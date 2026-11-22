@@ -1897,29 +1897,30 @@ fn belongs_to(
             .map_or(MISSING_ENCOUNTER, |(_, name)| name)
     });
     ui.horizontal(|ui| {
-        choice_label(ui, BELONGS_TO);
-        // The choice ends where the name field ends, inside the column. The part's list is as
-        // wide as its control at every size (FB8), and a long name wraps in it.
-        let right = name_right.min(ui.max_rect().right());
-        let width = (right - ui.cursor().left()).max(Density::Scan.control());
-        let mut chosen = current;
-        let mut dropdown = design::Dropdown::new(BELONGS.of(draft.id), BELONGS_TO)
-            .width(width)
-            .choice(None, ANY_ENCOUNTER)
-            .choices(choices.iter().map(|(id, name)| (Some(*id), *name)));
-        // An encounter that is gone stays the value, as words the list cannot choose again.
-        if current.is_some_and(|id| !choices.iter().any(|(known, _)| *known == id)) {
-            dropdown = dropdown.blocked_choice(
-                current,
-                MISSING_ENCOUNTER,
-                "Its encounter was deleted. Choose another.",
-            );
-        }
-        if dropdown.show(ui, &mut chosen).changed {
-            // The same choice again keeps a link that the note gives: only a change writes.
-            draft.setup.encounter = chosen.map(EntryRef::id);
-            draft.touch();
-        }
+        choice_label(ui, BELONGS_TO, |ui| {
+            // The choice ends where the name field ends, inside the column. The part's list is as
+            // wide as its control at every size (FB8), and a long name wraps in it.
+            let right = name_right.min(ui.max_rect().right());
+            let width = (right - ui.cursor().left()).max(Density::Scan.control());
+            let mut chosen = current;
+            let mut dropdown = design::Dropdown::new(BELONGS.of(draft.id), BELONGS_TO)
+                .width(width)
+                .choice(None, ANY_ENCOUNTER)
+                .choices(choices.iter().map(|(id, name)| (Some(*id), *name)));
+            // An encounter that is gone stays the value, as words the list cannot choose again.
+            if current.is_some_and(|id| !choices.iter().any(|(known, _)| *known == id)) {
+                dropdown = dropdown.blocked_choice(
+                    current,
+                    MISSING_ENCOUNTER,
+                    "Its encounter was deleted. Choose another.",
+                );
+            }
+            if dropdown.show(ui, &mut chosen).changed {
+                // The same choice again keeps a link that the note gives: only a change writes.
+                draft.setup.encounter = chosen.map(EntryRef::id);
+                draft.touch();
+            }
+        });
     });
     // In an encounter's editor, belonging to it goes without saying.
     if current.is_some() && current == open.map(|(id, _)| id) {
@@ -2141,7 +2142,7 @@ impl ChangeKind {
 /// override valid on its own, so that the form never holds a block that it cannot read.
 #[allow(
     clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    reason = "ruling M20: a change’s fault under its own field, typed (`Ban::Body`)"
 )]
 fn change_row(
     ui: &mut egui::Ui,
@@ -2153,6 +2154,7 @@ fn change_row(
     base: &Base,
 ) -> Option<egui::Rect> {
     let mut fault = None;
+    let mut field_left = ui.cursor().left();
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(
             egui::vec2(LABEL_WIDTH, Density::Read.control()),
@@ -2170,6 +2172,8 @@ fn change_row(
         // part, whose closed value is regular `Body` weight, as every closed drop-down's.
         let mut kind = ChangeKind::of(*value);
         let name = format!("{label}: how it changes");
+        // Where the field starts: its reason starts there too.
+        field_left = ui.cursor().left();
         let mut dropdown = design::Dropdown::new(field, &name)
             .width(86.0)
             .choice(ChangeKind::Same, "Same");
@@ -2223,18 +2227,22 @@ fn change_row(
     });
     // The reason sits under its own field, at the field's left edge, not at the form's top.
     // Its rect is where the form says this fault (G122).
+    // Layout 11c (M0233): it is placed by its rect at the field's measured left.
     fault.map(|error| {
-        ui.horizontal(|ui| {
-            ui.add_space(LABEL_WIDTH + ui.spacing().item_spacing.x);
-            ui.vertical(|ui| {
+        let mut column = ui.available_rect_before_wrap();
+        column.min.x = column.min.x.max(field_left);
+        ui.scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(column)
+                .layout(egui::Layout::top_down(egui::Align::Min)),
+            |ui| {
                 design::outcome::row_fault(
                     ui,
                     &MemberFault::new(FaultKind::InvalidChange, override_error(&error)),
                 )
                 .rect
-            })
-            .inner
-        })
+            },
+        )
         .inner
     })
 }
@@ -3040,9 +3048,16 @@ impl Encounters {
             } else {
                 shown
             };
-            super::blocked_reason(ui, shown);
-            let used = ui.cursor().top() - top;
-            ui.add_space((height + ui.spacing().item_spacing.y - used).max(0.0));
+            // Layout 11c (M0241): the slot is allocated at its height, so it keeps that height
+            // whatever its reason takes, and grows only for a taller one.
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), height),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_min_height(height);
+                    super::blocked_reason(ui, shown);
+                },
+            );
         }
         design::rule(ui);
         // The file's warnings that no member row states; they go in the footer below.
@@ -3450,11 +3465,7 @@ fn members_pane(
 
 /// FB4: `Default side` and `Belongs to` share one label column, the wider label plus `S`, so
 /// their controls start at one x.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-fn choice_label(ui: &mut egui::Ui, text: &str) {
+fn choice_label<R>(ui: &mut egui::Ui, text: &str, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let font = Type::Small.font(ui);
     let widest = [SIDE_FIELD, BELONGS_TO]
         .map(|label| {
@@ -3469,10 +3480,15 @@ fn choice_label(ui: &mut egui::Ui, text: &str) {
         .fold(0.0, f32::max);
     let column_end = ui.cursor().left() + widest + design::S.max(ui.spacing().item_spacing.x);
     ui.label(Type::Small.rich(ui, text).color(colors().muted));
-    let gap = column_end - ui.cursor().left();
-    if gap > 0.0 {
-        ui.add_space(gap);
-    }
+    // Layout 11c (M0246): the control after the label is placed by its rect at the labels' one
+    // column, so every control of these rows starts at one x.
+    let mut room = ui.available_rect_before_wrap();
+    room.min.x = room.min.x.max(column_end);
+    ui.scope_builder(
+        egui::UiBuilder::new().max_rect(room).layout(*ui.layout()),
+        add,
+    )
+    .inner
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -3539,10 +3555,6 @@ pub(super) fn revisions_issued() -> u64 {
 
 /// What a group is, in its own editor and in the frame an encounter's editor gives it. There,
 /// `open` is that encounter, and the frame needs less weight and room.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn group_fields(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
@@ -3554,22 +3566,23 @@ fn group_fields(
 ) -> bool {
     ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
     ui.horizontal(|ui| {
-        choice_label(ui, SIDE_FIELD);
-        let name = format!("{SIDE_FIELD} for {}", draft.name);
-        let side = draft.setup.side.clone();
-        super::side_control(
-            ui,
-            (
-                super::list::SIDE_CHOICE.of(draft.id),
-                super::list::SIDE_OTHER.of(draft.id),
-            ),
-            &name,
-            &mut draft.setup.side,
-            &[],
-        );
-        if draft.setup.side != side {
-            draft.touch();
-        }
+        choice_label(ui, SIDE_FIELD, |ui| {
+            let name = format!("{SIDE_FIELD} for {}", draft.name);
+            let side = draft.setup.side.clone();
+            super::side_control(
+                ui,
+                (
+                    super::list::SIDE_CHOICE.of(draft.id),
+                    super::list::SIDE_OTHER.of(draft.id),
+                ),
+                &name,
+                &mut draft.setup.side,
+                &[],
+            );
+            if draft.setup.side != side {
+                draft.touch();
+            }
+        });
     });
     if open.is_none() {
         design::help(ui, "Party, enemies, or any other name, such as rivals.");
@@ -3618,7 +3631,14 @@ fn group_fields(
         ui.add(egui::Label::new(Type::Small.rich(ui, empty).color(colors().muted)).wrap());
     }
     let member_shown = members(ui, draft, snapshot, expanded, refused_member);
-    ui.add_space(if open.is_some() { design::S } else { design::M });
+    design::gap(
+        ui,
+        if open.is_some() {
+            design::Gap::S
+        } else {
+            design::Gap::M
+        },
+    );
     design::field(ui, NOTES_FIELD, None, None, |ui| {
         let hint = design::placeholder(ui, "When they arrive, what they want. Markdown is fine.");
         let rows = if open.is_some() { 2 } else { 4 };
@@ -4298,15 +4318,21 @@ fn unread_member(
             ui.scroll_to_rect(rect, Some(egui::Align::Min));
         }
         // The example belongs to the message, so it starts at the message words.
-        let inset = unread.rect.left() - ui.cursor().left();
-        ui.horizontal(|ui| {
-            ui.add_space(inset);
-            ui.label(
-                Type::Small
-                    .rich(ui, "For example: HP +5, AC +2, Speed 40 ft.")
-                    .color(colors().muted),
-            );
-        });
+        // Layout 11c (M0255): placed by its rect at the message's measured left.
+        let mut column = ui.available_rect_before_wrap();
+        column.min.x = column.min.x.max(unread.rect.left());
+        ui.scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(column)
+                .layout(egui::Layout::left_to_right(egui::Align::Min)),
+            |ui| {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "For example: HP +5, AC +2, Speed 40 ft.")
+                        .color(colors().muted),
+                );
+            },
+        );
         if let Some(entry) = entry {
             let id = format!("{repair_id}:{line}");
             if overrides_form(

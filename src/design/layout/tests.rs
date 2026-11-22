@@ -466,6 +466,46 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         "m-p0-title-hint-link: the link's hover shows its hint"
     );
     draw_line(vec![egui::Event::PointerGone]);
+    // Review of PR 740 (P2): a blocked link shows its reason on hover, not its hint, and its
+    // press does not come back.
+    const WAIT: &str = "Wait for the sheet read to end.";
+    let pressed = std::cell::Cell::new(false);
+    let blocked_line = |events: Vec<egui::Event>| {
+        frame_with(&ctx, vec2(1600.0, 300.0), events, |ui| {
+            let shown = TitleLine::new(title)
+                .action(
+                    TitleAction::link(CONNECT)
+                        .hint(CONNECT_HINT)
+                        .blocked(Some(WAIT)),
+                )
+                .show(ui);
+            pressed.set(pressed.get() || shown.clicked(CONNECT));
+        })
+    };
+    let (nodes, _) = blocked_line(Vec::new());
+    let connect = bounds(&nodes, "Connect to refresh");
+    blocked_line(vec![egui::Event::PointerMoved(connect.center())]);
+    blocked_line(Vec::new());
+    let (_, painted) = blocked_line(Vec::new());
+    assert!(
+        painted.iter().any(|text| text.text == WAIT)
+            && !painted.iter().any(|text| text.text == CONNECT_HINT),
+        "m-p0-title-link-blocked: a blocked link's hover says why, not its hint"
+    );
+    for pressed_now in [true, false] {
+        blocked_line(vec![egui::Event::PointerButton {
+            pos: connect.center(),
+            button: egui::PointerButton::Primary,
+            pressed: pressed_now,
+            modifiers: egui::Modifiers::NONE,
+        }]);
+    }
+    blocked_line(Vec::new());
+    assert!(
+        !pressed.get(),
+        "m-p0-title-link-blocked: a blocked link's press does not come back"
+    );
+    blocked_line(vec![egui::Event::PointerGone]);
     // M-L0.10 (ruling M21): a menu action (`Packages`) opens its menu, and a blocked one does
     // not; the status menu keeps inside the room the caller gives from the link's rect (the
     // column under it, issue #504), one lane clear of its edges.

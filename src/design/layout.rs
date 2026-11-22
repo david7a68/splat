@@ -508,9 +508,9 @@ impl FieldId {
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Response {
         let id = self.id();
-        let guard = TextGuard::before(ui, id, text.as_str());
+        let guard = TextGuard::before(ui, id, &|| BoundText::of(text.as_str()));
         let response = ui.add(style(TextEdit::singleline(text).id(id)));
-        guard.after(ui, text.as_str(), &response);
+        guard.after(ui, &|| BoundText::of(text.as_str()), &response);
         record_field(ui, &response);
         response
     }
@@ -532,16 +532,25 @@ impl FieldId {
         clippy::disallowed_methods,
         reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
     )]
-    pub fn editor(
+    pub fn editor<T: GuardedText>(
         self,
         ui: &mut Ui,
-        text: &mut dyn TextBuffer,
+        text: &mut T,
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Editor {
         let id = self.id();
-        let guard = TextGuard::before(ui, id, text.as_str());
-        let output = style(TextEdit::multiline(text).id(id)).show(ui);
-        guard.after(ui, text.as_str(), &output.response);
+        // A document lent by `pane::EditorRegion::document` brings its kept layout (layout PR 9b).
+        let mut kept = text
+            .kept()
+            .map(|(face, live)| super::pane::kept_layouter(id, face, live));
+        let guard = TextGuard::before(ui, id, &|| text.bound().0);
+        let edit = style(TextEdit::multiline(text).id(id));
+        let edit = match kept.as_mut() {
+            Some(layouter) => edit.layouter(layouter),
+            None => edit,
+        };
+        let output = edit.show(ui);
+        guard.after(ui, &|| text.bound().0, &output.response);
         record_field(ui, &output.response);
         Editor {
             frame: output.response.rect,
@@ -595,9 +604,9 @@ impl FieldId {
         let id = self.named(name).id();
         // Clear's place, kept inside the frame's right end whether or not Clear shows.
         let place = search_clear().natural_width(ui);
-        let guard = TextGuard::before(ui, id, text);
+        let guard = TextGuard::before(ui, id, &|| BoundText::of(text));
         let field = super::components::search_box(ui, id, name, text, hint, width, place);
-        guard.after(ui, text, &field);
+        guard.after(ui, &|| BoundText::of(text), &field);
         record_field(ui, &field);
         if !text.is_empty() {
             let frame = field.rect;
@@ -633,9 +642,9 @@ impl FieldId {
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Response {
         let id = self.id();
-        let guard = TextGuard::before(ui, id, text.as_str());
+        let guard = TextGuard::before(ui, id, &|| BoundText::of(text.as_str()));
         let response = ui.add(style(TextEdit::multiline(text).id(id)));
-        guard.after(ui, text.as_str(), &response);
+        guard.after(ui, &|| BoundText::of(text.as_str()), &response);
         record_field(ui, &response);
         response
     }
@@ -674,11 +683,13 @@ pub struct Editor {
     pub view: Rect,
 }
 
-/// What the bound text was when the field last drew with focus: its length and a hash.
+/// What the bound text was when the field last drew with focus: its length and a hash, or the
+/// key of a document (`text_draft::TextDraft`, layout PR 9b), which needs no hash: another
+/// draft has another identity, and the program's replacement is always a new revision.
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct BoundText {
-    len: usize,
-    hash: u64,
+enum BoundText {
+    Hash { len: usize, hash: u64 },
+    Draft(super::text_draft::DraftKey),
 }
 
 impl BoundText {
@@ -686,11 +697,70 @@ impl BoundText {
     /// history every frame it has focus, so this adds less than egui does).
     fn of(text: &str) -> Self {
         #[cfg(any(test, feature = "test-support"))]
-        BOUND_TEXT_HASHES.with(|count| count.set(count.get() + 1));
-        Self {
+        {
+            BOUND_TEXT_HASHES.with(|count| count.set(count.get() + 1));
+            BOUND_TEXT_BYTES.with(|count| count.set(count.get() + text.len()));
+        }
+        Self::Hash {
             len: text.len(),
             hash: egui::util::hash(text),
         }
+    }
+}
+
+/// A field's text, as the guard knows it: a plain text by its hash, a revised document by its
+/// revision (layout PR 9b: a quiet frame of a document field hashes nothing). Sealed.
+pub trait GuardedText: TextBuffer + guarded::Sealed {
+    #[doc(hidden)]
+    fn bound(&self) -> Bound;
+
+    /// The face and the live key of a document lent for one draw, whose layout the part keeps.
+    #[doc(hidden)]
+    fn kept(
+        &self,
+    ) -> Option<(
+        super::pane::Face,
+        std::rc::Rc<std::cell::Cell<super::text_draft::DraftKey>>,
+    )> {
+        None
+    }
+}
+
+/// What a [`GuardedText`] is to the guard. Opaque.
+#[doc(hidden)]
+pub struct Bound(BoundText);
+
+mod guarded {
+    pub trait Sealed {}
+    impl Sealed for String {}
+    impl Sealed for super::super::text_draft::TextDraft {}
+    impl Sealed for super::super::text_draft::Lent<'_> {}
+}
+
+impl GuardedText for String {
+    fn bound(&self) -> Bound {
+        Bound(BoundText::of(self))
+    }
+}
+
+impl GuardedText for super::text_draft::TextDraft {
+    fn bound(&self) -> Bound {
+        Bound(BoundText::Draft(self.key()))
+    }
+}
+
+impl GuardedText for super::text_draft::Lent<'_> {
+    fn bound(&self) -> Bound {
+        Bound(BoundText::Draft(self.draft.key()))
+    }
+
+    fn kept(
+        &self,
+    ) -> Option<(
+        super::pane::Face,
+        std::rc::Rc<std::cell::Cell<super::text_draft::DraftKey>>,
+    )> {
+        Some((self.face.clone(), self.live.clone()))
     }
 }
 
@@ -698,6 +768,8 @@ impl BoundText {
 thread_local! {
     /// How many times a field part hashed its text, for the cost proof.
     pub(crate) static BOUND_TEXT_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many bytes of text the field parts hashed (layout PR 9b's quiet-frame proof).
+    pub static BOUND_TEXT_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How many fields keep a record. The oldest record goes first, and egui's Undo history for
@@ -745,7 +817,7 @@ struct TextGuard {
 }
 
 impl TextGuard {
-    fn before(ui: &Ui, id: Id, text: &str) -> Self {
+    fn before(ui: &Ui, id: Id, text: &dyn Fn() -> BoundText) -> Self {
         let focused_before = ui.memory(|memory| memory.has_focus(id));
         let check = focused_before
             || ui.input(|input| {
@@ -764,7 +836,7 @@ impl TextGuard {
         Self { id, focused_before }
     }
 
-    fn after(self, ui: &Ui, text: &str, response: &Response) {
+    fn after(self, ui: &Ui, text: &dyn Fn() -> BoundText, response: &Response) {
         if !response.has_focus() {
             return;
         }
@@ -773,7 +845,7 @@ impl TextGuard {
         if !self.focused_before && Self::stale(ui, self.id, text) {
             Self::drop_history(ui.ctx(), self.id);
         }
-        let bound = BoundText::of(text);
+        let bound = text();
         let ctx = ui.ctx();
         let oldest = ctx.data_mut(|data| {
             let records = &mut data
@@ -789,7 +861,7 @@ impl TextGuard {
     }
 
     /// Whether the field last had focus with another text.
-    fn stale(ui: &Ui, id: Id, text: &str) -> bool {
+    fn stale(ui: &Ui, id: Id, text: &dyn Fn() -> BoundText) -> bool {
         let Some(bound) = ui.ctx().data(|data| {
             data.get_temp::<BoundTexts>(bound_texts_id())
                 .and_then(|records| {
@@ -802,7 +874,7 @@ impl TextGuard {
         }) else {
             return false;
         };
-        bound.len != text.len() || bound != BoundText::of(text)
+        bound != text()
     }
 
     fn forget(ctx: &egui::Context, id: Id) {
@@ -829,9 +901,9 @@ pub(super) fn guarded_field(
     text: &mut String,
     draw: impl FnOnce(&mut Ui, &mut String) -> Response,
 ) -> Response {
-    let guard = TextGuard::before(ui, id, text);
+    let guard = TextGuard::before(ui, id, &|| BoundText::of(text));
     let response = draw(ui, text);
-    guard.after(ui, text, &response);
+    guard.after(ui, &|| BoundText::of(text), &response);
     response
 }
 
@@ -2123,11 +2195,24 @@ impl<'a> TitleLine<'a> {
                     false
                 }
                 None if matches!(self.actions[at].weight, TitleWeight::Link) => {
-                    // Review of PR 730: a link keeps its hint, as the other forms do.
-                    let link = super::title_link(ui, self.actions[at].word.as_str());
-                    match self.actions[at].hint {
-                        Some(hint) => link.on_hover_text(hint),
-                        None => link,
+                    // Reviews of PR 730 and 740: a link keeps its hint, as the other forms do;
+                    // a blocked one takes no press and says why on hover and to a screen
+                    // reader, as a blocked `Action` does.
+                    let action = self.actions[at];
+                    let link = ui
+                        .add_enabled_ui(action.blocked.is_none(), |ui| {
+                            super::title_link(ui, action.word.as_str())
+                        })
+                        .inner;
+                    match (action.blocked, action.hint) {
+                        (Some(reason), _) => {
+                            ui.ctx().accesskit_node_builder(link.id, |node| {
+                                node.set_description(reason);
+                            });
+                            link.on_disabled_hover_text(reason)
+                        }
+                        (None, Some(hint)) => link.on_hover_text(hint),
+                        (None, None) => link,
                     }
                     .clicked()
                 }
@@ -4386,6 +4471,27 @@ fn menu_popup_raw(response: &Response) -> egui::Popup<'_> {
     egui::Popup::menu(response)
 }
 
+/// The submenus of a menu that a click inside does not close ([`MenuPopup::show_submenus`]).
+pub struct Submenus {
+    _by_its_menu: (),
+}
+
+impl Submenus {
+    /// Its submenus, each a row of the menu with its word and caret, whose choices open under it
+    /// in the menu, each on its own; `contents(ui, at)` draws an open one's choices, and `width`
+    /// is the widest submenu's choices, so the menu keeps one width.
+    pub fn show<W: AsRef<str>>(
+        &mut self,
+        ui: &mut Ui,
+        id: impl std::hash::Hash,
+        width: f32,
+        words: &[W],
+        contents: impl FnMut(&mut Ui, usize),
+    ) {
+        super::components::menu_submenus(ui, id, width, words, contents);
+    }
+}
+
 /// A menu from [`menu_popup`]: `show` draws its content at the width the part decides.
 #[must_use = "call `show` to draw the menu"]
 pub struct MenuPopup<'a> {
@@ -4454,6 +4560,18 @@ impl MenuPopup<'_> {
     pub fn close_behavior(mut self, behavior: egui::PopupCloseBehavior) -> Self {
         self.popup = self.popup.close_behavior(behavior);
         self
+    }
+
+    /// A menu of several submenus (M0051, the creature Filter's facts): `content` draws the
+    /// menu, and its submenus through [`Submenus::show`]. Its rows and choices keep it open; a
+    /// click outside it or Escape closes it. Only this menu makes a [`Submenus`], so no menu that
+    /// a click inside closes holds one.
+    pub fn show_submenus<R>(
+        self,
+        content: impl FnOnce(&mut Ui, &mut Submenus) -> R,
+    ) -> Option<egui::InnerResponse<R>> {
+        self.close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| content(ui, &mut Submenus { _by_its_menu: () }))
     }
 
     /// Draw the menu while it is open.
@@ -4533,6 +4651,20 @@ struct MenuMeasure {
 
 fn menu_measure_id() -> Id {
     Id::new("splat_menu_measure")
+}
+
+/// Draw `add` as one block of the menu being drawn, `width` wide (a menu's submenus, with their
+/// wrapped choices and their scroll lane, M0051): the choices in it note no width of their own,
+/// and the block notes its whole width, so the menu is as wide as the block (review of PR 759).
+pub(super) fn menu_block<R>(ui: &mut Ui, width: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let outer = ui.data_mut(|data| data.remove_temp::<MenuMeasure>(menu_measure_id()));
+    let inner = add(ui);
+    if let Some(mut outer) = outer {
+        outer.widest = outer.widest.max(width);
+        outer.any = true;
+        ui.data_mut(|data| data.insert_temp(menu_measure_id(), outer));
+    }
+    inner
 }
 
 /// A choice notes its words' width (`natural`) for the menu it is drawn in, if any.

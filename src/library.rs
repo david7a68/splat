@@ -3544,10 +3544,6 @@ impl Library {
             });
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn new_entry(&mut self, ui: &mut egui::Ui, dirty: bool, campaigns: &Campaigns) {
         if self.new_kind.is_empty() {
             self.new_kind = "creature".into();
@@ -3684,8 +3680,9 @@ impl Library {
                             );
                         },
                     );
-                    ui.vertical(|ui| {
-                        ui.add_space(design::L + design::XS);
+                    // The button stands on the field's line, below its label.
+                    let drop = design::L + design::XS;
+                    design::dropped(ui, egui::vec2(ui.available_width(), drop), drop, |ui| {
                         create = Action::primary("Create entry")
                             .blocked(blocked)
                             .show(ui)

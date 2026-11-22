@@ -321,6 +321,104 @@ enum Host {
     Alone { fills: bool },
 }
 
+/// How a document editor lays its text out ([`EditorRegion::document`]).
+#[derive(Clone, Debug)]
+pub enum Face {
+    /// Plain text in one font (a note's source in monospace, prose).
+    Font(egui::TextStyle),
+    /// Text laid out by a styling layouter (Markdown's source). `folds`: the layout depends on
+    /// where the caret and the selection are (a fold opens on their lines), so the kept layout
+    /// is keyed by them too.
+    Laid {
+        layout: fn(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley>,
+        folds: bool,
+    },
+}
+
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// How many times a document editor laid out its text (layout PR 9b's quiet-frame proof).
+    pub static KEPT_LAYOUTS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Everything a kept layout of a document was made from (layout PR 9b, note v2 §3): the
+/// draft's identity and revision, the measure (width, font, fonts' generation, which the theme's
+/// installation also raises, scale), the font atlas's epoch, the light or dark visuals, the face,
+/// and for a face that folds, the caret and the selection of a focused field.
+#[derive(Clone, PartialEq)]
+struct LaidKey {
+    draft: super::text_draft::DraftKey,
+    measure: super::memo::Measure,
+    atlas: u64,
+    dark: bool,
+    face: (Option<egui::TextStyle>, usize),
+    caret: Option<(bool, Option<(usize, usize)>)>,
+}
+
+/// The layouter of a document editor: the laid-out text kept for its [`LaidKey`]. egui calls
+/// it with the text it was given and again after each edit in its own pass (several in one
+/// frame too); each call reads the draft's live key (`text_draft::Lent`), so an edited text is
+/// never answered with the galley of another revision.
+pub(in crate::design) fn kept_layouter(
+    field: Id,
+    face: Face,
+    live: std::rc::Rc<std::cell::Cell<super::text_draft::DraftKey>>,
+) -> impl FnMut(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley> {
+    let store = field.with("kept_layout");
+    move |ui: &Ui, text: &dyn egui::TextBuffer, wrap: f32| {
+        let font = match &face {
+            Face::Font(style) => style.resolve(ui.style()),
+            Face::Laid { .. } => super::tokens::Type::Body.font(ui),
+        };
+        let caret = match &face {
+            Face::Laid { folds: true, .. } => {
+                let focused = ui.memory(|memory| memory.has_focus(field));
+                let range = egui::TextEdit::load_state(ui.ctx(), field)
+                    .and_then(|state| state.cursor.char_range())
+                    .map(|range| (range.primary.index, range.secondary.index));
+                Some((focused, range))
+            }
+            _ => None,
+        };
+        let key = LaidKey {
+            draft: live.get(),
+            measure: super::memo::Measure::of(ui, wrap, &font),
+            atlas: super::theme::atlas_epoch(ui.ctx()),
+            dark: ui.visuals().dark_mode,
+            face: match &face {
+                Face::Font(style) => (Some(style.clone()), 0),
+                Face::Laid { layout, .. } => (None, *layout as usize),
+            },
+            caret,
+        };
+        if let Some(galley) = ui
+            .ctx()
+            .data(|data| data.get_temp::<(LaidKey, std::sync::Arc<egui::Galley>)>(store))
+            .filter(|(kept, _)| *kept == key)
+            .map(|(_, galley)| galley)
+        {
+            return galley;
+        }
+        #[cfg(any(test, feature = "test-support"))]
+        KEPT_LAYOUTS_MADE.with(|made| made.set(made.get() + 1));
+        let galley = match &face {
+            Face::Font(_) => {
+                let color = ui
+                    .visuals()
+                    .override_text_color
+                    .unwrap_or_else(|| ui.visuals().widgets.inactive.text_color());
+                let job =
+                    egui::text::LayoutJob::simple(text.as_str().to_owned(), font, color, wrap);
+                ui.fonts_mut(|fonts| fonts.layout_job(job))
+            }
+            Face::Laid { layout, .. } => layout(ui, text, wrap),
+        };
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(store, (key, galley.clone())));
+        galley
+    }
+}
+
 /// How tall an editor viewport of its own is ([`editor_view`]).
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ViewHeight {
@@ -334,11 +432,11 @@ pub enum ViewHeight {
 /// [`EditorRegion::editor`], with the same fixed frame, inner text scroll and lane, caret
 /// follow and reveal. For an editor that a page's own scroll holds (Campaign's repair) or that
 /// fills its pane's body (a Session template). Keyed by `field`'s id.
-pub fn editor_view(
+pub fn editor_view<T: super::layout::GuardedText>(
     ui: &mut Ui,
     height: ViewHeight,
     field: super::layout::FieldId,
-    text: &mut dyn egui::TextBuffer,
+    text: &mut T,
     style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
 ) -> super::layout::Editor {
     let (max, fills) = match height {
@@ -352,6 +450,29 @@ pub fn editor_view(
         _scope: std::marker::PhantomData,
     }
     .editor(ui, field, text, style)
+}
+
+/// [`editor_view`] for a document (`text_draft::TextDraft`): the same viewport, with its laid-out
+/// text kept by its key as [`EditorRegion::document`] keeps it.
+pub fn document_view(
+    ui: &mut Ui,
+    height: ViewHeight,
+    field: super::layout::FieldId,
+    text: &mut super::text_draft::TextDraft,
+    face: Face,
+    style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
+) -> super::layout::Editor {
+    let (max, fills) = match height {
+        ViewHeight::AtMost(most) => (most, false),
+        ViewHeight::Fills => (ui.available_height(), true),
+    };
+    EditorRegion {
+        pane: field.id().with("editor_view"),
+        max: max.floor().max(0.0),
+        host: Host::Alone { fills },
+        _scope: std::marker::PhantomData,
+    }
+    .document(ui, field, text, face, style)
 }
 
 /// The fixed frame of every editor viewport: the field's well, its hairline and an `S` inner
@@ -456,6 +577,28 @@ fn region_drawn(ui: &Ui, pane: Id) -> Option<f32> {
 }
 
 impl EditorRegion<'_> {
+    /// [`editor`](Self::editor) for a document (`text_draft::TextDraft`, layout PR 9b, rulings
+    /// L8 and M25). The part lays the text out in `face` and keeps the laid-out text by its full
+    /// key (the draft's identity and revision, the measure, the font atlas's epoch, the visuals,
+    /// the face, and the caret for a face that folds): a quiet frame lays out, hashes and copies
+    /// none of it in the app. egui's own per-frame text copies stay, counted (M25). `style` sets
+    /// the rest of the text edit, not its font.
+    pub fn document(
+        self,
+        ui: &mut Ui,
+        field: super::layout::FieldId,
+        text: &mut super::text_draft::TextDraft,
+        face: Face,
+        style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
+    ) -> super::layout::Editor {
+        let mut lent = super::text_draft::Lent {
+            live: std::rc::Rc::new(std::cell::Cell::new(text.key())),
+            draft: text,
+            face,
+        };
+        self.editor(ui, field, &mut lent, style)
+    }
+
     /// The pane's one editor, drawn through `field` (its id and text guard, `FieldId::editor`)
     /// inside the region, as tall as its text up to the region's height, then scrolling.
     ///
@@ -469,11 +612,11 @@ impl EditorRegion<'_> {
     /// line), or the first caret after the editor was not drawn, and lies outside the view is
     /// revealed, centred and with no animation, in the next pass; a caret that did not move is
     /// never scrolled to, so the DM's own wheel stays.
-    pub fn editor(
+    pub fn editor<T: super::layout::GuardedText>(
         self,
         ui: &mut Ui,
         field: super::layout::FieldId,
-        text: &mut dyn egui::TextBuffer,
+        text: &mut T,
         style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
     ) -> super::layout::Editor {
         let pane = innermost(ui);
@@ -1071,6 +1214,76 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
 pub fn reveal_with_focus(ui: &Ui, words: Rect) {
     if let Some(focused) = ui.ctx().memory(|memory| memory.focused()) {
         super::components::reveal_with(ui, focused, words);
+    }
+}
+
+/// Room a body keeps for content that an act will add (layout step 11b; ruling R30, D-2). A
+/// closed set: each room's height comes from tokens and line heights, never from the content.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Room {
+    /// A Log heading and one new entry of at most two prose lines, under a note's body.
+    LogEntry,
+}
+
+impl Room {
+    /// The room's height in `ui`'s fonts.
+    pub fn height(self, ui: &Ui) -> f32 {
+        match self {
+            Self::LogEntry => {
+                let prose =
+                    ui.fonts_mut(|fonts| fonts.row_height(&super::reader::prose_type(ui).font(ui)));
+                super::L + super::Type::Heading.line() + S + 2.0 * prose
+            }
+        }
+    }
+}
+
+/// The body's room for content that an act will add, where the body's content ends: blank
+/// space of the room's height, drawn here and nowhere else, so the content lands in room
+/// already in view and nothing moves. Its rect, for [`reveal_with_focus_and_growth`].
+pub fn keep_room(ui: &mut Ui, room: Room) -> Rect {
+    let top = ui.cursor().top();
+    let height = room.height(ui);
+    super::extras::space(ui, height);
+    Rect::from_min_max(
+        pos2(ui.max_rect().left(), top),
+        pos2(ui.max_rect().right(), top + height),
+    )
+}
+
+/// How much a pane's footer grows when an act ends (layout step 11b). A closed set.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Growth {
+    /// The act's result line and its Undo.
+    ResultWithUndo,
+}
+
+impl Growth {
+    /// The footer's growth.
+    pub fn height(self) -> f32 {
+        match self {
+            Self::ResultWithUndo => S + 2.0 * super::Density::Read.control(),
+        }
+    }
+}
+
+/// An act's room, named for its one field (`field`, drawn in this pass): `room` (a
+/// [`keep_room`]) and, below it, as much again as the footer will grow when the act ends belong
+/// to the field while it has the keyboard. The pane's focus arbiter keeps the field and all of
+/// that whole above the footer as it is now, so when the act's content and its result come,
+/// nothing moves and nothing is covered. Only the field: another control that takes the
+/// keyboard (the field's own Save, a link in the note) is revealed alone. The field too is
+/// revealed alone when its block, the room and the growth together are taller than the pane's
+/// body room: a rect that spans both edges of the view makes no scroll, and the keyboard's
+/// target would stay hidden (Astra's review of PR 736).
+pub fn reveal_with_focus_and_growth(ui: &Ui, field: &egui::Response, room: Rect, growth: Growth) {
+    if !field.has_focus() {
+        return;
+    }
+    let named = room.with_max_y(room.max.y + growth.height());
+    let block = super::components::reveal_rect(ui.ctx(), field.id, field.rect).union(named);
+    if body_room(ui).is_none_or(|body| block.height() <= body.height()) {
+        super::components::reveal_with(ui, field.id, named);
     }
 }
 
@@ -2450,6 +2663,13 @@ mod hold_tests {
         near: bool,
         /// A text field under it, with its words.
         clip: Option<String>,
+        /// A field whose act adds content (layout step 11b), with its words, its own Save
+        /// under it, and its room at the list's end with the footer's growth named for it.
+        grown: Option<String>,
+        /// Rows between that Save and the room.
+        grown_gap: usize,
+        /// That room, as the last pass drew it.
+        room: Option<Rect>,
     }
 
     impl State {
@@ -2466,6 +2686,9 @@ mod hold_tests {
                 help: false,
                 near: false,
                 clip: None,
+                grown: None,
+                grown_gap: 0,
+                room: None,
             }
         }
     }
@@ -2530,6 +2753,35 @@ mod hold_tests {
                 .then_some("The far control's help, which comes with no change of focus.");
             crate::design::small_field(ui, "Far caption", help, None, |ui| {
                 let _ = ui.button("Far control");
+            });
+            let grown = state.grown.as_mut().map(|text| {
+                const GROWN: crate::design::layout::FieldName =
+                    crate::field_id!("hold_test_grown_text");
+                let field = crate::design::labelled_field(
+                    ui,
+                    GROWN.once(crate::design::layout::Once::Example),
+                    "Grown caption",
+                    text,
+                    None,
+                    None,
+                );
+                let _ = ui.button("Save grown");
+                field
+            });
+            if grown.is_some() {
+                for row in 0..state.grown_gap {
+                    ui.label(format!("Row before the room {row}"));
+                }
+            }
+            state.room = grown.map(|field| {
+                let room = keep_room(ui, Room::LogEntry);
+                reveal_with_focus_and_growth(ui, &field, room, Growth::ResultWithUndo);
+                // The note's later sections (a reader's `From other notes`): the scroll area
+                // cannot show past the content's end.
+                for row in 0..6 {
+                    ui.label(format!("Row after the room {row}"));
+                }
+                room
             });
         });
     }
@@ -2713,6 +2965,109 @@ mod hold_tests {
             caption.top() >= viewport.top() - 0.5,
             "i9-again: a second click on the focused field brings its caption {caption:?} into \
              the view {viewport:?}"
+        );
+
+        // Layout step 11b (Astra's review of PR 736, P1): an act's room and the footer's growth
+        // belong to its one field while it has the keyboard. The growth is counted here apart
+        // from `Growth`, so a growth of 0 fails too.
+        let growth = S + 2.0 * crate::design::Density::Read.control();
+        h.state_mut().message = false;
+        h.state_mut().help = false;
+        h.state_mut().near = false;
+        h.state_mut().clip = None;
+        h.state_mut().grown = Some("away".to_owned());
+        h.state_mut().grown_gap = 60;
+        h.run_steps(4);
+        let view = |h: &Harness<'_, State>| {
+            pane_records(&h.ctx)
+                .into_iter()
+                .next()
+                .unwrap()
+                .viewport()
+                .unwrap()
+        };
+        let field = |h: &Harness<'_, State>| {
+            h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Grown caption")
+                .rect()
+        };
+        let save = |h: &Harness<'_, State>| h.get_by_label("Save grown").rect();
+        let whole = |rect: Rect, view: Rect| {
+            rect.top() >= view.top() - 0.5 && rect.bottom() <= view.bottom() + 0.5
+        };
+        let wheel = |h: &mut Harness<'_, State>, delta: f32| {
+            h.hover_at(view(h).center());
+            h.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, delta),
+                modifiers: egui::Modifiers::NONE,
+            });
+            // The wheel's smooth scroll ends before the next act.
+            h.run_steps(10);
+        };
+        // A long note: the field, its room and the growth are taller than the view. The DM's
+        // wheel takes the field above the view, with the room below it.
+        let middle = |h: &mut Harness<'_, State>| {
+            let by = field(h).bottom() - view(h).top() + 40.0;
+            wheel(h, -by);
+            let (field, room, view) = (field(h), h.state().room.unwrap(), view(h));
+            assert!(
+                field.bottom() < view.top() && room.bottom() > view.bottom(),
+                "i11b-setup: the field {field:?} is above the view {view:?}, its room {room:?} \
+                 below it"
+            );
+        };
+        middle(&mut h);
+        h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Grown caption")
+            .focus();
+        h.run_steps(4);
+        let (shown, at) = (field(&h), view(&h));
+        assert!(
+            whole(shown, at),
+            "i11b-field-alone: with its room too far below, the focused field {shown:?} comes \
+             whole into the view {at:?} alone"
+        );
+        middle(&mut h);
+        h.get_by_label("Save grown").focus();
+        h.run_steps(4);
+        let (shown, at) = (save(&h), view(&h));
+        assert!(
+            whole(shown, at),
+            "i11b-save-alone: Tab to the field's Save {shown:?} brings it whole into the view \
+             {at:?}"
+        );
+        // A short note: the field, its room and the growth fit the view. Its Save, whole at the
+        // view's end with the room below the view, takes the keyboard and nothing scrolls; the
+        // field takes it and comes into view with its room and the growth.
+        h.state_mut().grown_gap = 0;
+        h.run_steps(4);
+        h.get_by_label("Next control").focus();
+        h.run_steps(4);
+        let by = save(&h).bottom() - (view(&h).bottom() - 10.0);
+        wheel(&mut h, -by);
+        let (before, room, at) = (save(&h), h.state().room.unwrap(), view(&h));
+        assert!(
+            whole(before, at)
+                && room.bottom() + growth > at.bottom()
+                && room.bottom() + growth - field(&h).top() <= at.height(),
+            "i11b-setup-short: Save {before:?} whole in the view {at:?}, the room {room:?} and \
+             the growth {growth} past its end, all of it no taller than the view"
+        );
+        h.get_by_label("Save grown").focus();
+        h.run_steps(4);
+        let after = save(&h);
+        assert!(
+            (after.top() - before.top()).abs() <= 0.5,
+            "i11b-save-no-growth: the room and the growth are the field's, not Save's: Save \
+             stays at {before:?}, not {after:?}"
+        );
+        h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Grown caption")
+            .focus();
+        h.run_steps(4);
+        let (shown, room, at) = (field(&h), h.state().room.unwrap(), view(&h));
+        assert!(
+            whole(shown, at) && room.bottom() + growth <= at.bottom() + 0.5,
+            "i11b-field-with-room: the focused field {shown:?}, its room {room:?} and the growth \
+             {growth} come whole into the view {at:?}"
         );
     }
 
@@ -4553,6 +4908,13 @@ mod editor_region_tests {
         focus: bool,
         /// A caret placed from code (a char index), with focus, after the editor draws.
         set_caret: Option<usize>,
+        /// Draw this document (`EditorRegion::document`, layout PR 9b) in place of `text`.
+        doc: Option<crate::design::text_draft::TextDraft>,
+        /// Lay the document out with a face that folds (`Face::Laid { folds: true }`).
+        folds: bool,
+        /// Each frame's `changed()` of the editor, and the text its galley holds.
+        changed: Vec<bool>,
+        galley_text: String,
     }
 
     fn harness(height: f32, state: State) -> egui_kittest::Harness<'static, State> {
@@ -4582,7 +4944,8 @@ mod editor_region_tests {
             .build_ui_state(
                 |ui, state: &mut State| {
                     let want = state.lines;
-                    if state.text.lines().count() != want {
+                    // `lines` 0: the test owns the text (a document, the differential script).
+                    if want > 0 && state.text.lines().count() != want {
                         state.text = (0..want)
                             .map(|line| format!("Line {line}"))
                             .collect::<Vec<_>>()
@@ -4628,12 +4991,31 @@ mod editor_region_tests {
                                 ui.label("Title");
                                 let mut caret = None;
                                 if region {
-                                    let output = editor.editor(
-                                        ui,
-                                        FIELD.once(Once::Example),
-                                        text,
-                                        |edit| edit.desired_width(f32::INFINITY),
-                                    );
+                                    let face = if state.folds {
+                                        Face::Laid {
+                                            layout: laid_plainly,
+                                            folds: true,
+                                        }
+                                    } else {
+                                        Face::Font(egui::TextStyle::Body)
+                                    };
+                                    let output = match state.doc.as_mut() {
+                                        Some(doc) => editor.document(
+                                            ui,
+                                            FIELD.once(Once::Example),
+                                            doc,
+                                            face,
+                                            |edit| edit,
+                                        ),
+                                        None => editor.editor(
+                                            ui,
+                                            FIELD.once(Once::Example),
+                                            text,
+                                            |edit| edit.desired_width(f32::INFINITY),
+                                        ),
+                                    };
+                                    state.changed.push(output.response.changed());
+                                    state.galley_text.clone_from(&output.galley.job.text);
                                     if focus {
                                         output.response.request_focus();
                                     }
@@ -5136,6 +5518,251 @@ mod editor_region_tests {
                 facts(&with),
                 facts(&plain),
                 "p2-plain: {lines} lines, a body with no region is `Body::Content`"
+            );
+        }
+    }
+
+    /// A face's layout that does not fold, for a test of the caret part of the key.
+    fn laid_plainly(
+        ui: &Ui,
+        text: &dyn egui::TextBuffer,
+        wrap: f32,
+    ) -> std::sync::Arc<egui::Galley> {
+        let job = egui::text::LayoutJob::simple(
+            text.as_str().to_owned(),
+            egui::TextStyle::Body.resolve(ui.style()),
+            ui.visuals().widgets.inactive.text_color(),
+            wrap,
+        );
+        ui.fonts_mut(|fonts| fonts.layout_job(job))
+    }
+
+    /// A harness on a document (layout PR 9b) of `lines` lines, focused, after warm frames;
+    /// `folds`: with a face that folds.
+    fn document(lines: usize, folds: bool) -> egui_kittest::Harness<'static, State> {
+        let words: String = (0..lines)
+            .map(|line| format!("Line {line}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut h = harness(
+            400.0,
+            State {
+                messages: 1,
+                region: true,
+                focus: true,
+                doc: Some(crate::design::text_draft::TextDraft::new(words)),
+                folds,
+                ..State::default()
+            },
+        );
+        h.run_steps(4);
+        h
+    }
+
+    fn made() -> usize {
+        KEPT_LAYOUTS_MADE.with(std::cell::Cell::get)
+    }
+
+    fn hashed() -> usize {
+        crate::design::layout::BOUND_TEXT_BYTES.with(std::cell::Cell::get)
+    }
+
+    /// Layout PR 9b (note v2 §3): a document lays out its text once per key. Quiet focused
+    /// frames lay out and hash nothing; each part of the key, alone, lays it out again: an edit,
+    /// two edits in one frame (the galley holds the draft's words in each frame, also the frame
+    /// of the edit, so the layouter reads the live key on each call), the program's
+    /// replacement with equal words, another draft in the same field, a resize, and a font atlas
+    /// made again with the same fonts (its size and fill can come back equal). A caret move
+    /// with the same words lays out again only a face that folds.
+    #[test]
+    fn a_document_keeps_its_layout_until_its_key_changes() {
+        for folds in [false, true] {
+            a_document_keeps_its_layout(folds);
+        }
+    }
+
+    fn a_document_keeps_its_layout(folds: bool) {
+        let mut h = document(40, folds);
+        let (layouts, bytes) = (made(), hashed());
+        h.run_steps(5);
+        assert_eq!(
+            (made() - layouts, hashed() - bytes),
+            (0, 0),
+            "quiet: five focused frames lay out and hash no text"
+        );
+        let relaid =
+            |h: &mut egui_kittest::Harness<'static, State>,
+             case: &str,
+             change: &mut dyn FnMut(&mut egui_kittest::Harness<'static, State>)| {
+                let before = made();
+                change(h);
+                for frame in 1..=3 {
+                    h.step();
+                    let draft = h.state().doc.as_ref().map(|doc| doc.as_str().to_owned());
+                    assert_eq!(
+                        Some(h.state().galley_text.clone()),
+                        draft,
+                        "{case}, folds {folds}, frame {frame}: the galley holds the draft's words"
+                    );
+                }
+                assert!(
+                    made() > before,
+                    "{case}, folds {folds}: laid out again ({} more)",
+                    made() - before
+                );
+                let quiet = made();
+                h.run_steps(3);
+                assert_eq!(made(), quiet, "{case}, folds {folds}: quiet again after");
+            };
+        let up = |h: &mut egui_kittest::Harness<'static, State>| {
+            let key = |pressed| egui::Event::Key {
+                key: egui::Key::ArrowUp,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            };
+            h.input_mut().events.extend([key(true), key(false)]);
+        };
+        if folds {
+            relaid(&mut h, "caret", &mut |h| up(h));
+        } else {
+            let (before, words) = (made(), h.state().doc.as_ref().map(|doc| doc.key()));
+            let caret = h.state().caret;
+            up(&mut h);
+            h.run_steps(3);
+            assert_ne!(h.state().caret, caret, "caret: the caret moved");
+            assert_eq!(
+                (made(), h.state().doc.as_ref().map(|doc| doc.key())),
+                (before, words),
+                "caret: a plain face keeps its layout when only the caret moves"
+            );
+        }
+        relaid(&mut h, "edit", &mut |h| {
+            h.event(egui::Event::Text("!".into()))
+        });
+        relaid(&mut h, "two-edits", &mut |h| {
+            h.input_mut().events.push(egui::Event::Text("a".into()));
+            h.input_mut().events.push(egui::Event::Text("b".into()));
+        });
+        relaid(&mut h, "replace-equal", &mut |h| {
+            let doc = h.state_mut().doc.as_mut().expect("a document");
+            let words = doc.as_str().to_owned();
+            doc.replace(words);
+        });
+        relaid(&mut h, "swap", &mut |h| {
+            let doc = h.state_mut().doc.as_mut().expect("a document");
+            let other = doc.copy_as_new();
+            *doc = other;
+        });
+        relaid(&mut h, "resize", &mut |h| {
+            h.set_size(vec2(520.0, 400.0));
+        });
+        relaid(&mut h, "atlas", &mut |h| {
+            // egui makes its font atlas again for a new text alpha mode, and again when it comes
+            // back: the same fonts, style, size and fill as before, in a new atlas. The app's own
+            // font generation does not change.
+            let alpha = h.ctx.style().visuals.text_alpha_from_coverage;
+            h.ctx.all_styles_mut(|style| {
+                style.visuals.text_alpha_from_coverage = egui::epaint::AlphaFromCoverage::Linear;
+            });
+            h.step();
+            h.ctx
+                .all_styles_mut(|style| style.visuals.text_alpha_from_coverage = alpha);
+        });
+    }
+
+    /// Layout PR 9b (note v2 §6.4): through the real part (guard, kept layouter), a document
+    /// answers each event exactly as a plain text does: the same words, caret and `changed()` in
+    /// every frame, for typing, paste, an empty paste, Delete at the end, select all and type,
+    /// Undo and Redo, and IME preedit, commit and cancel.
+    #[test]
+    fn a_document_answers_as_a_plain_text_does() {
+        let words = "Ash road\nCinder pass";
+        let make = |doc: bool| {
+            let mut h = harness(
+                400.0,
+                State {
+                    messages: 1,
+                    region: true,
+                    focus: true,
+                    text: words.to_owned(),
+                    doc: doc.then(|| crate::design::text_draft::TextDraft::new(words)),
+                    ..State::default()
+                },
+            );
+            h.run_steps(2);
+            h
+        };
+        let (mut plain, mut doc) = (make(false), make(true));
+        let key = |key, modifiers| {
+            vec![
+                egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                },
+                egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: false,
+                    repeat: false,
+                    modifiers,
+                },
+            ]
+        };
+        let ime = |event| vec![egui::Event::Ime(event)];
+        let script: Vec<(&str, Vec<egui::Event>)> = vec![
+            ("end", key(egui::Key::End, egui::Modifiers::COMMAND)),
+            ("type", vec![egui::Event::Text("!".into())]),
+            ("paste", vec![egui::Event::Paste(" ford".into())]),
+            ("empty-paste", vec![egui::Event::Paste(String::new())]),
+            (
+                "delete-at-end",
+                key(egui::Key::Delete, egui::Modifiers::NONE),
+            ),
+            ("select-all", key(egui::Key::A, egui::Modifiers::COMMAND)),
+            ("replace", vec![egui::Event::Text("New".into())]),
+            ("undo", key(egui::Key::Z, egui::Modifiers::COMMAND)),
+            ("redo", key(egui::Key::Y, egui::Modifiers::COMMAND)),
+            ("ime-on", ime(egui::ImeEvent::Enabled)),
+            ("preedit", ime(egui::ImeEvent::Preedit("ka".into()))),
+            ("commit", ime(egui::ImeEvent::Commit("か".into()))),
+            ("preedit-again", ime(egui::ImeEvent::Preedit("ki".into()))),
+            ("cancel", ime(egui::ImeEvent::Preedit(String::new()))),
+            ("ime-off", ime(egui::ImeEvent::Disabled)),
+        ];
+        let text = |h: &egui_kittest::Harness<'static, State>| match &h.state().doc {
+            Some(doc) => doc.as_str().to_owned(),
+            None => h.state().text.clone(),
+        };
+        for (step, events) in script {
+            let modifiers = events
+                .iter()
+                .find_map(|event| match event {
+                    egui::Event::Key { modifiers, .. } => Some(*modifiers),
+                    _ => None,
+                })
+                .unwrap_or_default();
+            for h in [&mut plain, &mut doc] {
+                h.state_mut().changed.clear();
+                h.input_mut().modifiers = modifiers;
+                crate::input_frame::one_pass(h, events.clone());
+                h.input_mut().modifiers = egui::Modifiers::NONE;
+                h.run_steps(1);
+            }
+            assert_eq!(text(&doc), text(&plain), "{step}: the same words");
+            assert_eq!(
+                doc.state().changed,
+                plain.state().changed,
+                "{step}: the same changed() in each frame"
+            );
+            assert_eq!(
+                doc.state().caret,
+                plain.state().caret,
+                "{step}: the same caret"
             );
         }
     }

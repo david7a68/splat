@@ -304,7 +304,7 @@ impl<'a> Driver<'a> {
         });
         let started = Instant::now();
         let frames = Arc::new(Mutex::new(Frames::default()));
-        let harness = Self::build_harness(world, output.is_some(), frames.clone());
+        let harness = Self::build_harness(world, output.is_some(), frames.clone(), SMALL);
         if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
             println!(
                 "Timing {scenario}: app + fonts + renderer = {:?}",
@@ -366,10 +366,11 @@ impl<'a> Driver<'a> {
         world: &World,
         capturing: bool,
         frames: Arc<Mutex<Frames>>,
+        size: (f32, f32),
     ) -> Harness<'a, Splat> {
         let app = world.app();
         let builder = Harness::<Splat>::builder()
-            .with_size(egui::vec2(SMALL.0, SMALL.1))
+            .with_size(egui::vec2(size.0, size.1))
             .with_pixels_per_point(1.0)
             .with_max_steps(64);
         let builder = if capturing {
@@ -410,8 +411,22 @@ impl<'a> Driver<'a> {
 
     /// Quit and start the app again on the same files, as a restart does.
     pub fn restart(&mut self) {
+        self.restart_in(SMALL);
+    }
+
+    /// `restart` with the new app's window at `size` from its first frame, so what it shows
+    /// first is laid out at that size, with nothing kept from another (the base size is unchanged).
+    pub fn restart_at(&mut self, size: (f32, f32)) {
+        let base = self.base;
+        self.base = size;
+        self.restart_in(size);
+        self.base = base;
+        self.window = size;
+    }
+
+    fn restart_in(&mut self, first: (f32, f32)) {
         // The old app writes its state as it runs. A new one reads that.
-        self.harness = Self::build_harness(&self.world, self.capturing, self.frames.clone());
+        self.harness = Self::build_harness(&self.world, self.capturing, self.frames.clone(), first);
         self.harness_generation += 1;
         self.window = self.base;
         self.resize(self.base, 1.0);
@@ -1398,6 +1413,27 @@ impl<'a> Driver<'a> {
         self.interactions += 1;
         self.settle();
         (first, next)
+    }
+
+    /// One input frame of `events`, with egui's own layout passes, and the `frames` frames after
+    /// it with no input: `look` at what each presented frame painted and named, the act's own
+    /// frame first, before the app settles; then the app settles. A move or a cut that lasts a
+    /// frame and is gone when the app settles shows here (Astra's review of PR 736).
+    pub fn each_frame_after<T>(
+        &mut self,
+        events: impl IntoIterator<Item = egui::Event>,
+        frames: usize,
+        look: impl Fn(&Self) -> T,
+    ) -> Vec<T> {
+        super::input_frame::one_pass(&mut self.harness, events);
+        let mut seen = vec![look(self)];
+        for _ in 0..frames {
+            self.harness.step();
+            seen.push(look(self));
+        }
+        self.interactions += 1;
+        self.settle();
+        seen
     }
 
     /// A screen reader's Click on the visible control named `name`, as one input event.

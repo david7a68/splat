@@ -1065,6 +1065,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         "Change on Status in Lookup puts the keyboard in the field, with the status on disk",
     );
     d.type_text("missing");
+    const STATUS_ENTRY: &str = ": Status away → missing.";
     let lookup_pane = |d: &Driver<'_>| {
         d.place_of(SEARCH_LOOKUP).map(|search| {
             egui::Rect::from_min_max(
@@ -1081,10 +1082,56 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         .into_iter()
         .find(|node| node.name == "Status" && node.role == egui::accesskit::Role::TextInput)
         .map(|node| node.rect);
-    d.press(Key::Enter);
+    // Layout step 11b, from the act's own frame on (Astra's review of PR 736): Enter in one
+    // input frame, then each frame until the app settles. In each: the title's top (the witness
+    // of any scroll), whether the new entry is painted cut by the pane's clip, and whether the
+    // result's Undo is whole, when it is there.
+    let enter = |pressed| egui::Event::Key {
+        key: Key::Enter,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let frames = d.each_frame_after([enter(true), enter(false)], 6, |d| {
+        let pane = lookup_pane(d);
+        (
+            pane.and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane))
+                .map(|title| title.top()),
+            pane.is_some_and(|pane| {
+                d.cut_texts_in(pane)
+                    .iter()
+                    .any(|text| text.contains(STATUS_ENTRY))
+            }),
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == "Undo change to Status")
+                .map(|node| node.fully_in_view()),
+        )
+    });
     d.expect("Undo change to Status");
     let title_after = lookup_pane(d).and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane));
     let change_after = d.place_of("Change Status");
+    // The new entry lands whole in the body room (`design::pane::keep_room`) and is never cut on
+    // the way; the title keeps its place in every frame, the act's own first; and the result's
+    // Undo is whole in every frame it shows, as the footer grew into room the arbiter kept clear
+    // (`reveal_with_focus_and_growth`). Lookup builds its footer before its body draws the act,
+    // so the Undo comes in the frame after the act (a footer fault outside layout step 11b,
+    // reported to the lead); it must be whole there.
+    let entry_at_act = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(STATUS_ENTRY))
+        && frames.iter().all(|(_, cut, _)| !cut);
+    let undo_at_act = frames
+        .get(1)
+        .is_some_and(|(_, _, undo)| *undo == Some(true))
+        && frames.iter().all(|(_, _, undo)| undo.unwrap_or(true))
+        && d.nodes()
+            .into_iter()
+            .any(|node| node.name == "Undo change to Status" && node.fully_in_view());
+    let title_kept = title_before.is_some_and(|before| {
+        frames
+            .iter()
+            .all(|(top, _, _)| top.is_some_and(|top| (top - before.top()).abs() <= 0.5))
+    });
     let changed = fs::read_to_string(&path).unwrap();
     d.observe(
         "T15.4",
@@ -1118,24 +1165,28 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     // across resizes before it would scroll the reader away from what the act left in view.
     let mut at_capture = Vec::new();
     // Capture all three reviewer sizes; each look is after its resize.
-    const STATUS_ENTRY: &str = ": Status away → missing.";
     d.state_prepared("status-changed-in-lookup", Sizes::All, |d| {
         d.settle();
         let entry = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(STATUS_ENTRY));
         at_capture.push((named(d), entry));
     });
-    // D-2 (a), before and after the act at 960: `Change` stands where the focused field stood.
-    let _ = (title_before, title_after);
+    // D-2 (a), before and after the act at 960: `Change` stands where the focused field stood,
+    // the title does not move in any frame (nothing scrolls when the entry and the result come),
+    // the entry is never cut, and the Undo is whole in each frame it shows.
     let still = field_before
         .zip(change_after)
         .is_some_and(|(field, change)| {
             change.top() >= field.top() - 0.5
                 && change.bottom() <= field.bottom() + crate::design::L
-        });
+        })
+        && title_kept
+        && title_before
+            .zip(title_after)
+            .is_some_and(|(before, after)| (before.top() - after.top()).abs() <= 0.5);
     d.observe(
         "iter-29-D2-status-still",
-        still,
-        format!("At {SMALL:?}: title {title_before:?} → {title_after:?}; the field {field_before:?}, then Change {change_after:?}"),
+        still && entry_at_act && undo_at_act,
+        format!("At {SMALL:?}: title {title_before:?} → {title_after:?}; the field {field_before:?}, then Change {change_after:?}; entry whole {entry_at_act}, Undo whole {undo_at_act}; each frame from the act (title top, entry cut, Undo whole) {frames:?}"),
     );
     for (size, ((fits, detail), entry)) in [SMALL, DEFAULT, LARGE].into_iter().zip(at_capture) {
         d.observe(
