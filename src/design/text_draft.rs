@@ -83,6 +83,27 @@ impl DraftKey {
     }
 }
 
+/// The last answer of [`TextDraft::same_as`], kept by the two revisions it compared. A host
+/// keeps one per compare it makes on every frame (a draft against its saved text).
+pub type KeptCompare = std::cell::Cell<Option<(Revision, Revision, bool)>>;
+
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// How many whole-text compares the drafts made (`TextDraft::same_words`).
+    pub static WORDS_COMPARED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many bytes of words were copied: a draft's clone, and a host's own counted copies
+    /// ([`count_copied`]).
+    pub static WORDS_COPIED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// A host copied `bytes` of a document's words (a template's clone): counted in tests, so a
+/// quiet frame's copy shows in `pane::text_work`.
+pub fn count_copied(bytes: usize) {
+    #[cfg(any(test, feature = "test-support"))]
+    WORDS_COPIED.with(|count| count.set(count.get() + bytes));
+    let _ = bytes;
+}
+
 /// A document's text, its identity and its revision. See the module comment.
 #[derive(Debug)]
 pub struct TextDraft {
@@ -104,11 +125,40 @@ impl TextDraft {
 
     /// Another document with the same words: a new identity.
     pub fn copy_as_new(&self) -> Self {
+        count_copied(self.text.len());
         Self::new(self.text.clone())
     }
 
     pub fn key(&self) -> DraftKey {
         self.key
+    }
+
+    /// The revision of the words: new in this run for each change, also across drafts.
+    pub fn revision(&self) -> Revision {
+        self.key.revision
+    }
+
+    /// Whether the words are `other`: one compare of the whole text, counted in tests (layout
+    /// PR 9b-C: a quiet frame compares none). Kept by revisions in [`same_as`](Self::same_as).
+    pub fn same_words(&self, other: &str) -> bool {
+        #[cfg(any(test, feature = "test-support"))]
+        WORDS_COMPARED.with(|count| count.set(count.get() + 1));
+        self.text == other
+    }
+
+    /// Whether the words are `words`, the value of revision `other` (a saved text as a
+    /// `memo::Revised`, or another draft): compared once per pair of revisions, the answer
+    /// kept in `kept`. A quiet frame compares two numbers.
+    pub fn same_as(&self, other: Revision, words: &str, kept: &KeptCompare) -> bool {
+        let key = (self.revision(), other);
+        if let Some((draft, saved, same)) = kept.get()
+            && (draft, saved) == key
+        {
+            return same;
+        }
+        let same = self.same_words(words);
+        kept.set(Some((key.0, key.1, same)));
+        same
     }
 
     pub fn as_str(&self) -> &str {

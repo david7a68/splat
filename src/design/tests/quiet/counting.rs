@@ -1,11 +1,12 @@
-//! The counting global allocator of the quiet-frame harnesses (layout PR 9b): `quiet_text`
-//! (the document editor) and `quiet_reader` (the Reader) share it by `#[path]`. Each harness is a
-//! process of its own (`harness = false`), so this allocator sees every thread of it.
+//! The counting allocator of the quiet-frame harnesses (layout PR 9b): one per test process,
+//! included by `#[path]` (`splat-design`'s `quiet_text`, `splat-content-ui`'s
+//! `quiet_markdown`), so both measure the same way. Gross counts and bytes per measured frame,
+//! and a check that the measuring thread did all of the counted work.
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-struct Counting;
+pub struct Counting;
 
 static MEASURING: AtomicBool = AtomicBool::new(false);
 static ALL_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -77,4 +78,41 @@ pub fn measured(run: impl FnOnce()) -> Allocated {
         "every counted allocation was the measuring thread's"
     );
     mine
+}
+
+/// The whole screen, with no panel or frame of its own (both sides draw in the same one).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+pub fn root(ctx: &egui::Context) -> egui::Ui {
+    egui::Ui::new(
+        ctx.clone(),
+        egui::Id::new("quiet_harness_root"),
+        egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(800.0, 600.0),
+        )),
+    )
+}
+
+/// The stock reference: egui's own text edit, laid out by `layouter`, at `wrap`.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+pub fn stock_text_edit(
+    ui: &mut egui::Ui,
+    id: egui::Id,
+    text: &mut String,
+    wrap: f32,
+    layouter: &mut dyn FnMut(&egui::Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley>,
+) {
+    let _ = egui::TextEdit::multiline(text)
+        .id(id)
+        .layouter(layouter)
+        .frame(false)
+        .margin(egui::Vec2::ZERO)
+        .desired_width(wrap)
+        .show(ui);
 }

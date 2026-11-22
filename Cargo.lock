@@ -3958,6 +3958,7 @@ dependencies = [
  "base64",
  "directories",
  "eframe",
+ "egui",
  "egui-phosphor",
  "egui_extras",
  "egui_kittest",

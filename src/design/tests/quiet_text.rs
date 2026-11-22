@@ -28,9 +28,9 @@ use splat_design::{layout, pane, text_draft::TextDraft};
 use std::cell::Cell;
 use std::sync::Arc;
 
-#[path = "support/counting.rs"]
+#[path = "quiet/counting.rs"]
 mod counting;
-use counting::{Allocated, measured};
+use counting::{Allocated, measured, root, stock_text_edit};
 
 /// Which editor a case draws.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -139,7 +139,7 @@ impl Editor {
                     .clone();
                 let mut layouter =
                     move |_: &egui::Ui, _: &dyn egui::TextBuffer, _: f32| galley.clone();
-                stock_text_edit(ui, &mut self.plain, wrap, &mut layouter);
+                stock_text_edit(ui, FIELD.id(), &mut self.plain, wrap, &mut layouter);
                 None
             }
         }
@@ -152,42 +152,6 @@ impl Editor {
         drop(shown);
         allocated
     }
-}
-
-/// The whole screen, with no panel or frame of its own (both sides draw in the same one).
-#[allow(
-    clippy::disallowed_methods,
-    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-)]
-fn root(ctx: &egui::Context) -> egui::Ui {
-    egui::Ui::new(
-        ctx.clone(),
-        egui::Id::new("quiet_text_root"),
-        egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
-            egui::Pos2::ZERO,
-            egui::vec2(800.0, 600.0),
-        )),
-    )
-}
-
-/// The stock reference: egui's own text edit, laid out by `layouter`, at `wrap`.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-)]
-fn stock_text_edit(
-    ui: &mut egui::Ui,
-    text: &mut String,
-    wrap: f32,
-    layouter: &mut dyn FnMut(&egui::Ui, &dyn egui::TextBuffer, f32) -> Arc<egui::Galley>,
-) {
-    let _ = egui::TextEdit::multiline(text)
-        .id(FIELD.id())
-        .layouter(layouter)
-        .frame(false)
-        .margin(egui::Vec2::ZERO)
-        .desired_width(wrap)
-        .show(ui);
 }
 
 /// About `bytes` bytes of `pattern`, repeated.
@@ -217,13 +181,27 @@ fn quiet_frame(side: Side, text: &str, case: Case) -> Allocated {
     let hashed = layout::BOUND_TEXT_BYTES.with(Cell::get);
     let laid = pane::KEPT_LAYOUTS_MADE.with(Cell::get);
     let first = editor.quiet();
-    for _ in 0..4 {
-        assert_eq!(
-            editor.quiet(),
-            first,
-            "{side:?} {case:?}: the quiet frames are equal"
-        );
-    }
+    let work = pane::text_work(|| {
+        for _ in 0..4 {
+            assert_eq!(
+                editor.quiet(),
+                first,
+                "{side:?} {case:?}: the quiet frames are equal"
+            );
+        }
+    });
+    // The document's editor drew in each sampled frame (the stock side draws none), and did no
+    // text work.
+    let drawn = if side == Side::Document { 4 } else { 0 };
+    assert!(
+        work.drawn >= drawn
+            && work
+                == pane::TextWork {
+                    drawn: work.drawn,
+                    ..Default::default()
+                },
+        "{side:?} {case:?}: no text work: {work:?}"
+    );
     assert_eq!(
         layout::BOUND_TEXT_BYTES.with(Cell::get),
         hashed,

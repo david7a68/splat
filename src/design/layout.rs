@@ -549,6 +549,8 @@ impl FieldId {
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Editor {
         let id = self.id();
+        #[cfg(any(test, feature = "test-support"))]
+        DOCUMENTS_DRAWN.with(|count| count.set(count.get() + 1));
         let guard = TextGuard::before(ui, id, Words::Draft(text));
         // The draft is lent to egui for this draw: each change reaches `live`, which the kept
         // layouter reads on every call.
@@ -765,6 +767,9 @@ thread_local! {
     pub(crate) static BOUND_TEXT_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// How many bytes of text the field parts hashed (layout PR 9b's quiet-frame proof).
     pub static BOUND_TEXT_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many times a document editor drew (`FieldId::editor`): a quiet-frame proof first
+    /// shows that the host's editor was there.
+    pub static DOCUMENTS_DRAWN: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// How many of those bytes were a document's words (`text_draft::TextDraft`).
     pub static DRAFT_TEXT_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }

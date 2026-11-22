@@ -5158,8 +5158,8 @@ pub mod campaign_content {
         let work = crate::design::pane::text_work(|| d.settle());
         d.observe(
             "9b-quiet-campaign-repair",
-            work == (0, 0),
-            format!("Layouts made and bytes hashed on settled frames: {work:?}"),
+            work.is_quiet(3),
+            format!("Text work on settled frames (editors drawn, layouts, hashed, compares, copies): {work:?}"),
         );
         d.observe(
             "iter-23-C-check-once",
@@ -21753,8 +21753,8 @@ pub mod encounter_groups {
         let work = crate::design::pane::text_work(|| d.settle());
         d.observe(
             "9b-quiet-group-notes",
-            work == (0, 0),
-            format!("Layouts made and bytes hashed on settled frames: {work:?}"),
+            work.is_quiet(3),
+            format!("Text work on settled frames (editors drawn, layouts, hashed, compares, copies): {work:?}"),
         );
         let typed = d.visible_text("Arrive at dusk.");
         d.click("Undo replace member");

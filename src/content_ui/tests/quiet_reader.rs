@@ -29,7 +29,11 @@
 //! often as its dependency changed, then is quiet again.
 //!
 //! Its own process (`harness = false`): a global allocator counts every thread of the process.
-#[path = "../../design/tests/support/counting.rs"]
+#[path = "../../design/tests/quiet/counting.rs"]
+#[allow(
+    dead_code,
+    reason = "the shared module's own bare screen and text edit are the editor harnesses'"
+)]
 mod counting;
 
 use counting::{Allocated, measured};

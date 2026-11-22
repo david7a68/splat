@@ -40,8 +40,15 @@ splat-content = { path = "../../crates/content", features = ["test-support"] }
 splat-design = { path = "../../src/design", features = ["test-support"] }
 splat-trackers = { path = "../../src/trackers", features = ["test-support"] }
 egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }
+# The quiet-frame harnesses share `splat-design`'s counting module, which names `egui`.
+egui = { version = "0.33", default-features = false }
 
-# Layout PR 9b-R1a: a counting global allocator needs a process of its own.
+# Layout PR 9b-C: a folded Markdown document's quiet frames, under a counting allocator.
+[[test]]
+name = "quiet_markdown"
+harness = false
+
+# Layout PR 9b-R1a: the Reader's host's quiet frames, under a counting allocator.
 [[test]]
 name = "quiet_reader"
 harness = false

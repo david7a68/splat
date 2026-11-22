@@ -826,12 +826,25 @@ thread_local! {
     pub(crate) static FAILING_WRITES: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Template {
     pub name: String,
     /// None for a built-in template, which is read-only until customized.
     pub path: Option<PathBuf>,
     pub body: String,
+}
+
+/// A copy of a template copies its words: counted in tests (layout PR 9b-C), so a frame that
+/// copies one shows in `pane::text_work`.
+impl Clone for Template {
+    fn clone(&self) -> Self {
+        crate::design::text_draft::count_copied(self.body.len());
+        Self {
+            name: self.name.clone(),
+            path: self.path.clone(),
+            body: self.body.clone(),
+        }
+    }
 }
 
 pub const BUILT_IN_TEMPLATES: [(&str, &str); 2] = [
@@ -1936,7 +1949,9 @@ impl NoteUndo {
 
     /// Whether this Undo still applies to the note in this draft.
     pub fn live(&self, draft: &Draft) -> bool {
-        self.owns(draft) && draft.body.as_str() == self.after && self.left_properties(&draft.prefix)
+        self.owns(draft)
+            && draft.body.same_words(&self.after)
+            && self.left_properties(&draft.prefix)
     }
 
     /// The properties are the ones the act left, or the act did not change them.

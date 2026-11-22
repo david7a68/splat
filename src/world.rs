@@ -6711,10 +6711,9 @@ mod tests {
                 shares,
                 "no copy of the Log keys on an unchanged pass"
             );
-            assert_eq!(
-                work,
-                (0, 0),
-                "9b-quiet: the World edit form's unchanged passes"
+            assert!(
+                work.is_quiet(3),
+                "9b-quiet: the World edit form's unchanged passes: {work:?}"
             );
             let rows = harness.query_all_by_label(LOG_WAITS_FOR_CANCEL).count();
             let (world, lookup) = harness.state();
