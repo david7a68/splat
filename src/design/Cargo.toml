@@ -28,6 +28,10 @@ proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
 serde_json = "1"
 syn = { version = "2.0.119", features = ["full", "visit", "extra-traits"] }
 tempfile = "3"
+# Model tests (ruling M29): a state machine model as the oracle of a shared part. The gate runs
+# them with a fixed seed and case count. No `fork` or `timeout` feature: no child process, no clock.
+proptest = { version = "1", default-features = false, features = ["std", "bit-set"] }
+proptest-state-machine = "0.3"
 
 # Layout PR 9b: a counting global allocator needs a process of its own.
 [[test]]
