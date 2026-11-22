@@ -3266,9 +3266,16 @@ impl Run {
     }
 
     fn notes_tab(&mut self, ui: &mut egui::Ui) {
+        design::ScrollColumn::new("run_encounter_notes").show(ui, |ui| self.prep_notes(ui));
+    }
+
+    /// The encounter's prep: its read-aloud text and technical details, or what to do when it
+    /// has none. In its own column on the Prep tab (`notes_tab`); in the ended view's panel, in
+    /// the sync block's column, which is its scroll (`ended_panel`).
+    fn prep_notes(&mut self, ui: &mut egui::Ui) {
         let (prep, technical) = self.prep();
         let mut pressed = false;
-        design::ScrollColumn::new("run_encounter_notes").show(ui, |ui| {
+        {
             if prep.is_empty() {
                 // Round 30 AP1: a sentence that names an act offers it. The run's own
                 // record of its encounter decides, not Lookup's index, which can lag behind
@@ -3315,7 +3322,7 @@ impl Run {
                     style::markdown(ui, technical);
                 });
             }
-        });
+        }
         if pressed {
             self.prep_refusal = None;
         }
@@ -6087,6 +6094,12 @@ impl Run {
                 - design::S
         };
         let (reason_room, second_line) = self.ended_second_line(ui, line_width, undo_room);
+        // The final state and the panel beside it: one task of two columns
+        // (`PaneColumns::shared_task`), whose edges are resolved now, before the header paints,
+        // in the pane's body (its room less the pane's scroll lane, `edges_in`).
+        let panes_width = ui.available_width() - design::lane_width();
+        let edges = self.ended_columns(ui.ctx()).edges_in(ui, panes_width);
+        let rest = edges.child_within(ui, panes_width, 0);
         let (header_rect, _) = ui.allocate_exact_size(
             vec2(
                 ui.available_width(),
@@ -6100,110 +6113,18 @@ impl Run {
             egui::Sense::hover(),
         );
         design::rule(ui);
-        // FI2: errors and a changed file sit in the message footer at the bottom of the view,
-        // below the final state and the panel, so neither moves when one comes or goes.
-        // The ended view is the footer's pane, and its content is one task of two columns
-        // (`PaneColumns::shared_task`): the final state, and the panel's column beside it. The
-        // footer follows the taller column by `S` when both fit, and is pinned at the pane's
-        // bottom when one is taller (each column then scrolls on its own).
-        let frame = design::outcome::PaneFrame::new(ui);
-        let messages = self.run_messages(&frame, false, ui.available_width());
-        // Where the final state's rows end, for Undo's edge in the header.
-        let mut roster_right = ui.available_rect_before_wrap().left();
-        let pressed = messages
-            .pane(ui, design::pane::Body::Content, |ui| {
-                if self.closing.is_open() {
-                    ui.horizontal(|ui| {
-                        closed = self.close_confirmation(ui, "The run stays saved.");
-                    });
-                }
-                // Beside a panel, the final state comes first.
-                let columns = design::PaneColumns::shared_task("run_ended_columns").rest(0.0);
-                let columns = if self.hide_panel {
-                    columns
-                } else {
-                    let width = design::side_panel_width(ui.ctx().content_rect().width());
-                    columns.trailing(
-                        0.0,
-                        design::Column::panel("run_ended_log", width)
-                            .page_keeps(design::RUN_LIST_KEEPS)
-                            .frame(side_frame()),
-                    )
-                };
-                columns.edges(ui).show_children(ui, |ui, index| {
-                    if index == 1 {
-                        self.ended_panel(ui);
-                        return;
-                    }
-                    // The panel's drag handle lies on this column's right edge, so the rows
-                    // stop `S` short of it.
-                    egui::Frame::new()
-                        .inner_margin(egui::Margin {
-                            right: design::S as i8,
-                            ..egui::Margin::ZERO
-                        })
-                        .show(ui, |ui| {
-                            let scale = RunScale::fit(
-                                ui.available_height(),
-                                ui.available_width(),
-                                self.state.order.len(),
-                            );
-                            design::ScrollColumn::new("run_final_state").show(ui, |ui| {
-                                ui.set_max_width(ui.available_width().min(scale.max_width));
-                                // SI1: how everyone ended comes first, so the whole party's HP
-                                // is in view; what the party takes follows.
-                                design::heading(ui, design::Heading::Label("Final state"));
-                                let spacing = ui.spacing().item_spacing.y;
-                                ui.spacing_mut().item_spacing.y = 0.0;
-                                roster_right = ui.available_rect_before_wrap().right();
-                                for index in &self.state.order {
-                                    let p = &self.state.participants[*index];
-                                    let sync = self.row_sync_word(*index);
-                                    let name = row_name(p, TurnMark::None, sync);
-                                    let layout = RowLayout::new(
-                                        ui,
-                                        ui.available_width(),
-                                        p,
-                                        sync,
-                                        scale,
-                                        RowFit::Natural,
-                                        0.0,
-                                    )
-                                    .with_art(self.row_art(ui.ctx(), p));
-                                    let response = design::row(
-                                        ui,
-                                        layout.height(scale),
-                                        false,
-                                        &name,
-                                        |ui, rect| {
-                                            paint_row(
-                                                ui,
-                                                rect,
-                                                p,
-                                                TurnMark::None,
-                                                sync,
-                                                scale,
-                                                &layout,
-                                                None,
-                                                None,
-                                            );
-                                        },
-                                    );
-                                    if layout.name_cut {
-                                        response.on_hover_text(&p.name);
-                                    }
-                                }
-                                ui.spacing_mut().item_spacing.y = spacing;
-                                design::gap(ui, design::Gap::L);
-                                self.loot_section(ui);
-                            });
-                        });
-                });
-            })
-            .pressed;
-        self.run_press(pressed, &mut None);
-        // The header, drawn after the pane so it knows the final state's edge, in the rect kept
-        // for it above the pane (outside the pane's scroll and clip).
+        // The rows' size comes from the pane's whole room, so a footer that comes or goes
+        // changes no row. They end the panel's `S` gutter and the column's lane before the
+        // panel's edge, at most `max_width` from the column's left.
+        let scale = RunScale::fit(
+            ui.available_height(),
+            rest.span() - design::S - design::lane_width(),
+            self.state.order.len(),
+        );
+        let roster_right =
+            rest.min + (rest.span() - design::S - design::lane_width()).min(scale.max_width);
+        // The header comes before the pane, so it is first in Tab order, and outside the pane's
+        // scroll and clip. Its Undo ends at the final state's rows' edge, from the edges above.
         let mut header_ui = ui.new_child(
             egui::UiBuilder::new()
                 .id_salt("ended_header")
@@ -6295,6 +6216,91 @@ impl Run {
             });
         }
 
+        // FI2: errors and a changed file sit in the message footer at the bottom of the view,
+        // below the final state and the panel, so neither moves when one comes or goes.
+        // The ended view is the footer's pane, and its content is one task of two columns
+        // (`PaneColumns::shared_task`): the final state, and the panel's column beside it. The
+        // footer follows the taller column by `S` when both fit, and is pinned at the pane's
+        // bottom when one is taller (each column then scrolls on its own).
+        let frame = design::outcome::PaneFrame::new(ui);
+        let messages = self.run_messages(&frame, false, ui.available_width());
+        let pressed = messages
+            .pane(ui, design::pane::Body::Content, |ui| {
+                if self.closing.is_open() {
+                    ui.horizontal(|ui| {
+                        closed = self.close_confirmation(ui, "The run stays saved.");
+                    });
+                }
+                // Beside a panel, the final state comes first.
+                edges.show_children(ui, |ui, index| {
+                    if index == 1 {
+                        self.ended_panel(ui);
+                        return;
+                    }
+                    // The panel's drag handle lies on this column's right edge, so the rows
+                    // stop `S` short of it.
+                    egui::Frame::new()
+                        .inner_margin(egui::Margin {
+                            right: design::S as i8,
+                            ..egui::Margin::ZERO
+                        })
+                        .show(ui, |ui| {
+                            // As tall as its content: the shared columns follow the taller one.
+                            design::ScrollColumn::new("run_final_state")
+                                .fit_height()
+                                .show(ui, |ui| {
+                                    ui.set_max_width(ui.available_width().min(scale.max_width));
+                                    // SI1: how everyone ended comes first, so the whole party's HP
+                                    // is in view; what the party takes follows.
+                                    design::heading(ui, design::Heading::Label("Final state"));
+                                    let spacing = ui.spacing().item_spacing.y;
+                                    ui.spacing_mut().item_spacing.y = 0.0;
+                                    for index in &self.state.order {
+                                        let p = &self.state.participants[*index];
+                                        let sync = self.row_sync_word(*index);
+                                        let name = row_name(p, TurnMark::None, sync);
+                                        let layout = RowLayout::new(
+                                            ui,
+                                            ui.available_width(),
+                                            p,
+                                            sync,
+                                            scale,
+                                            RowFit::Natural,
+                                            0.0,
+                                        )
+                                        .with_art(self.row_art(ui.ctx(), p));
+                                        let response = design::row(
+                                            ui,
+                                            layout.height(scale),
+                                            false,
+                                            &name,
+                                            |ui, rect| {
+                                                paint_row(
+                                                    ui,
+                                                    rect,
+                                                    p,
+                                                    TurnMark::None,
+                                                    sync,
+                                                    scale,
+                                                    &layout,
+                                                    None,
+                                                    None,
+                                                );
+                                            },
+                                        );
+                                        if layout.name_cut {
+                                            response.on_hover_text(&p.name);
+                                        }
+                                    }
+                                    ui.spacing_mut().item_spacing.y = spacing;
+                                    design::gap(ui, design::Gap::L);
+                                    self.loot_section(ui);
+                                });
+                        });
+                });
+            })
+            .pressed;
+        self.run_press(pressed, &mut None);
         closed
     }
 
@@ -6377,6 +6383,24 @@ impl Run {
 
     /// The width of Undo with its whole target, when the ended header shows it beside
     /// Continue fight or its reason. Then Undo never gives up its target.
+    /// The ended view's columns: the final state, with the rest of the room, and the panel at its
+    /// kept width at the right while it shows.
+    fn ended_columns(&self, ctx: &egui::Context) -> design::PaneColumns {
+        let columns = design::PaneColumns::shared_task("run_ended_columns").rest(0.0);
+        if self.hide_panel {
+            return columns;
+        }
+        columns.trailing(
+            0.0,
+            design::Column::panel(
+                "run_ended_log",
+                design::side_panel_width(ctx.content_rect().width()),
+            )
+            .page_keeps(design::RUN_LIST_KEEPS)
+            .frame(side_frame()),
+        )
+    }
+
     /// The ended view's panel column (`ended_view`'s trailing child): the sync block and Prep,
     /// then the Combat log. With choices to make, they have the column, and the log waits behind
     /// a heading. Never a pair of choices cut by a second scroll.
@@ -6395,7 +6419,7 @@ impl Run {
             .show(ui, |ui| {
                 self.sync_block(ui);
                 if !self.setup_details.is_empty() {
-                    design::section(ui, "Prep", |ui| self.notes_tab(ui));
+                    design::section(ui, "Prep", |ui| self.prep_notes(ui));
                 }
             });
         // SM11, AM14: Prep's peer, so one form, closed, with or without choices to make.

@@ -332,6 +332,56 @@ fn death_saves_move_nothing(d: &mut Driver<'_>) {
     }
 }
 
+/// Layout 11c (review of PR 750): the ended view opened first at 1920, with no height kept from
+/// a smaller window (a restart). P1: its short columns are measured as they are, so the footer
+/// follows them. P2: the header (Close run) comes before the footer (its message's Dismiss, its
+/// group) in Tab order. Then the base size again.
+fn ended_fresh_at_1920(d: &mut Driver<'_>) {
+    let base = d.window_size();
+    d.set_base(LARGE);
+    d.restart();
+    let pane = ended_pane(d);
+    d.observe(
+        "m32-L11c-ended-fresh-1920",
+        pane.as_ref().is_some_and(|pane| {
+            pane.content && !pane.pinned && pane.height.is_some_and(|height| height < pane.view)
+        }),
+        format!("Opened first at 1920, the ended pane: {pane:?}"),
+    );
+    let footer = pane.and_then(|pane| pane.footer);
+    d.harness_focus_nothing();
+    let (mut close, mut first_footer, mut stops) = (None, None, Vec::new());
+    for stop in 0..60 {
+        d.press(Key::Tab);
+        let Some(name) = d.focused_name() else {
+            continue;
+        };
+        let in_footer = footer.is_some_and(|(rect, group)| {
+            d.focus_id() == Some(group)
+                || d.nodes()
+                    .iter()
+                    .any(|node| node.name == name && rect.contains_rect(node.rect))
+        });
+        if name == "Close run" {
+            close.get_or_insert(stop);
+        }
+        if in_footer {
+            first_footer.get_or_insert(stop);
+        }
+        if close.is_some() && first_footer.is_some() {
+            break;
+        }
+        stops.push(name);
+    }
+    d.harness_focus_nothing();
+    d.observe(
+        "m32-L11c-ended-tab-order",
+        close.zip(first_footer).is_some_and(|(close, footer)| close < footer),
+        format!("Tab reaches Close run at stop {close:?} and the footer at {first_footer:?}; stops: {stops:?}"),
+    );
+    d.set_base(base);
+}
+
 pub fn run(d: &mut Driver<'_>) {
     // The fight belongs to a session, so the plan and Timeline have it.
     d.click(NAV_SESSIONS);
@@ -439,6 +489,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Add Long rest");
     d.click(BACK_TO_RUN);
     d.app_mut().timeline.save();
+    ended_fresh_at_1920(d);
     d.restart();
     let ended = |d: &mut Driver<'_>| d.app_mut().encounters.run().is_some_and(|run| run.ended());
     let shown = ended(d) && !d.has(END_STEP) && d.visible_passage(LATER) && d.in_view(CLOSE_RUN);

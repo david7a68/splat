@@ -791,6 +791,38 @@ fn painted_bounds(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     found
 }
 
+/// Layout 11c (M0153): the ended view's pane, from the pane solver's own record: the pane whose
+/// scroll viewport holds the first Final state row.
+#[derive(Debug)]
+pub(crate) struct EndedPane {
+    /// A `Body::Content` pane.
+    pub(crate) content: bool,
+    /// Its footer is pinned at the pane's bottom (it does not follow the content).
+    pub(crate) pinned: bool,
+    /// Its scroll viewport's height.
+    pub(crate) view: f32,
+    /// Its content's height as laid out.
+    pub(crate) height: Option<f32>,
+    /// Its footer, when it holds a message, and the footer's focus group.
+    pub(crate) footer: Option<(egui::Rect, egui::Id)>,
+}
+
+pub(crate) fn ended_pane(d: &Driver<'_>) -> Option<EndedPane> {
+    let row = roster_places(d).first().map(|(_, rect)| *rect)?;
+    d.pane_records().into_iter().find_map(|record| {
+        let viewport = record.viewport()?;
+        viewport.contains(row.center()).then(|| EndedPane {
+            content: matches!(record.body(), crate::design::pane::Body::Content),
+            pinned: record.placement() == crate::design::pane::Placement::Pinned,
+            view: viewport.height(),
+            height: record.content_height(),
+            footer: record
+                .footer()
+                .map(|footer| (footer, record.id().with("focus"))),
+        })
+    })
+}
+
 /// Layout PR 8: where the Settings footer that holds the control or text named `name` stands,
 /// from the pane records: the footer, its pane's viewport and the footer's gap from the pane's own
 /// content (the viewport's top plus the content's height, or the viewport's bottom when pinned).
@@ -12290,26 +12322,10 @@ pub mod run_sync_states {
         }
         for size in [SMALL, LARGE] {
             let (row_edge, undo_edge, pane) = d.at_size(size, |d| {
-                let first = roster_places(d).first().map(|(_, rect)| *rect);
-                // Layout 11c (M0153): the ended view's pane, the one whose scroll viewport holds
-                // the first Final state row, from the pane solver's own record.
-                let pane = first.and_then(|row| {
-                    d.pane_records().into_iter().find_map(|record| {
-                        let viewport = record.viewport()?;
-                        viewport.contains(row.center()).then(|| {
-                            (
-                                matches!(record.body(), crate::design::pane::Body::Content),
-                                record.placement() == crate::design::pane::Placement::Pinned,
-                                viewport.height(),
-                                record.content_height(),
-                            )
-                        })
-                    })
-                });
                 (
-                    first.map(|rect| rect.right()),
+                    roster_places(d).first().map(|(_, rect)| rect.right()),
                     d.place_of("Undo: end encounter").map(|rect| rect.right()),
-                    pane,
+                    ended_pane(d),
                 )
             });
             d.observe(
@@ -12324,17 +12340,17 @@ pub mod run_sync_states {
             // pinned when one is taller (960). The pane solver's record is the reference.
             d.observe(
                 "m32-L11c-ended-columns-pane",
-                pane.is_some_and(|(content, pinned, view, height)| {
-                    content
-                        && height.is_some_and(|height| {
+                pane.as_ref().is_some_and(|pane| {
+                    pane.content
+                        && pane.height.is_some_and(|height| {
                             if size == LARGE {
-                                !pinned && height < view
+                                !pane.pinned && height < pane.view
                             } else {
-                                pinned == (height >= view - 0.5)
+                                pane.pinned == (height >= pane.view - 0.5)
                             }
                         })
                 }),
-                format!("At {size:?}, the ended pane (Content, pinned, viewport height, content height): {pane:?}"),
+                format!("At {size:?}, the ended pane: {pane:?}"),
             );
         }
         // A pair of choices is never cut: both are in view, at the minimum window too.
