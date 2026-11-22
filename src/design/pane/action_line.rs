@@ -199,6 +199,44 @@ impl ActionLine<'_> {
     }
 }
 
+/// For a caller's tests (the Trackers page's, L7): the narrowest row width at which `line`'s
+/// actions take one row. One point narrower, the last of them wraps.
+#[cfg(any(test, feature = "test-support"))]
+pub fn one_row_width(line: &ActionLine<'_>) -> f32 {
+    let start = if line.beside {
+        line.columns.name + S + line.columns.value + S
+    } else {
+        line.indent
+    };
+    let widths: f32 = line.actions.iter().map(|action| action.width).sum();
+    start + widths + S * line.actions.len().saturating_sub(1) as f32
+}
+
+/// For a caller's tests: whether a line drew inside its measured `block` (its rect, as
+/// `draw_laid` or a region placed it): every rect it painted lies in the block, and the lowest
+/// painted bottom with the block's `tail` is the block's end. Each painted rect is read from what
+/// was drawn (an action's response, a part's painted words), never from its slot.
+#[cfg(any(test, feature = "test-support"))]
+pub fn painted_in_block(block: Rect, tail: f32, painted: &[Rect]) -> Result<(), String> {
+    if let Some(out) = painted
+        .iter()
+        .find(|rect| !block.expand(0.5).contains_rect(**rect))
+    {
+        return Err(format!("{out:?} is painted outside its block {block:?}"));
+    }
+    let lowest = painted
+        .iter()
+        .map(|rect| rect.bottom())
+        .fold(block.top(), f32::max);
+    if (lowest + tail - block.bottom()).abs() > 0.5 {
+        return Err(format!(
+            "the lowest painted bottom {lowest} with the tail {tail} does not end the block \
+             {block:?}"
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -690,6 +728,126 @@ mod tests {
         harness.ctx.set_pixels_per_point(1.5);
         harness.step();
         assert!(laid() > before, "another scale lays the lines out again");
+    }
+
+    /// What the threshold case drew: the tail, the one-row width, and at each width its block,
+    /// every rect it painted, and each action's top.
+    type Threshold = (f32, Option<f32>, Vec<(Rect, Vec<Rect>, Vec<f32>)>);
+
+    /// Sol 2-018: a real Trackers line at its wrap threshold. With a long action ("Score for Old
+    /// Guard"), a part below it and a nonzero tail, one point wider than its one-row width the
+    /// actions take one row, and one point narrower the last wraps; at both, everything painted
+    /// (the actions' responses, the part's painted words) lies in the measured block, and the
+    /// lowest painted bottom with the tail ends it. Red: a row that wraps one point early.
+    #[test]
+    fn a_long_action_at_its_wrap_threshold_stays_in_its_block() {
+        const WORDS: [&str; 3] = ["Burn a torch", "Crowd loves it", "Score for Old Guard"];
+        const BELOW: &str =
+            "Two fields count Old Guard once: the line that leaves one out says so here.";
+        let mut harness = Harness::builder()
+            .with_size(vec2(1200.0, 400.0))
+            .themed_ui_state(
+                |ui, state: &mut Threshold| {
+                    let actions: Vec<LineAction> = WORDS
+                        .iter()
+                        .map(|words| LineAction {
+                            key: Id::new(("threshold", *words)),
+                            width: Action::secondary(words)
+                                .density(Density::Read)
+                                .natural_width(ui),
+                        })
+                        .collect();
+                    let line = ActionLine {
+                        key: Id::new("threshold"),
+                        heading: None,
+                        title: None,
+                        indent: 0.0,
+                        name: "Old Guard",
+                        value: "2",
+                        columns: LineColumns {
+                            name: 120.0,
+                            value: 48.0,
+                        },
+                        actions: &actions,
+                        beside: true,
+                        below: &[],
+                        tail: LINE_GAP,
+                    };
+                    let threshold = one_row_width(&line);
+                    state.1 = Some(threshold);
+                    state.2.clear();
+                    for width in [threshold + 1.0, threshold - 1.0] {
+                        // The part's words, measured as the caller does: wrapped in the line's
+                        // width.
+                        let below = [ui
+                            .fonts_mut(|fonts| {
+                                fonts.layout(
+                                    BELOW.to_owned(),
+                                    Type::Small.font(ui),
+                                    colors().muted,
+                                    width,
+                                )
+                            })
+                            .size()
+                            .y];
+                        let line = ActionLine {
+                            below: &below,
+                            ..line
+                        };
+                        let laid = line.lay(ui, width);
+                        let mut painted = Vec::new();
+                        let mut tops = Vec::new();
+                        let block = draw_laid(ui, &laid, |ui| {
+                            painted.push(ui.part(slot::NAME, line.name, false).rect);
+                            painted.push(ui.part(slot::VALUE, line.value, false).rect);
+                            for (at, words) in WORDS.iter().enumerate() {
+                                let rect = ui.in_slot(slot::FIRST_ACTION + at, |ui| {
+                                    Action::secondary(words)
+                                        .density(Density::Read)
+                                        .show(ui)
+                                        .rect
+                                });
+                                tops.push(rect.top());
+                                painted.push(rect);
+                            }
+                            painted.push(ui.in_slot(line.below_slot(0), |ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        Type::Small.rich(ui, BELOW).color(colors().muted),
+                                    )
+                                    .wrap(),
+                                )
+                                .rect
+                            }));
+                        });
+                        state.2.push((block, painted, tops));
+                    }
+                    state.0 = LINE_GAP;
+                },
+                (0.0, None, Vec::new()),
+            );
+        harness.run_steps(2);
+        let (tail, threshold, drawn) = harness.state();
+        let threshold = threshold.expect("measured");
+        assert_eq!(drawn.len(), 2);
+        let ((wide, wide_painted, wide_tops), (narrow, narrow_painted, narrow_tops)) =
+            (&drawn[0], &drawn[1]);
+        assert!(
+            wide_tops.iter().all(|top| (top - wide_tops[0]).abs() < 0.5)
+                && narrow_tops[2] > narrow_tops[0] + 0.5,
+            "at {} one row, at {} the last action wraps: {wide_tops:?} {narrow_tops:?}",
+            threshold + 1.0,
+            threshold - 1.0
+        );
+        for (block, painted) in [(wide, wide_painted), (narrow, narrow_painted)] {
+            if let Err(fault) = painted_in_block(*block, *tail, painted) {
+                panic!("at width {}: {fault}", block.width());
+            }
+        }
+        assert!(
+            (narrow.height() - wide.height() - Density::Read.control() - XS).abs() < 0.5,
+            "the wrapped row adds one control and XS: {wide:?} {narrow:?}"
+        );
     }
 
     /// Review of PR 876 (P2): each action's slot is keyed by its action, so hiding an action

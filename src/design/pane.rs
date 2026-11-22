@@ -136,6 +136,8 @@ mod plan_row;
 mod region;
 pub use action_line::{ActionLine, LineAction, LineColumns, slot as line_slot};
 #[cfg(any(test, feature = "test-support"))]
+pub use action_line::{one_row_width, painted_in_block};
+#[cfg(any(test, feature = "test-support"))]
 pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
 use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
