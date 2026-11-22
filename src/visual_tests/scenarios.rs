@@ -16204,6 +16204,28 @@ pub mod session_notes {
         // Must stay true: the open details form owns its own save, so the move is not primary.
         d.click("Edit details");
         d.expect("Save details");
+        // Layout step 11c (L11c-C.2): Edit details gives the keyboard to the name field, and the
+        // pane's focus clearance brings that field's block, the whole form with its Save, into
+        // view (here the form opens below all three blocks).
+        let whole = |d: &Driver<'_>, name: &str, role: Option<egui::accesskit::Role>| {
+            d.nodes().into_iter().any(|node| {
+                node.name == name
+                    && role.is_none_or(|role| node.role == role)
+                    && node.fully_in_view()
+            })
+        };
+        let (field, save, focused) = (
+            whole(d, "Campaign name", Some(egui::accesskit::Role::TextInput)),
+            whole(d, "Save details", None),
+            d.focused_name(),
+        );
+        d.observe(
+            "l11c-C2-edit-details-form",
+            field && save && focused.as_deref() == Some("Campaign name"),
+            format!(
+                "After Edit details: the name field whole {field}, Save details whole {save}, focus on {focused:?}"
+            ),
+        );
         // The details form's own save is the one primary once its details change.
         let name = d
             .field_text("Campaign name")
