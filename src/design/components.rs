@@ -5133,6 +5133,58 @@ pub fn menu_submenu<R>(
     .inner
 }
 
+/// A menu of several submenus (the creature Filter's facts, M0051). Each submenu is a row of the
+/// menu, with `menu_submenu`'s inset, type and height and its caret after its word; its choices
+/// open under it, in the same menu, one submenu at a time. So no submenu lies over the next
+/// one's row at any width: the menu stays the one layer `menu_popup` placed in its owning pane,
+/// clear of its splitter and scroll bar. The keyboard reaches each row and then the open row's
+/// choices in order (Tab); Space or Enter on a row opens or closes it; Escape closes the menu,
+/// as any menu. Each row tells a screen reader whether it is open. `words` are the submenus'
+/// words; `contents(ui, at)` draws the open one's choices, from the row's words. Only
+/// [`Submenus::show`](super::layout::Submenus::show) calls it, in a menu that a click inside
+/// does not close ([`MenuPopup::show_submenus`](super::layout::MenuPopup::show_submenus)).
+pub(in crate::design) fn menu_submenus<W: AsRef<str>>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    words: &[W],
+    mut contents: impl FnMut(&mut Ui, usize),
+) {
+    let key = ui.make_persistent_id(id);
+    let mut open: Option<usize> = ui.data(|data| data.get_temp(key)).flatten();
+    for (at, word) in words.iter().enumerate() {
+        let word = word.as_ref();
+        let here = open == Some(at);
+        let row = ui
+            .scope(|ui| {
+                ui.spacing_mut().button_padding = vec2(S, XS);
+                ui.spacing_mut().interact_size.y = Density::Read.control();
+                if here {
+                    ui.style_mut().visuals.widgets.inactive = ui.style().visuals.widgets.open;
+                }
+                let caret = if here { icons::DOWN } else { icons::NEXT };
+                ui.add(
+                    egui::Button::new(Type::Strong.rich(ui, word))
+                        .right_text(Type::Body.rich(ui, caret).color(colors().muted)),
+                )
+            })
+            .inner;
+        // Its name is its word, without the caret; its state is open or closed.
+        named(ui, &row, word);
+        ui.ctx()
+            .accesskit_node_builder(row.id, |node| node.set_expanded(here));
+        if row.clicked() {
+            open = if here { None } else { Some(at) };
+        }
+        if open == Some(at) {
+            ui.horizontal_top(|ui| {
+                space(ui, S);
+                ui.vertical(|ui| contents(ui, at));
+            });
+        }
+    }
+    ui.data_mut(|data| data.insert_temp(key, open));
+}
+
 /// Where a submenu of `size` starts (its top left): right of its button, else left of it, each
 /// level with the button; else below the button's row, or above it when it does not fit below,
 /// as far left as the button and inside `inside`. It never covers the button, and it stays `S`

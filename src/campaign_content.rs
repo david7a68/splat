@@ -2744,97 +2744,87 @@ impl CampaignContent {
                     )
                 }
             };
-            // A fault count is a status: the warning icon and colour, then the count.
-            let job = crate::content_actions::issue_count_title(ui, &heading);
-            // Review of PR 730: its id is not its count, so a repair that changes the count keeps
-            // it as the DM left it. It is whether Campaign.md has flags: flags that appear open
-            // it (`default_open`), and with the last one repaired it starts closed again.
-            let issues = design::Section::new(job)
-                .id(("campaign_issues", campaign_flags.is_empty()))
-                .default_open(!campaign_flags.is_empty())
-                .show(ui, |ui| {
-                    design::ScrollColumn::new("campaign_issues")
-                        .max_height(design::FORM_WIDTH / 2.0)
-                        .fit_height()
-                        .show(ui, |ui| {
-                            flag_lines(ui, &mut self.open_run_settings);
-                            for e in errors.iter().filter(|error| {
-                                !closure
+            let issues = issues_section(ui, &heading, !campaign_flags.is_empty(), |ui| {
+                design::ScrollColumn::new("campaign_issues")
+                    .max_height(design::FORM_WIDTH / 2.0)
+                    .fit_height()
+                    .show(ui, |ui| {
+                        flag_lines(ui, &mut self.open_run_settings);
+                        for e in errors.iter().filter(|error| {
+                            !closure
+                                .missing_dependencies
+                                .iter()
+                                .any(|issue| issue.message.as_str() == error.as_str())
+                        }) {
+                            ui.add(
+                                egui::Label::new(Type::Small.rich(ui, e.as_str()).color(c.muted))
+                                    .wrap(),
+                            );
+                        }
+                        for issue in &closure.missing_dependencies {
+                            ui.push_id(&issue.reference, |ui| {
+                                // FA6: a dependency issue is a warning like the flags above
+                                // it, and its repairs start at its words, one per owner.
+                                let missing = issue.fault();
+                                let mut fault =
+                                    design::outcome::BodyFault::new(&ContentFault::Missing {
+                                        place: missing.place,
+                                        cause: &missing.cause,
+                                    });
+                                for id in &issue.owners {
+                                    if let Some(path) = catalogue.file_path_of(*id) {
+                                        let owner = &catalogue.entries[id];
+                                        fault = fault.repair(design::outcome::Repair::new(
+                                            crate::choice!("Repair {}", owner.entry.name),
+                                            path.to_path_buf(),
+                                        ));
+                                    }
+                                }
+                                let repair = fault.show(ui);
+                                if let Some(path) = repair {
+                                    ui.ctx().data_mut(|data| {
+                                        data.insert_temp(
+                                            egui::Id::new("open_library_repair"),
+                                            path,
+                                        );
+                                        // The editor names the missing link and opens at
+                                        // its line.
+                                        if let Some(target) = &issue.target {
+                                            data.insert_temp(
+                                                egui::Id::new("open_library_repair_link"),
+                                                Some((target.clone(), issue.message.clone())),
+                                            );
+                                        }
+                                    });
+                                }
+                                design::quiet_section(ui, "Technical details", |ui| {
+                                    ui.label(
+                                        Type::Small.rich(ui, issue.technical()).color(c.muted),
+                                    );
+                                });
+                            });
+                        }
+                        for entry in catalogue.entries.values().filter(|entry| {
+                            entry.private
+                                && !closure
                                     .missing_dependencies
                                     .iter()
-                                    .any(|issue| issue.message.as_str() == error.as_str())
-                            }) {
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small.rich(ui, e.as_str()).color(c.muted),
-                                    )
-                                    .wrap(),
-                                );
-                            }
-                            for issue in &closure.missing_dependencies {
-                                ui.push_id(&issue.reference, |ui| {
-                                    // FA6: a dependency issue is a warning like the flags above
-                                    // it, and its repairs start at its words, one per owner.
-                                    let missing = issue.fault();
-                                    let mut fault =
-                                        design::outcome::BodyFault::new(&ContentFault::Missing {
-                                            place: missing.place,
-                                            cause: &missing.cause,
-                                        });
-                                    for id in &issue.owners {
-                                        if let Some(path) = catalogue.file_path_of(*id) {
-                                            let owner = &catalogue.entries[id];
-                                            fault = fault.repair(design::outcome::Repair::new(
-                                                crate::choice!("Repair {}", owner.entry.name),
-                                                path.to_path_buf(),
-                                            ));
-                                        }
-                                    }
-                                    let repair = fault.show(ui);
-                                    if let Some(path) = repair {
-                                        ui.ctx().data_mut(|data| {
-                                            data.insert_temp(
-                                                egui::Id::new("open_library_repair"),
-                                                path,
-                                            );
-                                            // The editor names the missing link and opens at
-                                            // its line.
-                                            if let Some(target) = &issue.target {
-                                                data.insert_temp(
-                                                    egui::Id::new("open_library_repair_link"),
-                                                    Some((target.clone(), issue.message.clone())),
-                                                );
-                                            }
-                                        });
-                                    }
-                                    design::quiet_section(ui, "Technical details", |ui| {
-                                        ui.label(
-                                            Type::Small.rich(ui, issue.technical()).color(c.muted),
-                                        );
-                                    });
-                                });
-                            }
-                            for entry in catalogue.entries.values().filter(|entry| {
-                                entry.private
-                                    && !closure
-                                        .missing_dependencies
+                                    .any(|issue| issue.owners.contains(&entry.entry.id))
+                        }) {
+                            if splat::content::required_references(&entry.entry).is_ok_and(
+                                |references| {
+                                    references
                                         .iter()
-                                        .any(|issue| issue.owners.contains(&entry.entry.id))
-                            }) {
-                                if splat::content::required_references(&entry.entry).is_ok_and(
-                                    |references| {
-                                        references
-                                            .iter()
-                                            .any(|reference| catalogue.resolve(reference).is_err())
-                                    },
-                                ) && design::link(ui, &format!("Open {}", entry.entry.name))
-                                    .clicked()
-                                {
-                                    self.open_lookup = Some(entry.entry.id);
-                                }
+                                        .any(|reference| catalogue.resolve(reference).is_err())
+                                },
+                            ) && design::link(ui, &format!("Open {}", entry.entry.name))
+                                .clicked()
+                            {
+                                self.open_lookup = Some(entry.entry.id);
                             }
-                        });
-                });
+                        }
+                    });
+            });
             design::named(ui, &issues.header_response, &heading);
         }
         design::rule(ui);
@@ -3402,6 +3392,24 @@ pub fn load_snapshot(campaign: &Campaign, modules: &[Module]) -> Loaded {
 
 /// What the DM pressed in the Packages page's footer: the result and its press, done after the
 /// pane returns (`CampaignContent::press_result`).
+/// The issue list's section, under its count (`heading`). A fault count is a status: the warning
+/// icon and colour, then the count. Review of PR 730: its id is not its count, so a repair that
+/// changes the count keeps it as the DM left it. It is whether Campaign.md has flags
+/// (`flagged`): flags that appear open it (`default_open`), and with the last one repaired it
+/// starts closed again.
+fn issues_section<R>(
+    ui: &mut egui::Ui,
+    heading: &str,
+    flagged: bool,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::CollapsingResponse<R> {
+    let job = crate::content_actions::issue_count_title(ui, heading);
+    design::Section::new(job)
+        .id(("campaign_issues", !flagged))
+        .default_open(flagged)
+        .show(ui, add)
+}
+
 /// `needed by Ember Cultist, Arena Final`: the one form of what keeps an entry selected, in the
 /// package list's rows and in `Needed by your entries` (round 28 FB7).
 fn needed_by(reasons: impl Iterator<Item = String>) -> String {

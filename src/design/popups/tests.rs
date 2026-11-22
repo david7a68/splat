@@ -1402,6 +1402,101 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
         draw(click(aberration.center()));
         draw(Vec::new());
         assert_eq!(chosen.get(), Some("Aberration"), "the choice at {width}");
+
+        // M0051: a menu of several submenus (`menu_submenus`, the creature Filter's facts) in
+        // the same column, on `menu_popup`. A submenu's choices open under its row, in the menu,
+        // so every other row stays in view below them, inside the column, and only one is open.
+        let ctx = context();
+        let picked = Cell::new(None::<&str>);
+        let placed = Cell::new(Rect::NOTHING);
+        let draw = |events| {
+            frame(&ctx, size, events, |ui| {
+                let column = Rect::from_min_size(
+                    pos2(ui.max_rect().right() - COLUMN, ui.max_rect().top()),
+                    vec2(COLUMN, 600.0),
+                );
+                placed.set(column);
+                let mut child = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(column)
+                        .layout(Layout::top_down(Align::Min)),
+                );
+                let filter = child.button("Filter creatures");
+                crate::design::menu_popup(&child, &filter).show_submenus(|ui, submenus| {
+                    submenus.show(ui, "facts", &["Habitat", "Type", "Size"], |ui, at| {
+                        let kinds: &[&'static str] = match at {
+                            0 => &["Underdark", "Forest"],
+                            1 => &["Aberration", "Beast", "Celestial"],
+                            _ => &["Tiny", "Huge"],
+                        };
+                        for kind in kinds {
+                            if ui.button(*kind).clicked() {
+                                picked.set(Some(kind));
+                            }
+                        }
+                    });
+                });
+            })
+        };
+        let first = draw(Vec::new());
+        let filter = bounds(&first, "Filter creatures").expect("the menu's button");
+        draw(click(filter.center()));
+        let menu = draw(Vec::new());
+        let ty = bounds(&menu, "Type").expect("the Type row");
+        draw(click(ty.center()));
+        let open = draw(Vec::new());
+        let expanded = |output: &egui::FullOutput, name: &str| {
+            output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some(name))
+                .and_then(|(_, node)| node.is_expanded())
+        };
+        let (ty, beast, size_row, habitat) = (
+            bounds(&open, "Type").expect("its row"),
+            bounds(&open, "Beast").expect("Type's choices are open"),
+            bounds(&open, "Size").expect("the next row"),
+            bounds(&open, "Habitat").expect("the row before"),
+        );
+        assert!(
+            beast.top() >= ty.bottom() - 0.5
+                && size_row.top() >= beast.bottom() - 0.5
+                && beast.left() >= ty.left()
+                && [ty, beast, size_row, habitat].iter().all(|rect| {
+                    rect.left() >= placed.get().left() - 0.5
+                        && rect.right() <= placed.get().right() - lane_width() + 0.5
+                }),
+            "m0051-submenus: at {width}, Type's choices under its row and above Size, inside the \
+             column: {ty:?} {beast:?} {size_row:?}"
+        );
+        assert_eq!(
+            [
+                expanded(&open, "Habitat"),
+                expanded(&open, "Type"),
+                expanded(&open, "Size")
+            ],
+            [Some(false), Some(true), Some(false)],
+            "m0051-submenus: at {width}, each row says whether it is open"
+        );
+        // Another row opens and the first closes: one at a time. Its choice is reachable.
+        draw(click(size_row.center()));
+        let swapped = draw(Vec::new());
+        assert!(
+            bounds(&swapped, "Beast").is_none() && bounds(&swapped, "Huge").is_some(),
+            "m0051-submenus: at {width}, one submenu open at a time"
+        );
+        let huge = bounds(&swapped, "Huge").unwrap();
+        draw(click(huge.center()));
+        draw(Vec::new());
+        assert_eq!(
+            picked.get(),
+            Some("Huge"),
+            "m0051-submenus: the choice at {width}"
+        );
     }
 }
 

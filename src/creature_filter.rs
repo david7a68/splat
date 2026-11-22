@@ -40,8 +40,7 @@ pub fn filter_bar<'a>(
         let response = design::menu_button_at_line_start(ui, &word, count > 0);
         design::named(ui, &response, "Filter creatures");
         design::menu_popup(&*ui, &response)
-            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-            .show(|ui| menu(ui, filter, &choices(creatures())));
+            .show_submenus(|ui, submenus| menu(ui, submenus, filter, &choices(creatures())));
         let chosen: Vec<(Facet, String)> = filter
             .chosen
             .iter()
@@ -73,14 +72,12 @@ fn chip(ui: &mut egui::Ui, label: &str) -> bool {
         .clicked()
 }
 
-/// Each fact is egui's submenu: `design::menu_submenu` opens below its own row in a narrow pane,
-/// over the next fact's row, so it does not fit a menu of several submenus yet.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
+/// Each fact is a submenu of the Filter menu (`MenuPopup::show_submenus`, M0051): its choices
+/// open under its row, in the menu, one fact at a time, so none lies over the next fact's row,
+/// also in a narrow pane.
 fn menu(
     ui: &mut egui::Ui,
+    submenus: &mut design::Submenus,
     filter: &mut Filter,
     choices: &std::collections::BTreeMap<Facet, Vec<(String, usize)>>,
 ) {
@@ -92,46 +89,52 @@ fn menu(
         );
         return;
     }
-    for facet in Facet::ALL {
-        let Some(values) = choices.get(&facet) else {
-            continue;
-        };
-        let chosen = if facet == Facet::Challenge {
-            usize::from(filter.challenge != (None, None))
-        } else {
-            filter.chosen.get(&facet).map_or(0, |v| v.len())
-        };
-        let label = if chosen > 0 {
-            format!("{} ({chosen})", facet.label())
-        } else {
-            facet.label().to_owned()
-        };
-        ui.menu_button(label, |ui| {
-            // As wide as its widest choice and the scroll lane, which the column always keeps.
-            ui.set_width(facet_width(ui, facet, values) + design::lane_width());
-            design::ScrollColumn::new(("creature filter facet", facet.label()))
-                .max_height(ui.ctx().content_rect().height() * 0.6)
-                .fit_height()
-                .show(ui, |ui| {
-                    if facet == Facet::Challenge {
-                        challenge_menu(ui, filter, values);
-                    } else {
-                        for (value, count) in values {
-                            let mut on = filter.is_chosen(facet, value);
-                            let response = ui.checkbox(&mut on, format!("{value} ({count})"));
-                            design::named(
-                                ui,
-                                &response,
-                                &format!("Filter {}: {value}", facet.label()),
-                            );
-                            if response.changed() {
-                                filter.toggle(facet, value);
-                            }
+    let facets: Vec<(Facet, &[(String, usize)])> = Facet::ALL
+        .into_iter()
+        .filter_map(|facet| Some((facet, choices.get(&facet)?.as_slice())))
+        .collect();
+    let words: Vec<String> = facets
+        .iter()
+        .map(|(facet, _)| {
+            let chosen = if *facet == Facet::Challenge {
+                usize::from(filter.challenge != (None, None))
+            } else {
+                filter.chosen.get(facet).map_or(0, |v| v.len())
+            };
+            if chosen > 0 {
+                format!("{} ({chosen})", facet.label())
+            } else {
+                facet.label().to_owned()
+            }
+        })
+        .collect();
+    // As wide as the widest fact's choices (from the rows' inset) and the scroll lane, which the
+    // column always keeps: the menu keeps one width whichever fact is open.
+    let widest = facets
+        .iter()
+        .map(|(facet, values)| facet_width(ui, *facet, values))
+        .fold(0.0, f32::max);
+    ui.set_width(widest + design::S + design::lane_width());
+    submenus.show(ui, "creature filter facts", &words, |ui, at| {
+        let (facet, values) = facets[at];
+        design::ScrollColumn::new(("creature filter facet", facet.label()))
+            .max_height(ui.ctx().content_rect().height() * 0.5)
+            .fit_height()
+            .show(ui, |ui| {
+                if facet == Facet::Challenge {
+                    challenge_menu(ui, filter, values);
+                } else {
+                    for (value, count) in values {
+                        let mut on = filter.is_chosen(facet, value);
+                        let response = ui.checkbox(&mut on, format!("{value} ({count})"));
+                        design::named(ui, &response, &format!("Filter {}: {value}", facet.label()));
+                        if response.changed() {
+                            filter.toggle(facet, value);
                         }
                     }
-                });
-        });
-    }
+                }
+            });
+    });
 }
 
 /// The width of a fact's choices: the challenge rows (`challenge_menu`), or the widest checkbox

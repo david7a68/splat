@@ -2112,11 +2112,24 @@ impl<'a> TitleLine<'a> {
                     false
                 }
                 None if matches!(self.actions[at].weight, TitleWeight::Link) => {
-                    // Review of PR 730: a link keeps its hint, as the other forms do.
-                    let link = super::title_link(ui, self.actions[at].word.as_str());
-                    match self.actions[at].hint {
-                        Some(hint) => link.on_hover_text(hint),
-                        None => link,
+                    // Reviews of PR 730 and 740: a link keeps its hint, as the other forms do;
+                    // a blocked one takes no press and says why on hover and to a screen
+                    // reader, as a blocked `Action` does.
+                    let action = self.actions[at];
+                    let link = ui
+                        .add_enabled_ui(action.blocked.is_none(), |ui| {
+                            super::title_link(ui, action.word.as_str())
+                        })
+                        .inner;
+                    match (action.blocked, action.hint) {
+                        (Some(reason), _) => {
+                            ui.ctx().accesskit_node_builder(link.id, |node| {
+                                node.set_description(reason);
+                            });
+                            link.on_disabled_hover_text(reason)
+                        }
+                        (None, Some(hint)) => link.on_hover_text(hint),
+                        (None, None) => link,
                     }
                     .clicked()
                 }
@@ -4375,6 +4388,25 @@ fn menu_popup_raw(response: &Response) -> egui::Popup<'_> {
     egui::Popup::menu(response)
 }
 
+/// The submenus of a menu that a click inside does not close ([`MenuPopup::show_submenus`]).
+pub struct Submenus {
+    _by_its_menu: (),
+}
+
+impl Submenus {
+    /// Its submenus, each a row of the menu with its word and caret, whose choices open under it
+    /// in the menu, one at a time; `contents(ui, at)` draws the open one's choices.
+    pub fn show<W: AsRef<str>>(
+        &mut self,
+        ui: &mut Ui,
+        id: impl std::hash::Hash,
+        words: &[W],
+        contents: impl FnMut(&mut Ui, usize),
+    ) {
+        super::components::menu_submenus(ui, id, words, contents);
+    }
+}
+
 /// A menu from [`menu_popup`]: `show` draws its content at the width the part decides.
 #[must_use = "call `show` to draw the menu"]
 pub struct MenuPopup<'a> {
@@ -4443,6 +4475,18 @@ impl MenuPopup<'_> {
     pub fn close_behavior(mut self, behavior: egui::PopupCloseBehavior) -> Self {
         self.popup = self.popup.close_behavior(behavior);
         self
+    }
+
+    /// A menu of several submenus (M0051, the creature Filter's facts): `content` draws the
+    /// menu, and its submenus through [`Submenus::show`]. Its rows and choices keep it open; a
+    /// click outside it or Escape closes it. Only this menu makes a [`Submenus`], so no menu that
+    /// a click inside closes holds one.
+    pub fn show_submenus<R>(
+        self,
+        content: impl FnOnce(&mut Ui, &mut Submenus) -> R,
+    ) -> Option<egui::InnerResponse<R>> {
+        self.close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| content(ui, &mut Submenus { _by_its_menu: () }))
     }
 
     /// Draw the menu while it is open.
