@@ -362,11 +362,16 @@ impl Trackers {
             .map(|campaign| HistoryOwner(campaign.path.clone()))
     }
 
-    /// The last Remove, when it was made in the reader of `note` in this campaign.
+    /// The last Remove, when it was made in the reader of `note` in this campaign and that
+    /// note is in play: the one selection the footer draws its kept line from, so a note out
+    /// of play shows no Undo remove (PR 676 review, P1).
     pub(crate) fn removed_in(
         &self,
         note: Uuid,
     ) -> Option<crate::design::results::Shown<'_, Removed>> {
+        if !in_play(&self.rules, note) {
+            return None;
+        }
         self.removed
             .get(&self.history_owner()?)
             .filter(|shown| shown.value().note == note)
