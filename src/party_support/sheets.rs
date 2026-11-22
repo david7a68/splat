@@ -1769,14 +1769,14 @@ mod sheet_now_tests {
     }
 
     /// Layout step 11a (Astra's P1 on PR 700): the sheet's two wide columns end whole together
-    /// under a footer. A wrapped Armor fact in the left column, Resistance and then Darkvision in
-    /// the right: at some heights the footer's edge crosses Darkvision only, and a cut moved to
+    /// at the pane's edge (`rows_end_whole`, as the run's sheet). A wrapped Armor fact in the left column, Resistance and then Darkvision in
+    /// the right: at some heights the edge crosses Darkvision only, and a cut moved to
     /// Darkvision's top would cross Armor's lower lines. At every height from 300 to 1300 px, no
     /// text of the body is cut from below. The reference is the clip that paints each text,
     /// against the text's own bounds.
     #[test]
     fn both_wide_columns_end_whole_at_every_height() {
-        use crate::design::outcome::{Messages, NoPress, Outcome, PaneFrame};
+        use crate::design::outcome::{Messages, NoPress, PaneFrame};
         let record = std::sync::Arc::new(wizard_with(
             10,
             json!({
@@ -1797,7 +1797,8 @@ mod sheet_now_tests {
                     let frame = PaneFrame::new(ui);
                     let mut messages =
                         Messages::<NoPress>::new(&frame, "sheet_probe", ui.available_width());
-                    messages.outcome(Outcome::Refused(crate::sentence!("Save the draft first.")));
+                    // The body's own bottom is its edge, as the run's sheet has it.
+                    messages.rows_end_whole();
                     let _ = messages.pane(ui, design::pane::Body::Content, |ui| {
                         overview(ui, &record, None)
                     });
