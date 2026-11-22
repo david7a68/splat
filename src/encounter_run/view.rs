@@ -4420,14 +4420,8 @@ impl Run {
                 )
             });
             response.clone().on_hover_text("Blank rolls initiative");
-            // FI5: the reason's footer can take room from the list. While the field has focus
-            // and its words cannot be read, a field that the footer hides scrolls into view.
-            if response.has_focus()
-                && arrival_total(text).is_err()
-                && !ui.clip_rect().contains_rect(response.rect)
-            {
-                response.scroll_to_me(None);
-            }
+            // FI5: the reason's footer can take room from the list. The pane's focus arbiter
+            // (I9, `whole_rows`) brings the focused field whole above the footer it grows.
             ui.ctx().accesskit_node_builder(response.id, |node| {
                 node.set_description("Blank rolls initiative")
             });
@@ -10503,7 +10497,7 @@ mod tests {
             let also_bad = groups[2].id;
             // The whole Arrivals tab, so its footer is drawn too. `clean` has no bad total.
             let edge = std::rc::Rc::new(std::cell::Cell::new(0.0));
-            let build = |mut run: Run, bad_total: bool| {
+            let build = |mut run: Run, bad_total: bool, height: f32| {
                 run.set_groups(Arc::new(groups.clone()));
                 if bad_total {
                     run.group_totals.insert(bad, "1-2".into());
@@ -10511,7 +10505,7 @@ mod tests {
                 }
                 let seen = edge.clone();
                 let mut harness = egui_kittest::Harness::builder()
-                    .with_size(vec2(width, 800.0))
+                    .with_size(vec2(width, height))
                     .themed(move |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
                             seen.set(ui.max_rect().right());
@@ -10521,12 +10515,54 @@ mod tests {
                 harness.run_steps(2);
                 harness
             };
-            let clean = build(super::super::tests::run(), false);
+            let clean = build(super::super::tests::run(), false, 800.0);
             let clean_field = clean
                 .get_by_label("Initiative total for Lost Patrol")
                 .rect();
             drop(clean);
-            let mut harness = build(run, true);
+            // L11c-R.4 (`group_row`): in a pane just tall enough for it, the DM types a total
+            // that cannot be read into the last group's field. Its reason grows the footer over
+            // the field, and the pane's focus arbiter (I9) brings the field whole above it.
+            let mut short = build(
+                super::super::tests::run(),
+                false,
+                clean_field.bottom() + design::L,
+            );
+            let lost = "Initiative total for Lost Patrol";
+            short.get_by_label(lost).click();
+            short.run_steps(2);
+            let before = short.get_by_label(lost).rect();
+            assert!(
+                (before.top() - clean_field.top()).abs() <= 0.5,
+                "group_row-reveal at {width}: the field starts whole in view: {before:?}"
+            );
+            short.get_by_label(lost).type_text("1-2");
+            short.run_steps(4);
+            let field = short.get_by_label(lost).rect();
+            let reason = short
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text)
+                        if text
+                            .galley
+                            .text()
+                            .starts_with("Lost Patrol: Enter a whole number") =>
+                    {
+                        Some(text.pos.y)
+                    }
+                    _ => None,
+                })
+                .next()
+                .expect("the reason is in the footer");
+            assert!(
+                field.top() >= 0.0 && field.bottom() <= reason + 0.5 && field.top() < before.top(),
+                "group_row-reveal at {width}: the field {field:?} stands whole above its reason \
+                 at {reason} (it was at {before:?})"
+            );
+            drop(short);
+            let mut harness = build(run, true, 800.0);
             // Astra 2: an unchanged frame works out no summary and no reason again.
             let prepared = PREPARED.with(std::cell::Cell::get);
             harness.run_steps(3);
