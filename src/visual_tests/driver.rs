@@ -866,7 +866,8 @@ impl<'a> Driver<'a> {
     }
 
     /// Rect shapes in `area` (control frames, fields, row backgrounds; in points) that the clip
-    /// painting them cuts from below: part shows above the clip's bottom, the rest is under it.
+    /// painting them cuts from below: part shows above the clip's bottom (a sliver of its top
+    /// edge is enough), the rest is under it.
     /// Only shapes no taller than `tallest` count, as a card or a column frame may run under a
     /// cut, and only shapes taller than a hairline.
     pub fn frames_cut_from_below(&self, area: egui::Rect, tallest: f32) -> Vec<egui::Rect> {
@@ -887,7 +888,7 @@ impl<'a> Driver<'a> {
                     if r.height() > 2.0
                         && r.height() <= tallest
                         && area.intersects(r)
-                        && r.top() < clip.bottom() - 1.0
+                        && r.top() < clip.bottom() - 0.1
                         && r.bottom() > clip.bottom() + 1.0
                         && clip.x_range().intersects(r.x_range())
                     {
