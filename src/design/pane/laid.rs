@@ -367,6 +367,9 @@ mod tests {
         /// A typed jump to a block's top, asked once in the pane's column before the region
         /// draws, and one after it.
         jumps: (Option<usize>, Option<usize>),
+        /// The least scroll that shows a block (`bring_into_view`), asked once before the
+        /// region draws.
+        bring: Option<usize>,
     }
 
     impl Page {
@@ -388,6 +391,7 @@ mod tests {
                 beside: None,
                 duplicate: false,
                 jumps: (None, None),
+                bring: None,
             }
         }
     }
@@ -459,6 +463,7 @@ mod tests {
                     let (top, pull) = (page.top, page.pull);
                     // A jump asked in this pass before the region draws, or after it.
                     let jumps = std::mem::take(&mut page.jumps);
+                    let bring = page.bring.take();
                     let Page {
                         laid,
                         rows,
@@ -471,6 +476,17 @@ mod tests {
                     let top_of = |at: usize| top + laid[..at].iter().map(Laid::height).sum::<f32>();
                     if let Some(at) = jumps.0 {
                         crate::design::reveal::jump(ui, top_of(at), JumpTo::LinkedHeading);
+                    }
+                    if let Some(at) = bring {
+                        let block = Rect::from_min_size(
+                            egui::pos2(ui.max_rect().left(), top_of(at)),
+                            egui::vec2(ui.max_rect().width(), laid[at].height()),
+                        );
+                        let _ = crate::design::reveal::bring_into_view(
+                            ui,
+                            block,
+                            JumpTo::OpenMenuControl,
+                        );
                     }
                     BlockRegion::new("laid_test", region, rows).show_laid(
                         ui,
@@ -1207,8 +1223,9 @@ mod tests {
     }
 
     /// Review of PR 770: a column has one queued request. A typed jump and a measured region's
-    /// request asked for one column in one pass: only the newest applies, in either order. A
-    /// wheel over another column keeps the jump. Red runs: two queues (the jump outranks the
+    /// request asked for one column in one pass: only the newest applies, in either order, and the
+    /// same for `bring_into_view`. A wheel over another column keeps a jump and a
+    /// `bring_into_view`. Red runs: two queues (the jump outranks the
     /// region's request); the jump's cancel read window-wide.
     #[test]
     fn a_column_has_one_request_whoever_asks_it() {
@@ -1254,6 +1271,35 @@ mod tests {
         assert!(
             shown(&harness, 2),
             "a wheel over another column leaves this column's jump"
+        );
+        // The same for the least scroll that shows a block (`bring_into_view`).
+        harness.state_mut().bring = Some(28);
+        harness.step();
+        let beside = harness.state().beside.expect("the other column").center();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(beside));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 28),
+            "a wheel over another column leaves this column's bring_into_view"
+        );
+        // A region's request after it, in one pass, replaces it.
+        harness.state_mut().bring = Some(9);
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new(36usize)));
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 36) && !shown(&harness, 9),
+            "the newer region request replaces bring_into_view"
         );
     }
 }
