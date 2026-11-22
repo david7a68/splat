@@ -20378,11 +20378,23 @@ pub mod encounter_groups {
         // editor's notes field ends at the roster's. Layout PR 5b: a member's menu follows the
         // members' facts, so it ends within that edge, in the members' column (I6).
         for size in [SMALL, DEFAULT, LARGE] {
+            // PR 641 review (P1): the notes field's right edge is compared with the members'
+            // rule (the hairline under a member's row, which spans the members column) directly.
             let (edges, (columns, _, detail)) = d.at_size(size, |d| {
+                let menu = d.place_of("More actions for Cinder Wolf");
+                let rule = menu.and_then(|menu| {
+                    d.hairlines_in(egui::Rect::from_min_max(
+                        egui::pos2(0.0, menu.bottom()),
+                        egui::pos2(d.window_size().0, menu.bottom() + 24.0),
+                    ))
+                    .into_iter()
+                    .map(|line| line.right())
+                    .reduce(f32::max)
+                });
                 (
                     (
-                        d.place_of("More actions for Cinder Wolf")
-                            .map(|rect| rect.right()),
+                        menu.map(|rect| rect.right()),
+                        rule,
                         d.place_of(&format!("Group notes for {GROUP_RIVALS}"))
                             .map(|rect| rect.right()),
                     ),
@@ -20391,9 +20403,11 @@ pub mod encounter_groups {
             });
             d.observe(
                 "iter-18-B-FD4-group",
-                columns && matches!(edges, (Some(menu), Some(notes)) if menu <= notes + 0.5),
+                columns
+                    && matches!(edges, (Some(menu), Some(rule), Some(notes))
+                        if (notes - rule).abs() <= 0.5 && menu <= notes + 0.5),
                 format!(
-                    "At {size:?}, the member menu and the notes field end at {edges:?}; {detail}"
+                    "At {size:?}, the member menu, the members' rule and the notes field end at {edges:?}; {detail}"
                 ),
             );
         }
