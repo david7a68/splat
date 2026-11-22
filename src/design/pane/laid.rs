@@ -1450,8 +1450,14 @@ mod tests {
                     }
                 }
                 harness.run_steps(3);
-                let survived = shown(&harness, 35);
+                // Survived: its block is whole in view. Ended: the view is nowhere near its block
+                // (a request that applied and was then scrolled past by the input is not ended).
+                let page = harness.state();
+                let target = block_rect(page, 35);
+                let near = target.top() < page.clip.bottom() + 300.0
+                    && target.bottom() > page.clip.top() - 300.0;
                 let expected = !(in_a && cancels);
+                let survived = if expected { shown(&harness, 35) } else { near };
                 if survived != expected {
                     wrong.push(format!(
                         "{name} at {}: survived {survived}, expected {expected}",
