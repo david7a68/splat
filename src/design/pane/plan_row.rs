@@ -68,6 +68,10 @@ pub struct PlanRow<'a> {
     /// The rule after the row is part of the block (a closed row); an opened row draws its
     /// details first, then the rule.
     pub rule: bool,
+    /// Space at the block's end: the gap a column leaves after each of its items, where the
+    /// block stands in a region that stacks blocks with none (the Session plan's measured body),
+    /// so a row has one pitch in place and in the region. Zero in place.
+    pub tail: f32,
 }
 
 /// The plan's shared column: its widest facts and its widest action recipe, from every closed
@@ -293,7 +297,7 @@ impl PlanRow<'_> {
         } else {
             Rect::from_min_size(pos2(0.0, row + LINE_GAP), vec2(width, 0.0))
         };
-        let height = rule.bottom();
+        let height = rule.bottom() + self.tail;
         let mut texts = vec![LaidText {
             at: Pos2::new(lead_at.x, lead_at.y),
             galley: lead,
@@ -490,6 +494,7 @@ mod tests {
                                 actions: place.0,
                                 actions_height: place.1,
                                 rule: true,
+                                tail: 0.0,
                             })
                             .collect();
                         // The shared column, from every row, before any row draws.
@@ -732,6 +737,7 @@ mod tests {
                             actions: 60.0,
                             actions_height: Density::Read.control(),
                             rule: true,
+                            tail: 0.0,
                         };
                         let laid = row.lay(ui, width, PlanColumns::default());
                         let _ = crate::design::draw_laid(ui, &laid, |ui| {
