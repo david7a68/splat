@@ -4420,10 +4420,7 @@ impl Library {
         self.just_saved &= !dirty && self.source;
         // Ctrl+S is taken only where a draft could be saved; it saves exactly when Save can
         // (`DraftState::can_save`, below).
-        let save_key = dirty
-            && editable
-            && !conflict
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        let save_key = design::save_row::save_key(ui, dirty && editable && !conflict);
         let d = colors().document;
         // The file stopped reading under the draft: its owner line says so, as for a file that
         // never read.

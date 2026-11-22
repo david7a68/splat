@@ -3021,6 +3021,8 @@ impl eframe::App for Splat {
             Some((fact.name.clone(), event.session?))
         });
         let modal = self.modal_open(ctx);
+        // Every page's Ctrl+S asks this one test (`design::save_row::save_key`, issues #513, #514).
+        design::save_row::set_modal(ctx, modal);
         if !modal {
             if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {
                 self.toggle_lookup();

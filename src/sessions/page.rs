@@ -4896,9 +4896,8 @@ impl Sessions {
         // Beside a page with its own draft, Ctrl+S goes to where the keyboard is. The key is
         // taken here, before the field, and the save runs after the field took this frame's
         // input (issue #513): words typed in the same frame are saved with it.
-        let save = (!in_panel || self.note_had_focus)
-            && !self.modal
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        let save =
+            design::save_row::save_key(ui, (!in_panel || self.note_had_focus) && !self.modal);
         if draft.state == DraftState::Conflict {
             if draft.on_disk.is_none() {
                 draft.show_disk();
@@ -7934,9 +7933,7 @@ impl Sessions {
         }
         // Ctrl+S is taken before the field and saves after it (issue #513), so words typed in
         // the same frame are saved with it.
-        let save = self.template_draft.is_some()
-            && !self.modal
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        let save = design::save_row::save_key(ui, self.template_draft.is_some() && !self.modal);
         let mut pressed_link = None;
         // The template's text field is its file's (M0495, M0496). A template has no typed owner
         // key yet: its path is the key (`TextKey::from_data`, counted).
@@ -8132,10 +8129,7 @@ impl Sessions {
         }
         // `Ctrl+S` saves exactly when the button it labels can, not under a modal (the app's
         // one test) nor the page's lock.
-        let save_key = state.can_save()
-            && !self.modal
-            && ui.is_enabled()
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        let save_key = design::save_row::save_key(ui, state.can_save() && !self.modal);
         // The commit place: `Save folder` in every state, so the place the DM pressed never
         // turns into another act.
         let row = design::save_row(ui, &state, "Save folder");
