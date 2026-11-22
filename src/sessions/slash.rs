@@ -499,17 +499,18 @@ fn set_caret(ctx: &egui::Context, editor: egui::Id, at: usize) {
     egui::TextEdit::store_state(ctx, editor, state);
 }
 
-/// Under the `/`, or above it when the note has no room below.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-fn popup_at(ui: &egui::Ui, id: egui::Id, anchor: egui::Rect, shown: bool) -> egui::Popup<'static> {
-    egui::Popup::new(id, ui.ctx().clone(), anchor, ui.layer_id())
+/// Under the `/`, or above it when the note has no room below: the shared menu at a place
+/// (`design::menu_popup_at`, M0536), so it stays inside the note's pane, clear of its splitter
+/// and scroll bar, with a menu's keys and close rules.
+fn popup_at(
+    ui: &egui::Ui,
+    id: egui::Id,
+    anchor: egui::Rect,
+    shown: bool,
+) -> design::MenuPopup<'static> {
+    design::menu_popup_at(ui, id, anchor)
         .open_memory((!shown).then_some(egui::SetOpenCommand::Bool(true)))
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-        .align(egui::RectAlign::BOTTOM_START)
-        .align_alternatives(&[egui::RectAlign::TOP_START])
         .width(MENU_WIDTH)
 }
 

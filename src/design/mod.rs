@@ -45,12 +45,12 @@ pub use action_rows::{Columns, RowAction, action_row};
 pub use layout::{
     ACTION_GAP, BackEdge, BackLink, BackTo, CREATE_FIELD_MIN, Create, CreateChoice, CreateDropdown,
     CreateField, CreateReasons, DraftOwner, Editor, EditorHead, EditorKind, FieldId, FieldName,
-    InlineCreate, KeptLine, KeyName, MAX_WORD_CHARS, NARROWEST_PANE, NoReason, Once,
+    InlineCreate, KeptLine, KeyName, MAX_WORD_CHARS, MenuPopup, NARROWEST_PANE, NoReason, Once,
     ParticipantKey, RowIndex, RowKey, ScrollColumn, Selection, SideAction, Sideways, Slot,
     SlotType, Submenus, TextKey, TextOwner, TitleAction, TitleActionRow, TitleLine, TitlePlacement,
     TitleType, Unsaved, Word, edit_in_place, first_unsaved, labelled_field, lane_width, line_field,
-    menu_popup, path_help, register_title_row, search_min_row, sideways_scroll, status_slot,
-    title_lead_in, title_placement,
+    menu_popup, menu_popup_at, path_help, register_title_row, search_min_row, sideways_scroll,
+    status_slot, title_lead_in, title_placement,
 };
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]
@@ -67,6 +67,6 @@ pub use save_row::{DraftState, save_row};
 pub use status::{KindStatus, StatusKind, Tinted};
 pub use tokens::*;
 // M5, ruling R22: the run's turn heading, one closed part.
-pub use turn_heading::{KeptTurnHeading, TurnHeading, TurnKeys, TurnName};
+pub use turn_heading::{KeptTurnHeading, TurnHeading, TurnKeys, TurnName, TurnStrip};
 // Ruling R24: one block per value of a settings pane.
 pub use value_block::{HeadingNote, HeadingRow, ValueBlock};

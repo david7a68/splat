@@ -2291,3 +2291,56 @@ fn closed_dropdowns_measure_no_choice_rows_and_open_metrics_follow_inputs() {
     }
     assert_eq!(ROW_METRICS_MADE.with(Cell::get), closed);
 }
+
+/// M-P0.S1 (M0536): a menu opened at a place, not a control (Sessions' `/` menu opens at the
+/// note's text cursor), keeps `menu_popup`'s room: inside the pane that draws it, one scroll
+/// lane clear of its right edge (its splitter or scroll bar), and above the place when there is
+/// no room below. The pane, the lane and the place are this test's own numbers.
+#[test]
+fn a_menu_at_a_place_stays_in_its_pane_and_opens_above_with_no_room_below() {
+    const COLUMN: f32 = 316.0;
+    const LONG: &str = "Search entries and notes for a link to put at the cursor in this note";
+    let ctx = context();
+    let size = vec2(960.0, 640.0);
+    let pane = Rect::from_min_size(pos2(200.0, 0.0), vec2(COLUMN, 640.0));
+    // The text cursor near the pane's right edge and its bottom, as after a long line.
+    let caret = Rect::from_min_size(pos2(pane.right() - 40.0, 600.0), vec2(2.0, 20.0));
+    let id = egui::Id::new("test_menu_at_a_place");
+    let rows = std::cell::RefCell::new(Vec::new());
+    let draw = |shown: bool| {
+        frame(&ctx, size, Vec::new(), |ui| {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(pane), |ui| {
+                ui.set_clip_rect(pane);
+                rows.borrow_mut().clear();
+                crate::design::menu_popup_at(ui, id, caret)
+                    .open_memory((!shown).then_some(egui::SetOpenCommand::Bool(true)))
+                    .show(|ui| {
+                        rows.borrow_mut()
+                            .push(crate::design::choice_wrapped(ui, true, LONG, None).rect);
+                    });
+            });
+        })
+    };
+    draw(false);
+    for _ in 0..3 {
+        draw(true);
+    }
+    assert!(egui::Popup::is_id_open(&ctx, id), "open");
+    let menu = ctx
+        .memory(|memory| memory.area_rect(id))
+        .expect("the menu's rect");
+    let clear = lane_width().max(crate::design::S);
+    assert!(
+        menu.left() >= pane.left() + clear - 0.5 && menu.right() <= pane.right() - clear + 0.5,
+        "the menu {menu:?} is inside the pane {pane:?}, one lane ({clear}) clear of its edges"
+    );
+    assert!(
+        menu.bottom() <= caret.top() + 0.5,
+        "with no room below the cursor, the menu {menu:?} opens above it {caret:?}"
+    );
+    assert!(
+        rows.borrow().iter().all(|row| menu.contains_rect(*row)),
+        "its choice is inside it: {:?}",
+        rows.borrow()
+    );
+}
