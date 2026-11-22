@@ -333,13 +333,11 @@ fn death_saves_move_nothing(d: &mut Driver<'_>) {
 }
 
 /// Layout 11c (review of PR 750): the ended view opened first at 1920, with no height kept from
-/// a smaller window (a restart): its short columns are measured as they are, so the footer
-/// follows them (P1); and its header comes before the footer in Tab order (P2). Then the base
-/// size again.
+/// a smaller window (a restart whose window is 1920 from its first frame): its short columns
+/// are measured as they are, so the footer follows them (P1); and its header comes before the
+/// footer in Tab order (P2). The caller's restart then comes back at the base size.
 fn ended_fresh_at_1920(d: &mut Driver<'_>) {
-    let base = d.window_size();
-    d.set_base(LARGE);
-    d.restart();
+    d.restart_at(LARGE);
     let pane = ended_pane(d);
     d.observe(
         "m32-L11c-ended-fresh-1920",
@@ -353,7 +351,6 @@ fn ended_fresh_at_1920(d: &mut Driver<'_>) {
     d.app_mut().encounters.run_mut().unwrap().wants_unend = Some(crate::encounter_run::Unend::Undo);
     d.settle();
     ended_tab_order(d);
-    d.set_base(base);
 }
 
 /// Layout 11c (review of PR 750, P2): the ended view's header (Close run) comes before its
