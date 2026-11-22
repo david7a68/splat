@@ -504,11 +504,14 @@ pub(super) struct Column {
     pub applied: Option<f32>,
 }
 
-/// An offset a measured region's request queued for its column (layout 11c, A1b), and the frame
-/// it was queued in.
+/// The one request queued for a column (layout 11c, A1b; review of PR 770): a measured region's
+/// request, or a typed jump ([`jump`]). A newer request for the column replaces it, whatever
+/// asked it; one rule applies and cancels them all (`take_queued`).
 #[derive(Clone, Copy, Debug)]
 struct Queued {
     offset: f32,
+    /// What asked it: a region's request (`None`) or a jump's reason.
+    why: Option<JumpTo>,
     /// The column's view (screen points) when it was queued: only input over it is the DM's
     /// input for this request.
     view: Rect,
@@ -525,20 +528,25 @@ fn queued_id(column: Id) -> Id {
 /// layout 11c): the column applies it at the start of its next pass (`take_queued`), drawn in
 /// another pass of this frame. A newer request replaces it. Outside a `ScrollColumn`, nothing.
 pub(in crate::design) fn queue(ui: &Ui, by: f32) {
-    let Some((_, region)) = owning_region(ui) else {
-        return;
-    };
+    if let Some((_, region)) = owning_region(ui) {
+        enqueue(ui, &region, by, None);
+    }
+}
+
+/// Queue the column's offset `by` points from where it is now, for its next pass: its one
+/// request, replacing an older one.
+fn enqueue(ui: &Ui, region: &Region, by: f32, why: Option<JumpTo>) {
     let frame = ui.ctx().cumulative_frame_nr();
     let queued = Queued {
         offset: (region.offset + by).max(0.0),
+        why,
         view: region.view,
         made: frame,
         frame,
     };
     ui.ctx()
         .data_mut(|data| data.insert_temp(queued_id(region.key), queued));
-    ui.ctx()
-        .request_discard("a region's request moves its column");
+    ui.ctx().request_discard("a request moves its column");
 }
 
 /// The view of the `ScrollColumn` that `ui` is drawn in, in screen points (its area's viewport
@@ -554,9 +562,13 @@ pub(in crate::design) fn column_view(ui: &Ui) -> Option<Rect> {
 /// method event while the focus is in it, ends it; else it applies in its own frame or the next
 /// one. A release ends a held press and is not input. A key counts only when it moves a view or
 /// a caret (`moves_view`) and goes to this column (`keys_in`).
-pub(super) fn take_queued(ui: &Ui, key: Id) -> Option<f32> {
+pub(super) fn take_queued(ui: &Ui, key: Id, area: Id) -> Option<f32> {
     let id = queued_id(key);
     let mut queued = ui.ctx().data(|data| data.get_temp::<Queued>(id))?;
+    let _ = queued.why;
+    // The column's own fling after a drag still moves it: the DM's scroll goes on.
+    let fling = egui::scroll_area::State::load(ui.ctx(), area)
+        .is_some_and(|state| state.velocity() != Vec2::ZERO);
     let frame = ui.ctx().cumulative_frame_nr();
     let view = queued.view;
     let keys = keys_in(ui, view);
@@ -578,7 +590,7 @@ pub(super) fn take_queued(ui: &Ui, key: Id) -> Option<f32> {
             event => keys && moves_view(event),
         });
         (
-            (wheel && over(pointer.hover_pos())) || dragged,
+            (wheel && over(pointer.hover_pos())) || dragged || fling,
             pressed_in,
             other,
         )
@@ -702,73 +714,22 @@ pub enum JumpTo {
     LinkedHeading,
 }
 
-/// A jump queued for a column: the frame it was asked in and the offset it puts the column at.
-#[derive(Clone, Copy, Debug)]
-struct Jump {
-    frame: u64,
-    to: f32,
-    why: JumpTo,
-}
-
-fn jump_id(key: Id) -> Id {
-    key.with("design_jump")
-}
-
 /// The `ScrollColumn` that holds `ui` moves, at its next pass, so that the screen y `top` of
-/// this pass is at its view's top (layout PR 10c, ruling M18). The column is the one writer of
-/// its offset: it applies the jump where it applies a reveal's (`take_offset`). The DM's own
-/// input in between (a wheel, a press, a key) drops it; a later jump replaces it. Outside a
-/// `ScrollColumn` it does nothing.
+/// this pass is at its view's top (layout PR 10c, ruling M18). It is the column's one queued
+/// request (`enqueue`): a newer request for the column, a jump or a region's, replaces it, and
+/// the DM's own input over that column (or to a control in it) drops it (`take_queued`). Outside
+/// a `ScrollColumn` it does nothing.
 pub fn jump(ui: &Ui, top: f32, why: JumpTo) {
     let Some((_, region)) = owning_region(ui) else {
         return;
     };
-    let to = (region.offset + top - region.view.top()).max(0.0);
-    let frame = ui.ctx().cumulative_frame_nr();
-    ui.ctx().data_mut(|data| {
-        data.insert_temp(jump_id(region.key), Jump { frame, to, why });
-    });
-    ui.ctx().request_repaint();
+    enqueue(ui, &region, top - region.view.top(), Some(why));
 }
 
-/// The jump queued for the column `key`, taken once: asked in this frame or the last, and with
-/// no input of the DM's in this pass. The DM's scroll that is still going on drops it too
-/// (layout PR 10d): a drag of the column or its bar, the wheel's smooth rest still being
-/// applied, or the column's own fling after a drag (its area `area` still has a velocity).
-fn take_jump(ui: &Ui, key: Id, area: Id) -> Option<f32> {
-    let jump = ui.ctx().data_mut(|data| {
-        let jump = data.get_temp::<Jump>(jump_id(key));
-        if jump.is_some() {
-            data.remove::<Jump>(jump_id(key));
-        }
-        jump
-    })?;
-    let frame = ui.ctx().cumulative_frame_nr();
-    let fresh = jump.frame == frame || jump.frame + 1 == frame;
-    let _ = jump.why;
-    let moved = ui.input(|input| {
-        input.smooth_scroll_delta != Vec2::ZERO
-            || input.events.iter().any(|event| {
-                matches!(
-                    event,
-                    egui::Event::MouseWheel { .. }
-                        | egui::Event::PointerButton { pressed: true, .. }
-                        | egui::Event::Key { pressed: true, .. }
-                )
-            })
-    }) || ui.ctx().dragged_id().is_some()
-        || egui::scroll_area::State::load(ui.ctx(), area)
-            .is_some_and(|state| state.velocity() != Vec2::ZERO);
-    (fresh && !moved).then_some(jump.to)
-}
-
-/// The offset the request of the column `key` queued for this pass, taken once, after this
-/// pass's input is checked: a jump's ([`jump`]), else a reveal's. `ScrollColumn` calls it before
+/// The offset the reveal of the column `key` queued for this pass, taken once, after this pass's
+/// input is checked (a jump's and a region's are the column's queued request: `take_queued`). `ScrollColumn` calls it before
 /// its area begins.
 pub(super) fn take_offset(ui: &Ui, column: Column) -> Option<f32> {
-    if let Some(to) = take_jump(ui, column.key, column.area) {
-        return Some(to);
-    }
     // A column that hosts no reveal holds no request: no registry read.
     if !column.hosts {
         return None;

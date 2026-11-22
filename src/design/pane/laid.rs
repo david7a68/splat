@@ -334,6 +334,7 @@ mod tests {
         memo::Revised,
         outcome::{Messages, NoPress, PaneFrame},
         pane::{BlockRegion, Body, Navigation, RegionState},
+        reveal::JumpTo,
     };
     use egui_kittest::{Harness, kittest::Queryable};
 
@@ -363,6 +364,9 @@ mod tests {
         beside: Option<Rect>,
         /// Block 1 takes block 0's key.
         duplicate: bool,
+        /// A typed jump to a block's top, asked once in the pane's column before the region
+        /// draws, and one after it.
+        jumps: (Option<usize>, Option<usize>),
     }
 
     impl Page {
@@ -383,6 +387,7 @@ mod tests {
                 pull: false,
                 beside: None,
                 duplicate: false,
+                jumps: (None, None),
             }
         }
     }
@@ -452,6 +457,8 @@ mod tests {
                     page.top = ui.cursor().top();
                     page.clip = ui.clip_rect();
                     let (top, pull) = (page.top, page.pull);
+                    // A jump asked in this pass before the region draws, or after it.
+                    let jumps = std::mem::take(&mut page.jumps);
                     let Page {
                         laid,
                         rows,
@@ -461,6 +468,10 @@ mod tests {
                         stray,
                         ..
                     } = page;
+                    let top_of = |at: usize| top + laid[..at].iter().map(Laid::height).sum::<f32>();
+                    if let Some(at) = jumps.0 {
+                        crate::design::reveal::jump(ui, top_of(at), JumpTo::LinkedHeading);
+                    }
                     BlockRegion::new("laid_test", region, rows).show_laid(
                         ui,
                         |at| &laid[at],
@@ -498,6 +509,9 @@ mod tests {
                             }
                         },
                     );
+                    if let Some(at) = jumps.1 {
+                        crate::design::reveal::jump(ui, top_of(at), JumpTo::LinkedHeading);
+                    }
                 });
             },
             page,
@@ -1190,5 +1204,56 @@ mod tests {
         let mut page = Page::new(texts(6));
         page.duplicate = true;
         let _ = harness(page, egui::vec2(960.0, 420.0));
+    }
+
+    /// Review of PR 770: a column has one queued request. A typed jump and a measured region's
+    /// request asked for one column in one pass: only the newest applies, in either order. A
+    /// wheel over another column keeps the jump. Red runs: two queues (the jump outranks the
+    /// region's request); the jump's cancel read window-wide.
+    #[test]
+    fn a_column_has_one_request_whoever_asks_it() {
+        let mut page = Page::new(texts(40));
+        page.beside = Some(Rect::NOTHING);
+        let mut harness = harness(page, egui::vec2(1200.0, 420.0));
+        // The jump first, then the region's request: the request applies.
+        harness.state_mut().jumps = (Some(10), None);
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new(30usize)));
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 30) && !shown(&harness, 10),
+            "the newer region request applies, not the older jump"
+        );
+        // The region's request first, then the jump: the jump applies (its block at the top).
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new(5usize)));
+        harness.state_mut().jumps = (None, Some(20));
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 20) && !shown(&harness, 5),
+            "the newer jump applies, not the older request"
+        );
+        // A jump queued, and a wheel over the other column in the next frame: it applies.
+        harness.state_mut().jumps = (Some(2), None);
+        harness.step();
+        let beside = harness.state().beside.expect("the other column").center();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(beside));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 2),
+            "a wheel over another column leaves this column's jump"
+        );
     }
 }

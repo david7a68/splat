@@ -1172,12 +1172,12 @@ impl ScrollColumn {
             applied: None,
         };
         let mut area = self.area();
-        // A region's queued request (layout 11c) waits while the column's own correction (a held
-        // press, `from_top`) sets the offset.
+        // The column's queued request (a region's or a jump: layout 11c) waits while the column's
+        // own correction (a held press, `from_top`) sets the offset.
         column.applied = self
             .offset
             .is_none()
-            .then(|| super::reveal::take_queued(ui, column.key))
+            .then(|| super::reveal::take_queued(ui, column.key, column.area))
             .flatten();
         if let Some(offset) = column
             .applied
