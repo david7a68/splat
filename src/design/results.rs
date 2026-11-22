@@ -1071,8 +1071,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "removed_fight_message",
             &[Ban::Body],
         ),
-        ("src/trackers/history.rs", "remove", &[Ban::Results]),
-        ("src/trackers/history.rs", "footer", &[Ban::Order]),
         (
             "src/world/edit.rs",
             "edit_form",
@@ -1650,11 +1648,7 @@ pub(crate) const STAGED: &[Staged] = &[
     (
         "ResultOrder::issue(",
         "Record the result in a `design::Results` store: it issues the order at the action.",
-        &[
-            ("src/design/components.rs", 15),
-            ("src/timeline.rs", 1),
-            ("src/trackers/history.rs", 1),
-        ],
+        &[("src/design/components.rs", 15), ("src/timeline.rs", 1)],
     ),
     (
         "save_row_state(",
