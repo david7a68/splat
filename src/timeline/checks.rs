@@ -791,10 +791,13 @@ fn result(ui: &mut egui::Ui, label: &str, check: &Check, view: &View<'_>) -> Opt
         egui::Layout::top_down(egui::Align::Min),
         |ui| {
             ui.set_width(width);
-            // Layout 11c (M0547): the words' first line is centred on Clear's line, so the
-            // column is placed by its rect that far below the row's top.
+            // Layout 11c (M0547): the words' first line is centred on the row's line, as the
+            // label and Clear are: the column is placed by its rect, half the room the line
+            // leaves around the words' measured row below the row's top.
+            let font = Type::Body.font(ui);
+            let row = ui.fonts_mut(|fonts| fonts.row_height(&font));
             let mut column = ui.available_rect_before_wrap();
-            column.min.y += (Density::Read.control() - Type::Body.size()) / 2.0 - design::XS;
+            column.min.y += ((Density::Read.control() - row) / 2.0).max(0.0);
             ui.scope_builder(
                 egui::UiBuilder::new()
                     .max_rect(column)
