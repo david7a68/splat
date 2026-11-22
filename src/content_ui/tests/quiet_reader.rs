@@ -271,12 +271,23 @@ fn stock_labels(galleys: &[Arc<egui::Galley>], accesskit: bool) -> Allocated {
 
 /// A host's quiet frame over a note of about `bytes` bytes, and the stock reference over its
 /// kept galleys; the host's five quiet frames are equal and parse nothing.
-fn both(host: Host, bytes: usize, accesskit: bool, linked: bool) -> (Allocated, Allocated) {
-    let what = format!("{host:?}, AccessKit {accesskit}, linked {linked}, {bytes} B");
+fn both(
+    host: Host,
+    bytes: usize,
+    accesskit: bool,
+    linked: bool,
+    standing: bool,
+) -> (Allocated, Allocated) {
+    let what = format!(
+        "{host:?}, AccessKit {accesskit}, linked {linked}, a change standing {standing}, {bytes} B"
+    );
     // The linked rows see one screen of the note: a link out of view costs the same whatever its
     // words (its parts and targets are built only in view).
     let height = if linked { 800.0 } else { SCREEN_HEIGHT };
     let mut reading = Reading::with(host, bytes, accesskit, linked, height);
+    if standing {
+        stand_a_change(&mut reading);
+    }
     let parses = MARKDOWN_PARSES.with(std::cell::Cell::get);
     let first = reading.quiet(&what);
     for _ in 0..4 {
@@ -291,6 +302,10 @@ fn both(host: Host, bytes: usize, accesskit: bool, linked: bool) -> (Allocated, 
         parses,
         "{what}: the reader parsed nothing on its quiet frames"
     );
+    assert!(
+        !standing || reading.reader.change_result_stands(),
+        "{what}: the change's result stands through its quiet frames"
+    );
     let galleys = markdown_view::kept_galleys(&reading.ctx);
     assert!(
         galleys.len() >= 6,
@@ -298,6 +313,24 @@ fn both(host: Host, bytes: usize, accesskit: bool, linked: bool) -> (Allocated, 
         galleys.len()
     );
     (first, stock_labels(&galleys, accesskit))
+}
+
+/// The DM changes the note's status through the reader's own act; the app loads the index
+/// again for the written file. The change's result now stands, and the reader keeps whether the
+/// file still holds what the change wrote (layout PR 9b-R1c).
+fn stand_a_change(reading: &mut Reading) {
+    let item = reading.index.items[reading.at].clone();
+    reading
+        .reader
+        .change_for_harness(&reading.campaign, &item, &reading.index, "status", "away");
+    reading.index = Arc::new(ContentIndex::load(&[], Some(&reading.campaign)).expect("reloaded"));
+    for _ in 0..4 {
+        let _ = reading.frame();
+    }
+    assert!(
+        reading.reader.change_result_stands(),
+        "the change's result stands after the act"
+    );
 }
 
 /// After `change`, the reader prepares again exactly `expected` times, then is quiet again.
@@ -498,19 +531,21 @@ fn main() {
     let sizes = [10_000, 100_000, 1_000_000];
     let mut failures = Vec::new();
     let rows = [
-        (Host::World, false, false),
-        (Host::World, true, false),
-        (Host::Lookup, false, false),
-        (Host::Lookup, true, false),
+        (Host::World, false, false, false),
+        (Host::World, true, false, false),
+        (Host::Lookup, false, false, false),
+        (Host::Lookup, true, false, false),
         // The links' own words grow (PR 813 review, P2), AccessKit off: what grows with them
         // is the app's, not egui's text runs.
-        (Host::World, false, true),
+        (Host::World, false, true, false),
+        // A change's result stands (layout PR 9b-R1c): the host reads no file on a quiet frame.
+        (Host::World, false, false, true),
     ];
-    for (host, accesskit, linked) in rows {
+    for (host, accesskit, linked, standing) in rows {
         {
             let frames: Vec<_> = sizes
                 .iter()
-                .map(|&bytes| both(host, bytes, accesskit, linked))
+                .map(|&bytes| both(host, bytes, accesskit, linked, standing))
                 .collect();
             let (host_small, stock_small) = frames[0];
             for (&bytes, &(reader, stock)) in sizes.iter().zip(&frames).skip(1) {
@@ -597,6 +632,28 @@ fn main() {
         }));
     }
     failures.extend(content_cases());
+    // A change's result ends when an outside edit comes, at the index's next load (the reader
+    // reads the file then, not on its quiet frames).
+    let mut reading = Reading::new(Host::World, 10_000, false);
+    stand_a_change(&mut reading);
+    let path = reading
+        ._dir
+        .path()
+        .join(&reading.index.items[reading.at].entry.path);
+    let words = std::fs::read_to_string(&path).expect("the note");
+    std::fs::write(&path, words.replace("status: away", "status: gone")).expect("an outside edit");
+    let before = reading.reader.change_result_stands();
+    let _ = reading.frame();
+    let quiet = reading.reader.change_result_stands();
+    reading.index = Arc::new(ContentIndex::load(&[], Some(&reading.campaign)).expect("reloaded"));
+    let _ = reading.frame();
+    if !(before && quiet && !reading.reader.change_result_stands()) {
+        failures.push(format!(
+            "an outside edit ends a change's result at the index's next load: before {before}, \
+             a frame without a load {quiet}, after the load {}",
+            reading.reader.change_result_stands()
+        ));
+    }
     assert!(
         failures.is_empty(),
         "quiet_reader:\n{}",

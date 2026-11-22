@@ -2355,6 +2355,10 @@ pub struct Reader {
     picker: Option<Picker>,
     /// The form closed with nothing to write: the note's path and its text, while it reads so.
     kept: Option<(String, String)>,
+    /// The index's load at which the reader last compared its files on disk (a change's result,
+    /// the kept form): the disk is read again only when a new load may hold an outside edit
+    /// (layout PR 9b-R1c), never on a quiet frame.
+    disk_checked: Option<u64>,
     error: Option<String>,
     /// Source lookup is cached by note and index generation, including repairs and moves.
     group_fault: Option<GroupFault>,
@@ -2997,23 +3001,28 @@ impl Reader {
         region: Option<design::pane::EditorRegion<'_>>,
     ) -> Option<Nav> {
         self.prepare(item);
-        // A change's result ends when its file no longer holds what the change wrote.
-        if let Some(ReaderResult::Change(change)) = self.result(Slot::Change)
-            && campaign.is_none_or(|campaign| {
-                fs::read_to_string(campaign.path.join(&change.path))
-                    .ok()
-                    .as_deref()
-                    != Some(&change.after)
-            })
-        {
-            self.end(Slot::Change);
-        }
-        if self.kept.as_ref().is_some_and(|(path, text)| {
-            campaign.is_none_or(|campaign| {
-                fs::read_to_string(campaign.path.join(path)).ok().as_deref() != Some(text)
-            })
-        }) {
-            self.kept = None;
+        // The app loads the index again when a file changes, so a new load is when an outside
+        // edit can have come (layout PR 9b-R1c: no file is read on a quiet frame).
+        if self.disk_checked != Some(index.generation()) {
+            self.disk_checked = Some(index.generation());
+            // A change's result ends when its file no longer holds what the change wrote.
+            if let Some(ReaderResult::Change(change)) = self.result(Slot::Change)
+                && campaign.is_none_or(|campaign| {
+                    fs::read_to_string(campaign.path.join(&change.path))
+                        .ok()
+                        .as_deref()
+                        != Some(&change.after)
+                })
+            {
+                self.end(Slot::Change);
+            }
+            if self.kept.as_ref().is_some_and(|(path, text)| {
+                campaign.is_none_or(|campaign| {
+                    fs::read_to_string(campaign.path.join(path)).ok().as_deref() != Some(text)
+                })
+            }) {
+                self.kept = None;
+            }
         }
         let heading = if self.heading_document.is_none_or(|id| id == item.entry.id) {
             self.heading_document = None;
@@ -3681,6 +3690,26 @@ impl Reader {
             notices,
             entry,
         });
+    }
+
+    /// `change` for the quiet-frame harness (layout PR 9b-R1c): a value written through the
+    /// reader's own act, so its result stands as a DM's would.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn change_for_harness(
+        &mut self,
+        campaign: &Campaign,
+        item: &Item,
+        index: &ContentIndex,
+        key: &str,
+        value: &str,
+    ) {
+        let _ = self.change(campaign, item, index, key, value.into());
+    }
+
+    /// Whether a change's result stands (the quiet-frame harness's content case).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn change_result_stands(&self) -> bool {
+        matches!(self.result(Slot::Change), Some(ReaderResult::Change(_)))
     }
 
     fn change(
