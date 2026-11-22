@@ -544,6 +544,8 @@ impl FieldId {
         guard.after(ui, text.as_str(), &output.response);
         record_field(ui, &output.response);
         Editor {
+            frame: output.response.rect,
+            view: output.text_clip_rect,
             response: output.response,
             galley: output.galley,
             galley_pos: output.galley_pos,
@@ -664,6 +666,12 @@ pub struct Editor {
     pub text_clip_rect: Rect,
     /// The cursor or selection, while the field has one.
     pub cursor_range: Option<egui::text::CCursorRange>,
+    /// The editor's outside frame: the field itself here; the fixed frame of an editor viewport
+    /// (`pane::EditorRegion::editor`, `pane::editor_view`), whose text scrolls inside it.
+    pub frame: Rect,
+    /// The part of the text in view: the text's own rect here; the viewport's inner scroll view
+    /// for an editor viewport.
+    pub view: Rect,
 }
 
 /// What the bound text was when the field last drew with focus: its length and a hash.
@@ -1591,10 +1599,35 @@ impl<'a> TitleAction<'a> {
     /// Its target's width on one line.
     fn natural_width(&self, ui: &Ui) -> f32 {
         if self.menu {
-            super::menu_button_width(ui, self.word.as_str())
+            self.menu_button(&Self::menu_label(self.word))
+                .natural_width(ui)
         } else {
             self.action().natural_width(ui)
         }
+    }
+
+    /// A menu action's label: its word and the room its caret takes after it.
+    fn menu_label(word: Word) -> String {
+        format!("{}    ", word.as_str())
+    }
+
+    /// A menu action's button (`TitleLine::menu`): its weight, icon, name and lock, at `Read`,
+    /// on `label` (`menu_label`), so its caret fits after the word.
+    fn menu_button<'l>(&self, label: &'l str) -> Action<'l>
+    where
+        'a: 'l,
+    {
+        let mut action = match self.weight {
+            TitleWeight::Quiet => Action::quiet(label),
+            TitleWeight::Secondary => Action::secondary(label),
+        }
+        .density(Density::Read)
+        .blocked(self.blocked)
+        .name(self.name.unwrap_or(self.word.as_str()));
+        if let Some(icon) = self.icon {
+            action = action.icon(icon);
+        }
+        action
     }
 
     fn action(&self) -> Action<'a> {
@@ -1691,12 +1724,19 @@ pub struct TitleLine<'a> {
     menus: Vec<(usize, Menu<'a>)>,
     /// A status link after the actions, and the menu it opens.
     status: Option<StatusMenu<'a>>,
+    /// A status link after that one that acts when pressed (`status_press`).
+    status_press: Option<Status<'a>>,
+    /// The pressed status link's press this frame.
+    status_clicked: bool,
     /// Each menu's room, from its control's rect (`menu_room`).
     menu_room: Option<Box<dyn Fn(Rect) -> Rect + 'a>>,
     /// The page's header (`page`): a rule under the line and `L` before the page's body.
     page: bool,
     /// A close icon at the right end of the title's line, and its accessible name.
     close: Option<&'a str>,
+    /// A view toggle left of the close icon: its icon, its accessible name, its hint and
+    /// whether it is on.
+    toggle: Option<(&'static str, &'a str, &'a str, bool)>,
 }
 
 /// A menu's content: the caller draws its own choices.
@@ -1718,8 +1758,12 @@ pub enum TitleType {
 #[derive(Clone, Debug, Default)]
 pub struct TitleLineResponse {
     pressed: Option<Word>,
+    /// The DM pressed the status link of `TitleLine::status_press`.
+    pub status_pressed: bool,
     /// The DM pressed the close icon (`TitleLine::close`).
     pub closed: bool,
+    /// The DM pressed the view toggle (`TitleLine::toggle`).
+    pub toggled: bool,
     /// The actions sit under the title.
     pub below: bool,
     /// The rows of actions under the title (0 when they follow the title).
@@ -1803,9 +1847,12 @@ impl<'a> TitleLine<'a> {
             actions: Vec::new(),
             menus: Vec::new(),
             status: None,
+            status_press: None,
+            status_clicked: false,
             menu_room: None,
             page: false,
             close: None,
+            toggle: None,
         }
     }
 
@@ -1814,7 +1861,8 @@ impl<'a> TitleLine<'a> {
         self
     }
 
-    /// One muted `Small` state or count after the title, `XS` after it.
+    /// One muted `Small` state, count or date after the title (the Notes panel's note date),
+    /// `XS` after it.
     pub fn context(mut self, context: Option<&'a str>) -> Self {
         self.context = context;
         self
@@ -1878,6 +1926,26 @@ impl<'a> TitleLine<'a> {
         self
     }
 
+    /// A view toggle at the right end of the title's own line, left of a close icon (the
+    /// session list's show and hide): an icon target, `name` its accessible name and `hint`
+    /// (with its key) on hover; `on` is its pressed state for assistive tools (the list is
+    /// shown). It is not an action: it changes what the page shows beside it, never its data,
+    /// and it keeps one place however the actions come, go or wrap. The title and the actions
+    /// beside it keep clear of it, and the keyboard reaches it after them and before the close
+    /// icon, as they stand on the line. Its press is [`TitleLineResponse::toggled`].
+    pub fn toggle(mut self, icon: &'static str, name: &'a str, hint: &'a str, on: bool) -> Self {
+        self.toggle = Some((icon, name, hint, on));
+        self
+    }
+
+    /// A status link after the one with a menu (or after the actions), placed and kept as an
+    /// action is, that acts when pressed (World's `N notes cannot be read` opens its repair):
+    /// [`TitleLineResponse::status_pressed`].
+    pub fn status_press(mut self, status: Status<'a>) -> Self {
+        self.status_press = Some(status);
+        self
+    }
+
     /// The status link's width on one line.
     fn status_width(ui: &Ui, status: &Status<'_>) -> f32 {
         number_width(
@@ -1916,6 +1984,11 @@ impl<'a> TitleLine<'a> {
                         .as_ref()
                         .map(|(status, _)| Self::status_width(ui, status)),
                 )
+                .chain(
+                    self.status_press
+                        .as_ref()
+                        .map(|status| Self::status_width(ui, status)),
+                )
                 .collect(),
         }
     }
@@ -1923,8 +1996,12 @@ impl<'a> TitleLine<'a> {
     /// Draw one action in exactly its measured target; past the actions, the status link and
     /// its menu.
     fn action_at(&mut self, ui: &mut Ui, at: usize, rect: Rect) -> bool {
+        // Past the actions: the status with its menu first, then the pressed one.
         let status = (at >= self.actions.len())
             .then(|| self.status.take())
+            .flatten();
+        let press = (at >= self.actions.len() && status.is_none())
+            .then(|| self.status_press.take())
             .flatten();
         ui.scope_builder(
             UiBuilder::new()
@@ -1936,13 +2013,19 @@ impl<'a> TitleLine<'a> {
                     self.menu_under(ui, &link).show(menu);
                     false
                 }
+                None if let Some(status) = press => {
+                    self.status_clicked |= super::status_link(ui, status).clicked();
+                    false
+                }
                 None if self.actions[at].menu => {
                     let action = self.actions[at];
-                    let button = super::components::title_menu_button(
-                        ui,
-                        action.word.as_str(),
-                        action.blocked,
+                    let label = TitleAction::menu_label(action.word);
+                    let button = action.menu_button(&label).show(ui);
+                    let caret = Rect::from_min_max(
+                        egui::pos2(button.rect.right() - L - XS, button.rect.top()),
+                        button.rect.right_bottom(),
                     );
+                    super::combo_icon(ui, caret, ui.style().interact(&button), false);
                     let menu = self
                         .menus
                         .iter()
@@ -1973,30 +2056,45 @@ impl<'a> TitleLine<'a> {
         super::icon_button(&mut child, super::icons::CLOSE, name).clicked()
     }
 
+    /// The view toggle, its right edge at `right` (left of the close icon), on the line from
+    /// `top`, `line_height` high.
+    fn toggle_at(&self, ui: &mut Ui, right: f32, top: f32, line_height: f32) -> bool {
+        let Some((icon, name, hint, on)) = self.toggle else {
+            return false;
+        };
+        let size = Density::Read.control();
+        let rect = Rect::from_min_size(
+            egui::pos2(right - size, top + (line_height - size) / 2.0),
+            vec2(size, size),
+        );
+        let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
+        super::components::icon_toggle(&mut child, icon, name, hint, on).clicked()
+    }
+
     pub fn show(mut self, ui: &mut Ui) -> TitleLineResponse {
         let metrics = self.metrics(ui);
         let room = ui.available_width();
-        // The close icon keeps its target and a gap at the title line's right end.
-        let close = if self.close.is_some() {
-            Density::Read.control() + ACTION_GAP
-        } else {
-            0.0
-        };
+        // The close icon and the view toggle keep their targets and a gap each at the title
+        // line's right end; `close` is the close icon's part, `end` both.
+        let end_icon = Density::Read.control() + ACTION_GAP;
+        let close = if self.close.is_some() { end_icon } else { 0.0 };
+        let end = close + if self.toggle.is_some() { end_icon } else { 0.0 };
         // Issue #567: a title with no actions that is wider than its line (less the close
         // icon) wraps under nothing, as the `Under` form wraps it; it never paints past the
         // line or under the close icon.
-        let placement = if metrics.widths.is_empty() && metrics.beside() > room - close {
+        let placement = if metrics.widths.is_empty() && metrics.beside() > room - end {
             TitlePlacement::Under(Vec::new())
         } else {
             title_placement(
                 metrics.beside(),
                 metrics.lead_in,
                 &metrics.widths,
-                room - close,
+                room - end,
                 room,
             )
         };
         let closed;
+        let toggled;
         let height = Density::Read.control();
         let mut pressed = None;
         let font = self.font();
@@ -2045,6 +2143,8 @@ impl<'a> TitleLine<'a> {
                         pressed = Some(self.actions[at].word);
                     }
                 }
+                // Drawn in their order on the line, so the keyboard reaches the toggle first.
+                toggled = self.toggle_at(ui, line.right() - close, line.top(), line_height);
                 closed = self.close_at(ui, line.right(), line.top(), line_height);
                 0
             }
@@ -2052,7 +2152,7 @@ impl<'a> TitleLine<'a> {
                 let (line_left, line_top) = (ui.cursor().left(), ui.cursor().top());
                 let title_rect = ui
                     .horizontal_wrapped(|ui| {
-                        ui.set_max_width(room - close);
+                        ui.set_max_width(room - end);
                         ui.spacing_mut().item_spacing.x = XS;
                         ui.add(title.wrap());
                         if let Some((words, context)) = context {
@@ -2062,6 +2162,7 @@ impl<'a> TitleLine<'a> {
                     .response
                     .rect;
                 let right = line_left + room;
+                toggled = self.toggle_at(ui, right - close, line_top, font.line());
                 closed = self.close_at(ui, right, line_top, font.line());
                 for row in &rows {
                     let (line, _) = ui.allocate_exact_size(vec2(room, height), Sense::hover());
@@ -2101,7 +2202,9 @@ impl<'a> TitleLine<'a> {
         }
         TitleLineResponse {
             pressed,
+            status_pressed: self.status_clicked,
             closed,
+            toggled,
             below: rows > 0,
             rows,
         }

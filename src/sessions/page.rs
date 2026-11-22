@@ -56,8 +56,15 @@ const NOTE_COLUMN: &str = "session_note_frame";
 /// The note frame's padding and hairline, on both sides.
 const NOTE_FRAME_EDGES: f32 = 2.0 * (design::S + design::HAIRLINE_WIDTH);
 /// The header's toggle of the session list, by what a press does.
-pub const HIDE_LIST: &str = "Hide the session list";
-pub const SHOW_LIST: &str = "Show the session list";
+/// The session list's toggle: one name in both states; its pressed state says whether the list
+/// is shown (review of PR 618).
+pub const LIST_TOGGLE: &str = "Session list";
+/// The page header's actions (M0498).
+const NEW_SESSION: design::Word = crate::word!("New session");
+const NEW_TEMPLATE: design::Word = crate::word!("New template");
+const STOP_RECORDING: design::Word = crate::word!("Stop recording");
+const TEMPLATES: design::Word = crate::word!("Templates");
+const SHOW_PARTY: design::Word = crate::word!("Show party");
 /// The plan and the note stand side by side from here.
 const PLAN_BESIDE_NOTE_FROM: f32 = 720.0;
 const PLAN_WIDTH: f32 = 330.0;
@@ -372,6 +379,10 @@ enum Tab {
     Recordings,
 }
 
+/// The Encounters store's line of a plan group's discard, for one frame's footer.
+pub type GroupDiscardLine<'a> = dyn for<'f> Fn(&'f design::outcome::PaneFrame) -> Option<design::outcome::KeptLine<'f, ()>>
+    + 'a;
+
 /// What the rest of the app tells this page about fights.
 pub struct Plan<'a> {
     pub fights: &'a [PlanFight],
@@ -384,11 +395,10 @@ pub struct Plan<'a> {
     pub group_blocked: Option<&'a str>,
     /// A group being assembled takes the plan's place, beside the note.
     pub group_open: bool,
-    /// A new group started in the plan was discarded there.
-    pub group_discarded: bool,
-    pub group_discarded_name: String,
-    /// When that discard was made, for the plan footer's newest-first order.
-    pub group_discarded_order: Option<design::ResultOrder>,
+    /// A new group started in the plan was discarded there: the Encounters store's own line
+    /// of that discard for this frame's footer (`Encounters::group_discard_line`), with the
+    /// store's words, order and ticket.
+    pub group_discard: &'a GroupDiscardLine<'a>,
     /// A fight is open that something can still join.
     pub arrivals_open: bool,
     pub group_editor: std::cell::RefCell<&'a mut dyn FnMut(&mut egui::Ui)>,
@@ -611,20 +621,6 @@ struct LinkUndoState {
     events: Vec<timeline::Event>,
 }
 
-/// A notice the page just made: it takes a new footer order in `order`, so it lists as the
-/// newest result.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
-fn new_notice(
-    order: &mut Option<design::ResultOrder>,
-    notice: (Tone, String),
-) -> Option<(Tone, String)> {
-    *order = Some(design::ResultOrder::issue());
-    Some(notice)
-}
-
 #[derive(Default)]
 pub struct Sessions {
     /// G118: the plan's kept lines, one per planned fight (`plan::PlanLines`), and the
@@ -659,10 +655,9 @@ pub struct Sessions {
     /// When the link update's result was made.
     /// The link update's result, with its Undo.
     link_updates: design::Results<kept::Page, kept::LinkUpdate>,
-    /// When the group removal in `removed_group` was done.
-    pub(super) removed_group_order: design::ResultOrder,
-    /// When the run deletion in `deleted_run` was done.
-    pub(super) deleted_run_order: design::ResultOrder,
+    /// The plan's results whose data its own fields hold (a scene act, the removed group, the
+    /// deleted run), by kind: their footer order and press tickets (`kept::PlanMark`).
+    plan_marks: design::Results<kept::PlanOwner, kept::PlanMark>,
     folder_text: String,
     view: View,
     tab: Tab,
@@ -738,15 +733,10 @@ pub struct Sessions {
     recordings: Vec<Recording>,
     live: Option<Live>,
     confirm_record: bool,
-    notice: Option<(Tone, String)>,
-    /// When `notice` was made (`new_notice`), for its footer order.
-    notice_order: Option<design::ResultOrder>,
-    /// A copy of a notice that arrived on its own (processing finished). While `notice` still
-    /// equals it, the notice sits in the bottom banner; any later notice replaces it and keeps
-    /// its own place above the tabs, as the result of the DM's action.
-    arrived_notice: Option<(Tone, String)>,
-    /// The session a notice is about. None means whichever is open now.
-    notice_session: Option<Uuid>,
+    /// The page's one notice (#597): what the last act or a job said, in its tone, the session
+    /// it is about and whether it arrived by itself (`kept::PageNotice`). The store issues its
+    /// order; a new notice replaces it.
+    notices: design::Results<kept::Page, kept::PageNotice>,
     /// A job ended while the DM may be elsewhere.
     job_done: bool,
     /// The latest result stays after its completion notice is acknowledged.
@@ -829,7 +819,9 @@ pub struct Sessions {
     pub wants_runs_refresh: bool,
     pub wants_new_fight: bool,
     pub wants_new_group: bool,
-    pub wants_group_undo: bool,
+    /// The plan footer's `Undo discard` of a plan group, by its line's ticket
+    /// (`Encounters::undo_group_discard_in_plan`).
+    pub wants_group_undo: Option<design::results::Ticket>,
     /// The session whose plan a group is being assembled in. It is the one that gets the link.
     group_session: Option<Uuid>,
     /// B4 review F1: the plan's group whose name the DM pressed while an unsaved draft refuses
@@ -902,11 +894,13 @@ fn fills_body(reason: design::pane::FillsReason) -> design::pane::Body {
 
 /// The words a draft dropped (reloaded from disk, or discarded) and their Undo, in the footer
 /// of the pane that holds the draft: the result its store keeps (M0437), with the store's order,
-/// taken at the act, and its ticket.
+/// taken at the act, and its ticket. The Undo names the draft's note or template (`name`,
+/// M0438, M0440).
 fn add_dropped<'f>(
     frame: &'f PaneFrame,
     messages: &mut Messages<'f, SessionAct>,
     draft: &Draft,
+    name: &str,
     dropped: &design::Results<kept::DraftFile, kept::Dropped>,
 ) {
     if draft.dropped.is_none() {
@@ -923,12 +917,12 @@ fn add_dropped<'f>(
                 Notice::new(crate::sentence!(
                     "Reloaded from disk. Your previous draft is kept until you edit or the file changes again."
                 )),
-                UndoStep::verb(Verb::Reload).pressed_as(SessionAct::UndoDrop),
+                UndoStep::of(Verb::Reload, name).pressed_as(SessionAct::UndoDrop),
             )
         } else {
             KeptOutcome::Notice(
                 Notice::new(crate::sentence!("Draft discarded.")),
-                UndoStep::verb(Verb::Discard).pressed_as(SessionAct::UndoDrop),
+                UndoStep::of(Verb::Discard, name).pressed_as(SessionAct::UndoDrop),
             )
         }
     }));
@@ -2030,7 +2024,7 @@ impl Sessions {
 
     /// The notice that arrived on its own is still the one to show.
     fn notice_arrived(&self) -> bool {
-        self.notice.is_some() && self.notice == self.arrived_notice
+        self.notice().is_some_and(|notice| notice.arrived)
     }
 
     /// Round 26 FM7: the session's own Recordings tab shows the processed row, so the DM has
@@ -2041,7 +2035,7 @@ impl Sessions {
             && self.form.is_none()
             && self.tab == Tab::Recordings
             && self.notice_arrived()
-            && self.notice_session == self.selected
+            && self.notice_session() == self.selected
     }
 
     fn has_banner_notices(&self) -> bool {
@@ -2053,7 +2047,7 @@ impl Sessions {
             || (notes
                 && self.notice_arrived()
                 && !self.processed_notice_read_here()
-                && (self.notice_session.is_none() || self.notice_session == self.selected))
+                && (self.notice_session().is_none() || self.notice_session() == self.selected))
             || (notes && selected.is_some_and(|note| !note.also.is_empty()))
             || (notes && !self.unreadable.is_empty())
             || self.draft.as_ref().is_some_and(Draft::needs_attention)
@@ -2081,8 +2075,10 @@ impl Sessions {
         if notes
             && self.notice_arrived()
             && !self.processed_notice_read_here()
-            && (self.notice_session.is_none() || self.notice_session == self.selected)
-            && let Some((tone, words)) = self.notice.clone()
+            && (self.notice_session().is_none() || self.notice_session() == self.selected)
+            && let Some((tone, words)) = self
+                .notice()
+                .map(|notice| (notice.tone, notice.words.clone()))
         {
             // N6: the close icon on the words' first line, placed by the message part (M0441).
             // Work that finished by itself (`is processed`) is a result said where it happened,
@@ -2102,8 +2098,7 @@ impl Sessions {
             };
             let closed = message.in_padding().show(ui);
             if closed.is_some() {
-                self.notice = None;
-                self.notice_session = None;
+                self.end_notice();
             }
         }
         if notes
@@ -2133,9 +2128,7 @@ impl Sessions {
                             });
                             self.refresh();
                         }
-                        Err(error) => {
-                            self.notice = new_notice(&mut self.notice_order, (Tone::Error, error))
-                        }
+                        Err(error) => self.say(Tone::Error, error, None),
                     }
                 }
             }
@@ -2505,23 +2498,19 @@ impl Sessions {
             .iter()
             .find(|note| note.id == session)
             .map_or_else(|| "this session".to_owned(), Note::label);
-        self.notice_session = Some(session);
         match result {
             Ok(None) => {
                 self.processed_session = Some(session);
                 self.processed_recording = failed_recording.clone();
                 self.job_done = true;
                 self.job_warned = false;
-                self.notice = new_notice(
-                    &mut self.notice_order,
-                    (
-                        Tone::Success,
-                        format!(
-                            "“{label}” is processed. Read the result, and add the events you want to the timeline."
-                        ),
+                self.say_arrived(
+                    Tone::Success,
+                    format!(
+                        "“{label}” is processed. Read the result, and add the events you want to the timeline."
                     ),
+                    Some(session),
                 );
-                self.arrived_notice.clone_from(&self.notice);
             }
             Ok(Some(warning)) => {
                 self.processed_session = Some(session);
@@ -2530,10 +2519,10 @@ impl Sessions {
                 self.job_warned = true;
                 // The recording's row has the words, for as long as the result stands.
                 let _ = warning;
-                self.notice = None;
+                self.end_notice();
             }
             Err(error) if error == processing::CANCELLED => {
-                self.notice = None;
+                self.end_notice();
                 self.raise(Alert {
                     session,
                     can_record: false,
@@ -2544,7 +2533,7 @@ impl Sessions {
                 });
             }
             Err(error) => {
-                self.notice = None;
+                self.end_notice();
                 self.raise(Alert {
                     session,
                     can_record: false,
@@ -2569,7 +2558,7 @@ impl Sessions {
         self.template = None;
         self.reading = None;
         self.form = None;
-        self.notice = None;
+        self.end_notice();
         self.deleted_run = None;
         self.removed_group = None;
         self.plan_notice_state = None;
@@ -2616,8 +2605,8 @@ impl Sessions {
         self.job_done = false;
         self.job_warned = false;
         // A folder move's result stays its campaign's (`folder_moves`): this campaign's scope
-        // hides it, and coming back shows it again.
-        self.notice_session = None;
+        // hides it, and coming back shows it again. The page's notice does not: the change
+        // ends it (`end_notice` above), and coming back does not bring it back.
         self.select(self.current().or(self.notes.first().map(|note| note.id)));
     }
 
@@ -2752,8 +2741,8 @@ impl Sessions {
         self.open_event = None;
         self.fight = None;
         self.reading_note = session != self.current();
-        if self.notice_session.is_none() {
-            self.notice = None;
+        if self.notice().is_some_and(|notice| notice.session.is_none()) {
+            self.end_notice();
         }
         self.confirm_record = false;
         self.confirm_again = None;
@@ -2896,8 +2885,7 @@ impl Sessions {
                 self.focus_notes = self.notes_open;
             }
             Err(error) => {
-                self.notice_session = None;
-                self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
+                self.say(Tone::Error, error, None);
             }
         }
     }
@@ -3006,7 +2994,7 @@ impl Sessions {
             .or_else(|| self.job.as_ref().map(|(_, session)| *session))
             .or_else(|| self.alerts.last().map(|alert| alert.session))
             .or(self.processed_session)
-            .or(self.notice_session)
+            .or(self.notice_session())
             .or_else(|| {
                 let root = self.folder.clone().unwrap_or_default();
                 self.saved
@@ -3692,13 +3680,10 @@ impl Sessions {
                 path: path.clone(),
             });
         } else if tell {
-            self.notice_session = Some(session);
-            self.notice = new_notice(
-                &mut self.notice_order,
-                (
-                    Tone::Warning,
-                    format!("Nothing was recorded for “{label}”."),
-                ),
+            self.say(
+                Tone::Warning,
+                format!("Nothing was recorded for “{label}”."),
+                Some(session),
             );
         }
         self.refresh_recordings();
@@ -3725,8 +3710,7 @@ impl Sessions {
                 self.processed_recording = None;
                 self.job_done = false;
                 self.job_warned = false;
-                self.notice = None;
-                self.notice_session = None;
+                self.end_notice();
                 // A new recording answers an old failure of this session.
                 self.alerts
                     .retain(|alert| !(alert.can_record && alert.session == session));
@@ -3765,12 +3749,10 @@ impl Sessions {
         session: Uuid,
     ) {
         if !recording.exists() {
-            self.notice = new_notice(
-                &mut self.notice_order,
-                (
-                    Tone::Warning,
-                    "Audio removed. Restore the WAV file to process it.".into(),
-                ),
+            self.say(
+                Tone::Warning,
+                "Audio removed. Restore the WAV file to process it.".into(),
+                None,
             );
             return;
         }
@@ -3804,8 +3786,7 @@ impl Sessions {
             events.join("\n")
         );
         let (speech_key, llm_key) = settings.held_keys();
-        self.notice = None;
-        self.notice_session = None;
+        self.end_notice();
         let _ = fs::remove_file(recording.with_extension("state.txt"));
         self.processed_session = None;
         self.processed_recording = None;
@@ -4108,8 +4089,7 @@ impl Sessions {
                     if let Some(session) = self.selected
                         && let Err(error) = self.start_recording(settings, session)
                     {
-                        self.notice_session = None;
-                        self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
+                        self.say(Tone::Error, error, None);
                     }
                 }
                 Some(RecordAct::NotNow) => self.confirm_record = false,
@@ -4175,14 +4155,26 @@ impl Sessions {
             self.draft.as_ref()
         };
         if let Some(draft) = draft {
-            add_dropped(frame, &mut messages, draft, &self.dropped);
+            let name = if template {
+                self.template.clone()
+            } else {
+                self.note_name()
+            };
+            add_dropped(
+                frame,
+                &mut messages,
+                draft,
+                &name.unwrap_or_default(),
+                &self.dropped,
+            );
         }
         if template {
             if let Some(shown) = self.deleted_templates.get(&self.page()) {
                 messages.kept(shown.outcome(frame, |deleted| {
                     Said::new(crate::sentence!("Deleted “{}”.", deleted.name))
                         .undo(
-                            UndoStep::verb(Verb::Delete).pressed_as(SessionAct::UndoDeleteTemplate),
+                            UndoStep::of(Verb::Delete, deleted.name.clone())
+                                .pressed_as(SessionAct::UndoDeleteTemplate),
                         )
                         .into()
                 }));
@@ -4483,12 +4475,9 @@ impl Sessions {
         let Some(note) = self.notes.iter().find(|note| note.id == session) else {
             return;
         };
-        self.notice = new_notice(
-            &mut self.notice_order,
-            (Tone::Info, format!("{name} stays in {}.", note.label())),
-        );
-        self.notice_session = Some(new);
-        self.move_run_here = self.notice.as_ref().map(|(_, words)| (new, words.clone()));
+        let words = format!("{name} stays in {}.", note.label());
+        self.move_run_here = Some((new, words.clone()));
+        self.say(Tone::Info, words, Some(new));
     }
 
     /// `Move it here`: the open run's event moves to `session`, and its result with `Undo move`
@@ -4518,8 +4507,7 @@ impl Sessions {
             .map_or(1, |note| note.number);
         let name = name.to_owned();
         // The `stays in` notice is answered: the result takes its place.
-        self.notice = None;
-        self.notice_session = None;
+        self.end_notice();
         let moved = kept::Moved {
             page: self.page(),
             session,
@@ -4572,6 +4560,48 @@ impl Sessions {
         kept::Page {
             root: self.folder.clone().unwrap_or_default(),
         }
+    }
+
+    /// The page's one notice, while it stands (#597).
+    fn notice(&self) -> Option<&kept::PageNotice> {
+        self.notices.get(&self.page()).map(|shown| shown.value())
+    }
+
+    /// The session the page's notice is about: `None` for whichever is open, or no notice.
+    fn notice_session(&self) -> Option<Uuid> {
+        self.notice().and_then(|notice| notice.session)
+    }
+
+    /// Say `words` in `tone`, about `session` (`None`: whichever is open). It replaces the
+    /// page's notice and takes a new order, as the newest result.
+    fn say(&mut self, tone: Tone, words: String, session: Option<Uuid>) {
+        let page = self.page();
+        self.notices.record(kept::PageNotice {
+            page,
+            tone,
+            words,
+            session,
+            arrived: false,
+        });
+    }
+
+    /// What a job said when it finished while the DM was elsewhere: it stands in the bottom
+    /// banner until the DM reads it where it happened.
+    fn say_arrived(&mut self, tone: Tone, words: String, session: Option<Uuid>) {
+        let page = self.page();
+        self.notices.record(kept::PageNotice {
+            page,
+            tone,
+            words,
+            session,
+            arrived: true,
+        });
+    }
+
+    /// The page's notice ends.
+    fn end_notice(&mut self) {
+        let page = self.page();
+        self.notices.owner_changed(&page);
     }
 
     /// One session of this campaign's folder.
@@ -5180,18 +5210,19 @@ impl Sessions {
                     .selected
                     .and_then(|id| self.notes.iter().find(|note| note.id == id))
                     .map_or_else(|| "Notes".to_owned(), Note::label);
-                let date = self.selected.and_then(|id| self.notes.iter().find(|note| note.id == id)).map_or("", |note| note.date.as_str());
-                let mut close = false;
-                if self.selected.is_none() {
-                    close = design::panel_header(ui, &title, "Close notes");
-                } else {
-                    ui.horizontal_top(|ui| {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                            close = design::icon_button(ui, icons::CLOSE, "Close notes").clicked();
-                            ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| note_title(ui, &title, date));
-                        });
-                    });
-                }
+                // M0471: the panel's title line is the shared part: the note's title, its date
+                // after it (muted `Small`), and the close icon at the line's right end.
+                let date = self
+                    .selected
+                    .and_then(|id| self.notes.iter().find(|note| note.id == id))
+                    .map(|note| note.date.as_str())
+                    .filter(|date| !date.is_empty());
+                let close = design::TitleLine::new(&title)
+                    .role(design::TitleType::Section)
+                    .context(date)
+                    .close("Close notes")
+                    .show(ui)
+                    .closed;
                 if let Some(draft) = &self.draft { Self::note_status(ui, draft); }
                 design::rule(ui);
                 if close { self.notes_open = false; return; }
@@ -5228,7 +5259,8 @@ impl Sessions {
                 let mut messages =
                     Messages::new(&frame, "notes_panel_footer", ui.available_width());
                 if let Some(draft) = &self.draft {
-                    add_dropped(&frame, &mut messages, draft, &self.dropped);
+                    let name = self.note_name().unwrap_or_default();
+                    add_dropped(&frame, &mut messages, draft, &name, &self.dropped);
                 }
                 if let Some(date) = dated {
                     messages.outcome(
@@ -5406,11 +5438,7 @@ impl Sessions {
 
     /// A note's link that no entry answers to. Saying so is better than a link that does nothing.
     pub fn no_entry_named(&mut self, name: &str) {
-        self.notice = new_notice(
-            &mut self.notice_order,
-            (Tone::Info, format!("No entry is named {name}.")),
-        );
-        self.notice_session = None;
+        self.say(Tone::Info, format!("No entry is named {name}."), None);
     }
 
     /// Words at the end of the plan in this session's note, so that the file holds the plan.
@@ -6038,7 +6066,7 @@ impl Sessions {
                 self.finish_recording(ui.ctx());
             }
             if let Err(error) = self.start_recording(settings, session) {
-                self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
+                self.say(Tone::Error, error, None);
             }
         }
         if again {
@@ -6102,11 +6130,12 @@ impl Sessions {
     fn clear_success(&mut self) {
         self.saved.owner_changed(&self.of_session(self.selected));
         // News of another session's job waits until the DM has seen it.
-        if matches!(self.notice, Some((Tone::Success, _)))
-            && (self.notice_session.is_none() || self.notice_session == self.selected)
+        if self
+            .notice()
+            .is_some_and(|notice| notice.tone == Tone::Success)
+            && (self.notice_session().is_none() || self.notice_session() == self.selected)
         {
-            self.notice = None;
-            self.notice_session = None;
+            self.end_notice();
         }
     }
 
@@ -6611,11 +6640,7 @@ impl Sessions {
         if let Some(body) = add_to_notes
             && self.add_to_note(ui.ctx(), &body)
         {
-            self.notice_session = None;
-            self.notice = new_notice(
-                &mut self.notice_order,
-                (Tone::Success, "Added to the notes.".to_owned()),
-            );
+            self.say(Tone::Success, "Added to the notes.".to_owned(), None);
         }
     }
 
@@ -6751,7 +6776,6 @@ impl Sessions {
             self.confirm_delete = None;
             ctx.data_mut(|data| data.remove::<bool>(focus_id));
             self.reading = None;
-            self.notice_session = None;
             // A deleted recording takes its result with it, so the rail stops saying Processed.
             if self.processed_recording.as_deref() == Some(path.as_path()) {
                 self.processed_session = None;
@@ -6759,14 +6783,12 @@ impl Sessions {
                 self.job_done = false;
                 self.job_warned = false;
             }
-            self.notice = new_notice(
-                &mut self.notice_order,
-                match delete_recording(&path) {
-                    Ok(()) => (Tone::Success, "Recording deleted.".to_owned()),
-                    // `delete_recording` says it in plain words (`not_deleted`).
-                    Err(error) => (Tone::Error, error),
-                },
-            );
+            let (tone, words) = match delete_recording(&path) {
+                Ok(()) => (Tone::Success, "Recording deleted.".to_owned()),
+                // `delete_recording` says it in plain words (`not_deleted`).
+                Err(error) => (Tone::Error, error),
+            };
+            self.say(tone, words, None);
             self.refresh_recordings();
         }
     }
@@ -6810,19 +6832,20 @@ impl Sessions {
     ) -> Messages<'f, SessionAct> {
         self.expire_move(book);
         self.end_carry_results();
-        let shown = self.notice_session.is_none() || self.notice_session == self.selected;
+        let shown = self.notice_session().is_none() || self.notice_session() == self.selected;
         if shown && self.job_done() {
             self.job_done = false;
         }
         let mut messages = Messages::new(frame, ("session_footer", self.selected), width);
         let dismiss = || Choice::new(MessageChoice::Dismiss(Lost::Nothing), SessionAct::Dismiss);
         if let Some(draft) = &self.draft {
-            add_dropped(frame, &mut messages, draft, &self.dropped);
+            let name = self.note_name().unwrap_or_default();
+            add_dropped(frame, &mut messages, draft, &name, &self.dropped);
         }
         if let Some((tone, words)) = self
-            .notice
-            .clone()
+            .notice()
             .filter(|_| shown && !self.notice_arrived())
+            .map(|notice| (notice.tone, notice.words.clone()))
         {
             let here = self
                 .move_run_here
@@ -6850,11 +6873,14 @@ impl Sessions {
                         );
                     }
                     Tone::Success => {
-                        // Every success notice is made with its order (`new_notice`).
-                        messages.outcome_at(
-                            self.notice_order.unwrap_or_default(),
-                            Said::new(sentence).choice(dismiss()),
-                        );
+                        // A success is a kept line: its order and its ticket are the store's.
+                        if let Some(shown) = self.notices.get(&self.page()) {
+                            messages.kept(
+                                shown.outcome(frame, |_| {
+                                    Said::new(sentence).choice(dismiss()).into()
+                                }),
+                            );
+                        }
                     }
                     Tone::Info => {
                         messages.outcome(Notice::new(sentence).choice(dismiss()));
@@ -6915,7 +6941,7 @@ impl Sessions {
                 )),
             );
         }
-        self.carry_in_messages(&mut messages);
+        self.carry_in_messages(frame, &mut messages);
         messages
     }
 
@@ -6952,7 +6978,7 @@ impl Sessions {
                     moved.name,
                     moved.number
                 ))
-                .undo(UndoStep::verb(Verb::Move).pressed_as(SessionAct::UndoMove))
+                .undo(UndoStep::of(Verb::Move, moved.name.clone()).pressed_as(SessionAct::UndoMove))
                 .into()
             }));
         }
@@ -6986,7 +7012,10 @@ impl Sessions {
                     None => crate::sentence!("{} added.", added.title),
                 };
                 Said::new(words)
-                    .undo(UndoStep::verb(Verb::Add).pressed_as(SessionAct::UndoMarker))
+                    .undo(
+                        UndoStep::of(Verb::Add, added.title.clone())
+                            .pressed_as(SessionAct::UndoMarker),
+                    )
                     .into()
             }));
         }
@@ -7017,7 +7046,7 @@ impl Sessions {
                         Ok(_) => self.refresh(),
                         // The result stays, with its Undo, beside the reason.
                         Err(ByTicket::Failed(error)) => {
-                            self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
+                            self.say(Tone::Error, error, None);
                         }
                         Err(ByTicket::Gone) => {}
                     }
@@ -7057,14 +7086,18 @@ impl Sessions {
             | SessionAct::UndoIdentity
             | SessionAct::UndoMarker
             | SessionAct::DismissSaved => {}
-            SessionAct::Dismiss => {
-                self.notice = None;
-                self.notice_session = None;
-            }
+            // A success's close icon uses its kept line up, by its ticket; another notice's ends
+            // the page's notice.
+            SessionAct::Dismiss => match press.ticket {
+                Some(ticket) => {
+                    let _ = self.notices.use_press_by(ticket);
+                }
+                None => self.end_notice(),
+            },
             SessionAct::PlayThisOne => self.play_this_one(),
             SessionAct::Open(session) => self.select(session),
             SessionAct::OpenSettings => self.wants_processing_settings = true,
-            SessionAct::UndoCarry(session) => self.undo_carry(session),
+            SessionAct::UndoCarry(session) => self.undo_carry(session, press.ticket),
             SessionAct::UndoDrop => {
                 if let (Some(draft), Some(ticket)) = (&mut self.draft, press.ticket) {
                     let _ = self.dropped.undo_by(ticket, |_| {
@@ -7391,8 +7424,7 @@ impl Sessions {
             }),
             Tab::Recordings => {
                 if self.processed_notice_read_here() {
-                    self.notice = None;
-                    self.notice_session = None;
+                    self.end_notice();
                 }
                 self.recordings_tab(ui, settings, book);
             }
@@ -7599,7 +7631,10 @@ impl Sessions {
         if let Some(shown) = self.deleted_templates.get(&self.page()) {
             messages.kept(shown.outcome(frame, |deleted| {
                 Said::new(crate::sentence!("Deleted “{}”.", deleted.name))
-                    .undo(UndoStep::verb(Verb::Delete).pressed_as(SessionAct::UndoDeleteTemplate))
+                    .undo(
+                        UndoStep::of(Verb::Delete, deleted.name.clone())
+                            .pressed_as(SessionAct::UndoDeleteTemplate),
+                    )
                     .into()
             }));
         }
@@ -7818,37 +7853,42 @@ impl Sessions {
             && !self.modal
             && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
         let mut pressed_link = None;
-        design::ScrollColumn::new(("template_editor", &template.name)).show(ui, |ui| {
-            // The template's text field is its file's (M0495, M0496). A template has no typed
-            // owner key yet: its path is the key (`TextKey::from_data`, counted).
-            let field = TEMPLATE_TEXT.of(design::TextKey::from_data(
-                template
-                    .path
-                    .as_deref()
-                    .map_or_else(|| template.name.clone(), |path| path.display().to_string()),
-            ));
-            if let Some(draft) = &mut self.template_draft {
-                let (width, height) = (ui.available_width(), ui.available_height());
-                let font = design::reader::prose_type(ui).font(ui);
-                let output = field.editor(ui, &mut draft.body, |edit| {
+        // The template's text field is its file's (M0495, M0496). A template has no typed owner
+        // key yet: its path is the key (`TextKey::from_data`, counted).
+        let field = TEMPLATE_TEXT.of(design::TextKey::from_data(
+            template
+                .path
+                .as_deref()
+                .map_or_else(|| template.name.clone(), |path| path.display().to_string()),
+        ));
+        if let Some(draft) = &mut self.template_draft {
+            // One closed editor viewport (layout PR 9): its fixed frame fills the pane's body
+            // and keeps all four edges in view; the text and its lane scroll inside it.
+            let font = design::reader::prose_type(ui).font(ui);
+            let output = design::pane::editor_view(
+                ui,
+                design::pane::ViewHeight::Fills,
+                field,
+                &mut draft.body,
+                |edit| {
                     // The layouter is a function item: leaking its box allocates nothing.
                     edit.font(font)
                         .layouter(Box::leak(Box::new(crate::markdown_source::layouter)))
-                        .margin(egui::vec2(design::S, design::S))
-                        .desired_width(width)
-                        .min_size(egui::vec2(0.0, height))
+                },
+            );
+            crate::markdown_source::paint_section_rules(ui, &output);
+            pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
+            let response = output.response;
+            design::named(ui, &response, "Template text");
+            if response.changed() {
+                draft.edited();
+                self.deleted_templates.owner_changed(&kept::Page {
+                    root: self.folder.clone().unwrap_or_default(),
                 });
-                crate::markdown_source::paint_section_rules(ui, &output);
-                pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
-                let response = output.response;
-                design::named(ui, &response, "Template text");
-                if response.changed() {
-                    draft.edited();
-                    self.deleted_templates.owner_changed(&kept::Page {
-                        root: self.folder.clone().unwrap_or_default(),
-                    });
-                }
-            } else {
+            }
+        } else {
+            // A built-in template reads in the pane's scroll column: it is not an editor.
+            design::ScrollColumn::new(("template_editor", &template.name)).show(ui, |ui| {
                 let mut body = template.body.clone();
                 let (width, height) = (ui.available_width(), ui.available_height());
                 let font = design::reader::prose_type(ui).font(ui);
@@ -7863,8 +7903,8 @@ impl Sessions {
                 });
                 design::named(ui, &output.response, "Built-in template text");
                 crate::markdown_source::paint_section_rules(ui, &output);
-            }
-        });
+            });
+        }
         if save && let Some(draft) = &mut self.template_draft {
             draft.save();
         }
@@ -8258,66 +8298,63 @@ impl Sessions {
         } else {
             design::count(count, singular, plural)
         };
-        let mut new_session = false;
         let in_form = self.form.is_some();
         let empty = self.notes.is_empty();
         let locked = self.draft.as_ref().is_some_and(Draft::needs_attention);
-        let mut stop = false;
         // The same width test as the page below the header (`notes_view`).
         let offers_list_toggle = self.offers_list_toggle(ui.available_width() >= TWO_COLUMNS_FROM);
-        design::page_header(ui, page_title, Some(&context), |ui| {
-            // First, so it keeps the header's right end whatever comes and goes beside it.
-            if offers_list_toggle {
-                let (name, hint) = if self.list_hidden {
-                    (SHOW_LIST, "Show the session list (Ctrl+\\)")
-                } else {
-                    (HIDE_LIST, "Hide the session list (Ctrl+\\)")
-                };
-                if design::icon_button_with_hint(ui, icons::SESSION_LIST, name, hint).clicked() {
-                    self.toggle_list();
-                }
-            }
-            let list_alone = self.list_only && ui.ctx().content_rect().width() < 1500.0;
-            if self.view == View::Notes && !in_form && !empty && !folder_missing {
-                new_session = Action::secondary("New session")
+        let list_alone = self.list_only && ui.ctx().content_rect().width() < 1500.0;
+        // M0498: the page's header is the shared title line. The list's show and hide is its
+        // view toggle, at the line's right end whatever comes and goes among the actions.
+        let mut line = design::TitleLine::new(page_title)
+            .context((!context.is_empty()).then_some(context.as_str()))
+            .page();
+        if offers_list_toggle {
+            let hint = if self.list_hidden {
+                "Show the session list (Ctrl+\\)"
+            } else {
+                "Hide the session list (Ctrl+\\)"
+            };
+            line = line.toggle(icons::SESSION_LIST, LIST_TOGGLE, hint, !self.list_hidden);
+        }
+        if self.view == View::Notes && !in_form && !empty && !folder_missing {
+            line = line.action(
+                design::TitleAction::secondary(NEW_SESSION)
                     .icon(icons::ADD)
-                    .blocked_if(
-                        folder_missing,
-                        "Choose the session folder before making a session.",
-                    )
-                    .blocked_if(locked, "Other sessions wait until you choose what to keep.")
-                    .show(ui)
-                    .clicked();
-            }
-            if self.view == View::Templates
-                && self.new_template.is_none()
-                && Action::secondary("New template")
-                    .icon(icons::ADD)
-                    .show(ui)
-                    .clicked()
-            {
-                self.templates_list_only = false;
-                self.new_template = Some(String::new());
-                self.template_error = None;
-            }
-            if self.live.is_some() && (self.view != View::Notes || in_form || list_alone || empty) {
-                stop = Action::quiet("Stop recording")
-                    .icon(icons::STOP_RECORDING)
-                    .show(ui)
-                    .clicked();
-            }
-            if self.view == View::Notes && Action::quiet("Templates").show(ui).clicked() {
-                self.view = View::Templates;
-            }
-            if self.party_hidden
-                && Action::quiet("Show party")
-                    .icon(icons::PARTY)
-                    .show(ui)
-                    .clicked()
-            {
-                self.party_bar = Some(true);
-            }
-        });
+                    .blocked(
+                        locked.then_some("Other sessions wait until you choose what to keep."),
+                    ),
+            );
+        }
+        if self.view == View::Templates && self.new_template.is_none() {
+            line = line.action(design::TitleAction::secondary(NEW_TEMPLATE).icon(icons::ADD));
+        }
+        if self.live.is_some() && (self.view != View::Notes || in_form || list_alone || empty) {
+            line =
+                line.action(design::TitleAction::quiet(STOP_RECORDING).icon(icons::STOP_RECORDING));
+        }
+        if self.view == View::Notes {
+            line = line.action(design::TitleAction::quiet(TEMPLATES));
+        }
+        if self.party_hidden {
+            line = line.action(design::TitleAction::quiet(SHOW_PARTY).icon(icons::PARTY));
+        }
+        let header = line.show(ui);
+        if header.toggled {
+            self.toggle_list();
+        }
+        if header.clicked(NEW_TEMPLATE) {
+            self.templates_list_only = false;
+            self.new_template = Some(String::new());
+            self.template_error = None;
+        }
+        if header.clicked(TEMPLATES) {
+            self.view = View::Templates;
+        }
+        if header.clicked(SHOW_PARTY) {
+            self.party_bar = Some(true);
+        }
+        let (stop, new_session) = (header.clicked(STOP_RECORDING), header.clicked(NEW_SESSION));
         if stop {
             self.finish_recording(ui.ctx());
         }
@@ -8429,6 +8466,11 @@ impl Sessions {
         self.finish_job(Ok(None), session);
     }
 
+    /// The open note's name, as its warnings and its draft's Undo name it.
+    pub fn open_note_name(&self) -> Option<String> {
+        self.note_name()
+    }
+
     /// The open note's draft, to put back after a step that a scenario proves aside.
     pub fn draft_snapshot(&self) -> Option<Draft> {
         self.draft.clone()
@@ -8459,8 +8501,7 @@ impl Sessions {
 
     /// A job that stays in progress, for a capture of that state.
     pub fn simulate_job(&mut self, progress: processing::Progress) {
-        self.notice = None;
-        self.notice_session = None;
+        self.end_notice();
         self.processed_session = None;
         self.processed_recording = None;
         self.job_done = false;
@@ -9493,6 +9534,46 @@ mod tests {
         );
     }
 
+    /// #597: the page's notice is one entry of its store. A newer notice replaces the older one
+    /// (also its arrived flag), and a success about one session ends when the DM moves on in
+    /// that session, never in another.
+    #[test]
+    fn the_page_notice_is_one_entry_of_its_store() {
+        let folder = tempfile::tempdir().unwrap();
+        let (a, b) = (Uuid::from_u128(1), Uuid::from_u128(2));
+        let mut sessions = Sessions {
+            folder: Some(folder.path().to_path_buf()),
+            ..Sessions::default()
+        };
+        let notice = |sessions: &Sessions| {
+            sessions
+                .notice()
+                .map(|notice| (notice.tone, notice.words.clone(), notice.session))
+        };
+        sessions.say_arrived(Tone::Success, "“Session 1” is processed.".into(), Some(a));
+        assert!(
+            sessions.notice_arrived(),
+            "a job's notice arrived by itself"
+        );
+        sessions.say(Tone::Error, "Not saved.".into(), None);
+        assert_eq!(
+            notice(&sessions),
+            Some((Tone::Error, "Not saved.".to_owned(), None)),
+            "n0-notice-one-entry: the newer notice replaces the older"
+        );
+        assert!(
+            !sessions.notice_arrived(),
+            "n0-notice-one-entry: the newer notice is the page's, not the job's"
+        );
+        sessions.say(Tone::Success, "Recording deleted.".into(), Some(a));
+        sessions.selected = Some(b);
+        sessions.clear_success();
+        assert!(notice(&sessions).is_some(), "another session keeps it");
+        sessions.selected = Some(a);
+        sessions.clear_success();
+        assert_eq!(notice(&sessions), None, "its own session ends it");
+    }
+
     /// M0495 (lane N0): the template editor's field is its template's. Words typed and erased
     /// in template A do not come back with Ctrl+Z in template B, drawn at the same place, even
     /// when both hold the same words (the case the field's text guard leaves to the owner key).
@@ -10009,7 +10090,8 @@ mod tests {
         }
         harness.run_steps(2);
         // The footer's own Undo, by its ticket.
-        harness.get_by_label("Undo move").click();
+        // M0483: the Undo names the run it moves back.
+        harness.get_by_label("Undo move Bridge Ambush").click();
         harness.run_steps(2);
         {
             let (page, book) = harness.state_mut();

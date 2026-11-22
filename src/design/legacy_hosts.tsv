@@ -77,6 +77,7 @@ fills	src/sessions/page.rs	fills_body	1	Sessions	the Sessions wrapper (named `fi
 fills	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
 composite-child	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign	the package list and the chosen package: a shared task (step 7); its children become closed blocks with the forms and lists of steps 10 and 11
 composite-child	src/sessions/page.rs	Sessions::session_content	1	Sessions	the plan and the note beside it: a shared task (step 7) in the edges the session header was drawn in; its children become closed blocks with the plan recipes and the Editor and Reader blocks of steps 9 and 11
+composite-child	src/encounters.rs	Encounters::editor_panes	1	Encounters	the roster and Add participants: a shared task (step 6b) in the edges the encounter head was drawn with; its children become closed blocks with the roster recipes of step 11
 footer-feed	src/lib.rs	Splat::page	5	App	mixed task footer (Settings): one footer for Campaigns, Settings and D&D Beyond (3), and the campaign link's for Campaigns and D&D Beyond (2); step 8
 footer-feed	src/party.rs	Party::sheet_view	1	Party
 virtual-rows	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign
@@ -118,7 +119,6 @@ row-clip	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
 row-clip	src/timeline/page.rs	TimelinePage::detail	1	Timeline
 row-clip	src/world/repair.rs	source_editor	1	World
 row-clip	src/design/pane/columns.rs	PaneEdges::show_children	1	design	design implementation boundary: a resizable child clips to the composite's view (egui's side panel sets its own clip)
-scroll-area	src/copy_dialog.rs	CopyDialog::show	1	Library
 scroll-area	src/design/components.rs	dialog_width	1	design	design implementation boundary
 scroll-area	src/design/components.rs	draft_comparison_labeled	1	design	design implementation boundary
 scroll-area	src/design/components.rs	scroll_part	1	design	design implementation boundary
@@ -157,7 +157,6 @@ scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
 scroll-request	src/markdown_view.rs	show_with_density	1	Reader
 scroll-request	src/processing/settings.rs	ProcessingSettings::input_section	1	Processing
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
-scroll-request	src/processing/settings.rs	ProcessingSettings::show	1	Processing
 scroll-request	src/sessions/page.rs	Sessions::banner	1	Sessions
 scroll-request	src/sessions/page.rs	Sessions::note_editor	2	Sessions
 scroll-request	src/sessions/page.rs	Sessions::reading_view	1	Sessions

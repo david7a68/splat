@@ -571,67 +571,79 @@ impl WorldPage {
         let count = faults.map_or(0, |faults| faults.notes() + broken);
         let broken_links = faults.map_or(0, |faults| faults.listed().len());
         let mut create = None;
-        design::page_header(
-            ui,
-            "World",
-            (count > 0)
-                .then(|| design::count(count, "note", "notes"))
-                .as_deref(),
-            |ui| {
-                create = design::locked(
-                    ui,
-                    index
-                        .is_none()
-                        .then_some("Wait for the notes to load before creating a note."),
-                    new_menu,
-                );
-                if broken_links > 0 {
-                    let response = design::status_link(
-                        ui,
-                        design::Status {
-                            icon: icons::WARN,
-                            word: &design::count(
-                                broken_links,
-                                "note needs fixing",
-                                "notes need fixing",
-                            ),
-                            color: colors().result.warning,
-                        },
-                    );
-                    design::layout::menu_popup(ui, &response).show(|ui| {
-                        if let (Some(index), Some(faults)) = (index, faults) {
-                            for &at in faults.listed() {
-                                let item = &index.items[at];
-                                if design::link(ui, &item.entry.name).clicked() {
-                                    self.open_note(item.entry.id);
-                                    ui.close();
-                                }
+        // M0603 (ruling M21): the header is the shared title line: the title and its count,
+        // New with its menu, the count of notes that need fixing with its menu, and the count
+        // that cannot be read, which opens the first one's repair.
+        const NEW: design::Word = crate::word!("New");
+        let context = (count > 0).then(|| design::count(count, "note", "notes"));
+        let fixing = design::count(broken_links, "note needs fixing", "notes need fixing");
+        let unreadable = format!("{} cannot be read", design::count(broken, "note", "notes"));
+        let mut open = None;
+        let mut line = design::TitleLine::new("World")
+            .context(context.as_deref())
+            .menu(
+                design::TitleAction::secondary(NEW)
+                    .icon(icons::ADD)
+                    .name("New ▾")
+                    .blocked(
+                        index
+                            .is_none()
+                            .then_some("Wait for the notes to load before creating a note."),
+                    ),
+                |ui| create = new_choices(ui),
+            );
+        if broken_links > 0 {
+            line = line.status(
+                design::Status {
+                    icon: icons::WARN,
+                    word: &fixing,
+                    color: colors().result.warning,
+                },
+                |ui| {
+                    if let (Some(index), Some(faults)) = (index, faults) {
+                        for &at in faults.listed() {
+                            let item = &index.items[at];
+                            if design::link(ui, &item.entry.name).clicked() {
+                                open = Some(item.entry.id);
+                                ui.close();
                             }
                         }
-                    });
-                }
-                // Every note this count holds cannot be read, which is an error in its row,
-                // this count and its repair alike.
-                if broken > 0
-                    && design::status_link(
-                        ui,
-                        design::Status {
-                            icon: icons::ERROR,
-                            word: &format!(
-                                "{} cannot be read",
-                                design::count(broken, "note", "notes")
-                            ),
-                            color: colors().result.error,
-                        },
-                    )
-                    .clicked()
-                    && let Some((path, _)) = index.and_then(|index| index.broken_world.first())
-                {
-                    self.search.clear();
-                    self.open_repair(campaign, path);
-                }
-            },
-        );
+                    }
+                },
+            );
+        }
+        // Every note this count holds cannot be read, which is an error in its row, this count
+        // and its repair alike.
+        if broken > 0 {
+            line = line.status_press(design::Status {
+                icon: icons::ERROR,
+                word: &unreadable,
+                color: colors().result.error,
+            });
+        }
+        // The header's menus keep to the column under their control (as the Library's header,
+        // issue #504): the list's content or the reader's, never over the list's scroll bar or
+        // the splitter.
+        let columns = header_columns(ui, index.is_some());
+        let shown = line
+            .page()
+            .menu_room(move |control| {
+                columns
+                    .iter()
+                    .copied()
+                    .find(|column| column.x_range().contains(control.center().x))
+                    .unwrap_or_else(|| columns[columns.len() - 1])
+            })
+            .show(ui);
+        if let Some(id) = open {
+            self.open_note(id);
+        }
+        if shown.status_pressed
+            && let Some((path, _)) = index.and_then(|index| index.broken_world.first())
+        {
+            self.search.clear();
+            self.open_repair(campaign, path);
+        }
         if let Some(kind) = create.take() {
             self.begin_new(kind, index.map(AsRef::as_ref));
         }
@@ -675,104 +687,98 @@ impl WorldPage {
             }
             return;
         }
-        design::Column::left("world_list_panel", LIST_WIDTH, 190.0..=480.0)
-            .frame(egui::Frame::new().inner_margin(egui::Margin {
-                right: design::S as i8,
-                ..Default::default()
-            }))
-            .show_inside(ui, |ui| {
-                let width = ui.available_width();
-                let _ = WORLD_SEARCH.search(
-                    ui,
-                    "Search the world",
-                    &mut self.search,
-                    "Find a note",
-                    width,
-                );
-                // The list column's own scroll: it keeps its lane, so nothing moves when the bar
-                // comes or goes; its rows fill the column.
-                design::ScrollColumn::new("world_list")
-                    .full_width()
-                    .show(ui, |ui| {
-                        if groups.is_empty() && index.broken_world.is_empty() {
-                            ui.label(
-                                Type::Body
-                                    .rich(ui, "Nothing here matches.")
-                                    .color(colors().muted),
-                            );
+        list_column().show_inside(ui, |ui| {
+            let width = ui.available_width();
+            let _ = WORLD_SEARCH.search(
+                ui,
+                "Search the world",
+                &mut self.search,
+                "Find a note",
+                width,
+            );
+            // The list column's own scroll: it keeps its lane, so nothing moves when the bar
+            // comes or goes; its rows fill the column.
+            design::ScrollColumn::new("world_list")
+                .full_width()
+                .show(ui, |ui| {
+                    if groups.is_empty() && index.broken_world.is_empty() {
+                        ui.label(
+                            Type::Body
+                                .rich(ui, "Nothing here matches.")
+                                .color(colors().muted),
+                        );
+                    }
+                    if self.search.trim().is_empty() {
+                        self.check_rows(ui);
+                    }
+                    self.list(ui, index, &groups);
+                    let broken: Vec<_> = index
+                        .broken_world
+                        .iter()
+                        .filter(|(path, _)| {
+                            path.to_lowercase().contains(&self.search.to_lowercase())
+                        })
+                        .collect();
+                    if !broken.is_empty() {
+                        // The list's last row left no gap after it: the heading takes its
+                        // whole space, as the list's own headings do.
+                        let spacing = ui.spacing().item_spacing.y;
+                        if !groups.is_empty() {
+                            ui.spacing_mut().item_spacing.y = 0.0;
                         }
-                        if self.search.trim().is_empty() {
-                            self.check_rows(ui);
-                        }
-                        self.list(ui, index, &groups);
-                        let broken: Vec<_> = index
-                            .broken_world
-                            .iter()
-                            .filter(|(path, _)| {
-                                path.to_lowercase().contains(&self.search.to_lowercase())
-                            })
-                            .collect();
-                        if !broken.is_empty() {
-                            // The list's last row left no gap after it: the heading takes its
-                            // whole space, as the list's own headings do.
-                            let spacing = ui.spacing().item_spacing.y;
-                            if !groups.is_empty() {
-                                ui.spacing_mut().item_spacing.y = 0.0;
-                            }
-                            design::heading(
+                        design::heading(
+                            ui,
+                            design::Heading::Group {
+                                title: "Cannot be read",
+                                count: broken.len(),
+                            },
+                        );
+                        ui.spacing_mut().item_spacing.y = spacing;
+                        for (path, problem) in broken {
+                            let detail = self.broken_details.get(path);
+                            let open = self.repair.as_ref().is_some_and(|r| r.path == *path)
+                                || matches!(
+                                    &self.error,
+                                    Some(PageError::Unread(unread)) if unread.fault.path == *path
+                                );
+                            let response = broken_row(
                                 ui,
-                                design::Heading::Group {
-                                    title: "Cannot be read",
-                                    count: broken.len(),
-                                },
-                            );
-                            ui.spacing_mut().item_spacing.y = spacing;
-                            for (path, problem) in broken {
-                                let detail = self.broken_details.get(path);
-                                let open = self.repair.as_ref().is_some_and(|r| r.path == *path)
-                                    || matches!(
-                                        &self.error,
-                                        Some(PageError::Unread(unread)) if unread.fault.path == *path
-                                    );
-                                let response = broken_row(
-                                    ui,
-                                    open,
-                                    path,
-                                    detail.map_or(problem.as_str(), |detail| &detail.cause),
-                                )
-                                .on_hover_text(detail.map_or(problem.as_str(), |detail| &detail.hover));
-                                if response.clicked() {
-                                    self.open_repair(campaign, path);
-                                }
+                                open,
+                                path,
+                                detail.map_or(problem.as_str(), |detail| &detail.cause),
+                            )
+                            .on_hover_text(detail.map_or(problem.as_str(), |detail| &detail.hover));
+                            if response.clicked() {
+                                self.open_repair(campaign, path);
                             }
                         }
-                        let drafts: Vec<_> = self
-                            .kept_repairs
-                            .iter()
-                            .filter(|r| {
-                                r.dirty()
-                                    && !index.broken_world.iter().any(|(path, _)| path == &r.path)
-                            })
-                            .map(|r| r.path.clone())
-                            .collect();
-                        if !drafts.is_empty() {
-                            design::heading(
-                                ui,
-                                design::Heading::Group {
-                                    title: "Repair drafts",
-                                    count: drafts.len(),
-                                },
-                            );
-                            for path in drafts {
-                                if design::two_line_row(ui, ROW, false, &path, "Unsaved repair")
-                                    .clicked()
-                                {
-                                    self.open_repair(campaign, &path);
-                                }
+                    }
+                    let drafts: Vec<_> = self
+                        .kept_repairs
+                        .iter()
+                        .filter(|r| {
+                            r.dirty() && !index.broken_world.iter().any(|(path, _)| path == &r.path)
+                        })
+                        .map(|r| r.path.clone())
+                        .collect();
+                    if !drafts.is_empty() {
+                        design::heading(
+                            ui,
+                            design::Heading::Group {
+                                title: "Repair drafts",
+                                count: drafts.len(),
+                            },
+                        );
+                        for path in drafts {
+                            if design::two_line_row(ui, ROW, false, &path, "Unsaved repair")
+                                .clicked()
+                            {
+                                self.open_repair(campaign, &path);
                             }
                         }
-                    });
-            });
+                    }
+                });
+        });
         let mut nav = None;
         // An `L` gutter, so a quiet action that starts a line can reach into it and stay clear
         // of the World column's splitter.
@@ -1801,29 +1807,67 @@ impl WorldPage {
     }
 }
 
-/// The same next step in the header and in an empty reader.
+/// The list of notes' column: one definition for the column and for the header's menus.
+fn list_column() -> design::Column {
+    design::Column::left("world_list_panel", LIST_WIDTH, 190.0..=480.0).frame(
+        egui::Frame::new().inner_margin(egui::Margin {
+            right: design::S as i8,
+            ..Default::default()
+        }),
+    )
+}
+
+/// The page's columns that `ui` lays out next, left to right, for the header's menus
+/// (`TitleLine::menu_room`): the list's and the reader's, each its content, `S` inside its
+/// panel, where the list's scroll bar starts. The header asks the list for its width before it
+/// draws (`Column::width_within`). While the notes load there is no list: one column.
+fn header_columns(ui: &egui::Ui, listed: bool) -> Vec<egui::Rect> {
+    let mut room = ui.available_rect_before_wrap();
+    let mut columns = Vec::new();
+    if listed {
+        let width = list_column().width_within(ui.ctx(), room);
+        columns.push(egui::Rect::from_x_y_ranges(
+            room.left()..=room.left() + width,
+            room.y_range(),
+        ));
+        room.min.x += width;
+    }
+    columns.push(room);
+    columns
+        .into_iter()
+        .map(|column| column.shrink2(egui::vec2(design::S, 0.0)))
+        .collect()
+}
+
+/// The same next step in the header and in an empty reader: the empty reader's `New ▾` with its
+/// menu (the header's is its title line's menu action, `TitleLine::menu`).
 fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
-    let mut choice = None;
     let label = format!("New {}", icons::DOWN);
     let response = design::Action::secondary(&label)
         .name("New ▾")
         .icon(icons::ADD)
         .show(ui);
-    design::layout::menu_popup(ui, &response).show(|ui| {
-        for (word, kind) in [
-            // `…` marks a choice that asks for a name first. Generate NPC makes its card at once.
-            ("Note…", "note"),
-            ("NPC…", "npc"),
-            ("Location…", "location"),
-            ("Generate NPC", "generate"),
-        ] {
-            // M0609: a menu's choices are the shared quiet actions, as in the Library's menus.
-            if design::Action::quiet(word).show(ui).clicked() {
-                choice = Some(kind);
-                ui.close();
-            }
+    design::layout::menu_popup(ui, &response)
+        .show(new_choices)
+        .and_then(|shown| shown.inner)
+}
+
+/// New's choices, in its menu.
+fn new_choices(ui: &mut egui::Ui) -> Option<&'static str> {
+    let mut choice = None;
+    for (word, kind) in [
+        // `…` marks a choice that asks for a name first. Generate NPC makes its card at once.
+        ("Note…", "note"),
+        ("NPC…", "npc"),
+        ("Location…", "location"),
+        ("Generate NPC", "generate"),
+    ] {
+        // M0609: a menu's choices are the shared quiet actions, as in the Library's menus.
+        if design::Action::quiet(word).show(ui).clicked() {
+            choice = Some(kind);
+            ui.close();
         }
-    });
+    }
     choice
 }
 
