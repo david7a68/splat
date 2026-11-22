@@ -3895,7 +3895,6 @@ enum EditorPane {
     Add,
 }
 const START_FIGHT: &str = "Start fight";
-const RELOAD: &str = "Reload from disk";
 const RELOAD_HINT: &str = "Read encounters and runs from disk again";
 const NAME_FIELD: &str = "Encounter name";
 const SEARCH_FIELD: &str = "Find a creature or party member";
@@ -6774,9 +6773,9 @@ impl Encounters {
         let loading = self.pending.is_some();
         let blocked = self.draft_dirty().then_some(BLOCKED_BY_DRAFT);
         let settings_changed = self.settings_unsaved();
-        let mut new = false;
-        let mut new_group = false;
-        let mut reload = false;
+        let new;
+        let new_group;
+        let reload;
         // With nothing here yet, the page's one action is in its body.
         let empty = self
             .snapshot
@@ -6802,56 +6801,44 @@ impl Encounters {
         );
         {
             let ui = &mut header;
-            // Beside Lookup in a small window, the header cannot hold every word. The counts go
-            // first. Then Reload keeps its icon, with its name and its reason on hover.
-            let reload_blocked = group_blocked
-                .or(loading.then_some("Still reading this campaign."))
-                .or(settings_changed
-                    .then_some("Save or discard the changes in Campaign, Rules and runs first."));
-            let gap = ui.spacing().item_spacing.x;
-            let new_button = || Action::secondary("New encounter").icon(icons::ADD);
-            let group_button = || Action::quiet("New group").icon(icons::ADD);
-            let reload_button = || Action::quiet(RELOAD).icon(icons::REFRESH);
-            let mut words = reload_button().natural_width(ui) + gap;
+            // M0195: the header is the shared title line: the title, the page's reading state,
+            // New encounter, New group and Reload from disk. Where they do not fit beside the
+            // title, the line places them (under it, whole), not this page.
+            const NEW_ENCOUNTER: design::Word = crate::word!("New encounter");
+            const NEW_GROUP: design::Word = crate::word!("New group");
+            const RELOAD_WORD: design::Word = crate::word!("Reload from disk");
+            let reading = loading.then_some("Still reading this campaign.");
+            let reload_blocked = group_blocked.or(reading).or(settings_changed
+                .then_some("Save or discard the changes in Campaign, Rules and runs first."));
+            let mut line = design::TitleLine::new("Encounters")
+                .context((!context.is_empty()).then_some(context.as_str()));
             if !empty {
-                words +=
-                    new_button().natural_width(ui) + group_button().natural_width(ui) + 2.0 * gap;
+                line = line
+                    .action(
+                        design::TitleAction::secondary(NEW_ENCOUNTER)
+                            .icon(icons::ADD)
+                            .blocked(blocked.or(reading)),
+                    )
+                    .action(
+                        design::TitleAction::quiet(NEW_GROUP)
+                            .icon(icons::ADD)
+                            .blocked(group_blocked.or(reading))
+                            .hint("A reusable set of creatures to add to a running encounter"),
+                    );
             }
-            let spare = ui.available_width()
-                - design::number_width(ui, "Encounters", &Type::Title.font(ui))
-                - words;
-            let counts_fit = spare
-                >= design::XS + gap + design::number_width(ui, &context, &Type::Small.font(ui));
-            let context = (counts_fit && !context.is_empty()).then_some(context.as_str());
-            design::page_header(ui, "Encounters", context, |ui| {
-                if !empty {
-                    new = new_button()
-                        .blocked(blocked.or(loading.then_some("Still reading this campaign.")))
-                        .show(ui)
-                        .clicked();
-                    new_group = group_button()
-                        .blocked(
-                            group_blocked.or(loading.then_some("Still reading this campaign.")),
-                        )
-                        .hint("A reusable set of creatures to add to a running encounter")
-                        .show(ui)
-                        .clicked();
-                }
-                // A run stays open through this, so a note fixed outside Splat reaches its Groups tab.
-                reload = if spare >= 0.0 {
-                    reload_button()
+            // A run stays open through Reload, so a note fixed outside Splat reaches its Groups tab.
+            let shown = line
+                .action(
+                    design::TitleAction::quiet(RELOAD_WORD)
+                        .icon(icons::REFRESH)
                         .blocked(reload_blocked)
-                        .hint(RELOAD_HINT)
-                        .show(ui)
-                        .clicked()
-                } else {
-                    design::locked(ui, reload_blocked, |ui| {
-                        design::icon_button(ui, icons::REFRESH, RELOAD)
-                            .on_hover_text(RELOAD_HINT)
-                            .clicked()
-                    })
-                };
-            });
+                        .hint(RELOAD_HINT),
+                )
+                .page()
+                .show(ui);
+            new = shown.clicked(NEW_ENCOUNTER);
+            new_group = shown.clicked(NEW_GROUP);
+            reload = shown.clicked(RELOAD_WORD);
         }
         let used = header.min_rect();
         // FG3: the empty state starts where every page's empty state starts, `L` below the

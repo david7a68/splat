@@ -318,6 +318,16 @@ pub fn run(d: &mut Driver<'_>) {
         ),
     );
     d.state("ready-to-run-beside-lookup", Sizes::Small);
+    // M0195: the page's header is the shared title line, so beside Lookup at 960 its actions
+    // keep their words whole (under the title where they do not fit beside it), never an icon
+    // alone.
+    let whole = ["New encounter", "New group", "Reload from disk"]
+        .map(|words| (words, d.painted_whole_in(words, egui::Rect::EVERYTHING)));
+    d.observe(
+        "m32-M0195-header-words-whole",
+        whole.iter().all(|(_, shown)| *shown),
+        format!("Beside Lookup at 960, the header's actions painted whole: {whole:?}"),
+    );
     d.press_ctrl(Key::K);
 
     // The editor: the roster heading, or the tab row below 760 px. Its answer is worked out

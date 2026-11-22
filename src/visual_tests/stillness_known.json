@@ -174,9 +174,6 @@
   ],
   "run-continue": [
     ["N2/icon-off-text-centre","10-plan-with-continued-fight","960x640","Button \"More actions for Sunken Vault\"",1],
-    ["G1c/content-moved-with-bar","17-history-not-the-last-fight-beside-lookup","960x640","Button \"Edit\"",1],
-    ["G1c/content-moved-with-bar","17-history-not-the-last-fight-beside-lookup","960x640","Button \"More actions for Bridge Ambush\"",1],
-    ["G1c/content-moved-with-bar","17-history-not-the-last-fight-beside-lookup","960x640","Link \"Round 2\"",1],
     ["G3/far-action","12-history-continue-fight","1920x1080","Button \"Resume\"",1],
     ["G3/far-action","12-history-continue-fight","1920x1080","Button \"Start fight\"",1],
     ["G3/far-action","13-history-beside-lookup","1920x1080","Button \"Resume\"",1],
