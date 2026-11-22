@@ -18391,6 +18391,77 @@ pub mod session_recording {
             }
             d.wait_for_text("Anthropic");
         });
+        // Layout PR 10b (SR1/AR2): the open list leaves its own field whole: the Service caption
+        // and the control are in the body above the footer, and no row covers either; at 960 and
+        // at 1920 (a wider menu is checked at the other sizes too).
+        for size in [SMALL, LARGE] {
+            let (whole, detail) = d.aside(|d| d.act_at_size(size, |d| {
+                if !d.has("Anthropic") {
+                    d.click_starting("Transcript and summary service: ");
+                    d.wait_for_text("Anthropic");
+                }
+                let nodes = d.nodes();
+                let service = nodes
+                    .iter()
+                    .find(|node| node.name.starts_with("Transcript and summary service: "))
+                    .map(|node| node.rect);
+                let caption = service.and_then(|service| {
+                    nodes
+                        .iter()
+                        .filter(|node| {
+                            node.name == "Service" && node.rect.bottom() <= service.top() + 1.0
+                        })
+                        .map(|node| node.rect)
+                        .reduce(|a, b| if a.bottom() > b.bottom() { a } else { b })
+                });
+                let rows: Vec<egui::Rect> = nodes
+                    .iter()
+                    .filter(|node| {
+                        ["Anthropic", "OpenAI", "Google Gemini", "OpenRouter", "Another service"]
+                            .contains(&node.name.as_str())
+                    })
+                    .map(|node| node.rect)
+                    .collect();
+                let scale = d.pixels_per_point();
+                let limit = service.and_then(|service| {
+                    d.pane_records()
+                        .into_iter()
+                        .find(|record| record.room().contains(service.center() / scale))
+                        .map(|record| {
+                            let room = record.viewport().unwrap_or(record.room());
+                            let bottom = record.footer().map_or(room.bottom(), |footer| footer.top());
+                            (room.top() * scale, bottom * scale)
+                        })
+                });
+                let whole = service.zip(caption).zip(limit).is_some_and(
+                    |((service, caption), (top, bottom))| {
+                        caption.top() >= top - 1.0
+                            && service.bottom() <= bottom + 1.0
+                            && !rows.is_empty()
+                            && rows
+                                .iter()
+                                .all(|row| !row.intersects(caption) && !row.intersects(service))
+                    },
+                );
+                (
+                    whole,
+                    format!(
+                        "caption {caption:?}, control {service:?}, body {limit:?}, rows {rows:?}"
+                    ),
+                )
+            }));
+            d.observe(
+                "layout-10b-SR1-list-context",
+                whole,
+                format!("At {size:?}, the open list leaves its field whole: {detail}"),
+            );
+        }
+        d.aside(|d| {
+            if !d.has("Anthropic") {
+                d.click_starting("Transcript and summary service: ");
+                d.wait_for_text("Anthropic");
+            }
+        });
         d.click("Anthropic");
         d.state_prepared("processing-settings-anthropic", Sizes::All, |d| {
             // iter-25-S FK4: `Save key` ends at the edge the other fields end at, and its reason

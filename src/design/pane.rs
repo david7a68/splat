@@ -2600,7 +2600,7 @@ mod hold_tests {
         // the release, its whole field comes into view, caption included.
         h.state_mut().clip = Some("Words".to_owned());
         h.run_steps(2);
-        let caption = || {
+        let caption = |h: &Harness<'_, State>| {
             h.get_by_role_and_label(egui::accesskit::Role::Label, "Clip caption")
                 .rect()
         };
@@ -2610,7 +2610,7 @@ mod hold_tests {
             .unwrap()
             .viewport()
             .unwrap();
-        let top = caption().bottom() - viewport.top() + 2.0;
+        let top = caption(&h).bottom() - viewport.top() + 2.0;
         h.hover_at(viewport.center());
         h.event(egui::Event::MouseWheel {
             unit: egui::MouseWheelUnit::Point,
@@ -2619,7 +2619,7 @@ mod hold_tests {
         });
         h.run_steps(4);
         let (cut, field) = (
-            caption(),
+            caption(&h),
             h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Clip caption")
                 .rect(),
         );
@@ -2631,7 +2631,7 @@ mod hold_tests {
         h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Clip caption")
             .click();
         h.run_steps(4);
-        let caption = caption();
+        let caption = caption(&h);
         assert!(
             caption.top() >= viewport.top() - 0.5,
             "i9-click: after a click on the field, its caption {caption:?} is whole in the view \
