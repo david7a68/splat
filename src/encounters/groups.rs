@@ -6230,7 +6230,7 @@ mod tests {
         let error = draft.save(&campaign, &[]).unwrap_err();
         assert_eq!(
             error,
-            super::super::disk::changed_on_disk("group", "Changed")
+            super::super::disk::changed_on_disk("group", "Changed").to_string()
         );
         assert!(
             error.starts_with("Changed changed on disk."),

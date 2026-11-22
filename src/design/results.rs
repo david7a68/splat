@@ -1242,6 +1242,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // `design::message` or `small_message`.
         ("src/encounters/groups.rs", "belongs_to", &[Ban::Body]),
         ("src/encounters/groups.rs", "body_fault", &[Ban::Body]),
+        // Ruling M20 (lane E2): a draft's disk conflict takes its editor's place (the
+        // comparison follows), typed; it replaces `design::message` and `message_with_actions`.
+        ("src/encounters/disk.rs", "show", &[Ban::Body]),
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
