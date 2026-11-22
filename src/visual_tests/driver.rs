@@ -1273,6 +1273,25 @@ impl<'a> Driver<'a> {
     }
 
     /// Is a control with this text there, and disabled?
+    /// The pressed state of the toggle named `name` (a toggle button's or a selected
+    /// control's), or `None` when no control has that name or it has no such state.
+    pub fn is_pressed(&self, name: &str) -> Option<bool> {
+        let mut pressed = None;
+        ergonomics::visit_nodes(&self.harness, |node, _| {
+            let access = node.accesskit_node();
+            if access.label().as_deref() == Some(name) {
+                pressed = pressed.or_else(|| {
+                    access.is_selected().or_else(|| {
+                        access
+                            .toggled()
+                            .map(|toggled| toggled == accesskit::Toggled::True)
+                    })
+                });
+            }
+        });
+        pressed
+    }
+
     pub fn is_disabled(&self, name: &str) -> bool {
         self.nodes()
             .iter()
