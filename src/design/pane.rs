@@ -134,7 +134,7 @@ mod plan;
 mod plan_row;
 /// The scroll region of an owned list body over its plan (layout step 3b).
 mod region;
-pub use action_line::{ActionLine, LineColumns, slot as line_slot};
+pub use action_line::{ActionLine, LineAction, LineColumns, slot as line_slot};
 #[cfg(any(test, feature = "test-support"))]
 pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
