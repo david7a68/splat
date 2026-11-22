@@ -9418,9 +9418,21 @@ pub mod prep_to_table {
         d.state_prepared("first-turn", Sizes::Standard, |d| {
             sheet_rows_whole(d, "l11a-SM5-AM16-sheet-rows");
         });
-        // Astra's P2 on PR 700: the run's sheet at 1920 too.
+        // Astra's P2 on PR 700: the run's sheet at 1920 too. At 1920x1080 it fits whole; at
+        // 1920x720 and 1920x480 (the same wide sheet) it scrolls, and at every offset to its end
+        // its bottom ends at a whole row (proof steps that end at the sheet's top, where it is).
         let (whole, found) = d.at_size(LARGE, sheet_whole);
-        d.observe("l11a-SM5-AM16-sheet-rows", whole, found);
+        let sweeps = d.aside(|d| {
+            [(1920.0, 720.0), (1920.0, 480.0)].map(|size| d.act_at_size(size, sheet_sweep))
+        });
+        d.observe(
+            "l11a-SM5-AM16-sheet-rows",
+            whole
+                && sweeps[1].0 > sweeps[0].0
+                && sweeps[0].0 >= 10
+                && sweeps.iter().all(|(_, faults)| faults.is_empty()),
+            format!("{found}; at 1920x720 and 1920x480, steps of 6 points and faults {sweeps:?}"),
+        );
         d.observe(
             "P1",
             current_participant(d).as_deref() == Some(first.as_str()),
