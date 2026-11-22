@@ -1391,12 +1391,19 @@ mod tests {
         saved_runs: &[crate::encounter_run::SavedRunInfo],
         add: impl FnOnce(&Plan<'_>) -> R,
     ) -> R {
+        // `Plan`'s revisions change only when their lists do (Encounters keeps them): these
+        // frames never change the fights or the runs, so one revision each, made once.
+        thread_local! {
+            static STILL: crate::design::memo::Revision =
+                crate::design::memo::Revised::new(()).revision();
+        }
+        let still = STILL.with(|still| *still);
         let mut group = |_: &mut egui::Ui| {};
         let plan = Plan {
             fights,
             saved_runs,
-            saved_runs_revision: crate::design::memo::Revised::new(()).revision(),
-            fights_revision: crate::design::memo::Revised::new(()).revision(),
+            saved_runs_revision: still,
+            fights_revision: still,
             groups: &[],
             group_blocked: None,
             group_open: false,
