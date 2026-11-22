@@ -48,6 +48,14 @@ pub enum Navigation {
 /// The frames a request may wait (a held press) before it ends.
 const REQUEST_FRAMES: u64 = 8;
 
+/// The block (by key) whose first control, or last, takes the focus once it draws, and the
+/// frame a key asked it in.
+type FocusTo = Option<(Id, bool, u64)>;
+
+/// A Tab in a focused text field at the drawn edge: the field, the block it routes to if the
+/// field gives Tab up, and whether to that block's last control.
+type TabAfter = Option<(Id, usize, bool)>;
+
 /// What the highest request wants shown.
 enum Want {
     Block(usize),
@@ -154,9 +162,12 @@ pub struct RegionState {
     stand: Option<KeyStand>,
     /// An arrow pressed at the drawn edge in the last pass, from this control: down or up.
     arrow: Option<(Id, bool)>,
+    /// A Tab in a focused text field at the drawn edge in this pass: the field, the block it
+    /// routes to if the field gives Tab up, and whether to its last control.
+    tab_after: TabAfter,
     /// The block (by key) whose first control, or last, takes the focus once it draws; the frame
     /// it was asked in.
-    focus_to: Option<(Id, bool, u64)>,
+    focus_to: FocusTo,
 }
 
 impl RegionState {
@@ -181,6 +192,7 @@ impl RegionState {
             asked: None,
             stand: None,
             arrow: None,
+            tab_after: None,
             focus_to: None,
         }
     }
@@ -359,13 +371,17 @@ impl<'s> BlockRegion<'s> {
         // pass's input), in the content's terms: the mask is decided before any block draws.
         let clip = ui.clip_rect();
         let (offset, view) = (clip.top() - rect.top(), clip.height().max(0.0));
-        let held = cancel_in_place(ui, (&mut state.pending, &mut state.asked));
+        let held = cancel_in_place(
+            ui,
+            (&mut state.pending, &mut state.asked, &mut state.focus_to),
+        );
         let plan = state.plan.plan(content, env);
         route_keys(
             ui,
             Keys {
                 stand: &mut state.stand,
                 arrow: &mut state.arrow,
+                tab_after: &mut state.tab_after,
                 focus_to: &mut state.focus_to,
                 pending: &mut state.pending,
             },
@@ -410,7 +426,12 @@ impl<'s> BlockRegion<'s> {
         keyboard_after_draw(
             &ctx,
             layer,
-            (&mut state.focus_to, &mut state.stand),
+            (
+                &mut state.focus_to,
+                &mut state.stand,
+                &mut state.tab_after,
+                &mut state.pending,
+            ),
             plan,
             &ranges,
             &mask.whole,
@@ -726,7 +747,10 @@ impl<'s> BlockRegion<'s> {
 /// draws. The column's one rule (`reveal::column_input`): the DM's movement over the column, or
 /// another input to it (a press, a key that moves a view or a caret), cancels every OLDER
 /// request; a press held still in it makes them wait, up to `REQUEST_FRAMES`. Whether one waits.
-fn cancel_in_place(ui: &Ui, (pending, asked): (&mut Pending, &mut Option<u64>)) -> bool {
+fn cancel_in_place(
+    ui: &Ui,
+    (pending, asked, focus_to): (&mut Pending, &mut Option<u64>, &mut FocusTo),
+) -> bool {
     let frame = ui.ctx().cumulative_frame_nr();
     let (cancel, held) = crate::design::reveal::column_view(ui)
         .map(|(key, view)| crate::design::reveal::column_input(ui, key, view, None))
@@ -738,6 +762,10 @@ fn cancel_in_place(ui: &Ui, (pending, asked): (&mut Pending, &mut Option<u64>)) 
         });
     if cancel || asked.is_some_and(|asked| frame > asked + REQUEST_FRAMES) {
         *pending = Pending::default();
+        // Review of PR 787 (P2): a routed key's focus goes with its request.
+        if cancel {
+            *focus_to = None;
+        }
     }
     held
 }
@@ -789,7 +817,8 @@ struct KeyStand {
 struct Keys<'s> {
     stand: &'s mut Option<KeyStand>,
     arrow: &'s mut Option<(Id, bool)>,
-    focus_to: &'s mut Option<(Id, bool, u64)>,
+    tab_after: &'s mut TabAfter,
+    focus_to: &'s mut FocusTo,
     pending: &'s mut Pending,
 }
 
@@ -813,9 +842,40 @@ fn route_keys(ui: &Ui, keys: Keys<'_>, plan: &BlockPlan) {
         return;
     };
     let owns = crate::design::reveal::column_view(ui)
-        .is_some_and(|(key, _)| crate::design::reveal::keys_in(ui, key));
+        .is_some_and(|(key, view)| crate::design::reveal::keys_in(ui, key, view));
     let n = plan.len();
     let mut target = None;
+    // Review of PR 787 (P2): a focused text field keeps its keys. Home, End and the arrows move
+    // its caret, so they never route (nor an arrow's fallback: the focus does not move); Tab
+    // routes only when the field gives it up (egui moves the focus off it in this pass: a field
+    // that indents keeps it), which `keyboard_after_draw` sees.
+    if egui::text_edit::TextEditState::load(ui.ctx(), stand.focused).is_some() {
+        *keys.arrow = None;
+        if owns {
+            let tab = |modifiers: egui::Modifiers| {
+                ui.input(|input| {
+                    input.events.iter().any(|event| {
+                        matches!(event, egui::Event::Key { key: Key::Tab, pressed: true, modifiers: m, .. }
+                            if *m == modifiers)
+                    })
+                })
+            };
+            if tab(egui::Modifiers::NONE)
+                && stand.last
+                && stand.block + 1 < n
+                && stand.block + 1 >= stand.whole.end
+            {
+                *keys.tab_after = Some((stand.focused, stand.block + 1, false));
+            } else if tab(egui::Modifiers::SHIFT)
+                && stand.first
+                && stand.block > 0
+                && stand.block - 1 < stand.whole.start
+            {
+                *keys.tab_after = Some((stand.focused, stand.block - 1, true));
+            }
+        }
+        return;
+    }
     // An arrow of the last pass that egui could not move (the focus stayed on its control).
     if let Some((id, down)) = keys.arrow.take()
         && id == stand.focused
@@ -879,7 +939,12 @@ fn route_keys(ui: &Ui, keys: Keys<'_>, plan: &BlockPlan) {
 fn keyboard_after_draw(
     ctx: &egui::Context,
     layer: egui::LayerId,
-    (focus_to, stand): (&mut Option<(Id, bool, u64)>, &mut Option<KeyStand>),
+    (focus_to, stand, tab_after, pending): (
+        &mut FocusTo,
+        &mut Option<KeyStand>,
+        &mut TabAfter,
+        &mut Pending,
+    ),
     plan: &BlockPlan,
     ranges: &[(usize, Range<usize>)],
     whole: &Range<usize>,
@@ -897,6 +962,17 @@ fn keyboard_after_draw(
                 .collect()
         })
     };
+    // A Tab that a text field gave up (egui moved the focus off it in this pass) routes now.
+    if let Some((field, at, last)) = tab_after.take()
+        && ctx.memory(|memory| memory.focused()) != Some(field)
+        && let Some(key) = plan.key(at)
+    {
+        *focus_to = Some((key, last, ctx.cumulative_frame_nr()));
+        if !whole.contains(&at) {
+            pending.navigation = Some(Navigation::Show(key));
+            ctx.request_discard("a text field gave Tab up at a measured body's drawn edge");
+        }
+    }
     if let Some((key, last, asked)) = *focus_to {
         if ctx.cumulative_frame_nr() > asked + REQUEST_FRAMES {
             *focus_to = None;
