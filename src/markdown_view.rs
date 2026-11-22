@@ -2314,7 +2314,8 @@ mod tests {
                 })
                 .expect("the last row is painted");
             let scroll = design::theme::scroll_style();
-            let bars: Vec<egui::Rect> = first
+            // The bar, once the table knows it overflows (the frames after the first).
+            let bars: Vec<egui::Rect> = output
                 .shapes
                 .iter()
                 .filter_map(|shape| match &shape.shape {
