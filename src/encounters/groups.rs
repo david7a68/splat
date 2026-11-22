@@ -5463,6 +5463,45 @@ mod tests {
             "a quiet frame copies no plan list"
         );
         assert_eq!(kept.groups.len(), 1, "the kept groups are the offered ones");
+        // Review of PR 804 (a cache proof changes content): each input of the kept lists, alone.
+        // The snapshot: the free group renamed on disk, with the same count, read again.
+        free.name = "Wolf Pack".into();
+        free.save(&campaign, &[]).unwrap();
+        encounters.snapshot = Some(Snapshot::load(&campaign, &[]).unwrap());
+        let kept = encounters.plan_kept();
+        assert_eq!(
+            kept.groups
+                .iter()
+                .map(|group| group.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Wolf Pack"],
+            "a group renamed on disk is listed by its new name"
+        );
+        // The saved runs: Bridge's unfinished run, listed with the snapshot's revision kept.
+        let run = crate::encounter_run::SavedRunInfo {
+            path: std::path::PathBuf::from("bridge.json"),
+            id: Some(Uuid::new_v4()),
+            source: Some(bridge),
+            encounter: "Bridge".into(),
+            label: "Round 2".into(),
+            standing: crate::encounter_run::Standing::Unfinished,
+            setup: false,
+            saved_at: None,
+            unsent: vec![],
+        };
+        encounters
+            .snapshot
+            .as_mut()
+            .unwrap()
+            .take_run_list(Ok(vec![run]), false);
+        encounters.note_run_facts();
+        let kept = encounters.plan_kept();
+        assert!(
+            kept.fights
+                .iter()
+                .any(|fight| fight.name == "Bridge" && fight.saved.is_some()),
+            "a run saved for a fight is listed with it"
+        );
     }
 
     #[test]

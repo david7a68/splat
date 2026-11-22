@@ -128,6 +128,8 @@ mod columns;
 mod laid;
 /// The whole-block plan of a body and its index (layout step 3a; step 3b draws from it).
 mod plan;
+/// The Session plan's closed row as a recipe (layout 11c A2b).
+mod plan_row;
 /// The scroll region of an owned list body over its plan (layout step 3b).
 mod region;
 #[cfg(any(test, feature = "test-support"))]
@@ -136,6 +138,7 @@ pub use columns::{PaneColumns, PaneEdges};
 use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
 pub use laid::{Laid, LaidUi};
 pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Measured, Row};
+pub use plan_row::{PlanColumns, PlanRow, SummaryPart, rule as plan_rule, slot as plan_slot};
 pub use region::{BlockRegion, Navigation, RegionState};
 
 /// What a pane's body is, for the footer's place.

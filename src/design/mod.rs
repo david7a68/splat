@@ -57,8 +57,9 @@ pub use layout::{
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]
 pub use pane::{
-    ACTION_ROW, Block, BlockRegion, Body, ENTRY_ROW_HEIGHT, EditorRegion, Fills, FillsReason,
-    Navigation, PaneColumns, PaneEdges, Placement, RegionState, Row,
+    ACTION_ROW, Block, BlockRegion, Body, ENTRY_ROW_HEIGHT, EditorRegion, Fills, FillsReason, Laid,
+    LaidUi, Navigation, PaneColumns, PaneEdges, Placement, PlanColumns, PlanRow, RegionState, Row,
+    SummaryPart, plan_rule, plan_slot,
 };
 // Wave 2 callers name the popup parts through `design`, as they name the components.
 #[allow(unused_imports)]
