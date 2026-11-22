@@ -385,18 +385,6 @@ fn entry_thing(label: &str) -> crate::design::results::Thing {
     crate::design::results::Thing::new(crate::design::results::Kind::Entry, super::named(label))
 }
 
-impl Removed {
-    /// What its Undo names, and the name a refused Undo gives the entry.
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
-}
-
-/// A history entry as a refusal names it: `entry “Take seal”`.
-fn entry_thing(label: &str) -> crate::design::results::Thing {
-    crate::design::results::Thing::new(crate::design::results::Kind::Entry, super::named(label))
-}
-
 /// One footer message of a note's history, as `footer_lines` selects it: its words, and its kind.
 pub struct FooterLine {
     pub words: String,
