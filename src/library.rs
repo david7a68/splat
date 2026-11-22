@@ -5198,81 +5198,68 @@ impl Library {
             let footer = messages.take().expect("the footer is built above");
             footer_pressed = footer
                 .pane_editor(ui, |ui, region| {
-                    egui::Frame::new()
-                        .fill(colors().well)
-                        .stroke(egui::Stroke::new(
-                            design::HAIRLINE_WIDTH,
-                            colors().field_border,
-                        ))
-                        .corner_radius(design::RADIUS_CONTROL)
-                        .inner_margin(design::S)
-                        .show(ui, |ui| {
-                            ui.set_max_width(
-                                editor_width - (design::S + design::HAIRLINE_WIDTH) * 2.0,
-                            );
-                            let width = ui.available_width();
-                            let output =
-                                region.editor(ui, note.markdown_field(), &mut self.draft, |edit| {
-                                    edit.font(egui::TextStyle::Monospace)
-                                        .frame(false)
-                                        .margin(egui::Vec2::ZERO)
-                                        .desired_width(width)
-                                        .interactive(editable)
-                                });
-                            // Each edit is a new draft: a failed Save of the old words ends.
-                            if output.response.changed() {
-                                self.draft_revision += 1;
-                            }
-                            pressed_link = crate::markdown_source::pressed_note_link(
-                                ui,
-                                &output,
-                                note.entry.as_ref().map(|entry| entry.id),
-                            );
-                            let response = output.response;
-                            design::named(ui, &response, "Markdown editor");
-                            if std::mem::take(&mut self.focus_markdown) {
-                                response.request_focus();
-                            }
-                            // The caret goes to the broken line; the region reveals a caret that
-                            // moved outside its view, centred (P2).
-                            if std::mem::take(&mut self.focus_repair)
-                                && let Some(line) = repair_line
-                            {
-                                let at = self
-                                    .draft
-                                    .lines()
-                                    .take(line.saturating_sub(1))
-                                    .map(|line| line.chars().count() + 1)
-                                    .sum();
-                                response.request_focus();
-                                let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
-                                    .unwrap_or_default();
-                                state
-                                    .cursor
-                                    .set_char_range(Some(egui::text::CCursorRange::one(
-                                        egui::text::CCursor::new(at),
-                                    )));
-                                state.store(ui.ctx(), response.id);
-                            }
-                            if std::mem::take(&mut self.focus_hp)
-                                && let Some(at) = self
-                                    .draft
-                                    .find("initiative: ")
-                                    .map(|at| at + "initiative: ".len())
-                            {
-                                response.request_focus();
-                                let at = self.draft[..at].chars().count();
-                                let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
-                                    .unwrap_or_default();
-                                state
-                                    .cursor
-                                    .set_char_range(Some(egui::text::CCursorRange::two(
-                                        egui::text::CCursor::new(at),
-                                        egui::text::CCursor::new(at + 1),
-                                    )));
-                                state.store(ui.ctx(), response.id);
-                            }
-                        });
+                    // The region draws the editor's fixed frame, with the text and its lane
+                    // inside it (layout PR 9).
+                    ui.scope(|ui| {
+                        ui.set_max_width(editor_width);
+                        let output =
+                            region.editor(ui, note.markdown_field(), &mut self.draft, |edit| {
+                                edit.font(egui::TextStyle::Monospace).interactive(editable)
+                            });
+                        // Each edit is a new draft: a failed Save of the old words ends.
+                        if output.response.changed() {
+                            self.draft_revision += 1;
+                        }
+                        pressed_link = crate::markdown_source::pressed_note_link(
+                            ui,
+                            &output,
+                            note.entry.as_ref().map(|entry| entry.id),
+                        );
+                        let response = output.response;
+                        design::named(ui, &response, "Markdown editor");
+                        if std::mem::take(&mut self.focus_markdown) {
+                            response.request_focus();
+                        }
+                        // The caret goes to the broken line; the region reveals a caret that
+                        // moved outside its view, centred (P2).
+                        if std::mem::take(&mut self.focus_repair)
+                            && let Some(line) = repair_line
+                        {
+                            let at = self
+                                .draft
+                                .lines()
+                                .take(line.saturating_sub(1))
+                                .map(|line| line.chars().count() + 1)
+                                .sum();
+                            response.request_focus();
+                            let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
+                                .unwrap_or_default();
+                            state
+                                .cursor
+                                .set_char_range(Some(egui::text::CCursorRange::one(
+                                    egui::text::CCursor::new(at),
+                                )));
+                            state.store(ui.ctx(), response.id);
+                        }
+                        if std::mem::take(&mut self.focus_hp)
+                            && let Some(at) = self
+                                .draft
+                                .find("initiative: ")
+                                .map(|at| at + "initiative: ".len())
+                        {
+                            response.request_focus();
+                            let at = self.draft[..at].chars().count();
+                            let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
+                                .unwrap_or_default();
+                            state
+                                .cursor
+                                .set_char_range(Some(egui::text::CCursorRange::two(
+                                    egui::text::CCursor::new(at),
+                                    egui::text::CCursor::new(at + 1),
+                                )));
+                            state.store(ui.ctx(), response.id);
+                        }
+                    });
                 })
                 .pressed;
         } else {
@@ -6485,7 +6472,7 @@ mod tests {
                 "src/campaigns.rs",
                 &[
                     ("kept_result", 0),
-                    (".blocked(", 5),
+                    (".blocked(", 4),
                     ("blocked_if(", 0),
                     ("design::locked(", 1),
                     ("undo_message(", 0),
@@ -11091,7 +11078,13 @@ mod tests {
         );
         // M-L0.4b: the typed footer's checked words are the shared words of World and the
         // workspace, which other pages still draw.
-        assert_eq!(DUPLICATE_ENTRY.as_str(), crate::world::DUPLICATE_ENTRY);
+        assert_eq!(
+            design::outcome::Fault::cause(&crate::world::DuplicateIdentity(
+                crate::world::IdentityNoun::Entry
+            ))
+            .as_str(),
+            crate::world::DUPLICATE_ENTRY
+        );
         assert_eq!(
             manifest_replace_help("Package.md").as_str(),
             crate::content_workspace::manifest_replace_consequence("Package.md")

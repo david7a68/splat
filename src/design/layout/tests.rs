@@ -478,6 +478,12 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                 color: colors().result.error,
             })
             .close("Close Library")
+            .toggle(
+                crate::design::icons::SESSION_LIST,
+                "Hide the list",
+                "Hide the list (Ctrl+\\)",
+                true,
+            )
     }
     for (width, beside, blocked) in [
         (900.0, true, false),
@@ -489,6 +495,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         let packages = std::cell::Cell::new(false);
         let lock = std::cell::Cell::new(blocked);
         let closed = std::cell::Cell::new(false);
+        let toggled = std::cell::Cell::new(false);
         let status_pressed = std::cell::Cell::new(false);
         let left = std::cell::Cell::new(0.0);
         // The column under the link: the line's right half, as a reader beside a list.
@@ -503,17 +510,14 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                 ));
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                     let shown = header(&opened, &packages, lock.get(), room.get()).show(ui);
-                    if shown.closed {
-                        closed.set(true);
-                    }
-                    if shown.status_pressed {
-                        status_pressed.set(true);
-                    }
+                    closed.set(closed.get() || shown.closed);
+                    toggled.set(toggled.get() || shown.toggled);
+                    status_pressed.set(status_pressed.get() || shown.status_pressed);
                 });
             })
         };
         let (nodes, painted) = draw(Vec::new());
-        let (title, new, status, close) = (
+        let (title, new, status, close, toggle) = (
             painted
                 .iter()
                 .find(|text| text.text == "Library")
@@ -522,6 +526,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             bounds(&nodes, "New entry"),
             bounds(&nodes, "3 files need fixing"),
             bounds(&nodes, "Close Library"),
+            bounds(&nodes, "Hide the list"),
         );
         assert!(
             painted_whole(&painted, "N"),
@@ -537,6 +542,54 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             new.right() <= close.left() && status.right() <= close.left() || !beside,
             "{width}: the actions keep clear of the close icon: {new:?} {status:?} {close:?}"
         );
+        // N0 (ruling M21): the view toggle, an icon target, stands left of the close icon on
+        // the title's line, wherever the actions go, and the actions keep clear of it.
+        assert!(
+            (toggle.right() - (close.left() - ACTION_GAP)).abs() <= 0.5
+                && (toggle.center().y - close.center().y).abs() <= 0.5
+                && toggle.width() >= 24.0,
+            "n0-title-toggle: {width}: the toggle left of the close icon, on its line: {toggle:?}, close {close:?}"
+        );
+        assert!(
+            new.right() <= toggle.left() && status.right() <= toggle.left() || !beside,
+            "n0-title-toggle: {width}: the actions keep clear of the toggle: {new:?} {status:?} {toggle:?}"
+        );
+        // Review of PR 618: assistive tools read the toggle's state, not only its name.
+        assert_eq!(
+            nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some("Hide the list"))
+                .and_then(|(_, node)| node.toggled()),
+            Some(egui::accesskit::Toggled::True),
+            "n0-title-toggle-state: {width}: the toggle is a pressed toggle button"
+        );
+        // And the keyboard follows the line: Tab reaches the toggle before the close icon.
+        let tab = || egui::Event::Key {
+            key: egui::Key::Tab,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let mut reached = Vec::new();
+        for _ in 0..10 {
+            let (nodes, _) = draw(vec![tab()]);
+            let focused = ctx.memory(|memory| memory.focused()).map(|id| id.value());
+            if let Some(name) = nodes
+                .iter()
+                .find(|(id, _)| Some(id.0) == focused)
+                .and_then(|(_, node)| node.label())
+                .filter(|name| !reached.iter().any(|seen: &String| seen == name))
+            {
+                reached.push(name.to_owned());
+            }
+        }
+        let place = |name: &str| reached.iter().position(|seen| seen == name);
+        assert!(
+            place("Hide the list").is_some() && place("Hide the list") < place("Close Library"),
+            "n0-title-tab: {width}: Tab reaches the toggle, then the close icon: {reached:?}"
+        );
+        ctx.memory_mut(|memory| memory.surrender_focus(memory.focused().unwrap_or(egui::Id::NULL)));
         assert_eq!(
             (new.center().y - title.center().y).abs() < 4.0,
             beside,
@@ -623,6 +676,15 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         lock.set(blocked);
         draw(click(close.center()));
         assert!(closed.get(), "{width}: the close icon's press comes back");
+        assert!(
+            !toggled.get(),
+            "{width}: the close icon's press is not the toggle's"
+        );
+        draw(click(toggle.center()));
+        assert!(
+            toggled.get(),
+            "n0-title-toggle: {width}: the toggle's press comes back"
+        );
         let (nodes, _) = draw(Vec::new());
         let unreadable = bounds(&nodes, "1 note cannot be read");
         assert!(!status_pressed.get(), "{width}: no press yet");

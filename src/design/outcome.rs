@@ -858,6 +858,9 @@ pub struct ChoiceWords {
     /// that revision, not form by form (a clone is the same version).
     shorter: std::sync::Arc<[ChoiceWords]>,
     shorter_revision: Option<super::memo::Revision>,
+    /// Its objects must show whole (a file name): words that do not fit wrap, never cut
+    /// (`whole_objects`).
+    whole: bool,
 }
 
 impl PartialEq for ChoiceWords {
@@ -865,6 +868,7 @@ impl PartialEq for ChoiceWords {
         self.fixed == other.fixed
             && self.objects == other.objects
             && self.shorter_revision == other.shorter_revision
+            && self.whole == other.whole
     }
 }
 
@@ -880,6 +884,7 @@ impl From<&'static str> for ChoiceWords {
             objects: Vec::new(),
             shorter: std::sync::Arc::from([]),
             shorter_revision: None,
+            whole: false,
         }
     }
 }
@@ -898,7 +903,16 @@ impl ChoiceWords {
             objects,
             shorter: std::sync::Arc::from([]),
             shorter_revision: None,
+            whole: false,
         }
+    }
+
+    /// Objects that must show whole, such as a file the repair acts on (M0583): when the words
+    /// do not fit their line, they wrap in the action, which grows taller (`Action::wraps`),
+    /// instead of being cut. Words that fit stay on one line.
+    pub fn whole_objects(mut self) -> Self {
+        self.whole = true;
+        self
     }
 
     /// These words, with shorter forms of the same choice for a line too short for them,
@@ -947,6 +961,9 @@ impl ChoiceWords {
         let whole = self.label();
         if fits(&whole) {
             return Fitted::Whole(whole);
+        }
+        if self.whole {
+            return Fitted::Wraps(whole);
         }
         for form in self.shorter.iter() {
             let words = form.label();
@@ -1631,6 +1648,7 @@ pub struct FaultMessage<A> {
     choices: Vec<Choice<A>>,
     file: Option<FileLine>,
     hover: Option<String>,
+    help: Vec<Sentence>,
 }
 
 impl<A> FaultMessage<A> {
@@ -1641,6 +1659,7 @@ impl<A> FaultMessage<A> {
             choices: Vec::new(),
             file: None,
             hover: None,
+            help: Vec::new(),
         }
     }
 
@@ -1654,6 +1673,14 @@ impl<A> FaultMessage<A> {
     /// instructions to the DM (N0, ruling M21).
     pub fn hover(mut self, said: String) -> Self {
         self.hover = Some(said);
+        self
+    }
+
+    /// What the DM can do about it, in a help line under its words (before its file line and
+    /// choices), as a [`Choice`]'s help says what the choice does: painted, never only on hover.
+    /// Each call is a line of its own, in order (the help, then what the fault blocks).
+    pub fn help(mut self, help: Sentence) -> Self {
+        self.help.push(help);
         self
     }
 
@@ -2085,6 +2112,8 @@ struct Body {
     file: Option<FileLine>,
     /// What the system itself said, on hover over the words (`FaultMessage::hover`).
     words_hover: Option<String>,
+    /// What the DM can do, in help lines under the words (`FaultMessage::help`).
+    help: Vec<Sentence>,
     /// No other kept result of its Undo's verb stands in its footer (`undo_alone`): the Undo
     /// paints `UndoStep::alone` for its room, else `UndoStep::fit`.
     undo_alone: bool,
@@ -2178,6 +2207,7 @@ impl<A> Typed<A> {
                 helps,
                 file: None,
                 words_hover: None,
+                help: Vec::new(),
                 undo_alone: false,
             },
             undo: undo_id,
@@ -2191,9 +2221,23 @@ impl<A> Typed<A> {
         self
     }
 
+    /// The same message with each caller's id mapped by `id`.
+    fn map<B>(self, id: impl Fn(A) -> B) -> Typed<B> {
+        Typed {
+            body: self.body,
+            undo: self.undo.map(&id),
+            choices: self.choices.into_iter().map(id).collect(),
+        }
+    }
+
     /// With what the system itself said, on hover over the words.
     fn with_hover(mut self, hover: Option<String>) -> Self {
         self.body.words_hover = hover;
+        self
+    }
+
+    fn with_help(mut self, help: Vec<Sentence>) -> Self {
+        self.body.help = help;
         self
     }
 
@@ -2223,7 +2267,8 @@ impl<A> Outcome<A> {
                 FooterRank::Reason,
                 Typed::new(fault.tone, fault.words, None, fault.choices)
                     .with_file(fault.file)
-                    .with_hover(fault.hover),
+                    .with_hover(fault.hover)
+                    .with_help(fault.help),
             ),
         }
     }
@@ -2263,6 +2308,7 @@ impl<A> KeptOutcome<A> {
                 Typed::new(fault.tone, fault.words, Some(undo), fault.choices)
                     .with_file(fault.file)
                     .with_hover(fault.hover)
+                    .with_help(fault.help)
             }
         }
     }
@@ -2409,6 +2455,18 @@ impl<'f, A> KeptLine<'f, A> {
     ) -> Self {
         let (typed, refused) = prepare(outcome, refused);
         Self::prepared(frame, ticket, typed, refused)
+    }
+
+    /// The same line with each of its caller's ids mapped by `id`: a line that another page's
+    /// store made for this pane's footer (the Encounters store's group discard in the Session
+    /// plan's footer). Its ticket stays its store's, so its press reaches only that entry.
+    pub fn map<B>(self, id: impl Fn(A) -> B) -> KeptLine<'f, B> {
+        KeptLine {
+            ticket: self.ticket,
+            typed: self.typed.map(id),
+            refused: self.refused,
+            frame: std::marker::PhantomData,
+        }
     }
 
     /// Its ticket, for a test of `Results::present`.
@@ -3946,6 +4004,14 @@ impl Body {
             }
             message.rect.left()
         });
+        // The help under the row, at the words (`FaultMessage::help`), a line each.
+        for help in &self.help {
+            let inset = row.inner - ui.cursor().left();
+            ui.horizontal_top(|ui| {
+                space(ui, inset);
+                super::components::help(ui, help.as_str());
+            });
+        }
         if beside.is_none()
             && let Some(file) = &self.file
         {
@@ -4078,13 +4144,18 @@ impl Body {
                 if stacked {
                     // The bottom of what the choice before drew: its help line, else itself.
                     let mut below: Option<f32> = None;
+                    let mut help_bottom: Option<f32> = None;
                     for (at, choice) in self.row_choices() {
                         // A red choice stands exactly `M` below the line before it, measured from
-                        // that line's own bounds: a one-line help sits centred in a taller row.
+                        // that line's own bounds; a safe one keeps `L` from the help line before
+                        // it, so that help reads as its own choice's (M8).
+                        let help_before = help_bottom.take();
                         if let Some(below) = below
                             && self.loses(at, choice)
                         {
                             space(ui, (below + M - ui.cursor().top()).max(0.0));
+                        } else {
+                            after_help(ui, help_before);
                         }
                         let shown = message_choice_row(ui, self.tone, |ui| {
                             let room = ui.available_width();
@@ -4097,7 +4168,9 @@ impl Body {
                             (self.helps.get(at).and_then(Option::as_ref), &shown)
                         {
                             let lock = self.locks.get(at).and_then(holding);
-                            below = Some(action_help(ui, self.tone, help, response, lock).bottom());
+                            let help = action_help(ui, self.tone, help, response, lock).bottom();
+                            below = Some(help);
+                            help_bottom = Some(help);
                         }
                     }
                 } else if !one_line {
@@ -4117,6 +4190,12 @@ impl Body {
 
     /// The file line under the words, from their first letter (`FileLine::draw`).
     fn file_line(&self, ui: &mut Ui) {
+        // The help first, under the words (`FaultMessage::help`), then the file line.
+        for help in &self.help {
+            message_choice_row(ui, self.tone, |ui| {
+                super::components::help(ui, help.as_str());
+            });
+        }
         if let Some(file) = &self.file {
             message_choice_row(ui, self.tone, |ui| {
                 ui.vertical(|ui| file.draw(ui));
@@ -4726,6 +4805,34 @@ impl<A> BodyMessage<A> {
     }
 }
 
+/// A finished change said at the place where it happened, with its Undo, when the act's owner
+/// keeps that Undo with its data in place rather than in a footer store: a Session plan row
+/// removed from tonight, at the removed row's place, and `Scene added to tonight.` under the
+/// Scene field. The success tone and no choices. Its Undo's words are typed (`UndoStep`), and as
+/// the only Undo at its place it shows its whole form wherever it fits, else gives up its object
+/// whole (ruling M9, `UndoStep::alone`); its accessible name is always the whole form. It gives
+/// back the caller's id when the Undo is pressed. A body place: `show` is a reviewed suppression
+/// (`Ban::Body`). A result whose owner keeps it in a `Results` store is a kept line in its
+/// footer (`Messages::kept`), never this.
+#[must_use = "call show"]
+pub struct PlacedResult<A> {
+    typed: Typed<A>,
+}
+
+impl<A> PlacedResult<A> {
+    pub fn new(words: Sentence, undo: Undo<A>) -> Self {
+        let mut typed = Typed::new(Tone::Success, words, Some(undo), Vec::new());
+        typed.body.undo_alone = true;
+        Self { typed }
+    }
+
+    /// Draw it at the cursor; the caller's id when its Undo is pressed.
+    pub fn show(self, ui: &mut Ui) -> Option<A> {
+        let pressed = self.typed.body.draw(ui, MessagePlace::Row)?;
+        self.typed.id(pressed)
+    }
+}
+
 /// A page or section whose body cannot show: its fault in place of the body, with choices that
 /// repair it under the words. It takes the fault's words and tone when it is made, and gives
 /// back the caller's id of the choice pressed.
@@ -4845,6 +4952,9 @@ fn compact_link_width(ui: &Ui, word: &str) -> f32 {
 /// accessible description (after its lock's reason while that holds), and a keyboard focus on
 /// the action brings the action and its help into view together (`reveal_with`). The help
 /// line's rect.
+///
+/// It sits `XS` under what its action drew last (the action, or its lock's reason), top-aligned,
+/// so it reads as that action's; the next choice keeps `L` from it ([`after_help`]).
 fn action_help(
     ui: &mut Ui,
     tone: Tone,
@@ -4852,7 +4962,26 @@ fn action_help(
     action: &Response,
     lock: Option<&str>,
 ) -> Rect {
-    let line = message_choice_row(ui, tone, |ui| super::components::help(ui, help.as_str()));
+    let top = ui.min_rect().bottom().max(action.rect.bottom()) + XS;
+    let room = Rect::from_min_max(
+        egui::pos2(ui.max_rect().left(), top),
+        egui::pos2(ui.max_rect().right(), ui.max_rect().bottom().max(top)),
+    );
+    let inset = S + 1.0 + number_width(ui, tone.parts().0, &Type::Body.font(ui)) + XS;
+    let line = ui
+        .scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(room)
+                .layout(egui::Layout::top_down(egui::Align::Min)),
+            |ui| {
+                ui.horizontal_top(|ui| {
+                    space(ui, inset);
+                    super::components::help(ui, help.as_str())
+                })
+                .inner
+            },
+        )
+        .inner;
     let description = match lock {
         Some(reason) => format!("{reason} {}", help.as_str()),
         None => help.as_str().to_owned(),
@@ -4861,6 +4990,15 @@ fn action_help(
         .accesskit_node_builder(action.id, |node| node.set_description(description));
     super::components::reveal_with(ui, action.id, action.rect.union(line.rect));
     line.rect
+}
+
+/// The space before the next choice of a stack (ruling M8): `L` from the help line of the
+/// choice before it (`help_bottom`), so that help reads as its own choice's and not the next
+/// one's; nothing after a choice with no help.
+fn after_help(ui: &mut Ui, help_bottom: Option<f32>) {
+    if let Some(bottom) = help_bottom {
+        space(ui, (bottom + L - ui.cursor().top()).max(0.0));
+    }
 }
 
 /// A message whose one choice opens an inline creation form in its place (Library's "This folder
@@ -4935,6 +5073,9 @@ impl<'o> FormOpener<'o> {
             title,
             open,
         } = self;
+        // Review of PR 612 (P2): when the form closes, the keyboard goes back to the choice that
+        // opened it, from the frame after (kept under the opener's own key).
+        let give_back = ui.make_persistent_id(("form_opener_focus", words.as_str()));
         if !*open {
             let repair = Repair {
                 words: choice,
@@ -4942,14 +5083,20 @@ impl<'o> FormOpener<'o> {
                 lock,
                 id: (),
             };
-            let opened = BodyFault {
+            let (pressed, controls) = BodyFault {
                 tone,
                 words,
                 repairs: vec![repair],
                 whole: None,
+                help: None,
             }
-            .draw(ui)
-            .is_some();
+            .draw_repairs(ui);
+            let opened = pressed.is_some();
+            if ui.data_mut(|data| data.remove_temp::<bool>(give_back)) == Some(true)
+                && let Some(choice) = controls.first()
+            {
+                choice.request_focus();
+            }
             *open = opened;
             return Opened { opened, form: None };
         }
@@ -4958,6 +5105,7 @@ impl<'o> FormOpener<'o> {
             words,
             repairs: Vec::new(),
             whole: None,
+            help: None,
         }
         .draw(ui);
         if let Some(title) = title {
@@ -4966,6 +5114,7 @@ impl<'o> FormOpener<'o> {
         let response = form.show(ui);
         if response.cancel {
             *open = false;
+            ui.data_mut(|data| data.insert_temp(give_back, true));
         }
         Opened {
             opened: false,
@@ -4988,6 +5137,7 @@ pub struct BodyFault<A> {
     repairs: Vec<Repair<A>>,
     /// The whole sentence when the words quote a value cut around `…` (`whole`).
     whole: Option<String>,
+    help: Option<Sentence>,
 }
 
 impl<A> BodyFault<A> {
@@ -4997,6 +5147,7 @@ impl<A> BodyFault<A> {
             words: fault_words(fault),
             repairs: Vec::new(),
             whole: None,
+            help: None,
         }
     }
 
@@ -5005,6 +5156,13 @@ impl<A> BodyFault<A> {
     /// and the pointer reach the value whole.
     pub fn whole(mut self, whole: impl Into<String>) -> Self {
         self.whole = Some(whole.into());
+        self
+    }
+
+    /// What the DM can do about it, in a help line under its words, before its repairs (the
+    /// group editor's missing member), as a [`Choice`]'s help says what the choice does.
+    pub fn help(mut self, help: Sentence) -> Self {
+        self.help = Some(help);
         self
     }
 
@@ -5020,11 +5178,18 @@ impl<A> BodyFault<A> {
 
     /// `show`'s drawing, for the design's own body places (`FormOpener`).
     fn draw(self, ui: &mut Ui) -> Option<A> {
+        self.draw_repairs(ui).0
+    }
+
+    /// `draw`, with each repair's control, in order (to give one the keyboard back).
+    fn draw_repairs(self, ui: &mut Ui) -> (Option<A>, Vec<Response>) {
+        let mut controls = Vec::new();
         let Self {
             tone,
             words,
             repairs,
             whole,
+            help,
         } = self;
         let mut pressed = None;
         let response = ui
@@ -5038,8 +5203,15 @@ impl<A> BodyFault<A> {
                     });
                     let _ = message.on_hover_text(whole);
                 }
+                if let Some(help) = &help {
+                    message_choice_row(ui, tone, |ui| {
+                        super::components::help(ui, help.as_str());
+                    });
+                }
+                let mut help_bottom = None;
                 for (at, repair) in repairs.iter().enumerate() {
                     let lock = holding(&repair.lock);
+                    after_help(ui, help_bottom.take());
                     let action = message_choice_row(ui, tone, |ui| {
                         let room = ui.available_width();
                         data_choice(ui, &repair.words, ChoiceKind::Safe, room, lock)
@@ -5063,16 +5235,18 @@ impl<A> BodyFault<A> {
                         });
                     }
                     if let Some(help) = &repair.help {
-                        action_help(ui, tone, help, &action, lock);
+                        help_bottom = Some(action_help(ui, tone, help, &action, lock).bottom());
                     }
+                    controls.push(action);
                 }
             })
             .response;
         register(ui, response.rect, MessagePlace::Page, tone);
-        match pressed? {
-            Pressed::Choice(at) => repairs.into_iter().nth(at).map(|repair| repair.id),
-            Pressed::Undo => None,
-        }
+        let pressed = match pressed {
+            Some(Pressed::Choice(at)) => repairs.into_iter().nth(at).map(|repair| repair.id),
+            Some(Pressed::Undo) | None => None,
+        };
+        (pressed, controls)
     }
 }
 
@@ -5823,6 +5997,72 @@ mod tests {
     /// and the accessible name is always the whole form. Narrow: `Undo discard` named
     /// `Undo discard of Bridge Ambush`; a long object of a verb with no joining word is cut in
     /// the visible words only. Wide: the whole form shows. The press reaches its entry.
+    /// M-N1.1: a result with its Undo at its own place (`PlacedResult`, a Session plan row
+    /// removed from tonight) follows ruling M9 as a footer's lone Undo does. Wide, the whole
+    /// form shows; narrow, where it does not fit, `Undo remove` without its object (its words
+    /// name it), never a cut object. Its accessible name stays whole, and its press comes back
+    /// as the caller's id.
+    #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the body place `PlacedResult::show` itself"
+    )]
+    fn a_placed_result_shows_its_undo_whole_where_it_fits() {
+        const OBJECT: &str = "Bridge Ambush at the Ravenholm Ironside Crossing";
+        let name = format!("Undo remove {OBJECT}");
+        let harness = |width: f32| {
+            let mut h = Harness::builder()
+                .with_size(egui::vec2(960.0, 300.0))
+                .build_ui_state(
+                    move |ui, pressed: &mut Option<u8>| {
+                        ui.set_max_width(width);
+                        let result = PlacedResult::new(
+                            crate::sentence!("Removed “{}” from tonight.", OBJECT),
+                            UndoStep::of(Verb::Remove, OBJECT).pressed_as(7_u8),
+                        );
+                        if let Some(id) = result.show(ui) {
+                            *pressed = Some(id);
+                        }
+                    },
+                    None,
+                );
+            crate::design::theme::install(&h.ctx);
+            h.run_steps(2);
+            h
+        };
+        let shown = |h: &Harness<'_, Option<u8>>| -> Vec<String> {
+            let undo = h.get_by_label(&name).rect();
+            h.output()
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text)
+                        if text.galley.job.text.starts_with("Undo")
+                            && undo.contains(text.pos + text.galley.rect.center().to_vec2()) =>
+                    {
+                        Some(text.galley.job.text.clone())
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        let h = harness(900.0);
+        assert_eq!(shown(&h), [name.as_str()], "wide: the whole form");
+        let mut h = harness(320.0);
+        assert_eq!(
+            shown(&h),
+            ["Undo remove"],
+            "narrow: the object goes whole, never cut"
+        );
+        h.get_by_label(&name).click();
+        h.run_steps(2);
+        assert_eq!(
+            *h.state(),
+            Some(7),
+            "its press comes back as the caller's id"
+        );
+    }
+
     #[test]
     fn an_undo_shows_its_short_form_when_narrow_and_keeps_its_whole_name() {
         use egui_kittest::kittest::NodeT;
@@ -6308,6 +6548,7 @@ mod tests {
                         |ui| {
                             state.right = ui.max_rect().right();
                             let pressed = BodyFault::new(&fault)
+                                .help(crate::sentence!("Check the packages it uses."))
                                 .repair(Repair::new("Open in Library", Fix::Open))
                                 .repair(
                                     Repair::new(
@@ -6349,6 +6590,12 @@ mod tests {
                             )
                             .show(ui);
                             state.pressed.extend(pressed);
+                            // A typed fault with its help line (M-P0 item 9).
+                            let _ = BodyMessage::<Fix>::from(
+                                FaultMessage::new(&Hp(Severity::CannotRead, Some(3)))
+                                    .help(crate::sentence!("Read the row again after you fix it.")),
+                            )
+                            .show(ui);
                         },
                     );
                 },
@@ -6356,6 +6603,31 @@ mod tests {
             );
         crate::design::theme::install(&h.ctx);
         h.run_steps(4);
+        // M-P0 item 9: a typed body fault's help line, under its words and before its repairs, at
+        // their column; a typed fault message's, under its words, at them.
+        let label = |h: &Harness<'_, State>, words: &str| {
+            h.get_by_role_and_label(egui::accesskit::Role::Label, words)
+                .rect()
+        };
+        let (words, help, open) = (
+            label(&h, "Cinder Wolf: The HP is missing."),
+            label(&h, "Check the packages it uses."),
+            h.get_by_label("Open in Library").rect(),
+        );
+        assert!(
+            help.top() >= words.bottom() - 1.0
+                && help.bottom() <= open.top() + 1.0
+                && (help.left() - open.left()).abs() < 1.0,
+            "the fault's help under its words, before its repairs: {words:?} {help:?} {open:?}"
+        );
+        let (words, help) = (
+            label(&h, "Cinder Wolf · line 3: The HP is missing."),
+            label(&h, "Read the row again after you fix it."),
+        );
+        assert!(
+            help.top() >= words.bottom() - 1.0 && (help.left() - words.left()).abs() < 1.0,
+            "the fault message's help under its words, at them: {words:?} {help:?}"
+        );
         let name = format!("Replace with a basic {PATH}");
         let replace = h.get_by_label(&name).rect();
         assert!(
@@ -6504,6 +6776,7 @@ mod tests {
                                 pressed.extend(notice);
                                 let fault = BodyMessage::<Fix>::from(
                                     FaultMessage::new(&Hp(Severity::CannotRead, Some(20)))
+                                        .help(crate::sentence!("Set the HP in the file."))
                                         .file(FileLine::new("/vault", "Encounters/Shrine.md")),
                                 )
                                 .compact()
@@ -6552,6 +6825,14 @@ mod tests {
                     "Cinder Wolf · line 20: The HP is missing.",
                 )
                 .rect();
+            // M-P0 item 9: the compact fault's help under its row, at its words.
+            let help = h
+                .get_by_role_and_label(egui::accesskit::Role::Label, "Set the HP in the file.")
+                .rect();
+            assert!(
+                help.top() >= cause.bottom() - 1.0 && (help.left() - cause.left()).abs() < 1.0,
+                "{width}: the compact fault's help under its words, at them: {cause:?} {help:?}"
+            );
             // The path's node by the name the part gave it (`named`).
             let path = h
                 .query_all(
@@ -6721,12 +7002,36 @@ mod tests {
             !h.state().open && has(&h, "Register as a new package") && !has(&h, "New package name"),
             "Cancel closes the form"
         );
+        // Review of PR 612 (P2): the keyboard goes back to the choice that opened the form,
+        // after Cancel and after Escape in the form's field.
+        let choice_focused = |h: &Harness<'_, Form>| {
+            h.get_by_label("Register as a new package")
+                .accesskit_node()
+                .is_focused()
+        };
+        assert!(
+            choice_focused(&h),
+            "after Cancel, the choice has the keyboard"
+        );
+        h.get_by_label("Register as a new package").click();
+        h.run_steps(3);
+        h.get_all_by_label("New package name")
+            .find(|node| node.accesskit_node().role() == egui::accesskit::Role::TextInput)
+            .expect("the form's field")
+            .click();
+        h.run_steps(2);
+        h.key_press(egui::Key::Escape);
+        h.run_steps(3);
+        assert!(
+            !h.state().open && choice_focused(&h),
+            "Escape in the field closes the form and gives the keyboard back to the choice"
+        );
         h.state_mut().locked = true;
         h.run_steps(2);
         h.get_by_label("Register as a new package").click();
         h.run_steps(3);
         assert!(
-            !h.state().open && h.state().opened == 1,
+            !h.state().open && h.state().opened == 2,
             "locked, the choice opens nothing"
         );
     }

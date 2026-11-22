@@ -1,11 +1,10 @@
 //! Carry-over (F5 of `docs/design/session-cycle.md`): what the last session left, added to this
 //! session's note in one act with its exact Undo; and an embed of a session note's heading,
 //! which Read draws by its target.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Plan, Sessions, prose};
 use crate::{
     content_workspace::patch_fields,
-    design::{self, Action, Tone, Type, colors},
+    design::{self, Action, Type, colors},
     encounter_run::RunGroup,
     encounters::PlanFight,
     sessions::{
@@ -14,6 +13,7 @@ use crate::{
     },
     timeline::Book,
 };
+use design::results::{Cause, FailedAct, Fallback, File, Name, Recovery, Refusal, Step};
 use eframe::egui;
 use serde::Deserialize;
 use serde_yaml_ng::Value;
@@ -477,9 +477,61 @@ enum Outcome {
         undo: NoteUndo,
         /// The draft's revision when the Undo was last checked.
         seen: u64,
+        /// The session it carried from (`Session 1`), which its Undo names.
+        from: String,
     },
-    /// Why the act wrote nothing, until the note's text changes.
-    Refused { words: String, seen: u64 },
+    /// Why the act (or its Undo) wrote nothing, until the note's text changes.
+    Refused { refusal: Refusal, seen: u64 },
+}
+
+/// Whose carry-over result it is: the session note the act changed. A session's ID is its own
+/// in every campaign.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct CarryOwner {
+    session: Uuid,
+}
+
+impl design::results::Owner for CarryOwner {
+    type Scope = ();
+    fn scope(&self) -> &() {
+        &()
+    }
+}
+
+/// A session's carry-over result in the page's store: its owner only, for the footer's order
+/// (issued at the act) and its press's ticket. Its words and Undo come from `Carries::results`,
+/// which holds the Undo (it follows the note to a moved file, `Carries::moved`) and ends it.
+struct CarryMark(CarryOwner);
+
+impl design::results::Kept for CarryMark {
+    type Owner = CarryOwner;
+    const ENDS: design::results::Ends = design::results::Ends {
+        // Its result ended (the note's text changed, its Undo was done): `Carries::end`.
+        owner_changed: design::results::OwnerChanged::Ends,
+        // A folder scan keeps it; the note's own words end it.
+        disk_changed: design::results::DiskChanged::Stays,
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> CarryOwner {
+        self.0.clone()
+    }
+}
+
+/// Why a carry-over act (`undo`: its Undo) could not change the session note: the cause from
+/// the note act's fault, and the step that lets the DM try again.
+fn carry_refusal(fault: &ActFault, from: &str, into: &str, undo: bool) -> Refusal {
+    let name = |name: &str, fallback| Name::new(name).unwrap_or(Name::fallback(fallback));
+    let (from, into) = (
+        name(from, Fallback::ThatSession),
+        name(into, Fallback::ThatSession),
+    );
+    let (cause, step) = super::kept::note_cause(fault, undo);
+    let act = if undo {
+        FailedAct::CarryNotUndone { from, into }
+    } else {
+        FailedAct::NotCarried { from, into }
+    };
+    Refusal::new(act, cause, Recovery::First(step))
 }
 
 /// The results of carry-over acts, by the session note each act changed; Read's prepared words
@@ -487,8 +539,8 @@ enum Outcome {
 #[derive(Default)]
 pub(super) struct Carries {
     results: BTreeMap<Uuid, Outcome>,
-    /// When each session's carry-over act was done: its result's footer order.
-    orders: BTreeMap<Uuid, design::ResultOrder>,
+    /// Each result of `results` in the page's store, for its footer order and ticket.
+    marks: design::Results<CarryOwner, CarryMark>,
     /// Read's words, for what they were made from. A folder scan prepares them again, as the
     /// notes that embeds show can change.
     read: Option<(ReadKey, Arc<Prepared>)>,
@@ -503,20 +555,25 @@ pub(super) struct Carries {
 type PreparingKey = (Uuid, Option<Uuid>, Option<Uuid>, Option<Uuid>, usize);
 
 impl Carries {
-    /// The act on `session` made `outcome`: it replaces that session's earlier result, with a new
-    /// order of its own. Other sessions' results keep theirs.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
+    /// The act on `session` made `outcome`: it replaces that session's earlier result, and the
+    /// page's store issues its order now. Other sessions' results keep theirs.
     fn record(&mut self, session: Uuid, outcome: Outcome) {
         self.results.insert(session, outcome);
-        self.orders.insert(session, design::ResultOrder::issue());
+        self.marks.record(CarryMark(CarryOwner { session }));
+    }
+
+    /// `session`'s result ended: its entry in the store ends with it.
+    fn end(&mut self, session: Uuid) {
+        self.results.remove(&session);
+        self.marks.owner_changed(&CarryOwner { session });
     }
 
     /// The footer order of `session`'s result, issued by the act that made it.
-    pub(super) fn order(&self, session: Uuid) -> design::ResultOrder {
-        self.orders.get(&session).copied().unwrap_or_default()
+    #[cfg(test)]
+    fn order(&self, session: Uuid) -> Option<design::ResultOrder> {
+        self.marks
+            .get(&CarryOwner { session })
+            .map(|shown| shown.order_for_caller_test())
     }
 
     /// The folder was scanned: an embed's note can have changed or gone, and an event can have
@@ -559,7 +616,7 @@ impl Carries {
             _ => false,
         };
         if ended {
-            self.results.remove(&session);
+            self.end(session);
         }
     }
 }
@@ -733,31 +790,49 @@ impl Sessions {
             .as_ref()
             .and_then(|(_, last)| last.as_ref()?.source.clone());
         let now = self.carry_source(previous, plan, book);
+        // The two sessions as a refusal names them.
+        let into_label = self
+            .notes
+            .iter()
+            .find(|note| note.id == session)
+            .map_or_else(String::new, Note::label);
+        let from_label = match &now {
+            Some(Ok(source)) => self
+                .notes
+                .iter()
+                .find(|note| note.id == source.id)
+                .map_or_else(|| source.name.clone(), Note::label),
+            _ => previous.label(),
+        };
+        let name = |label: &str| Name::new(label).unwrap_or(Name::fallback(Fallback::ThatSession));
+        let (from, into) = (name(&from_label), name(&into_label));
         let seen = self
             .draft
             .as_ref()
             .map_or(0, crate::sessions::Draft::revision);
         let source = match (&now, &shown) {
             (Some(Ok(now)), Some(Ok(shown))) if now == shown => now.clone(),
-            (Some(Err(words)), _) => {
-                self.carries.record(
-                    session,
-                    Outcome::Refused {
-                        words: words.clone(),
-                        seen,
-                    },
+            (Some(Err(_)), _) => {
+                // The last session's note cannot be read now.
+                let refusal = Refusal::new(
+                    FailedAct::NotCarried { from, into },
+                    Cause::Unreadable(File::LastSessionNote),
+                    Recovery::First(Step::Check(File::LastSessionNote)),
                 );
+                self.carries
+                    .record(session, Outcome::Refused { refusal, seen });
                 return;
             }
-            (Some(Ok(now)), _) => {
+            (Some(Ok(_)), _) => {
                 // What the line offered is not what the last note holds now: read it again.
-                let words = format!(
-                    "{}’s note changed. Check what it holds, then carry over again.",
-                    now.name
+                let refusal = Refusal::new(
+                    FailedAct::NotCarried { from, into },
+                    Cause::OfferChanged,
+                    Recovery::First(Step::CheckOffer),
                 );
                 self.last_time = None;
                 self.carries
-                    .record(session, Outcome::Refused { words, seen });
+                    .record(session, Outcome::Refused { refusal, seen });
                 return;
             }
             (None, _) => return,
@@ -777,9 +852,10 @@ impl Sessions {
                 words: offer.map(|offer| offer.result(&source)).unwrap_or_default(),
                 undo,
                 seen,
+                from: source.name.clone(),
             },
             Err(fault) => Outcome::Refused {
-                words: fault.words().to_owned(),
+                refusal: carry_refusal(&fault, &from_label, &into_label, false),
                 seen,
             },
         };
@@ -788,45 +864,43 @@ impl Sessions {
 
     /// The result of the open session's act, in the Session page's message footer, so that the
     /// Last time line, the tabs and the plan never move when it comes or goes: its words and
-    /// `Undo: Carry over`, or why it wrote nothing. It is that note's, so it shows also when the
-    /// last session can no longer be found. A save that failed says so, and the Undo still works.
-    /// The result keeps the order its act issued (`Carries::record`): its Undo follows the note
-    /// to a moved file (`Carries::moved`), which a `design::Results` entry cannot do (staged).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: a carry-over result keeps its own order (`outcome_at`, design::results::STAGED_ALLOWS)"
-    )]
-    pub(super) fn carry_in_messages(
+    /// `Undo carry over from <session>`, or why it wrote nothing. It is that note's, so it shows
+    /// also when the last session can no longer be found. A save that failed says so, and the Undo still works.
+    /// The result keeps the order its act issued in the page's store (`Carries::record`); its
+    /// Undo stays in `Carries::results`, which follows the note to a moved file.
+    pub(super) fn carry_in_messages<'f>(
         &self,
-        messages: &mut crate::design::outcome::Messages<'_, super::SessionAct>,
+        frame: &'f crate::design::outcome::PaneFrame,
+        messages: &mut crate::design::outcome::Messages<'f, super::SessionAct>,
     ) {
         use crate::design::outcome::{FaultMessage, KeptOutcome, Said, UndoStep, Verb};
         let Some(session) = self.selected else {
             return;
         };
+        let Some(shown) = self.carries.marks.get(&CarryOwner { session }) else {
+            return;
+        };
         match self.carries.results.get(&session) {
-            Some(Outcome::Refused { words, .. }) => {
-                messages.outcome(crate::design::outcome::Outcome::Refused(
-                    super::notice_sentence(words),
-                ));
+            Some(Outcome::Refused { refusal, .. }) => {
+                messages.outcome(FaultMessage::new(&super::kept::RefusalFault(refusal)));
             }
-            Some(Outcome::Done { words, undo, .. }) => {
-                let order = self.carries.order(session);
-                let step = UndoStep::verb(Verb::CarryOver)
+            Some(Outcome::Done {
+                words, undo, from, ..
+            }) => {
+                let step = UndoStep::of(Verb::CarryOver, format!("from {from}"))
                     .pressed_as(super::SessionAct::UndoCarry(session));
-                if undo.written() {
-                    messages.outcome_at(order, Said::new(super::notice_sentence(words)).undo(step));
-                } else {
-                    messages.outcome_at(
-                        order,
+                messages.kept(shown.outcome(frame, |_| {
+                    if undo.written() {
+                        Said::new(super::notice_sentence(words)).undo(step).into()
+                    } else {
                         KeptOutcome::Fault(
                             FaultMessage::new(&super::PageFault::Failed(crate::sentence!(
                                 "Notes not saved."
                             ))),
                             step,
-                        ),
-                    );
-                }
+                        )
+                    }
+                }));
             }
             None => {}
         }
@@ -840,10 +914,27 @@ impl Sessions {
         }
     }
 
-    /// `Undo carry over`: the act's own Undo, on this session's note. When it cannot apply, the
-    /// footer says why.
-    pub(super) fn undo_carry(&mut self, session: Uuid) {
-        let (Some(Outcome::Done { undo, .. }), Some(draft)) =
+    /// `Undo carry over from <session>`: the act's own Undo, on this session's note, by its
+    /// line's `ticket`: a result replaced or ended since is gone, and nothing changes. When it
+    /// cannot apply, the footer says why.
+    pub(super) fn undo_carry(&mut self, session: Uuid, ticket: Option<design::results::Ticket>) {
+        let Some(ticket) = ticket else {
+            return;
+        };
+        if self
+            .carries
+            .marks
+            .undo_by(ticket, |_| Ok::<(), ()>(()))
+            .is_err()
+        {
+            return;
+        }
+        let into = self
+            .notes
+            .iter()
+            .find(|note| note.id == session)
+            .map_or_else(String::new, Note::label);
+        let (Some(Outcome::Done { undo, from, .. }), Some(draft)) =
             (self.carries.results.remove(&session), self.draft.as_mut())
         else {
             return;
@@ -854,7 +945,7 @@ impl Sessions {
             self.carries.record(
                 session,
                 Outcome::Refused {
-                    words: fault.words().to_owned(),
+                    refusal: carry_refusal(&fault, &from, &into, true),
                     seen,
                 },
             );
@@ -882,7 +973,28 @@ enum Shown {
         words: String,
     },
     /// The note or its heading is gone. The line stays in the note.
-    Gone(String),
+    Gone(EmbedGone),
+}
+
+/// An embed whose session note or heading is gone, as Read says it in its place: the link's
+/// note name and heading, a warning, and the step (link the session again in Write).
+#[derive(Clone, Debug)]
+pub(super) struct EmbedGone {
+    name: String,
+    heading: String,
+}
+
+impl design::outcome::Fault for EmbedGone {
+    fn severity(&self) -> design::outcome::Severity {
+        design::outcome::Severity::NeedsFixing
+    }
+    fn cause(&self) -> design::outcome::Sentence {
+        crate::sentence!(
+            "The recap’s source is gone: {} › {}. Link the session again in Write.",
+            self.name,
+            self.heading
+        )
+    }
 }
 
 /// The Last time preview in this room: a dash and the longest run of the preview's whole words
@@ -998,9 +1110,10 @@ impl Sessions {
                 continue;
             }
             let gone = || {
-                Shown::Gone(format!(
-                    "The recap’s source is gone: {name} › {heading}. Link the session again in Write."
-                ))
+                Shown::Gone(EmbedGone {
+                    name: name.to_owned(),
+                    heading: heading.to_owned(),
+                })
             };
             let shown = match index.resolve_link(name, None) {
                 // A session note at the link's whole path keeps it a link while it has the
@@ -1135,6 +1248,10 @@ impl Sessions {
 
     /// One part of the prepared Read: its Markdown, and each embed as its heading's words under
     /// a muted line that links its session, or as the words that say its source is gone.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "an embed whose source is gone, said in its place in Read (Ban::Body)"
+    )]
     pub(super) fn show_prepared(&mut self, ui: &mut egui::Ui, prepared: &Prepared, after: bool) {
         let mut open = None;
         for chunk in if after {
@@ -1156,8 +1273,12 @@ impl Sessions {
                         });
                         crate::markdown_view::show_reader(ui, words);
                     }
-                    Some(Shown::Gone(words)) => {
-                        design::small_message(ui, Tone::Warning, words);
+                    Some(Shown::Gone(gone)) => {
+                        let _ = design::outcome::BodyMessage::<()>::from(
+                            design::outcome::FaultMessage::new(gone),
+                        )
+                        .compact()
+                        .show(ui);
                     }
                     None => {}
                 },
@@ -1261,9 +1382,7 @@ mod tests {
             groups: &[],
             group_blocked: None,
             group_open: false,
-            group_discarded: false,
-            group_discarded_name: String::new(),
-            group_discarded_order: None,
+            group_discard: &|_| None,
             arrivals_open: false,
             group_editor: std::cell::RefCell::new(&mut group),
             blocked: None,
@@ -1462,14 +1581,14 @@ mod tests {
                                 "carry",
                                 ui.available_width(),
                             );
-                            page.carry_in_messages(&mut messages);
+                            page.carry_in_messages(&frame, &mut messages);
                             let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
                                 page.last_time_block(ui, book, plan);
                             });
-                            if let Some(super::super::SessionAct::UndoCarry(session)) =
-                                paned.pressed.map(|press| press.id)
+                            if let Some(press) = paned.pressed
+                                && let super::super::SessionAct::UndoCarry(session) = press.id
                             {
-                                page.undo_carry(session);
+                                page.undo_carry(session, press.ticket);
                             }
                         });
                     });
@@ -1529,7 +1648,9 @@ mod tests {
         assert!(
             harness
                 .query_all_by_label(
-                    "Session 1’s note changed. Check what it holds, then carry over again."
+                    "Nothing was carried over from Session 1: The Road into Session 2: The \
+                     Crossing. What Carry over adds changed after it was shown. Check what the \
+                     Last time line offers now first."
                 )
                 .next()
                 .is_some()
@@ -1562,10 +1683,11 @@ mod tests {
         // on another session comes after it, through the one path every act takes, then the DM
         // goes to B and back to A: A's order is unchanged, and older than B's.
         let a_order = harness.state().0.carries.order(tonight.id);
+        assert!(a_order.is_some(), "A's result is in the page's store");
         harness.state_mut().0.carries.record(
             last.id,
             Outcome::Refused {
-                words: "B's act.".into(),
+                refusal: carry_refusal(&ActFault::Missing, "Session 1", "Session 2", false),
                 seen: 0,
             },
         );
@@ -1579,7 +1701,7 @@ mod tests {
             a_again == a_order && b_order > a_order,
             "A's order {a_order:?} stays {a_again:?} after B's act {b_order:?}"
         );
-        harness.state_mut().0.carries.results.remove(&last.id);
+        harness.state_mut().0.carries.end(last.id);
 
         // An act on another session, then back: the Undo is this session's, and it still works.
         let page = &mut harness.state_mut().0;
@@ -1607,18 +1729,20 @@ mod tests {
         rescan(&mut harness);
         assert!(
             harness
-                .query_all_by_label("Undo carry over")
+                .query_all_by_label("Undo carry over from Session 1")
                 .next()
                 .is_some()
         );
         fs::write(&last.path, &last_text).unwrap();
         rescan(&mut harness);
-        harness.get_by_label("Undo carry over").click();
+        harness
+            .get_by_label("Undo carry over from Session 1")
+            .click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
         assert!(
             harness
-                .query_all_by_label("Undo carry over")
+                .query_all_by_label("Undo carry over from Session 1")
                 .next()
                 .is_none()
         );
@@ -1635,7 +1759,11 @@ mod tests {
         assert_eq!(read(), changed);
         assert!(
             harness
-                .query_all_by_label("The note changed on disk. Choose in the note first.")
+                .query_all_by_label(
+                    "Nothing was carried over from Session 1: The Road into Session 2: The \
+                     Crossing. The session note has unsaved words, and its file changed on disk. \
+                     Choose which words to keep in the session note first."
+                )
                 .next()
                 .is_some()
         );
@@ -1671,7 +1799,9 @@ mod tests {
                 .body
                 .contains("Who burned the ropes?")
         );
-        harness.get_by_label("Undo carry over").click();
+        harness
+            .get_by_label("Undo carry over from Session 1")
+            .click();
         harness.run_steps(2);
         let draft = harness.state().0.draft.as_ref().unwrap();
         assert!(!draft.text().contains("carried_"));
@@ -1701,9 +1831,35 @@ mod tests {
                 .next()
                 .is_some()
         );
-        harness.get_by_label("Undo carry over").click();
+        harness
+            .get_by_label("Undo carry over from Session 1")
+            .click();
         harness.run_steps(2);
         assert_eq!(read(), changed);
+
+        // M-N1.3: the Undo acts by its line's ticket. A press left over on a result that a later
+        // act of this session replaced reaches nothing: the later result stays.
+        let page = &mut harness.state_mut().0;
+        let refused = || Outcome::Refused {
+            refusal: carry_refusal(&ActFault::Missing, "Session 1", "Session 2", false),
+            seen: 0,
+        };
+        page.carries.record(tonight.id, refused());
+        let stale = page
+            .carries
+            .marks
+            .get(&CarryOwner {
+                session: tonight.id,
+            })
+            .expect("the result is in the page's store")
+            .ticket_for_caller_test();
+        page.carries.record(tonight.id, refused());
+        page.undo_carry(tonight.id, Some(stale));
+        assert!(
+            page.carries.results.contains_key(&tonight.id),
+            "a press on the replaced result's line leaves the newer result alone"
+        );
+        page.carries.end(tonight.id);
 
         // A restart: the note holds what the act wrote, and every part is done.
         let mut draft = Draft::open(&tonight.path).unwrap();

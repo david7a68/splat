@@ -903,10 +903,12 @@ impl ProcessingSettings {
         );
         ui.push_id("llm_settings", |ui| self.llm_section(ui));
         // After the DM chooses a service that leaves a field empty, that field's reason comes
-        // into view; the notice is in the tab's footer. A key problem has its reason at the key
-        // row beside the choice, so the view stays where the DM is.
+        // into view with the focused choice; the notice is in the tab's footer. The pane's one
+        // focus arbiter brings them in (layout PR 10), so no second scroll competes with it or
+        // with the DM's wheel. A key problem has its reason at the key row beside the choice, so
+        // the view stays where the DM is.
         if reveal && let Some(reason) = self.reason_rect {
-            ui.scroll_to_rect(reason, None);
+            design::pane::reveal_with_focus(ui, reason);
         }
     }
 
