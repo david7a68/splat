@@ -1,7 +1,6 @@
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     content_workspace::CampaignDocument,
-    design::{self, Action, Density, Status, Tone, Type, colors, icons, memo::Revised},
+    design::{self, Action, Density, Status, Type, colors, icons, memo::Revised},
     persistence::{Campaign, Store, UserData},
 };
 use eframe::egui;
@@ -18,19 +17,83 @@ pub enum CampaignAct {
     RegisterAsNew,
 }
 
+/// The kept results of the campaign form and list (migration-32 C0): the store issues each
+/// result's order when its act is done, so the footer puts them newest first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FormResult {
+    /// The details draft Discard dropped, of this campaign: its Undo puts it back only into that
+    /// campaign's form. It ends with an edit, Save, Cancel, an Edit details press (any
+    /// campaign's form, from either page), a change of the open campaign, the next Discard (a
+    /// new result), and its Undo.
+    Discarded(Uuid),
+    /// The campaign just added or the copy just registered. It ends with the next add, the
+    /// registered campaign's removal, and the copy's Undo.
+    Added,
+}
+
+impl crate::design::results::Owner for FormResult {
+    type Scope = ();
+    fn scope(&self) -> &() {
+        &()
+    }
+}
+
+/// What a kept result's act left: the dropped draft, or the add's words.
+enum FormKept {
+    Discarded {
+        campaign: Uuid,
+        name: String,
+        path: String,
+    },
+    Added(String),
+}
+
+impl crate::design::results::Kept for FormKept {
+    type Owner = FormResult;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // The form ends its own result at each end event above (`end_result`).
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        // Undo discard and Undo register campaign leave the store only when they work.
+        press: crate::design::results::Press::Undo,
+    };
+    fn owner(&self) -> FormResult {
+        match self {
+            Self::Discarded { campaign, .. } => FormResult::Discarded(*campaign),
+            Self::Added(_) => FormResult::Added,
+        }
+    }
+}
+
 /// A failed act of the Settings and Link and folder footers (a campaign's, the account's, D&D
 /// Beyond's), in its own words: the check's or the system's.
-pub struct NotDone(crate::design::outcome::Sentence);
+pub struct NotDone(
+    crate::design::outcome::Sentence,
+    crate::design::outcome::Severity,
+);
 
 impl NotDone {
+    /// A failed act: the error tone.
     pub fn words(words: &str) -> Self {
-        Self(footer_words(words))
+        Self(
+            footer_words(words),
+            crate::design::outcome::Severity::NotSaved,
+        )
+    }
+
+    /// An act that waits for the DM to fix something first (a copy that needs an entry of
+    /// this campaign only): the warning tone.
+    pub fn needs_fixing(words: &str) -> Self {
+        Self(
+            footer_words(words),
+            crate::design::outcome::Severity::NeedsFixing,
+        )
     }
 }
 
 impl crate::design::outcome::Fault for NotDone {
     fn severity(&self) -> crate::design::outcome::Severity {
-        crate::design::outcome::Severity::NotSaved
+        self.1
     }
     fn cause(&self) -> crate::design::outcome::Sentence {
         self.0.clone()
@@ -74,17 +137,12 @@ pub struct Campaigns {
     add_path: String,
     name: String,
     path: String,
-    discarded_details: Option<(String, String)>,
-    /// When the details draft was discarded: its result's place in the footer.
-    discarded_order: crate::design::ResultOrder,
+    /// The discarded details draft and the add's result, each with the order its act took.
+    results: crate::design::Results<FormResult, FormKept>,
     /// The open import form: the remote campaign it adds, and its reveal (R30), which ends
     /// with it whatever path closes it.
     remote: Option<ImportForm>,
     confirm_remove: Option<Uuid>,
-    /// The campaign just added, and where to go next.
-    added: Option<String>,
-    /// When that campaign was added: its result's place in the footer.
-    added_order: crate::design::ResultOrder,
     /// The DM asked to go on to Encounters, from that message.
     pub wants_encounters: bool,
     /// Round 26 AG1: the widest name and link block and the widest action group, as the last
@@ -109,10 +167,6 @@ const SELECTOR_HEIGHT: f32 = 44.0;
 pub(crate) const NO_CAMPAIGN_COPY: &str = "Campaign.md is missing, and Splat has no copy. You can write a new one with the default packages.";
 
 impl Default for Campaigns {
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn default() -> Self {
         let mut result = Self {
             store: None,
@@ -131,12 +185,9 @@ impl Default for Campaigns {
             add_path: String::new(),
             name: String::new(),
             path: String::new(),
-            discarded_details: None,
-            discarded_order: crate::design::ResultOrder::issue(),
+            results: Default::default(),
             remote: None,
             confirm_remove: None,
-            added: None,
-            added_order: crate::design::ResultOrder::issue(),
             wants_encounters: false,
             list_measure: (0.0, 0.0),
         };
@@ -197,10 +248,6 @@ impl Campaigns {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn save_form(&mut self) -> Result<(), String> {
         if self.remote.is_some() && self.editing.is_none() {
             std::fs::create_dir_all(self.path.trim())
@@ -257,15 +304,15 @@ impl Campaigns {
         self.clear_form();
         // A new result replaces the copy's registration result, and its Undo with it.
         self.campaign_copy = None;
-        self.added = adding.then(|| format!("Added {}.", campaign.name));
-        self.added_order = crate::design::ResultOrder::issue();
+        if adding {
+            self.results
+                .record(FormKept::Added(format!("Added {}.", campaign.name)));
+        } else {
+            self.results.owner_changed(&FormResult::Added);
+        }
         Ok(())
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn register_campaign_copy(&mut self) -> Result<(), String> {
         let path = PathBuf::from(self.path.trim());
         let found =
@@ -293,8 +340,7 @@ impl Campaigns {
         }
         self.campaign_copy = Some((copy, id, before.active_campaign_id));
         self.clear_form();
-        self.added = Some(copy_registered(&name));
-        self.added_order = crate::design::ResultOrder::issue();
+        self.results.record(FormKept::Added(copy_registered(&name)));
         Ok(())
     }
 
@@ -422,10 +468,6 @@ impl Campaigns {
     }
 
     #[cfg(any(test, feature = "test-support"))]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn at(path: PathBuf) -> Self {
         let mut store = Store::at(path);
         let data = store.load().unwrap();
@@ -446,12 +488,9 @@ impl Campaigns {
             add_path: String::new(),
             name: String::new(),
             path: String::new(),
-            discarded_details: None,
-            discarded_order: crate::design::ResultOrder::issue(),
+            results: Default::default(),
             remote: None,
             confirm_remove: None,
-            added: None,
-            added_order: crate::design::ResultOrder::issue(),
             wants_encounters: false,
             list_measure: (0.0, 0.0),
         }
@@ -693,8 +732,14 @@ impl Campaigns {
             .any(|c| Some(c.id) != self.data.active_campaign_id && links_to(c, remote_id))
     }
 
+    /// The discarded details draft ends (see `FormResult::Discarded`), whichever campaign's.
+    fn end_discard(&mut self) {
+        self.results
+            .end_unreachable(|kept| !matches!(kept, FormKept::Discarded { .. }));
+    }
+
     fn clear_form(&mut self) {
-        self.discarded_details = None;
+        self.end_discard();
         let editing = self.editing.take().is_some();
         self.name = if editing {
             std::mem::take(&mut self.add_name)
@@ -835,9 +880,13 @@ impl Campaigns {
     }
 
     fn select(&mut self, id: Option<Uuid>) {
-        // Another campaign: the open import form's reveal was for the one before.
+        // Another campaign: the open import form's reveal was for the one before, and a
+        // discarded details draft was the other campaign's.
         if let Some(form) = &mut self.remote {
             form.reveal.end();
+        }
+        if id != self.data.active_campaign_id {
+            self.end_discard();
         }
         let mut data = self.data.clone();
         data.active_campaign_id = id;
@@ -896,6 +945,7 @@ impl Campaigns {
             }
             self.remote = None;
             self.editing = Some(campaign.id);
+            self.end_discard();
             self.reveal_details = true;
             self.name = campaign.name.clone();
             self.path = campaign.path.to_string_lossy().into_owned();
@@ -990,7 +1040,7 @@ impl Campaigns {
             // The result of registering a removed campaign ends with it.
             if !self.data.campaigns.iter().any(|c| c.id == id) {
                 self.campaign_copy = None;
-                self.added = None;
+                self.results.owner_changed(&FormResult::Added);
             }
         }
     }
@@ -999,14 +1049,42 @@ impl Campaigns {
     fn build_encounter(&mut self) {
         self.wants_encounters = true;
         if self.campaign_copy.is_none() {
-            self.added = None;
+            self.results.owner_changed(&FormResult::Added);
+        }
+    }
+
+    /// The add's or the copy's result words, while the result stands.
+    fn added(&self) -> Option<&str> {
+        match self.results.get(&FormResult::Added)?.value() {
+            FormKept::Added(words) => Some(words),
+            FormKept::Discarded { .. } => None,
         }
     }
 
     /// `Undo register campaign`: the copy's own files go back and its registration goes. Other
     /// settings, including changes made since, stay. The active campaign goes back only while
-    /// it is still the copy. The result that the Undo followed ends.
-    fn undo_campaign_copy(&mut self) -> Result<(), String> {
+    /// it is still the copy. The result that the Undo followed ends; a failed Undo keeps it.
+    fn undo_campaign_copy(&mut self, ticket: design::results::Ticket) -> Result<(), String> {
+        let mut results = std::mem::take(&mut self.results);
+        let undone = results.undo_by(ticket, |_| self.undo_copy_files());
+        self.results = results;
+        match undone {
+            Ok(_) => Ok(()),
+            Err(design::results::ByTicket::Failed(error)) => Err(error),
+            Err(design::results::ByTicket::Gone) => Err("Nothing to undo.".into()),
+        }
+    }
+
+    /// The ticket of the add's or the copy's result line, for tests of its Undo.
+    #[cfg(test)]
+    fn added_ticket(&self) -> design::results::Ticket {
+        self.results
+            .get(&FormResult::Added)
+            .expect("an add or copy result")
+            .ticket_for_caller_test()
+    }
+
+    fn undo_copy_files(&mut self) -> Result<(), String> {
         let (copy, id, active) = self.campaign_copy.as_ref().ok_or("Nothing to undo.")?;
         let mut data = self.data.clone();
         data.campaigns.retain(|campaign| campaign.id != *id);
@@ -1021,7 +1099,6 @@ impl Campaigns {
         copy.undo()?;
         self.persist(data)?;
         self.campaign_copy = None;
-        self.added = None;
         Ok(())
     }
 
@@ -1164,7 +1241,11 @@ impl Campaigns {
                                 // Buttons keep every letter. The name and status give way first.
                                 ui.spacing_mut().item_spacing.x = design::XS;
                                 design::row_menu(ui, &campaign.name, |ui| {
-                                    if ui.button("Remove…").clicked() {
+                                    if Action::destructive("Remove…")
+                                        .density(Density::Read)
+                                        .show(ui)
+                                        .clicked()
+                                    {
                                         self.confirm_remove = Some(campaign.id);
                                         ui.close();
                                     }
@@ -1181,7 +1262,7 @@ impl Campaigns {
                                     }
                                     self.remote = None;
                                     self.editing = Some(campaign.id);
-                                    self.discarded_details = None;
+                                    self.end_discard();
                                     self.name = campaign.name.clone();
                                     self.path = campaign.path.to_string_lossy().into_owned();
                                 }
@@ -1248,14 +1329,16 @@ impl Campaigns {
     /// `blocked` is the page's lock (a run, a recording, an unsaved draft): the footer is outside
     /// the list's lock, so an action here that changes the campaigns takes it too.
     /// The lines are typed data (layout PR 2b); a press comes back from the pane, and the host
-    /// gives it to `footer_act`.
+    /// gives it to `footer_act`. The results are the store's (`results`), each with the order
+    /// its act took; `frame` is the pane's.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: the discard’s and the add’s results keep the orders their acts issued (`outcome_at`), and the page’s lock words are app-owned `&str` (design::results::STAGED_ALLOWS)"
+        reason = "staged: the page’s lock words are app-owned `&str` (design::results::STAGED_ALLOWS)"
     )]
-    pub fn footer_messages<A: From<CampaignAct> + 'static>(
+    pub fn footer_messages<'f, A: From<CampaignAct> + 'static>(
         &self,
-        messages: &mut design::outcome::Messages<'_, A>,
+        frame: &'f design::outcome::PaneFrame,
+        messages: &mut design::outcome::Messages<'f, A>,
         list: bool,
         blocked: Option<&str>,
     ) {
@@ -1265,17 +1348,21 @@ impl Campaigns {
         };
         let locked =
             blocked.or((!self.writable).then_some("Reload valid campaign settings first."));
-        if self.editing.is_some() && self.discarded_details.is_some() {
-            messages.outcome_at(
-                self.discarded_order,
+        if let Some(editing) = self.editing
+            && let Some(shown) = self.results.get(&FormResult::Discarded(editing))
+        {
+            messages.kept(shown.outcome(frame, |_| {
                 KeptOutcome::Notice(
                     Notice::new(crate::sentence!("Campaign details draft discarded.")),
                     UndoStep::of(Verb::Discard, "Campaign details")
                         .pressed_as(A::from(CampaignAct::UndoDiscard)),
-                ),
-            );
+                )
+            }));
         }
-        let added = self.added.as_deref().filter(|_| list);
+        let mut added = self
+            .results
+            .get(&FormResult::Added)
+            .filter(|_| list && self.added().is_some());
         let copy = self.campaign_copy.is_some();
         // Build an encounter is another choice after the result's words; only Undo is quiet.
         let build = || {
@@ -1284,7 +1371,7 @@ impl Campaigns {
                 A::from(CampaignAct::BuildEncounter),
             )
         };
-        if let Some(added) = added.filter(|_| copy) {
+        if let Some(shown) = added.take_if(|_| copy) {
             // Review round 26: Undo changes the registration and can change the active campaign,
             // so it waits for what blocks a campaign change, with the reason. The page's lock
             // comes and goes (a run, a recording, a draft): `locked_when`, so its line keeps its
@@ -1298,10 +1385,10 @@ impl Campaigns {
             let undo = UndoStep::of(Verb::Register, "campaign")
                 .pressed_as(A::from(CampaignAct::UndoRegister))
                 .locked_when(locked.is_some(), reason);
-            messages.outcome_at(
-                self.added_order,
-                Said::new(footer_words(added)).undo(undo).choice(build()),
-            );
+            let words = footer_words(self.added().unwrap_or_default());
+            messages.kept(shown.outcome(frame, |_| {
+                Said::new(words).undo(undo).choice(build()).into()
+            }));
         }
         if let Some(error) = &self.error {
             let mut fault = FaultMessage::new(&NotDone::words(error));
@@ -1320,31 +1407,42 @@ impl Campaigns {
             }
             messages.outcome(fault);
         }
-        if let Some(added) = added.filter(|_| !copy) {
-            messages.outcome_at(
-                self.added_order,
-                Said::new(footer_words(added)).choice(build()),
-            );
+        if let Some(shown) = added {
+            let words = footer_words(self.added().unwrap_or_default());
+            messages.kept(shown.outcome(frame, |_| Said::new(words).choice(build()).into()));
         }
     }
 
     /// What a press in the campaign messages of a footer asks for (`footer_messages`), done
     /// after the pane is drawn.
-    pub fn footer_act(&mut self, act: CampaignAct) {
-        match act {
-            CampaignAct::UndoDiscard => {
-                if let Some((name, path)) = self.discarded_details.take() {
+    /// An Undo names its result by the ticket of the line that was pressed (`Results::undo_by`),
+    /// so it never undoes a newer result of the same kind.
+    pub fn footer_act(&mut self, press: design::outcome::Press<CampaignAct>) {
+        match (press.id, press.ticket) {
+            (CampaignAct::UndoDiscard, Some(ticket)) => {
+                // Only into its own campaign's open form.
+                let editing = self.editing;
+                let undone = self.results.undo_by(ticket, |kept| match kept {
+                    FormKept::Discarded {
+                        campaign,
+                        name,
+                        path,
+                    } if Some(*campaign) == editing => Ok((name.clone(), path.clone())),
+                    FormKept::Discarded { .. } | FormKept::Added(_) => Err(()),
+                });
+                if let Ok((_, (name, path))) = undone {
                     self.name = name;
                     self.path = path;
                 }
             }
-            CampaignAct::UndoRegister => {
-                if let Err(error) = self.undo_campaign_copy() {
+            (CampaignAct::UndoRegister, Some(ticket)) => {
+                if let Err(error) = self.undo_campaign_copy(ticket) {
                     self.error = Some(error);
                 }
             }
-            CampaignAct::BuildEncounter => self.build_encounter(),
-            CampaignAct::RegisterAsNew => {
+            (CampaignAct::UndoDiscard | CampaignAct::UndoRegister, None) => {}
+            (CampaignAct::BuildEncounter, _) => self.build_encounter(),
+            (CampaignAct::RegisterAsNew, _) => {
                 if let Err(error) = self.register_campaign_copy() {
                     self.error = Some(error);
                 }
@@ -1352,42 +1450,31 @@ impl Campaigns {
         }
     }
 
-    /// An error, and its own recovery after it.
-    fn draw_error(
-        me: &std::cell::RefCell<&mut Campaigns>,
-        ui: &mut egui::Ui,
-        error: &str,
-        locked: Option<&str>,
-    ) {
-        design::message(ui, Tone::Error, error);
-        if error.contains("registered at another folder") {
-            let reason = locked.or(me
-                .borrow()
-                .name
-                .trim()
-                .is_empty()
-                .then_some("Type a name first."));
-            if Action::secondary("Register as a new campaign")
-                .blocked(reason)
-                .show(ui)
-                .clicked()
-            {
-                let mut this = me.borrow_mut();
-                if let Err(error) = this.register_campaign_copy() {
-                    this.error = Some(error);
-                }
-            }
-            design::blocked_reason(ui, reason);
-        }
-    }
-
     /// The form's error where its page has no footer: the first campaign's form on an empty
-    /// page, which has no scroll area, so nothing below it can move.
+    /// page, which has no scroll area, so nothing below it can move. A body fault in its place,
+    /// with its own recovery after it (`Register as a new campaign`, locked with its painted
+    /// reason until the form has a name).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the first campaign’s form has no footer: its error is the page’s body fault (M20)"
+    )]
     pub fn form_error_inline(&mut self, ui: &mut egui::Ui) {
-        let error = self.error.clone();
-        let cell = std::cell::RefCell::new(self);
-        if let Some(error) = error {
-            Self::draw_error(&cell, ui, &error, None);
+        let Some(error) = self.error.clone() else {
+            return;
+        };
+        let mut fault = design::outcome::BodyFault::new(&NotDone::words(&error));
+        if error.contains("registered at another folder") {
+            fault = fault.repair(
+                design::outcome::Repair::new("Register as a new campaign", ()).locked_when(
+                    self.name.trim().is_empty(),
+                    crate::sentence!("Type a name first."),
+                ),
+            );
+        }
+        if fault.show(ui).is_some()
+            && let Err(error) = self.register_campaign_copy()
+        {
+            self.error = Some(error);
         }
     }
 
@@ -1621,7 +1708,7 @@ impl Campaigns {
                             None,
                         );
                         if !unchanged {
-                            self.discarded_details = None;
+                            self.end_discard();
                             if Action::quiet("Discard").show(ui).clicked()
                                 && let Some(saved) = self
                                     .data
@@ -1629,9 +1716,11 @@ impl Campaigns {
                                     .iter()
                                     .find(|c| Some(c.id) == self.editing)
                             {
-                                self.discarded_details =
-                                    Some((self.name.clone(), self.path.clone()));
-                                self.discarded_order = crate::design::ResultOrder::issue();
+                                self.results.record(FormKept::Discarded {
+                                    campaign: saved.id,
+                                    name: self.name.clone(),
+                                    path: self.path.clone(),
+                                });
                                 self.name = saved.name.clone();
                                 self.path = saved.path.to_string_lossy().into_owned();
                             }
@@ -1829,16 +1918,12 @@ mod tests {
         register(&mut campaigns);
         let result =
             "Copy of Original is registered as a new campaign. Its D&D Beyond link is off.";
-        assert_eq!(campaigns.added.as_deref(), Some(result), "SD2-named");
+        assert_eq!(campaigns.added(), Some(result), "SD2-named");
         assert!(campaigns.campaign_copy.is_some());
 
         campaigns.build_encounter();
         assert!(campaigns.wants_encounters);
-        assert_eq!(
-            campaigns.added.as_deref(),
-            Some(result),
-            "SD2-build-keeps-result"
-        );
+        assert_eq!(campaigns.added(), Some(result), "SD2-build-keeps-result");
         assert!(campaigns.campaign_copy.is_some(), "SD2-build-keeps-undo");
 
         // Another settings change while the result lives: Library registers a package.
@@ -1850,9 +1935,11 @@ mod tests {
         std::fs::create_dir(&package.path).unwrap();
         campaigns.register_module(package.clone()).unwrap();
 
-        campaigns.undo_campaign_copy().unwrap();
+        campaigns
+            .undo_campaign_copy(campaigns.added_ticket())
+            .unwrap();
         assert!(
-            campaigns.added.is_none() && campaigns.campaign_copy.is_none(),
+            campaigns.added().is_none() && campaigns.campaign_copy.is_none(),
             "SD2-undo-ends"
         );
         assert!(
@@ -1884,7 +1971,7 @@ mod tests {
         campaigns.name = "Third".into();
         campaigns.path = third.to_string_lossy().into_owned();
         campaigns.save_form().unwrap();
-        assert_eq!(campaigns.added.as_deref(), Some("Added Third."));
+        assert_eq!(campaigns.added(), Some("Added Third."));
         assert!(
             campaigns.campaign_copy.is_none(),
             "SD2-new-result-ends-undo"
@@ -1892,7 +1979,7 @@ mod tests {
 
         // A plain add has no Undo: Build an encounter ends its result, as before.
         campaigns.build_encounter();
-        assert!(campaigns.added.is_none());
+        assert!(campaigns.added().is_none());
     }
 
     /// SD2: Undo takes back only the copy's registration. A campaign the DM opened since stays
@@ -1923,7 +2010,9 @@ mod tests {
         assert!(campaigns.save_form().is_err());
         campaigns.register_campaign_copy().unwrap();
         campaigns.select(Some(first));
-        campaigns.undo_campaign_copy().unwrap();
+        campaigns
+            .undo_campaign_copy(campaigns.added_ticket())
+            .unwrap();
         assert_eq!(
             campaigns.active_campaign().map(|c| c.id),
             Some(first),
@@ -2079,10 +2168,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn one_to_one_links_replace_and_unlink_without_changing_other_campaigns() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
@@ -2121,12 +2206,9 @@ mod tests {
             add_path: String::new(),
             name: String::new(),
             path: String::new(),
-            discarded_details: None,
-            discarded_order: crate::design::ResultOrder::issue(),
+            results: Default::default(),
             remote: None,
             confirm_remove: None,
-            added: None,
-            added_order: crate::design::ResultOrder::issue(),
             wants_encounters: false,
             list_measure: (0.0, 0.0),
         };
@@ -2190,11 +2272,132 @@ mod tests {
         campaigns.select(Some(second));
         campaigns.link(Some("12".into())).unwrap();
         assert_eq!(
-            Store::at(path).load().unwrap().campaigns[1]
+            Store::at(path.clone()).load().unwrap().campaigns[1]
                 .dndbeyond_campaign_id
                 .as_deref(),
             Some("12")
         );
+        // Review of PR 642: each result belongs to its campaign. The Link and folder page as
+        // the app draws it: the link's field and the details form, then the pane's footer, and
+        // a press done after it.
+        use egui_kittest::kittest::Queryable;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(900.0, 900.0))
+            .build_ui_state(
+                |ui, (campaigns, dndbeyond): &mut (Campaigns, crate::dndbeyond::DndBeyond)| {
+                    dndbeyond.poll(ui.ctx(), 0, true, campaigns);
+                    campaigns.show_active(ui, None, dndbeyond, None);
+                    campaigns.show_form_if_editing(ui);
+                    let frame = design::outcome::PaneFrame::new(ui);
+                    let mut messages =
+                        design::outcome::Messages::<CampaignAct>::new(&frame, "link_footer", 600.0);
+                    campaigns.footer_messages(&frame, &mut messages, false, None);
+                    dndbeyond.footer_messages(&frame, &mut messages, true);
+                    let paned = messages.pane(ui, design::Body::Content, |_| ());
+                    if let Some(press) = paned.pressed {
+                        campaigns.footer_act(press);
+                    }
+                },
+                (
+                    campaigns,
+                    crate::dndbeyond::DndBeyond::listed_for_test(&[
+                        ("12", "Watchtower"),
+                        ("34", "Harbor"),
+                    ]),
+                ),
+            );
+        harness.run_steps(3);
+        const SAVED: &str = "Campaign link saved.";
+        let shows =
+            |harness: &egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
+             words: &str| harness.query_all_by_label_contains(words).next().is_some();
+        let pick =
+            |harness: &mut egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
+             choice: &str| {
+                harness
+                    .get_by_label_contains("D&D Beyond campaign link")
+                    .click();
+                harness.run_steps(2);
+                harness.get_by_label(choice).click();
+                harness.run_steps(3);
+            };
+        let open =
+            |harness: &mut egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
+             id: Uuid| {
+                harness.state_mut().0.select(Some(id));
+                harness.run_steps(3);
+            };
+        // A (the second campaign) unlinks: its result. B (the first, unlinked) opens: A's
+        // result ends with the change, and it does not come back with A.
+        pick(&mut harness, "Not linked");
+        assert!(shows(&harness, SAVED), "unlinking A says its result");
+        open(&mut harness, first);
+        assert!(!shows(&harness, SAVED), "A's link result followed into B");
+        open(&mut harness, second);
+        assert!(!shows(&harness, SAVED), "A's ended link result came back");
+        // A links, then a link attempt fails (the settings cannot be written): the failure is
+        // the newest answer, and the older success ends.
+        pick(&mut harness, "Harbor");
+        assert!(shows(&harness, SAVED));
+        use std::os::unix::fs::PermissionsExt;
+        let settings = path.parent().unwrap().to_path_buf();
+        let mode = |path: &std::path::Path, mode| {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap()
+        };
+        mode(&path, 0o444);
+        mode(&settings, 0o555);
+        pick(&mut harness, "Watchtower");
+        mode(&settings, 0o755);
+        mode(&path, 0o644);
+        assert!(
+            harness.state().1.error_for_test().is_some() && !shows(&harness, SAVED),
+            "a failed link left its older success beside the error ({:?})",
+            harness.state().1.error_for_test()
+        );
+        // A's details: an edit and Discard keep A's draft, with its Undo, in A's own form.
+        let edit_name =
+            |harness: &mut egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>| {
+                harness.get_by_label("Edit details").click();
+                harness.run_steps(3);
+                harness
+                    .query_all_by_role_and_label(egui::accesskit::Role::TextInput, "Campaign name")
+                    .next()
+                    .expect("the name field")
+                    .focus();
+                harness.run_steps(1);
+                harness.event(egui::Event::Text(" A".into()));
+                harness.run_steps(3);
+                harness.get_by_label("Discard").click();
+                harness.run_steps(3);
+            };
+        const UNDO: &str = "Undo discard of Campaign details";
+        edit_name(&mut harness);
+        harness.get_by_label(UNDO).click();
+        harness.run_steps(3);
+        assert_eq!(
+            harness.state().0.name,
+            "Campaign A",
+            "Undo of A in A's form"
+        );
+        harness.get_by_label("Discard").click();
+        harness.run_steps(3);
+        assert!(harness.query_by_label(UNDO).is_some());
+        // Unrelated B: B opens and its Edit details opens B's form. A's draft is not B's: no
+        // Undo of it shows there, and B's form keeps B's details.
+        open(&mut harness, first);
+        harness.get_by_label("Edit details").click();
+        harness.run_steps(3);
+        assert!(
+            harness.query_by_label(UNDO).is_none() && harness.state().0.name == "Campaign",
+            "A's discarded draft offers its Undo in B's form (name {:?})",
+            harness.state().0.name
+        );
+        // Back in A: the draft ended with the change; A's form shows A's saved details.
+        open(&mut harness, second);
+        harness.get_by_label("Edit details").click();
+        harness.run_steps(3);
+        assert!(harness.query_by_label(UNDO).is_none());
+        assert_eq!(harness.state().0.name, "Campaign");
     }
     #[test]
     fn unregistering_remembers_legacy_names_and_finding_a_folder_restores_one_registration() {

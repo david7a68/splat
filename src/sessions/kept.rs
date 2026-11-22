@@ -288,3 +288,85 @@ impl Kept for LinkUpdate {
         self.page.clone()
     }
 }
+
+/// One kind of the plan's kept result whose data the plan's own fields hold: a scene act's Undo
+/// (`Scenes::added`, `Scenes::removed`), the group removed from tonight (`removed_group`), the
+/// deleted run (`deleted_run`). One of each kind per campaign, as each kind's data is held once.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum PlanKind {
+    SceneAdded,
+    SceneRemoved,
+    GroupRemoved,
+    DeletedRun,
+}
+
+/// Whose plan result it is: the campaign's session folder and its kind. A campaign switch hides
+/// it, and ends its data (`open_campaign`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct PlanOwner {
+    pub root: PathBuf,
+    pub kind: PlanKind,
+}
+
+impl Owner for PlanOwner {
+    type Scope = Path;
+    fn scope(&self) -> &Path {
+        &self.root
+    }
+}
+
+/// A plan result in the plan's store: its owner only, for the footer's order (issued at the act)
+/// and the press's ticket. Its words and its Undo come from the data its kind holds, which ends
+/// it: when that data goes (an Undo, the note's next edit, another act of the kind), the plan
+/// ends this entry before its footer is made (`Sessions::end_plan_marks`).
+pub(super) struct PlanMark(pub PlanOwner);
+
+impl Kept for PlanMark {
+    type Owner = PlanOwner;
+    const ENDS: Ends = Ends {
+        // Its data was dropped (`end_plan_marks`).
+        owner_changed: OwnerChanged::Ends,
+        // A reload keeps the data it undoes; the data's own checks end it.
+        disk_changed: DiskChanged::Stays,
+        // Its Undo puts its data back; it leaves only when that was done.
+        press: Press::Undo,
+    };
+    fn owner(&self) -> PlanOwner {
+        self.0.clone()
+    }
+}
+
+/// A refused act on a session note (a scene act, Carry over, their Undo), as its line says it:
+/// the refusal's words, and the severity of its tone (R41: an unreadable note is an error).
+pub(super) struct RefusalFault<'a>(pub &'a crate::design::results::Refusal);
+
+impl crate::design::outcome::Fault for RefusalFault<'_> {
+    fn severity(&self) -> crate::design::outcome::Severity {
+        match self.0.tone() {
+            crate::design::Tone::Error => crate::design::outcome::Severity::CannotRead,
+            _ => crate::design::outcome::Severity::NeedsFixing,
+        }
+    }
+    fn cause(&self) -> crate::design::outcome::Sentence {
+        self.0.words()
+    }
+}
+
+/// Why a note act could not change the session note, from the act's fault, and the step that
+/// lets the DM try again. `undo`: the act is an Undo, so a changed line changed after the act.
+pub(super) fn note_cause(
+    fault: &crate::sessions::ActFault,
+    undo: bool,
+) -> (crate::design::results::Cause, crate::design::results::Step) {
+    use crate::design::results::{Cause, File, Step};
+    use crate::sessions::ActFault;
+    let file = File::SessionNote;
+    match fault {
+        ActFault::LineChanged if undo => (Cause::ChangedAfter(file), Step::Check(file)),
+        ActFault::LineChanged => (Cause::LineChanged(file), Step::Check(file)),
+        ActFault::Changed => (Cause::Conflict(file), Step::ChooseWords(file)),
+        ActFault::Missing => (Cause::Gone(file), Step::Check(file)),
+        ActFault::OtherNote => (Cause::Replaced(file), Step::Check(file)),
+        ActFault::NotSaved(..) => (Cause::NotSaved(file), Step::Check(file)),
+    }
+}

@@ -170,6 +170,16 @@ pub fn broken(d: &mut Driver<'_>) {
     // the pane's bottom; a footer that cuts no body has no hairline at its top.
     d.state_prepared("broken-note-repair", Sizes::All, |d| {
         repair_footer_follows(d, "Line 3 opens a list", "iter-27-A-FE2");
+        // Layout PR 9 (SI5, AI1): the short editor's frame and Save share one right edge.
+        let (whole, detail) = d.editor_frame_whole(
+            &crate::world::repair::editor_name("Notes/Broken.md"),
+            Some("Save repaired note"),
+        );
+        d.observe(
+            "layout-9-SI5-short-frame",
+            whole,
+            format!("The short repair's frame is whole and ends at Save: {detail}"),
+        );
     });
     long_repair_keeps_save(d);
     let external = "---\nsplat_schema: 2\nsplat_id: [\n---\n\nOutside edit kept.\n";
@@ -3285,6 +3295,20 @@ pub fn round_trip(d: &mut Driver<'_>) {
             "iter-8-D-FD2-both",
             one_status,
             format!("A repair and an edit share one repair rail status at {size:?}"),
+        );
+    }
+    // Layout PR 9 (SJ9, AJ8): the repair's frame holds its lane and ends at Save, at each size.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (whole, detail) = d.at_size(size, |d| {
+            d.editor_frame_whole(
+                &crate::world::repair::editor_name("Notes/Rail repair.md"),
+                Some("Save repaired note"),
+            )
+        });
+        d.observe(
+            "layout-9-SJ9-repair-frame",
+            whole,
+            format!("At {size:?}, the repair's frame is whole and ends at Save: {detail}"),
         );
     }
     d.state("world-edit-and-repair-drafts", Sizes::All);
@@ -6984,15 +7008,19 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.state("package-wrong-folder-picked", Sizes::All);
     crate::hermetic::closed::next_folder(moved.clone());
     d.click("Find the folder…");
-    d.wait_for_control("Undo recover modules/watch-package");
-    d.expect("Ashen Marches found in modules/watch-package/.");
+    d.wait_for_control("Undo recover Ashen Marches in modules/watch-package/");
+    d.expect("Ashen Marches recovered in modules/watch-package/.");
     d.state_prepared("package-correct-folder-picked", Sizes::All, |d| {
-        check_undo_icon(d, "Undo recover modules/watch-package", "iter-6-C-AD3");
+        check_undo_icon(
+            d,
+            "Undo recover Ashen Marches in modules/watch-package/",
+            "iter-6-C-AD3",
+        );
     });
-    d.click("Undo recover modules/watch-package");
+    d.click("Undo recover Ashen Marches in modules/watch-package/");
     d.wait_for_text("Use this folder");
     d.click("Use this folder");
-    d.wait_for_control("Undo recover modules/watch-package");
+    d.wait_for_control("Undo recover Ashen Marches in modules/watch-package/");
     go_library(d);
     d.click("Packages");
     d.click("Reload from disk");
@@ -7614,6 +7642,11 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "Open in Library has a secondary border");
         d.observe("iter-7-C-FD5", d.visible_text("Package.md cannot be read (line 4). Entries are still available."),
             "The manifest fault and availability sentence have a full stop between them");
+        // Ruling M8 (migration-32 C0, M0001/M0012): what Replace keeps and replaces is that
+        // choice's own help line, painted under it, not part of the fault's words above it.
+        let help_line = d.painted_rect_in("This keeps the package name and its links.", egui::Rect::EVERYTHING);
+        d.observe("m32-C0-M8-replace-help", help_line.is_some_and(|line| line.top() >= replace.bottom() - 0.5),
+            format!("Replace's help {help_line:?} is under Replace {replace:?}"));
         d.observe("iter-6-C-AD1", d.visible_text("This keeps the package name and its links.")
             && d.visible_text("including its description.")
             && d.visible_text("The entries stay unchanged."),
@@ -8845,7 +8878,10 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
                     return;
                 }
                 let words = text.galley.job.text.replace('\u{a0}', " ");
-                if words == "Save or discard to switch campaign." {
+                // Its full words, or its short form where they do not fit (ruling M24).
+                if words == "Save or discard to switch campaign."
+                    || words == crate::design::save_row::SAVE_OR_DISCARD_SHORT
+                {
                     reason = Some(rect);
                 }
                 if words.ends_with("Round 2 · Paused") {
@@ -13734,6 +13770,20 @@ fn long_repair_keeps_save(d: &mut Driver<'_>) {
             && !d.visible_passage("Long line 1.\n")
             && d.editor_text().is_some_and(|text| text.contains("Long line 300. Edited.")),
         format!("At 960x640, editing line 300 of 600 keeps Save and Discard whole in view, with the edited line: {detail}"),
+    );
+    // Layout PR 9 (SI1, AI1): the long editor's fixed frame keeps all four edges in view, its
+    // text and lane scroll inside it, and it ends at Save's right edge; at 960 and at 1920.
+    let (whole, detail) = d.editor_frame_whole(&editor_name, Some(SAVE));
+    d.observe(
+        "layout-9-SI1-long-frame",
+        whole,
+        format!("At 960x640, the long repair's frame is whole and ends at Save: {detail}"),
+    );
+    let (whole, detail) = d.at_size(LARGE, |d| d.editor_frame_whole(&editor_name, Some(SAVE)));
+    d.observe(
+        "layout-9-SI1-long-frame-1920",
+        whole,
+        format!("At 1920x1080, the long repair's frame is whole and ends at Save: {detail}"),
     );
     d.state("long-repair-middle-line-edited", Sizes::Small);
     // Discard works, and the footer gains its Undo line: Save stays whole in view.

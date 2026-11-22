@@ -366,8 +366,6 @@ enum ContentFault<'a> {
     Manifest {
         package: &'a str,
         problem: &'a str,
-        /// The manifest's path in its package, for what Replace keeps and replaces.
-        path: &'a str,
         on_disk: bool,
     },
     /// A chosen package that is not available, and where it was.
@@ -459,27 +457,11 @@ impl design::outcome::Fault for ContentFault<'_> {
                 .and_then(&outside)
                 .unwrap_or(crate::sentence!("This needs fixing.")),
             Self::Flag(cause) => outside(cause).unwrap_or(crate::sentence!("This needs fixing.")),
+            // What Replace keeps and replaces is its choice's own help line (ruling M8).
             Self::Manifest {
-                package,
-                problem,
-                path,
-                on_disk,
-            } => {
-                let words = outside(&manifest_message(package, problem))
-                    .unwrap_or(crate::sentence!("The package manifest cannot be used."));
-                // What Replace keeps and replaces, in the Library's words (one owner).
-                match on_disk
-                    .then(|| {
-                        outside(&crate::content_workspace::manifest_replace_consequence(
-                            path,
-                        ))
-                    })
-                    .flatten()
-                {
-                    Some(consequence) => words.then(consequence),
-                    None => words,
-                }
-            }
+                package, problem, ..
+            } => outside(&manifest_message(package, problem))
+                .unwrap_or(crate::sentence!("The package manifest cannot be used.")),
             Self::Unavailable {
                 message,
                 it_was,
@@ -750,7 +732,6 @@ struct PackageWarnings {
 /// `indeterminate` is the package box's own state: a box that is not fully ticked never says
 /// `All chosen`.
 fn package_count(ticked: usize, total: usize, indeterminate: bool) -> String {
-    let number = |n: usize| design::count(n, "", "").trim().to_owned();
     let entries = || {
         if total == 0 {
             String::new()
@@ -764,7 +745,7 @@ fn package_count(ticked: usize, total: usize, indeterminate: bool) -> String {
     } else if ticked == total && !indeterminate {
         format!("All chosen{}", entries())
     } else {
-        format!("{} of {} chosen", number(ticked), number(total))
+        design::outcome::chosen_count(ticked, total, "")
     }
 }
 
@@ -834,7 +815,7 @@ fn undo_failed(cause: &str) -> String {
     reason = "a manifest write’s words are the content workspace’s own (`ManifestWrite::message`)"
 )]
 fn outcome_of(payload: &Payload, locked: bool) -> design::outcome::KeptOutcome<ContentPress> {
-    use design::outcome::{KeptOutcome, Notice, Said, Sentence, UndoStep, Verb};
+    use design::outcome::{Done, KeptOutcome, Notice, Said, Sentence, UndoStep, Verb};
     let undo = |verb: Verb, object: &str| {
         UndoStep::of(verb, object.to_owned()).pressed_as(ContentPress::Undo)
     };
@@ -848,12 +829,13 @@ fn outcome_of(payload: &Payload, locked: bool) -> design::outcome::KeptOutcome<C
         Payload::CampaignWrite(_) => Said::new(crate::sentence!("Campaign.md was written again."))
             .undo(undo(Verb::Write, "Campaign.md"))
             .into(),
-        Payload::Recovered { module, .. } => {
-            let folder = folder_words(&module.path);
-            Said::new(crate::sentence!("{} found in {}/.", module.name, folder))
-                .undo(undo(Verb::Recover, &folder))
-                .into()
-        }
+        // One verb for the result and its Undo (M0003): `Watch recovered in packages/watch/.`,
+        // its Undo told apart by the same folder.
+        Payload::Recovered { module, .. } => Done::new(Verb::Recover, module.name.clone())
+            .object_first()
+            .within(format!("{}/", folder_words(&module.path)))
+            .undo(ContentPress::Undo)
+            .into(),
         Payload::Discarded { .. } => discarded("Campaign packages"),
         Payload::RepairDiscard { path, .. } => discarded(path.rsplit('/').next().unwrap_or(path)),
         Payload::ManifestWrite { name, write, .. } => Said::new(
@@ -1273,11 +1255,7 @@ impl CampaignContent {
             .is_none_or(|c| c.id != active.id || c.path != active.path)
         {
             if self.dirty() {
-                ui.label(
-                    Type::Section
-                        .rich(ui, "Unsaved campaign content")
-                        .color(colors().text),
-                );
+                design::heading(ui, design::Heading::Section("Unsaved campaign content"));
                 ui.label("The previous campaign still has pending changes. Select it again to save them, or discard and switch.");
                 if Action::destructive("Discard and switch campaign")
                     .show(ui)
@@ -1822,10 +1800,9 @@ impl CampaignContent {
             return;
         }
         let c = colors();
-        ui.label(
-            Type::Section
-                .rich(ui, "Campaign package: changes to review")
-                .color(c.text),
+        design::heading(
+            ui,
+            design::Heading::Section("Campaign package: changes to review"),
         );
         design::ScrollColumn::new("campaign package changes")
             .max_height(220.0)
@@ -2373,7 +2350,6 @@ impl CampaignContent {
             let fault = FaultMessage::new(&ContentFault::Manifest {
                 package: &module.name,
                 problem,
-                path,
                 on_disk: exists,
             });
             let fault = if exists {
@@ -2388,6 +2364,8 @@ impl CampaignContent {
                             crate::choice!("Replace with a basic {}", path),
                             ContentPress::WriteManifest(module.id),
                         )
+                        // What it keeps and replaces, in the Library's words (one owner).
+                        .help(crate::library::manifest_replace_help(path))
                         .locked_when(unsaved, wait()),
                     )
             } else {
