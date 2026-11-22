@@ -27,15 +27,41 @@ struct ArtFile {
     creature_types: HashMap<String, String>,
 }
 
+/// The next art index's generation: each index made, and each package added to one, takes a new
+/// number, so a reader whose figures came from one index knows when another has replaced it
+/// (layout PR 9b-R1a; no pointer is compared).
+static NEXT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn next_generation() -> u64 {
+    NEXT_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Where the art is. With two offers for one target, the package registered first wins.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ArtIndex {
+    generation: u64,
     entries: HashMap<String, PathBuf>,
     links: HashMap<String, PathBuf>,
     creature_types: HashMap<String, PathBuf>,
 }
 
+impl Default for ArtIndex {
+    fn default() -> Self {
+        Self {
+            generation: next_generation(),
+            entries: HashMap::new(),
+            links: HashMap::new(),
+            creature_types: HashMap::new(),
+        }
+    }
+}
+
 impl ArtIndex {
+    /// This index's generation: no other index, and no other state of this one, has it.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
     /// Read the art of each package folder. A bad file costs only that package its art.
     pub fn load<'a>(roots: impl IntoIterator<Item = &'a Path>) -> Self {
         let mut index = Self::default();
@@ -48,6 +74,7 @@ impl ArtIndex {
 
     /// Add one package folder. A package with no art file adds nothing.
     pub fn add_package(&mut self, root: &Path) -> Result<(), String> {
+        self.generation = next_generation();
         let path = root.join(ART_FILE);
         let Ok(meta) = fs::symlink_metadata(&path) else {
             return Ok(());

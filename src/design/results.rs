@@ -1175,11 +1175,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         ("src/sessions/page.rs", "banner", &[Ban::Body]),
-        (
-            "src/sessions/page.rs",
-            "note_editor",
-            &[Ban::Layout(1), Ban::Body],
-        ),
+        ("src/sessions/page.rs", "note_editor", &[Ban::Body]),
         (
             "src/timeline/page.rs",
             "detail",
@@ -1573,6 +1569,12 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/tests/quiet/counting.rs",
             "stock_text_edit",
+            &[Ban::Layout(1)],
+        ),
+        // Layout PR 9b-R1a: the Reader's harness (`quiet_reader`): a bare screen of its size.
+        (
+            "src/design/tests/quiet/counting.rs",
+            "root_sized",
             &[Ban::Layout(1)],
         ),
         ("src/design/popups.rs", "list", &[Ban::Layout(1)]),

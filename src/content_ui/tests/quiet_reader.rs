@@ -1,0 +1,402 @@
+//! Layout PR 9b-R1a (rulings L8 and M25; note 9b §10.6; lead brief Sol 2-004): the Reader's
+//! text cost on a quiet frame, counted for the WHOLE host.
+//!
+//! Each row draws a real reader host, `world::Reader::read_with` (World's reader, and Lookup's
+//! compact one), over a campaign note on disk, through `ContentIndex::load`, as the app does:
+//! the link index is in the context, the reader draws the note's title, kind line, values and
+//! body. Each measured frame first proves that the host drew the note's words. The count runs
+//! from the host's entry through paint (`Context::run`, its end of pass included), so a copy or
+//! a rebuild of the text anywhere in the host shows, not only one in the shared Reader part.
+//!
+//! What is MEASURED, per host, with AccessKit off and on, over notes of about 10 KB, 100 KB and
+//! 1 MB with the same blocks and links (only the paragraphs grow):
+//! - allocation COUNTS: the host's growth from the small note to a large one equals the stock
+//!   reference's growth exactly;
+//! - gross BYTES (an allocation at its size, a reallocation at its new size): the growth is
+//!   equal within 4 KiB (egui rounds some buffers it grows; a copy of a 90 KB or 990 KB text is
+//!   far more);
+//! - warmed quiet frames are equal to each other;
+//! - every counted allocation was the measuring thread's.
+//!
+//! The stock reference: egui's own label (`Label::ui`) over each of the paragraphs' kept
+//! galleys, in the same context setup. With AccessKit on, that is egui's text cost per label
+//! (its accessible name and its AccessKit text runs: M25, counted, not removed). With AccessKit
+//! off it costs nothing that grows with the text, so neither may the host.
+//!
+//! What is COUNTED by the part: the Reader's Markdown parses (`markdown_view::MARKDOWN_PARSES`).
+//! None on a quiet frame. Each eviction case (a resize, the theme installed again, the font
+//! atlas made again, the link index loaded again, a new art index) prepares again exactly as
+//! often as its dependency changed, then is quiet again.
+//!
+//! Its own process (`harness = false`): a global allocator counts every thread of the process.
+#[path = "../../design/tests/quiet/counting.rs"]
+#[allow(
+    dead_code,
+    reason = "the shared module’s own bare screen and text edit are the editor harnesses’"
+)]
+mod counting;
+
+use counting::{Allocated, measured, root_sized, stock_label};
+use eframe::egui;
+use splat_content_ui::{
+    lookup::ContentIndex,
+    markdown_view::{self, MARKDOWN_PARSES},
+    persistence::Campaign,
+    world::{self, Reader},
+};
+use std::sync::Arc;
+
+/// Which reader host a row draws.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Host {
+    /// World's reader.
+    World,
+    /// Lookup's reader of the same entry (`Reader::compact`).
+    Lookup,
+}
+
+/// Every row sees the whole note: egui reads out a label's words only where the label can be
+/// seen, so the host and the stock labels must see the same paragraphs.
+const SCREEN_HEIGHT: f32 = 1_000_000.0;
+
+/// The first words of the note’s body: the frame proves the host drew them.
+const OPENING: &str = "Opening words of the crossing";
+
+/// A note body of about `bytes` bytes, with the same blocks and links at every size: a heading,
+/// two paragraphs with a link each, a list of two items, a quote and a plain paragraph. Only
+/// the paragraphs' words grow.
+fn note_body(bytes: usize) -> String {
+    let words = |share: usize| "cinder ash road pass ".repeat((bytes / 6 / 21).max(1) * share / 6);
+    format!(
+        "{OPENING} {} by [the ford](https://example.com/ford).\n\n\
+         ## The ford\n\n\
+         The ferry hands wait {} near [the pier](https://example.com/pier) tonight.\n\n\
+         - {}\n- The second item {}\n\n\
+         > {}\n\n\
+         The last words {}\n",
+        words(6),
+        words(6),
+        words(6),
+        words(6),
+        words(6),
+        words(6),
+    )
+}
+
+/// A campaign with one note on disk, its loaded index, and a reader host drawing it.
+struct Reading {
+    ctx: egui::Context,
+    reader: Reader,
+    index: Arc<ContentIndex>,
+    at: usize,
+    campaign: Campaign,
+    time: f64,
+    width: f32,
+    _dir: tempfile::TempDir,
+}
+
+impl Reading {
+    fn new(host: Host, bytes: usize, accesskit: bool) -> Self {
+        let dir = tempfile::tempdir().expect("a folder for the campaign");
+        let campaign = Campaign {
+            id: uuid::Uuid::new_v4(),
+            name: "Sample".into(),
+            path: dir.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        // A plain note: World's and Lookup's readers draw its body as one document. (A typed
+        // entry draws through the shared entry view, which is not moved yet: note 9b §10.6.)
+        let id = world::create_entry(&campaign, "Watch notes", "").expect("a note");
+        let first = ContentIndex::load(&[], Some(&campaign)).expect("the index");
+        let found = &first.items[first.position(id).expect("the note in the index")];
+        assert!(found.is_note(), "the fixture is a plain note");
+        let path = dir.path().join(&found.entry.path);
+        let mut text = std::fs::read_to_string(&path).expect("the note’s file");
+        text.push_str(&note_body(bytes));
+        std::fs::write(&path, text).expect("the note’s body");
+        let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).expect("the index"));
+        let at = index.position(id).expect("the note in the index");
+        let ctx = egui::Context::default();
+        splat_design::design::theme::install(&ctx);
+        if !accesskit {
+            ctx.disable_accesskit();
+        }
+        let mut reader = Reader::default();
+        reader.compact = host == Host::Lookup;
+        let mut reading = Self {
+            ctx,
+            reader,
+            index,
+            at,
+            campaign,
+            time: 0.0,
+            width: 900.0,
+            _dir: dir,
+        };
+        // Warm frames: fonts, the atlas, the preparation.
+        for _ in 0..4 {
+            let _ = reading.frame();
+        }
+        reading
+    }
+
+    fn input(&mut self) -> egui::RawInput {
+        self.time += 0.25;
+        egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(self.width, SCREEN_HEIGHT),
+            )),
+            time: Some(self.time),
+            ..Default::default()
+        }
+    }
+
+    /// One frame of the host, as the app draws it: the link index in the context, the reader
+    /// over the note.
+    fn frame(&mut self) -> egui::FullOutput {
+        let input = self.input();
+        let ctx = self.ctx.clone();
+        ctx.run(input, |ctx| {
+            ctx.data_mut(|data| {
+                data.insert_temp(egui::Id::new("reader_link_index"), self.index.clone());
+            });
+            let mut ui = root_sized(ctx, egui::vec2(self.width, SCREEN_HEIGHT));
+            let _ = self.reader.read_with(
+                &mut ui,
+                &self.index.items[self.at],
+                &self.index,
+                Some(&self.campaign),
+                None,
+            );
+        })
+    }
+
+    /// One quiet frame, measured, after the host proved it drew the note's words in one layout
+    /// pass (a discarded pass would draw the host twice).
+    fn quiet(&mut self, what: &str) -> Allocated {
+        let mut shown = None;
+        let passes = self.ctx.cumulative_pass_nr();
+        let allocated = measured(|| shown = Some(self.frame()));
+        let output = shown.expect("the frame ran");
+        assert_eq!(
+            self.ctx.cumulative_pass_nr() - passes,
+            1,
+            "{what}: a quiet frame runs one layout pass; discarded for {:?}",
+            output.platform_output.request_discard_reasons
+        );
+        assert!(
+            painted(&output).iter().any(|text| text.contains(OPENING)),
+            "{what}: the real reader host drew the note’s words in the measured frame"
+        );
+        drop(output);
+        allocated
+    }
+}
+
+/// The texts a frame painted.
+fn painted(output: &egui::FullOutput) -> Vec<String> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+            egui::Shape::Text(text) => out.push(text.galley.job.text.clone()),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &output.shapes {
+        walk(&clipped.shape, &mut out);
+    }
+    out
+}
+
+/// The stock reference: egui's own label over each galley, in a context set up as the host's.
+fn stock_labels(galleys: &[Arc<egui::Galley>], accesskit: bool) -> Allocated {
+    let ctx = egui::Context::default();
+    splat_design::design::theme::install(&ctx);
+    if !accesskit {
+        ctx.disable_accesskit();
+    }
+    let mut time = 0.0;
+    let mut frame = |ctx: &egui::Context| {
+        time += 0.25;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(900.0, SCREEN_HEIGHT),
+            )),
+            time: Some(time),
+            ..Default::default()
+        };
+        ctx.run(input, |ctx| {
+            let mut ui = root_sized(ctx, egui::vec2(900.0, SCREEN_HEIGHT));
+            for galley in galleys {
+                stock_label(&mut ui, galley.clone());
+            }
+        })
+    };
+    for _ in 0..4 {
+        let _ = frame(&ctx);
+    }
+    let mut shown = None;
+    let first = measured(|| shown = Some(frame(&ctx)));
+    drop(shown);
+    for _ in 0..4 {
+        let mut shown = None;
+        assert_eq!(
+            measured(|| shown = Some(frame(&ctx))),
+            first,
+            "the stock reference’s quiet frames are equal"
+        );
+        drop(shown);
+    }
+    first
+}
+
+/// A host's quiet frame over a note of about `bytes` bytes, and the stock reference over its
+/// kept galleys; the host's five quiet frames are equal and parse nothing.
+fn both(host: Host, bytes: usize, accesskit: bool) -> (Allocated, Allocated) {
+    let what = format!("{host:?}, AccessKit {accesskit}, {bytes} B");
+    let mut reading = Reading::new(host, bytes, accesskit);
+    let parses = MARKDOWN_PARSES.with(std::cell::Cell::get);
+    let first = reading.quiet(&what);
+    for _ in 0..4 {
+        assert_eq!(
+            reading.quiet(&what),
+            first,
+            "{what}: the quiet frames are equal"
+        );
+    }
+    assert_eq!(
+        MARKDOWN_PARSES.with(std::cell::Cell::get),
+        parses,
+        "{what}: the reader parsed nothing on its quiet frames"
+    );
+    let galleys = markdown_view::kept_galleys(&reading.ctx);
+    assert!(
+        galleys.len() >= 6,
+        "{what}: the reader keeps its paragraphs laid out ({})",
+        galleys.len()
+    );
+    (first, stock_labels(&galleys, accesskit))
+}
+
+/// After `change`, the reader prepares again exactly `expected` times, then is quiet again.
+fn prepares_again(
+    host: Host,
+    case: &str,
+    expected: usize,
+    change: impl FnOnce(&mut Reading),
+) -> Option<String> {
+    let mut reading = Reading::new(host, 10_000, true);
+    let before = MARKDOWN_PARSES.with(std::cell::Cell::get);
+    change(&mut reading);
+    for _ in 0..4 {
+        let _ = reading.frame();
+    }
+    let made = MARKDOWN_PARSES.with(std::cell::Cell::get) - before;
+    let quiet = MARKDOWN_PARSES.with(std::cell::Cell::get);
+    let _ = reading.quiet(case);
+    let again = MARKDOWN_PARSES.with(std::cell::Cell::get) - quiet;
+    (made != expected || again != 0).then(|| {
+        format!(
+            "{host:?}, {case}: prepared {made} times (expected {expected}), then {again} on a \
+             quiet frame"
+        )
+    })
+}
+
+fn main() {
+    let sizes = [10_000, 100_000, 1_000_000];
+    let mut failures = Vec::new();
+    for host in [Host::World, Host::Lookup] {
+        for accesskit in [false, true] {
+            let frames: Vec<_> = sizes
+                .iter()
+                .map(|&bytes| both(host, bytes, accesskit))
+                .collect();
+            let (host_small, stock_small) = frames[0];
+            for (&bytes, &(reader, stock)) in sizes.iter().zip(&frames).skip(1) {
+                let count = |a: Allocated, b: Allocated| a.count as i64 - b.count as i64;
+                let gross = |a: Allocated, b: Allocated| a.bytes as i64 - b.bytes as i64;
+                let (host_count, stock_count) =
+                    (count(reader, host_small), count(stock, stock_small));
+                let (host_bytes, stock_bytes) =
+                    (gross(reader, host_small), gross(stock, stock_small));
+                println!(
+                    "{:<7} accesskit {accesskit:<5} {bytes:>8} B: host +{host_count} allocations \
+                     +{host_bytes} B, stock +{stock_count} +{stock_bytes} B (host {reader:?}, \
+                     stock {stock:?})",
+                    format!("{host:?}")
+                );
+                if host_count != stock_count {
+                    failures.push(format!(
+                        "{host:?}, AccessKit {accesskit}, {bytes} B: the host's allocation count \
+                         grows by {host_count}, egui's labels' by {stock_count}"
+                    ));
+                }
+                if (host_bytes - stock_bytes).abs() > 4096 {
+                    failures.push(format!(
+                        "{host:?}, AccessKit {accesskit}, {bytes} B: the host's gross bytes grow \
+                         by {host_bytes}, egui's labels' by {stock_bytes}"
+                    ));
+                }
+            }
+        }
+        failures.extend(prepares_again(host, "a resize", 1, |reading| {
+            // Below the reader's measure: the note's column gets narrower.
+            reading.width = 480.0;
+        }));
+        failures.extend(prepares_again(
+            host,
+            "the theme installed again",
+            1,
+            |reading| {
+                splat_design::design::theme::install(&reading.ctx);
+            },
+        ));
+        failures.extend(prepares_again(
+            host,
+            "the font atlas made again",
+            2,
+            |reading| {
+                // egui makes its font atlas again for a new text alpha mode, and again when it
+                // comes back: the same fonts, style and size, in a new atlas.
+                let alpha = reading.ctx.style().visuals.text_alpha_from_coverage;
+                reading.ctx.all_styles_mut(|style| {
+                    style.visuals.text_alpha_from_coverage =
+                        egui::epaint::AlphaFromCoverage::Linear;
+                });
+                let _ = reading.frame();
+                reading
+                    .ctx
+                    .all_styles_mut(|style| style.visuals.text_alpha_from_coverage = alpha);
+            },
+        ));
+        failures.extend(prepares_again(
+            host,
+            "the link index loaded again",
+            1,
+            |reading| {
+                reading.index = Arc::new(
+                    ContentIndex::load(&[], Some(&reading.campaign)).expect("the index again"),
+                );
+            },
+        ));
+        failures.extend(prepares_again(host, "a new art index", 1, |reading| {
+            reading.ctx.data_mut(|data| {
+                data.insert_temp(
+                    egui::Id::new("art_index"),
+                    Arc::new(splat_content_ui::content::art::ArtIndex::default()),
+                );
+            });
+        }));
+    }
+    assert!(
+        failures.is_empty(),
+        "quiet_reader:\n{}",
+        failures.join("\n")
+    );
+    println!("quiet_reader: ok");
+}
