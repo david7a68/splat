@@ -21,6 +21,11 @@
 //!   following it; so every row is reached, also one outside the view.
 //! - **Small room (L3).** Below the tallest block, the list is laid out at that height in an
 //!   outer scroll of the room it has; each entry into that state is counted.
+//! - **Fit height** (`BlockRegion::fit_height`, layout 11c, note C0-parts Part A). Outside a
+//!   `Content` pane, a region is as tall as the room it is given; a fit region is as tall as its
+//!   blocks, up to that room. In a child of a shared composite (`PaneColumns::shared_task`), its
+//!   scroll column then adds the height it hides, so the composite is measured by the blocks, and
+//!   a short list leaves the footer to follow it (`ScrollColumn::fit_height`'s rule, for blocks).
 
 use super::laid::{Laid, LaidUi};
 #[cfg(test)]
@@ -230,6 +235,8 @@ pub struct BlockRegion<'s> {
     state: &'s mut RegionState,
     content: &'s Revised<Vec<Block>>,
     name: &'s str,
+    /// As tall as its blocks, up to the room (`fit_height`).
+    fit: bool,
 }
 
 impl<'s> BlockRegion<'s> {
@@ -243,7 +250,17 @@ impl<'s> BlockRegion<'s> {
             state,
             content,
             name: "List",
+            fit: false,
         }
+    }
+
+    /// As tall as its blocks, up to the room it is given, not the whole room (see the module):
+    /// for a list in a child of a shared composite, so a short list does not make the composite
+    /// as tall as the room and pin the pane's footer. In a `Content` pane a region draws its
+    /// whole extent in place, so this changes nothing there.
+    pub fn fit_height(mut self) -> Self {
+        self.fit = true;
+        self
     }
 
     /// The list box's accessible name.
@@ -270,10 +287,16 @@ impl<'s> BlockRegion<'s> {
             fonts: crate::design::theme::font_generation(ui.ctx()),
             scale: ui.ctx().pixels_per_point(),
         };
-        let tallest = self.state.plan.plan(self.content, env).tallest();
+        let plan = self.state.plan.plan(self.content, env);
+        let (tallest, extent) = (plan.tallest(), plan.extent());
         if room.height() + 0.5 >= tallest {
             self.state.small = false;
-            return self.region(ui, env, room.height(), block);
+            let view = if self.fit {
+                room.height().min(extent)
+            } else {
+                room.height()
+            };
+            return self.region(ui, env, view, block);
         }
         // L3: below the tallest block the list is laid out at that height, in an outer scroll
         // of the room it has.
@@ -301,6 +324,7 @@ impl<'s> BlockRegion<'s> {
             state,
             content,
             name,
+            fit,
         } = self;
         let mut refused = 0;
         let whole = BlockRegion {
@@ -308,6 +332,7 @@ impl<'s> BlockRegion<'s> {
             state: &mut *state,
             content,
             name,
+            fit,
         }
         .show(ui, |ui, at| {
             let Block::Measured(measured) = content[at] else {
@@ -514,6 +539,7 @@ impl<'s> BlockRegion<'s> {
             state,
             content,
             name,
+            ..
         } = self;
         let ctx = ui.ctx().clone();
         // The pass's input first: a user scroll over the region cancels every pending request

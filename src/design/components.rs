@@ -8458,6 +8458,10 @@ mod tests {
             /// resizable column of `count` rows that scrolls on its own, and a column of four
             /// rows and the last action.
             Composite,
+            /// `Composite` with a fit `BlockRegion` of `count` row blocks as its left column
+            /// (note C0-parts Part A): as tall as its rows up to the room, so a short region
+            /// leaves the composite to its taller column.
+            RegionComposite,
         }
         const REASON: &str = "Line 1 opens a list.";
         let rows = |ui: &mut Ui, count: usize| {
@@ -8508,8 +8512,20 @@ mod tests {
                 Shape::Nested,
                 Shape::Editor,
                 Shape::Composite,
+                Shape::RegionComposite,
             ] {
                 for count in [2, 200] {
+                    let mut region = crate::design::RegionState::new("shape_region");
+                    let row_blocks = |count: usize| {
+                        crate::design::memo::Revised::new(vec![
+                            crate::design::Block::Row(
+                                crate::design::Row::OneLine
+                            );
+                            count
+                        ])
+                    };
+                    let blocks = Rc::new(std::cell::RefCell::new(row_blocks(count)));
+                    let blocks_in = blocks.clone();
                     let pressed = Rc::new(Cell::new(None::<&'static str>));
                     let pressed_in = pressed.clone();
                     let mut harness =
@@ -8633,6 +8649,43 @@ mod tests {
                                             },
                                         );
                                     }
+                                    Shape::RegionComposite => {
+                                        super::super::pane::PaneColumns::shared_task(
+                                            "shape_columns",
+                                        )
+                                        .resizable(
+                                            0.0,
+                                            super::super::Column::left(
+                                                "shape_left",
+                                                200.0,
+                                                150.0..=300.0,
+                                            ),
+                                        )
+                                        .rest(S)
+                                        .edges(ui)
+                                        .show_children(
+                                            ui,
+                                            |ui, index| {
+                                                if index == 0 {
+                                                    let blocks = blocks_in.borrow();
+                                                    crate::design::BlockRegion::new(
+                                                        "shape_region",
+                                                        &mut region,
+                                                        &blocks,
+                                                    )
+                                                    .fit_height()
+                                                    .show(ui, |ui, at| {
+                                                        ui.label(format!("Line {at}"));
+                                                    });
+                                                } else {
+                                                    for line in 0..4 {
+                                                        ui.label(format!("Line R{line}"));
+                                                    }
+                                                    press(ui, "Last action");
+                                                }
+                                            },
+                                        );
+                                    }
                                     Shape::Editor => {
                                         let mut text = (0..count)
                                             .map(|line| format!("Line {line}"))
@@ -8715,7 +8768,11 @@ mod tests {
                     let follows = count == 2
                         && matches!(
                             shape,
-                            Shape::Rows | Shape::InScope | Shape::InFrame | Shape::Composite
+                            Shape::Rows
+                                | Shape::InScope
+                                | Shape::InFrame
+                                | Shape::Composite
+                                | Shape::RegionComposite
                         );
                     if follows {
                         // The frame's 4 px margin is under its last rect.
@@ -8749,7 +8806,7 @@ mod tests {
                     // footer starts `S` below the last action of the taller column, and the
                     // splitter's rule ends at that action; with 200 the left column scrolls in
                     // the whole room and the rule ends above the footer.
-                    if shape == Shape::Composite {
+                    if matches!(shape, Shape::Composite | Shape::RegionComposite) {
                         let last = nodes
                             .iter()
                             .find(|(label, _)| label == "Last action")
@@ -8783,12 +8840,34 @@ mod tests {
                             "{case}: the footer {footer:?} follows the taller column's Last action {last:?} by `S` (2 rows), and the splitter's rule ends at it: {rule:?}"
                         );
                     }
+                    // A fit region that grows under a composite measured short (a package with
+                    // more entries chosen next): the composite grows with it, by the height its
+                    // column hides, until the region's last row is whole and the footer follows
+                    // it by `S` (note C0-parts Part A; the Campaign page showed 3 of 6 rows).
+                    if shape == Shape::RegionComposite && count == 2 {
+                        *blocks.borrow_mut() = row_blocks(12);
+                        harness.run_steps(4);
+                        let footer = footer_rect(&harness.ctx, Id::new("shape_footer"))
+                            .unwrap_or_else(|| panic!("{case}: the footer shows"));
+                        let last = access(&harness)
+                            .into_iter()
+                            .find(|(label, _)| label == "Line 11")
+                            .map(|(_, rect)| rect);
+                        // The row's label stands at its row's top; the row is one `OneLine` block.
+                        let row = crate::design::Density::Scan.row();
+                        assert!(
+                            last.is_some_and(
+                                |last| (footer.top() - (last.top() + row + S)).abs() <= 1.0
+                            ),
+                            "{case}, grown to 12 rows: the last row's label {last:?} shows, and the footer {footer:?} follows its row ({row} px) by `S`"
+                        );
+                    }
                     // The body control next to the footer takes its press.
                     let target = match shape {
                         Shape::TallColumn => Some("Tall action"),
                         Shape::SideColumn => Some("Left action"),
                         Shape::Editor => None,
-                        Shape::Composite => Some("Last action"),
+                        Shape::Composite | Shape::RegionComposite => Some("Last action"),
                         _ if count == 2 => Some("Last action"),
                         _ => None,
                     };
