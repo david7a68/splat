@@ -528,23 +528,32 @@ fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
 /// creature search (not on the Members tab at 960) and the first member's menu. `None` where it
 /// is not shown.
 fn group_head_tops(d: &Driver<'_>) -> Vec<(&'static str, Option<f32>)> {
+    field_tops(
+        d,
+        &[
+            "Group name: ",
+            "Default side",
+            "Belongs to",
+            "Find a creature or party member",
+            "More actions for ",
+        ],
+    )
+}
+
+/// The top of the first control in view whose accessible name starts with each prefix.
+fn field_tops(d: &Driver<'_>, prefixes: &[&'static str]) -> Vec<(&'static str, Option<f32>)> {
     let nodes = d.nodes();
-    [
-        "Group name: ",
-        "Default side",
-        "Belongs to",
-        "Find a creature or party member",
-        "More actions for ",
-    ]
-    .into_iter()
-    .map(|prefix| {
-        let top = nodes
-            .iter()
-            .find(|node| node.name.starts_with(prefix) && node.in_view())
-            .map(|node| node.rect.top());
-        (prefix, top)
-    })
-    .collect()
+    prefixes
+        .iter()
+        .copied()
+        .map(|prefix| {
+            let top = nodes
+                .iter()
+                .find(|node| node.name.starts_with(prefix) && node.in_view())
+                .map(|node| node.rect.top());
+            (prefix, top)
+        })
+        .collect()
 }
 
 /// Whether the save row shows the campaign-switch reason: its full words, or (where they do not
@@ -5739,6 +5748,46 @@ pub mod encounter_build {
                 "With sync on, the roster has the option: {option}. It says what the party has now, together: {together}. And for each row: {row}"
             ),
         );
+        // Layout step 6b (I8): the encounter's first edit brings Unsaved, Discard and the
+        // campaign-switch reason (beside Resume's paused run at the row's end); each reason has
+        // its planned place, so the name, the creature search and the first roster row keep their
+        // tops at 960, 1200 and 1920. Discard puts the encounter back.
+        let still = d.aside(|d| {
+            let fields = |d: &Driver<'_>| {
+                field_tops(
+                    d,
+                    &[
+                        "Encounter name: ",
+                        "Find a creature or party member",
+                        "More actions for ",
+                    ],
+                )
+            };
+            let sizes = [SMALL, DEFAULT, LARGE];
+            let clean = sizes.map(|size| d.at_size(size, fields));
+            d.type_into(&d.name_starting("Encounter name: "), " 2");
+            let dirty = sizes.map(|size| d.at_size(size, fields));
+            let switch = d.has_containing("to switch campaign.");
+            d.click("Discard");
+            (
+                switch
+                    && clean
+                        .iter()
+                        .all(|tops| tops[0].1.is_some() && tops[2].1.is_some())
+                    && clean.iter().zip(&dirty).all(|(clean, dirty)| {
+                        clean
+                            .iter()
+                            .zip(dirty)
+                            .all(|((_, a), (_, b))| match (a, b) {
+                                (Some(a), Some(b)) => (a - b).abs() <= 0.5,
+                                (None, None) => true,
+                                _ => false,
+                            })
+                    }),
+                format!("Switch reason shown {switch}; clean {clean:?}, dirty {dirty:?}"),
+            )
+        });
+        d.observe("l6b-encounter-head-still", still.0, still.1);
         // iter-26-B FB5: the run state keeps its x in the save row when the first edit brings
         // `Unsaved`, Discard and the campaign-switch reason, at 960, 1200 and 1920.
         let run_state_x = |d: &mut Driver<'_>| {
@@ -27848,13 +27897,15 @@ pub mod session_plan {
                     d.place_of("Save creature"),
                 )
             });
-            let form = crate::design::FORM_WIDTH + 2.0 * crate::design::S;
+            // Layout step 6b: exactly the shared rule's width for the room to the roster rule's
+            // end, so a name bounded by any other edge (one a lane wider) fails.
+            let margins = 2.0 * crate::design::S;
             d.observe(
                 "iter-26-B-FA9",
                 name.zip(rule).is_some_and(|(name, rule)| {
-                    name.right() <= rule + 1.0
-                        && ((name.right() - rule).abs() <= 1.0
-                            || (name.width() - form).abs() <= 1.0)
+                    let column = rule - name.left() - margins;
+                    let wanted = crate::design::save_row::name_width(column) + margins;
+                    (name.width() - wanted).abs() <= 1.0
                 }) && start.zip(name).is_some_and(|(save, name)| {
                     (save.left() - (name.right() + crate::design::L)).abs() <= 1.5
                 }) && creature.is_some(),
@@ -28392,8 +28443,32 @@ pub mod share_to_package {
 
 pub mod remove_package_in_use {
     use super::*;
+    /// An item of the package the steps remove that the campaign chooses and no other entry
+    /// needs: Lookup's loot search holds it only while the package is chosen.
+    const ITEM: &str = "Veilglass Lantern";
+    /// A creature of that package. Every chosen creature of it is needed by an encounter, so
+    /// Encounters lists it whether or not the package is chosen.
+    const CREATURE: &str = "Cinder Wolf";
+
+    /// What the two readers give back: whether Lookup's loot search holds `ITEM`, and whether
+    /// Encounters' creature search lists `CREATURE`.
+    fn readers(d: &Driver<'_>) -> (bool, bool) {
+        let item = d.app().lookup.index().is_some_and(|index| {
+            index
+                .loot_sources()
+                .items
+                .iter()
+                .any(|item| item.name == ITEM)
+        });
+        (item, d.app().encounters.searchable_creature(CREATURE))
+    }
+
     pub fn run(d: &mut Driver<'_>) {
-        let package = d.app_mut().campaigns.modules()[0].id;
+        let module = d.app_mut().campaigns.modules()[0].clone();
+        let package = module.id;
+        // P2 of the review of PR 623: the search results before any change, for the Undo of
+        // the removal at the end.
+        let searched = readers(d);
         go_library(d);
         d.click("Packages");
         d.click("Manage packages…");
@@ -28626,6 +28701,29 @@ pub mod remove_package_in_use {
             "A package removal does not say its creature file was deleted",
         );
         d.state("paused-run-after-package-removal", Sizes::All);
+        // P2 of the review of PR 623 (issue #509): the package comes back (registered again,
+        // which Lookup reads at once) while the campaign does not choose it: Lookup's loot search
+        // loses its item. Undo of the removal chooses it again: Lookup gives the item back, and
+        // Encounters reads the campaign again and lists what it listed before the removal.
+        d.app_mut().campaigns.register_module(module).unwrap();
+        go_campaign(d);
+        d.settle();
+        let removed = readers(d);
+        let read = d.app().encounters.snapshot_revision();
+        d.click("Undo remove Ashen Marches");
+        d.settle();
+        let undone = readers(d);
+        d.observe(
+            "m32-C0-509-removal-undo-readers",
+            searched == (true, true)
+                && !removed.0
+                && undone == searched
+                && d.app().encounters.snapshot_revision() != read,
+            format!(
+                "{ITEM} in Lookup's loot search, {CREATURE} listed by Encounters: before {searched:?}, removed and registered again {removed:?}, after Undo {undone:?}; Encounters read again {}",
+                d.app().encounters.snapshot_revision() != read
+            ),
+        );
     }
 }
 

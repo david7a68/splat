@@ -218,7 +218,7 @@ that hosts reveals (R34, R44, R46); the Settings pane's column (the import form)
 | Per-change cache | `Memo`, `Revised`, `Revision` (`design::memo`) | A cache keyed only by revisions. A revision advances only on a stated change: `Revised::revise` when its closure returns `Changed::Yes`, `Revised::set` when the new value differs (it needs `Eq`). A pointer address, a frame count or an input epoch is not a key: the type does not take one. A `Revised` or `Memo` value is `Sync`, so it holds no `Cell` or `RefCell`. `ptr_eq` calls are counted and can only go down |
 | Side panel | `side_panel_width`, `TitleLine::close` | One width rule for Lookup, Notes and the run; separate participant and fight tabs. A panel's title row is a title line with its close icon (`panel_header` is gone) |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
-| Composite columns | `PaneColumns` (`shared_task`, `independent`; `fixed`, `resizable`, `rest`, `least_height`; `edges`), `PaneEdges` (`header`, `child_header`, `show_children`, `outer`, `child`) | Children side by side in one pane (layout step 7). `edges` resolves every child's edges once, before anything of the pane paints, from the room and this pass's splitter drag or key; the header (`header`, the composite's outer edge: its children and gutters, never the window), a child's toolbar (`child_header`) and the children (`show_children`) all use those edges, so they share one right edge in every pass of a drag. Edges kept to a later pass or used in another room are refused and resolved again. A shared task in a `Body::Content` pane is as tall as its tallest child's whole content (each child's scroll columns add what they hide), up to the room left and at least its `least_height` while taller, so the footer follows the taller child by `S` and a resizable child's rule ends there; in any other body it fills the room left. Independent children are whole-height hosts of their own panes and footers. Children are still drawn by a closure: each host is a counted `composite-child` row of the legacy freeze until its children are closed blocks |
+| Composite columns | `PaneColumns` (`shared_task`, `independent`; `fixed`, `resizable`, `rest`, `trailing`, `least_height`; `edges`, `edges_in`), `PaneEdges` (`header`, `child_header`, `show_children`, `outer`, `child`, `child_within`) | Children side by side in one pane (layout step 7). `edges` resolves every child's edges once, before anything of the pane paints, from the room and this pass's splitter drag or key; the header (`header`, the composite's outer edge: its children and gutters, never the window), a child's toolbar (`child_header`) and the children (`show_children`) all use those edges, so they share one right edge in every pass of a drag. Edges kept to a later pass or used in another room are refused and resolved again. A shared task in a `Body::Content` pane is as tall as its tallest child's whole content (each child's scroll columns add what they hide), up to the room left and at least its `least_height` while taller, so the footer follows the taller child by `S` and a resizable child's rule ends there; in any other body it fills the room left. Independent children are whole-height hosts of their own panes and footers. Children are still drawn by a closure: each host is a counted `composite-child` row of the legacy freeze until its children are closed blocks |
 | Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px reserves 24 px of layout width from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the underline covers only the word, and the next item starts after the whole target, so two short links side by side never share a press area. An icon before the words is not part of the underline: draw it as its own glyph, as `status_link` does |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
@@ -1501,7 +1501,16 @@ also gives the open fight from that encounter its new read-aloud text and notes 
 state stay, and other changes wait for the next fight. An unfinished encounter
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start
 fight says `Close the open run first.` beside it. The actions are measured as they are drawn, in their widest
-weight, and the place is planned from the widths only, so nothing moves while the DM types. Sync and repeat options follow the roster. Use group_heading
+weight, and the place is planned from the widths only, so nothing moves while the DM types. The roster and Add
+participants are one composite (`PaneColumns`: the roster has the rest of the room, Add participants trails at the
+right at its own or dragged width); the head resolves their edges before it paints, so the name ends at the
+roster's edge (its rows' and rules' end, less the scroll bar's lane) in the same pass as the roster, a drag
+included, never at an edge from an earlier frame. The save row's reasons follow the draft head plan and ruling M24:
+the campaign-switch reason, then the row's other reason (the creature's open changes, a read in progress, no
+participants), each on the row in full where it fits beside the widest state word and Discard (and the paused run's
+state), else in its short form in every state (`Save or discard to switch.`, `Save or discard the creature first.`,
+`Still reading.`; `Add participants first.` keeps its words), with the full reason in hover and the accessible
+description; only a row narrower than the short form keeps a line below. Sync and repeat options follow the roster. Use group_heading
 for groups of controls and sentence-case field labels over single inputs; tabbed Add participants has no repeated heading. Group frames choose where Add goes;
 search says `Adding to <name>` as read-only text. The frame's Add slot keeps the width of `Adding here` with its
 check in every frame, so every name field ends at one edge and does not move with the Add target. Each encounter group has a frame below the roster with name,
@@ -2413,8 +2422,10 @@ the end of the plan, `Plan a scene: words, a person or a place`, with `Add` and 
 end), keeps the field open, and shows `Scene added to tonight.` with `Undo add scene` directly under the field's action line, so
 the field does not move for it; once the field closes, the result is in the plan's message footer. Escape or
 `Cancel` clears and closes it. Every scene act goes through `Draft::apply` with `Apply::Now`, on the one line its row was drawn
-from (its place and its whole text): what it cannot do shows, in a warning, where the DM acted, until the note's
-words change or, for `Notes not saved`, until the note saves. An act whose save failed keeps its Undo.
+from (its place and its whole text): a refused act is a bounded `Refusal` (`The scene “<words>” was not ticked in
+<session>.`, its cause and its next step; ruling M7), drawn where the DM acted (`row_fault`) or in the footer,
+until the note's words change; a save that failed is the error `Notes not saved.` until the note saves. An act
+whose save failed keeps its Undo.
 
 Remove from tonight removes one fight or group link, retaining surrounding words, with `Undo remove <name>` below
 that row after `S` (`PlacedResult`). A removed group's message and Undo sit in the plan's message footer until the next note or plan

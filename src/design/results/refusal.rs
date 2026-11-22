@@ -169,6 +169,8 @@ pub enum Fallback {
     ThisFight,
     /// `that session`
     ThatSession,
+    /// `this scene`: a plan scene whose words are blank (M-N1.4).
+    ThisScene,
     /// `that tracker`: a tracker's act, label or name that has no words (M-S0.3)
     ThatTracker,
 }
@@ -186,6 +188,7 @@ impl Name {
             match fallback {
                 Fallback::ThisFight => "this fight",
                 Fallback::ThatSession => "that session",
+                Fallback::ThisScene => "this scene",
                 Fallback::ThatTracker => "that tracker",
             }
             .to_owned(),

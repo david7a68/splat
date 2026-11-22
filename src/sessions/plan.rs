@@ -1680,11 +1680,36 @@ struct Shown {
 /// What a scene act could not do, while the note's words are the words it met.
 #[derive(Debug)]
 pub(super) struct Fault {
-    pub(super) words: String,
+    pub(super) what: SceneFault,
     met: String,
     place: Place,
     /// The act waits in the draft: its words end when the note is saved.
     waits: bool,
+}
+
+/// What a scene act could not do.
+#[derive(Debug)]
+pub(super) enum SceneFault {
+    /// It was refused and wrote nothing: what was not done to which scene, why, and the next
+    /// step (ruling M7).
+    Refused(design::results::Refusal),
+    /// It is in the draft, and the note could not be saved: it waits for the next save.
+    NotSaved,
+}
+
+impl MessageFault for SceneFault {
+    fn severity(&self) -> Severity {
+        match self {
+            Self::Refused(refusal) => kept::RefusalFault(refusal).severity(),
+            Self::NotSaved => Severity::NotSaved,
+        }
+    }
+    fn cause(&self) -> Sentence {
+        match self {
+            Self::Refused(refusal) => refusal.words(),
+            Self::NotSaved => crate::sentence!("Notes not saved."),
+        }
+    }
 }
 
 /// What the scenes' fold measured on the last frame. Scenes fold first, so that the next
@@ -1787,6 +1812,8 @@ pub(super) struct Scenes {
     field: Option<design::AddField>,
     /// `Scene added to tonight.`
     pub(super) added: Option<NoteUndo>,
+    /// The words of the scene in `added`, which a refused Undo of it names.
+    added_words: String,
     /// A scene taken out of tonight: its line's place among the plan's lines, its words, and
     /// its Undo. The place is the line that now follows it, which stays while the note is as the
     /// act left it, also when a fight before it is played.
@@ -5013,13 +5040,17 @@ impl Sessions {
         if drawn { place } else { Place::Footer }
     }
 
-    /// The scene act's words under the place where the DM acted, while they show there.
+    /// The scene act's refusal under the place where the DM acted, while it shows there.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a refused scene act, said where the DM acted (Ban::Body)"
+    )]
     fn row_fault(&self, ui: &mut egui::Ui, place: Place, shown: Shown) {
         if let Some(fault) = &self.scenes.fault
             && shown.fault == Some(place)
         {
             design::gap(ui, design::Gap::XS);
-            design::message(ui, Tone::Warning, &fault.words);
+            let _ = design::outcome::row_fault(ui, &fault.what);
         }
     }
 
@@ -5145,7 +5176,7 @@ impl Sessions {
         if let Some(fault) = &self.scenes.fault
             && shown.fault == Some(Place::Footer)
         {
-            messages.outcome(Outcome::Refused(as_sentence(&fault.words)));
+            messages.outcome(FaultMessage::new(&fault.what));
         }
         if shown.added == Some(Place::Footer)
             && let Some(undo) = &self.scenes.added
@@ -5280,64 +5311,122 @@ impl Sessions {
         let (Some(draft), Some(note)) = (&mut self.draft, session) else {
             return;
         };
+        // The session as a refusal names it.
+        let within = self
+            .notes
+            .iter()
+            .find(|one| one.id == note)
+            .map(crate::sessions::Note::label)
+            .and_then(design::results::Name::new)
+            .unwrap_or(design::results::Name::fallback(
+                design::results::Fallback::ThatSession,
+            ));
         let scenes = &mut self.scenes;
         let (marks, folder) = (&mut self.plan_marks, self.folder.as_deref());
         scenes.fault = None;
-        let (result, place) = match act {
+        // What the act would not have done, to which scene, when it is refused.
+        let scene = |words: &str| {
+            design::results::Thing::new(
+                design::results::Kind::Scene,
+                design::results::Name::new(words).unwrap_or(design::results::Name::fallback(
+                    design::results::Fallback::ThisScene,
+                )),
+            )
+        };
+        use design::results::FailedAct;
+        let (result, place, failed) = match act {
             SceneAct::StartFight(_) | SceneAct::AddToLog(..) => return,
             SceneAct::Add(words) => {
                 let result = draft.apply(note, Apply::Now, |text| Some(add_scene(text, &words)));
+                let failed = FailedAct::NotAdded {
+                    what: scene(&plain_links(&words)),
+                    to: within.clone(),
+                };
                 if let Ok(undo) | Err(ActFault::NotSaved(_, undo)) = &result {
                     scenes.added = Some(undo.clone());
+                    scenes.added_words = plain_links(&words);
                     Self::mark_plan(marks, folder, PlanKind::SceneAdded);
                     if let Some(field) = &mut scenes.field {
                         field.clear();
                         field.focus = true;
                     }
                 }
-                (result.map(drop), Place::Field)
+                (result.map(drop), Place::Field, (failed, false))
             }
-            SceneAct::Tick(slot, task) => (
-                draft
-                    .apply(note, Apply::Now, |text| {
-                        change_line(
-                            text,
-                            task.at,
-                            &task.line,
-                            Some(&ticked(&task.line, !task.done)),
-                        )
-                    })
-                    .map(drop),
-                Place::Row(slot),
-            ),
+            SceneAct::Tick(slot, task) => {
+                let what = scene(&plain_links(&task.words));
+                let within = within.clone();
+                let failed = if task.done {
+                    FailedAct::NotUnticked { what, within }
+                } else {
+                    FailedAct::NotTicked { what, within }
+                };
+                let result = draft.apply(note, Apply::Now, |text| {
+                    change_line(
+                        text,
+                        task.at,
+                        &task.line,
+                        Some(&ticked(&task.line, !task.done)),
+                    )
+                });
+                (result.map(drop), Place::Row(slot), (failed, false))
+            }
             SceneAct::Remove(slot, line, task) => {
                 let result = draft.apply(note, Apply::Now, |text| {
                     change_line(text, task.at, &task.line, None)
                 });
+                let failed = FailedAct::NotRemoved {
+                    what: scene(&plain_links(&task.words)),
+                    from: within.clone(),
+                };
                 if let Ok(undo) | Err(ActFault::NotSaved(_, undo)) = &result {
                     scenes.removed = Some((line, plain_links(&task.words), undo.clone()));
                     Self::mark_plan(marks, folder, PlanKind::SceneRemoved);
                 }
-                (result.map(drop), Place::Row(slot))
+                (result.map(drop), Place::Row(slot), (failed, false))
             }
+            // The Undo of an add takes the scene back out of the note.
             SceneAct::UndoAdd => (
                 scenes.added.take().map_or(Ok(()), |undo| undo.undo(draft)),
                 Place::Field,
+                (
+                    FailedAct::NotRemoved {
+                        what: scene(&scenes.added_words),
+                        from: within.clone(),
+                    },
+                    true,
+                ),
             ),
-            SceneAct::UndoRemove(place) => (
-                scenes
-                    .removed
-                    .take()
-                    .map_or(Ok(()), |(_, _, undo)| undo.undo(draft)),
-                place,
-            ),
+            SceneAct::UndoRemove(place) => {
+                let removed = scenes.removed.take();
+                let failed = FailedAct::NotPutBack {
+                    what: scene(removed.as_ref().map_or("", |(_, words, _)| words.as_str())),
+                    into: within.clone(),
+                };
+                (
+                    removed.map_or(Ok(()), |(_, _, undo)| undo.undo(draft)),
+                    place,
+                    (failed, true),
+                )
+            }
         };
         if let Err(fault) = result {
+            let (failed, undo) = failed;
+            let what = if matches!(fault, ActFault::NotSaved(..)) {
+                SceneFault::NotSaved
+            } else {
+                let (cause, step) = kept::note_cause(&fault, undo);
+                SceneFault::Refused(design::results::Refusal::new(
+                    failed,
+                    cause,
+                    design::results::Recovery::First(step),
+                ))
+            };
             scenes.fault = Some(Fault {
-                words: fault.words().to_owned(),
                 met: draft.body.clone(),
                 place,
-                waits: matches!(fault, ActFault::NotSaved(..)),
+                waits: matches!(what, SceneFault::NotSaved),
+                what,
             });
         }
     }
@@ -8639,7 +8728,10 @@ mod tests {
         assert_eq!(read(), obsidian, "the outside edit stays");
         assert!(
             harness
-                .query_all_by_label("That line changed on disk.")
+                .query_all_by_label(
+                    "The scene “Wait for the tide” was not removed from Session 2: The Crossing. \
+                     The session note changed after the act. Check the session note first."
+                )
                 .next()
                 .is_some(),
             "a refused Undo scene says why after the field closed"
@@ -8661,7 +8753,11 @@ mod tests {
         assert_eq!(read(), changed);
         assert!(
             harness
-                .query_by_label("The note changed on disk. Choose in the note first.")
+                .query_by_label(
+                    "The scene “Pay the toll” was not unticked in Session 2: The Crossing. The \
+                     session note has unsaved words, and its file changed on disk. Choose which \
+                     words to keep in the session note first."
+                )
                 .is_some()
         );
 
@@ -8679,7 +8775,7 @@ mod tests {
         std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
         fs::set_permissions(dir.path(), permissions).unwrap();
         assert_eq!(read(), changed);
-        assert!(harness.query_by_label("Notes not saved").is_some());
+        assert!(harness.query_by_label("Notes not saved.").is_some());
         assert!(
             harness
                 .state()
@@ -8750,9 +8846,15 @@ mod tests {
             "the first scene changed on disk; clicking it must not tick the second scene"
         );
         let fault = page.scenes.fault.as_ref().expect("the act says why");
+        // M-N1.4: a refused scene act is a bounded refusal (ruling M7): the act, the scene and
+        // the session, the cause and the next step.
         assert_eq!(
-            (fault.words.as_str(), fault.place),
-            ("That line changed on disk.", Place::Row((0, 0)))
+            (fault.what.cause().as_str(), fault.place),
+            (
+                "The scene “Talk” was not ticked in Session 1: Review. That line of the session \
+                 note changed. Check the session note first.",
+                Place::Row((0, 0))
+            )
         );
         assert_eq!(
             page.draft.as_ref().unwrap().body,
@@ -8785,7 +8887,10 @@ mod tests {
         page.scene_act(SceneAct::Add("Second".into()), Some(note.id));
         std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
         fs::set_permissions(dir.path(), permissions).unwrap();
-        assert_eq!(page.scenes.fault.as_ref().unwrap().words, "Notes not saved");
+        assert_eq!(
+            page.scenes.fault.as_ref().unwrap().what.cause().as_str(),
+            "Notes not saved."
+        );
         assert!(page.draft.as_ref().unwrap().body.contains("- [ ] Second"));
         page.draft.as_mut().unwrap().save();
         assert!(

@@ -1055,6 +1055,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M-N1.3 (ruling M20): Read's embed whose source is gone, typed (`BodyMessage`), in
         // place of a `small_message`.
         ("src/sessions/carry.rs", "show_prepared", &[Ban::Body]),
+        // M-N1.4 (ruling M20): a scene act's typed fault where the DM acted, in place of a
+        // `design::message`.
+        ("src/sessions/plan.rs", "row_fault", &[Ban::Body]),
         // M-N1.1 (ruling M20): a result with the note's Undo at its own place
         // (`PlacedResult`), replacing three `undo_message` calls.
         (
@@ -1239,6 +1242,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // `design::message` or `small_message`.
         ("src/encounters/groups.rs", "belongs_to", &[Ban::Body]),
         ("src/encounters/groups.rs", "body_fault", &[Ban::Body]),
+        // Ruling M20 (lane E2): a draft's disk conflict takes its editor's place (the
+        // comparison follows), typed; it replaces `design::message` and `message_with_actions`.
+        ("src/encounters/disk.rs", "show", &[Ban::Body]),
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
@@ -1277,6 +1283,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/timeline.rs", "removal_follows_run", &[Ban::ByOwner(1)]),
         ("src/timeline/checks.rs", "check_fault", &[Ban::Body]),
         ("src/timeline/checks.rs", "check_notice", &[Ban::Body]),
+        // Ruling M20 (lane T0): Timeline.md's problems in the page's place and the session date
+        // notice, typed; each replaces `design::message`, `message_with_actions` or
+        // `message_with_action`.
+        ("src/timeline/page.rs", "problems", &[Ban::Body]),
+        ("src/timeline/page.rs", "dated_notice", &[Ban::Body]),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
         ("src/world/repair.rs", "cause", &[Ban::Words]),
         ("src/world.rs", "said", &[Ban::Words]),
@@ -1623,7 +1634,7 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/design/outcome.rs", 1),
             ("src/design/pane.rs", 5),
-            ("src/sessions/plan.rs", 2),
+            ("src/sessions/plan.rs", 1),
             ("src/timeline/page.rs", 1),
             ("src/world.rs", 1),
         ],

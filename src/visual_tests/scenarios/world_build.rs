@@ -8878,7 +8878,10 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
                     return;
                 }
                 let words = text.galley.job.text.replace('\u{a0}', " ");
-                if words == "Save or discard to switch campaign." {
+                // Its full words, or its short form where they do not fit (ruling M24).
+                if words == "Save or discard to switch campaign."
+                    || words == crate::design::save_row::SAVE_OR_DISCARD_SHORT
+                {
                     reason = Some(rect);
                 }
                 if words.ends_with("Round 2 · Paused") {
