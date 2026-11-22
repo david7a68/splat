@@ -135,6 +135,19 @@ fn menu_slot_icon(ui: &egui::Ui, word: &str) -> Option<&'static str> {
 pub(super) const SIDE_CHOICE: design::FieldName = crate::field_id!("side_choice");
 pub(super) const SIDE_OTHER: design::FieldName = crate::field_id!("side_other");
 
+/// The words an other-side field holds while it has the keyboard: as typed, over the stored
+/// side they were typed over, and the frame that last drew the field.
+#[derive(Clone)]
+struct HeldSide {
+    typed: String,
+    over: String,
+    frame: u64,
+}
+
+/// Every other-side field's held words, by the field's id: one entry, pruned of fields not drawn.
+type HeldSides = std::collections::HashMap<egui::Id, HeldSide>;
+const HELD_SIDES: &str = "side_other_held";
+
 /// What a side picker offers: a named side, or another side the DM types.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum SideChoice {
@@ -159,24 +172,56 @@ pub(super) fn side_control(
     let mut other = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(false);
     ui.horizontal(|ui| {
         if other {
-            let mut text = if custom {
-                design::reader::human_label(side)
-            } else {
-                String::new()
-            };
-            if design::line_field(
+            // While the field has the keyboard it keeps the words as typed, so its Undo history
+            // stays whole (review of PR 613); the side's stored form (`friends`, shown
+            // `Friends`) comes back when the field lets go. The words belong to one field (its
+            // id, which its owner's key makes) and to the stored side they were typed over: a side
+            // changed from outside (Undo of a discard) or a field not drawn in the last frame
+            // drops them (review of PR 695).
+            let field_id = other_field.id();
+            let frame = ui.ctx().cumulative_frame_nr();
+            let held = ui.data_mut(|data| {
+                let held = data.get_temp_mut_or_default::<HeldSides>(egui::Id::new(HELD_SIDES));
+                held.retain(|_, words| words.frame + 1 >= frame);
+                held.get(&field_id)
+                    .filter(|words| words.over == *side)
+                    .map(|words| words.typed.clone())
+            });
+            let mut text = held.unwrap_or_else(|| {
+                if custom {
+                    design::reader::human_label(side)
+                } else {
+                    String::new()
+                }
+            });
+            let field = design::line_field(
                 ui,
                 other_field,
                 &format!("Other side for {name}"),
                 &mut text,
                 "Side name",
                 design::S * 10.0,
-            )
-            .changed()
-                && !text.trim().is_empty()
-            {
+            );
+            if field.changed() && !text.trim().is_empty() {
                 *side = text.trim().to_lowercase();
             }
+            // Read before the data lock: `has_focus` takes the context's lock too.
+            let focused = field.has_focus();
+            ui.data_mut(|data| {
+                let held = data.get_temp_mut_or_default::<HeldSides>(egui::Id::new(HELD_SIDES));
+                if focused {
+                    held.insert(
+                        field_id,
+                        HeldSide {
+                            typed: text,
+                            over: side.clone(),
+                            frame,
+                        },
+                    );
+                } else {
+                    held.remove(&field_id);
+                }
+            });
         }
         let mut named: Vec<&str> = ["party", "enemies"]
             .into_iter()
@@ -1466,6 +1511,140 @@ mod iter_2_c_tests {
     use super::*;
     use crate::timeline::{Book, Kind, SessionLink};
     use std::path::PathBuf;
+
+    /// Review of PR 613 (P2): the other side's field keeps the words as typed while it has the
+    /// keyboard, so Ctrl+Z gives back the side it replaced; when it lets go, it shows the
+    /// side's stored form.
+    #[test]
+    fn the_other_side_field_keeps_its_undo_while_typing() {
+        use egui_kittest::kittest::Queryable;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 200.0))
+            .build_ui_state(
+                |ui, (side, shown): &mut (String, bool)| {
+                    let id = ui.make_persistent_id(("Side", "other_side"));
+                    ui.data_mut(|data| data.insert_temp(id, true));
+                    if !*shown {
+                        ui.label("Elsewhere");
+                        return;
+                    }
+                    side_control(
+                        ui,
+                        (
+                            SIDE_CHOICE.of(uuid::Uuid::nil()),
+                            SIDE_OTHER.of(uuid::Uuid::nil()),
+                        ),
+                        "Side",
+                        side,
+                        &[],
+                    );
+                    ui.label("Elsewhere");
+                },
+                ("rivals".to_owned(), true),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let field = |harness: &egui_kittest::Harness<'_, (String, bool)>| {
+            harness
+                .get_by_role_and_label(egui::accesskit::Role::TextInput, "Other side for Side")
+                .value()
+                .unwrap_or_default()
+        };
+        assert_eq!(field(&harness), "Rivals");
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Other side for Side")
+            .focus();
+        harness.run_steps(2);
+        let key = |key, modifiers| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        };
+        harness.input_mut().events.extend([
+            key(egui::Key::A, egui::Modifiers::COMMAND),
+            egui::Event::Text("friends".into()),
+        ]);
+        harness.run_steps(3);
+        assert_eq!(harness.state().0, "friends");
+        assert_eq!(
+            field(&harness),
+            "friends",
+            "the words stay as typed while typing"
+        );
+        harness
+            .input_mut()
+            .events
+            .push(key(egui::Key::Z, egui::Modifiers::COMMAND));
+        harness.run_steps(3);
+        assert_eq!(
+            field(&harness),
+            "Rivals",
+            "Ctrl+Z gives back the side it replaced"
+        );
+        assert_eq!(harness.state().0, "rivals");
+        // When the field lets go, it shows the side's stored form.
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::Text("x".into()));
+        harness.run_steps(2);
+        harness.get_by_label("Elsewhere").click();
+        harness
+            .input_mut()
+            .events
+            .push(key(egui::Key::Escape, egui::Modifiers::NONE));
+        harness.run_steps(3);
+        assert_eq!(harness.state().0, "rivalsx");
+        assert_eq!(field(&harness), "Rivalsx");
+        // Review of PR 695 (P1): the held words belong to the side they were typed over. A side
+        // changed from outside while the field keeps the keyboard (Undo of a discard, pressed
+        // through accessibility) shows in the field, and the next letter goes after it.
+        let focus = |harness: &mut egui_kittest::Harness<'_, (String, bool)>| {
+            harness
+                .get_by_role_and_label(egui::accesskit::Role::TextInput, "Other side for Side")
+                .focus();
+            harness.run_steps(2);
+        };
+        focus(&mut harness);
+        assert_eq!(field(&harness), "Rivalsx");
+        harness.state_mut().0 = "friends".into();
+        harness.run_steps(2);
+        assert_eq!(
+            field(&harness),
+            "Friends",
+            "the outside change shows in the field"
+        );
+        harness.input_mut().events.extend([
+            key(egui::Key::End, egui::Modifiers::NONE),
+            egui::Event::Text("x".into()),
+        ]);
+        harness.run_steps(2);
+        assert_eq!(
+            harness.state().0,
+            "friendsx",
+            "typing goes after the side as it is"
+        );
+        // P2: a field not drawn in a frame loses its held words; drawn again, it shows the
+        // stored form, not the words typed before it went.
+        harness.input_mut().events.extend([
+            key(egui::Key::A, egui::Modifiers::COMMAND),
+            egui::Event::Text("foes".into()),
+        ]);
+        harness.run_steps(2);
+        assert_eq!(field(&harness), "foes");
+        harness.state_mut().1 = false;
+        harness.run_steps(2);
+        harness.state_mut().1 = true;
+        harness.step();
+        assert_eq!(
+            field(&harness),
+            "Foes",
+            "a hidden field’s held words are gone"
+        );
+        assert_eq!(harness.state().0, "foes");
+    }
 
     /// F1, FB2, FB6: a Ready row's line ends with the difficulty in its one form at every width;
     /// the detail gives way first, by whole words, and a line with room keeps it whole.
