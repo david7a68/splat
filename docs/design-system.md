@@ -2154,15 +2154,18 @@ adds, through `Draft::apply_with_properties` and in one save, the recap as one e
 `![[<note>#What happened]]` (or the processed recap under `> This draft was written automatically. Check it
 against your memory.`, which the embed replaces once What happened has prose), the plan lines still to come
 with empty boxes and the open threads, each below what its heading holds and never twice, and the properties
-`carried_from` and `carried_parts`. The result is an `undo_message` in the Session page's message footer (as
+`carried_from` and `carried_parts`. The result is a kept line in the Session page's message footer (as
 every result of that page, so the Last time line, the tabs and the plan never move), success tone, naming only
-what it added, with `Undo carry over`, which puts back the exact text and properties. The result belongs to
+what it added, with `Undo carry over from <session>`, which puts back the exact text and properties; its order
+and its Undo's ticket come from the page's store (`Carries::record`). The result belongs to
 the new note by its ID: another session or page leaves it, it shows also when the last session can no longer be
-found, and any other change of the note's text ends it. A refusal shows in the same footer, in a warning. Read draws an embed of a session note's heading as that heading's words under a
+found, and any other change of the note's text ends it. A refusal shows in the same footer as a bounded
+`Refusal` (`Nothing was carried over from <session> into <session>.`, its cause and its next step; an
+unreadable note is an error, every other cause a warning). Read draws an embed of a session note's heading as that heading's words under a
 `Type::Small` muted `From` and, one `S` after it in every layout, a small link to the session. Its target is resolved as every campaign link is
 (`ContentIndex::resolve_link`), with its folder when it has one: a target that two notes share stays a link,
 and so does an embed inside a callout or a list item. A target that names nothing, also after a rename outside
-Obsidian, is a warning `small_message`, `The recap’s source is gone: <target> › <heading>. Link the session
+Obsidian, is a compact warning `BodyMessage` (`EmbedGone`), `The recap’s source is gone: <target> › <heading>. Link the session
 again in Write.`, and the line stays in the note. A session note at the target's whole path (as Obsidian reads
 `Archive/Same`) that has the heading keeps it a link: the index has not read that note yet, or the target names
 part of its path. A note with only the same last name in another folder does not; Splat never rewrites an embed, and the DM links again by hand. Read's words are prepared

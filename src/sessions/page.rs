@@ -6916,7 +6916,7 @@ impl Sessions {
                 )),
             );
         }
-        self.carry_in_messages(&mut messages);
+        self.carry_in_messages(frame, &mut messages);
         messages
     }
 
@@ -7069,7 +7069,7 @@ impl Sessions {
             SessionAct::PlayThisOne => self.play_this_one(),
             SessionAct::Open(session) => self.select(session),
             SessionAct::OpenSettings => self.wants_processing_settings = true,
-            SessionAct::UndoCarry(session) => self.undo_carry(session),
+            SessionAct::UndoCarry(session) => self.undo_carry(session, press.ticket),
             SessionAct::UndoDrop => {
                 if let (Some(draft), Some(ticket)) = (&mut self.draft, press.ticket) {
                     let _ = self.dropped.undo_by(ticket, |_| {
