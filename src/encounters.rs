@@ -2931,9 +2931,45 @@ struct SearchRoster<'a> {
     already: &'a dyn Fn(&Creature) -> bool,
     /// The creatures the roster's rows name: what `already` reads, so a change of the roster
     /// ranks again (with no words, a party member on the roster is left out). Empty for a group.
-    on_roster: &'a [Uuid],
+    on_roster: OnRoster<'a>,
     /// Where a press of a copied note's repair says what it did (FF8), for the page's store.
     separated: &'a std::cell::Cell<Option<Separated>>,
+}
+
+/// The creatures the roster's rows name, as a search's ranking reads them (issue #518): an
+/// encounter's slots, read in place, or a list of ids (a group's none, a test's). A repaint
+/// compares them with the kept ranking's copy in one walk that allocates nothing; a copy is made
+/// only when the ranking is made again.
+#[derive(Clone, Copy)]
+enum OnRoster<'a> {
+    Slots(&'a [Slot]),
+    Ids(&'a [Uuid]),
+}
+
+impl OnRoster<'_> {
+    fn slot_creature(slot: &Slot) -> Option<Uuid> {
+        slot.creature.as_ref().and_then(|reference| reference.id)
+    }
+
+    /// Whether the roster names `kept`, in order.
+    fn names(self, kept: &[Uuid]) -> bool {
+        match self {
+            Self::Ids(ids) => ids == kept,
+            Self::Slots(slots) => slots
+                .iter()
+                .filter_map(Self::slot_creature)
+                .eq(kept.iter().copied()),
+        }
+    }
+
+    fn to_vec(self) -> Vec<Uuid> {
+        #[cfg(any(test, feature = "test-support"))]
+        ROSTER_COPIES.with(|copies| copies.set(copies.get() + 1));
+        match self {
+            Self::Ids(ids) => ids.to_vec(),
+            Self::Slots(slots) => slots.iter().filter_map(Self::slot_creature).collect(),
+        }
+    }
 }
 
 /// The creatures a search offers: the campaign's read (`Snapshot::creatures`, by its revision),
@@ -2960,15 +2996,15 @@ struct SearchKey {
     unlinked: bool,
     query: String,
     filter: Filter,
-    on_roster: Vec<Uuid>,
 }
 
 /// A search's ranking, kept for its view (the field's id) until its key changes: the creatures
 /// found, in the one order, by their place in the list; how many match as typed (no typo); and
 /// whether one of them cannot be added (its rows are taller).
-#[derive(Clone)]
 struct SearchRanked {
     key: SearchKey,
+    /// The roster's creatures this ranking read (`OnRoster::names` checks them on a repaint).
+    on_roster: Vec<Uuid>,
     found: Arc<Vec<usize>>,
     as_typed: usize,
     unavailable: bool,
@@ -2980,6 +3016,7 @@ impl SearchRanked {
         list: SearchList<'_>,
         filter: &Filter,
         already: &dyn Fn(&Creature) -> bool,
+        on_roster: Vec<Uuid>,
     ) -> Self {
         let parsed = Query::parse(&key.query);
         let typed = crate::matching::Typed::new(&parsed.words);
@@ -3023,6 +3060,7 @@ impl SearchRanked {
             .any(|&at| list.creatures[at].unavailable.is_some());
         Self {
             key,
+            on_roster,
             found: Arc::new(found),
             as_typed,
             unavailable,
@@ -3035,6 +3073,8 @@ impl SearchRanked {
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static SEARCH_RANKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many times a search copied the roster's creatures for its ranking (issue #518).
+    static ROSTER_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 struct Snapshot {
@@ -5544,7 +5584,9 @@ impl Encounters {
                 design::save_row::Changed::No
             },
             design::save_row::Primary::Elsewhere,
-        );
+        )
+        // Issue #553: the encounter's own Discard can show beside it.
+        .discard_named("Discard creature changes");
         if editor.error.is_some() {
             state = state.not_saved();
         }
@@ -7941,7 +7983,7 @@ impl Encounters {
                 peek,
                 SearchRoster {
                     already: &|_| false,
-                    on_roster: &[],
+                    on_roster: OnRoster::Ids(&[]),
                     separated,
                 },
             );
@@ -7950,14 +7992,6 @@ impl Encounters {
             }
             return;
         }
-        // What `already` reads of the roster, for the kept ranking's key: the creatures its
-        // rows name (as many as the roster's rows, which this frame draws anyway).
-        let on_roster: Vec<Uuid> = draft
-            .setup
-            .roster
-            .iter()
-            .filter_map(|slot| slot.creature.as_ref().and_then(|reference| reference.id))
-            .collect();
         let chosen = Self::creature_search(
             ui,
             snapshot.search_list(false),
@@ -7966,7 +8000,8 @@ impl Encounters {
             peek,
             SearchRoster {
                 already: &|c: &Creature| snapshot.already_on_roster(draft, c),
-                on_roster: &on_roster,
+                // What `already` reads of the roster: the creatures its rows name.
+                on_roster: OnRoster::Slots(&draft.setup.roster),
                 separated,
             },
         );
@@ -8034,16 +8069,23 @@ impl Encounters {
             unlinked: list.unlinked,
             query: query.clone(),
             filter: filter.clone(),
-            on_roster: roster.on_roster.to_vec(),
         };
+        // Kept behind an `Arc`, so a repaint's read copies nothing; the roster is compared in
+        // place (issue #518).
         let kept_id = response.id.with("creature_search_ranked");
         let ranked = match ui
-            .data(|data| data.get_temp::<SearchRanked>(kept_id))
-            .filter(|kept| kept.key == key)
+            .data(|data| data.get_temp::<Arc<SearchRanked>>(kept_id))
+            .filter(|kept| kept.key == key && roster.on_roster.names(&kept.on_roster))
         {
             Some(kept) => kept,
             None => {
-                let ranked = SearchRanked::rank(key, list, &filter, roster.already);
+                let ranked = Arc::new(SearchRanked::rank(
+                    key,
+                    list,
+                    &filter,
+                    roster.already,
+                    roster.on_roster.to_vec(),
+                ));
                 ui.data_mut(|data| data.insert_temp(kept_id, ranked.clone()));
                 ranked
             }
@@ -9365,10 +9407,12 @@ impl Encounters {
     ) {
         match result {
             Ok(warning) => {
+                // The settings as the file holds them (issue #519): the reload that follows reads
+                // them back, so `Saved` stays.
                 self.options_saved = self
                     .snapshot
                     .as_ref()
-                    .map(|snapshot| (active.id, snapshot.options.clone()));
+                    .map(|snapshot| (active.id, snapshot.options.as_saved()));
                 self.saved = true;
                 self.reload(ctx, active.clone(), modules);
                 self.error = warning;
@@ -9654,7 +9698,7 @@ mod tests {
                         &mut None,
                         SearchRoster {
                             already: &|c: &Creature| roster.contains(&c.id),
-                            on_roster: roster,
+                            on_roster: OnRoster::Ids(roster),
                             separated: &std::cell::Cell::new(None),
                         },
                     );
@@ -9673,8 +9717,14 @@ mod tests {
         );
         let seen = ranked();
         assert!(seen > 0, "the words ranked");
+        let copies = ROSTER_COPIES.with(std::cell::Cell::get);
         harness.run_steps(5);
         assert_eq!(ranked(), seen, "an unchanged repaint visits no creature");
+        assert_eq!(
+            ROSTER_COPIES.with(std::cell::Cell::get),
+            copies,
+            "#518: an unchanged repaint copies no roster ids"
+        );
         harness.state_mut().1 = "dread".to_owned();
         harness.run_steps(2);
         assert!(ranked() > seen, "new words rank again");
@@ -9737,7 +9787,7 @@ mod tests {
                     &mut None,
                     SearchRoster {
                         already: &|_| false,
-                        on_roster: &[],
+                        on_roster: OnRoster::Ids(&[]),
                         separated: &std::cell::Cell::new(None),
                     },
                 );
@@ -9806,7 +9856,7 @@ mod tests {
                         &mut None,
                         SearchRoster {
                             already: &|_| true,
-                            on_roster: &[],
+                            on_roster: OnRoster::Ids(&[]),
                             separated: &std::cell::Cell::new(None),
                         },
                     );
@@ -10191,7 +10241,7 @@ mod tests {
                             &mut None,
                             SearchRoster {
                                 already: &|_| false,
-                                on_roster: &[],
+                                on_roster: OnRoster::Ids(&[]),
                                 separated: &separated,
                             },
                         );
@@ -10417,7 +10467,7 @@ mod tests {
                     &mut None,
                     SearchRoster {
                         already: &|_| false,
-                        on_roster: &[],
+                        on_roster: OnRoster::Ids(&[]),
                         separated: &std::cell::Cell::new(None),
                     },
                 );
@@ -10656,7 +10706,17 @@ mod tests {
                 Some(focus),
                 "The same notes control keeps focus"
             );
-            let current = egui::scroll_area::State::load(&harness.ctx, scroll_id)
+            // Issue #542: the column recorded after the resize is the same column, with the same
+            // offset; a new column that started at its top would fail here.
+            let recorded = harness
+                .ctx
+                .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(draft.borrow().id)))
+                .expect("the roster column's scroll id after the resize");
+            assert_eq!(
+                recorded, scroll_id,
+                "At {width}, the roster keeps its column"
+            );
+            let current = egui::scroll_area::State::load(&harness.ctx, recorded)
                 .unwrap()
                 .offset
                 .y;
@@ -10953,7 +11013,8 @@ mod tests {
             .next()
             .expect("the save row says Unsaved")
             .rect();
-        let discard = harness.get_by_label("Discard").rect();
+        // Issue #553: its Discard has its own accessible name, apart from the encounter's.
+        let discard = harness.get_by_label("Discard creature changes").rect();
         assert!(
             harness.query_by_label("Done with this creature").is_none()
                 && word.right() <= discard.left()
@@ -11814,6 +11875,29 @@ mod tests {
         old.options.folder = "Being typed".into();
         new.keep_edited_settings(&old);
         assert_eq!(new.options.folder, "Being typed", "the edit stays");
+
+        // Issue #519: a folder saved with outer spaces keeps its `Saved`. Save writes it
+        // trimmed, and the save row's record is the settings as the file holds them, so the
+        // reload that follows (which reads them back) does not end it.
+        let mut encounters = Encounters {
+            active: Some(active.clone()),
+            snapshot: Some(Snapshot::load(&active, &[]).unwrap()),
+            ..Default::default()
+        };
+        encounters.snapshot.as_mut().unwrap().options.folder = "Runs  ".into();
+        let result = commit_options(
+            encounters.snapshot.as_ref().unwrap(),
+            &active,
+            OptionsCommit::Save,
+        );
+        assert!(result.is_ok(), "the folder saves: {result:?}");
+        encounters.options_committed(&egui::Context::default(), &active, Vec::new(), result);
+        let reread = Snapshot::load(&active, &[]).unwrap();
+        assert_eq!(
+            encounters.options_saved.map(|(_, saved)| saved),
+            Some(reread.saved_options),
+            "#519: the record is what the file holds, so the reload keeps Saved"
+        );
     }
 
     /// Restored behind the group editor, the encounter draft could be neither reached nor closed.

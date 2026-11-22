@@ -82,6 +82,15 @@ impl Default for Options {
     }
 }
 impl Options {
+    /// These settings as Save writes them, and a read of the file gives them back: the folder
+    /// without its outer spaces (issue #519).
+    pub fn as_saved(&self) -> Self {
+        Self {
+            folder: self.folder.trim().to_owned(),
+            ..self.clone()
+        }
+    }
+
     pub fn load(campaign: &Campaign, catalogue: &Catalogue) -> Result<Self, String> {
         let document = CampaignDocument::load(campaign)?;
         let mut entry = Entry::parse(&document.path, &document.text)?;
