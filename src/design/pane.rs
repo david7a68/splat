@@ -684,8 +684,9 @@ impl EditorRegion<'_> {
         // that pass's view height and offset. The region is the one writer of its offset, and
         // it writes at most once per pass, before the pass lays out, from the view's height NOW
         // (no animation: the first frame shown has the caret in view):
-        // - the view's height changed under the caret (the footer gained or lost a line, the
-        //   window changed): the least scroll that keeps the caret in view;
+        // - the view's height changed under a caret that was in view (the footer gained or lost
+        //   a line, the window changed): the least scroll that keeps the caret in view; a caret
+        //   the DM scrolled away from stays away (their wheel is never pulled back);
         // - a reveal is pending (the caret moved outside the view in the last pass): the caret
         //   centred in the view as tall as it is now.
         // Otherwise nothing, so the DM's own wheel is never pulled back.
@@ -743,12 +744,13 @@ impl EditorRegion<'_> {
             Some(EditorJump::Top) => Some(0.0),
             Some(EditorJump::Show { top, bottom }) => Some(((top + bottom - max) / 2.0).max(0.0)),
             None => kept.and_then(|(_, caret_top, caret_bottom, view, offset)| {
+                let was_in_view = caret_top >= offset - 0.5 && caret_bottom <= offset + view + 0.5;
                 follow_caret(
                     caret_top..caret_bottom,
                     offset,
                     max,
                     reveal,
-                    (view - max).abs() > 0.5,
+                    was_in_view && (view - max).abs() > 0.5,
                 )
             }),
         };
