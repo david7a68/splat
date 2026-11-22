@@ -1268,13 +1268,24 @@ impl ScrollColumn {
     /// The area for this pass in `ui` (the `Ui` it is shown in), and its persistent key for a
     /// reveal (`design::reveal`): a reveal's offset, written in the last frame, wins once.
     fn area_in(&self, ui: &Ui) -> (egui::ScrollArea, super::reveal::Column) {
-        let column = super::reveal::Column {
+        let mut column = super::reveal::Column {
             key: ui.make_persistent_id(("design_reveal_column", self.id)),
             hosts: self.hosts_reveals,
             area: ui.make_persistent_id(self.id),
+            applied: None,
         };
         let mut area = self.area();
-        if let Some(offset) = super::reveal::take_offset(ui, column) {
+        // The column's queued request (a region's or a jump: layout 11c) waits while the column's
+        // own correction (a held press, `from_top`) sets the offset.
+        column.applied = self
+            .offset
+            .is_none()
+            .then(|| super::reveal::take_queued(ui, column.key, column.area))
+            .flatten();
+        if let Some(offset) = column
+            .applied
+            .or_else(|| super::reveal::take_offset(ui, column))
+        {
             area = area.vertical_scroll_offset(offset);
         }
         (area, column)
