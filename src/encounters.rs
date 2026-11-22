@@ -3723,7 +3723,7 @@ impl DraftUndo {
                 let (words, step) = if group.file_gone() {
                     (
                         disk::removed_with_draft(&group.name()),
-                        UndoStep::verb(Verb::Remove),
+                        UndoStep::of(Verb::Remove, group.name()),
                     )
                 } else if *delete {
                     (
