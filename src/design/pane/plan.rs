@@ -171,6 +171,9 @@ pub(in crate::design) struct BlockPlan {
     /// A block a recipe laid out is in it: the body is a measured one (layout 11c), drawn from
     /// the mask before paint.
     measured: bool,
+    /// Each measured block's stable key, in order (`None` for a row of the first vocabulary): a
+    /// request names a block by it.
+    keys: Vec<Option<egui::Id>>,
 }
 
 /// Where each block starts and where a section may split. Read one entry at a time through
@@ -339,6 +342,10 @@ pub(in crate::design) struct Mask {
     pub no_whole: Option<NoWholeBlock>,
     /// Every unit taller than the view that meets it (two at most: one at each edge).
     pub too_tall: Vec<TooTall>,
+    /// The parts of the blocks the view's edges cut that are drawn: each eligible unit of a split
+    /// section (L6) and each `TooTall` unit, as the block and the content's span of that part. A
+    /// block cut at an edge is drawn only here, clipped to its parts; one with none is not drawn.
+    pub parts: Vec<(usize, f32, f32)>,
     /// The index entries this mask read: every one (its searches, the eligible span, the cut
     /// blocks' spans and boundaries, and the routes).
     pub read: usize,
@@ -366,9 +373,23 @@ impl BlockPlan {
             .windows(2)
             .map(|pair| pair[1] - pair[0])
             .fold(0.0, f32::max);
-        let measured = blocks
+        let keys: Vec<Option<egui::Id>> = blocks
             .iter()
-            .any(|block| matches!(block, Block::Measured(_)));
+            .map(|block| match block {
+                Block::Measured(measured) => Some(measured.key),
+                _ => None,
+            })
+            .collect();
+        let measured = keys.iter().any(Option::is_some);
+        // Review of PR 757 (P2): a key names one block; two blocks of one key would share their
+        // widget ids and a request could not tell them apart.
+        debug_assert!(
+            {
+                let mut seen = std::collections::HashSet::new();
+                keys.iter().flatten().all(|key| seen.insert(*key))
+            },
+            "two measured blocks of one region share a key"
+        );
         work.builds += 1;
         work.blocks_measured += blocks.len();
         work.bytes_indexed +=
@@ -378,6 +399,7 @@ impl BlockPlan {
             tallest,
             scale: env.scale,
             measured,
+            keys,
         }
     }
 
@@ -397,6 +419,7 @@ impl BlockPlan {
             },
             scale,
             measured: false,
+            keys: vec![None; blocks.len()],
         }
     }
 
@@ -412,6 +435,22 @@ impl BlockPlan {
     /// Whether a recipe laid out one of its blocks (layout 11c): a measured body.
     pub(in crate::design) fn measured(&self) -> bool {
         self.measured
+    }
+
+    /// Block `at`'s stable key, when a recipe laid it out.
+    pub(in crate::design) fn key(&self, at: usize) -> Option<egui::Id> {
+        self.keys[at]
+    }
+
+    /// Block `at`'s head (its semantic boundary from its top), if it has one.
+    pub(in crate::design) fn head(&self, at: usize) -> Option<f32> {
+        Reader::new(self).head(at)
+    }
+
+    /// The block whose key is `key`, if the plan holds it: a scan, made only when a request is
+    /// resolved, never on a quiet frame.
+    pub(in crate::design) fn find(&self, key: egui::Id) -> Option<usize> {
+        self.keys.iter().position(|kept| *kept == Some(key))
     }
 
     /// The scale the plan was measured at: its comparisons are on that physical pixel grid.
@@ -559,6 +598,7 @@ impl BlockPlan {
             eligible: (start < end).then(|| (read.top(start), read.top(end))),
             no_whole: None,
             too_tall: Vec::new(),
+            parts: Vec::new(),
             read: 0,
         };
         // The blocks cut by the view's top and bottom edges. Each of their units is checked
@@ -576,8 +616,10 @@ impl BlockPlan {
                             Some((low, high)) => (low.min(unit.from), high.max(unit.to)),
                             None => (unit.from, unit.to),
                         });
+                        mask.parts.push((at, unit.from, unit.to));
                     }
                 } else if !self.at_or_before(unit.to, top) && !self.at_or_after(unit.from, bottom) {
+                    mask.parts.push((at, unit.from, unit.to));
                     mask.too_tall.push(TooTall {
                         owner,
                         block: at,

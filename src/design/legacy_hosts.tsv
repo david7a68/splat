@@ -91,6 +91,7 @@ row-register	src/campaign_content.rs	whole_row	1	Campaign
 row-register	src/design/components.rs	row	1	design	design implementation boundary
 row-register	src/dndbeyond.rs	DndBeyond::show_import	1	Settings
 row-register	src/encounter_run/view.rs	Run::group_list	1	Run
+row-register	src/encounters/groups.rs	register_whole	1	Encounters	a group form's whole block (a choice row, a member with its count line, its notes) for the pane's whole-row cut (layout 11c, SB1/AB1; raised)
 row-register	src/encounters/list.rs	list_row	1	Encounters
 row-register	src/loot_editor.rs	line_row	1	Encounters
 row-register	src/party_support/sheets.rs	sheet_rect	1	Party	a sheet row (a tile, a fact line, a line of columns) with the heading above it is one block for the pane's whole-row cut (layout 11a; raised)
@@ -108,6 +109,7 @@ row-clip	src/design/components.rs	draft_comparison_labeled	1	design	design imple
 row-clip	src/design/layout.rs	MenuPopup::show	1	design	design implementation boundary
 row-clip	src/design/pane.rs	Footer::place	1	design	design implementation boundary
 row-clip	src/design/pane.rs	whole_rows	2	design	design implementation boundary
+row-clip	src/design/pane/region.rs	clip_to_part	1	design	a block an edge cuts draws only its parts (layout 11c A1b, review of PR 743; raised)
 row-clip	src/design/turn_heading.rs	paint	1	design	design implementation boundary
 row-clip	src/encounter_run/view.rs	Run::roster	4	Run
 row-clip	src/encounters/groups.rs	Encounters::group_editor_view	1	Encounters
@@ -136,6 +138,7 @@ scroll-request	src/design/components.rs	reveal_least	1	design	design implementat
 scroll-request	src/design/components.rs	scroll_part	2	design	design implementation boundary
 scroll-request	src/design/pane.rs	EditorRegion::editor	1	design	design implementation boundary
 scroll-request	src/design/pane.rs	reveal_focus	1	design	design implementation boundary
+scroll-request	src/design/reveal.rs	settle_queued	1	design	no egui target writes a column after a region request (layout 11c A1b; raised)
 scroll-request	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run	named follow-selection exception (PR 403)
 scroll-request	src/encounter_run/view.rs	Run::group_row	1	Run
 scroll-request	src/encounter_run/view.rs	Run::roster	1	Run

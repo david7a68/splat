@@ -100,6 +100,11 @@ pub struct LaidUi<'u> {
 }
 
 impl LaidUi<'_> {
+    /// How many control slots the layout has.
+    pub fn slots(&self) -> usize {
+        self.laid.slots.len()
+    }
+
     /// Slot `at`'s rect, on the screen.
     pub fn slot(&self, at: usize) -> Rect {
         self.laid.slots[at].translate(self.ui.max_rect().min.to_vec2())
@@ -155,59 +160,135 @@ pub(in crate::design) fn render(
     true
 }
 
-/// Where a block's paint and widgets start on its layer, to check them after it draws.
+/// Where a block's paint and widgets start on every layer it may paint to, to check them after
+/// it draws (debug and test builds).
 struct Bounds {
-    layer: egui::LayerId,
-    shapes: usize,
-    widgets: usize,
+    starts: Vec<(egui::LayerId, usize, usize)>,
 }
 
 impl Bounds {
-    fn start(ui: &Ui) -> Self {
-        let layer = ui.layer_id();
-        Self {
-            layer,
-            shapes: ui
-                .ctx()
+    /// The layers a block's renderer may paint to: its own, and every layer egui knows in this
+    /// pass (each `Area`; outside `src/design/` a layer comes only from a design part, as Clippy
+    /// bans `Ui::with_layer_id` and `Painter::new`), except a popup's (`Foreground`, `Tooltip`,
+    /// `Debug`: a menu, a tooltip or a drag ghost is a design part that leaves its block by rule).
+    fn layers(ui: &Ui) -> Vec<egui::LayerId> {
+        let mut layers: Vec<egui::LayerId> = ui.ctx().memory(|memory| memory.layer_ids().collect());
+        if !layers.contains(&ui.layer_id()) {
+            layers.push(ui.layer_id());
+        }
+        layers.retain(|layer| {
+            !matches!(
+                layer.order,
+                egui::Order::Foreground | egui::Order::Tooltip | egui::Order::Debug
+            )
+        });
+        layers
+    }
+
+    fn counts(ui: &Ui, layer: egui::LayerId) -> (usize, usize) {
+        (
+            ui.ctx()
                 .graphics(|graphics| graphics.get(layer).map_or(0, |list| list.next_idx().0)),
-            widgets: ui
-                .ctx()
+            ui.ctx()
                 .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count()),
+        )
+    }
+
+    fn start(ui: &Ui) -> Self {
+        if !cfg!(debug_assertions) {
+            return Self { starts: Vec::new() };
+        }
+        Self {
+            starts: Self::layers(ui)
+                .into_iter()
+                .map(|layer| {
+                    let (shapes, widgets) = Self::counts(ui, layer);
+                    (layer, shapes, widgets)
+                })
+                .collect(),
         }
     }
 
-    /// Debug and test builds: every shape painted since `start` (its visual bounds) and every
-    /// widget added lies in `rect`, to one physical pixel.
+    /// Debug and test builds: every shape painted since `start` on any of those layers (its
+    /// visual bounds) and every widget added lies in `rect`, to one physical pixel.
     fn check(self, ui: &Ui, rect: Rect) {
         if !cfg!(debug_assertions) {
             return;
         }
         let room = rect.expand(1.0 / ui.ctx().pixels_per_point() + 0.01);
-        let painted = ui.ctx().graphics(|graphics| {
-            graphics.get(self.layer).map_or(Vec::new(), |list| {
-                list.all_entries()
-                    .skip(self.shapes)
-                    .map(|clipped| clipped.shape.visual_bounding_rect())
-                    .filter(|bounds| bounds.is_positive())
+        for layer in Self::layers(ui) {
+            let (shapes, widgets) = self
+                .starts
+                .iter()
+                .find(|(kept, ..)| *kept == layer)
+                .map_or((0, 0), |(_, shapes, widgets)| (*shapes, *widgets));
+            let painted: Vec<Rect> = ui.ctx().graphics(|graphics| {
+                graphics.get(layer).map_or(Vec::new(), |list| {
+                    list.all_entries()
+                        .skip(shapes)
+                        .map(|clipped| clipped.shape.visual_bounding_rect())
+                        .filter(|bounds| bounds.is_positive())
+                        .collect()
+                })
+            });
+            let placed: Vec<Rect> = ui.ctx().viewport(|viewport| {
+                viewport
+                    .this_pass
+                    .widgets
+                    .get_layer(layer)
+                    .skip(widgets)
+                    .map(|widget| widget.rect)
                     .collect()
-            })
-        });
-        let widgets: Vec<Rect> = ui.ctx().viewport(|viewport| {
-            viewport
-                .this_pass
-                .widgets
-                .get_layer(self.layer)
-                .skip(self.widgets)
-                .map(|widget| widget.rect)
-                .collect()
-        });
-        for bounds in painted.iter().chain(&widgets) {
-            assert!(
-                room.contains_rect(*bounds),
-                "a laid block paints or places {bounds:?} outside its rect {rect:?}"
-            );
+            });
+            for bounds in painted.iter().chain(&placed) {
+                assert!(
+                    room.contains_rect(*bounds),
+                    "a laid block paints or places {bounds:?} on {layer:?} outside its rect {rect:?}"
+                );
+            }
         }
     }
+}
+
+/// A test recipe of fixed geometry: `texts` (each wrapped beside the control column) at their
+/// tops, a block of `size` with its `head`, and a control slot of `control` px at the right edge
+/// at each of `slots`' tops.
+#[cfg(test)]
+pub(in crate::design) fn test_block(
+    ui: &Ui,
+    key: impl std::hash::Hash,
+    texts: &[(&str, f32)],
+    (size, head): (Vec2, Option<f32>),
+    slots: &[f32],
+    control: f32,
+) -> Laid {
+    let font = crate::design::tokens::Type::Body.font(ui);
+    let wrap = size.x - control - crate::design::tokens::S;
+    let texts = texts
+        .iter()
+        .map(|(text, top)| LaidText {
+            at: egui::pos2(0.0, *top),
+            galley: ui.fonts_mut(|fonts| {
+                fonts.layout((*text).to_owned(), font.clone(), egui::Color32::GRAY, wrap)
+            }),
+        })
+        .collect();
+    let height = crate::design::theme::INTERACT_HEIGHT;
+    Laid::new(
+        Id::new(key),
+        size,
+        head,
+        texts,
+        slots
+            .iter()
+            .map(|top| {
+                Rect::from_min_size(
+                    egui::pos2(size.x - control, *top),
+                    egui::vec2(control, height),
+                )
+            })
+            .collect(),
+    )
 }
 
 /// A test recipe: a block of `lines` lines of `text` at `width`, with one control slot of
@@ -252,7 +333,8 @@ mod tests {
     use crate::design::{
         memo::Revised,
         outcome::{Messages, NoPress, PaneFrame},
-        pane::{BlockRegion, Body, RegionState},
+        pane::{BlockRegion, Body, Navigation, RegionState},
+        reveal::JumpTo,
     };
     use egui_kittest::{Harness, kittest::Queryable};
 
@@ -270,6 +352,26 @@ mod tests {
         overflow: Option<usize>,
         /// Lay out the blocks again, without giving the plan the new layouts.
         stale: bool,
+        /// A section 300 px tall with a 150 px head (`Head k` over `Body k`, a control on each).
+        split: Option<usize>,
+        /// A block of this many controls, 80 px apart.
+        controls: Option<(usize, usize)>,
+        /// A control paints outside its block on a layer of its own.
+        stray: Option<usize>,
+        /// Every block drawn asks egui to scroll to the region's top (a raw `scroll_to_rect`).
+        pull: bool,
+        /// Another scroll column beside the pane (its rect in this pass).
+        beside: Option<Rect>,
+        /// Block 1 takes block 0's key.
+        duplicate: bool,
+        /// A typed jump to a block's top, asked once in the pane's column before the region
+        /// draws, and one after it.
+        jumps: (Option<usize>, Option<usize>),
+        /// The least scroll that shows a block (`bring_into_view`), asked once before the
+        /// region draws.
+        bring: Option<usize>,
+        /// What `dm_scrolls` (a retry's rule, PR 780) said in the pane's column in the last pass.
+        scrolls: bool,
     }
 
     impl Page {
@@ -284,6 +386,15 @@ mod tests {
                 clicked: Vec::new(),
                 overflow: None,
                 stale: false,
+                split: None,
+                controls: None,
+                stray: None,
+                pull: false,
+                beside: None,
+                duplicate: false,
+                jumps: (None, None),
+                bring: None,
+                scrolls: false,
             }
         }
     }
@@ -291,13 +402,60 @@ mod tests {
     fn harness(page: Page, size: egui::Vec2) -> Harness<'static, Page> {
         let mut harness = Harness::builder().with_size(size).build_ui_state(
             |ui, page: &mut Page| {
+                let full = ui.available_rect_before_wrap();
+                if page.beside.is_some() {
+                    let (_, right) = full.split_left_right_at_fraction(0.5);
+                    page.beside = Some(right);
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
+                        crate::design::layout::ScrollColumn::new("laid_test_beside").show(
+                            ui,
+                            |ui| {
+                                let _ = ui.button("Beside button");
+                                for line in 0..80 {
+                                    let _ = ui.label(format!("Beside {line}"));
+                                }
+                            },
+                        );
+                    });
+                }
+                let left = page
+                    .beside
+                    .map_or(full, |_| full.split_left_right_at_fraction(0.5).0);
+                let mut ui = ui.new_child(egui::UiBuilder::new().max_rect(left));
+                let ui = &mut ui;
                 let frame = PaneFrame::new(ui);
                 let messages = Messages::<NoPress>::new(&frame, "laid_test", ui.available_width());
                 let _ = messages.pane(ui, Body::Content, |ui| {
                     let width = ui.available_width();
                     if page.laid.is_empty() || std::mem::take(&mut page.stale) {
+                        let (split, controls, duplicate) =
+                            (page.split, page.controls, page.duplicate);
                         page.laid = (0..page.texts.len())
-                            .map(|at| test_recipe(ui, at, &page.texts[at], width, 80.0))
+                            .map(|at| match (split, controls) {
+                                (Some(split), _) if split == at => test_block(
+                                    ui,
+                                    at,
+                                    &[
+                                        (&format!("Head {at} "), 0.0),
+                                        (&format!("Body {at} "), 150.0),
+                                    ],
+                                    (egui::vec2(width, 300.0), Some(150.0)),
+                                    &[0.0, 150.0],
+                                    80.0,
+                                ),
+                                (_, Some((block, count))) if block == at => test_block(
+                                    ui,
+                                    at,
+                                    &[(&format!("Row {at} "), 0.0)],
+                                    (egui::vec2(width, 80.0 * count as f32), None),
+                                    &(0..count).map(|i| 80.0 * i as f32).collect::<Vec<_>>(),
+                                    80.0,
+                                ),
+                                _ if duplicate && at == 1 => {
+                                    test_recipe(ui, 0usize, &page.texts[at], width, 80.0)
+                                }
+                                _ => test_recipe(ui, at, &page.texts[at], width, 80.0),
+                            })
                             .collect();
                         if page.rows.is_empty() {
                             page.rows.set(page.laid.iter().map(Laid::block).collect());
@@ -305,20 +463,59 @@ mod tests {
                     }
                     page.top = ui.cursor().top();
                     page.clip = ui.clip_rect();
+                    page.scrolls = crate::design::reveal::dm_scrolls(ui);
+                    let (top, pull) = (page.top, page.pull);
+                    // A jump asked in this pass before the region draws, or after it.
+                    let jumps = std::mem::take(&mut page.jumps);
+                    let bring = page.bring.take();
                     let Page {
                         laid,
                         rows,
                         region,
                         clicked,
                         overflow,
+                        stray,
                         ..
                     } = page;
+                    let top_of = |at: usize| top + laid[..at].iter().map(Laid::height).sum::<f32>();
+                    if let Some(at) = jumps.0 {
+                        crate::design::reveal::jump(ui, top_of(at), JumpTo::LinkedHeading);
+                    }
+                    if let Some(at) = bring {
+                        let block = Rect::from_min_size(
+                            egui::pos2(ui.max_rect().left(), top_of(at)),
+                            egui::vec2(ui.max_rect().width(), laid[at].height()),
+                        );
+                        let _ = crate::design::reveal::bring_into_view(
+                            ui,
+                            block,
+                            JumpTo::OpenMenuControl,
+                        );
+                    }
                     BlockRegion::new("laid_test", region, rows).show_laid(
                         ui,
                         |at| &laid[at],
                         |ui, at| {
                             if ui.put(0, egui::Button::new(format!("Act {at}"))).clicked() {
                                 clicked.push(at);
+                            }
+                            for slot in 1..ui.slots() {
+                                let _ = ui.put(slot, egui::Button::new(format!("Act {at}.{slot}")));
+                            }
+                            if *stray == Some(at) {
+                                let slot = ui.slot(0);
+                                ui.in_slot(0, |ui| stray_mark(ui, slot));
+                            }
+                            if pull {
+                                ui.in_slot(0, |ui| {
+                                    ui.scroll_to_rect(
+                                        Rect::from_min_size(
+                                            egui::pos2(slot_left(ui), top),
+                                            egui::vec2(1.0, 1.0),
+                                        ),
+                                        None,
+                                    );
+                                });
                             }
                             if *overflow == Some(at) {
                                 let slot = ui.slot(0);
@@ -332,6 +529,9 @@ mod tests {
                             }
                         },
                     );
+                    if let Some(at) = jumps.1 {
+                        crate::design::reveal::jump(ui, top_of(at), JumpTo::LinkedHeading);
+                    }
                 });
             },
             page,
@@ -344,18 +544,47 @@ mod tests {
         harness
     }
 
-    /// The texts painted in the last frame.
+    fn slot_left(ui: &Ui) -> f32 {
+        ui.max_rect().left()
+    }
+
+    /// A mark painted 300 px below `slot`, on an `Area` of its own at the middle order (a layer
+    /// other than the block's).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
+    fn stray_mark(ui: &Ui, slot: Rect) {
+        egui::Area::new(Id::new("laid_test_stray"))
+            .order(egui::Order::Middle)
+            .fixed_pos(slot.min + egui::vec2(0.0, 300.0))
+            .show(ui.ctx(), |ui| {
+                ui.painter().rect_filled(
+                    Rect::from_min_size(ui.max_rect().min, slot.size()),
+                    0.0,
+                    egui::Color32::RED,
+                );
+            });
+    }
+
+    /// The texts painted in the last frame where their clip shows them (a shape that lies wholly
+    /// outside its clip shows nothing).
     fn painted(harness: &Harness<'_, Page>) -> Vec<String> {
-        fn walk(shape: &egui::Shape, out: &mut Vec<String>) {
+        fn walk(shape: &egui::Shape, clip: Rect, out: &mut Vec<String>) {
             match shape {
-                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
-                egui::Shape::Text(text) => out.push(text.galley.text().to_owned()),
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, clip, out)),
+                egui::Shape::Text(text) => {
+                    let shown = clip.intersect(shape.visual_bounding_rect());
+                    if shown.height() > 0.5 && shown.width() > 0.5 {
+                        out.push(text.galley.text().to_owned());
+                    }
+                }
                 _ => {}
             }
         }
         let mut out = Vec::new();
         for shape in &harness.output().shapes {
-            walk(&shape.shape, &mut out);
+            walk(&shape.shape, shape.clip_rect, &mut out);
         }
         out
     }
@@ -547,5 +776,979 @@ mod tests {
             builds + 1,
             "a reorder plans again"
         );
+    }
+
+    /// Whether block `at` is drawn whole in the pane's room.
+    fn shown(harness: &Harness<'_, Page>, at: usize) -> bool {
+        let page = harness.state();
+        harness.query_by_label(&format!("Act {at}")).is_some()
+            && page.clip.expand(0.5).contains_rect(block_rect(page, at))
+    }
+
+    fn key_press(harness: &mut Harness<'_, Page>, key: egui::Key, modifiers: egui::Modifiers) {
+        for pressed in [true, false] {
+            harness.input_mut().events.push(egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers,
+            });
+        }
+        harness.run_steps(3);
+    }
+
+    /// Review of PR 743 (P2): a section taller than the pane splits at its head (L6). A 300 px
+    /// block with a 150 px head, shown from its top in a room between the two: its head is whole
+    /// and draws (its words and its control); its cut body does not paint. Red: draw only the
+    /// whole and the `TooTall` blocks.
+    #[test]
+    fn a_split_section_draws_its_whole_head() {
+        let mut page = Page::new(texts(8));
+        page.split = Some(3);
+        let mut harness = harness(page, egui::vec2(960.0, 260.0));
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new(3usize)));
+        harness.run_steps(3);
+        let page = harness.state();
+        let rect = block_rect(page, 3);
+        assert!(
+            page.clip.height() > 150.0 && page.clip.height() < 300.0,
+            "the room {:?} is between the head and the section",
+            page.clip
+        );
+        assert!(
+            (rect.top() - page.clip.top()).abs() < 1.0,
+            "a section taller than the room shows its head at the room's top: {rect:?} in {:?}",
+            page.clip
+        );
+        let texts = painted(&harness);
+        assert!(
+            texts.iter().any(|text| text.starts_with("Head 3 "))
+                && harness.query_by_label("Act 3").is_some(),
+            "the whole head draws, with its control"
+        );
+        assert!(
+            !texts.iter().any(|text| text.starts_with("Body 3 ")),
+            "the cut body does not paint"
+        );
+    }
+
+    /// Review of PR 743 (P2): a renderer that paints outside its block on a layer of its own
+    /// (an `Area`) fails the bounds check too.
+    #[test]
+    #[should_panic(expected = "outside its rect")]
+    fn paint_on_another_layer_fails_the_bounds_check() {
+        let mut page = Page::new(texts(6));
+        page.stray = Some(1);
+        let _ = harness(page, egui::vec2(960.0, 420.0));
+    }
+
+    /// Review of PR 743 (P3): Tab goes into and through a block taller than the pane, and focus
+    /// clearance brings each of its controls whole into view.
+    #[test]
+    fn tab_reaches_each_control_of_a_block_taller_than_the_pane() {
+        let mut page = Page::new(texts(6));
+        page.controls = Some((2, 8));
+        let mut harness = harness(page, egui::vec2(960.0, 300.0));
+        harness.get_by_label("Act 1").focus();
+        harness.run_steps(3);
+        for slot in 0..8 {
+            key_press(&mut harness, egui::Key::Tab, egui::Modifiers::NONE);
+            let label = if slot == 0 {
+                "Act 2".to_owned()
+            } else {
+                format!("Act 2.{slot}")
+            };
+            let node = harness.get_by_label(&label);
+            assert!(node.is_focused(), "Tab {slot} focuses {label}");
+            let clip = harness.state().clip;
+            assert!(
+                clip.expand(0.5).contains_rect(node.rect()),
+                "{label} {:?} is whole in the room {clip:?}",
+                node.rect()
+            );
+        }
+        // Shift+Tab goes back through it, each control whole in view again.
+        for slot in (0..7).rev() {
+            key_press(&mut harness, egui::Key::Tab, egui::Modifiers::SHIFT);
+            // egui moves the focus backwards a frame later; the pane's scroll follows it.
+            harness.run_steps(2);
+            let label = if slot == 0 {
+                "Act 2".to_owned()
+            } else {
+                format!("Act 2.{slot}")
+            };
+            let node = harness.get_by_label(&label);
+            assert!(node.is_focused(), "Shift+Tab focuses {label}");
+            let clip = harness.state().clip;
+            assert!(
+                clip.expand(0.5).contains_rect(node.rect()),
+                "{label} {:?} is whole in the room {clip:?}",
+                node.rect()
+            );
+        }
+        // The arrows go down through it the same way.
+        for slot in 1..8 {
+            key_press(&mut harness, egui::Key::ArrowDown, egui::Modifiers::NONE);
+            // egui moves the focus by an arrow at the end of its frame; the scroll follows it.
+            harness.run_steps(2);
+            let label = format!("Act 2.{slot}");
+            let node = harness.get_by_label(&label);
+            assert!(node.is_focused(), "ArrowDown focuses {label}");
+            let clip = harness.state().clip;
+            assert!(
+                clip.expand(0.5).contains_rect(node.rect()),
+                "{label} {:?} is whole in the room {clip:?}",
+                node.rect()
+            );
+        }
+        assert!(
+            harness.state().region.work().too_tall > 0,
+            "the block is counted"
+        );
+    }
+
+    /// Layout 11c, A1b (the v2 review's item 2): the resolver of a measured body in a Content
+    /// pane. A request names its block by key and shows it whole, in the next frame with one pass
+    /// a frame and in the asking frame with two; a key no longer in the plan ends its request;
+    /// the DM's wheel in the same pass cancels it; a held press makes it wait, and it lands after
+    /// the release; and a raw `scroll_to_rect` in the passes that queue and apply it does not
+    /// move the view afterwards.
+    #[test]
+    fn a_request_shows_its_block_by_key_in_the_order_of_the_resolver() {
+        let mut harness = harness(Page::new(texts(40)), egui::vec2(960.0, 420.0));
+        let show = |harness: &mut Harness<'_, Page>, at: usize| {
+            harness
+                .state_mut()
+                .region
+                .navigate(Navigation::Show(Id::new(at)));
+        };
+        show(&mut harness, 30);
+        harness.step();
+        assert!(!shown(&harness, 30), "one pass a frame: not yet");
+        harness.step();
+        assert!(shown(&harness, 30), "one pass a frame: the next frame");
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::new(2).unwrap());
+        show(&mut harness, 5);
+        harness.step();
+        assert!(shown(&harness, 5), "two passes: the asking frame");
+        let top = block_rect(harness.state(), 5).top();
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new("gone")));
+        harness.run_steps(3);
+        assert_eq!(
+            block_rect(harness.state(), 5).top(),
+            top,
+            "a key not in the plan moves nothing"
+        );
+        // The DM's wheel in the same pass cancels it.
+        show(&mut harness, 35);
+        let at = harness.state().clip.center();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(at));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(4);
+        assert!(!shown(&harness, 35), "the wheel cancels the request");
+        // A held press makes it wait; it lands after the release.
+        let at = harness.state().clip.center();
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(at));
+        harness.input_mut().events.push(button(true));
+        harness.step();
+        show(&mut harness, 25);
+        harness.run_steps(2);
+        assert!(
+            !shown(&harness, 25),
+            "the request waits while the press is held"
+        );
+        harness.input_mut().events.push(button(false));
+        harness.run_steps(3);
+        assert!(shown(&harness, 25), "it lands after the release");
+        // A wheel while the press is held cancels the waiting request.
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(at));
+        harness.input_mut().events.push(button(true));
+        harness.step();
+        show(&mut harness, 38);
+        harness.step();
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(2);
+        harness.input_mut().events.push(button(false));
+        harness.run_steps(4);
+        assert!(
+            !shown(&harness, 38),
+            "a wheel while held cancels the request"
+        );
+        // egui's own target, asked in the passes that queue and apply the request, does not
+        // write the offset after it.
+        harness.state_mut().pull = true;
+        show(&mut harness, 12);
+        harness.step();
+        harness.state_mut().pull = false;
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 12),
+            "a raw scroll_to_rect does not move the view after it"
+        );
+        // One pass a frame: a request queued in one frame and a wheel in the next: the column
+        // cancels it.
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        show(&mut harness, 33);
+        harness.step();
+        let at = harness.state().clip.center();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(at));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(4);
+        assert!(!shown(&harness, 33), "the wheel cancels a queued request");
+    }
+
+    fn button_at(at: egui::Pos2, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        }
+    }
+
+    /// Review of PR 757 (P1): in a section drawn as its head (the 300 px section in a 244 px
+    /// room), Tab from the head's control reaches the body's control, which the head's clip hides:
+    /// the body comes whole into view, so the control shows, keeps the focus and paints. Red: no
+    /// clearance for a clipped part's control.
+    #[test]
+    fn tab_into_a_clipped_part_brings_its_unit_into_view() {
+        let mut page = Page::new(texts(8));
+        page.split = Some(3);
+        let mut harness = harness(page, egui::vec2(960.0, 260.0));
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new(3usize)));
+        harness.run_steps(3);
+        harness.get_by_label("Act 3").focus();
+        harness.run_steps(3);
+        key_press(&mut harness, egui::Key::Tab, egui::Modifiers::NONE);
+        let node = harness.get_by_label("Act 3.1");
+        let clip = harness.state().clip;
+        assert!(node.is_focused(), "Tab reaches the body's control");
+        assert!(
+            clip.expand(0.5).contains_rect(node.rect()),
+            "the body's control {:?} is whole in the room {clip:?}",
+            node.rect()
+        );
+        assert!(
+            painted(&harness)
+                .iter()
+                .any(|text| text.starts_with("Body 3 ")),
+            "the body's unit draws"
+        );
+    }
+
+    /// Review of PR 757 (P1, P2): a queued request belongs to its column. With one pass a frame:
+    /// a wheel over another column does not end it; a press held still in its own column makes
+    /// it wait (queued first, then held) and it lands after the release; a drag begun in its
+    /// column ends it, also while the press is held. Red runs: input read window-wide; no wait for
+    /// a held press in the column; a drag that only defers it.
+    #[test]
+    fn a_queued_request_answers_only_its_own_column() {
+        let mut page = Page::new(texts(40));
+        page.beside = Some(Rect::NOTHING);
+        let mut harness = harness(page, egui::vec2(1200.0, 420.0));
+        let show = |harness: &mut Harness<'_, Page>, at: usize| {
+            harness
+                .state_mut()
+                .region
+                .navigate(Navigation::Show(Id::new(at)));
+        };
+        // A wheel over the other column.
+        show(&mut harness, 30);
+        harness.step();
+        let beside = harness.state().beside.expect("the other column").center();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(beside));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 30),
+            "a wheel over another column leaves the request"
+        );
+        // Queued, then a press held still in its column: it waits, and lands after the release.
+        // A point of the pane's own column (the clip spans both columns).
+        let at = harness.state().clip.left_center() + egui::vec2(100.0, 0.0);
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(at));
+        harness.step();
+        show(&mut harness, 5);
+        harness.step();
+        harness.input_mut().events.push(button_at(at, true));
+        harness.run_steps(2);
+        assert!(
+            !shown(&harness, 5),
+            "the queued request waits while the press is held"
+        );
+        harness.input_mut().events.push(button_at(at, false));
+        harness.run_steps(3);
+        assert!(shown(&harness, 5), "it lands after the release");
+        // Queued, then a drag begun in its column: it ends.
+        show(&mut harness, 35);
+        harness.step();
+        harness.input_mut().events.push(button_at(at, true));
+        harness.step();
+        for step in 1..4 {
+            harness.input_mut().events.push(egui::Event::PointerMoved(
+                at + egui::vec2(0.0, 12.0 * step as f32),
+            ));
+            harness.step();
+        }
+        let end = at + egui::vec2(0.0, 36.0);
+        harness.input_mut().events.push(button_at(end, false));
+        harness.run_steps(3);
+        assert!(
+            !shown(&harness, 35),
+            "a drag in its column ends the request"
+        );
+        // The keyboard. Focus in the other column: Page Down there, in the frame that asks or the
+        // next, does not end this column's request.
+        let key = |harness: &mut Harness<'_, Page>, key, modifiers| {
+            for pressed in [true, false] {
+                harness.input_mut().events.push(egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed,
+                    repeat: false,
+                    modifiers,
+                });
+            }
+        };
+        harness.get_by_label("Beside button").focus();
+        harness.run_steps(2);
+        show(&mut harness, 20);
+        key(&mut harness, egui::Key::PageDown, egui::Modifiers::NONE);
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 20),
+            "Page Down in another column leaves the request"
+        );
+        show(&mut harness, 8);
+        harness.step();
+        key(&mut harness, egui::Key::PageDown, egui::Modifiers::NONE);
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 8),
+            "Page Down in another column leaves a queued request"
+        );
+        // Focus in this column: a shortcut (Ctrl+S, Ctrl+Page Down) moves nothing and leaves a
+        // queued request;
+        // Page Down ends a request.
+        harness.get_by_label("Act 8").focus();
+        harness.run_steps(2);
+        show(&mut harness, 30);
+        harness.step();
+        key(&mut harness, egui::Key::S, egui::Modifiers::CTRL);
+        harness.run_steps(3);
+        assert!(shown(&harness, 30), "a shortcut leaves a queued request");
+        // A key that moves nothing (Escape) leaves it too.
+        show(&mut harness, 16);
+        harness.step();
+        key(&mut harness, egui::Key::Escape, egui::Modifiers::NONE);
+        harness.run_steps(3);
+        assert!(shown(&harness, 16), "Escape leaves a queued request");
+        // A shortcut on a key that would move the view (Ctrl+Page Down: the next tab) too.
+        show(&mut harness, 12);
+        harness.step();
+        key(&mut harness, egui::Key::PageDown, egui::Modifiers::CTRL);
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 12),
+            "a shortcut on a view key leaves a queued request"
+        );
+        harness.get_by_label("Act 12").focus();
+        harness.run_steps(2);
+        show(&mut harness, 2);
+        key(&mut harness, egui::Key::PageDown, egui::Modifiers::NONE);
+        harness.run_steps(3);
+        assert!(
+            !shown(&harness, 2),
+            "Page Down in this column ends the request"
+        );
+    }
+
+    /// Review of PR 757 (P2): two measured blocks of one region may not share a key.
+    #[test]
+    #[should_panic(expected = "share a key")]
+    fn two_blocks_of_one_key_are_refused() {
+        let mut page = Page::new(texts(6));
+        page.duplicate = true;
+        let _ = harness(page, egui::vec2(960.0, 420.0));
+    }
+
+    /// Review of PR 770: a column has one queued request. A typed jump and a measured region's
+    /// request asked for one column in one pass: only the newest applies, in either order, and the
+    /// same for `bring_into_view`. A wheel over another column keeps a jump and a
+    /// `bring_into_view`. Red runs: two queues (the jump outranks the
+    /// region's request); the jump's cancel read window-wide.
+    #[test]
+    fn a_column_has_one_request_whoever_asks_it() {
+        let mut page = Page::new(texts(40));
+        page.beside = Some(Rect::NOTHING);
+        let mut harness = harness(page, egui::vec2(1200.0, 420.0));
+        // The jump first, then the region's request: the request applies.
+        harness.state_mut().jumps = (Some(10), None);
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new(30usize)));
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 30) && !shown(&harness, 10),
+            "the newer region request applies, not the older jump"
+        );
+        // The region's request first, then the jump: the jump applies (its block at the top).
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new(5usize)));
+        harness.state_mut().jumps = (None, Some(20));
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 20) && !shown(&harness, 5),
+            "the newer jump applies, not the older request"
+        );
+        // A jump queued, and a wheel over the other column in the next frame: it applies.
+        harness.state_mut().jumps = (Some(2), None);
+        harness.step();
+        let beside = harness.state().beside.expect("the other column").center();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(beside));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 2),
+            "a wheel over another column leaves this column's jump"
+        );
+        // The same for the least scroll that shows a block (`bring_into_view`).
+        harness.state_mut().bring = Some(28);
+        harness.step();
+        let beside = harness.state().beside.expect("the other column").center();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(beside));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 28),
+            "a wheel over another column leaves this column's bring_into_view"
+        );
+        // A region's request after it, in one pass, replaces it.
+        harness.state_mut().bring = Some(9);
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new(36usize)));
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 36) && !shown(&harness, 9),
+            "the newer region request replaces bring_into_view"
+        );
+    }
+
+    /// One input of the resolver's case table (Sol sweep 2-001).
+    #[derive(Clone, Copy, Debug)]
+    enum Input {
+        Wheel,
+        ContentDrag,
+        BarDrag,
+        Press,
+        Key(egui::Key, egui::Modifiers),
+        Text,
+        Ime,
+        /// A key pressed while a press is held in the column (review of PR 757).
+        HeldKey(egui::Key),
+    }
+
+    /// The resolver's case table (Sol sweep 2-001; reviews of PRs 757 and 770): two columns, a
+    /// request queued for column A (the pane; for block 20, away from the blocks Home and End
+    /// route to), and each input the cancel rule handles, aimed at
+    /// column B (the pointer over it, the focus in it) and then at A. A's request survives every
+    /// input at B; every input at A ends it, except a shortcut that moves nothing (Ctrl+S). Each
+    /// cancel branch of `take_queued` has a row. A retry's rule (`dm_scrolls`, the row menu's
+    /// bring-back of PR 780) is the same rule: in A it says the DM scrolls for exactly the inputs
+    /// that end A's request. (A press on A's scroll bar sets A's offset in
+    /// egui's own pass, after a queued one, so the bar always wins; its row checks that.)
+    #[test]
+    fn the_resolver_cancels_only_on_its_own_columns_input() {
+        use egui::{Key, Modifiers};
+        let rows = [
+            ("wheel", Input::Wheel, true),
+            ("content drag", Input::ContentDrag, true),
+            ("bar drag", Input::BarDrag, true),
+            ("press", Input::Press, true),
+            ("Page Up", Input::Key(Key::PageUp, Modifiers::NONE), true),
+            (
+                "Page Down",
+                Input::Key(Key::PageDown, Modifiers::NONE),
+                true,
+            ),
+            ("Home", Input::Key(Key::Home, Modifiers::NONE), true),
+            ("End", Input::Key(Key::End, Modifiers::NONE), true),
+            ("ArrowUp", Input::Key(Key::ArrowUp, Modifiers::NONE), true),
+            (
+                "ArrowDown",
+                Input::Key(Key::ArrowDown, Modifiers::NONE),
+                true,
+            ),
+            (
+                "ArrowLeft",
+                Input::Key(Key::ArrowLeft, Modifiers::NONE),
+                true,
+            ),
+            (
+                "ArrowRight",
+                Input::Key(Key::ArrowRight, Modifiers::NONE),
+                true,
+            ),
+            ("Tab", Input::Key(Key::Tab, Modifiers::NONE), true),
+            ("Shift+Tab", Input::Key(Key::Tab, Modifiers::SHIFT), true),
+            ("IME", Input::Ime, true),
+            ("Ctrl+Home", Input::Key(Key::Home, Modifiers::CTRL), true),
+            ("Ctrl+End", Input::Key(Key::End, Modifiers::CTRL), true),
+            (
+                "Ctrl+ArrowLeft",
+                Input::Key(Key::ArrowLeft, Modifiers::CTRL),
+                true,
+            ),
+            (
+                "Ctrl+ArrowDown",
+                Input::Key(Key::ArrowDown, Modifiers::CTRL),
+                true,
+            ),
+            ("Page Down while held", Input::HeldKey(Key::PageDown), true),
+            ("text", Input::Text, true),
+            ("Ctrl+S", Input::Key(Key::S, Modifiers::CTRL), false),
+        ];
+        let mut page = Page::new(texts(40));
+        page.beside = Some(Rect::NOTHING);
+        let mut harness = harness(page, egui::vec2(1200.0, 420.0));
+        let button = |at: egui::Pos2, pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        };
+        // Whether the view is near block 35 now (the request applied, even for one frame).
+        let near = |harness: &Harness<'_, Page>| {
+            let page = harness.state();
+            let target = block_rect(page, 20);
+            target.top() < page.clip.bottom() + 100.0 && target.bottom() > page.clip.top() - 100.0
+        };
+        let mut wrong = Vec::new();
+        for (name, input, cancels) in rows {
+            for in_a in [false, true] {
+                // From the top, nothing pending, the focus and the pointer where the input aims.
+                harness.state_mut().region.navigate(Navigation::Reset);
+                harness.run_steps(10);
+                let beside = harness.state().beside.expect("the other column");
+                let clip = harness.state().clip;
+                let (point, bar, focus) = if in_a {
+                    (
+                        clip.left_center() + egui::vec2(100.0, 0.0),
+                        egui::pos2(beside.left() - 5.0, clip.top() + 12.0),
+                        "Act 0",
+                    )
+                } else {
+                    (
+                        beside.center(),
+                        egui::pos2(beside.right() - 5.0, beside.top() + 12.0),
+                        "Beside button",
+                    )
+                };
+                harness.get_by_label(focus).focus();
+                harness
+                    .input_mut()
+                    .events
+                    .push(egui::Event::PointerMoved(point));
+                harness.run_steps(2);
+                // A's request, queued (one pass a frame: it applies in the next frame).
+                harness
+                    .state_mut()
+                    .region
+                    .navigate(Navigation::Show(Id::new(20usize)));
+                harness.step();
+                // Whether A's request applied in any frame of the input, and whether a retry's rule
+                // (`dm_scrolls`) said the DM scrolls A in any frame.
+                let (mut seen, mut scrolls) = (false, false);
+                let mut observe = |harness: &Harness<'_, Page>| {
+                    seen |= near(harness);
+                    scrolls |= harness.state().scrolls;
+                };
+                let events = &mut harness.input_mut().events;
+                match input {
+                    Input::Wheel => events.push(egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: egui::vec2(0.0, -10.0),
+                        modifiers: Modifiers::NONE,
+                    }),
+                    Input::ContentDrag | Input::BarDrag => {
+                        let from = if matches!(input, Input::BarDrag) {
+                            bar
+                        } else {
+                            point
+                        };
+                        events.push(egui::Event::PointerMoved(from));
+                        events.push(button(from, true));
+                        harness.step();
+                        observe(&harness);
+                        for step in 1..4 {
+                            let to = from + egui::vec2(0.0, 12.0 * step as f32);
+                            harness
+                                .input_mut()
+                                .events
+                                .push(egui::Event::PointerMoved(to));
+                            harness.step();
+                            observe(&harness);
+                        }
+                        harness
+                            .input_mut()
+                            .events
+                            .push(button(from + egui::vec2(0.0, 36.0), false));
+                    }
+                    Input::Press => {
+                        events.push(button(point, true));
+                        events.push(button(point, false));
+                    }
+                    Input::Key(key, modifiers) => {
+                        for pressed in [true, false] {
+                            events.push(egui::Event::Key {
+                                key,
+                                physical_key: None,
+                                pressed,
+                                repeat: false,
+                                modifiers,
+                            });
+                        }
+                    }
+                    Input::Text => events.push(egui::Event::Text("x".to_owned())),
+                    Input::HeldKey(key) => {
+                        events.push(button(point, true));
+                        harness.step();
+                        observe(&harness);
+                        for pressed in [true, false] {
+                            harness.input_mut().events.push(egui::Event::Key {
+                                key,
+                                physical_key: None,
+                                pressed,
+                                repeat: false,
+                                modifiers: Modifiers::NONE,
+                            });
+                        }
+                        harness.step();
+                        observe(&harness);
+                        harness.input_mut().events.push(button(point, false));
+                    }
+                    Input::Ime => {
+                        events.push(egui::Event::Ime(egui::ImeEvent::Commit("x".to_owned())));
+                    }
+                }
+                for _ in 0..3 {
+                    harness.step();
+                    observe(&harness);
+                }
+                // Survived: its block is whole in view. Ended: the view came nowhere near its block
+                // in any frame (a request that applied for one frame, then was scrolled past by the
+                // input, was not ended).
+                let expected = !(in_a && cancels);
+                let survived = if expected { shown(&harness, 20) } else { seen };
+                if scrolls == expected {
+                    wrong.push(format!(
+                        "{name} at {}: dm_scrolls {scrolls}, expected {}",
+                        if in_a { "A" } else { "B" },
+                        !expected
+                    ));
+                }
+                if survived != expected {
+                    wrong.push(format!(
+                        "{name} at {}: survived {survived}, expected {expected}",
+                        if in_a { "A" } else { "B" }
+                    ));
+                }
+            }
+        }
+        assert!(wrong.is_empty(), "the case table: {wrong:#?}");
+    }
+
+    /// Two columns, one inside the other: a jump for the outer one, asked once.
+    struct Nested {
+        jump: bool,
+        /// A jump to the outer column's top, asked once.
+        top: bool,
+        /// The outer column's view and the inner column's, in the last pass.
+        outer: Rect,
+        inner: Rect,
+    }
+
+    /// Review of PR 757 (P2, P3): a key or a wheel belongs to the innermost column, not to every
+    /// column whose rect holds its control or the pointer. A jump queued for the outer column
+    /// survives each input aimed at the inner column (the focus on its control, the pointer over
+    /// it) and ends on the same input aimed at the outer column. Red: ownership by rect.
+    #[test]
+    fn a_nested_column_owns_its_own_keys() {
+        use egui::{Key, Modifiers};
+        use egui_kittest::kittest::Queryable;
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(600.0, 340.0))
+            .build_ui_state(
+                |ui, nested: &mut Nested| {
+                    crate::design::layout::ScrollColumn::new("laid_test_outer")
+                        .max_height(300.0)
+                        .show(ui, |ui| {
+                            nested.outer = ui.clip_rect();
+                            if std::mem::take(&mut nested.top) {
+                                crate::design::reveal::jump(
+                                    ui,
+                                    ui.cursor().top(),
+                                    JumpTo::LinkedHeading,
+                                );
+                            }
+                            let _ = ui.button("Outer button");
+                            for line in 0..80 {
+                                if line == 4 {
+                                    crate::design::layout::ScrollColumn::new("laid_test_inner")
+                                        .max_height(100.0)
+                                        .show(ui, |ui| {
+                                            nested.inner = ui.clip_rect();
+                                            let _ = ui.button("Inner button");
+                                            for inner in 0..20 {
+                                                let _ = ui.label(format!("Inner {inner}"));
+                                            }
+                                        });
+                                }
+                                if line == 60 && std::mem::take(&mut nested.jump) {
+                                    crate::design::reveal::jump(
+                                        ui,
+                                        ui.cursor().top(),
+                                        JumpTo::LinkedHeading,
+                                    );
+                                }
+                                let _ = ui.label(format!("Outer {line}"));
+                            }
+                        });
+                },
+                Nested {
+                    jump: false,
+                    top: false,
+                    outer: Rect::NOTHING,
+                    inner: Rect::NOTHING,
+                },
+            );
+        crate::design::theme::install(&harness.ctx);
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        harness.run_steps(3);
+        let jumped = |harness: &Harness<'_, Nested>| {
+            harness
+                .query_by_label("Outer 60")
+                .is_some_and(|node| harness.state().outer.contains_rect(node.rect()))
+        };
+        let rows = [
+            ("wheel", None, true),
+            ("Page Down", Some((Key::PageDown, Modifiers::NONE)), true),
+            ("ArrowDown", Some((Key::ArrowDown, Modifiers::NONE)), true),
+            ("Ctrl+Home", Some((Key::Home, Modifiers::CTRL)), true),
+            ("Tab", Some((Key::Tab, Modifiers::NONE)), true),
+        ];
+        let mut wrong = Vec::new();
+        for (name, key, _) in rows {
+            for at_inner in [true, false] {
+                // From the outer column's top, the focus and the pointer where the input aims.
+                harness.run_steps(10);
+                harness.state_mut().top = true;
+                harness.run_steps(4);
+                let (focus, point) = if at_inner {
+                    ("Inner button", harness.state().inner.center())
+                } else {
+                    (
+                        "Outer button",
+                        harness.state().outer.left_bottom() + egui::vec2(40.0, -20.0),
+                    )
+                };
+                harness.get_by_label(focus).focus();
+                harness
+                    .input_mut()
+                    .events
+                    .push(egui::Event::PointerMoved(point));
+                harness.run_steps(2);
+                harness.state_mut().jump = true;
+                harness.step();
+                match key {
+                    None => harness.input_mut().events.push(egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: egui::vec2(0.0, -10.0),
+                        modifiers: Modifiers::NONE,
+                    }),
+                    Some((key, modifiers)) => {
+                        for pressed in [true, false] {
+                            harness.input_mut().events.push(egui::Event::Key {
+                                key,
+                                physical_key: None,
+                                pressed,
+                                repeat: false,
+                                modifiers,
+                            });
+                        }
+                    }
+                }
+                // Whether the jump applied in any frame (the input itself may move the column after
+                // it, as a wheel does once the jump moved the inner column from under the pointer).
+                let mut survived = false;
+                for _ in 0..3 {
+                    harness.step();
+                    survived |= jumped(&harness);
+                }
+                if survived != at_inner {
+                    wrong.push(format!(
+                        "{name} at the {} column: the outer jump survived {survived}",
+                        if at_inner { "inner" } else { "outer" }
+                    ));
+                }
+            }
+        }
+        assert!(wrong.is_empty(), "nested columns: {wrong:#?}");
+    }
+
+    /// Layout 11c, A1c (the v2 review's item 3): keyboard routing across masked blocks. From the
+    /// last whole block, Tab and ArrowDown go to the next block, which is not drawn: it comes
+    /// whole into view and its control takes the focus. From the first whole block, Shift+Tab
+    /// and ArrowUp go to the block before it. End and Home go to the last and the first block.
+    /// An older request and a Tab in one pass: the Tab cancels the older one, and its own lands.
+    /// Reds: no routing; the key's own request cancelled with the older ones.
+    #[test]
+    fn keys_go_across_masked_blocks() {
+        use egui::{Key, Modifiers};
+        let mut harness = harness(Page::new(texts(40)), egui::vec2(960.0, 420.0));
+        let edge = |harness: &Harness<'_, Page>| {
+            let whole: Vec<usize> = (0..40).filter(|at| shown(harness, *at)).collect();
+            (whole[0], whole[whole.len() - 1])
+        };
+        let focused = |harness: &Harness<'_, Page>, at: usize| {
+            harness
+                .query_by_label(&format!("Act {at}"))
+                .is_some_and(|node| node.is_focused())
+        };
+        let press = |harness: &mut Harness<'_, Page>, key, modifiers| {
+            for pressed in [true, false] {
+                harness.input_mut().events.push(egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed,
+                    repeat: false,
+                    modifiers,
+                });
+            }
+            harness.run_steps(6);
+        };
+        let mut wrong = Vec::new();
+        let mut check = |harness: &Harness<'_, Page>, name: &str, at: usize| {
+            if !(focused(harness, at) && shown(harness, at)) {
+                wrong.push(format!(
+                    "{name}: Act {at} focused {} and whole {}",
+                    focused(harness, at),
+                    shown(harness, at)
+                ));
+            }
+        };
+        // Down from the last whole block, by Tab and by ArrowDown.
+        for (name, key) in [("Tab", Key::Tab), ("ArrowDown", Key::ArrowDown)] {
+            let (_, last) = edge(&harness);
+            harness.get_by_label(&format!("Act {last}")).focus();
+            harness.run_steps(2);
+            press(&mut harness, key, Modifiers::NONE);
+            check(&harness, name, last + 1);
+        }
+        // Up from the first whole block, by Shift+Tab and by ArrowUp.
+        for (name, key, modifiers) in [
+            ("Shift+Tab", Key::Tab, Modifiers::SHIFT),
+            ("ArrowUp", Key::ArrowUp, Modifiers::NONE),
+        ] {
+            let (first, _) = edge(&harness);
+            harness.get_by_label(&format!("Act {first}")).focus();
+            harness.run_steps(2);
+            press(&mut harness, key, modifiers);
+            check(&harness, name, first - 1);
+        }
+        // End and Home.
+        press(&mut harness, Key::End, Modifiers::NONE);
+        check(&harness, "End", 39);
+        press(&mut harness, Key::Home, Modifiers::NONE);
+        check(&harness, "Home", 0);
+        // An older request and a Tab in one pass.
+        let (_, last) = edge(&harness);
+        harness.get_by_label(&format!("Act {last}")).focus();
+        harness.run_steps(2);
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new(30usize)));
+        press(&mut harness, Key::Tab, Modifiers::NONE);
+        check(&harness, "Tab over an older request", last + 1);
+        if shown(&harness, 30) {
+            wrong.push("the older request survived the Tab".to_owned());
+        }
+        assert!(wrong.is_empty(), "keyboard routing: {wrong:#?}");
     }
 }

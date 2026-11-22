@@ -23464,7 +23464,22 @@ pub mod encounter_owned_groups {
             invalid && kept,
             format!("With an empty new group, New and Save blocked: {invalid}; Ctrl+S writes nothing: {kept}"),
         );
-        d.state("new-group-in-the-encounter", Sizes::All);
+        // Layout 11c (SB1, AB1): the encounter editor's column ends at a whole block of the new
+        // group's form; the footer's edge cuts no control frame or row of it (read from the
+        // paint and its clip: under a column's cut a node keeps its whole rect).
+        d.state_prepared("new-group-in-the-encounter", Sizes::All, |d| {
+            let size = d.window_size();
+            let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(size.0, size.1));
+            let cut = d.frames_cut_from_below(window, crate::design::XXL * 2.0);
+            let words = texts_cut_from_below(d, window);
+            d.observe(
+                "m32-L11c-SB1-AB1-group-form-blocks",
+                cut.is_empty() && words.is_empty(),
+                format!(
+                    "At {size:?}, frames cut from below {cut:?}, texts cut from below {words:?}"
+                ),
+            );
+        });
         // Two frames, one adding and one not: both name fields end at one edge at every size.
         for size in [SMALL, DEFAULT, LARGE] {
             let edges = d.at_size(size, |d| {
