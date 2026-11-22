@@ -4489,6 +4489,7 @@ impl Encounters {
         };
         if let Some(run) = self.run.as_mut().filter(|run| run.ended()) {
             run.continue_blocked = rule(run.id());
+            run.answer_still_stands();
         }
         self.history_blocked = read.and_then(rule);
         self.continue_key = Some((timeline.changes(), ended, read));
