@@ -43,7 +43,12 @@ pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui
         if bring_back && !inside.contains_rect(button.rect) {
             // The layout can settle a frame after the resize: keep asking until the button shows.
             ui.data_mut(|data| data.insert_temp(pending, true));
-            ui.scroll_to_rect(button.rect, None);
+            // The least scroll that shows it, written by the pane's own column (M0259).
+            design::reveal::bring_into_view(
+                ui,
+                button.rect,
+                design::reveal::JumpTo::OpenMenuControl,
+            );
         } else {
             ui.data_mut(|data| data.remove::<bool>(pending));
         }
@@ -1922,6 +1927,44 @@ mod iter_2_c_tests {
                 "{case}: the menu’s rows {rows:?} lie below or above the button {shown:?}, inside the pane {pane:?} less a lane of {lane}"
             );
         }
+        // M0259 (M-P0.25): when the pane shrinks under an open row menu, the pane's own column
+        // brings the menu's button back with the least scroll (`reveal::bring_into_view`), with
+        // no press: its bottom comes to the view's bottom, not its top to the view's top.
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(400.0, 600.0))
+            .build(|ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    design::ScrollColumn::new("rows").show(ui, |ui| {
+                        let _ = ui.allocate_exact_size(vec2(1.0, 400.0), egui::Sense::hover());
+                        row_menu(ui, "Bridge Ambush", |ui| {
+                            let _ = menu_action(ui, "Edit encounter", None);
+                        });
+                        let _ = ui.allocate_exact_size(vec2(1.0, 600.0), egui::Sense::hover());
+                    });
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness
+            .get_by_label("More actions for Bridge Ambush")
+            .click();
+        harness.run_steps(4);
+        let before = harness
+            .get_by_label("More actions for Bridge Ambush")
+            .rect();
+        harness.set_size(vec2(400.0, 300.0));
+        harness.run_steps(8);
+        let after = harness
+            .get_by_label("More actions for Bridge Ambush")
+            .rect();
+        assert!(
+            before.top() > 300.0
+                && after.top() >= 0.0
+                && after.bottom() <= 300.0
+                && after.top() > 150.0,
+            "m0259-least-scroll: shrunk under the open menu, its button came back from {before:?} \
+             to {after:?}, at the view's bottom"
+        );
     }
 
     /// T12.12: Remove is offered only for an encounter with no saved run: none unfinished,
