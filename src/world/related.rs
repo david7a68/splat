@@ -230,10 +230,9 @@ fn from_other_pages(
     design::heading(ui, design::Heading::Section("From other notes"));
     for ((_, title), pages) in &groups {
         let count: usize = pages.iter().map(|(_, facts)| facts.len()).sum();
-        egui::CollapsingHeader::new(design::group_heading_text(ui, title, count))
-            .id_salt(("lines_about", item.entry.id, title))
+        design::Section::new(design::group_heading_text(ui, title, count))
+            .id(("lines_about", item.entry.id, title))
             .default_open(count <= OPEN_LINES)
-            .icon(design::section_icon)
             .show(ui, |ui| {
                 for (source, facts) in pages {
                     ui.push_id(source, |ui| {

@@ -345,9 +345,7 @@ impl DndBeyond {
         if session.is_none() {
             return;
         }
-        let header = egui::CollapsingHeader::new("Add from D&D Beyond")
-            .icon(crate::design::section_icon)
-            .icon(crate::design::section_icon)
+        let header = crate::design::Section::new("Add from D&D Beyond")
             .default_open(local.all().is_empty())
             .show(ui, |ui| {
                 let Some(session) = session else {

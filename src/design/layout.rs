@@ -1588,6 +1588,8 @@ pub struct TitleAction<'a> {
     blocked: Option<&'a str>,
     name: Option<&'a str>,
     key: Option<KeyName>,
+    /// Its hover hint (`hint`).
+    hint: Option<&'a str>,
     /// It opens a menu (`TitleLine::menu`): a quiet menu button, its caret after the word.
     menu: bool,
 }
@@ -1601,6 +1603,7 @@ impl<'a> TitleAction<'a> {
             blocked: None,
             name: None,
             key: None,
+            hint: None,
             menu: false,
         }
     }
@@ -1645,6 +1648,14 @@ impl<'a> TitleAction<'a> {
         self
     }
 
+    /// What it does, on hover, when its word does not say it all (`Campaign entries`: "This
+    /// campaign’s own entries, in the Library"), as [`Action::hint`]. A blocked action shows its
+    /// reason instead.
+    pub fn hint(mut self, hint: &'a str) -> Self {
+        self.hint = Some(hint);
+        self
+    }
+
     /// Its target's width on one line.
     fn natural_width(&self, ui: &Ui) -> f32 {
         if matches!(self.weight, TitleWeight::Link) {
@@ -1681,6 +1692,9 @@ impl<'a> TitleAction<'a> {
         if let Some(icon) = self.icon {
             action = action.icon(icon);
         }
+        if let Some(hint) = self.hint {
+            action = action.hint(hint);
+        }
         action
     }
 
@@ -1699,6 +1713,9 @@ impl<'a> TitleAction<'a> {
         }
         if let Some(key) = self.key {
             action = action.key(key.as_str());
+        }
+        if let Some(hint) = self.hint {
+            action = action.hint(hint);
         }
         action
     }

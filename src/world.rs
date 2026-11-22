@@ -3438,7 +3438,6 @@ impl Reader {
                     paths.iter().map(|path| campaign.path.join(path)),
                 );
                 paths.sort_by_key(|path| Some(campaign.path.join(path)) != first);
-                let spacing = ui.spacing().item_spacing.y;
                 // M0178: the duplicate repair's one form (`DuplicateIdentity`): each file's
                 // repair, with what it leaves existing links in its help line.
                 let mut fault =
@@ -3469,8 +3468,8 @@ impl Reader {
                         Err(error) => self.error = Some(error),
                     }
                 }
-                // An `M` gap ends the choices, so the fields below do not read as a consequence.
-                ui.add_space((design::M - spacing).max(0.0));
+                // A gap ends the choices, so the fields below do not read as a consequence.
+                design::gap_to_next(ui, design::Gap::M);
             }
         }
         let warnings: Vec<_> = index
@@ -4378,10 +4377,6 @@ impl Reader {
 
     /// A labelled value row. With no `change`, the value is read only: the row keeps its label
     /// and value column, and leaves out Change.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn value_row(
         ui: &mut egui::Ui,
         label: &str,
@@ -4433,7 +4428,7 @@ impl Reader {
                 let Some(change) = change else {
                     return false;
                 };
-                ui.add_space((design::L - ui.spacing().item_spacing.x).max(0.0));
+                design::gap_to_next(ui, design::Gap::L);
                 change.show(ui).clicked()
             })
             .inner

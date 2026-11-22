@@ -4791,17 +4791,92 @@ pub fn section_icon(ui: &mut Ui, openness: f32, response: &Response) {
     phosphor_icon(ui, response.rect, icon, colors().muted);
 }
 
-/// A collapsing section with the icon set's arrow. Its header says whether it is open
-/// (expanded) to a screen reader.
+/// A collapsing section with the icon set's arrow, the one form of every section (M0412). Its
+/// header says whether it is open (expanded) to a screen reader. It starts closed and keeps the
+/// state the DM leaves it in, under its title. `id` keeps that state under the owner's id, so a
+/// title that changes (a count, a state word) does not close it; `default_open` is its state the
+/// first time it is drawn (a list that has little in it, a form with nothing to add yet);
+/// `open` opens (`Some(true)`) or closes (`Some(false)`) it this frame, as a search that shows
+/// only its matches does, or a press that asks for it. `None` leaves it as the DM left it.
+///
+/// ```
+/// fn f(ui: &mut egui::Ui, empty: bool) {
+///     let _ = splat_design::design::Section::new("Add campaign")
+///         .id("campaign_form")
+///         .default_open(empty)
+///         .show(ui, |ui| ui.label("The form"));
+/// }
+/// ```
+#[must_use = "call show"]
+pub struct Section<H = ()> {
+    title: egui::WidgetText,
+    id: Option<H>,
+    default_open: bool,
+    open: Option<bool>,
+}
+
+impl Section {
+    pub fn new(title: impl Into<egui::WidgetText>) -> Self {
+        Self {
+            title: title.into(),
+            id: None,
+            default_open: false,
+            open: None,
+        }
+    }
+}
+
+impl<H: std::hash::Hash> Section<H> {
+    /// The owner's id for its state, in place of its title.
+    pub fn id<K: std::hash::Hash>(self, id: K) -> Section<K> {
+        Section {
+            title: self.title,
+            id: Some(id),
+            default_open: self.default_open,
+            open: self.open,
+        }
+    }
+
+    /// Its state the first time it is drawn; after that, the DM's.
+    pub fn default_open(mut self, open: bool) -> Self {
+        self.default_open = open;
+        self
+    }
+
+    /// Its owner opens (`Some(true)`) or closes (`Some(false)`) it this frame.
+    pub fn open(mut self, open: Option<bool>) -> Self {
+        self.open = open;
+        self
+    }
+
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
+    pub fn show<R>(
+        self,
+        ui: &mut Ui,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> egui::CollapsingResponse<R> {
+        let mut header = egui::CollapsingHeader::new(self.title)
+            .icon(section_icon)
+            .default_open(self.default_open)
+            .open(self.open);
+        if let Some(id) = self.id {
+            header = header.id_salt(id);
+        }
+        let response = header.show(ui, add);
+        with_expanded(ui, response)
+    }
+}
+
+/// A collapsing section ([`Section`]) under its title.
 pub fn section<R>(
     ui: &mut Ui,
     title: impl Into<egui::WidgetText>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::CollapsingResponse<R> {
-    let response = egui::CollapsingHeader::new(title)
-        .icon(section_icon)
-        .show(ui, add);
-    with_expanded(ui, response)
+    Section::new(title).show(ui, add)
 }
 
 /// A collapsing section that stays open when its title changes, such as a count.
@@ -4824,12 +4899,7 @@ pub fn section_opened<R>(
     open: Option<bool>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::CollapsingResponse<R> {
-    let response = egui::CollapsingHeader::new(title)
-        .id_salt(id)
-        .icon(section_icon)
-        .open(open)
-        .show(ui, add);
-    with_expanded(ui, response)
+    Section::new(title).id(id).open(open).show(ui, add)
 }
 
 /// egui gives a collapsing header no expanded state: set it from the section's own state, after
@@ -6438,12 +6508,17 @@ mod tests {
                 let _ = section_opened(ui, "runs", "2 runs", Some(true), |ui| {
                     ui.label("Inside runs")
                 });
+                // M0412: open the first time it is drawn, then the DM's (an empty list's form).
+                let _ = Section::new("Add campaign")
+                    .id("campaign_form")
+                    .default_open(true)
+                    .show(ui, |ui| ui.label("Inside the form"));
             });
         super::super::theme::install(&harness.ctx);
         harness.run_steps(2);
         let expanded = |harness: &egui_kittest::Harness<'_>| {
             use egui_kittest::kittest::{NodeT, Queryable};
-            ["Details", "3 notes", "Technical", "2 runs"].map(|name| {
+            ["Details", "3 notes", "Technical", "2 runs", "Add campaign"].map(|name| {
                 harness
                     .get_by_label(name)
                     .accesskit_node()
@@ -6453,8 +6528,14 @@ mod tests {
         };
         assert_eq!(
             expanded(&harness),
-            [Some(false), Some(false), Some(false), Some(true)],
-            "closed at first; the owner's open one says it is open"
+            [
+                Some(false),
+                Some(false),
+                Some(false),
+                Some(true),
+                Some(true)
+            ],
+            "closed at first; the owner's open one and the one open by default say they are open"
         );
         {
             use egui_kittest::kittest::Queryable;
@@ -6463,8 +6544,25 @@ mod tests {
         harness.run_steps(3);
         assert_eq!(
             expanded(&harness),
-            [Some(false), Some(true), Some(false), Some(true)],
+            [Some(false), Some(true), Some(false), Some(true), Some(true)],
             "only the clicked section opens"
+        );
+        {
+            use egui_kittest::kittest::Queryable;
+            harness.get_by_label("Add campaign").click();
+        }
+        harness.run_steps(3);
+        assert_eq!(
+            expanded(&harness)[4],
+            Some(false),
+            "m-p0-section-default-open: the DM closes a section open by default, and it stays closed"
+        );
+        assert!(
+            {
+                use egui_kittest::kittest::Queryable;
+                harness.query_by_label("Inside the form").is_none()
+            },
+            "m-p0-section-default-open: its body goes with it"
         );
     }
 

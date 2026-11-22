@@ -482,9 +482,13 @@ fn notice_row(
     let short = notice.name(rules);
     let ends_words = mark.tables.is_empty() && mark.changes.is_empty();
     if ends_words {
-        words_ending_with(ui, &words, finish_width(ui, notice), |ui| {
-            finish(ui, &short, notice, mark, view, act)
-        });
+        design::line_end::words_ending_with(
+            ui,
+            Type::Body,
+            &words,
+            (finish_width(ui, notice), Density::Read.control()),
+            |ui| finish(ui, &short, notice, mark, view, act),
+        );
     } else {
         ui.add(egui::Label::new(Type::Body.rich(ui, &words)).wrap());
     }
@@ -576,58 +580,6 @@ fn notice_words(rules: &Rules, notice: &super::Notice, mark: Says<'_>) -> String
         (_, _, Some(name)) => format!("{name}: {}", mark.say),
         (_, _, None) => mark.say.to_owned(),
     }
-}
-
-/// The words, with `add` at the right end of their last line when it fits there, and else on
-/// a line of its own at the right. The last line is its own label, so nothing overlaps words.
-pub(super) fn words_ending_with(
-    ui: &mut egui::Ui,
-    words: &str,
-    trailing: f32,
-    add: impl FnOnce(&mut egui::Ui),
-) {
-    let width = ui.available_width();
-    let galley = ui
-        .painter()
-        .layout(words.to_owned(), Type::Body.font(ui), colors().text, width);
-    let gap = ui.spacing().item_spacing.x;
-    let fits = galley
-        .rows
-        .last()
-        .is_some_and(|row| width - row.rect().width() >= trailing + gap);
-    if !fits {
-        ui.add(egui::Label::new(Type::Body.rich(ui, words)).wrap());
-        right_line(ui, add);
-        return;
-    }
-    let before: usize = galley.rows[..galley.rows.len() - 1]
-        .iter()
-        .map(|row| row.char_count_including_newline())
-        .sum();
-    let split = words
-        .char_indices()
-        .nth(before)
-        .map_or(words.len(), |(at, _)| at);
-    let (head, last) = words.split_at(split);
-    if head.trim().is_empty() {
-        ui.horizontal(|ui| {
-            ui.label(Type::Body.rich(ui, last.trim()));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), add);
-        });
-        return;
-    }
-    // The last line keeps the words' pitch: it follows the line above with no gap, and its
-    // actions start at its top, so they reach below it and never over the words above.
-    ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.y = 0.0;
-        ui.add(egui::Label::new(Type::Body.rich(ui, head.trim_end())).wrap());
-        ui.horizontal(|ui| {
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                ui.label(Type::Body.rich(ui, last.trim()));
-            });
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), add);
-        });
-    });
 }
 
 /// A line of one control's height, laid out from its right end.

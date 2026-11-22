@@ -718,48 +718,15 @@ fn plan_row_with(
     design::register_row(ui, row.response.rect);
 }
 
-/// The plan's columns, from its last pass: its widest facts (each row's title and summary lines)
-/// and its widest action recipe. Each row adds its own to this pass's (`plan_measured`) after it
-/// is drawn; when they change, the plan is drawn once more, so its actions settle in their
-/// column on the next frame.
-#[derive(Clone, Copy, Default)]
-struct PlanColumns {
-    pass: u64,
-    last: (f32, f32),
-    next: (f32, f32),
-}
-
-fn plan_kept<R>(ui: &egui::Ui, update: impl FnOnce(&mut PlanColumns) -> R) -> R {
-    let pass = ui.ctx().cumulative_pass_nr();
-    let (out, changed) = ui.ctx().data_mut(|data| {
-        let kept = data.get_temp_mut_or_default::<PlanColumns>(egui::Id::new("plan_row_columns"));
-        let mut changed = false;
-        if kept.pass != pass {
-            changed = kept.pass + 1 == pass && kept.next != kept.last;
-            if kept.pass + 1 == pass {
-                kept.last = kept.next;
-            }
-            kept.next = (0.0, 0.0);
-            kept.pass = pass;
-        }
-        (update(kept), changed)
-    });
-    if changed {
-        ui.ctx().request_repaint();
-    }
-    out
-}
-
-/// The plan's columns from its last pass: (widest facts, widest actions); zero until measured.
+/// The plan's columns (`design::action_rows::columns`): its widest facts (each row's title and
+/// summary lines) and its widest action recipe, from its last pass.
 fn plan_columns(ui: &egui::Ui) -> (f32, f32) {
-    plan_kept(ui, |kept| kept.last)
+    design::action_rows::columns(ui, egui::Id::new("plan_row_columns"))
 }
 
 /// Add a drawn row's facts (every line) and its action recipe to this pass's columns.
 fn plan_measured(ui: &egui::Ui, facts: f32, actions: f32) {
-    plan_kept(ui, |kept| {
-        kept.next = (kept.next.0.max(facts), kept.next.1.max(actions));
-    });
+    design::action_rows::measured(ui, egui::Id::new("plan_row_columns"), facts, actions);
 }
 
 /// Why a played fight's summary cannot show: its run folder's cause (R41, in Encounters' words
@@ -2771,7 +2738,7 @@ pub(super) struct Travel {
     planned: design::Results<PlanLineOwner, PlannedLine>,
     /// The fights still to come with their days on the road, while the note, the Timeline and
     /// the campaign's fights are as they were.
-    days: Option<(RoadKey, Arc<RoadDays>)>,
+    days: Option<(RoadKey, Arc<PlannedDays>)>,
     /// Row 123: the plan that Timeline's open journey offers to, while its session, its note,
     /// the Timeline and the campaign's names are as they were.
     journey_plan: Option<(JourneyKey, Arc<JourneyPlan>)>,
@@ -2837,27 +2804,45 @@ type JourneyKey = (
 );
 
 /// What the plan's days on the road are read from: the session, the note's revision, the
-/// Timeline's count of changes, and the count of the campaign's fights.
-type RoadKey = (Option<Uuid>, u64, u64, usize);
+/// Timeline's count of changes, and the revision of the campaign's fights (a fight renamed on
+/// disk changes which rows are planned, though their count stays; review of PR 717).
+type RoadKey = (Option<Uuid>, u64, u64, design::memo::Revision);
 
 /// Each fight still to come, by its name, with its day on the road when it has one.
 type RoadDays = Vec<(String, Option<String>)>;
 
-/// The day of the planned fight at this place: that fight's own turn among the rows to come.
-fn planned_day(
-    days: &[(String, Option<String>)],
-    planned: &[&PlanFight],
-    position: usize,
-) -> Option<String> {
-    let name = planned[position].name.to_lowercase();
-    let turn = planned[..position]
+/// The planned fights' days, worked out once for each key of the road's days (`planned_days`):
+/// the day of each planned fight by its place in the plan (`None` with no day).
+#[derive(Default)]
+struct PlannedDays {
+    at: Vec<Option<String>>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How often the planned fights' days were worked out (`days_by_place`).
+    static DAYS_BY_PLACE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The day of each planned fight, by its place: that fight's own turn among the rows to come.
+/// One pass: each name's days are taken in order as its rows come.
+fn days_by_place(days: &[(String, Option<String>)], planned: &[&PlanFight]) -> Vec<Option<String>> {
+    #[cfg(test)]
+    DAYS_BY_PLACE.with(|count| count.set(count.get() + 1));
+    let mut by_name: std::collections::HashMap<&str, std::collections::VecDeque<&Option<String>>> =
+        std::collections::HashMap::new();
+    for (name, day) in days {
+        by_name.entry(name.as_str()).or_default().push_back(day);
+    }
+    planned
         .iter()
-        .filter(|fight| fight.name.eq_ignore_ascii_case(&name))
-        .count();
-    days.iter()
-        .filter(|(known, _)| *known == name)
-        .nth(turn)
-        .and_then(|(_, day)| day.clone())
+        .map(|fight| {
+            by_name
+                .get_mut(fight.name.to_lowercase().as_str())
+                .and_then(std::collections::VecDeque::pop_front)
+                .and_then(Clone::clone)
+        })
+        .collect()
 }
 
 /// F7's action and its words.
@@ -3507,23 +3492,45 @@ impl Sessions {
 
     /// The days on the road of the fights still to come, read again only when what they are
     /// read from changed.
+    /// The planned fights' days, worked out again only when the session, its draft, the
+    /// Timeline or the campaign's fights change; each new answer also ends the plan lines of
+    /// fights no longer planned and gives the kept lines a new days' revision
+    /// (`forget_plan_lines`). An unchanged frame does neither.
     fn planned_days(
         &mut self,
         book: &Book,
         session: Option<Uuid>,
         plan: &Plan<'_>,
-    ) -> Arc<RoadDays> {
+        planned: &[&PlanFight],
+    ) -> Arc<PlannedDays> {
         let Some(draft) = &self.draft else {
             return Arc::default();
         };
-        let key = (session, draft.revision(), book.changes(), plan.fights.len());
+        let key = (
+            session,
+            draft.revision(),
+            book.changes(),
+            plan.fights_revision,
+        );
         if let Some((known, days)) = &self.travel.days
             && *known == key
         {
             return Arc::clone(days);
         }
-        let days = Arc::new(road_days(&draft.body, &book.events, session, plan.fights));
+        let road = road_days(&draft.body, &book.events, session, plan.fights);
+        let days = Arc::new(PlannedDays {
+            at: days_by_place(&road, planned),
+        });
         self.travel.days = Some((key, Arc::clone(&days)));
+        let seen: Vec<_> = planned
+            .iter()
+            .zip(&days.at)
+            .enumerate()
+            .map(|(at, (fight, day))| ((session, at, fight.id), day.clone()))
+            .collect();
+        if seen != *self.plan_lines_seen {
+            self.forget_plan_lines(seen);
+        }
         days
     }
 
@@ -4888,12 +4895,10 @@ impl Sessions {
                     }
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
-                let days = self.planned_days(book, session, plan);
-                let seen: Vec<_> = planned.iter().enumerate().map(|(at, fight)| ((session, at, fight.id), planned_day(&days, &planned, at))).collect();
-                if seen != *self.plan_lines_seen { self.forget_plan_lines(seen); }
+                let days = self.planned_days(book, session, plan, &planned);
                 let plan_days = self.plan_lines_seen.revision();
                 for (position, fight) in planned.iter().enumerate() {
-                    let day = planned_day(&days, &planned, position);
+                    let day = days.at.get(position).cloned().flatten();
                     self.removed_fight_message(ui, session, position);
                     if !folded {
                         closed_scenes += self.scene_rows(ui, width, &scenes[position], position, shown, plan, &mut scene_act);
@@ -5838,6 +5843,8 @@ impl Sessions {
                 .any(|event| event.id == just.id && event.restores)
                 .then(|| timeline::fights_that_keep_hp(&book.events, session, plan.saved_runs));
             let words = as_sentence(&added_message(&just.label, just.to.as_deref(), restores));
+            // M0529 waits for layout 11c: an Add Undo that names its event moves under its words
+            // and makes the footer a line taller, which shifts the plan under the DM.
             Said::new(words)
                 .undo(UndoStep::verb(Verb::Add).pressed_as(pressed(FooterAct::UndoAdd)))
                 .into()
@@ -5848,16 +5855,15 @@ impl Sessions {
             && let Some(shown) = book.results.removal.get(&book.file())
         {
             let days = timeline::day_numbers(&book.events);
-            let words = as_sentence(&removed_event_words(
-                book,
-                session,
-                &days,
-                shown.value().label(),
-                planned,
-            ));
+            let label = shown.value().label().to_owned();
+            let words = as_sentence(&removed_event_words(book, session, &days, &label, planned));
+            // M-N1.7: the Undo names the event, as Timeline's line of the same removal does.
             messages.kept(shown.outcome(frame, |_| {
                 Said::new(words)
-                    .undo(UndoStep::verb(Verb::Remove).pressed_as(pressed(FooterAct::UndoRemove)))
+                    .undo(
+                        UndoStep::of(Verb::Remove, label)
+                            .pressed_as(pressed(FooterAct::UndoRemove)),
+                    )
                     .into()
             }));
         }
@@ -6727,6 +6733,84 @@ mod tests {
             ]
         );
         assert_eq!(unlink_planned_fight(&marked, "Wolf Pack", 1), body);
+        // Review of PR 717 (P1): the planned fights' days are kept by the fights' revision, not
+        // their count. Wolf Pack renamed on disk leaves the note and the count as they were;
+        // Bridge Ambush, now the first planned fight, shows no day of Wolf Pack's.
+        {
+            use crate::sessions::{Draft, NewNote, create_note};
+            let dir = tempfile::tempdir().unwrap();
+            let note = create_note(
+                dir.path(),
+                &NewNote {
+                    number: 1,
+                    title: "The Crossing",
+                    date: "2026-11-12",
+                    campaign: "Marches",
+                    template: &marked[marked.find("## Plan").unwrap()..],
+                },
+            )
+            .unwrap();
+            let mut sessions = Sessions {
+                draft: Some(Draft::open(&note.path).unwrap()),
+                ..Sessions::default()
+            };
+            let renamed = [
+                planned_fight("Grey Wolves", "Encounters/Grey Wolves.md"),
+                planned_fight("Bridge Ambush", "Encounters/Bridge Ambush.md"),
+            ];
+            let mut days_of = |fights: &[PlanFight], fights_revision| {
+                let body = sessions.draft.as_ref().unwrap().body.clone();
+                let planned: Vec<&PlanFight> =
+                    plan_links(&body, &book.events, Some(session), fights)
+                        .into_iter()
+                        .filter(|(_, _, waiting)| *waiting)
+                        .map(|(_, fight, _)| fight)
+                        .collect();
+                let mut group = |_: &mut egui::Ui| {};
+                let plan = Plan {
+                    fights,
+                    fights_revision,
+                    saved_runs: &[],
+                    saved_runs_revision: fights_revision,
+                    groups: &[],
+                    group_blocked: None,
+                    group_open: false,
+                    group_discard: &|_| None,
+                    arrivals_open: false,
+                    group_editor: std::cell::RefCell::new(&mut group),
+                    blocked: None,
+                    run_directory: None,
+                    open_run: None,
+                    open_state: String::new(),
+                    open_encounter: None,
+                    party: &[],
+                    tables: &[],
+                };
+                let names: Vec<String> = planned.iter().map(|fight| fight.name.clone()).collect();
+                let days = sessions.planned_days(&book, Some(session), &plan, &planned);
+                names
+                    .into_iter()
+                    .zip(days.at.iter().cloned())
+                    .collect::<Vec<_>>()
+            };
+            let read = crate::design::memo::Revised::new(()).revision();
+            assert_eq!(
+                days_of(&fights, read),
+                [
+                    (
+                        "Wolf Pack".to_owned(),
+                        Some("Day 2 of Road to the ford".to_owned())
+                    ),
+                    ("Bridge Ambush".to_owned(), None)
+                ]
+            );
+            let read_again = crate::design::memo::Revised::new(()).revision();
+            assert_eq!(
+                days_of(&renamed, read_again),
+                [("Bridge Ambush".to_owned(), None)],
+                "a renamed fight's day stays with it, never on the row after it"
+            );
+        }
         // A fight planned the ordinary way carries nothing.
         assert_eq!(
             road_days(body, &book.events, Some(session), &fights)[0].1,
@@ -7642,6 +7726,7 @@ mod tests {
                         fights: &[],
                         saved_runs: runs,
                         saved_runs_revision: no_runs,
+                        fights_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8247,6 +8332,7 @@ mod tests {
                         fights: &[],
                         saved_runs: runs,
                         saved_runs_revision: runs.revision(),
+                        fights_revision: runs.revision(),
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8588,6 +8674,7 @@ mod tests {
                         fights: &[],
                         saved_runs: &[],
                         saved_runs_revision: no_runs,
+                        fights_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8669,6 +8756,7 @@ mod tests {
                         fights: &fights,
                         saved_runs: &[],
                         saved_runs_revision: no_runs,
+                        fights_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8723,6 +8811,14 @@ mod tests {
                 shown(harness, "Open: Captain Varra")
             })
             .expect("scene-model-steady");
+        // Review of PR 703: the planned fights' days are worked out once for each change of
+        // the note, the Timeline or the fights, never on a quiet frame or a resize.
+        let days = || DAYS_BY_PLACE.with(std::cell::Cell::get);
+        let before = days();
+        harness.run_steps(3);
+        harness.set_size(egui::vec2(design::FORM_WIDTH + 200.0, 800.0));
+        harness.run_steps(3);
+        assert_eq!(days(), before, "quiet frames work out no planned day");
         // Two scenes, each with its box; the plain list line has no row. Round 28 FD3: the
         // heading counts every row under it, a done scene too (it said 2 for these 3 rows).
         assert!(harness.query_by_label("Open: Captain Varra").is_some());
@@ -9493,6 +9589,7 @@ mod tests {
                         fights: &[],
                         saved_runs: &[],
                         saved_runs_revision: no_runs,
+                        fights_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,

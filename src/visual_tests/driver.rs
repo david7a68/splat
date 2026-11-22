@@ -1152,6 +1152,21 @@ impl<'a> Driver<'a> {
             .unwrap_or_default()
     }
 
+    /// The whole name of a Timeline event's Undo on screen (M-N1.7: `Undo remove <label>`, on
+    /// the plan as on Timeline; `Undo add` for an added event), never a scene's `Undo add scene`.
+    pub fn event_undo(&self, verb: &str) -> Option<String> {
+        let start = format!("Undo {verb} ");
+        self.nodes()
+            .into_iter()
+            .find(|node| {
+                // An added event's Undo keeps no object yet (M0529 waits for layout 11c).
+                (node.name.starts_with(&start) || (verb == "add" && node.name == "Undo add"))
+                    && node.name != "Undo add scene"
+                    && Self::is_control(node)
+            })
+            .map(|node| node.name)
+    }
+
     pub fn has_containing(&self, name: &str) -> bool {
         self.nodes().iter().any(|node| node.name.contains(name))
     }
@@ -2375,17 +2390,80 @@ impl<'a> Driver<'a> {
         )
     }
 
-    /// Layout PR 5a-2 (I6): the Session plan's rows, from their records. In column mode every
-    /// row's actions start at one column exactly `L` after the widest title (a row whose drawn
-    /// action is narrower than its recipe's widest alternate starts up to `L` in); otherwise (the plan too narrow for the column) each row keeps its actions
-    /// at the far edge, as on main. Returns whether it holds, whether the
-    /// plan is in column mode, and the rows.
+    /// Layout PR 5a-2 (I6): the Session plan's rows. Each row's actions start at the column; in
+    /// the far-edge layout its summary lines may reach under them (every line is measured).
     pub fn plan_columns_hold(&self) -> (bool, bool, String) {
         let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
             .into_iter()
             .filter(|record| record.owner == "plan")
             .collect();
         plan_rows_hold(&records)
+    }
+
+    /// Layout PR 5a-2 and 5b (I6): the rows of a list measured in its last pass (`owner`), from
+    /// their records. In column mode the column starts exactly `L` after the widest facts, and
+    /// no action starts before it. With `aligned_end`, every row's actions end at one edge and
+    /// the widest starts at the column; else each row's actions start at the column (up to `L`
+    /// in, for a narrower alternate). Otherwise (too narrow for the column) each row keeps its
+    /// actions at the far edge, `far_gap` or more after its facts where they share its line.
+    /// Returns whether it holds, whether the list is in column mode, and the rows.
+    pub fn kept_columns_hold(
+        &self,
+        owner: &str,
+        aligned_end: bool,
+        far_gap: Option<f32>,
+    ) -> (bool, bool, String) {
+        const L: f32 = crate::design::L;
+        let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
+            .into_iter()
+            .filter(|record| record.owner == owner)
+            .collect();
+        let column = records.iter().all(|record| !record.wrapped);
+        let widest = records
+            .iter()
+            .map(|record| record.facts.right())
+            .fold(f32::MIN, f32::max);
+        let start = records
+            .iter()
+            .map(|record| record.action.left())
+            .fold(f32::MAX, f32::min);
+        let end = records.first().map_or(0.0, |record| record.action.right());
+        let holds = !records.is_empty()
+            && records.iter().all(|record| record.wrapped != column)
+            && (!column || !aligned_end || (start - (widest + L)).abs() <= 0.5)
+            && records.iter().all(|record| {
+                if column {
+                    (record.column - (widest + L)).abs() <= 0.5
+                        && record.action.left() >= record.column - 0.5
+                        && if aligned_end {
+                            (record.action.right() - end).abs() <= 0.5
+                        } else {
+                            record.action.left() <= record.column + L
+                        }
+                } else {
+                    far_gap
+                        .is_none_or(|gap| record.action.left() >= record.facts.right() + gap - 0.5)
+                }
+            });
+        let rows: Vec<_> = records
+            .iter()
+            .map(|record| {
+                (
+                    record.facts.right().round(),
+                    record.column.round(),
+                    record.action.left().round(),
+                    record.action.right().round(),
+                    record.wrapped,
+                )
+            })
+            .collect();
+        (
+            holds,
+            column,
+            format!(
+                "{owner}: the widest facts end at {widest:.1}; rows (facts end, column, actions start, actions end, far edge): {rows:?}"
+            ),
+        )
     }
 
     /// Every whole row the panes registered in the last completed pass (N12, layout step 11a).

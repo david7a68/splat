@@ -10,6 +10,7 @@ pub mod fact;
 pub mod fitting;
 pub mod icons;
 pub mod layout;
+pub mod line_end;
 pub mod memo;
 pub mod outcome;
 pub mod pane;
@@ -35,7 +36,7 @@ pub use components::*;
 #[allow(unused_imports)]
 pub use extras::{
     Gap, Heading, QUOTE_INDENT, choice, choice_value, choice_wrapped, choice_wrapped_value, gap,
-    heading, quote,
+    gap_to_next, heading, quote,
 };
 // Wave 2 callers name the layout parts through `design`, as they name the components.
 pub use action_rows::{Columns, RowAction, action_row};
