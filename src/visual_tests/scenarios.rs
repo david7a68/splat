@@ -21265,15 +21265,40 @@ pub mod encounter_groups {
                         preview = text.galley.job.sections.last().map(|s| s.format.color);
                     }
                 });
+                // Layout 11c (M0233): the fault's frame starts at the field's own left edge
+                // (±1 px), read from its painted icon, which stands `S` and a hairline after the
+                // frame's left (`small_tone_message`).
+                let mut icons = Vec::new();
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if clip.intersects(rect) && text.galley.job.text == crate::design::icons::ERROR
+                    {
+                        icons.push(rect);
+                    }
+                });
+                let frame = faults.first().and_then(|words| {
+                    icons
+                        .iter()
+                        .filter(|icon| {
+                            icon.right() <= words.left() + 1.0
+                                && icon.bottom() > words.top()
+                                && icon.top() < words.bottom()
+                        })
+                        .map(|icon| icon.left() - crate::design::S - crate::design::HAIRLINE_WIDTH)
+                        .reduce(f32::max)
+                });
                 let placed = field.is_some_and(|field| {
                     faults.len() == 1
                         && faults[0].top() >= field.bottom() - 0.5
                         && faults[0].top() < field.bottom() + crate::design::XL
                         && faults[0].left() >= field.left() - 0.5
+                        && frame.is_some_and(|frame| (frame - field.left()).abs() <= 1.0)
                 }) && preview == Some(crate::design::colors().result.error);
                 (
                     placed,
-                    format!("field {field:?}, faults {faults:?}, preview {preview:?}"),
+                    format!(
+                        "field {field:?}, faults {faults:?}, frame {frame:?}, preview {preview:?}"
+                    ),
                 )
             });
             d.observe(
