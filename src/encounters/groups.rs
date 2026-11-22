@@ -1896,31 +1896,33 @@ fn belongs_to(
             .find(|(known, _)| *known == id)
             .map_or(MISSING_ENCOUNTER, |(_, name)| name)
     });
-    ui.horizontal(|ui| {
-        choice_label(ui, BELONGS_TO, |ui| {
-            // The choice ends where the name field ends, inside the column. The part's list is as
-            // wide as its control at every size (FB8), and a long name wraps in it.
-            let right = name_right.min(ui.max_rect().right());
-            let width = (right - ui.cursor().left()).max(Density::Scan.control());
-            let mut chosen = current;
-            let mut dropdown = design::Dropdown::new(BELONGS.of(draft.id), BELONGS_TO)
-                .width(width)
-                .choice(None, ANY_ENCOUNTER)
-                .choices(choices.iter().map(|(id, name)| (Some(*id), *name)));
-            // An encounter that is gone stays the value, as words the list cannot choose again.
-            if current.is_some_and(|id| !choices.iter().any(|(known, _)| *known == id)) {
-                dropdown = dropdown.blocked_choice(
-                    current,
-                    MISSING_ENCOUNTER,
-                    "Its encounter was deleted. Choose another.",
-                );
-            }
-            if dropdown.show(ui, &mut chosen).changed {
-                // The same choice again keeps a link that the note gives: only a change writes.
-                draft.setup.encounter = chosen.map(EntryRef::id);
-                draft.touch();
-            }
-        });
+    whole_row(ui, |ui| {
+        ui.horizontal(|ui| {
+            choice_label(ui, BELONGS_TO, |ui| {
+                // The choice ends where the name field ends, inside the column. The part's list is as
+                // wide as its control at every size (FB8), and a long name wraps in it.
+                let right = name_right.min(ui.max_rect().right());
+                let width = (right - ui.cursor().left()).max(Density::Scan.control());
+                let mut chosen = current;
+                let mut dropdown = design::Dropdown::new(BELONGS.of(draft.id), BELONGS_TO)
+                    .width(width)
+                    .choice(None, ANY_ENCOUNTER)
+                    .choices(choices.iter().map(|(id, name)| (Some(*id), *name)));
+                // An encounter that is gone stays the value, as words the list cannot choose again.
+                if current.is_some_and(|id| !choices.iter().any(|(known, _)| *known == id)) {
+                    dropdown = dropdown.blocked_choice(
+                        current,
+                        MISSING_ENCOUNTER,
+                        "Its encounter was deleted. Choose another.",
+                    );
+                }
+                if dropdown.show(ui, &mut chosen).changed {
+                    // The same choice again keeps a link that the note gives: only a change writes.
+                    draft.setup.encounter = chosen.map(EntryRef::id);
+                    draft.touch();
+                }
+            });
+        })
     });
     // In an encounter's editor, belonging to it goes without saying.
     if current.is_some() && current == open.map(|(id, _)| id) {
@@ -3464,6 +3466,19 @@ fn members_pane(
 }
 
 /// FB4: `Default side` and `Belongs to` share one label column, the wider label plus `S`, so
+/// Layout 11c (SB1, AB1): a whole block of a group's form, registered, so a `Fills` pane's
+/// footer ends the column above it, with a hairline, and never cuts through it.
+fn register_whole(ui: &egui::Ui, block: egui::Rect) {
+    design::register_row(ui, block);
+}
+
+/// `add` as one whole block of a group's form (`register_whole`).
+fn whole_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let block = ui.scope(add);
+    register_whole(ui, block.response.rect);
+    block.inner
+}
+
 /// their controls start at one x.
 fn choice_label<R>(ui: &mut egui::Ui, text: &str, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let font = Type::Small.font(ui);
@@ -3565,24 +3580,26 @@ fn group_fields(
     refused: Option<RefusalPlace>,
 ) -> bool {
     ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-    ui.horizontal(|ui| {
-        choice_label(ui, SIDE_FIELD, |ui| {
-            let name = format!("{SIDE_FIELD} for {}", draft.name);
-            let side = draft.setup.side.clone();
-            super::side_control(
-                ui,
-                (
-                    super::list::SIDE_CHOICE.of(draft.id),
-                    super::list::SIDE_OTHER.of(draft.id),
-                ),
-                &name,
-                &mut draft.setup.side,
-                &[],
-            );
-            if draft.setup.side != side {
-                draft.touch();
-            }
-        });
+    whole_row(ui, |ui| {
+        ui.horizontal(|ui| {
+            choice_label(ui, SIDE_FIELD, |ui| {
+                let name = format!("{SIDE_FIELD} for {}", draft.name);
+                let side = draft.setup.side.clone();
+                super::side_control(
+                    ui,
+                    (
+                        super::list::SIDE_CHOICE.of(draft.id),
+                        super::list::SIDE_OTHER.of(draft.id),
+                    ),
+                    &name,
+                    &mut draft.setup.side,
+                    &[],
+                );
+                if draft.setup.side != side {
+                    draft.touch();
+                }
+            });
+        })
     });
     if open.is_none() {
         design::help(ui, "Party, enemies, or any other name, such as rivals.");
@@ -3639,24 +3656,27 @@ fn group_fields(
             design::Gap::M
         },
     );
-    design::field(ui, NOTES_FIELD, None, None, |ui| {
-        let hint = design::placeholder(ui, "When they arrive, what they want. Markdown is fine.");
-        let rows = if open.is_some() { 2 } else { 4 };
-        // Keyed by the group draft, so two groups never share its text or its Undo.
-        let output = GROUP_NOTES
-            .of(draft.id())
-            .editor(ui, &mut draft.notes, |edit| {
-                super::notes_style(edit, rows).hint_text(hint)
-            });
-        design::named(
-            ui,
-            &output.response,
-            &format!("{NOTES_FIELD} for {}", draft.name),
-        );
-        // F1: notes make a group changed, so Save checks it: an edit of them is an edit.
-        if output.response.changed() {
-            draft.touch();
-        }
+    whole_row(ui, |ui| {
+        design::field(ui, NOTES_FIELD, None, None, |ui| {
+            let hint =
+                design::placeholder(ui, "When they arrive, what they want. Markdown is fine.");
+            let rows = if open.is_some() { 2 } else { 4 };
+            // Keyed by the group draft, so two groups never share its text or its Undo.
+            let output = GROUP_NOTES
+                .of(draft.id())
+                .editor(ui, &mut draft.notes, |edit| {
+                    super::notes_style(edit, rows).hint_text(hint)
+                });
+            design::named(
+                ui,
+                &output.response,
+                &format!("{NOTES_FIELD} for {}", draft.name),
+            );
+            // F1: notes make a group changed, so Save checks it: an edit of them is an edit.
+            if output.response.changed() {
+                draft.touch();
+            }
+        })
     });
     gone_shown || member_shown
 }
@@ -3912,7 +3932,7 @@ fn members(
                 member_row
             });
             let (member_row, facts) = (facts.inner, facts.response.rect);
-            ui.horizontal(|ui| {
+            let count_line = ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
                 let count = ui.add(
                     egui::DragValue::new(&mut member.count)
@@ -3988,7 +4008,11 @@ fn members(
                     egui::Rect::from_min_max(egui::pos2(left, count.rect.top()), count.rect.max),
                     actions,
                 );
-            });
+            })
+            .response
+            .rect;
+            // The member's facts and its count line are one whole block.
+            register_whole(ui, facts.union(count_line));
             // FA1, FJ6: every member fault is in the one member-fault form, with its line while
             // the members are the saved ones (a draft's lines can move).
             let line = saved_members
