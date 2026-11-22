@@ -590,9 +590,14 @@ mod tests {
             "a one-letter title's link: {:?}",
             drawn[0].2
         );
+        let painted = harness.output().shapes.iter().any(|shape| {
+            matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text() == "Untitled")
+        });
         assert!(
-            harness.query_by_label("Untitled").is_some() && drawn[1].2.width() >= 24.0 - 0.01,
-            "an empty title shows `Untitled`, at least 24 px wide"
+            painted
+                && harness.query_by_label("Untitled").is_some()
+                && drawn[1].2.width() >= 24.0 - 0.01,
+            "an empty title shows and says `Untitled`, at least 24 px wide"
         );
     }
 }
