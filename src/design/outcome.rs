@@ -4325,6 +4325,26 @@ impl Body {
                     let _ = ui.allocate_exact_size(egui::vec2(0.0, height), egui::Sense::hover());
                     continue;
                 }
+                // A message outside a footer (`Reasons::Body`) keeps each open lock's room by
+                // what decides it: the words, the width, the tone, the fonts and the scale. A
+                // quiet frame takes the kept room and lays out no reason (issue #527).
+                let kept_room = matches!(reasons, Reasons::Body).then(|| {
+                    egui::Id::new((
+                        "body_reason_room",
+                        reason,
+                        ui.available_width().to_bits(),
+                        std::mem::discriminant(&self.tone),
+                        super::theme::font_generation(ui.ctx()),
+                        ui.ctx().pixels_per_point().to_bits(),
+                    ))
+                });
+                if let Some(kept) =
+                    kept_room.and_then(|key| ui.data(|data| data.get_temp::<f32>(key)))
+                {
+                    let height = (kept - ui.spacing().item_spacing.y).max(0.0);
+                    let _ = ui.allocate_exact_size(egui::vec2(0.0, height), egui::Sense::hover());
+                    continue;
+                }
                 count(|work| work.laid += 1);
                 let before = ui.cursor().top();
                 message_choice_row(ui, self.tone, |ui| {
@@ -4334,6 +4354,10 @@ impl Body {
                 });
                 if measure {
                     add(reasons, true, ui.cursor().top() - before);
+                }
+                if let Some(key) = kept_room {
+                    let taken = ui.cursor().top() - before;
+                    ui.data_mut(|data| data.insert_temp(key, taken));
                 }
             }
         }
@@ -4831,20 +4855,29 @@ impl<A> BodyMessage<A> {
                 return row.inner.then_some(id);
             }
         };
-        let pressed = if self.compact {
-            typed
-                .body
-                .draw_compact(ui, MessagePlace::Page, self.detail.as_deref())?
-        } else {
-            let room = if self.overhang {
-                IconRoom::Overhang
-            } else {
-                IconRoom::Measured
-            };
-            typed
-                .body
-                .draw_in(ui, MessagePlace::Page, Reasons::Body, room)?
-        };
+        // The controls' ids are the message's own: its place and its words (issue #526). A notice
+        // that replaces another in the same place has new ids, so it never takes a press that
+        // was meant for the old one's focused control; two equal messages side by side differ
+        // by their place.
+        let scope = (ui.next_auto_id(), "body_message", typed.body.words.clone());
+        let pressed = ui
+            .push_id(scope, |ui| {
+                if self.compact {
+                    typed
+                        .body
+                        .draw_compact(ui, MessagePlace::Page, self.detail.as_deref())
+                } else {
+                    let room = if self.overhang {
+                        IconRoom::Overhang
+                    } else {
+                        IconRoom::Measured
+                    };
+                    typed
+                        .body
+                        .draw_in(ui, MessagePlace::Page, Reasons::Body, room)
+                }
+            })
+            .inner?;
         typed.id(pressed)
     }
 }
@@ -6688,6 +6721,8 @@ mod tests {
             pressed: Vec<Fix>,
             /// The right edge of the fault's 320 px column.
             right: f32,
+            /// Issue #526: the warning replaced in its place by another one.
+            replaced: bool,
         }
         const PATH: &str =
             "Packages/Ravenholm Ironside Wardens/Encounters/Bridge Ambush/manifest.md";
@@ -6727,8 +6762,13 @@ mod tests {
                             state.pressed.extend(pressed);
                             // A typed message in the body (`BodyMessage`): a warning with its
                             // primary choice, a link and its close icon.
+                            let words = if state.replaced {
+                                crate::sentence!("Bram’s sheet changed.")
+                            } else {
+                                crate::sentence!("Kaya’s sheet changed.")
+                            };
                             let pressed = BodyMessage::from(
-                                Notice::warning(crate::sentence!("Kaya’s sheet changed."))
+                                Notice::warning(words)
                                     .choice(Choice::new(
                                         MessageChoice::Primary("Record again"),
                                         Fix::Record,
@@ -6747,10 +6787,24 @@ mod tests {
                             )
                             .show(ui);
                             state.pressed.extend(pressed);
-                            // A typed fault with its help line (M-P0 item 9).
+                            // A typed fault with its help line (M-P0 item 9), and a choice whose
+                            // lock is open (issue #527: its hidden reason keeps its room).
                             let _ = BodyMessage::<Fix>::from(
                                 FaultMessage::new(&Hp(Severity::CannotRead, Some(3)))
-                                    .help(crate::sentence!("Read the row again after you fix it.")),
+                                    .help(crate::sentence!("Read the row again after you fix it."))
+                                    .choice(
+                                        Choice::new(
+                                            MessageChoice::Link {
+                                                word: "Read again",
+                                                hover: None,
+                                            },
+                                            Fix::Open,
+                                        )
+                                        .locked_when(
+                                            false,
+                                            crate::sentence!("Wait for the sheet to load."),
+                                        ),
+                                    ),
                             )
                             .show(ui);
                         },
@@ -6903,6 +6957,27 @@ mod tests {
             h.state().pressed,
             [Fix::Record, Fix::Log, Fix::Dismiss],
             "each press once"
+        );
+        // Issue #527: quiet frames lay out no hidden reason; the open lock keeps its room.
+        let quiet = footer_work();
+        h.run_steps(3);
+        assert_eq!(
+            footer_work().laid - quiet.laid,
+            0,
+            "#527: a message outside a footer keeps its hidden reason's room"
+        );
+        // Issue #526: the warning is replaced in its place while its close icon has focus. Enter
+        // reaches no control of the new warning.
+        h.get_by_label(DISMISS_NAME).focus();
+        h.run_steps(1);
+        h.state_mut().replaced = true;
+        h.run_steps(1);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        assert_eq!(
+            h.state().pressed,
+            [Fix::Record, Fix::Log, Fix::Dismiss],
+            "#526: a replaced warning takes no press meant for the old one's focused control"
         );
 
         // The compact form (M-P0 item 7: the Run's header band and setup rows), at 900 and in a
