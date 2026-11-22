@@ -994,7 +994,7 @@ impl TimelinePage {
             }
             painter.galley(egui::pos2(x, top), galley, c.text);
             if !detail.is_empty() && !open {
-                let second = second_line(ui, &detail, &spans, width);
+                let second = second_line(ui, &detail, 0, &spans, width);
                 painter.galley(
                     egui::pos2(x, top + lines - Type::Small.line()),
                     second,
@@ -1035,9 +1035,11 @@ impl TimelinePage {
                         {
                             self.wants_back_to_run = true;
                         }
-                        ui.add(
-                            egui::Label::new(Type::Small.rich(ui, after).color(c.muted)).truncate(),
-                        );
+                        // The words after the link fit as the closed row's do (M0552): whole
+                        // words to the row's end, in their own colours.
+                        let from = detail.len() - after.len();
+                        let width = ui.available_width();
+                        ui.label(second_line(ui, &detail, from, &spans, width));
                     });
                 },
             );
@@ -2088,17 +2090,18 @@ pub(crate) fn check_long_rest_add(kinds: &'static [Kind]) {
     assert!(!super::party_state(&harness.state().events, session).rested);
 }
 
-/// A row's second line on one line, muted, with the rest ruling from `at` in its own colour.
-/// A row's second line: muted, with each status part (the rest ruling, a length the clock
-/// cannot count) in its own colour. `spans` are byte ranges in `detail`, in order.
+/// A row's second line, from the byte `from` of `detail` (the open row's words after its run
+/// link start there): muted, with each status part (the rest ruling, a length the clock cannot
+/// count) in its own colour. `spans` are byte ranges in `detail`, in order.
 fn second_line(
     ui: &egui::Ui,
     detail: &str,
+    from: usize,
     spans: &[(std::ops::Range<usize>, egui::Color32)],
     width: f32,
 ) -> std::sync::Arc<egui::Galley> {
     let mut job = egui::text::LayoutJob::default();
-    let mut at = 0;
+    let mut at = from.min(detail.len());
     let mut append = |words: &str, color| {
         job.append(
             &words.replace(['\n', '\r'], " "),
@@ -2216,6 +2219,56 @@ mod tests {
             !on_disk(&harness).contains("Moved camp"),
             "under a modal, Ctrl+S saves nothing on the campaign change's frame"
         );
+    }
+
+    /// M0552: the open row's words after its run link are fitted by the closed row's own line
+    /// (`second_line` from the link's end): cut with an ellipsis at the row's end, a status part
+    /// in its own colour (the raw label's were all muted), and the whole words in the line's text.
+    #[test]
+    fn the_open_rows_words_after_its_link_fit_as_a_closed_rows() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let mut seen = None;
+        // New fonts apply from the next frame.
+        for _ in 0..2 {
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let detail = "Session 4 · 3 rounds · Time not counted";
+                    let warning = detail.find("Time").unwrap();
+                    let spans = [(warning..detail.len(), colors().result.warning)];
+                    // After a link that ends at "rounds".
+                    let after = detail.find(" · Time").unwrap();
+                    let whole = second_line(ui, detail, after, &spans, f32::INFINITY);
+                    let cut = second_line(ui, detail, after, &spans, whole.size().x / 2.0);
+                    let shown = |galley: &egui::Galley| -> String {
+                        galley.rows[0]
+                            .glyphs
+                            .iter()
+                            .map(|glyph| glyph.chr)
+                            .collect()
+                    };
+                    let warned = whole
+                        .job
+                        .sections
+                        .iter()
+                        .filter(|section| section.format.color == colors().result.warning)
+                        .map(|section| &whole.job.text[section.byte_range.clone()])
+                        .collect::<String>();
+                    seen = Some((shown(&whole), shown(&cut), cut.job.text.clone(), warned));
+                });
+            });
+        }
+        let (whole, cut, text, warned) = seen.unwrap();
+        assert_eq!(
+            whole, " · Time not counted",
+            "the line starts at the link's end"
+        );
+        assert_eq!(warned, "Time not counted", "the warning keeps its colour");
+        assert!(
+            cut.ends_with('…') && cut.len() < whole.len(),
+            "cut to the row: {cut:?}"
+        );
+        assert_eq!(text, whole, "the line's text keeps the whole words");
     }
 
     /// M0556: the list opens at its last event: the list's column writes the jump
