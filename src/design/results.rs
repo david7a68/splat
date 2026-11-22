@@ -1152,11 +1152,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
         ("src/encounters/groups.rs", "members", &[Ban::Body]),
-        (
-            "src/encounters/groups.rs",
-            "members_pane",
-            &[Ban::Layout(1)],
-        ),
         ("src/loot_editor.rs", "add_row", &[Ban::Extras(1)]),
         (
             "src/markdown_view.rs",
