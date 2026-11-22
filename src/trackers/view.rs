@@ -415,11 +415,9 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             },
         );
         for (at, (key, def)) in usable(true).enumerate() {
-            tracker_lines(ui, rules, state, view, &columns, key, def, act);
-            if at == 0 {
-                // The heading and its first tracker, as one block (SH9).
-                register_block(ui, heading_top);
-            }
+            // The heading and its first tracker's first line, as one block (SH9).
+            let heading = (at == 0).then_some(heading_top);
+            tracker_lines(ui, rules, state, view, &columns, key, def, act, heading);
         }
     }
     let more = usable(false).count();
@@ -432,11 +430,10 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             design::group_heading_text(ui, "More trackers", more),
             |ui| {
                 for (at, (key, def)) in usable(false).enumerate() {
-                    tracker_lines(ui, rules, state, view, &columns, key, def, act);
-                    if at == 0 {
-                        // The open section's heading and its first tracker, as one block.
-                        register_block(ui, heading_top);
-                    }
+                    // The open section's heading and its first tracker's first line, as one
+                    // block.
+                    let heading = (at == 0).then_some(heading_top);
+                    tracker_lines(ui, rules, state, view, &columns, key, def, act, heading);
                 }
             },
         );
@@ -715,7 +712,12 @@ fn tracker_lines(
     key: &str,
     def: &super::Definition,
     act: &mut Option<Act>,
+    // The top of the section heading this tracker comes first under, if it does: the heading, the
+    // tracker's own name line and its FIRST line are one block (layout step 11a, SH9); its other
+    // lines are blocks of their own.
+    heading_top: Option<f32>,
 ) {
+    let mut bind = Some(heading_top.unwrap_or_else(|| ui.cursor().top()));
     let value_text = |instance: Option<&str>| {
         let value = state.value(rules, key, instance);
         match def.goal {
@@ -813,7 +815,7 @@ fn tracker_lines(
             said = true;
             design::outcome::row_fault(ui, &TrackerFault::Problem(super::repeat_words(repeat)));
         }
-        register_block(ui, line_top);
+        register_block(ui, bind.take().map_or(line_top, |top| top.min(line_top)));
     }
     design::gap(ui, Gap::XS);
 }
