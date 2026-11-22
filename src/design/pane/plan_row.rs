@@ -59,6 +59,10 @@ pub struct PlanRow<'a> {
     pub summary: &'a [SummaryPart<'a>],
     /// The row's own action place: its widest action recipe.
     pub actions: f32,
+    /// The action place's height, as the actions measure it (one line: `Density::Read.control()`;
+    /// more when they wrap): the summary starts under it and the block holds it (review of PR
+    /// 820).
+    pub actions_height: f32,
     /// The rule after the row is part of the block (a closed row); an opened row draws its
     /// details first, then the rule.
     pub rule: bool,
@@ -124,9 +128,19 @@ impl PlanRow<'_> {
         (width - Self::x0() - Density::Read.control() - S).max(XL)
     }
 
+    /// The title's words: an empty title shows `Untitled` (review of PR 820), so the link is
+    /// never empty.
+    fn words(&self) -> &str {
+        if self.title.trim().is_empty() {
+            "Untitled"
+        } else {
+            self.title
+        }
+    }
+
     fn title(&self, ui: &Ui, width: f32) -> std::sync::Arc<egui::Galley> {
         let text = Type::Body
-            .rich(ui, self.title)
+            .rich(ui, self.words())
             .color(colors().accent)
             .underline();
         egui::WidgetText::from(text).into_galley(
@@ -235,10 +249,8 @@ impl PlanRow<'_> {
         } else {
             width - self.actions
         };
-        let actions = Rect::from_min_size(
-            pos2(action_x, 0.0),
-            vec2(self.actions, Density::Read.control()),
-        );
+        let actions =
+            Rect::from_min_size(pos2(action_x, 0.0), vec2(self.actions, self.actions_height));
         let summary_top = title_height.max(actions.bottom());
         let summary = self.summary(ui, (x0, summary_top, Self::summary_width(width)));
         let row = (summary_top + summary.height).max(actions.bottom());
@@ -264,7 +276,8 @@ impl PlanRow<'_> {
                     at: pos2(x0, 0.0),
                     galley: title,
                 },
-                title_height,
+                // A press target at least 24 px wide (review of PR 820).
+                vec2(title_width.max(24.0), title_height),
             )])
     }
 }
@@ -302,6 +315,10 @@ mod tests {
         region: RegionState,
         /// Each drawn row's block rect, its title link's rect and its action's, as drawn.
         drawn: Vec<(usize, Rect, Rect, Rect)>,
+        /// The actions wrap to two lines (two buttons, one under the other), as they measure.
+        stacked: bool,
+        /// Each row's height by the test's own separate layout, in this pass.
+        expected: Vec<f32>,
     }
 
     const SUMMARY: [SummaryPart<'static>; 1] = [SummaryPart::Words {
@@ -311,6 +328,52 @@ mod tests {
         max_rows: 3,
     }];
 
+    /// The actions' measured height: one line, or two with `S` between.
+    fn actions_height(stacked: bool) -> f32 {
+        if stacked {
+            2.0 * Density::Read.control() + S
+        } else {
+            Density::Read.control()
+        }
+    }
+
+    /// The row's height by a separate layout (the test's own): the title (at least 24 px) beside
+    /// the actions, the summary under the taller, then `S` and the rule (review of PR 820).
+    fn expected_height(ui: &Ui, title: &str, width: f32, stacked: bool) -> f32 {
+        let x0 = Type::Body.size() + S;
+        let title = egui::WidgetText::from(Type::Body.rich(
+            ui,
+            if title.trim().is_empty() {
+                "Untitled"
+            } else {
+                title
+            },
+        ))
+        .into_galley(
+            ui,
+            Some(egui::TextWrapMode::Wrap),
+            (width - x0 - 120.0 - S).max(XL),
+            egui::TextStyle::Body,
+        );
+        let SummaryPart::Words {
+            text,
+            role,
+            color,
+            max_rows,
+        } = SUMMARY[0]
+        else {
+            unreachable!("the test's summary is words")
+        };
+        let mut job = egui::text::LayoutJob::single_section(
+            text.to_owned(),
+            egui::TextFormat::simple(role.font(ui), color),
+        );
+        job.wrap.max_width = (width - x0 - Density::Read.control() - S).max(XL);
+        job.wrap.max_rows = max_rows;
+        let summary = ui.fonts_mut(|fonts| fonts.layout_job(job)).size().y;
+        title.size().y.max(24.0).max(actions_height(stacked)) + summary + S + 1.0
+    }
+
     fn harness(titles: &[&str], size: Vec2, scale: f32) -> Harness<'static, Rows> {
         let rows = Rows {
             titles: titles.iter().map(|title| (*title).to_owned()).collect(),
@@ -318,6 +381,8 @@ mod tests {
             blocks: Revised::new(Vec::new()),
             region: RegionState::new("plan_row_test"),
             drawn: Vec::new(),
+            stacked: false,
+            expected: Vec::new(),
         };
         let mut harness = Harness::builder()
             .with_size(size)
@@ -329,6 +394,12 @@ mod tests {
                         Messages::<NoPress>::new(&frame, "plan_row_test", ui.available_width());
                     let _ = messages.pane(ui, Body::Content, |ui| {
                         let width = ui.available_width();
+                        let stacked = rows.stacked;
+                        rows.expected = rows
+                            .titles
+                            .iter()
+                            .map(|title| expected_height(ui, title, width, stacked))
+                            .collect();
                         let specs: Vec<PlanRow<'_>> = rows
                             .titles
                             .iter()
@@ -339,6 +410,7 @@ mod tests {
                                 title,
                                 summary: &SUMMARY,
                                 actions: 120.0,
+                                actions_height: actions_height(stacked),
                                 rule: true,
                             })
                             .collect();
@@ -356,15 +428,30 @@ mod tests {
                             blocks,
                             region,
                             drawn,
+                            ..
                         } = rows;
                         BlockRegion::new("plan_row_test", region, blocks).show_laid(
                             ui,
                             |at| &laid[at],
                             |ui, at| {
                                 let link = ui.link(0, &titles[at]).rect;
-                                let action = ui
-                                    .put(slot::ACTIONS, egui::Button::new(format!("Act {at}")))
-                                    .rect;
+                                let action = if stacked {
+                                    ui.in_slot(slot::ACTIONS, |ui| {
+                                        let first = ui.add_sized(
+                                            vec2(120.0, Density::Read.control()),
+                                            egui::Button::new(format!("Act {at}")),
+                                        );
+                                        ui.add_space(S);
+                                        let second = ui.add_sized(
+                                            vec2(120.0, Density::Read.control()),
+                                            egui::Button::new(format!("More {at}")),
+                                        );
+                                        first.rect.union(second.rect)
+                                    })
+                                } else {
+                                    ui.put(slot::ACTIONS, egui::Button::new(format!("Act {at}")))
+                                        .rect
+                                };
                                 rule(ui);
                                 let block =
                                     Rect::from_min_size(ui.slot(slot::LEAD).min, laid[at].size());
@@ -424,9 +511,12 @@ mod tests {
                         slot.top() >= block.top() - 0.5 && slot.bottom() <= block.bottom() + 0.5,
                         "{width}@{scale}: row {at}'s action {slot:?} inside its block"
                     );
+                    let _ = laid;
+                    let expected = rows.expected[at];
                     assert!(
-                        (block.height() - laid.size().y).abs() < 0.5,
-                        "{width}@{scale}: row {at} is as tall as laid"
+                        (block.height() - expected).abs() < 0.5,
+                        "{width}@{scale}: row {at} is {} tall, a separate layout says {expected}",
+                        block.height()
                     );
                 }
             }
@@ -467,6 +557,42 @@ mod tests {
                 .zip(&revisions)
                 .all(|(laid, was)| laid.revision() != *was),
             "every row was laid out again"
+        );
+    }
+
+    /// Review of PR 820: actions that wrap (two lines, as they measure) take their height in the
+    /// block: the block is as tall as a separate layout says, so the summary starts under them and
+    /// nothing goes past the block (the bounds check). Red: the actions' height left out.
+    #[test]
+    fn wrapped_actions_take_their_height() {
+        let mut harness = harness(&["Bridge Ambush", "Wolves"], vec2(520.0, 600.0), 1.0);
+        harness.state_mut().stacked = true;
+        harness.run_steps(2);
+        let rows = harness.state();
+        for &(at, block, _, action) in &rows.drawn {
+            let expected = rows.expected[at];
+            assert!(
+                (block.height() - expected).abs() < 0.5 && action.bottom() <= block.bottom() + 0.5,
+                "row {at}: {} tall with its two lines of actions, a separate layout says {expected}",
+                block.height()
+            );
+        }
+    }
+
+    /// Review of PR 820: a title link is a target at least 24 px wide, and an empty title shows
+    /// `Untitled`.
+    #[test]
+    fn a_short_or_empty_title_keeps_its_target() {
+        let harness = harness(&["A", ""], vec2(960.0, 600.0), 1.0);
+        let drawn = &harness.state().drawn;
+        assert!(
+            drawn[0].2.width() >= 24.0 - 0.01,
+            "a one-letter title's link: {:?}",
+            drawn[0].2
+        );
+        assert!(
+            harness.query_by_label("Untitled").is_some() && drawn[1].2.width() >= 24.0 - 0.01,
+            "an empty title shows `Untitled`, at least 24 px wide"
         );
     }
 }

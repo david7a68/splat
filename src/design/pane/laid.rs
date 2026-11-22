@@ -39,8 +39,8 @@ pub struct Laid {
     texts: Vec<LaidText>,
     slots: Vec<Rect>,
     /// Words drawn as links (`LaidUi::link`), each at its rect: its galley, and the press
-    /// target's height (at least 24 px, the galley centred in it).
-    links: Vec<(LaidText, f32)>,
+    /// target's size (at least 24 px each way, the galley centred in its height).
+    links: Vec<(LaidText, Vec2)>,
     /// The laid words a slot draws (`LaidUi::part`), by the slot's place; `None` for a slot the
     /// block fills itself.
     slot_texts: Vec<Option<Arc<Galley>>>,
@@ -55,15 +55,12 @@ impl Laid {
 
     /// This layout with `links`, drawn by the block through `LaidUi::link`. Each must lie in the
     /// block.
-    pub(in crate::design) fn with_links(mut self, links: Vec<(LaidText, f32)>) -> Self {
+    pub(in crate::design) fn with_links(mut self, links: Vec<(LaidText, Vec2)>) -> Self {
         debug_assert!(
-            links.iter().all(|(text, height)| {
+            links.iter().all(|(text, size)| {
                 Rect::from_min_size(egui::Pos2::ZERO, self.size)
                     .expand(0.5)
-                    .contains_rect(Rect::from_min_size(
-                        text.at,
-                        egui::vec2(text.galley.size().x, *height),
-                    ))
+                    .contains_rect(Rect::from_min_size(text.at, *size))
             }),
             "a recipe lays out every link inside its block"
         );
@@ -143,12 +140,15 @@ impl LaidUi<'_> {
     /// Link `at` (`Laid::with_links`): its laid words at their rect, a press target as tall as the
     /// recipe made it, named `name` to a screen reader, as `design::wrapped_link` draws one.
     pub fn link(&mut self, at: usize, name: &str) -> Response {
-        let (text, height) = &self.laid.links[at];
+        // An empty title shows `Untitled`, and says it (review of PR 820).
+        let name = if name.trim().is_empty() {
+            "Untitled"
+        } else {
+            name
+        };
+        let (text, size) = &self.laid.links[at];
         let origin = self.ui.max_rect().min;
-        let rect = Rect::from_min_size(
-            origin + text.at.to_vec2(),
-            egui::vec2(text.galley.size().x, *height),
-        );
+        let rect = Rect::from_min_size(origin + text.at.to_vec2(), *size);
         let response = self.ui.interact(
             rect,
             self.ui.id().with(("laid_link", at)),
