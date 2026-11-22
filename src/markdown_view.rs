@@ -3383,7 +3383,7 @@ mod tests {
             .and_then(|node| node.accesskit_node().label())
     }
 
-    fn link_names(harness: &egui_kittest::Harness<'_>) -> Vec<String> {
+    fn link_names<S>(harness: &egui_kittest::Harness<'_, S>) -> Vec<String> {
         use egui_kittest::kittest::NodeT;
         harness
             .root()
@@ -3502,8 +3502,8 @@ mod tests {
 
     /// Layout PR 9b-R1b: a kept document's maps are complete (every heading, every link control
     /// with its block and place), and a typed jump to a heading far below the view resolves from
-    /// the heading map: first as the heading's block draws, then from its kept offset before
-    /// any block draws.
+    /// the heading map: from the heading's kept offset before any block draws, and, in the frame
+    /// a new revision is prepared (no offsets yet), as the heading's block draws.
     #[test]
     fn a_typed_jump_resolves_from_the_heading_map() {
         let text: &'static str = Box::leak(
@@ -3514,24 +3514,27 @@ mod tests {
             )
             .into_boxed_str(),
         );
-        use crate::design::test_harness::ThemedPage;
+        use crate::design::test_harness::Themed;
         use egui_kittest::kittest::Queryable;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(480.0, 320.0))
-            .themed_ui(move |ui| {
-                design::layout::ScrollColumn::new("reader")
-                    .hosts_reveals()
-                    .show(ui, |ui| {
-                        show_document(
-                            ui,
-                            ReaderSource {
-                                doc: DocumentId::Entry(uuid::Uuid::from_u128(9)),
-                                revision: 1,
-                                text,
-                            },
-                        );
-                    });
-            });
+            .themed_ui_state(
+                move |ui, revision: &mut u64| {
+                    design::layout::ScrollColumn::new("reader")
+                        .hosts_reveals()
+                        .show(ui, |ui| {
+                            show_document(
+                                ui,
+                                ReaderSource {
+                                    doc: DocumentId::Entry(uuid::Uuid::from_u128(9)),
+                                    revision: *revision,
+                                    text,
+                                },
+                            );
+                        });
+                },
+                1,
+            );
         harness.run_steps(4);
         let maps = kept_maps(&harness.ctx);
         let controls: Vec<_> = maps.iter().flat_map(|(_, controls)| controls).collect();
@@ -3546,25 +3549,30 @@ mod tests {
             "9b-R1b-maps: the heading and both link controls, as drawn ({:?}): {maps:?}",
             link_names(&harness)
         );
-        let heading = |harness: &egui_kittest::Harness<'_>| {
+        let heading = |harness: &egui_kittest::Harness<'_, u64>| {
             harness
                 .get_by_role_and_label(egui::accesskit::Role::Label, "The ford")
                 .rect()
                 .top()
         };
         let below = heading(&harness);
-        for (round, case) in ["as its block draws", "from its kept offset"]
-            .iter()
-            .enumerate()
+        for (round, case) in [
+            "from its kept offset",
+            "as its block draws, in a new revision",
+        ]
+        .iter()
+        .enumerate()
         {
             if round == 1 {
-                // Away from the heading again, so the second jump has to move the column.
+                // Away from the heading again, so the second jump has to move the column; and a
+                // new revision, so the jump comes in the frame the document is prepared again.
                 harness.event(egui::Event::MouseWheel {
                     unit: egui::MouseWheelUnit::Point,
                     delta: egui::vec2(0.0, 400.0),
                     modifiers: egui::Modifiers::NONE,
                 });
                 harness.run_steps(10);
+                *harness.state_mut() = 2;
             }
             want_heading(&harness.ctx, Some("The ford".into()));
             harness.run_steps(6);
