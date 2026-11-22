@@ -10920,6 +10920,7 @@ mod tests {
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
         // Layout PR 9b: the creature text's quiet frames lay out and hash none of it.
+        harness.get_by_label("Creature text");
         assert_eq!(
             design::pane::text_work(|| harness.run_steps(3)),
             (0, 0),
