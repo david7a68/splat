@@ -2,6 +2,7 @@
 #![warn(deprecated)] // Its old message functions are gone; the parent file still allows them.
 use super::file_fault::FileFault;
 use crate::design::memo::Changed;
+use crate::design::text_draft::{DraftKey, TextDraft};
 use crate::{
     design::{
         self, colors,
@@ -15,7 +16,6 @@ use crate::{
     library::write_note,
     persistence::Campaign,
 };
-use crate::design::text_draft::{DraftKey, TextDraft};
 use eframe::egui;
 use uuid::Uuid;
 
@@ -160,7 +160,11 @@ pub fn refusal(
     static REFUSALS: splat::memo::Memo<(Option<String>, Option<usize>)> =
         splat::memo::Memo::new(64);
     REFUSALS.get_or(
-        &[campaign.id.as_bytes(), path.as_bytes(), &draft.key().to_bytes()],
+        &[
+            campaign.id.as_bytes(),
+            path.as_bytes(),
+            &draft.key().to_bytes(),
+        ],
         || {
             let draft = draft.as_str();
             if let Some(rule) = crate::library::note_path_rule(path) {
@@ -656,7 +660,7 @@ mod tests {
             repair.draft.push_str("\nMy unsent text.\n");
             let draft = repair.draft.clone();
             show(&mut repair, &campaign);
-            assert_eq!(repair.draft, draft, "{row}");
+            assert_eq!(repair.draft.as_str(), draft, "{row}");
             assert_eq!(std::fs::read_to_string(&path).unwrap(), text, "{row}");
         }
         for value in ["[", "", "not-an-id"] {
@@ -666,7 +670,7 @@ mod tests {
             repair.draft.push_str("\nMy unsent text.\n");
             let draft = repair.draft.clone();
             assert!(!repair.save(&campaign), "{value}");
-            assert_eq!(repair.draft, draft);
+            assert_eq!(repair.draft.as_str(), draft);
             assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
         }
         std::fs::write(&path, [0xff]).unwrap();
@@ -706,14 +710,14 @@ mod tests {
                 && words.contains("Line 3 opens a list with [ that never closes."),
             "iter-24-FD2-unchanged-invalid\n{words}"
         );
-        repair.draft = format!("{before}\nStill broken.\n");
+        let _ = repair.draft.replace(format!("{before}\nStill broken.\n"));
         let (primary, words) = painted(&mut repair, &campaign, false);
         assert!(!primary, "FD3-invalid");
         assert!(
             words.contains("Invalid") && !words.contains("Unsaved"),
             "FF2-invalid\n{words}"
         );
-        repair.draft = draft.clone();
+        let _ = repair.draft.replace(draft.clone());
         let (primary, words) = painted(&mut repair, &campaign, false);
         assert!(primary, "FD3-changed");
         assert!(
@@ -736,7 +740,7 @@ mod tests {
             splat::content::Entry::parse("Broken.md", &other).is_ok(),
             "fixture parses"
         );
-        repair.draft = other.clone();
+        let _ = repair.draft.replace(other.clone());
         for attempt in ["before", "after"] {
             let (primary, words) = painted(&mut repair, &campaign, false);
             assert!(!primary, "review-refused-primary-{attempt}");
@@ -753,10 +757,10 @@ mod tests {
                 "review-refused-bytes-{attempt}"
             );
         }
-        assert_eq!(repair.draft, other);
-        repair.draft = draft.clone();
+        assert_eq!(repair.draft.as_str(), other);
+        let _ = repair.draft.replace(draft.clone());
         assert!(!show_with(&mut repair, &campaign, true), "FD3-run-open");
-        assert_eq!(repair.draft, draft);
+        assert_eq!(repair.draft.as_str(), draft);
         // Round 23 re-check: before Save the state comes from the draft's own checks, with no
         // disk read. A Save that fails on the disk shows Save's own reason and `Not saved` in
         // place of `Unsaved` until the draft changes. The expected reason is the one the write
@@ -791,10 +795,10 @@ mod tests {
                 std::fs::remove_file(&path).unwrap();
             }
             show(&mut repair, &campaign);
-            assert_eq!(repair.draft, draft);
+            assert_eq!(repair.draft.as_str(), draft);
             failed_save(&mut repair, if moved { "moved" } else { "missing" });
             assert!(!path.exists());
-            assert_eq!(repair.draft, draft);
+            assert_eq!(repair.draft.as_str(), draft);
             std::fs::write(&path, before).unwrap();
             // The file coming back is not an edit of the draft: the cause stays until one.
             let (_, words) = painted(&mut repair, &campaign, false);
@@ -802,9 +806,9 @@ mod tests {
                 words.contains("Not saved"),
                 "recheck-{moved}-file-back\n{words}"
             );
-            repair.draft.push(' ');
+            repair.draft.push_str(" ");
             show(&mut repair, &campaign);
-            repair.draft = draft.clone();
+            let _ = repair.draft.replace(draft.clone());
         }
         // A read-only file: Save refuses, the bytes stay, and the next edit ends the cause.
         let mut permissions = std::fs::metadata(&path).unwrap().permissions();
@@ -825,7 +829,7 @@ mod tests {
         // Round 24 contract: one key after the disk failure gives Save the primary back.
         assert!(primary, "iter-24-D-read-only-key-primary");
         // Going back to the same words does not bring the old cause back.
-        repair.draft = draft.clone();
+        let _ = repair.draft.replace(draft.clone());
         let (_, words) = painted(&mut repair, &campaign, false);
         assert!(
             !words.contains("Not saved"),
@@ -850,7 +854,7 @@ mod tests {
             .clone()
             .expect("the outside write shows the disk choices");
         assert!(!repair.choose(&campaign, design::DiskConflictChoice::Reload, disk, false));
-        assert_eq!(repair.draft, draft);
+        assert_eq!(repair.draft.as_str(), draft);
         let (_, words) = painted(&mut repair, &campaign, false);
         assert!(
             words.contains("No changes")
@@ -864,7 +868,7 @@ mod tests {
             path: "../Outside.md".into(),
             campaign: campaign.id,
             baseline: before.into(),
-            draft: draft.clone(),
+            draft: draft.clone().into(),
             undos: design::Results::new(),
             disk: None,
             failed: None,

@@ -2,6 +2,7 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 #[cfg(test)]
 use crate::content_workspace::patch_fields;
+use crate::design::text_draft::TextDraft;
 use crate::encounter_settings::GroupingWords;
 use crate::{
     campaigns::Campaigns,
@@ -11,7 +12,6 @@ use crate::{
     party::Party,
     persistence::{Campaign, Module},
 };
-use crate::design::text_draft::TextDraft;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
@@ -5567,14 +5567,16 @@ impl Encounters {
                         .fit_height()
                         .show(ui, |ui| {
                             let width = ui.available_width() - 2.0 * design::S - design::M;
-                            let output =
-                                CREATURE_TEXT
-                                    .of(key)
-                                    .editor(ui, &mut editor.fields.body, mono_face(ui), |edit| {
-                                        edit.font(egui::TextStyle::Monospace)
-                                            .desired_width(width)
-                                            .margin(egui::vec2(design::S, design::S))
-                                    });
+                            let output = CREATURE_TEXT.of(key).editor(
+                                ui,
+                                &mut editor.fields.body,
+                                mono_face(ui),
+                                |edit| {
+                                    edit.font(egui::TextStyle::Monospace)
+                                        .desired_width(width)
+                                        .margin(egui::vec2(design::S, design::S))
+                                },
+                            );
                             if let Some(note) =
                                 crate::markdown_source::pressed_note_link(ui, &output, None)
                             {
@@ -8289,11 +8291,12 @@ impl Encounters {
                 ui,
                 "What you read to the table, then your tactics. The run shows this before the first turn.",
             );
-            let output = NOTES_FIELD
-                .of(draft.id)
-                .editor(ui, &mut draft.body, plain_face(ui), |edit| {
-                    notes_style(edit, 5).hint_text(hint)
-                });
+            let output =
+                NOTES_FIELD
+                    .of(draft.id)
+                    .editor(ui, &mut draft.body, plain_face(ui), |edit| {
+                        notes_style(edit, 5).hint_text(hint)
+                    });
             if let Some(note) = crate::markdown_source::pressed_note_link(ui, &output, None) {
                 crate::markdown_view::send_note_link(ui.ctx(), note, None);
             }

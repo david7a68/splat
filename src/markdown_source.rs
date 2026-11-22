@@ -1,7 +1,7 @@
 //! Markdown source, styled where it is typed, in the Reader's faces. Only the look changes:
 //! every character stays, markup included, so the file holds exactly what was typed.
-use crate::design::{self, Type, colors};
 use crate::design::text_draft::DraftKey;
+use crate::design::{self, Type, colors};
 use crate::markdown_view::LinkTarget;
 use eframe::egui::{
     self, Stroke, TextBuffer, TextFormat,
@@ -1116,7 +1116,7 @@ mod tests {
         );
         let (folded, _, _) = frame(Vec::new());
         assert!(!folded, "fe9-key: the caret moved up onto the mark's line");
-        assert_eq!(body, text, "fe9-bytes: the text keeps every byte");
+        assert_eq!(body.as_str(), text, "fe9-bytes: the text keeps every byte");
     }
 
     /// P2 of the PR 331 review: on a line with a folded mark, every editing gesture gives the
@@ -1245,7 +1245,7 @@ mod tests {
                 let copied = frame(&mut body, events.clone(), time);
                 time += 2.0;
                 frame(&mut body, Vec::new(), time);
-                after.push((*name, body.clone(), copied));
+                after.push((*name, body.as_str().to_owned(), copied));
             }
             after
         };

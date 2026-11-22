@@ -4983,14 +4983,19 @@ impl Sessions {
                             let font = design::reader::prose_type(ui).font(ui);
                             let face = markdown_face(font.clone());
                             let output =
-                                field.of(self.selected).editor(ui, &mut draft.body, face, |edit| {
-                                    edit.lock_focus(in_panel)
-                                        .frame(false)
-                                        .font(font)
-                                        .margin(egui::Vec2::ZERO)
-                                        .desired_width(width)
-                                        .min_size(egui::vec2(0.0, visible_height + heading_offset))
-                                });
+                                field
+                                    .of(self.selected)
+                                    .editor(ui, &mut draft.body, face, |edit| {
+                                        edit.lock_focus(in_panel)
+                                            .frame(false)
+                                            .font(font)
+                                            .margin(egui::Vec2::ZERO)
+                                            .desired_width(width)
+                                            .min_size(egui::vec2(
+                                                0.0,
+                                                visible_height + heading_offset,
+                                            ))
+                                    });
                             crate::markdown_source::paint_section_rules(
                                 ui,
                                 &output,

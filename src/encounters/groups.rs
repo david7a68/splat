@@ -4,6 +4,7 @@
 use super::{
     ADD_PANE_MAX_WIDTH, Creature, Draft, EditorPane, Encounters, ROSTER_MAX_WIDTH, Snapshot,
 };
+use crate::design::text_draft::TextDraft;
 use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
@@ -13,7 +14,6 @@ use crate::{
     library::{note_path, write_note},
     persistence::{Campaign, Module},
 };
-use crate::design::text_draft::TextDraft;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
@@ -3628,11 +3628,12 @@ fn group_fields(
         let hint = design::placeholder(ui, "When they arrive, what they want. Markdown is fine.");
         let rows = if open.is_some() { 2 } else { 4 };
         // Keyed by the group draft, so two groups never share its text or its Undo.
-        let output = GROUP_NOTES
-            .of(draft.id())
-            .editor(ui, &mut draft.notes, super::plain_face(ui), |edit| {
-                super::notes_style(edit, rows).hint_text(hint)
-            });
+        let output = GROUP_NOTES.of(draft.id()).editor(
+            ui,
+            &mut draft.notes,
+            super::plain_face(ui),
+            |edit| super::notes_style(edit, rows).hint_text(hint),
+        );
         design::named(
             ui,
             &output.response,
@@ -4876,7 +4877,11 @@ mod tests {
         harness.get_by_label("Remove").click();
         harness.run_steps(2);
         assert_eq!(harness.state().0.setup.members.len(), 1);
-        harness.state_mut().0.notes.replace("A new note after removal".into());
+        harness
+            .state_mut()
+            .0
+            .notes
+            .replace("A new note after removal".into());
         harness.state_mut().0.setup.members[0].count = 7;
         // Review of PR 347: A (Scout) is in the footer, and its Undo is pressed; the body then
         // removes B (Wolf) before that press is applied. A comes back from its own data, kept

@@ -161,6 +161,27 @@ impl Clone for TextDraft {
     }
 }
 
+/// A new document of these words.
+impl From<String> for TextDraft {
+    fn from(text: String) -> Self {
+        Self::new(text)
+    }
+}
+
+/// A new document of these words.
+impl From<&str> for TextDraft {
+    fn from(text: &str) -> Self {
+        Self::new(text)
+    }
+}
+
+/// The words.
+impl std::fmt::Display for TextDraft {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.text)
+    }
+}
+
 /// An empty new document.
 impl Default for TextDraft {
     fn default() -> Self {

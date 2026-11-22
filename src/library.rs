@@ -703,7 +703,9 @@ impl Library {
     fn stat_result_for(&self, file: &FileId) -> Option<Sentence> {
         self.kept
             .vital()
-            .filter(|(at, _, after, _)| at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str())
+            .filter(|(at, _, after, _)| {
+                at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str()
+            })
             .map(|(_, _, _, result)| result.clone())
     }
 
@@ -719,9 +721,9 @@ impl Library {
     /// Whether a press of `Undo heading change` acts now: as `stat_undo_applies`, for the
     /// heading fix.
     fn heading_undo_applies(&self, file: &FileId) -> bool {
-        self.kept
-            .heading()
-            .is_some_and(|(at, _, after)| at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str())
+        self.kept.heading().is_some_and(|(at, _, after)| {
+            at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str()
+        })
     }
 
     /// The footer order of the open entry's link result: the order its own update issued
@@ -1069,7 +1071,11 @@ impl Library {
     /// words it dropped are the newest kept result, with Undo. It takes the parts it changes, so
     /// the editor can call it while it reads the open note.
     fn discard_draft((kept, draft, revision, error): DraftParts<'_>, note: &Note) {
-        kept.set_discarded((note.owner.key(), note.path.clone(), draft.as_str().to_owned()));
+        kept.set_discarded((
+            note.owner.key(),
+            note.path.clone(),
+            draft.as_str().to_owned(),
+        ));
         let _ = draft.replace(note.text.as_str());
         // The draft changed: a failed Save of the old words no longer owns it.
         *revision += 1;
@@ -1406,7 +1412,9 @@ impl Library {
         self.source = false;
         self.matches = None;
         self.selected = Some(index);
-        let _ = self.draft.replace(self.loaded.as_ref().unwrap().notes[index].text.clone());
+        let _ = self
+            .draft
+            .replace(self.loaded.as_ref().unwrap().notes[index].text.clone());
         true
     }
     pub fn edit_copy(&mut self, entry: Entry) {
@@ -2667,7 +2675,9 @@ impl Library {
                 self.trail.leave(self.here());
             }
             self.selected = Some(i);
-            let _ = self.draft.replace(self.loaded.as_ref().unwrap().notes[i].text.clone());
+            let _ = self
+                .draft
+                .replace(self.loaded.as_ref().unwrap().notes[i].text.clone());
             self.error = None;
             self.source = false;
         }
@@ -3824,7 +3834,9 @@ impl Library {
         };
         self.selected = Some(index);
         self.reveal_row = true;
-        let _ = self.draft.replace(self.loaded.as_ref().unwrap().notes[index].text.clone());
+        let _ = self
+            .draft
+            .replace(self.loaded.as_ref().unwrap().notes[index].text.clone());
         self.disk_change = None;
         let _ = self.kept.take_scope_notice();
         self.scope = target.scope;
@@ -5204,16 +5216,15 @@ impl Library {
                     // inside it (layout PR 9).
                     ui.scope(|ui| {
                         ui.set_max_width(editor_width);
-                        let output =
-                            region.editor(
-                                ui,
-                                note.markdown_field(),
-                                &mut self.draft,
-                                design::pane::Face::Font(
-                                    egui::TextStyle::Monospace.resolve(ui.style()),
-                                ),
-                                |edit| edit.font(egui::TextStyle::Monospace).interactive(editable),
-                            );
+                        let output = region.editor(
+                            ui,
+                            note.markdown_field(),
+                            &mut self.draft,
+                            design::pane::Face::Font(
+                                egui::TextStyle::Monospace.resolve(ui.style()),
+                            ),
+                            |edit| edit.font(egui::TextStyle::Monospace).interactive(editable),
+                        );
                         // Each edit is a new draft: a failed Save of the old words ends.
                         if output.response.changed() {
                             self.draft_revision += 1;
@@ -7875,7 +7886,9 @@ mod tests {
                 if dirty {
                     assert_eq!(library.selected, Some(0));
                     assert!(library.draft.ends_with("Unsaved note.\n"));
-                    let _ = library.draft.replace(library.loaded.as_ref().unwrap().notes[0].text.clone());
+                    let _ = library
+                        .draft
+                        .replace(library.loaded.as_ref().unwrap().notes[0].text.clone());
                 } else {
                     let (place, title) = if read_by_menu {
                         (2, "# Guiding Bolt")
@@ -8197,7 +8210,9 @@ mod tests {
             };
             library.open_entry(0);
             library.source = true;
-            let _ = library.draft.replace(text.replacen("# Cinder Wolf", "# Ash Wolf", 1));
+            let _ = library
+                .draft
+                .replace(text.replacen("# Cinder Wolf", "# Ash Wolf", 1));
             let ctx = egui::Context::default();
             crate::design::theme::install(&ctx);
             let mut painted = Vec::new();
@@ -9411,7 +9426,11 @@ mod tests {
                 note,
             );
             replaced(&library, KeptKind::Discarded, before);
-            assert_eq!(library.draft.as_str(), note.text, "Discard: the file's words");
+            assert_eq!(
+                library.draft.as_str(),
+                note.text,
+                "Discard: the file's words"
+            );
         }
         for name in ["Ash", "Brand"] {
             let before = library.kept.order_of(KeptKind::Removed);
@@ -9942,7 +9961,9 @@ mod tests {
             selected: Some(0),
             ..Default::default()
         };
-        let _ = library.draft.replace(library.loaded.as_ref().unwrap().notes[0].text.clone());
+        let _ = library
+            .draft
+            .replace(library.loaded.as_ref().unwrap().notes[0].text.clone());
         library.draft.push_str("Unsaved description");
         let expected = library.draft.as_str().to_owned();
         library.search = "no matching entry".into();
@@ -10518,7 +10539,9 @@ mod tests {
         );
         // Edited back to a new fault: the notice names the draft's line, not the saved one.
         library.source = true;
-        let _ = library.draft.replace(valid.replace("splat_name: Yaml", "splat_name: ["));
+        let _ = library
+            .draft
+            .replace(valid.replace("splat_name: Yaml", "splat_name: ["));
         let painted = sd1_painted(&mut library);
         assert!(
             painted.contains("Line 5 opens a list"),
@@ -10781,7 +10804,9 @@ mod tests {
         // ends both.
         let file_permissions = fs::metadata(&path).unwrap().permissions();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
-        let _ = library.draft.replace(format!("{accepted}\nA locked file.\n"));
+        let _ = library
+            .draft
+            .replace(format!("{accepted}\nA locked file.\n"));
         library.draft_revision += 1;
         library.save_selected(false);
         let painted = sd1_painted(&mut library);

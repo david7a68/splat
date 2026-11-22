@@ -2341,7 +2341,7 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
     assert_eq!(other, "Brine", "k3-own: Ctrl+Z undoes the DM's own typing");
     // The field edits its own text (a command takes its words out, words go in at the caret):
     // the history stays, and Ctrl+Z goes back through the edit to what came before.
-    super::edit_in_place(&ctx, second_id, &mut other, |text| text.push_str(" sea"));
+    super::edit_line_in_place(&ctx, second_id, &mut other, |text| text.push_str(" sea"));
     edit(&mut other, Vec::new());
     edit(&mut other, vec![ctrl_z()]);
     assert_eq!(
@@ -2350,7 +2350,7 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
     );
     // Another object's text came first: the edit after it does not hide it, and the history goes.
     other = String::from("Kelp");
-    super::edit_in_place(&ctx, second_id, &mut other, |text| text.push('s'));
+    super::edit_line_in_place(&ctx, second_id, &mut other, |text| text.push('s'));
     edit(&mut other, Vec::new());
     edit(&mut other, vec![ctrl_z()]);
     assert_eq!(

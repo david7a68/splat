@@ -901,7 +901,7 @@ impl Reader {
     /// `Copy draft text` of a lost draft: the draft's text on the clipboard; the draft stays.
     pub(super) fn copy_lost(&self, ctx: &egui::Context, id: Uuid) {
         if let Some(draft) = self.edits.get(&id) {
-            ctx.copy_text(draft.now.text.clone());
+            ctx.copy_text(draft.now.text.as_str().to_owned());
         }
     }
 

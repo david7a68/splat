@@ -877,7 +877,23 @@ pub fn edit_in_place(
 ) {
     let before = BoundText::Draft(text.key());
     text.edit(edit);
-    let after = BoundText::Draft(text.key());
+    move_bound(ctx, id, before, BoundText::Draft(text.key()));
+}
+
+/// [`edit_in_place`] for a field of a plain `String` (a single-line field).
+pub fn edit_line_in_place(
+    ctx: &egui::Context,
+    id: Id,
+    text: &mut String,
+    edit: impl FnOnce(&mut String),
+) {
+    let before = BoundText::of(text);
+    edit(text);
+    move_bound(ctx, id, before, BoundText::of(text));
+}
+
+/// The guard's record of field `id` moves from `before` to `after`, when it holds `before`.
+fn move_bound(ctx: &egui::Context, id: Id, before: BoundText, after: BoundText) {
     ctx.data_mut(|data| {
         if let Some(record) = data
             .get_temp_mut_or_default::<BoundTexts>(bound_texts_id())
