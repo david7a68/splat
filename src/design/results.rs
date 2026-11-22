@@ -1326,11 +1326,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters/groups.rs", "unread_member", &[Ban::Body]),
         // M20 (M-L0.6): a repair draft's fault in the reader's body, with its repair.
         ("src/library/catalogue.rs", "repair_notice", &[Ban::Body]),
-        (
-            "src/library/catalogue.rs",
-            "use_checkbox",
-            &[Ban::Extras(1)],
-        ),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Body]),
         ("src/sessions/page.rs", "recording_row", &[Ban::Body]),
