@@ -6569,7 +6569,7 @@ mod tests {
         );
         harness.state_mut().draft.as_mut().unwrap().name = "Renamed again".into();
         harness.run_steps(2);
-        harness.get_by_label("Undo remove").click();
+        harness.get_by_label("Undo remove Changed").click();
         harness.run_steps(2);
         let draft = harness.state().draft.as_ref().unwrap();
         assert_eq!(draft.name, "Renamed again", "the unrelated edit stays");

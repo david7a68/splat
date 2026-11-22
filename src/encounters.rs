@@ -3826,7 +3826,7 @@ fn discard_outcome<A>(name: String, gone: bool, undo: A) -> design::outcome::Kep
                 "{} removed. Its draft was discarded.",
                 name
             )),
-            UndoStep::verb(Verb::Remove).pressed_as(undo),
+            UndoStep::of(Verb::Remove, name.clone()).pressed_as(undo),
         )
     } else {
         KeptOutcome::Notice(
@@ -12849,7 +12849,7 @@ mod tests {
                 .next()
                 .is_some()
         );
-        harness.get_by_label("Undo remove").click();
+        harness.get_by_label(&format!("Undo remove {name}")).click();
         harness.run_steps(2);
         let back = harness
             .state()
