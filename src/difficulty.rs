@@ -1,6 +1,7 @@
 //! Encounter difficulty: how a fight's XP compares with the party's XP budget. The budget per
 //! character comes from the rule entry that the campaign uses; no table is written here. Every
 //! screen that shows the word calls [`Scale::weigh`], and keeps its answer until an input changes.
+use crate::design::memo::{Key, Measure, Memos, Revision};
 use eframe::egui;
 use serde::Deserialize;
 use serde_yaml_ng::Value;
@@ -140,15 +141,20 @@ impl Missing {
             0 => String::new(),
             more => format!(" and {more} more"),
         };
+        // The closed recipe, longest first: the first name kept to `kept` letters, then `…`
+        // and `and 2 more` whole. The shared selector takes the first that fits.
         let letters: Vec<char> = first.chars().collect();
-        (1..letters.len())
-            .rev()
-            .map(|kept| {
-                let name: String = letters[..kept].iter().collect();
-                format!("{}: {}…{more}", self.short(), name.trim_end())
-            })
-            .find(|words| fits(words))
-            .or_else(|| Some(self.short().to_owned()))
+        let words = |kept: usize| {
+            let name: String = letters[..kept].iter().collect();
+            format!("{}: {}…{more}", self.short(), name.trim_end())
+        };
+        crate::design::fitting::first_fit(
+            (1..letters.len()).rev(),
+            |_| true,
+            |kept| Some(words(kept)).filter(|words| fits(words)),
+        )
+        .map(|(_, words)| words)
+        .or_else(|| Some(self.short().to_owned()))
     }
 
     /// Ruling R31, for every line that shows a roster with this reason, decided by the
@@ -617,18 +623,21 @@ impl Fitted {
 /// when not one word does.
 fn cut_at_words(text: &str, fits: &impl Fn(&str) -> bool) -> String {
     let words: Vec<&str> = text.split(' ').collect();
-    (1..words.len())
-        .rev()
-        .map(|kept| {
-            words[..kept]
-                .join(" ")
-                .trim_end_matches(['·', ',', ' ', '…'])
-                .to_owned()
-        })
-        .filter(|kept| !kept.is_empty())
-        .map(|kept| format!("{kept}…"))
-        .find(|cut| fits(cut))
-        .unwrap_or_else(|| "…".to_owned())
+    // The closed recipe, longest first: the first `kept` words with no separator left at
+    // their end, then `…`. The shared selector takes the first that fits.
+    let cut = |kept: usize| {
+        let kept = words[..kept]
+            .join(" ")
+            .trim_end_matches(['·', ',', ' ', '…'])
+            .to_owned();
+        (!kept.is_empty()).then(|| format!("{kept}…"))
+    };
+    crate::design::fitting::first_fit(
+        (1..words.len()).rev(),
+        |_| true,
+        |kept| cut(kept).filter(|cut| fits(cut)),
+    )
+    .map_or_else(|| "…".to_owned(), |(_, cut)| cut)
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -952,34 +961,37 @@ impl<'a> Line<'a> {
 /// Point 3 and point 1 of the round 29 reviews: the fitted lines of one owner, kept between
 /// frames. The OWNER holds it (a loaded run keeps one for its Arrivals), so it dies with that
 /// owner and no other run can read its answers. Each line is kept under its own id with one
-/// key: its content key, its room, its font and the display scale. On a frame where the key is
-/// unchanged, the line is not built and nothing is measured; a new key replaces the entry.
+/// key (ruling M6): the owner's revision `C` of what the line says, and the [`Measure`] it was
+/// fitted in (its room, its font, the theme's font generation and the display scale). On a
+/// frame where the key is unchanged, the line is not built and nothing is measured; a new key
+/// replaces the entry. The owner ends an entry with [`Kept::retain`] when it no longer shows
+/// its line, or ends them all by dropping the `Kept`.
 ///
 /// The kept answer is a fitted line (`V`'s default), or an owner's own answer for a line it
 /// lays out itself (the session plan's row keeps its laid-out line).
-pub struct Kept<K, V = Option<Fitted>> {
-    fits: std::collections::HashMap<K, (u64, V)>,
-    shortest: std::collections::HashMap<K, (u64, f32)>,
-    widest: std::collections::HashMap<K, (u64, Option<f32>)>,
+pub struct Kept<K, V: Sync = Option<Fitted>, C: Key = Revision> {
+    fits: Memos<K, (C, Measure), V>,
+    shortest: Memos<K, (C, Measure), f32>,
+    widest: Memos<K, (C, Measure), Option<f32>>,
 }
 
-impl<K, V> Default for Kept<K, V> {
+impl<K, V: Sync, C: Key> Default for Kept<K, V, C> {
     fn default() -> Self {
         Self {
-            fits: std::collections::HashMap::new(),
-            shortest: std::collections::HashMap::new(),
-            widest: std::collections::HashMap::new(),
+            fits: Memos::default(),
+            shortest: Memos::default(),
+            widest: Memos::default(),
         }
     }
 }
 
-impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
-    /// A line fitted to `room` in `font`. `content` must change whenever the line's parts do.
+impl<K: std::hash::Hash + Eq + Clone, C: Key> Kept<K, Option<Fitted>, C> {
+    /// A line fitted to `room` in `font`. `content` is the owner's revision of the line's parts.
     pub fn fit<'a>(
         &mut self,
         ui: &egui::Ui,
         id: &K,
-        content: impl std::hash::Hash,
+        content: C,
         room: f32,
         font: &egui::FontId,
         line: impl FnOnce() -> Line<'a>,
@@ -994,22 +1006,18 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
         &mut self,
         ui: &egui::Ui,
         id: &K,
-        content: impl std::hash::Hash,
+        content: C,
         font: &egui::FontId,
         line: impl FnOnce() -> Line<'a>,
     ) -> f32 {
-        let key = key(ui, (content, font));
-        if let Some((kept, width)) = self.shortest.get(id)
-            && *kept == key
-        {
-            return *width;
-        }
-        count_work(0, 1);
-        let width = line().shortest().map_or(0.0, |fitted| {
-            crate::design::number_width(ui, &fitted.text(), font)
-        });
-        self.shortest.insert(id.clone(), (key, width));
-        width
+        *self
+            .shortest
+            .get_or(id, (content, Measure::whole(ui, font)), || {
+                count_work(0, 1);
+                line().shortest().map_or(0.0, |fitted| {
+                    crate::design::number_width(ui, &fitted.text(), font)
+                })
+            })
     }
 
     /// The width of the line with nothing given way (its whole first form) in `font`; `None`
@@ -1019,75 +1027,55 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
         &mut self,
         ui: &egui::Ui,
         id: &K,
-        content: impl std::hash::Hash,
+        content: C,
         font: &egui::FontId,
         line: impl FnOnce() -> Line<'a>,
     ) -> Option<f32> {
-        let key = key(ui, (content, font));
-        if let Some((kept, width)) = self.widest.get(id)
-            && *kept == key
-        {
-            return *width;
-        }
-        let width = line()
-            .fit(|_| true)
-            .map(|fitted| crate::design::number_width(ui, &fitted.text(), font));
-        self.widest.insert(id.clone(), (key, width));
-        width
+        *self
+            .widest
+            .get_or(id, (content, Measure::whole(ui, font)), || {
+                line()
+                    .fit(|_| true)
+                    .map(|fitted| crate::design::number_width(ui, &fitted.text(), font))
+            })
     }
 
     #[cfg(any(test, feature = "test-support"))]
     pub fn seed(&mut self, id: K) {
-        self.fits.insert(id.clone(), (0, None));
-        self.shortest.insert(id, (0, 0.0));
+        self.fits.seed(id.clone());
+        self.shortest.seed(id);
     }
 }
 
-impl<K: std::hash::Hash + Eq + Clone, V: Clone> Kept<K, V> {
+impl<K: std::hash::Hash + Eq + Clone, V: Clone + Sync, C: Key> Kept<K, V, C> {
     /// As `fit`, for an owner whose answer is more than the line (G118: the Ready row's
     /// words where the fight has no form). `answer` runs only when the key changes.
     pub fn answer(
         &mut self,
         ui: &egui::Ui,
         id: &K,
-        content: impl std::hash::Hash,
+        content: C,
         room: f32,
         font: &egui::FontId,
         answer: impl FnOnce() -> V,
     ) -> V {
-        let key = key(ui, (content, room.to_bits(), font));
-        if let Some((kept, answer)) = self.fits.get(id)
-            && *kept == key
-        {
-            return answer.clone();
-        }
-        let answer = answer();
-        self.fits.insert(id.clone(), (key, answer.clone()));
-        answer
+        self.fits
+            .get_or(id, (content, Measure::of(ui, room, font)), answer)
+            .clone()
     }
 
-    /// Test builds: whether a line is kept for `id`, and a kept entry put in by hand.
+    /// Test builds: whether a line is kept for `id`.
     #[cfg(any(test, feature = "test-support"))]
     pub fn holds(&self, id: &K) -> bool {
-        self.fits.contains_key(id) || self.shortest.contains_key(id) || self.widest.contains_key(id)
+        self.fits.holds(id) || self.shortest.holds(id) || self.widest.holds(id)
     }
 
     /// Drop the lines whose owner no longer shows them (a group no longer offered).
     pub fn retain(&mut self, keep: impl Fn(&K) -> bool) {
-        self.fits.retain(|id, _| keep(id));
-        self.shortest.retain(|id, _| keep(id));
-        self.widest.retain(|id, _| keep(id));
+        self.fits.retain(&keep);
+        self.shortest.retain(&keep);
+        self.widest.retain(&keep);
     }
-}
-
-/// A line's key: its content, room and font, and the display scale (a new scale measures
-/// again).
-fn key(ui: &egui::Ui, parts: impl std::hash::Hash) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    parts.hash(&mut hasher);
-    ui.ctx().pixels_per_point().to_bits().hash(&mut hasher);
-    hasher.finish()
 }
 
 /// One part of a line in the line's own type: the word in `text`, its separators and numbers
@@ -1481,7 +1469,8 @@ mod tests {
     }
 
     /// Point 3 (round 29 review): a kept fit builds no line and measures nothing on a frame
-    /// whose key, room and font did not change; a new key, room or font works it out again.
+    /// whose key, room and font did not change; a new owner revision, room, display scale or
+    /// font generation works it out again (ruling M6).
     #[test]
     fn a_kept_line_does_no_work_on_an_unchanged_frame() {
         let low = Difficulty {
@@ -1507,7 +1496,7 @@ mod tests {
         crate::design::theme::install(&ctx);
         let work = || WORK.with(std::cell::Cell::get);
         let id = 7_u32;
-        let frame = |kept: &mut Kept<u32>, revision: u64, room: f32| {
+        let frame = |kept: &mut Kept<u32>, revision: Revision, room: f32| {
             let mut out = None;
             let _ = ctx.run(egui::RawInput::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -1524,32 +1513,42 @@ mod tests {
             });
             out.unwrap()
         };
+        let (one, two) = (
+            crate::design::memo::Revised::new(()).revision(),
+            crate::design::memo::Revised::new(()).revision(),
+        );
         let mut run_a = Kept::default();
-        let first = frame(&mut run_a, 1, 300.0);
+        let first = frame(&mut run_a, one, 300.0);
         let after_first = work();
         assert!(after_first.0 >= 1 && after_first.1 >= 1, "{after_first:?}");
-        assert_eq!(frame(&mut run_a, 1, 300.0), first);
+        assert_eq!(frame(&mut run_a, one, 300.0), first);
         assert_eq!(work(), after_first, "an unchanged frame does no work");
-        let _ = frame(&mut run_a, 1, 200.0);
+        let _ = frame(&mut run_a, one, 200.0);
         assert!(work().1 > after_first.1, "a new room measures again");
         let before = work();
-        let _ = frame(&mut run_a, 2, 200.0);
+        let _ = frame(&mut run_a, two, 200.0);
         assert!(work().0 > before.0, "a new revision builds again");
         // Point 1 of the second review: another owner (run B, loaded with the same group id and
         // the same counters) never reads run A's answers: it works its own out.
         let before = work();
         let mut run_b = Kept::default();
-        let _ = frame(&mut run_b, 2, 200.0);
+        let _ = frame(&mut run_b, two, 200.0);
         assert!(work().0 > before.0, "run B builds its own line");
         // A changed display scale fits again.
         let before = work();
         ctx.set_pixels_per_point(2.0);
-        let _ = frame(&mut run_b, 2, 200.0);
+        let _ = frame(&mut run_b, two, 200.0);
         assert!(work().1 > before.1, "a new display scale measures again");
+        // Fonts installed again under the same `FontId` (a new font generation) fit again.
+        let _ = frame(&mut run_b, two, 200.0);
+        let before = work();
+        crate::design::theme::install(&ctx);
+        let _ = frame(&mut run_b, two, 200.0);
+        assert!(work().1 > before.1, "a new font generation measures again");
         // A group that is no longer offered drops its kept line.
         run_b.retain(|kept| *kept != id);
         let before = work();
-        let _ = frame(&mut run_b, 2, 200.0);
+        let _ = frame(&mut run_b, two, 200.0);
         assert!(work().0 > before.0, "a dropped line is built again");
     }
 

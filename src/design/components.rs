@@ -1506,13 +1506,9 @@ fn parse_grouped(text: &str) -> Option<f64> {
         .ok()
 }
 
-/// A modifier as the DM may type it: `−3`, `-3`, `+2`, `2`.
-fn parse_signed(text: &str) -> Option<f64> {
-    text.trim()
-        .replace('\u{2212}', "-")
-        .trim_start_matches('+')
-        .parse()
-        .ok()
+/// The stepper's read-back of a signed value, through [`parse_signed`].
+fn parse_signed_value(text: &str) -> Option<f64> {
+    parse_signed(text).map(|value| value as f64)
 }
 
 /// The one stepper: its value in the form `shown`, its range, density and limits' reasons.
@@ -1607,7 +1603,7 @@ fn stepper_as(
                     Shown::Signed => {
                         field = field
                             .custom_formatter(|value, _| signed(value as i64))
-                            .custom_parser(parse_signed);
+                            .custom_parser(parse_signed_value);
                     }
                     Shown::Grouped => {
                         field = field
@@ -1644,7 +1640,18 @@ pub fn small_link(ui: &mut Ui, label: &str) -> Response {
     text_link(ui, label, Type::Small)
 }
 
+/// A body link whose target is one `Read` control high: a title line's link action
+/// (`TitleAction::link`), level with the actions beside it (M-Y0.2).
+pub fn title_link(ui: &mut Ui, label: &str) -> Response {
+    link_of_height(ui, label, Type::Body, Density::Read.control())
+}
+
 fn text_link(ui: &mut Ui, label: &str, role: Type) -> Response {
+    link_of_height(ui, label, role, XL)
+}
+
+/// A one-line link whose target is at least `XL` wide and at least `height` high.
+fn link_of_height(ui: &mut Ui, label: &str, role: Type, height: f32) -> Response {
     let c = colors();
     let room = ui.available_width().max(1.0);
     let galley = one_line(ui, label, role.font(ui), c.accent, room);
@@ -1652,7 +1659,7 @@ fn text_link(ui: &mut Ui, label: &str, role: Type) -> Response {
     // word such as `Ox` sits at its left, and the next item starts after the whole target,
     // so two short links side by side never share a press area.
     let (target, response) = ui.allocate_exact_size(
-        vec2(galley.size().x.max(XL), galley.size().y.max(XL)),
+        vec2(galley.size().x.max(XL), galley.size().y.max(height)),
         Sense::click(),
     );
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), label));
@@ -1988,8 +1995,9 @@ pub fn number_field_with_id(
                 .font(Type::Numeral.font(ui))
                 .hint_text(placeholder(ui, hint)),
         );
-        // Inside the guard: a letter the field drops is not another text.
-        text.retain(|c| c.is_ascii_digit() || c == '-');
+        // Inside the guard: a letter the field drops is not another text. A true minus stays,
+        // so the DM can type what the app shows (`parse_signed`).
+        text.retain(number_char);
         response
     });
     named(ui, &response, name);
@@ -3084,6 +3092,21 @@ pub fn hp_readout(
 /// A displayed current/maximum fraction. Callers supply their own unknown-value words.
 pub fn fraction(current: impl std::fmt::Display, maximum: impl std::fmt::Display) -> String {
     format!("{current}/{maximum}")
+}
+
+/// A whole number as the DM may type it, also as the app writes it ([`signed`]): `−3` (a true
+/// minus), `-3`, `+2`, `2`, with spaces around it. The one reader of typed signed numbers (a
+/// run's amounts and initiative, a tracker's Amount, World's initiative), so a DM can type what
+/// the app shows.
+pub fn parse_signed(text: &str) -> Option<i64> {
+    // `i64`'s own parse takes one `+` or `-`; the true minus becomes `-`.
+    text.trim().replace('\u{2212}', "-").parse().ok()
+}
+
+/// A character of a typed whole number: a digit, `+`, `-` or a true minus (`−`, as [`signed`]
+/// writes it). The number fields keep these and drop the rest; [`parse_signed`] reads them.
+pub fn number_char(c: char) -> bool {
+    c.is_ascii_digit() || matches!(c, '+' | '-' | '\u{2212}')
 }
 
 /// A modifier, with a true minus sign: `+3`, `−1`.
@@ -5930,8 +5953,21 @@ mod tests {
                 .map(|(_, node)| node.is_disabled());
             assert_eq!(decrease, Some(value == -1), "{value}: − at its limit only");
         }
-        for (typed, read) in [("\u{2212}3", -3.0), ("-3", -3.0), ("+2", 2.0), ("2", 2.0)] {
+        // The shared reader of typed signed numbers (M-P0 item 11): what the app writes reads
+        // back, a true minus included; words that are not one whole number read as nothing (the
+        // tracker's Amount cases, PR 638 review, moved here with its reader).
+        for (typed, read) in [
+            ("\u{2212}3", -3),
+            ("-3", -3),
+            ("+2", 2),
+            ("2", 2),
+            (" \u{2212}12 ", -12),
+            (&signed(-7), -7),
+        ] {
             assert_eq!(parse_signed(typed), Some(read), "{typed}");
+        }
+        for typed in ["3 points", "three", "", "++4", "+\u{2212}3"] {
+            assert_eq!(parse_signed(typed), None, "{typed}");
         }
         // The grouped stepper (M-P0 item 8, the group editor's member count): a count shows its
         // digits grouped, `1,000` stays `1,000`, and reads back with or without the commas.

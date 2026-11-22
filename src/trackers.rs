@@ -59,7 +59,12 @@ pub fn rules_on_disk(campaign: &Campaign, manifest: &str, index: &dyn RuleSource
                 ..Rules::default()
             };
         }
-        Err(error) => return Rules::cannot_read(format!("{manifest} cannot be read: {error}")),
+        Err(error) => {
+            return Rules::cannot_read(
+                RulesFile::Manifest,
+                format!("{manifest} cannot be read: {error}"),
+            );
+        }
     };
     if ids.is_empty() {
         return Rules::default();
@@ -88,12 +93,22 @@ pub fn rules_on_disk(campaign: &Campaign, manifest: &str, index: &dyn RuleSource
             Ok(text) => match Note::parse(path, &text) {
                 Ok(entry) if entry.id == id => notes.push(Ok(entry)),
                 Ok(_) => notes.push(Err((id, moved))),
-                Err(error) => return Rules::cannot_read(format!("{path} cannot be read: {error}")),
+                Err(error) => {
+                    return Rules::cannot_read(
+                        RulesFile::HouseRuleNote,
+                        format!("{path} cannot be read: {error}"),
+                    );
+                }
             },
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 notes.push(Err((id, moved)))
             }
-            Err(error) => return Rules::cannot_read(format!("{path} cannot be read: {error}.")),
+            Err(error) => {
+                return Rules::cannot_read(
+                    RulesFile::HouseRuleNote,
+                    format!("{path} cannot be read: {error}."),
+                );
+            }
         }
     }
     read_rules(index.loot_sources(), notes)
@@ -475,7 +490,14 @@ pub fn refusal(
         ),
         Refused::LedgerChanged => (Cause::Changed(File::Trackers), check(File::Trackers)),
         Refused::RulesChanged => (Cause::Changed(File::HouseRuleNote), rules()),
-        Refused::RulesUnreadable => (Cause::Unreadable(File::HouseRuleNote), rules()),
+        // The file that cannot be read, and the next step there (PR 661 review, P2).
+        Refused::RulesUnreadable(RulesFile::Manifest) => (
+            Cause::Unreadable(File::CampaignNote),
+            check(File::CampaignNote),
+        ),
+        Refused::RulesUnreadable(RulesFile::HouseRuleNote) => {
+            (Cause::Unreadable(File::HouseRuleNote), rules())
+        }
         Refused::TimelineUnreadable => (
             Cause::Unreadable(File::Timeline),
             Recovery::First(Step::FixTimeline),
@@ -539,9 +561,9 @@ pub struct Trackers {
     /// `Undo add` of this event.
     pub wants_undo_add: Option<String>,
     pub(crate) view: view::ViewState,
-    /// Counts each `settle`, so the view measures its columns again only when a value or a
-    /// definition changed.
-    pub(crate) revision: u64,
+    /// Counts each `settle`; its revision moves on with it, so the view measures its columns
+    /// and fits its names again only when a value or a definition changed.
+    pub(crate) revision: crate::design::memo::Revised<u64>,
     /// `Campaign → Rules and runs` in the empty state: the shell shows that page.
     pub wants_rules: bool,
     /// Each tracker's history, by key: worked out when the ledger or the definitions change.
@@ -592,10 +614,10 @@ impl Trackers {
         let Some(campaign) = campaign else { return };
         self.follow_clock(timeline);
         if let Some(index) = index
-            && !self
+            && self
                 .index
                 .as_ref()
-                .is_some_and(|old| Arc::ptr_eq(old, &index))
+                .is_none_or(|old| old.generation() != index.generation())
         {
             self.manifest = Some(index.manifest(campaign));
             self.index = Some(index);
@@ -700,9 +722,19 @@ impl Trackers {
         &self.newest
     }
 
+    /// A new settle: the count, and so its revision, moves on.
+    pub(crate) fn count_settle(&mut self) {
+        self.revision.revise(|settles| {
+            *settles += 1;
+            crate::design::memo::Changed::Yes
+        });
+    }
+
     /// Work the values, the notices, the histories and the newest act out of the ledger again.
     fn settle(&mut self) {
-        self.revision += 1;
+        self.count_settle();
+        // Every row's words were fitted for the old revision: none is read again.
+        self.view.history_fits.retain(|_| false);
         self.state = replay(&self.rules, &self.ledger, &self.today);
         self.history = history::rows(&self.rules, &self.ledger, &self.state);
         self.problems = history::problems(&self.rules, &self.state);
@@ -780,9 +812,10 @@ impl Trackers {
             (Some(campaign), Some(Ok(manifest)), Some(index)) => {
                 rules_on_disk(campaign, manifest, index.as_ref())
             }
-            (_, Some(Err(error)), _) => {
-                Rules::cannot_read(format!("Campaign.md cannot be read: {error}"))
-            }
+            (_, Some(Err(error)), _) => Rules::cannot_read(
+                RulesFile::Manifest,
+                format!("Campaign.md cannot be read: {error}"),
+            ),
             _ => Rules::default(),
         }
     }
@@ -803,7 +836,9 @@ impl Trackers {
         let changed = !rules.same_definitions(&self.rules);
         let result = ledger::commit(&ledger::path(&campaign.path), |ledger| {
             if rules.unreadable.is_some() {
-                return Err(Refused::RulesUnreadable);
+                return Err(Refused::RulesUnreadable(
+                    rules.unreadable_file.unwrap_or(RulesFile::HouseRuleNote),
+                ));
             }
             if changed {
                 return Err(Refused::RulesChanged);

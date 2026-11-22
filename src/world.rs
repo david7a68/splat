@@ -2,7 +2,6 @@
 //! made from them. Obsidian stays a plain note's editor; an entry also has Edit here. A plain
 //! note becomes a Lookup item, not an entry, so nothing depends on it.
 //! See `docs/design/world-and-house-rules.md`.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 #[path = "world/checks.rs"]
 pub mod checks;
 #[path = "world/edit.rs"]
@@ -5151,9 +5150,9 @@ impl Reader {
                 let stat_block = &index.items[adding.stat_block?].entry;
                 let total = match adding.initiative.trim() {
                     "" => None,
-                    text => match text.parse::<i64>() {
-                        Ok(total) => Some(total),
-                        Err(_) => {
+                    text => match design::parse_signed(text) {
+                        Some(total) => Some(total),
+                        None => {
                             self.error = Some("Initiative must be a whole number.".to_owned());
                             return None;
                         }

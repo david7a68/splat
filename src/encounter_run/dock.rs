@@ -46,7 +46,7 @@ impl Run {
             ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
                 ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
-                let value = self.amount.parse::<i64>().ok();
+                let value = design::parse_signed(&self.amount);
                 let empty = value.is_none().then_some("Type an amount first.");
                 // The narrowest dock keeps every word by giving up the hint and an icon.
                 let narrow = ui.available_width() < DOCK_ALL_WORDS_FROM;
@@ -439,7 +439,7 @@ impl Run {
     fn take_words_for_note(&mut self, ui: &egui::Ui) {
         let id = self.amount_id();
         if let Some(typed) =
-            Self::words_in_number_field(self.notes_open, ui, id, |c| c.is_ascii_digit())
+            Self::words_in_number_field(self.notes_open, ui, id, design::number_char)
         {
             self.for_note = Some(format!("{}{typed}", std::mem::take(&mut self.amount)));
             self.return_focus = true;
@@ -458,7 +458,6 @@ impl Run {
             width,
             Density::Glance.control(),
         );
-        self.amount.retain(|d| d.is_ascii_digit());
         // Typed, cleared or typed again: the amount is the DM's until a new roll.
         if response.changed() {
             self.amount_typed = true;
@@ -801,6 +800,26 @@ mod tests {
         );
         run.borrow_mut().notes_open = false;
         harness.get_by_label("Amount").click();
+        harness.run_steps(1);
+        // M-P0.21 (review of #709): a malformed amount is refused whole, never read as other
+        // digits: `3−5` stays as typed, Damage stays blocked, and no damage is applied.
+        let selected = run.borrow().selected;
+        let hp = run.borrow().state.participants[selected].hp;
+        assert!(
+            hp.is_some(),
+            "the selected row has HP that damage would change"
+        );
+        harness.get_by_label("Amount").type_text("3\u{2212}5");
+        harness.run_steps(1);
+        harness.get_by_label("Damage").click();
+        harness.run_steps(2);
+        assert_eq!(
+            run.borrow().state.participants[selected].hp,
+            hp,
+            "m-p0-21-malformed-refused"
+        );
+        assert_eq!(run.borrow().amount, "3\u{2212}5", "m-p0-21-malformed-kept");
+        run.borrow_mut().amount.clear();
         harness.run_steps(1);
         // Next turn moves the selection: the field closes, and its words wait for its row.
         harness.get_by_label("Effect: words for this row").click();

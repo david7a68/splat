@@ -4399,7 +4399,7 @@ impl Encounters {
                         .as_ref()
                         .map(|roster| roster.parts.clone())
                         .unwrap_or_default(),
-                    key: template.summary.as_ref().map_or(0, |roster| roster.key),
+                    revision: template.summary.as_ref().map(|roster| roster.revision),
                     difficulty: template.difficulty.clone(),
                 })
                 .collect()

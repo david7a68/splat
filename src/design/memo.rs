@@ -73,6 +73,19 @@
 //! impl Key for Frame {} // <- not sealed for outside kinds
 //! ```
 //!
+//! A fit's key holds the owner's revision and the [`Measure`] it was fitted in, never a hash of
+//! the content (ruling M6):
+//!
+//! ```compile_fail
+//! # use splat_design::ownership::{Measure, Memo};
+//! let fits: Memo<(u64, Measure), String> = Memo::new(); // <- a content hash beside the measure
+//! ```
+//!
+//! ```
+//! # use splat_design::ownership::{Measure, Memo, Revision};
+//! let fits: Memo<(Revision, Measure), String> = Memo::new();
+//! ```
+//!
 //! A revision is never made by hand:
 //!
 //! ```compile_fail
@@ -222,10 +235,48 @@ impl<T: Sync> Revised<T> {
     }
 }
 
+/// A new value made with its default, as `Revised::new(T::default())`: a new version.
+impl<T: Sync + Default> Default for Revised<T> {
+    fn default() -> Self {
+        Self::new(T::default())
+    }
+}
+
 impl<T: Sync> std::ops::Deref for Revised<T> {
     type Target = T;
     fn deref(&self) -> &T {
         &self.value
+    }
+}
+
+/// What a text was measured in (ruling M6): its room, its font, the theme's font generation and
+/// the display scale. A fit kept with one is worked out again when any of them changes, so a
+/// font installed again under the same `FontId` or a new scale never shows an old fit. It is
+/// made only from the `Ui` that measures ([`Measure::of`]), so no other number can stand in.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Measure {
+    room: u32,
+    size: u32,
+    family: egui::FontFamily,
+    fonts: u64,
+    scale: u32,
+}
+
+impl Measure {
+    /// A text measured in `font` for `room` points, in this `Ui`'s context.
+    pub fn of(ui: &egui::Ui, room: f32, font: &egui::FontId) -> Self {
+        Self {
+            room: room.to_bits(),
+            size: font.size.to_bits(),
+            family: font.family.clone(),
+            fonts: super::theme::font_generation(ui.ctx()),
+            scale: ui.ctx().pixels_per_point().to_bits(),
+        }
+    }
+
+    /// A text's own width in `font`: measured with no room to fit.
+    pub fn whole(ui: &egui::Ui, font: &egui::FontId) -> Self {
+        Self::of(ui, f32::INFINITY, font)
     }
 }
 
@@ -234,13 +285,69 @@ mod sealed {
     impl Sealed for super::Revision {}
     impl Sealed for (super::Revision, super::Revision) {}
     impl Sealed for (super::Revision, super::Revision, super::Revision) {}
+    impl<K: super::Key> Sealed for (K, super::Measure) {}
 }
 
-/// What a [`Memo`] can be keyed by: a revision, or a tuple of revisions. Sealed.
-pub trait Key: sealed::Sealed + Copy + Eq {}
+/// What a [`Memo`] can be keyed by: a revision, a tuple of revisions, or either with the
+/// [`Measure`] a text was fitted in. Sealed.
+pub trait Key: sealed::Sealed + Clone + Eq {}
 impl Key for Revision {}
 impl Key for (Revision, Revision) {}
 impl Key for (Revision, Revision, Revision) {}
+impl<K: Key> Key for (K, Measure) {}
+
+/// Several entries of one owner, each a [`Memo`] under its own id (a list's rows): each one is
+/// worked out once per change of its own key. The owner holds it, so the entries end with that
+/// owner, and it drops the rows it no longer shows with [`Memos::retain`].
+pub struct Memos<I, K: Key, T: Sync> {
+    entries: std::collections::HashMap<I, Memo<K, T>>,
+}
+
+impl<I, K: Key, T: Sync> Default for Memos<I, K, T> {
+    fn default() -> Self {
+        Self {
+            entries: std::collections::HashMap::new(),
+        }
+    }
+}
+
+impl<I: std::hash::Hash + Eq, K: Key, T: Sync> Memos<I, K, T> {
+    /// The value of entry `id` for `key`: the kept one, or a new one from `build` when the key
+    /// changed. The id is copied only for an entry that is new (a name is looked up by `&str`).
+    pub fn get_or<Q>(&mut self, id: &Q, key: K, build: impl FnOnce() -> T) -> &T
+    where
+        I: std::borrow::Borrow<Q>,
+        Q: std::hash::Hash + Eq + ToOwned<Owned = I> + ?Sized,
+    {
+        if !self.entries.contains_key(id) {
+            self.entries.insert(id.to_owned(), Memo::new());
+        }
+        self.entries
+            .get_mut(id)
+            .expect("inserted just now")
+            .get_or(key, build)
+    }
+
+    /// Whether an entry is kept for `id`, whatever its key.
+    pub fn holds<Q>(&self, id: &Q) -> bool
+    where
+        I: std::borrow::Borrow<Q>,
+        Q: std::hash::Hash + Eq + ?Sized,
+    {
+        self.entries.contains_key(id)
+    }
+
+    /// Keep only the entries whose id `keep` accepts.
+    pub fn retain(&mut self, mut keep: impl FnMut(&I) -> bool) {
+        self.entries.retain(|id, _| keep(id));
+    }
+
+    /// Test builds: an entry for `id` with no value yet, as a row shown once leaves.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn seed(&mut self, id: I) {
+        self.entries.insert(id, Memo::new());
+    }
+}
 
 /// The last value worked out, and the revisions it was worked out from.
 /// Its value must be `Sync`, so a kept value cannot change through `&` with a `Cell`.
@@ -334,5 +441,22 @@ mod tests {
         assert_eq!(memo.get(draft.revision()), None);
         memo.forget();
         assert_eq!(memo.get(before), None);
+        // Several entries of one owner: each is worked out once per change of its own key, a
+        // change of one leaves the other, and a dropped entry is worked out again.
+        let mut rows: Memos<u32, Revision, usize> = Memos::default();
+        let other = Revised::new(String::from("x\ny\nz"));
+        for _ in 0..3 {
+            assert_eq!(*rows.get_or(&1, draft.revision(), || count(&draft)), 1);
+            assert_eq!(*rows.get_or(&2, other.revision(), || count(&other)), 3);
+        }
+        assert_eq!(builds.get(), 4, "one build for each entry");
+        draft.set(String::from("a\nb"));
+        assert_eq!(*rows.get_or(&1, draft.revision(), || count(&draft)), 2);
+        assert_eq!(*rows.get_or(&2, other.revision(), || count(&other)), 3);
+        assert_eq!(builds.get(), 5, "a change of entry 1 leaves entry 2");
+        rows.retain(|id| *id != 2);
+        assert!(rows.holds(&1) && !rows.holds(&2));
+        assert_eq!(*rows.get_or(&2, other.revision(), || count(&other)), 3);
+        assert_eq!(builds.get(), 6, "a dropped entry is worked out again");
     }
 }

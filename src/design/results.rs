@@ -1048,16 +1048,21 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/sessions/plan.rs",
             "plan_pane",
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            &[Ban::ByOwner(1)],
+            // `Body` (M-N1.5, M20): a planned group's member faults in its row, typed.
+            &[Ban::Body, Ban::ByOwner(1)],
         ),
-        ("src/timeline.rs", "next_result_order", &[Ban::Results]),
-        ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
         // M-N1.3 (ruling M20): Read's embed whose source is gone, typed (`BodyMessage`), in
         // place of a `small_message`.
         ("src/sessions/carry.rs", "show_prepared", &[Ban::Body]),
         // M-N1.4 (ruling M20): a scene act's typed fault where the DM acted, in place of a
         // `design::message`.
         ("src/sessions/plan.rs", "row_fault", &[Ban::Body]),
+        // M-N1.5 (M20): the open played fight's fault in its details, typed, in place of two
+        // `design::message` calls; `/npc`'s fault in its menu, in place of two more.
+        ("src/sessions/plan.rs", "fight_block", &[Ban::Body]),
+        ("src/sessions/slash.rs", "show", &[Ban::Body]),
+        // M-N1.5 (M17): `/npc`'s fault carries the generator's and the system's words.
+        ("src/sessions/slash.rs", "cause", &[Ban::Words]),
         // M-N1.1 (ruling M20): a result with the note's Undo at its own place
         // (`PlacedResult`), replacing three `undo_message` calls.
         (
@@ -1150,11 +1155,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "add_row",
             &[Ban::Extras(1), Ban::RowKey(1)],
         ),
-        (
-            "src/loot_editor.rs",
-            "line_row",
-            &[Ban::Extras(1), Ban::RowKey(1)],
-        ),
+        ("src/loot_editor.rs", "line_row", &[Ban::RowKey(1)]),
         (
             "src/markdown_view.rs",
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
@@ -1166,8 +1167,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "note_editor",
             &[Ban::Layout(1), Ban::Body],
         ),
-        ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
-        ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
         (
             "src/timeline/page.rs",
@@ -1368,7 +1367,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "use_checkbox",
             &[Ban::Extras(1)],
         ),
-        ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Body]),
         ("src/sessions/page.rs", "record_line", &[Ban::Extras(1)]),
@@ -1646,7 +1644,7 @@ pub(crate) const STAGED: &[Staged] = &[
     (
         "ResultOrder::issue(",
         "Record the result in a `design::Results` store: it issues the order at the action.",
-        &[("src/design/components.rs", 15), ("src/timeline.rs", 1)],
+        &[("src/design/components.rs", 15)],
     ),
     (
         "save_row_state(",
@@ -1662,14 +1660,12 @@ pub(crate) const STAGED: &[Staged] = &[
         "ptr_eq(",
         "Key the cache by a `Revision` in a `design::memo::Memo`; a pointer address is not a change.",
         &[
-            ("src/content_workspace.rs", 1),
             ("src/design/comparison.rs", 1),
             ("crates/campaign/src/encounter_run/undo.rs", 2),
             ("src/library.rs", 1),
             ("src/library/catalogue.rs", 1),
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
-            ("src/trackers.rs", 1),
         ],
     ),
     (
