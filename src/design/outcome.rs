@@ -4888,9 +4888,19 @@ impl<A> PlacedResult<A> {
             return None;
         };
         let body = &result.typed.body;
-        let label = body.undo.as_ref().map(UndoStep::label).unwrap_or_default();
-        let pressed =
-            super::components::result_line(ui, body.tone, Some((body.words.as_str(), &label)));
+        // Its Undo's whole form where it fits in half the line, else its short form (M9); its
+        // accessible name is always the whole form.
+        let room = ui.available_width().min(LIST_MEASURE) / 2.0;
+        let (shown, label) = body
+            .undo
+            .as_ref()
+            .map(|undo| (undo.alone(ui, room), undo.label()))
+            .unwrap_or_default();
+        let pressed = super::components::result_line(
+            ui,
+            body.tone,
+            Some((body.words.as_str(), &shown, &label)),
+        );
         if pressed {
             result.typed.id(Pressed::Undo)
         } else {
@@ -6142,7 +6152,7 @@ mod tests {
                         let result = shown.then(|| {
                             PlacedResult::new(
                                 crate::sentence!("{} travel checks rolled for the journey across the Ravenholm hills.", 12),
-                                UndoStep::verb(Verb::Roll).pressed_as(9_u8),
+                                UndoStep::of(Verb::Roll, "12 travel checks").pressed_as(9_u8),
                             )
                         });
                         if let Some(id) = PlacedResult::show_line(result, ui) {
@@ -6171,13 +6181,13 @@ mod tests {
             .next()
             .expect("the words, named whole")
             .rect();
-        let undo = full.get_by_label("Undo roll").rect();
+        let undo = full.get_by_label("Undo roll 12 travel checks").rect();
         assert!(
             (words.center().y - undo.center().y).abs() < 2.0 && words.right() <= undo.left(),
             "m-p0-result-line: the cut words and the whole Undo on one line: {words:?} {undo:?}"
         );
         let mut full = full;
-        full.get_by_label("Undo roll").click();
+        full.get_by_label("Undo roll 12 travel checks").click();
         full.run_steps(2);
         assert_eq!(
             full.state().0,

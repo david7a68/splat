@@ -411,16 +411,17 @@ pub fn apply(
                 }
             }
             let rolled = design::count(offsets.len(), "travel check", "travel checks");
+            // The Undo names what its result names (M9): `Undo roll 3 travel checks`.
             Some((
-                crate::sentence!("{} rolled.", rolled),
-                design::outcome::UndoStep::verb(design::outcome::Verb::Roll),
+                crate::sentence!("{} rolled.", rolled.clone()),
+                design::outcome::UndoStep::of(design::outcome::Verb::Roll, rolled),
             ))
         }
         Act::Enter(at, value) => {
             add(event, *at, Some(*value))?;
             Some((
                 crate::sentence!("1 travel check rolled."),
-                design::outcome::UndoStep::verb(design::outcome::Verb::Roll),
+                design::outcome::UndoStep::of(design::outcome::Verb::Roll, "1 travel check"),
             ))
         }
         Act::Clear(label, words) => {
@@ -432,7 +433,7 @@ pub fn apply(
             event.checks.remove(at);
             Some((
                 crate::sentence!("Check cleared."),
-                design::outcome::UndoStep::verb(design::outcome::Verb::Clear),
+                design::outcome::UndoStep::of(design::outcome::Verb::Clear, label.clone()),
             ))
         }
         Act::Plan(_) => return Ok(None),
@@ -1376,8 +1377,11 @@ mod tests {
             .unwrap()
             .unwrap();
             assert_eq!(
-                (cleared.words.as_str(), cleared.undo.label().as_str()),
-                ("Check cleared.", "Undo clear")
+                (
+                    cleared.words.as_str(),
+                    cleared.undo.label().starts_with("Undo clear ")
+                ),
+                ("Check cleared.", true)
             );
         }
         apply(&mut book, &id, &Act::Choose(None), &tables).unwrap();

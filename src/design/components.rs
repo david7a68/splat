@@ -4483,7 +4483,7 @@ pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
 pub(in crate::design) fn result_line(
     ui: &mut Ui,
     tone: Tone,
-    result: Option<(&str, &str)>,
+    result: Option<(&str, &str, &str)>,
 ) -> bool {
     let size = vec2(
         ui.available_width().min(LIST_MEASURE),
@@ -4492,13 +4492,14 @@ pub(in crate::design) fn result_line(
     let mut pressed = false;
     ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
         ui.set_min_size(size);
-        let Some((text, action)) = result else {
+        let Some((text, action, name)) = result else {
             return;
         };
         let (icon, color) = tone.parts();
         let button = Action::quiet(action)
             .icon(icons::UNDO)
-            .density(Density::Read);
+            .density(Density::Read)
+            .name(name);
         let gap = ui.spacing().item_spacing.x;
         let left = ui.cursor().left();
         ui.spacing_mut().item_spacing.x = 0.0;
