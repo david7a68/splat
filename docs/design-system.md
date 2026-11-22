@@ -180,7 +180,7 @@ own offset at its next pass, where it writes a reveal's; the DM's own input in b
 
 | Part | Function | Notes |
 |---|---|---|
-| Page header | `page_header` | Title and one `Small` muted state or count on the same baseline; actions at the right; hairline, then an `L` gap. Never repeat the campaign name. The title and its count go first: the actions get the width they leave, and a status link among them wraps there, so the count is never cut |
+| Page header | `page_header` | Title and one `Small` muted state or count on the same baseline; actions at the right; hairline, then an `L` gap. The Campaign page's header is a `TitleLine` (M0280, ruling M23): its action follows the title as the part places it, and `Campaign entries` says on hover what it opens (`TitleAction::hint`). Never repeat the campaign name. The title and its count go first: the actions get the width they leave, and a status link among them wraps there, so the count is never cut |
 | Nav item | `nav_item` | Icon and word; accent bar when selected |
 | Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and adds a hover reason and accessible description. `.wraps()` is for an action whose words must all show (a repair that names a file, World's `Make <file> a separate note`): words that do not fit wrap in the room it has and it grows taller, with its own padding, border and target; words that fit stay on one line. Never a raw egui button styled to look like one. For one blocked control, show `blocked_reason` beside it in `Small` text, then an `L` gap before the next action. `.key("N")` shows the key beside the word |
 | Split button | `split_action` | Default `Action`, then a caret menu for other actions |
