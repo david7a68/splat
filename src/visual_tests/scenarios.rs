@@ -3938,14 +3938,23 @@ pub mod campaign_content {
             );
         }
         // Layout step 11c (L11c-C.1, SA4): with a repair's editor open the page is still the
-        // pane's scroll column, so where the page fits (1920) its footer follows the taller list
-        // by `S` (it was pinned in a `Fills` body). Where the page scrolls, the pane pins it.
+        // pane's scroll column. Where the page fits (1920), its footer starts `S` below the
+        // taller list's last entry (Veilglass Lantern), within that row's height; a `Fills` body
+        // stretched the columns to a footer pinned at the window's bottom, far below the list.
         d.state_prepared("repair-dirty", Sizes::All, |d| {
             if d.window_size().0 >= 1900.0 {
-                package_footer_follows(
-                    d,
-                    "Campaign packages draft discarded.",
+                let last = d.place_of("Veilglass Lantern");
+                let footer = footer_with(d, "Campaign packages draft discarded.");
+                let gap = footer.zip(last).map(|(footer, last)| footer.top() - last.bottom());
+                d.observe(
                     "l11c-C1-repair-follows",
+                    gap.is_some_and(|gap| {
+                        (crate::design::S - 0.5..=crate::design::S + Density::Glance.row())
+                            .contains(&gap)
+                    }),
+                    format!(
+                        "The footer {footer:?} starts {gap:?} below the last entry {last:?} (from `S` to `S` plus a row)"
+                    ),
                 );
             }
         });
