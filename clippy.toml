@@ -163,6 +163,7 @@ disallowed-methods = [
     { path = "splat_design::design::outcome::PagePlaceholder::show", reason = "a page placeholder is a review decision: `Ban::Body`" },
     { path = "splat_design::design::outcome::BodyFault::show", reason = "a fault with repairs in a page's body is a review decision: `Ban::Body`" },
     { path = "splat_design::design::outcome::BodyMessage::show", reason = "a typed message in a body, outside its footer, is a review decision: `Ban::Body`" },
+    { path = "splat_design::design::outcome::PlacedResult::show", reason = "a result with its Undo at its own place, outside its footer, is a review decision: `Ban::Body`" },
     { path = "splat_design::design::outcome::FormOpener::show", reason = "a message that opens a form in a body is a review decision: `Ban::Body`" },
     { path = "splat_design::design::outcome::RowMessages::new", reason = "put the message in the pane's `Footer`; a save row's own messages in its value block are a review decision: `Ban::Body`" },
     # Package X: design extras. Each part decides its own space, its check mark and its Clear, so

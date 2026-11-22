@@ -3730,6 +3730,20 @@ pub mod campaign_content {
             "Reload from disk stays, blocked, while a repair draft has changes",
             |d| d.has_containing(RELOAD) && d.is_disabled(RELOAD),
         );
+        // Layout PR 9 (SA7, AA6): the repair's frame holds its lane and ends at Save, at each size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (whole, detail) = d.at_size(size, |d| {
+                d.editor_frame_whole(
+                    &crate::world::repair::editor_name("Notes/Broken.md"),
+                    Some("Save repaired note"),
+                )
+            });
+            d.observe(
+                "layout-9-SA7-campaign-repair-frame",
+                whole,
+                format!("At {size:?}, the repair's frame is whole and ends at Save: {detail}"),
+            );
+        }
         d.state("repair-dirty", Sizes::All);
         // Lead ruling on round 23 FA3: a draft that parses but that Save refuses (a package
         // note, which settings own) is Invalid with Save's reason, and a Save attempt writes
@@ -15243,6 +15257,15 @@ pub mod session_notes {
                 .is_some_and(|(result, row)| result.top() > row.bottom() + crate::design::XL),
             format!("The delete result {result:?} is in the footer, below the list {last_row:?}"),
         );
+        // Layout PR 9 (SP7): a template editor in view keeps all four frame edges above the
+        // pane's footer.
+        let template = d.place_of("Template text").is_some();
+        let (whole, detail) = d.editor_frame_whole("Template text", None);
+        d.observe(
+            "layout-9-SP7-template-frame",
+            template && whole,
+            format!("A template editor beside the delete result keeps its frame whole: {detail}"),
+        );
         d.state("templates-deleted", Sizes::Default);
         d.click("Undo delete");
         d.expect("Downtime");
@@ -24596,11 +24619,13 @@ pub mod session_plan_groups {
         d.begin_task();
         d.click(&format!("More actions for {GROUP_RIVALS}"));
         d.click(&format!("Remove group {GROUP_RIVALS} from the plan"));
-        d.expect("Undo remove");
+        // M-N1.1: the Undo names the group it puts back (`UndoStep::of`).
+        let undo_group = format!("Undo remove {GROUP_RIVALS}");
+        d.expect(&undo_group);
         d.state("group-removed-from-plan", Sizes::Default);
         d.observe(
             "P1",
-            d.in_view("Undo remove")
+            d.in_view(&undo_group)
                 && d.visible_text(&format!("Removed “{GROUP_RIVALS}” from tonight.")),
             "Remove group keeps its message and Undo in view after capture resize",
         );
@@ -24636,7 +24661,7 @@ pub mod session_plan_groups {
             !d.has(&format!("Edit group {GROUP_RIVALS}")),
             "The row menu removes a group from this plan",
         );
-        d.click("Undo remove");
+        d.click(&undo_group);
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
         d.begin_task();
 
@@ -26183,7 +26208,8 @@ pub mod session_plan {
             "Removing a planned fight says so in the success tone",
         );
         d.state("planned-fight-removed", Sizes::All);
-        d.click("Undo remove");
+        // M-N1.1: the Undo at the removed row's place names the fight it puts back.
+        d.click(&format!("Undo remove {SECOND}"));
         d.expect(&format!("Start fight: {SECOND}"));
         // P1c: both plan acts go through the note's one act path, `Draft::apply`, with today's
         // behaviour: the change joins the draft as typed words do, and the note saves after its
@@ -26208,7 +26234,7 @@ pub mod session_plan {
         d.click("Remove from tonight");
         d.expect(&format!("Removed “{SECOND}” from tonight."));
         d.state("planned-fight-removed-beside-lookup", Sizes::Default);
-        d.click("Undo remove");
+        d.click(&format!("Undo remove {SECOND}"));
         d.expect(&format!("Start fight: {SECOND}"));
         let after = std::fs::read_to_string(&note).unwrap();
         d.observe(

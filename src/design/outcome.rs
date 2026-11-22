@@ -2191,6 +2191,15 @@ impl<A> Typed<A> {
         self
     }
 
+    /// The same message with each caller's id mapped by `id`.
+    fn map<B>(self, id: impl Fn(A) -> B) -> Typed<B> {
+        Typed {
+            body: self.body,
+            undo: self.undo.map(&id),
+            choices: self.choices.into_iter().map(id).collect(),
+        }
+    }
+
     /// With what the system itself said, on hover over the words.
     fn with_hover(mut self, hover: Option<String>) -> Self {
         self.body.words_hover = hover;
@@ -2409,6 +2418,18 @@ impl<'f, A> KeptLine<'f, A> {
     ) -> Self {
         let (typed, refused) = prepare(outcome, refused);
         Self::prepared(frame, ticket, typed, refused)
+    }
+
+    /// The same line with each of its caller's ids mapped by `id`: a line that another page's
+    /// store made for this pane's footer (the Encounters store's group discard in the Session
+    /// plan's footer). Its ticket stays its store's, so its press reaches only that entry.
+    pub fn map<B>(self, id: impl Fn(A) -> B) -> KeptLine<'f, B> {
+        KeptLine {
+            ticket: self.ticket,
+            typed: self.typed.map(id),
+            refused: self.refused,
+            frame: std::marker::PhantomData,
+        }
     }
 
     /// Its ticket, for a test of `Results::present`.
@@ -4726,6 +4747,34 @@ impl<A> BodyMessage<A> {
     }
 }
 
+/// A finished change said at the place where it happened, with its Undo, when the act's owner
+/// keeps that Undo with its data in place rather than in a footer store: a Session plan row
+/// removed from tonight, at the removed row's place, and `Scene added to tonight.` under the
+/// Scene field. The success tone and no choices. Its Undo's words are typed (`UndoStep`), and as
+/// the only Undo at its place it shows its whole form wherever it fits, else gives up its object
+/// whole (ruling M9, `UndoStep::alone`); its accessible name is always the whole form. It gives
+/// back the caller's id when the Undo is pressed. A body place: `show` is a reviewed suppression
+/// (`Ban::Body`). A result whose owner keeps it in a `Results` store is a kept line in its
+/// footer (`Messages::kept`), never this.
+#[must_use = "call show"]
+pub struct PlacedResult<A> {
+    typed: Typed<A>,
+}
+
+impl<A> PlacedResult<A> {
+    pub fn new(words: Sentence, undo: Undo<A>) -> Self {
+        let mut typed = Typed::new(Tone::Success, words, Some(undo), Vec::new());
+        typed.body.undo_alone = true;
+        Self { typed }
+    }
+
+    /// Draw it at the cursor; the caller's id when its Undo is pressed.
+    pub fn show(self, ui: &mut Ui) -> Option<A> {
+        let pressed = self.typed.body.draw(ui, MessagePlace::Row)?;
+        self.typed.id(pressed)
+    }
+}
+
 /// A page or section whose body cannot show: its fault in place of the body, with choices that
 /// repair it under the words. It takes the fault's words and tone when it is made, and gives
 /// back the caller's id of the choice pressed.
@@ -4935,6 +4984,9 @@ impl<'o> FormOpener<'o> {
             title,
             open,
         } = self;
+        // Review of PR 612 (P2): when the form closes, the keyboard goes back to the choice that
+        // opened it, from the frame after (kept under the opener's own key).
+        let give_back = ui.make_persistent_id(("form_opener_focus", words.as_str()));
         if !*open {
             let repair = Repair {
                 words: choice,
@@ -4942,14 +4994,19 @@ impl<'o> FormOpener<'o> {
                 lock,
                 id: (),
             };
-            let opened = BodyFault {
+            let (pressed, controls) = BodyFault {
                 tone,
                 words,
                 repairs: vec![repair],
                 whole: None,
             }
-            .draw(ui)
-            .is_some();
+            .draw_repairs(ui);
+            let opened = pressed.is_some();
+            if ui.data_mut(|data| data.remove_temp::<bool>(give_back)) == Some(true)
+                && let Some(choice) = controls.first()
+            {
+                choice.request_focus();
+            }
             *open = opened;
             return Opened { opened, form: None };
         }
@@ -4966,6 +5023,7 @@ impl<'o> FormOpener<'o> {
         let response = form.show(ui);
         if response.cancel {
             *open = false;
+            ui.data_mut(|data| data.insert_temp(give_back, true));
         }
         Opened {
             opened: false,
@@ -5020,6 +5078,12 @@ impl<A> BodyFault<A> {
 
     /// `show`'s drawing, for the design's own body places (`FormOpener`).
     fn draw(self, ui: &mut Ui) -> Option<A> {
+        self.draw_repairs(ui).0
+    }
+
+    /// `draw`, with each repair's control, in order (to give one the keyboard back).
+    fn draw_repairs(self, ui: &mut Ui) -> (Option<A>, Vec<Response>) {
+        let mut controls = Vec::new();
         let Self {
             tone,
             words,
@@ -5065,14 +5129,16 @@ impl<A> BodyFault<A> {
                     if let Some(help) = &repair.help {
                         action_help(ui, tone, help, &action, lock);
                     }
+                    controls.push(action);
                 }
             })
             .response;
         register(ui, response.rect, MessagePlace::Page, tone);
-        match pressed? {
-            Pressed::Choice(at) => repairs.into_iter().nth(at).map(|repair| repair.id),
-            Pressed::Undo => None,
-        }
+        let pressed = match pressed {
+            Some(Pressed::Choice(at)) => repairs.into_iter().nth(at).map(|repair| repair.id),
+            Some(Pressed::Undo) | None => None,
+        };
+        (pressed, controls)
     }
 }
 
@@ -5823,6 +5889,72 @@ mod tests {
     /// and the accessible name is always the whole form. Narrow: `Undo discard` named
     /// `Undo discard of Bridge Ambush`; a long object of a verb with no joining word is cut in
     /// the visible words only. Wide: the whole form shows. The press reaches its entry.
+    /// M-N1.1: a result with its Undo at its own place (`PlacedResult`, a Session plan row
+    /// removed from tonight) follows ruling M9 as a footer's lone Undo does. Wide, the whole
+    /// form shows; narrow, where it does not fit, `Undo remove` without its object (its words
+    /// name it), never a cut object. Its accessible name stays whole, and its press comes back
+    /// as the caller's id.
+    #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the body place `PlacedResult::show` itself"
+    )]
+    fn a_placed_result_shows_its_undo_whole_where_it_fits() {
+        const OBJECT: &str = "Bridge Ambush at the Ravenholm Ironside Crossing";
+        let name = format!("Undo remove {OBJECT}");
+        let harness = |width: f32| {
+            let mut h = Harness::builder()
+                .with_size(egui::vec2(960.0, 300.0))
+                .build_ui_state(
+                    move |ui, pressed: &mut Option<u8>| {
+                        ui.set_max_width(width);
+                        let result = PlacedResult::new(
+                            crate::sentence!("Removed “{}” from tonight.", OBJECT),
+                            UndoStep::of(Verb::Remove, OBJECT).pressed_as(7_u8),
+                        );
+                        if let Some(id) = result.show(ui) {
+                            *pressed = Some(id);
+                        }
+                    },
+                    None,
+                );
+            crate::design::theme::install(&h.ctx);
+            h.run_steps(2);
+            h
+        };
+        let shown = |h: &Harness<'_, Option<u8>>| -> Vec<String> {
+            let undo = h.get_by_label(&name).rect();
+            h.output()
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text)
+                        if text.galley.job.text.starts_with("Undo")
+                            && undo.contains(text.pos + text.galley.rect.center().to_vec2()) =>
+                    {
+                        Some(text.galley.job.text.clone())
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        let h = harness(900.0);
+        assert_eq!(shown(&h), [name.as_str()], "wide: the whole form");
+        let mut h = harness(320.0);
+        assert_eq!(
+            shown(&h),
+            ["Undo remove"],
+            "narrow: the object goes whole, never cut"
+        );
+        h.get_by_label(&name).click();
+        h.run_steps(2);
+        assert_eq!(
+            *h.state(),
+            Some(7),
+            "its press comes back as the caller's id"
+        );
+    }
+
     #[test]
     fn an_undo_shows_its_short_form_when_narrow_and_keeps_its_whole_name() {
         use egui_kittest::kittest::NodeT;
@@ -6721,12 +6853,36 @@ mod tests {
             !h.state().open && has(&h, "Register as a new package") && !has(&h, "New package name"),
             "Cancel closes the form"
         );
+        // Review of PR 612 (P2): the keyboard goes back to the choice that opened the form,
+        // after Cancel and after Escape in the form's field.
+        let choice_focused = |h: &Harness<'_, Form>| {
+            h.get_by_label("Register as a new package")
+                .accesskit_node()
+                .is_focused()
+        };
+        assert!(
+            choice_focused(&h),
+            "after Cancel, the choice has the keyboard"
+        );
+        h.get_by_label("Register as a new package").click();
+        h.run_steps(3);
+        h.get_all_by_label("New package name")
+            .find(|node| node.accesskit_node().role() == egui::accesskit::Role::TextInput)
+            .expect("the form's field")
+            .click();
+        h.run_steps(2);
+        h.key_press(egui::Key::Escape);
+        h.run_steps(3);
+        assert!(
+            !h.state().open && choice_focused(&h),
+            "Escape in the field closes the form and gives the keyboard back to the choice"
+        );
         h.state_mut().locked = true;
         h.run_steps(2);
         h.get_by_label("Register as a new package").click();
         h.run_steps(3);
         assert!(
-            !h.state().open && h.state().opened == 1,
+            !h.state().open && h.state().opened == 2,
             "locked, the choice opens nothing"
         );
     }

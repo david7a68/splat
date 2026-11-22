@@ -3417,6 +3417,27 @@ impl design::results::Kept for KeptMark {
     }
 }
 
+/// A discard's kept line: `<name> draft discarded.` with `Undo discard of <name>`, or, for a draft
+/// whose file was gone, `<name> removed. Its draft was discarded.` (FF7: it was removed with its
+/// file, and its Undo says so). One form for the editor's footer and the Session plan's.
+fn discard_outcome<A>(name: String, gone: bool, undo: A) -> design::outcome::KeptOutcome<A> {
+    use design::outcome::{KeptOutcome, Notice, UndoStep, Verb};
+    if gone {
+        KeptOutcome::Notice(
+            Notice::new(crate::sentence!(
+                "{} removed. Its draft was discarded.",
+                name
+            )),
+            UndoStep::verb(Verb::Remove).pressed_as(undo),
+        )
+    } else {
+        KeptOutcome::Notice(
+            Notice::new(crate::sentence!("{} draft discarded.", name)),
+            UndoStep::of(Verb::Discard, name).pressed_as(undo),
+        )
+    }
+}
+
 /// A fault on an Encounters pane, by kind: its severity and its words in one place.
 #[derive(Clone, Debug, PartialEq)]
 enum EncounterFault {
@@ -3718,7 +3739,6 @@ pub struct Encounters {
     /// The group draft `Discard changes` last dropped, for one step of undo.
     discarded_group: Option<GroupDraft>,
     /// When that discard was made, for the plan's footer order.
-    discarded_group_order: Option<design::ResultOrder>,
     /// A creature made the campaign's own, with its text open beside the roster.
     creature: Option<CreatureEditor>,
 
@@ -4498,21 +4518,49 @@ impl Encounters {
         // The plan shows it again, so an encounter draft left open cannot hide it there.
         self.group_in_plan && self.group_draft.is_none() && self.discarded_group.is_some()
     }
-    /// When the discard the plan shows was made, for its footer's newest-first order.
-    pub fn discarded_group_order(&self) -> Option<design::ResultOrder> {
-        self.discarded_group_order
-    }
-    pub fn discarded_group_name(&self) -> String {
-        self.discarded_group
-            .as_ref()
-            .map_or_else(String::new, GroupDraft::name)
-    }
-    pub fn undo_group_discard_in_plan(&mut self) {
-        if self.group_discarded_in_plan() {
-            self.group_draft = self.discarded_group.take();
-            self.message = None;
-            self.error = None;
+    /// The discard the plan shows, as the line of this page's kept store: the store's own
+    /// words, Undo and ticket, so the Session plan's footer orders it by the order the store
+    /// issued at the discard and its press reaches only that entry
+    /// (`undo_group_discard_in_plan`). Its id is `()`: the plan maps it to its own press.
+    pub fn group_discard_line<'f>(
+        &self,
+        frame: &'f design::outcome::PaneFrame,
+    ) -> Option<design::outcome::KeptLine<'f, ()>> {
+        if !self.group_discarded_in_plan() {
+            return None;
         }
+        let root = self.active.as_ref()?.path.clone();
+        self.kept
+            .get(&KeptOwner {
+                root,
+                kind: KeptResult::GroupDiscarded,
+            })
+            .map(|shown| {
+                shown.outcome(frame, |_| {
+                    let draft = self.discarded_group.as_ref();
+                    discard_outcome(
+                        draft.map_or_else(String::new, GroupDraft::name),
+                        draft.is_some_and(GroupDraft::file_gone),
+                        (),
+                    )
+                })
+            })
+    }
+    /// The plan footer's `Undo discard` of the line `group_discard_line` made, by its ticket: a
+    /// discard replaced or ended since is gone, and nothing changes.
+    pub fn undo_group_discard_in_plan(&mut self, ticket: design::results::Ticket) {
+        let mut kept = std::mem::take(&mut self.kept);
+        let _ = kept.undo_by(ticket, |mark| {
+            if mark.0.kind == KeptResult::GroupDiscarded && self.group_discarded_in_plan() {
+                self.group_draft = self.discarded_group.take();
+                self.message = None;
+                self.error = None;
+                Ok(())
+            } else {
+                Err(())
+            }
+        });
+        self.kept = kept;
     }
     /// The group editor, as a part of the session's page.
     pub fn group_in_plan_view(
@@ -5864,24 +5912,8 @@ impl Encounters {
         reason = "the run’s and the save’s words are kept as words"
     )]
     fn kept_outcome(&self, kind: KeptResult) -> design::outcome::KeptOutcome<FooterPress> {
-        use design::outcome::{KeptOutcome, Notice, Said, Sentence, UndoStep, Verb};
-        let discard = |name: String, gone: bool| {
-            if gone {
-                // FF7: a draft whose file was gone was removed with it; its Undo says so.
-                KeptOutcome::Notice(
-                    Notice::new(crate::sentence!(
-                        "{} removed. Its draft was discarded.",
-                        name
-                    )),
-                    UndoStep::verb(Verb::Remove).pressed_as(FooterPress::Undo),
-                )
-            } else {
-                KeptOutcome::Notice(
-                    Notice::new(crate::sentence!("{} draft discarded.", name)),
-                    UndoStep::of(Verb::Discard, name).pressed_as(FooterPress::Undo),
-                )
-            }
-        };
+        use design::outcome::{KeptOutcome, Said, Sentence, UndoStep, Verb};
+        let discard = |name, gone| discard_outcome(name, gone, FooterPress::Undo);
         match kind {
             KeptResult::Discarded => self.discarded.as_ref().map_or_else(
                 || discard(String::new(), false),
