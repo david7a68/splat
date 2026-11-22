@@ -634,6 +634,41 @@ fn session_content_edge(d: &Driver<'_>) -> Option<f32> {
         .or(rules)
 }
 
+/// Layout step 11a (SF4, SM5, AM16, AH6): a character sheet's rows are whole rows of their pane,
+/// so its edge (a footer, the session banner) never cuts a label, value, skill or condition
+/// through. The sheet's column starts at the leftmost of its known words that shows (a tile label
+/// or a skill); the texts that the clip cuts there are listed. `None` when no sheet shows.
+fn sheet_cut_texts(d: &Driver<'_>) -> Option<Vec<String>> {
+    let (width, height) = d.window_size();
+    let left = [
+        "Hit points",
+        "Armor class",
+        "Proficiency",
+        "Acrobatics",
+        "Athletics",
+        "Perception",
+        "Stealth",
+    ]
+    .into_iter()
+    .filter_map(|words| d.painted_rect_in(words, egui::Rect::EVERYTHING))
+    .map(|rect| rect.left())
+    .reduce(f32::min)?;
+    Some(d.cut_texts_in(egui::Rect::from_min_max(
+        egui::pos2(left - crate::design::S, 0.0),
+        egui::pos2(width, height),
+    )))
+}
+
+fn sheet_rows_whole(d: &mut Driver<'_>, id: &str) {
+    let size = d.window_size();
+    let cut = sheet_cut_texts(d);
+    d.observe(
+        id,
+        cut.as_ref().is_some_and(Vec::is_empty),
+        format!("At {size:?}, sheet texts cut by their pane's edge: {cut:?}"),
+    );
+}
+
 fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     d.nodes()
         .into_iter()
@@ -5268,7 +5303,9 @@ pub mod party {
             .simulate(crate::settings::Account::Connected);
         d.settle();
         d.expect(FORCE_READ);
-        d.state("copy-has-local-edits", Sizes::All);
+        d.state_prepared("copy-has-local-edits", Sizes::All, |d| {
+            sheet_rows_whole(d, "l11a-SF4-sheet-rows");
+        });
         const LOCAL_EDITS: &str = "so Splat stopped updating it.";
         party_body_takes_presses(d, "iter-27-C-press-local-edits", LOCAL_EDITS);
         // Round 27 review: typing in a field outside the footer reaches that field, and the
@@ -7328,6 +7365,7 @@ pub mod settings {
         );
         party_body_takes_presses(d, "iter-27-C-press-stopped", STOPPED);
         d.state_prepared("sync-stopped-recovery", Sizes::All, |d| {
+            sheet_rows_whole(d, "l11a-AH6-sheet-rows");
             // s30 B11 (R41): the rail's `Sync stopped` and the Party footer's notice of it take
             // one tone, a warning.
             let (rail, footer) = (
@@ -9188,7 +9226,9 @@ pub mod prep_to_table {
         d.click(BEGIN);
         d.expect(ROUND);
         d.expect(CURRENT_TURN);
-        d.state("first-turn", Sizes::Standard);
+        d.state_prepared("first-turn", Sizes::Standard, |d| {
+            sheet_rows_whole(d, "l11a-SM5-AM16-sheet-rows");
+        });
         d.observe(
             "P1",
             current_participant(d).as_deref() == Some(first.as_str()),
