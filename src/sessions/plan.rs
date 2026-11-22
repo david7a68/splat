@@ -1316,9 +1316,8 @@ fn plan_menu(
                 choice = Some(MenuChoice::New);
                 ui.close();
             }
-            if let Some(reason) = menu.blocked {
-                wrapped_words(ui, Type::Small, reason, colors().muted);
-            }
+            // A note under its choice, at its words after the icon (M-P0.27).
+            design::choice_note(ui, true, menu.blocked);
             if names.len() > FIGHT_SEARCH_FROM {
                 let field = menu
                     .field
@@ -2072,9 +2071,8 @@ fn scene_row(
                             start = Some(fight.clone());
                             ui.close();
                         }
-                        if let Some(reason) = plan.blocked {
-                            wrapped_words(ui, Type::Small, reason, c.muted);
-                        }
+                        // A note under its choice, at its words after the icon (M-P0.27).
+                        design::choice_note(ui, true, plan.blocked);
                     }
                     if log.is_some() && !on_row && log_action().show(ui).clicked() {
                         add_log = true;
@@ -3361,12 +3359,13 @@ impl Sessions {
             reveal: None,
         };
         let mut act = checks::header(ui, &view, &mut travel.block);
-        let done = travel.done.get(&event.id);
-        if design::undo_line(
-            ui,
-            Tone::Success,
-            done.map(|done| (done.words.as_str(), done.undo)),
-        ) {
+        // M0515 (M-P0.27): the journey's check result keeps its line, as the Timeline's does;
+        // the two share `checks::Done`, now typed.
+        let result = travel
+            .done
+            .get(&event.id)
+            .map(|done| PlacedResult::new(done.words.clone(), done.undo.clone().pressed_as(())));
+        if PlacedResult::show_line(result, ui).is_some() {
             undo = TravelUndo::Checks;
         }
         act = checks::lines(ui, &view, &mut travel.block).or(act);
@@ -4796,7 +4795,8 @@ impl Sessions {
                                         .blocked_if(running, "This run is open. Close it first.").show(ui).clicked() {
                                         remove = Some(event.id.clone()); ui.close();
                                     }
-                                    if running { wrapped_words(ui, Type::Small, "This run is open. Close it first.", c.muted); }
+                                    // A note under its choice, at its words (M-P0.27, review of PR 780).
+                                    design::choice_note(ui, false, running.then_some("This run is open. Close it first."));
                                     // Last, so no line of today's menu moves.
                                     if let Some(run) = ended.filter(|_| place == RewardsAt::Menu) {
                                         if listed {

@@ -4875,6 +4875,37 @@ impl<A> PlacedResult<A> {
         let pressed = self.typed.body.draw(ui, MessagePlace::Row)?;
         self.typed.id(pressed)
     }
+
+    /// A result's place that keeps one line whether or not a result shows, under a block it
+    /// belongs to (a Timeline journey's check result under its table, M0561): one `Read`
+    /// control high, capped at `LIST_MEASURE`, so a result that comes or goes moves nothing
+    /// below it. The result is its tone's icon and bar, its words cut by whole words to leave
+    /// room for its Undo (the whole words on hover and as their accessible name), and its Undo
+    /// at the line's end in its whole form. The caller's id when its Undo is pressed.
+    pub fn show_line(result: Option<Self>, ui: &mut Ui) -> Option<A> {
+        let Some(result) = result else {
+            let _ = super::components::result_line(ui, Tone::Success, None);
+            return None;
+        };
+        let body = &result.typed.body;
+        // Its Undo's whole form while the words still fit whole beside it, else its short form
+        // (M9, `alone`); its accessible name is always the whole form.
+        let (whole, short) = body
+            .undo
+            .as_ref()
+            .map(|undo| (undo.label(), undo.alone(ui, 0.0)))
+            .unwrap_or_default();
+        let pressed = super::components::result_line(
+            ui,
+            body.tone,
+            Some((body.words.as_str(), &whole, &short)),
+        );
+        if pressed {
+            result.typed.id(Pressed::Undo)
+        } else {
+            None
+        }
+    }
 }
 
 /// A page or section whose body cannot show: its fault in place of the body, with choices that
@@ -6105,6 +6136,86 @@ mod tests {
             *h.state(),
             Some(7),
             "its press comes back as the caller's id"
+        );
+        // M0561 (M-P0.27): the line form keeps one `Read` control's height whether or not a
+        // result shows, so a result that comes or goes moves nothing below it; its words cut by
+        // whole words before its whole Undo, the whole words on hover and as their name; its
+        // Undo's press comes back as the caller's id.
+        const WORDS: &str = "12 travel checks rolled for the journey across the Ravenholm hills.";
+        let line = |width: f32, shown: bool| {
+            let mut h = Harness::builder()
+                .with_size(egui::vec2(960.0, 300.0))
+                .build_ui_state(
+                    move |ui, state: &mut (Option<u8>, f32)| {
+                        ui.set_max_width(width);
+                        let result = shown.then(|| {
+                            PlacedResult::new(
+                                crate::sentence!("{} travel checks rolled for the journey across the Ravenholm hills.", 12),
+                                UndoStep::of(Verb::Roll, "12 travel checks").pressed_as(9_u8),
+                            )
+                        });
+                        if let Some(id) = PlacedResult::show_line(result, ui) {
+                            state.0 = Some(id);
+                        }
+                        state.1 = ui.label("Below").rect.top();
+                    },
+                    (None, 0.0),
+                );
+            crate::design::theme::install(&h.ctx);
+            h.run_steps(2);
+            h
+        };
+        let (empty, full) = (line(320.0, false), line(320.0, true));
+        assert!(
+            (empty.state().1 - full.state().1).abs() < 0.5,
+            "m-p0-result-line: what follows stays at {} with or without the result ({})",
+            empty.state().1,
+            full.state().1
+        );
+        let words = full
+            .query_all(
+                egui_kittest::kittest::By::new()
+                    .predicate(|node| node.data().label() == Some(WORDS)),
+            )
+            .next()
+            .expect("the words, named whole")
+            .rect();
+        let undo = full.get_by_label("Undo roll 12 travel checks").rect();
+        assert!(
+            (words.center().y - undo.center().y).abs() < 2.0 && words.right() <= undo.left(),
+            "m-p0-result-line: the cut words and the whole Undo on one line: {words:?} {undo:?}"
+        );
+        // The words come first: the Undo shows its whole form only while the words still fit
+        // whole beside it (here at 900), else its short form (at 320).
+        let undo_shown = |h: &Harness<'_, (Option<u8>, f32)>| -> Vec<String> {
+            h.output()
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.starts_with("Undo") => {
+                        Some(text.galley.job.text.clone())
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        let wide = line(900.0, true);
+        assert_eq!(
+            (undo_shown(&full), undo_shown(&wide)),
+            (
+                vec!["Undo roll".to_owned()],
+                vec!["Undo roll 12 travel checks".to_owned()]
+            ),
+            "m-p0-result-line: the short Undo where the words do not fit whole, the whole one \
+             where they do"
+        );
+        let mut full = full;
+        full.get_by_label("Undo roll 12 travel checks").click();
+        full.run_steps(2);
+        assert_eq!(
+            full.state().0,
+            Some(9),
+            "m-p0-result-line: the Undo's id comes back"
         );
     }
 
