@@ -5544,7 +5544,9 @@ impl Encounters {
                 design::save_row::Changed::No
             },
             design::save_row::Primary::Elsewhere,
-        );
+        )
+        // Issue #553: the encounter's own Discard can show beside it.
+        .discard_named("Discard creature changes");
         if editor.error.is_some() {
             state = state.not_saved();
         }
@@ -10956,7 +10958,8 @@ mod tests {
             .next()
             .expect("the save row says Unsaved")
             .rect();
-        let discard = harness.get_by_label("Discard").rect();
+        // Issue #553: its Discard has its own accessible name, apart from the encounter's.
+        let discard = harness.get_by_label("Discard creature changes").rect();
         assert!(
             harness.query_by_label("Done with this creature").is_none()
                 && word.right() <= discard.left()
