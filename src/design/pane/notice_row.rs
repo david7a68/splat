@@ -404,8 +404,18 @@ mod tests {
     #[test]
     fn a_notice_row_paints_at_its_measured_height_at_every_width() {
         let (mut at_line_end, mut wrapped_checks, mut wrapped_rolls) = (0, 0, 0);
+        // Every 6 px from 300 to 720 at scale 1, so a measure that wraps a check's words in the
+        // wrong room meets a width where the line count differs; five widths at 1.5.
+        let widths = |scale: f32| -> Vec<f32> {
+            if scale == 1.0 {
+                (0..=70).map(|step| 300.0 + 6.0 * step as f32).collect()
+            } else {
+                vec![300.0, 340.0, 420.0, 560.0, 720.0]
+            }
+        };
+        let mut gaps_seen = 0;
         for scale in [1.0, 1.5] {
-            for width in [300.0, 340.0, 420.0, 560.0, 720.0] {
+            for width in widths(scale) {
                 let harness = harness(width, scale);
                 let drawn = harness.state();
                 assert_eq!(
@@ -419,7 +429,10 @@ mod tests {
                     .shapes
                     .iter()
                     .filter_map(|clipped| match &clipped.shape {
-                        egui::Shape::Text(text) => Some(text.visual_bounding_rect()),
+                        // The text's line box: its galley at its place.
+                        egui::Shape::Text(text) => {
+                            Some(Rect::from_min_size(text.pos, text.galley.size()))
+                        }
                         _ => None,
                     })
                     .collect();
@@ -437,6 +450,66 @@ mod tests {
                             "notice-row-slot: {width}@{scale}: row {index} drew {drew:?} in slot {slot:?}"
                         );
                     }
+                    // The parts of the row the column's gap apart (an independent contract: what
+                    // stands above is what painted): each check box, the first row of rolls, the
+                    // results and a finish on its own line start `LINE_GAP` under the lowest part
+                    // painted above them. A finish at the end of the words' line shares that line.
+                    let parts: Vec<Rect> = controls
+                        .iter()
+                        .map(|(_, drew, _)| *drew)
+                        .chain(
+                            texts
+                                .iter()
+                                .copied()
+                                .filter(|text| rect.contains(text.center())),
+                        )
+                        .collect();
+                    let gap_above = |part: Rect| {
+                        parts
+                            .iter()
+                            .filter(|other| other.bottom() <= part.top() + 0.5)
+                            .map(|other| part.top() - other.bottom())
+                            .fold(f32::INFINITY, f32::min)
+                    };
+                    let row = &rows()[index];
+                    let mut spaced: Vec<Rect> = Vec::new();
+                    if !row.rolls.is_empty() {
+                        spaced.push(controls[0].1);
+                    }
+                    let first_check = row.rolls.len();
+                    spaced.extend(
+                        controls[first_check..controls.len() - 1]
+                            .iter()
+                            .map(|c| c.1),
+                    );
+                    let finish = controls.last().expect("the finish").1;
+                    let at_line_end = texts.iter().any(|text| {
+                        rect.contains(text.center())
+                            && text.center().y > finish.top()
+                            && text.center().y < finish.bottom()
+                            && text.right() < finish.left()
+                    });
+                    if !at_line_end {
+                        spaced.push(finish);
+                    }
+                    if let Some(results) = row.results {
+                        let _ = results;
+                        if let Some(text) = texts
+                            .iter()
+                            .filter(|text| rect.contains(text.center()))
+                            .find(|text| (text.left() - rect.left() - L).abs() < 1.0)
+                        {
+                            spaced.push(*text);
+                        }
+                    }
+                    for part in spaced {
+                        let gap = gap_above(part);
+                        assert!(
+                            (gap - LINE_GAP).abs() < 1.0,
+                            "notice-row-gap: {width}@{scale}: row {index}: {part:?} stands {gap} under the part above it, not {LINE_GAP}"
+                        );
+                        gaps_seen += 1;
+                    }
                     // The lowest painted part of the row ends at the row's laid bottom.
                     let lowest = controls
                         .iter()
@@ -449,7 +522,7 @@ mod tests {
                         )
                         .fold(rect.top(), f32::max);
                     assert!(
-                        (rect.bottom() - lowest).abs() < 1.5,
+                        (rect.bottom() - lowest).abs() < 0.5,
                         "notice-row-height: {width}@{scale}: row {index} laid {rect:?}, lowest painted {lowest}"
                     );
                 }
@@ -463,6 +536,7 @@ mod tests {
                     usize::from(finish.top() < drawn[3].0.top() + Density::Read.control());
             }
         }
+        assert!(gaps_seen > 0, "notice-row-gap-reached");
         assert!(
             at_line_end > 0 && wrapped_checks > 0 && wrapped_rolls > 0,
             "notice-row-reached: finish on the words' line {at_line_end}, a wrapped check {wrapped_checks}, wrapped rolls {wrapped_rolls}"
