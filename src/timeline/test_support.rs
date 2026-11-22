@@ -14,6 +14,7 @@ pub enum TestUndo {
 /// returns (the event put back), else `None`. With no such result, no Undo shows: `None`.
 pub fn press_footer_undo(book: &mut Book, which: TestUndo) -> Option<String> {
     use crate::design::outcome::{Messages, PaneFrame, Said, UndoStep, Verb};
+    use crate::design::test_harness::Themed as _;
     use egui_kittest::kittest::Queryable;
     let label = match which {
         TestUndo::Remove => "Undo remove",
@@ -22,7 +23,7 @@ pub fn press_footer_undo(book: &mut Book, which: TestUndo) -> Option<String> {
     };
     let mut harness = egui_kittest::Harness::builder()
         .with_size(eframe::egui::vec2(800.0, 300.0))
-        .build_state(
+        .themed_state(
             move |ctx, (book, back): &mut (Book, Option<String>)| {
                 eframe::egui::CentralPanel::default().show(ctx, |ui| {
                     let frame = PaneFrame::new(ui);
@@ -70,7 +71,6 @@ pub fn press_footer_undo(book: &mut Book, which: TestUndo) -> Option<String> {
             },
             (std::mem::take(book), None),
         );
-    crate::design::theme::install(&harness.ctx);
     harness.run_steps(2);
     if harness.query_by_label(label).is_some() {
         harness.get_by_label(label).click();

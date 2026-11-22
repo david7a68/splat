@@ -5584,9 +5584,10 @@ mod tests {
         reason = "the test draws one fault in every body place"
     )]
     fn one_fault_has_one_tone_in_every_place() {
+        use crate::design::test_harness::ThemedPage as _;
         let mut h = Harness::builder()
             .with_size(egui::vec2(600.0, 500.0))
-            .build_ui(|ui| {
+            .themed_ui(|ui| {
                 let fault = Hp(Severity::NeedsFixing, Some(14));
                 banner(ui, Banner::Fault(&fault));
                 row_fault(ui, &fault);
@@ -5604,7 +5605,6 @@ mod tests {
                 messages.outcome(Notice::new(crate::sentence!("Sync is off.")));
                 let _ = messages.pane(ui, crate::design::Body::Content, |_| ());
             });
-        crate::design::theme::install(&h.ctx);
         h.run_steps(4);
         let rects = message_rects(&h.ctx);
         let places: Vec<_> = rects.iter().map(|(_, place, _)| *place).collect();
@@ -5672,6 +5672,7 @@ mod tests {
     /// and the body in view above it (the footer's region scrolls: `Footer`'s own proof).
     #[test]
     fn a_footer_file_line_keeps_its_path_and_opens_its_file() {
+        use crate::design::test_harness::Themed as _;
         use egui::accesskit::Role;
         use egui_kittest::kittest::NodeT;
         use std::path::Path;
@@ -5698,7 +5699,7 @@ mod tests {
         let harness = |width: f32, count: usize, lines: Vec<FileLine>| {
             let mut h = Harness::builder()
                 .with_size(egui::vec2(960.0, 640.0))
-                .build_ui_state(
+                .themed_ui_state(
                     move |ui, fixture: &mut Fixture| {
                         let fault = Hp(Severity::NeedsFixing, Some(9));
                         ui.set_max_width(fixture.width);
@@ -5725,7 +5726,6 @@ mod tests {
                         pressed: 0,
                     },
                 );
-            crate::design::theme::install(&h.ctx);
             h.run_steps(4);
             h
         };
@@ -6084,12 +6084,13 @@ mod tests {
         reason = "the test of the body place `PlacedResult::show` itself"
     )]
     fn a_placed_result_shows_its_undo_whole_where_it_fits() {
+        use crate::design::test_harness::Themed as _;
         const OBJECT: &str = "Bridge Ambush at the Ravenholm Ironside Crossing";
         let name = format!("Undo remove {OBJECT}");
         let harness = |width: f32| {
             let mut h = Harness::builder()
                 .with_size(egui::vec2(960.0, 300.0))
-                .build_ui_state(
+                .themed_ui_state(
                     move |ui, pressed: &mut Option<u8>| {
                         ui.set_max_width(width);
                         let result = PlacedResult::new(
@@ -6102,7 +6103,6 @@ mod tests {
                     },
                     None,
                 );
-            crate::design::theme::install(&h.ctx);
             h.run_steps(2);
             h
         };
@@ -6145,7 +6145,7 @@ mod tests {
         let line = |width: f32, shown: bool| {
             let mut h = Harness::builder()
                 .with_size(egui::vec2(960.0, 300.0))
-                .build_ui_state(
+                .themed_ui_state(
                     move |ui, state: &mut (Option<u8>, f32)| {
                         ui.set_max_width(width);
                         let result = shown.then(|| {
@@ -6161,7 +6161,6 @@ mod tests {
                     },
                     (None, 0.0),
                 );
-            crate::design::theme::install(&h.ctx);
             h.run_steps(2);
             h
         };
@@ -6672,6 +6671,8 @@ mod tests {
         reason = "the test of the body places `BodyFault::show` and `BodyMessage::show` themselves"
     )]
     fn a_body_fault_gives_its_repairs_back_by_id() {
+        use crate::design::test_harness::Themed as _;
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::NodeT;
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         enum Fix {
@@ -6695,7 +6696,7 @@ mod tests {
         const LONG: &str = "Ravenholm Ironside Wardens of the Northern Bridge Crossing";
         let mut h = Harness::builder()
             .with_size(egui::vec2(960.0, 600.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, state: &mut State| {
                     let fault = Hp(Severity::NeedsFixing, None);
                     ui.allocate_ui_with_layout(
@@ -6758,7 +6759,6 @@ mod tests {
                 },
                 State::default(),
             );
-        crate::design::theme::install(&h.ctx);
         h.run_steps(4);
         // M-P0 item 9: a typed body fault's help line, under its words and before its repairs, at
         // their column; a typed fault message's, under its words, at them.
@@ -6913,7 +6913,7 @@ mod tests {
         for width in [900.0, 320.0] {
             let mut h = Harness::builder()
                 .with_size(egui::vec2(960.0, 400.0))
-                .build_ui_state(
+                .themed_ui_state(
                     move |ui, pressed: &mut Vec<Fix>| {
                         ui.allocate_ui_with_layout(
                             egui::vec2(width, 400.0),
@@ -6965,7 +6965,6 @@ mod tests {
                     },
                     Vec::new(),
                 );
-            crate::design::theme::install(&h.ctx);
             h.run_steps(4);
             let words = h
                 .get_by_role_and_label(egui::accesskit::Role::Label, "Kaya’s sheet changed.")
@@ -7075,7 +7074,7 @@ mod tests {
         const SAID: &str = "The recorder said: device busy.";
         let mut h = Harness::builder()
             .with_size(egui::vec2(600.0, 300.0))
-            .build_ui(|ui| {
+            .themed_ui(|ui| {
                 let fault = Hp(Severity::CannotRead, None);
                 let _ = BodyMessage::from(
                     FaultMessage::new(&fault)
@@ -7084,7 +7083,6 @@ mod tests {
                 )
                 .show(ui);
             });
-        crate::design::theme::install(&h.ctx);
         h.run_steps(2);
         let fault_words = fault_words(&Hp(Severity::CannotRead, None));
         h.get_by_role_and_label(egui::accesskit::Role::Label, fault_words.as_str())
@@ -7103,7 +7101,7 @@ mod tests {
         const WHOLE: &str = "Repair Ravenholm in Library";
         let mut h = Harness::builder()
             .with_size(egui::vec2(400.0, 300.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, right: &mut f32| {
                     let fault = Hp(Severity::NeedsFixing, None);
                     ui.allocate_ui_with_layout(
@@ -7122,7 +7120,6 @@ mod tests {
                 },
                 0.0,
             );
-        crate::design::theme::install(&h.ctx);
         h.run_steps(4);
         let node = h.get_by_label(WHOLE).rect();
         let wrapped = h.output().shapes.iter().any(|clipped| {
@@ -7147,7 +7144,7 @@ mod tests {
         const CANCEL: crate::design::layout::Word = crate::word!("Cancel");
         let mut h = Harness::builder()
             .with_size(egui::vec2(960.0, 600.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, form: &mut Form| {
                     let fault = Hp(Severity::NeedsFixing, None);
                     let mut opener =
@@ -7175,7 +7172,6 @@ mod tests {
                 },
                 Form::default(),
             );
-        crate::design::theme::install(&h.ctx);
         h.run_steps(3);
         // A caption and its field share a name: any node with it.
         let has = |h: &Harness<'_, Form>, name: &str| h.query_all_by_label(name).next().is_some();
@@ -7731,10 +7727,10 @@ mod tests {
         }
 
         pub(super) fn harness_sized(app: App, width: f32) -> Harness<'static, App> {
+            use crate::design::test_harness::Themed as _;
             let mut h = Harness::builder()
                 .with_size(egui::vec2(width, 500.0))
-                .build_ui_state(frame, app);
-            crate::design::theme::install(&h.ctx);
+                .themed_ui_state(frame, app);
             h.run_steps(4);
             h
         }
