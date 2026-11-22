@@ -79,11 +79,78 @@ pub fn quote<R>(
     depth: usize,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
+    indent(ui, depth, Gap::L, add)
+}
+
+/// `add` set in by `levels` steps of `step` from the text edge, on one line with nothing between
+/// (a tree's rows by depth, a quote by level): the caller names the level, the part owns the
+/// indent, and no item spacing adds to it.
+pub fn indent<R>(
+    ui: &mut Ui,
+    levels: usize,
+    step: Gap,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<R> {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        space(ui, QUOTE_INDENT * depth as f32);
+        space(ui, step.size() * levels as f32);
         ui.vertical(add).inner
     })
+}
+
+/// `add` drawn `drop` below the top of its slot. The slot is `size` wide and still holds the
+/// drop, so what follows starts below the block, as when a space came first; the block is placed
+/// by its rect, so a slot taller than the block never moves it.
+pub fn dropped<R>(ui: &mut Ui, size: egui::Vec2, drop: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let column = egui::Layout::top_down(egui::Align::Min);
+    ui.allocate_ui_with_layout(size, column, |ui| {
+        let mut room = ui.available_rect_before_wrap();
+        room.min.y += drop;
+        room.max.y = room.max.y.max(room.min.y);
+        ui.scope_builder(egui::UiBuilder::new().max_rect(room).layout(column), add)
+            .inner
+    })
+    .inner
+}
+
+/// The first line of a row, from the row's top. Every control that stands on it has its centre on
+/// the line's centre, as the first line of the row's name does (`FirstLine::slot`).
+#[derive(Clone, Copy, Debug)]
+pub struct FirstLine {
+    /// The line's top, from the row's top.
+    pub top: f32,
+    pub height: f32,
+}
+
+impl FirstLine {
+    /// A slot of the row (`size`, from the row's top) holding one control `control` high, placed
+    /// by its rect on the line (`dropped`).
+    pub fn slot<R>(
+        self,
+        ui: &mut Ui,
+        size: egui::Vec2,
+        control: f32,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> R {
+        dropped(ui, size, self.top + (self.height - control) / 2.0, add)
+    }
+}
+
+/// `add`'s block, which takes no room, and leaves no item gap, when it draws nothing. Says
+/// whether it drew. (A `Ui::scope` always allocates, and its item gap with it.)
+pub fn unless_empty<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> (R, bool) {
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(ui.available_rect_before_wrap())
+            .layout(*ui.layout()),
+    );
+    let inner = add(&mut child);
+    let rect = child.min_rect();
+    let drew = rect.height() > 0.0;
+    if drew {
+        ui.allocate_rect(rect, Sense::hover());
+    }
+    (inner, drew)
 }
 
 /// Exactly one step of the scale between the item above (or before) and the next, whatever the
@@ -504,6 +571,40 @@ mod tests {
         let mut add = add;
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| add(ui));
+        });
+    }
+
+    /// `indent`: the block starts `levels` steps in with no item spacing added; `dropped`: it starts
+    /// `drop` below the slot's top and the slot holds the drop; `unless_empty`: an empty block leaves
+    /// the next item where it would be with no block, a block that draws leaves its gap.
+    #[test]
+    fn indent_dropped_and_unless_empty_place_by_rect() {
+        run(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(8.0, 6.0);
+            let left = ui.max_rect().left();
+            let at = indent(ui, 3, Gap::S, |ui| ui.label("x").rect.left()).inner;
+            assert!((at - (left + 3.0 * S)).abs() < 0.01, "indent: {at}");
+            let top = ui.cursor().top();
+            let seen = dropped(ui, egui::vec2(100.0, 40.0), 10.0, |ui| {
+                ui.label("y").rect.top()
+            });
+            assert!((seen - (top + 10.0)).abs() < 0.01, "drop: {seen}");
+            assert!(
+                ui.cursor().top() >= top + 10.0,
+                "the slot holds the drop: {} from {top}",
+                ui.cursor().top()
+            );
+            let before = ui.cursor().top();
+            let ((), drew) = unless_empty(ui, |_| ());
+            assert!(
+                !drew && (ui.cursor().top() - before).abs() < 0.01,
+                "empty block moved the cursor"
+            );
+            let (_, drew) = unless_empty(ui, |ui| ui.label("z"));
+            assert!(
+                drew && ui.cursor().top() > before,
+                "a block that draws has its gap"
+            );
         });
     }
 
