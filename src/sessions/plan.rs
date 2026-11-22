@@ -872,7 +872,10 @@ struct GroupRow {
 /// The plan's closed rows, laid out before any row draws, with the plan's shared column.
 pub(super) struct KeptRows {
     events: Vec<(KeptRow, RewardsAt)>,
-    fights: Vec<KeptRow>,
+    /// Each planned fight's row with its occurrence: how many lines before it plan the same
+    /// fight. A fight's row and its controls are keyed by its file and occurrence, never by its
+    /// place, so a fight planned above another keeps the other's ids (review of PR 841).
+    fights: Vec<(KeptRow, usize)>,
     groups: Vec<GroupRow>,
     columns: design::PlanColumns,
 }
@@ -5297,7 +5300,7 @@ impl Sessions {
                 }
                 let mut fight_rows = rows.fights.iter();
                 for (position, fight) in planned_fights().enumerate() {
-                    let Some(row) = fight_rows.next() else { break };
+                    let Some((row, occurrence)) = fight_rows.next() else { break };
                     let saved = planned_saved_run(fight, plan.fights, plan.saved_runs);
                     self.removed_fight_message(ui, session, position);
                     if !folded {
@@ -5306,7 +5309,7 @@ impl Sessions {
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
                     let open = self.open_planned.as_ref() == Some(&fight.path);
-                    let fight_row = ui.push_id((&fight.path, position), |ui| {
+                    let fight_row = ui.push_id((&fight.path, *occurrence), |ui| {
                         let drawn = draw_plan_row(ui, row, Some(open), |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
@@ -5942,10 +5945,15 @@ impl Sessions {
                     plain_actions
                 },
             };
+            let occurrence = projection.planned[..position]
+                .iter()
+                .filter(|&&at| plan.fights[at].path == fight.path)
+                .count();
             fights.push((
-                egui::Id::new(("plan_fight", &fight.path, position)),
+                egui::Id::new(("plan_fight", &fight.path, occurrence)),
                 !open,
                 words,
+                occurrence,
             ));
         }
         let mut groups = Vec::new();
@@ -6013,7 +6021,7 @@ impl Sessions {
                 .collect(),
             fights: fights
                 .into_iter()
-                .map(|(key, rule, words)| lay(key, rule, words))
+                .map(|(key, rule, words, occurrence)| (lay(key, rule, words), occurrence))
                 .collect(),
             groups: groups
                 .into_iter()
@@ -10622,11 +10630,35 @@ mod tests {
                 .as_str()
                 .replace("- [[Mill]]\n", "- [[Mill]]\n- [[Empty Watch]]\n");
             let _ = draft.body.replace(body);
+            draft.edited();
         }
         harness.step();
         assert!(
             harness.query_by_label("Empty Watch").is_some() && has(&harness, "No members can join"),
             "an empty group's row says why it cannot join"
+        );
+        // Review of PR 841 (P3): a planned fight's row and its title are keyed by the fight's
+        // file and its occurrence, never by its place: a fight planned above Mill keeps Mill's
+        // title focused. Red: keyed by place.
+        harness.get_by_label("Mill").focus();
+        harness.run_steps(2);
+        assert!(harness.get_by_label("Mill").is_focused());
+        let bridges = harness.query_all_by_label("Bridge").count();
+        {
+            let draft = harness.state_mut().0.draft.as_mut().unwrap();
+            let body =
+                draft
+                    .body
+                    .as_str()
+                    .replacen("- [[Mill]]\n", "- [[Bridge]]\n- [[Mill]]\n", 1);
+            let _ = draft.body.replace(body);
+            draft.edited();
+        }
+        harness.run_steps(2);
+        assert!(
+            harness.query_all_by_label("Bridge").count() == bridges + 1
+                && harness.get_by_label("Mill").is_focused(),
+            "a fight planned above Mill keeps Mill's title focused"
         );
     }
 
