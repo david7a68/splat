@@ -5109,9 +5109,41 @@ impl Sessions {
         if save && let Some(draft) = &mut self.draft {
             draft.save();
         }
+        // The page editor's own edit keeps the Notes panel's slice (and its Undo) in step.
+        if edited && !in_panel {
+            self.panel_slice_follows_note(ui.ctx());
+        }
         if let Some(target) = pressed_link {
             self.open_note_link(target);
         }
+    }
+
+    /// The Notes panel's slice after a whole-note edit of the note's own (the page editor's,
+    /// `add_to_note`'s: a reading's summary, a plan's link): the slice takes the note's new
+    /// words past its part before, through the panel's text guard (`edit_in_place`), so the
+    /// panel keeps its typing history (review of PR 799). A change to the part before, or
+    /// another note, cuts the slice again when the panel draws, as an outside change does.
+    fn panel_slice_follows_note(&mut self, ctx: &egui::Context) {
+        let (Some(draft), Some(slice)) = (&self.draft, &mut self.panel_slice) else {
+            return;
+        };
+        if slice.session != self.selected || slice.body == draft.body.key() {
+            return;
+        }
+        let Some(tail) = draft.body.as_str().strip_prefix(slice.prefix.as_str()) else {
+            return;
+        };
+        let tail = tail.to_owned();
+        design::edit_in_place(
+            ctx,
+            NOTE_IN_PANEL.of(self.selected).id(),
+            &mut slice.tail,
+            |text| {
+                text.clear();
+                text.push_str(&tail);
+            },
+        );
+        slice.body = draft.body.key();
     }
 
     pub fn fresh_focus_in_panel(&mut self) {
@@ -5144,6 +5176,7 @@ impl Sessions {
             None => draft.body.edit(|body| insert_in_note(body, words)),
         }
         draft.edited();
+        self.panel_slice_follows_note(ctx);
         true
     }
 
@@ -9841,6 +9874,26 @@ mod tests {
                 && note.contains("Night one.")
                 && note.contains(" More."),
             "n0-panel-slice: what is typed in the panel goes into the note, its start kept: {note:?}"
+        );
+        // Review of PR 799 (P2): the page adds a reading's summary through `add_to_note` while
+        // the panel holds what was typed; the panel keeps its Undo, so Ctrl+Z there still takes
+        // back what was typed.
+        let ctx = harness.ctx.clone();
+        assert!(harness.state_mut().0.add_to_note(&ctx, "A summary."));
+        harness.run_steps(2);
+        assert!(
+            body(&harness).contains("A summary."),
+            "the summary is in the note"
+        );
+        let mut undone = Vec::new();
+        while undone.len() < 6 && body(&harness).contains(" More.") {
+            harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+            harness.run_steps(2);
+            undone.push(body(&harness));
+        }
+        assert!(
+            !body(&harness).contains(" More."),
+            "n0-panel-undo: after add_to_note, Ctrl+Z in the panel still takes back what was typed: {undone:?}"
         );
     }
 
