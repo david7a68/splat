@@ -1274,7 +1274,7 @@ impl WorldPage {
                 {
                     self.new_kind = None;
                 }
-                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                design::gap_to_next(ui, design::Gap::L);
                 if reason.is_some() {
                     design::blocked_reason(ui, reason);
                 } else if kind == "npc" {

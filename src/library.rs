@@ -5326,7 +5326,7 @@ impl Library {
                         // first warning, as between a kind line and prose,
                         // so the kind word does not read as the warning's.
                         if fault.is_some() || repair_problem.is_some() {
-                            ui.add_space(design::L - ui.spacing().item_spacing.y);
+                            design::gap_to_next(ui, design::Gap::L);
                         }
                         if let Some(fault) = &fault {
                             read_again = fault_notice(ui, fault);
