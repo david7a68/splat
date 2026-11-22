@@ -1833,40 +1833,41 @@ impl TimelinePage {
         {
             self.reveal_checks = None;
         }
-        design::page_header(
-            ui,
-            "Timeline",
-            Some(&if book.events.is_empty() {
-                String::new()
-            } else {
-                // The clock shows once a day sets it; before that, there is nothing to name.
-                let view = self.view(book);
-                let now = view
-                    .now
-                    .map_or_else(String::new, |now| format!(" · Now: {}", clock_words(now)));
-                format!(
-                    "{}{now}",
-                    if self.filter != Filter::All
-                        || !self.search.trim().is_empty()
-                        || self.session.is_some()
-                    {
-                        let shown = view.rows.len();
-                        format!(
-                            "{} of {}",
-                            if shown == 0 {
-                                "0".into()
-                            } else {
-                                design::count(shown, "", "")
-                            },
-                            design::count(book.events.len(), "event", "events")
-                        )
-                    } else {
+        // M0562: the header is the shared title line: the title, then the count of events (and
+        // how many show) and the clock, once a day sets it.
+        let context = if book.events.is_empty() {
+            String::new()
+        } else {
+            // The clock shows once a day sets it; before that, there is nothing to name.
+            let view = self.view(book);
+            let now = view
+                .now
+                .map_or_else(String::new, |now| format!(" · Now: {}", clock_words(now)));
+            format!(
+                "{}{now}",
+                if self.filter != Filter::All
+                    || !self.search.trim().is_empty()
+                    || self.session.is_some()
+                {
+                    let shown = view.rows.len();
+                    format!(
+                        "{} of {}",
+                        if shown == 0 {
+                            "0".into()
+                        } else {
+                            design::count(shown, "", "")
+                        },
                         design::count(book.events.len(), "event", "events")
-                    },
-                )
-            }),
-            |_| {},
-        );
+                    )
+                } else {
+                    design::count(book.events.len(), "event", "events")
+                },
+            )
+        };
+        let _ = design::TitleLine::new("Timeline")
+            .context((!context.is_empty()).then_some(context.as_str()))
+            .page()
+            .show(ui);
         if problems(ui, book) {
             return;
         }
