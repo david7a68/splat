@@ -2694,8 +2694,14 @@ pub enum FooterAct {
 pub trait TrackerUi {
     fn show(&mut self, ui: &mut egui::Ui, from_top: bool);
     fn history(&mut self, ui: &mut egui::Ui, note: &Entry);
-    fn history_footer(&self, note: Uuid, messages: &mut design::outcome::Messages<'_, FooterAct>);
-    fn undo_remove(&mut self);
+    fn history_footer<'f>(
+        &self,
+        note: Uuid,
+        frame: &'f design::outcome::PaneFrame,
+        messages: &mut design::outcome::Messages<'f, FooterAct>,
+    );
+    /// The last Remove's Undo, by the press's ticket (M-S0.4).
+    fn undo_remove(&mut self, ticket: Option<design::results::Ticket>);
 }
 
 /// The reader's kinds of kept result, one each: a later one of a kind replaces the earlier

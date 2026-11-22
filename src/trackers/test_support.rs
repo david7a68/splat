@@ -27,12 +27,29 @@ impl Trackers {
     }
 
     pub fn test_removed(&self) -> Option<history::Removed> {
-        self.removed.clone()
+        self.removed
+            .newest_first(self.campaign.as_ref()?.path.as_path())
+            .next()
+            .map(|shown| shown.value().clone())
+    }
+
+    /// The ticket of the last Remove's line, as its Undo's press carries it.
+    pub fn test_removed_ticket(&self) -> Option<crate::design::results::Ticket> {
+        self.removed
+            .newest_first(self.campaign.as_ref()?.path.as_path())
+            .next()
+            .map(|shown| shown.ticket_for_caller_test())
+    }
+
+    /// The press of the last Remove's Undo, with its line's ticket.
+    pub fn test_undo_remove(&mut self) {
+        let ticket = self.test_removed_ticket();
+        self.undo_remove(ticket);
     }
 
     /// What the last Remove's Undo names (`Undo remove <name>`); empty with no Remove.
     pub fn test_removed_name(&self) -> String {
-        self.removed
+        self.test_removed()
             .as_ref()
             .map(history::Removed::name)
             .unwrap_or_default()

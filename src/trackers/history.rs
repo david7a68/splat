@@ -45,8 +45,35 @@ pub struct Removed {
     pub words: String,
     /// What its Undo names: the clicked entry's act (`Undo remove Take seal: Keyring +1`).
     name: String,
-    /// When it was made, for the footer's order.
-    order: crate::design::ResultOrder,
+    /// The campaign it was made in: its owner in the store.
+    owner: HistoryOwner,
+}
+
+/// The owner of the last Remove of a tracker history: the campaign. One Undo of a Remove stands
+/// at a time, in whichever note's reader it was made; a campaign switch hides it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HistoryOwner(std::path::PathBuf);
+
+impl crate::design::results::Owner for HistoryOwner {
+    type Scope = std::path::Path;
+    fn scope(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl crate::design::results::Kept for Removed {
+    type Owner = HistoryOwner;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // An Undo that found its entries changed or gone on disk ends it.
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        // A read of the ledger keeps it: its Undo checks the entries when pressed.
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        // Its Undo puts the entries back; it leaves only when that works.
+        press: crate::design::results::Press::Undo,
+    };
+    fn owner(&self) -> HistoryOwner {
+        self.owner.clone()
+    }
 }
 
 /// The member an entry belongs to: the tracker it changed, the tracker whose change raised its
@@ -246,10 +273,6 @@ fn removal(
 impl Trackers {
     /// `Remove` on a row of a member's history in the reader of `note`: the entry it was drawn
     /// from, exactly as read. It replaces the Undo of the last `Remove`.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn remove(&mut self, note: Uuid, drawn: &Entry) {
         let today = self.today.clone();
         let mut made = None;
@@ -270,13 +293,14 @@ impl Trackers {
         });
         match done {
             Ok(()) => {
-                if let Some((placed, words, name)) = made {
-                    self.removed = Some(Removed {
+                if let (Some((placed, words, name)), Some(owner)) = (made, self.history_owner()) {
+                    // A new Remove replaces the last one and its Undo; the store issues its order.
+                    self.removed.record(Removed {
                         note,
                         placed,
                         words,
                         name,
-                        order: crate::design::ResultOrder::issue(),
+                        owner,
                     });
                 }
             }
@@ -288,8 +312,16 @@ impl Trackers {
     /// `Undo remove`: the entries go back where they were. When one of them, or the entry
     /// before it, changed or is gone on disk, it writes nothing, says so, and the Undo ends.
     /// When a notice raised since needs the entries to stay out, it writes nothing and names it.
-    pub fn undo_remove(&mut self) {
-        let Some(removed) = self.removed.clone() else {
+    /// `ticket` is the press's: a Remove replaced since its line was drawn does nothing.
+    pub fn undo_remove(&mut self, ticket: Option<crate::design::results::Ticket>) {
+        let Some(ticket) = ticket else {
+            return;
+        };
+        let Some(removed) = self
+            .removed
+            .get_by(&ticket)
+            .map(|shown| shown.value().clone())
+        else {
             return;
         };
         let today = self.today.clone();
@@ -310,15 +342,34 @@ impl Trackers {
             )
         });
         match done {
-            Ok(()) => self.removed = None,
+            Ok(()) => {
+                let _ = self.removed.undo_by(ticket, |_| Ok::<(), ()>(()));
+            }
             Err(Some(reason)) => {
                 if stale {
-                    self.removed = None;
+                    self.removed.owner_changed(&removed.owner);
                 }
                 self.history_reason = Some((removed.note, reason));
             }
             Err(None) => {}
         }
+    }
+
+    /// The campaign: the owner of the last Remove.
+    fn history_owner(&self) -> Option<HistoryOwner> {
+        self.campaign
+            .as_ref()
+            .map(|campaign| HistoryOwner(campaign.path.clone()))
+    }
+
+    /// The last Remove, when it was made in the reader of `note` in this campaign.
+    pub(crate) fn removed_in(
+        &self,
+        note: Uuid,
+    ) -> Option<crate::design::results::Shown<'_, Removed>> {
+        self.removed
+            .get(&self.history_owner()?)
+            .filter(|shown| shown.value().note == note)
     }
 }
 
@@ -345,8 +396,8 @@ enum LineKind {
     Refused(crate::design::results::Refusal),
     /// The save of the history failed, in `view::not_saved`'s words.
     NotSaved(crate::design::outcome::Sentence),
-    /// The last `Remove`, with the order `remove` issued for it and what its Undo names.
-    Removed(crate::design::ResultOrder, String),
+    /// The last `Remove`: a kept line of its store (`footer`).
+    Removed,
 }
 
 /// The footer messages of the history of `note`, in the footer's order: why the last `Remove`
@@ -376,26 +427,23 @@ pub fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
             }
         });
     }
-    if let Some(removed) = trackers.removed.as_ref().filter(|r| r.note == note) {
+    if let Some(removed) = trackers.removed_in(note) {
         lines.push(FooterLine {
-            words: removed.words.clone(),
-            kind: LineKind::Removed(removed.order, removed.name.clone()),
+            words: removed.value().words.clone(),
+            kind: LineKind::Removed,
         });
     }
     lines
 }
 
-/// The reader's footer messages of the history of `note` (`footer_lines`), typed. (A named lead
-/// exception in package D's slice: only this footer path moves to the typed footer. `remove`
-/// still issues its own order, so the result goes in by the staged path.)
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: the last Remove keeps the order `remove` issued (design::results::STAGED_ALLOWS)"
-)]
-pub fn footer<A: Clone + 'static>(
+/// The reader's footer messages of the history of `note` (`footer_lines`), typed. The last
+/// Remove is a kept line of its store (M0567, M0569): its Undo's press carries the store's
+/// ticket, so it reaches only the Remove its line showed.
+pub fn footer<'f, A: Clone + 'static>(
     trackers: &Trackers,
     note: Uuid,
-    messages: &mut Messages<'_, A>,
+    frame: &'f crate::design::outcome::PaneFrame,
+    messages: &mut Messages<'f, A>,
     said: fn(&str) -> Sentence,
     undo: A,
 ) {
@@ -407,14 +455,17 @@ pub fn footer<A: Clone + 'static>(
             LineKind::NotSaved(words) => {
                 messages.outcome(FaultMessage::new(&NotSaved(words)));
             }
-            LineKind::Removed(order, name) => {
-                messages.outcome_at(
-                    order,
-                    Said::new(said(&line.words))
-                        .undo(UndoStep::of(Verb::Remove, name).pressed_as(undo.clone())),
-                );
-            }
+            // Drawn from its store below, with its ticket.
+            LineKind::Removed => {}
         }
+    }
+    if let Some(shown) = trackers.removed_in(note) {
+        let line = shown.outcome(frame, |removed| {
+            Said::new(said(&removed.words))
+                .undo(UndoStep::of(Verb::Remove, removed.name.clone()).pressed_as(undo.clone()))
+                .into()
+        });
+        messages.kept(line);
     }
 }
 

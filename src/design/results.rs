@@ -1079,8 +1079,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "scene_act", &[Ban::Results]),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
-        ("src/trackers/history.rs", "remove", &[Ban::Results]),
-        ("src/trackers/history.rs", "footer", &[Ban::Order]),
         (
             "src/world/edit.rs",
             "edit_form",
@@ -1644,7 +1642,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/sessions/carry.rs", 1),
             ("src/sessions/plan.rs", 4),
             ("src/timeline.rs", 1),
-            ("src/trackers/history.rs", 1),
         ],
     ),
     (

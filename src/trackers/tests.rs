@@ -570,7 +570,7 @@ fn day_marks_follow_the_campaigns_day_count() {
         Some(vec![32, 62])
     );
     assert_eq!(value(&race, "favor", None), 0);
-    race.trackers.undo_remove();
+    race.trackers.test_undo_remove();
     assert_eq!(value(&race, "favor", None), 1);
     assert_eq!(race.trackers.state.due[0].id, day("month_end", 62));
     // A day notice comes from the day count, so no entry raises it: the wagon's Done goes
@@ -588,7 +588,7 @@ fn day_marks_follow_the_campaigns_day_count() {
     assert_eq!(value(&race, "seals", Some("Party")), 0);
     assert!(t.state.due.iter().any(|n| n.id == day("wagon", 3)));
     assert!(!t.state.due.iter().any(|n| n.key == "seals"));
-    race.trackers.undo_remove();
+    race.trackers.test_undo_remove();
     assert_eq!(value(&race, "seals", Some("Party")), 1);
     let t = &race.trackers;
     let rows: Vec<_> = t.state.due.iter().map(|n| n.id.clone()).collect();
@@ -1166,7 +1166,7 @@ fn undo_and_remove_of_a_change_that_raised_a_notice_take_the_notice_and_its_entr
     t.roll_notice(&bell, "wander_early");
     let before = file(&race);
     let t = &mut race.trackers;
-    t.undo_remove();
+    t.test_undo_remove();
     assert_eq!(
         t.test_history_reason(),
         Some((
@@ -1269,7 +1269,7 @@ fn undo_and_remove_of_a_change_that_raised_a_notice_take_the_notice_and_its_entr
     t.remove(note, &correction);
     let bell = t.state.due[0].clone();
     t.roll_notice(&bell, "wander_early");
-    t.undo_remove();
+    t.test_undo_remove();
     assert_eq!(t.test_history_reason(), None);
     assert_eq!(value(&race, "race_clock", None), 0);
     assert!(
@@ -1436,7 +1436,7 @@ fn each_write_path_of_the_ledger_holds() {
     );
     t.press("race_clock", None, "Enter room", None);
     let b = t.newest().to_vec();
-    t.undo_remove();
+    t.test_undo_remove();
     assert_eq!(t.test_removed(), None);
     assert_eq!(t.ledger.changes[0], older);
     assert_eq!(t.ledger.changes.last(), b.last());
@@ -1456,7 +1456,7 @@ fn each_write_path_of_the_ledger_holds() {
     let t = &mut race.trackers;
     t.read_disk();
     let removed_name = t.test_removed_name();
-    t.undo_remove();
+    t.test_undo_remove();
     assert_eq!(
         t.test_history_reason(),
         Some((
@@ -1486,7 +1486,7 @@ fn each_write_path_of_the_ledger_holds() {
     fs::write(&path, &edited).unwrap();
     t.read_disk();
     let removed_name = t.test_removed_name();
-    t.undo_remove();
+    t.test_undo_remove();
     assert_eq!(
         t.test_history_reason(),
         Some((
@@ -1987,4 +1987,42 @@ fn no_note_in_play_reads_no_ledger_and_shows_nothing() {
     assert!(!trackers.in_play());
     assert_eq!(trackers.due(), 0);
     assert!(trackers.unreadable.is_none(), "the ledger is not read");
+}
+
+/// M-S0.4 (M0567, M0569): the last Remove is a kept result of its store, and its Undo's press
+/// reaches only the Remove its line showed. Remove A, then Remove B, which replaces A's Undo:
+/// a press with A's old ticket puts nothing back; B's own Undo puts B back, and A stays out.
+#[test]
+fn a_remove_undo_reaches_only_the_remove_its_line_showed() {
+    let mut race = race();
+    let t = &mut race.trackers;
+    let note = t.rules.trackers[0].note;
+    t.played = None;
+    t.press("favor", None, "Crowd loves it", None);
+    t.press("favor", None, "Crowd loves it", None);
+    t.played = Some(TONIGHT);
+    t.test_settle();
+    let a = t.test_history()["favor"][0].entry.clone();
+    let b = t.test_history()["favor"][1].entry.clone();
+    t.remove(note, &a);
+    let a_ticket = t.test_removed_ticket();
+    assert!(
+        a_ticket.is_some(),
+        "A's Remove is kept with its line's ticket"
+    );
+    t.remove(note, &b);
+    let kept = t.ledger.clone();
+    t.undo_remove(a_ticket);
+    assert_eq!(
+        t.ledger.changes, kept.changes,
+        "m-s0-4-ticket: A's old ticket put an entry back"
+    );
+    assert_eq!(t.test_history_reason(), None);
+    assert!(t.test_removed().is_some(), "B's Undo stays");
+    t.test_undo_remove();
+    assert!(
+        t.ledger.changes.contains(&b) && !t.ledger.changes.contains(&a),
+        "B's own Undo puts B back, and A stays out"
+    );
+    assert_eq!(t.test_removed(), None);
 }
