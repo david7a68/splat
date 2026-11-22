@@ -384,6 +384,9 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             .filter(move |(_, def)| def.pin == pin)
     };
     if !state.due.is_empty() {
+        // Layout step 11a (SH9, AH6): a heading is one block with its first row, so the pane's
+        // cut never leaves it alone over a cut row; the next rows are blocks of their own.
+        let heading_top = ui.cursor().top();
         design::heading(
             ui,
             Heading::Group {
@@ -391,10 +394,10 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
                 count: state.due.len(),
             },
         );
-        for notice in &state.due {
+        for (at, notice) in state.due.iter().enumerate() {
             let top = ui.cursor().top();
             notice_row(ui, rules, view, notice, act);
-            register_block(ui, top);
+            register_block(ui, if at == 0 { heading_top } else { top });
         }
         // A heading adds its own space above it, so a `Pinned` heading needs none here.
         if usable(true).next().is_none() {
@@ -403,6 +406,7 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     }
     let columns = columns(ui, rules, state, view, *revision);
     if usable(true).next().is_some() {
+        let heading_top = ui.cursor().top();
         design::heading(
             ui,
             Heading::Group {
@@ -410,20 +414,26 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
                 count: 0,
             },
         );
-        for (key, def) in usable(true) {
-            tracker_lines(ui, rules, state, view, &columns, key, def, act);
+        for (at, (key, def)) in usable(true).enumerate() {
+            // The heading and its first tracker's first line, as one block (SH9).
+            let heading = (at == 0).then_some(heading_top);
+            tracker_lines(ui, rules, state, view, &columns, key, def, act, heading);
         }
     }
     let more = usable(false).count();
     if more > 0 {
         design::gap(ui, Gap::S);
+        let heading_top = ui.cursor().top();
         design::section_with_id(
             ui,
             "trackers_more",
             design::group_heading_text(ui, "More trackers", more),
             |ui| {
-                for (key, def) in usable(false) {
-                    tracker_lines(ui, rules, state, view, &columns, key, def, act);
+                for (at, (key, def)) in usable(false).enumerate() {
+                    // The open section's heading and its first tracker's first line, as one
+                    // block.
+                    let heading = (at == 0).then_some(heading_top);
+                    tracker_lines(ui, rules, state, view, &columns, key, def, act, heading);
                 }
             },
         );
@@ -702,7 +712,12 @@ fn tracker_lines(
     key: &str,
     def: &super::Definition,
     act: &mut Option<Act>,
+    // The top of the section heading this tracker comes first under, if it does: the heading, the
+    // tracker's own name line and its FIRST line are one block (layout step 11a, SH9); its other
+    // lines are blocks of their own.
+    heading_top: Option<f32>,
 ) {
+    let mut bind = Some(heading_top.unwrap_or_else(|| ui.cursor().top()));
     let value_text = |instance: Option<&str>| {
         let value = state.value(rules, key, instance);
         match def.goal {
@@ -800,7 +815,7 @@ fn tracker_lines(
             said = true;
             design::outcome::row_fault(ui, &TrackerFault::Problem(super::repeat_words(repeat)));
         }
-        register_block(ui, line_top);
+        register_block(ui, bind.take().map_or(line_top, |top| top.min(line_top)));
     }
     design::gap(ui, Gap::XS);
 }

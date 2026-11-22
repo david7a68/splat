@@ -1273,6 +1273,25 @@ impl<'a> Driver<'a> {
     }
 
     /// Is a control with this text there, and disabled?
+    /// The pressed state of the toggle named `name` (a toggle button's or a selected
+    /// control's), or `None` when no control has that name or it has no such state.
+    pub fn is_pressed(&self, name: &str) -> Option<bool> {
+        let mut pressed = None;
+        ergonomics::visit_nodes(&self.harness, |node, _| {
+            let access = node.accesskit_node();
+            if access.label().as_deref() == Some(name) {
+                pressed = pressed.or_else(|| {
+                    access.is_selected().or_else(|| {
+                        access
+                            .toggled()
+                            .map(|toggled| toggled == accesskit::Toggled::True)
+                    })
+                });
+            }
+        });
+        pressed
+    }
+
     pub fn is_disabled(&self, name: &str) -> bool {
         self.nodes()
             .iter()
@@ -2354,6 +2373,11 @@ impl<'a> Driver<'a> {
                 "the widest facts end at {widest:.1}; rows (facts start, facts end, action start, wrapped): {rows:?}"
             ),
         )
+    }
+
+    /// Every whole row the panes registered in the last completed pass (N12, layout step 11a).
+    pub fn registered_rows(&self) -> Vec<egui::Rect> {
+        super::ergonomics::row_rects(&self.harness.ctx)
     }
 
     /// The right edge of the registered row that holds `control`: a list row still ends at its

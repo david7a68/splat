@@ -33,6 +33,12 @@ impl Trackers {
             .map(|shown| shown.value().clone())
     }
 
+    /// Whether the history footer of `note` draws the last Remove's kept line, with its Undo
+    /// (`history::footer` draws exactly this selection).
+    pub fn test_removed_drawn(&self, note: Uuid) -> bool {
+        self.removed_in(note).is_some()
+    }
+
     /// The ticket of the last Remove's line, as its Undo's press carries it.
     pub fn test_removed_ticket(&self) -> Option<crate::design::results::Ticket> {
         self.removed

@@ -270,6 +270,19 @@ enum Page {
     Settings,
 }
 
+/// A feeder of the Settings footers' lines from one owner `T`. It names the lifetime that ties a
+/// footer's lines to the pane's frame (a closure's own signature cannot).
+fn settings_feed<T: ?Sized, F>(feed: F) -> F
+where
+    F: for<'f> Fn(
+        &'f design::outcome::PaneFrame,
+        &mut design::outcome::Messages<'f, campaigns::CampaignAct>,
+        &T,
+    ),
+{
+    feed
+}
+
 /// FF2: the page (and Campaign tab) that holds the draft a rail status names. The rail's draft
 /// list and this table share one constant for each draft, so a new draft names its page here.
 /// A failed package rename from the Library, drawn under the page for the pass that made it.
@@ -1946,115 +1959,163 @@ impl Splat {
                     return;
                 }
                 let blocked = self.blocked_switch();
-                // The footer and the tab share a child `Ui` that starts below the tab rule.
+                // The tab's panes share a child `Ui` that starts below the tab rule.
                 let rest = ui.available_rect_before_wrap();
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
-                    // Round 26: results, reasons and errors on this tab sit in one footer at the
-                    // bottom of the pane (the campaign form, the campaign list), so none of them
-                    // moves the form the DM works in. Round 27 FA1: a failed Connect's cause is in
-                    // the reason slot beside Connect; the account's other errors stay here.
-                    // Round 28: the pane places the footer after the content. Layout PR 2b: the
-                    // footer's lines are typed data; a press comes back from the pane and is done
-                    // after it. Migration-32 L2c (L1c, `pane_content_then`): the lines are read
-                    // after the body's acts (an edit, Save, Discard), so the frame of an act never
-                    // shows a line it ended.
-                    let width = ui.available_width().min(design::LIST_MEASURE);
-                    let frame = design::outcome::PaneFrame::new(ui);
-                    let messages = design::outcome::Messages::<campaigns::CampaignAct>::new(
-                        &frame,
-                        "settings_footer",
-                        width,
-                    );
-                    let campaigns = std::cell::RefCell::new(&mut self.campaigns);
-                    let campaigns_ref = &campaigns;
-                    let (settings, dndbeyond) = (&mut self.settings, &mut self.dndbeyond);
-                    let has_run = self.encounters.has_run();
+                    // Round 26: results, reasons and errors on this tab sit in a footer at the
+                    // bottom of the pane that shows them (the campaign form, the campaign list),
+                    // so none of them moves the form the DM works in. Round 27 FA1: a failed
+                    // Connect's cause is in the reason slot beside Connect; the account's other
+                    // errors stay in the footer. Round 28: the pane places the footer after the
+                    // content. Layout PR 2b: the footer's lines are typed data; a press comes back
+                    // from the pane and is done after it. Migration-32 L2c (L1c,
+                    // `pane_content_then`): the lines are read after the body's acts (an edit,
+                    // Save, Discard), so the frame of an act never shows a line it ended.
+                    // Layout PR 8: wide, the campaigns and the account are two tasks, each its own
+                    // pane with its own footer (below); narrow, they are stacked in one pane.
+                    let (campaigns, settings, dndbeyond) =
+                        (&mut self.campaigns, &mut self.settings, &mut self.dndbeyond);
                     // R46: the import form's reveal runs in this column.
                     let scroll = design::pane::ContentScroll::default().hosts_reveals();
-                    let paned = messages.pane_content_then(
-                        ui,
-                        scroll,
-                        move |ui| {
-                            // A child that starts empty, so the forms narrow themselves (`set_max_width`): the
-                            // pane's column holds its content at the column's width (gap sent to K).
-                            ui.vertical(|ui| {
-                                let mut campaigns = campaigns_ref.borrow_mut();
-                                let campaigns: &mut campaigns::Campaigns = &mut campaigns;
-                                let list =
-                            |ui: &mut egui::Ui,
-                             campaigns: &mut campaigns::Campaigns,
-                             dndbeyond: &mut dndbeyond::DndBeyond| {
-                                campaigns.show(ui, session.clone(), dndbeyond, blocked);
-                            };
-                                if ui.ctx().content_rect().width() >= 1000.0 {
-                                    design::gap(ui, design::Gap::L);
-                                    // A clear gutter, so that the left column's text does not run on.
-                                    // Not `ui.columns`, whose justified layout stretches the words in a paragraph.
-                                    let half = (ui.available_width() - design::XL) / 2.0;
-                                    // Round 26 AG1: the account column starts an `XL` gap after the
-                                    // campaign list, which is as wide as its rows need.
-                                    let widths = [
-                                        campaigns.list_width(half),
-                                        ui.available_width()
-                                            - design::XL
-                                            - campaigns.list_width(half),
-                                    ];
-                                    ui.horizontal_top(|ui| {
-                                        ui.spacing_mut().item_spacing.x = design::XL;
-                                        let layout = egui::Layout::top_down(egui::Align::Min);
-                                        for (place, width) in widths.into_iter().enumerate() {
-                                            let column = egui::vec2(width, 0.0);
-                                            ui.allocate_ui_with_layout(column, layout, |ui| {
-                                                // Both ways, so the second column starts in one place.
-                                                ui.set_width(width);
-                                                ui.spacing_mut().item_spacing.x = 8.0;
-                                                if place == 0 {
-                                                    list(ui, campaigns, dndbeyond);
-                                                } else {
-                                                    settings.campaign_form_open =
-                                                        campaigns.form_open();
-                                                    settings.show(ui);
-                                                }
+                    // The footer's lines by owner. The wide tab feeds the campaigns' footer with the
+                    // first two and the account's with the third; the narrow tab's one footer takes
+                    // all three, in this order.
+                    let feed_campaigns =
+                        settings_feed(|frame, messages, campaigns: &campaigns::Campaigns| {
+                            campaigns.footer_messages(frame, messages, true, blocked);
+                        });
+                    let feed_account =
+                        settings_feed(|_, messages, settings: &settings::Settings| {
+                            settings.footer_messages(messages);
+                        });
+                    let feed_list =
+                        settings_feed(|frame, messages, dndbeyond: &dndbeyond::DndBeyond| {
+                            dndbeyond.footer_messages(frame, messages, false);
+                        });
+                    // After a failed Connect, Connect comes into view above the footer.
+                    let reveal_connect = |ui: &mut egui::Ui, settings: &mut settings::Settings| {
+                        if let Some(connect) = settings
+                            .take_reveal()
+                            .filter(|connect| connect.bottom() > ui.clip_rect().bottom())
+                        {
+                            ui.scroll_to_rect(connect.expand2(egui::vec2(0.0, design::S)), None);
+                        }
+                    };
+                    if ui.ctx().content_rect().width() >= 1000.0 {
+                        design::gap(ui, design::Gap::L);
+                        // A clear gutter, so that the left column's text does not run on. Not
+                        // `ui.columns`, whose justified layout stretches the words in a paragraph.
+                        // Round 26 AG1: the account column starts an `XL` gap after the campaign
+                        // list, which is as wide as its rows need.
+                        let half = (ui.available_width() - design::XL) / 2.0;
+                        // Each pane keeps its scroll lane, inside its own width: the list keeps its
+                        // measured width and the account column its place, an `XL` gap after the
+                        // list's last word.
+                        let lane = design::lane_width();
+                        design::PaneColumns::independent("settings_columns")
+                            .fixed(0.0, campaigns.list_width(half) + lane)
+                            .rest(design::XL - lane)
+                            .edges(ui)
+                            .show_children(ui, |ui, place| {
+                                ui.spacing_mut().item_spacing.x = 8.0;
+                                let width = ui.available_width().min(design::LIST_MEASURE);
+                                let frame = design::outcome::PaneFrame::new(ui);
+                                if place == 0 {
+                                    // The campaigns: their results and the list's error.
+                                    let messages = design::outcome::Messages::<
+                                        campaigns::CampaignAct,
+                                    >::new(
+                                        &frame, "settings_campaign_footer", width
+                                    );
+                                    let (list, link) = (&mut *campaigns, &mut *dndbeyond);
+                                    let paned = messages.pane_content_then(
+                                        ui,
+                                        scroll,
+                                        |ui| {
+                                            // A child that starts empty, so the forms narrow
+                                            // themselves (`set_max_width`): the pane's column holds
+                                            // its content at the column's width (gap sent to K).
+                                            ui.vertical(|ui| {
+                                                list.show(ui, session.clone(), link, blocked);
                                             });
-                                        }
-                                    });
+                                            (list, link)
+                                        },
+                                        |(list, link), messages| {
+                                            feed_campaigns(&frame, messages, list);
+                                            feed_list(&frame, messages, link);
+                                        },
+                                    );
+                                    if let Some(press) = paned.pressed {
+                                        campaigns.footer_act(press);
+                                    }
                                 } else {
+                                    // The account: its errors that are not a failed Connect. It
+                                    // has no press of its own.
+                                    let messages = design::outcome::Messages::<
+                                        campaigns::CampaignAct,
+                                    >::new(
+                                        &frame, "settings_account_footer", width
+                                    );
+                                    let campaigns = &*campaigns;
+                                    let settings = &mut *settings;
+                                    let _ = messages.pane_content_then(
+                                        ui,
+                                        scroll,
+                                        |ui| {
+                                            ui.vertical(|ui| {
+                                                settings.campaign_form_open = campaigns.form_open();
+                                                settings.show(ui);
+                                                reveal_connect(ui, settings);
+                                            });
+                                            settings
+                                        },
+                                        |settings, messages| {
+                                            feed_account(&frame, messages, settings)
+                                        },
+                                    );
+                                }
+                            });
+                    } else {
+                        // Stacked columns share one scroll, so one footer: a second one would sit
+                        // in the middle of the page. It keeps the page's order and owners.
+                        let width = ui.available_width().min(design::LIST_MEASURE);
+                        let frame = design::outcome::PaneFrame::new(ui);
+                        let messages = design::outcome::Messages::<campaigns::CampaignAct>::new(
+                            &frame,
+                            "settings_footer",
+                            width,
+                        );
+                        let has_run = self.encounters.has_run();
+                        let paned = messages.pane_content_then(
+                            ui,
+                            scroll,
+                            |ui| {
+                                ui.vertical(|ui| {
                                     settings.campaign_form_open = campaigns.form_open();
                                     if has_run {
                                         // The account's heading is first in the column: no space above.
                                         settings.show_compact(ui);
                                         design::gap(ui, design::Gap::L);
-                                        list(ui, campaigns, dndbeyond);
+                                        campaigns.show(ui, session.clone(), dndbeyond, blocked);
                                     } else {
                                         design::gap(ui, design::Gap::L);
-                                        list(ui, campaigns, dndbeyond);
+                                        campaigns.show(ui, session.clone(), dndbeyond, blocked);
                                         // The account's heading adds the space above it.
                                         settings.show_compact(ui);
                                     }
-                                }
-                                // After a failed Connect, Connect comes into view above the footer.
-                                if let Some(connect) = settings
-                                    .take_reveal()
-                                    .filter(|connect| connect.bottom() > ui.clip_rect().bottom())
-                                {
-                                    ui.scroll_to_rect(
-                                        connect.expand2(egui::vec2(0.0, design::S)),
-                                        None,
-                                    );
-                                }
-                            });
-                            (settings, dndbeyond)
-                        },
-                        |(settings, dndbeyond), messages| {
-                            campaigns_ref
-                                .borrow()
-                                .footer_messages(&frame, messages, true, blocked);
-                            settings.footer_messages(messages);
-                            dndbeyond.footer_messages(&frame, messages, false);
-                        },
-                    );
-                    if let Some(press) = paned.pressed {
-                        campaigns.into_inner().footer_act(press);
+                                    reveal_connect(ui, settings);
+                                });
+                                (campaigns, settings, dndbeyond)
+                            },
+                            |(campaigns, settings, dndbeyond), messages| {
+                                feed_campaigns(&frame, messages, campaigns);
+                                feed_account(&frame, messages, settings);
+                                feed_list(&frame, messages, dndbeyond);
+                            },
+                        );
+                        if let Some(press) = paned.pressed {
+                            self.campaigns.footer_act(press);
+                        }
                     }
                 });
             }

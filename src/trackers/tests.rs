@@ -1985,6 +1985,16 @@ fn no_note_in_play_reads_no_ledger_and_shows_nothing() {
         history::footer_lines(&race.trackers, note).is_empty(),
         "a note out of play shows no Undo remove"
     );
+    // PR 676 review (P1): the Remove is still kept in its store, and the footer that is drawn
+    // (its kept line, `history::footer`) offers no Undo remove for a note out of play.
+    assert!(
+        race.trackers.test_removed().is_some(),
+        "the Remove is still kept"
+    );
+    assert!(
+        !race.trackers.test_removed_drawn(note),
+        "m-s0-4-out-of-play: the footer draws Undo remove for a note out of play"
+    );
     fs::write(ledger::path(&race.campaign.path), "not a ledger").unwrap();
     let mut trackers = Trackers::with_ids(crate::hermetic::new_uuid);
     poll(
