@@ -589,6 +589,7 @@ mod tests {
 
     #[test]
     fn iter8_b_sheet_notice_centres_with_next_and_log_and_has_a_gap() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         for width in [1200.0, 1920.0] {
             // M-P0 item 7: the notice is one compact message, so the header band keeps its
@@ -609,14 +610,13 @@ mod tests {
                 let kept = used.clone();
                 let mut harness = egui_kittest::Harness::builder()
                     .with_size(vec2(width, 800.0))
-                    .build(move |ctx| {
+                    .themed(move |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
                             let top = ui.cursor().top();
                             run.live_header(ui, design::RUN_REGULAR);
                             kept.set((top, ui.cursor().top()));
                         });
                     });
-                design::theme::install(&harness.ctx);
                 harness.run_steps(2);
                 let (top, bottom) = used.get();
                 let inside = !notice
@@ -641,12 +641,11 @@ mod tests {
             run.notice_summary = Some("Guard 1: HP 17 → 15".into());
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 800.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         run.live_header(ui, design::RUN_REGULAR);
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let log = harness.get_by_label("Log").rect();
             let text = |prefix: &str| {
@@ -705,17 +704,17 @@ mod tests {
     /// stays.
     #[test]
     fn reminders_take_only_spare_room_and_a_long_conflict_name_shortens() {
+        use crate::design::test_harness::ThemedPage as _;
         use crate::encounter_run::Condition;
         use egui_kittest::kittest::Queryable;
         let header = |mut run: crate::encounter_run::Run, width: f32| {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 640.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         run.live_header(ui, design::RUN_REGULAR);
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             harness
         };
@@ -833,6 +832,7 @@ mod tests {
 
     #[test]
     fn iter6_b_turn_heading_keeps_each_of_five_copy_numbers() {
+        use crate::design::test_harness::ThemedPage as _;
         for number in 1..=5 {
             for width in [442.0, 760.0] {
                 let mut run = super::super::tests::run();
@@ -854,12 +854,11 @@ mod tests {
                 let drawn = run.clone();
                 let mut harness = egui_kittest::Harness::builder()
                     .with_size(vec2(width, 640.0))
-                    .build(move |ctx| {
+                    .themed(move |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
                             drawn.borrow_mut().live_header(ui, design::RUN_REGULAR);
                         });
                     });
-                design::theme::install(&harness.ctx);
                 harness.run_steps(2);
                 // M5 at the production boundary: the run's own kept heading chose a candidate,
                 // and unchanged frames choose none again.
@@ -920,15 +919,15 @@ mod tests {
 
     #[test]
     fn iter6_b_narrow_header_keeps_add_word() {
+        use crate::design::test_harness::ThemedPage as _;
         let mut run = super::super::tests::run();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(442.0, 640.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     run.live_header(ui, design::RUN_REGULAR);
                 });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         assert!(
             harness
@@ -943,6 +942,7 @@ mod tests {
 
     #[test]
     fn iter_2_b_sheet_notice_uses_header_room_and_keeps_undo() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         for (width, in_header) in [(1920.0, true), (442.0, false)] {
             let mut run = super::super::tests::run();
@@ -955,12 +955,11 @@ mod tests {
             run.notice_summary = Some("Guard 1’s sheet changed: HP 17 → 15".into());
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 640.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         run.live_header(ui, design::RUN_REGULAR);
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             assert_eq!(
                 harness
