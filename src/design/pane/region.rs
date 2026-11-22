@@ -409,7 +409,12 @@ impl<'s> BlockRegion<'s> {
                 let block_rect = place(plan, at);
                 // A block's `Ui` (and so its controls' ids and their focus) is its own, by its key:
                 // the same whatever other blocks draw before it in this pass (review item 1).
-                let scope = ui.id().with(("block", id, plan.key(at).ok_or(at)));
+                // A keyed block's `Ui` is its key's own (`laid::block_scope`), the same as where its
+                // host draws it in place (`draw_laid`), so a switch between the two keeps its
+                // controls' ids and their focus (review of PR 869).
+                let scope = plan
+                    .key(at)
+                    .map_or_else(|| ui.id().with(("block", id, at)), super::laid::block_scope);
                 let mut child = ui.new_child(
                     UiBuilder::new()
                         .id_salt(scope)

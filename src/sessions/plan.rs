@@ -902,6 +902,10 @@ pub(super) struct KeptRows {
     columns: design::PlanColumns,
     /// Every laid row's block, in order: the plan's measured region draws them (A2c-3).
     blocks: design::memo::Revised<Vec<design::Block>>,
+    /// The fold's sums in the region, as in place: the closed rows' height, and the first
+    /// planned fight's row's bottom with the rows above it. Worked out with the rows, so a quiet
+    /// frame walks no block (review of PR 869).
+    fold: (f32, Option<f32>),
 }
 
 /// What the plan's laid rows are made from (layout 11c A2c, review of PR 841): revisions, ids and
@@ -5194,10 +5198,16 @@ impl Sessions {
         let removal_shows = self.removed_fight.as_ref().is_some_and(|(id, _, _, undo)| {
             *id == session && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
         });
+        // A scene act's words at a row's place (a removal, an Undo's refusal) show among the rows
+        // (`scene_rows`), also where no scene is left (review of PR 869, 869-a): they keep the
+        // rows in place, so they and their Undo show where they always do.
+        let scene_words_among_rows = matches!(shown.removed, Some(Place::Row(_)))
+            || matches!(shown.fault, Some(Place::Row(_)));
         let measured = self.open_event.is_none()
             && self.open_planned.is_none()
             && (folded || scenes.iter().all(|scenes| scenes.is_empty()))
             && !removal_shows
+            && !scene_words_among_rows
             && planned_groups()
                 .all(|group| group.warnings.is_empty() && group.own_problems().is_empty())
             && !(plan.group_blocked.is_some()
@@ -6247,23 +6257,16 @@ impl Sessions {
         {
             *height = row.laid.height();
         }
-        // The fold's sums, as in place: each block is its row with the column's gap, then its
-        // rule with the gap after it.
-        let rule = design::S + 1.0 + design::theme::LINE_GAP;
-        let mut closed = 0.0;
-        let mut next = None;
-        for at in 0..blocks {
-            let height = row_at(at).laid.height();
-            if at == events && fights > 0 {
-                next = Some(fold::Next {
-                    bottom: closed + height - rule,
-                    details: 0.0,
-                    scenes: 0.0,
-                });
-            }
-            closed += height;
-        }
-        (closed, next)
+        // The fold's sums, kept with the rows.
+        let (closed, next) = rows.fold;
+        (
+            closed,
+            next.map(|bottom| fold::Next {
+                bottom,
+                details: 0.0,
+                scenes: 0.0,
+            }),
+        )
     }
 
     /// The plan's closed rows, laid out by their recipe before any row draws, with the plan's
@@ -6531,6 +6534,7 @@ impl Sessions {
                 .collect(),
             columns,
             blocks: design::memo::Revised::new(Vec::new()),
+            fold: (0.0, None),
         };
         let blocks = kept
             .events
@@ -6541,6 +6545,25 @@ impl Sessions {
             .map(|row| row.laid.block())
             .collect();
         kept.blocks.set(blocks);
+        // Each block is its row with the column's gap, then its rule with the gap after it.
+        let rule = design::S + 1.0 + design::theme::LINE_GAP;
+        let mut closed = 0.0;
+        let mut next = None;
+        for (at, row) in kept
+            .events
+            .iter()
+            .map(|(row, ..)| row)
+            .chain(kept.fights.iter().map(|(row, _)| row))
+            .chain(kept.groups.iter().filter_map(|group| group.row.as_ref()))
+            .enumerate()
+        {
+            let height = row.laid.height();
+            if at == kept.events.len() && !kept.fights.is_empty() {
+                next = Some(closed + height - rule);
+            }
+            closed += height;
+        }
+        kept.fold = (closed, next);
         let rows = Arc::new(kept);
         self.plan_rows.kept = Some((key, Arc::clone(&rows)));
         rows
@@ -11386,6 +11409,24 @@ mod tests {
                 "{name}'s row is registered: {rows:?}"
             );
         }
+        // Review of PR 869 (P2): a row keeps its controls' ids in both modes, so a focused
+        // control keeps its focus while the body switches to the rows in place and back. Red:
+        // the region's own block scope.
+        harness.get_by_label("Start fight: Ford").focus();
+        harness.run_steps(2);
+        assert!(harness.get_by_label("Start fight: Ford").is_focused());
+        harness.state_mut().0.open_planned = Some("Encounters/Mill.md".into());
+        harness.run_steps(2);
+        assert!(
+            !measured(&harness) && harness.get_by_label("Start fight: Ford").is_focused(),
+            "a focused control keeps its focus when the rows draw in place"
+        );
+        harness.state_mut().0.open_planned = None;
+        harness.run_steps(2);
+        assert!(
+            measured(&harness) && harness.get_by_label("Start fight: Ford").is_focused(),
+            "and when they are the region again"
+        );
         let before = ["Bridge", "Mill", "Ford"].map(|name| top(&harness, name));
         // The first open: the rows draw in place, and the rows above the opened one and the
         // opened one keep their place.
@@ -11469,6 +11510,44 @@ mod tests {
         assert!(
             measured(&harness) && harness.query_by_label("Long rest").is_some(),
             "the added row is brought into view in the region"
+        );
+        // Review of PR 869 (869-a): the last scene removed while a closed fight remains. Its
+        // removal message and its Undo show where they always do (among the rows), and Undo
+        // brings the scene back. Red: the measured mode, which left the message out.
+        harness.set_size(egui::vec2(design::FORM_WIDTH, 1400.0));
+        {
+            let draft = harness.state_mut().0.draft.as_mut().unwrap();
+            let body =
+                draft
+                    .body
+                    .as_str()
+                    .replacen("- [[Ford]]\n", "- [[Ford]]\n- [ ] Pay the toll\n", 1);
+            let _ = draft.body.replace(body);
+            draft.edited();
+        }
+        harness.run_steps(2);
+        assert!(
+            !measured(&harness) && harness.query_by_label("Open: Pay the toll").is_some(),
+            "a scene row draws the rows in place"
+        );
+        harness
+            .get_by_label("More actions for Pay the toll")
+            .click();
+        harness.run_steps(2);
+        harness.get_by_label("Remove from tonight").click();
+        harness.run_steps(3);
+        assert!(
+            harness.query_by_label("Open: Pay the toll").is_none()
+                && harness
+                    .query_by_label_contains("Removed “Pay the toll” from tonight.")
+                    .is_some(),
+            "the last scene's removal says so"
+        );
+        harness.get_by_label_contains("Undo remove").click();
+        harness.run_steps(3);
+        assert!(
+            harness.query_by_label("Open: Pay the toll").is_some(),
+            "Undo brings the scene back"
         );
     }
 
