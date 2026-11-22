@@ -1134,7 +1134,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "note_editor",
             &[Ban::Layout(1), Ban::Body],
         ),
-        ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
         (
             "src/timeline/page.rs",
             "detail",
@@ -1452,7 +1451,9 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "field_id! statement",
             &[Ban::Layout(1)],
         ),
-        ("src/design/layout.rs", "menu_popup_raw", &[Ban::Layout(1)]),
+        // Both anchors of a menu (a control, or a place such as the text cursor): M-P0.S1 moved
+        // Sessions' `/` menu here, whose own `popup_at` row (1) is gone.
+        ("src/design/layout.rs", "menu_popup_raw", &[Ban::Layout(2)]),
         ("src/design/layout.rs", "multi_line", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "sideways_scroll", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "single_line", &[Ban::Layout(1)]),

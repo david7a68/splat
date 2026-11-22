@@ -4515,11 +4515,50 @@ pub fn menu_popup<'a, P: MenuPane + ?Sized>(pane: &P, response: &'a Response) ->
     let (align, room) = menu_side(pane, response.rect);
     MenuPopup {
         id: egui::Popup::default_response_id(response),
-        popup: menu_popup_raw(response).align(align).width(room),
+        popup: menu_popup_raw(MenuAnchor::Control(response))
+            .align(align)
+            .width(room),
         room,
         pane,
         control: response.rect,
     }
+}
+
+/// A menu that opens at `anchor`, a place in `ui`'s pane that is not a control (Sessions' `/`
+/// menu opens at the note's text cursor, M0536), named by `id`. Its room, side, width, keys and
+/// close rules are [`menu_popup`]'s: it stays inside `ui`'s pane, one scroll lane clear of the
+/// pane's edges, so it lies over neither a splitter nor a scroll bar, and it opens above the
+/// anchor when there is no room below. No click opens it: the caller opens it with
+/// [`MenuPopup::open_memory`] or [`MenuPopup::open`], and closes it with
+/// `egui::Popup::close_id(ctx, id)` as egui's own menus close.
+pub fn menu_popup_at(ui: &Ui, id: Id, anchor: Rect) -> MenuPopup<'static> {
+    let pane = ui.pane();
+    let (align, room) = menu_side(pane, anchor);
+    MenuPopup {
+        id,
+        popup: menu_popup_raw(MenuAnchor::At {
+            id,
+            ctx: ui.ctx().clone(),
+            rect: anchor,
+            layer: ui.layer_id(),
+        })
+        .align(align)
+        .width(room),
+        room,
+        pane,
+        control: anchor,
+    }
+}
+
+/// What a menu opens beside: a control (it toggles the menu when pressed), or a place.
+enum MenuAnchor<'a> {
+    Control(&'a Response),
+    At {
+        id: Id,
+        ctx: egui::Context,
+        rect: Rect,
+        layer: egui::LayerId,
+    },
 }
 
 /// Where a menu's room comes from: the `Ui` its control is drawn in (that pane's clip), or,
@@ -4576,8 +4615,21 @@ fn menu_room(pane: Rect, control: Rect, align: egui::RectAlign) -> f32 {
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
-fn menu_popup_raw(response: &Response) -> egui::Popup<'_> {
-    egui::Popup::menu(response)
+fn menu_popup_raw(anchor: MenuAnchor<'_>) -> egui::Popup<'_> {
+    match anchor {
+        MenuAnchor::Control(response) => egui::Popup::menu(response),
+        // `Popup::menu`'s form without its toggle: a menu's kind, layout, style and no gap.
+        MenuAnchor::At {
+            id,
+            ctx,
+            rect,
+            layer,
+        } => egui::Popup::new(id, ctx, rect, layer)
+            .kind(egui::PopupKind::Menu)
+            .layout(egui::Layout::top_down_justified(egui::Align::Min))
+            .style(egui::containers::menu::menu_style)
+            .gap(0.0),
+    }
 }
 
 /// The submenus of a menu that a click inside does not close ([`MenuPopup::show_submenus`]).
