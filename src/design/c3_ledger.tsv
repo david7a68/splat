@@ -9,11 +9,11 @@ astra-desk-5.md:AE1	pane-whole-row-cut	4	named	open
 astra-desk-6.md:AF2	pane-whole-row-cut	3b,4,5b,10a,11	root	open
 astra-desk-6.md:AF5	pane-whole-row-cut	3b,4,5b,10a,11	root	open
 astra-desk-7.md:AG4	pane-whole-row-cut	11	named	open
-astra-desk-8.md:AH6	pane-whole-row-cut	11	named	open
+astra-desk-8.md:AH6	pane-whole-row-cut	11	named	closed #700
 astra-table-1.md:AL1	pane-whole-row-cut	5b	named	open
 astra-table-1.md:AL2	pane-whole-row-cut	5b	named	open
-astra-table-2.md:AM16	pane-whole-row-cut	11	named	open
-astra-table-2.md:AM2	pane-whole-row-cut	5b,11	named	open
+astra-table-2.md:AM16	pane-whole-row-cut	11	named	closed #700
+astra-table-2.md:AM2	pane-whole-row-cut	5b,11	named	closed #758
 astra-table-7.md:AR1	pane-whole-row-cut	3b	named	open
 sol-desk-1.md:SA2	pane-whole-row-cut	11	named	open
 sol-desk-1.md:SA3	pane-whole-row-cut	11	named	open
@@ -22,13 +22,13 @@ sol-desk-3.md:SC2	pane-whole-row-cut	3b,4,5b,10a,11	root	open
 sol-desk-4.md:SD1	pane-whole-row-cut	3b,4,5b,10a,11	root	open
 sol-desk-5.md:SE1	pane-whole-row-cut	3b,4,5b,10a,11	root	open
 sol-desk-6.md:SF3	pane-whole-row-cut	3b,4,5b,10a,11	root	open
-sol-desk-6.md:SF4	pane-whole-row-cut	11	named	open
+sol-desk-6.md:SF4	pane-whole-row-cut	11	named	closed #700
 sol-desk-7.md:SG2	pane-whole-row-cut	11	named	open
 sol-desk-8.md:SH8	pane-whole-row-cut	11	named	open
 sol-desk-8.md:SH9	pane-whole-row-cut	11	named	closed #684
 sol-table-1.md:SL1	pane-whole-row-cut	5b	named	open
-sol-table-2.md:SM2	pane-whole-row-cut	5b,11	named	open
-sol-table-2.md:SM5	pane-whole-row-cut	11	named	open
+sol-table-2.md:SM2	pane-whole-row-cut	5b,11	named	closed #758
+sol-table-2.md:SM5	pane-whole-row-cut	11	named	closed #700
 sol-table-7.md:SR3	pane-whole-row-cut	3b	named	open
 astra-desk-1.md:AA4	action-near-row	5b	named	open
 astra-desk-11.md:AK1	action-near-row	4,5a,5b,6,11	root	open

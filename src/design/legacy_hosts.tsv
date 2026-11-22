@@ -128,7 +128,6 @@ scroll-area	src/design/layout.rs	ScrollColumn::area	2	design	design implementati
 scroll-area	src/design/layout.rs	sideways_scroll	1	design	design implementation boundary
 scroll-area	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run
 scroll-area	src/encounter_run/view.rs	Run::ended_view	2	Run
-scroll-area	src/encounter_run/view.rs	Run::groups_tab	1	Run
 scroll-area	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
 scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
