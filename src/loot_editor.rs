@@ -358,10 +358,18 @@ fn line_row(
     design::register_row(ui, row.response.rect);
     // Below the row, under the key it is about, so the row stays one line.
     if let Some(reason) = reason {
-        ui.horizontal(|ui| {
-            ui.add_space((key_left - row.response.rect.left()).max(0.0));
-            ui.add(egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap());
-        });
+        // The reason's column starts where the key's does (the row's item spacing after it, as
+        // the words started when a space of the key's offset came first).
+        let mut under = ui.available_rect_before_wrap();
+        under.min.x = (key_left + ui.spacing().item_spacing.x).max(under.min.x);
+        ui.scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(under)
+                .layout(egui::Layout::top_down(egui::Align::Min)),
+            |ui| {
+                ui.add(egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap());
+            },
+        );
     }
     remove.then_some(at)
 }
