@@ -575,9 +575,13 @@ pub fn jump(ui: &Ui, top: f32, why: JumpTo) {
 /// The jump queued for the column `key`, taken once: asked in this frame or the last, and with
 /// no input of the DM's in this pass.
 fn take_jump(ui: &Ui, key: Id) -> Option<f32> {
-    let jump = ui
-        .ctx()
-        .data_mut(|data| data.remove_temp::<Jump>(jump_id(key)))?;
+    let jump = ui.ctx().data_mut(|data| {
+        let jump = data.get_temp::<Jump>(jump_id(key));
+        if jump.is_some() {
+            data.remove::<Jump>(jump_id(key));
+        }
+        jump
+    })?;
     let frame = ui.ctx().cumulative_frame_nr();
     let fresh = jump.frame == frame || jump.frame + 1 == frame;
     let _ = jump.why;
