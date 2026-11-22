@@ -1729,12 +1729,6 @@ pub(super) fn lane_help(ui: &mut egui::Ui, text: &str) {
     });
 }
 
-/// The run folder is known not to be there. A folder that cannot be looked for (a parent
-/// without permission) is not "missing": it cannot be read.
-fn grouped(value: u64) -> String {
-    design::count(value as usize, "", "").trim().to_owned()
-}
-
 pub use splat_content_ui::content_actions::creature_name_link;
 
 /// `changed` holds this creature's values when a slot or member changes them.
