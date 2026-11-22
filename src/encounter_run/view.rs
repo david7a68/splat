@@ -6128,7 +6128,21 @@ impl Run {
         // (`PaneColumns::shared_task`), whose edges are resolved now, before the header paints,
         // in the pane's body (its room less the pane's scroll lane, `edges_in`).
         let panes_width = ui.available_width() - design::lane_width();
-        let edges = self.ended_columns(ui.ctx()).edges_in(ui, panes_width);
+        let columns = design::PaneColumns::shared_task("run_ended_columns").rest(0.0);
+        let columns = if self.hide_panel {
+            columns
+        } else {
+            columns.trailing(
+                0.0,
+                design::Column::panel(
+                    "run_ended_log",
+                    design::side_panel_width(ui.ctx().content_rect().width()),
+                )
+                .page_keeps(design::RUN_LIST_KEEPS)
+                .frame(side_frame()),
+            )
+        };
+        let edges = columns.edges_in(ui, panes_width);
         let rest = edges.child_within(ui, panes_width, 0);
         let (header_rect, _) = ui.allocate_exact_size(
             vec2(
@@ -6413,24 +6427,6 @@ impl Run {
 
     /// The width of Undo with its whole target, when the ended header shows it beside
     /// Continue fight or its reason. Then Undo never gives up its target.
-    /// The ended view's columns: the final state, with the rest of the room, and the panel at its
-    /// kept width at the right while it shows.
-    fn ended_columns(&self, ctx: &egui::Context) -> design::PaneColumns {
-        let columns = design::PaneColumns::shared_task("run_ended_columns").rest(0.0);
-        if self.hide_panel {
-            return columns;
-        }
-        columns.trailing(
-            0.0,
-            design::Column::panel(
-                "run_ended_log",
-                design::side_panel_width(ctx.content_rect().width()),
-            )
-            .page_keeps(design::RUN_LIST_KEEPS)
-            .frame(side_frame()),
-        )
-    }
-
     /// The ended view's panel column (`ended_view`'s trailing child): the sync block and Prep,
     /// then the Combat log. With choices to make, they have the column, and the log waits behind
     /// a heading. Never a pair of choices cut by a second scroll.
