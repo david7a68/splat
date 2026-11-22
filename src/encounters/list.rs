@@ -269,8 +269,8 @@ fn section(
 
 /// G118: a Ready row's difficulty line. It takes the roster's TYPED parts (`Roster::parts`),
 /// never built words, so a member the summary shows is not named again after `XP not known`.
-/// The line is kept in the page's `kept` under the roster's key, so an unchanged frame builds
-/// and measures nothing.
+/// The line is kept in the page's `kept` under the roster's revision, so an unchanged frame
+/// builds and measures nothing.
 pub(super) struct ReadyLine<'a> {
     pub id: Uuid,
     pub difficulty: &'a crate::difficulty::Difficulty,
@@ -323,7 +323,7 @@ fn facts_width(ui: &egui::Ui, name: &str, detail: &str, status: bool, line: Opti
 fn ready_line_width(ui: &egui::Ui, line: &mut ReadyLine<'_>) -> Option<f32> {
     let (difficulty, roster) = (line.difficulty, line.roster);
     line.kept
-        .widest(ui, &line.id, roster.key, &Type::Small.font(ui), || {
+        .widest(ui, &line.id, roster.revision, &Type::Small.font(ui), || {
             crate::difficulty::Line::roster(difficulty, &roster.parts)
         })
 }
@@ -448,7 +448,7 @@ pub(super) fn ledger(
             .as_ref()
             .filter(|_| !row.unfinished_run)
             .and_then(|roster| {
-                kept.widest(ui, &template.id, roster.key, &small, || {
+                kept.widest(ui, &template.id, roster.revision, &small, || {
                     crate::difficulty::Line::roster(&template.difficulty, &roster.parts)
                 })
             });
@@ -674,7 +674,7 @@ fn row_facts(
         } = line;
         // Where the fight has no form, the kept answer is the words alone,
         // so no frame fits the summary again.
-        kept.answer(ui, &id, roster.key, room, &font, || {
+        kept.answer(ui, &id, roster.revision, room, &font, || {
             crate::difficulty::Line::roster(difficulty, &roster.parts)
                 .fit(|text| design::number_width(ui, text, &font) <= room)
                 .or_else(|| {

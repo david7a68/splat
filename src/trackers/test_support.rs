@@ -27,12 +27,35 @@ impl Trackers {
     }
 
     pub fn test_removed(&self) -> Option<history::Removed> {
-        self.removed.clone()
+        self.removed
+            .newest_first(self.campaign.as_ref()?.path.as_path())
+            .next()
+            .map(|shown| shown.value().clone())
+    }
+
+    /// Whether the history footer of `note` draws the last Remove's kept line, with its Undo
+    /// (`history::footer` draws exactly this selection).
+    pub fn test_removed_drawn(&self, note: Uuid) -> bool {
+        self.removed_in(note).is_some()
+    }
+
+    /// The ticket of the last Remove's line, as its Undo's press carries it.
+    pub fn test_removed_ticket(&self) -> Option<crate::design::results::Ticket> {
+        self.removed
+            .newest_first(self.campaign.as_ref()?.path.as_path())
+            .next()
+            .map(|shown| shown.ticket_for_caller_test())
+    }
+
+    /// The press of the last Remove's Undo, with its line's ticket.
+    pub fn test_undo_remove(&mut self) {
+        let ticket = self.test_removed_ticket();
+        self.undo_remove(ticket);
     }
 
     /// What the last Remove's Undo names (`Undo remove <name>`); empty with no Remove.
     pub fn test_removed_name(&self) -> String {
-        self.removed
+        self.test_removed()
             .as_ref()
             .map(history::Removed::name)
             .unwrap_or_default()
@@ -55,6 +78,6 @@ impl Trackers {
     }
 
     pub fn test_remeasure(&mut self) {
-        self.revision += 1;
+        self.count_settle();
     }
 }

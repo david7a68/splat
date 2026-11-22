@@ -1316,7 +1316,7 @@ impl Run {
             .is_some_and(|armed| armed.damage.is_some())
             && self.save_targets().contains(&row)
         {
-            let amount = self.amount.parse::<i64>().ok()?;
+            let amount = crate::design::parse_signed(&self.amount)?;
             return self.save_result(row, &self.amount_command(amount, Command::Damage));
         }
         // Then a save's applied result: it lives in the run's state, so Undo takes it back.

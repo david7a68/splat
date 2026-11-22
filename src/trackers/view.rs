@@ -5,6 +5,7 @@ use super::{
     Rules, Says, State, TrackerFault, Trackers, Unrecorded, ledger::Entry, ledger::NoticeRef,
     mark_of,
 };
+use crate::design::memo::{Measure, Memos, Revision};
 use crate::design::outcome::PaneFrame;
 use crate::design::outcome::{
     Banner, Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, PagePlaceholder,
@@ -26,14 +27,20 @@ pub(crate) struct ViewState {
     /// The act pressed in this frame. The shell applies it after Lookup drew, once it has read
     /// the day count again, so an act uses the day at the click.
     pressed: Option<Act>,
-    /// A name wider than its column, as shortened for that width, so a frame with no change
-    /// does not shorten it again.
-    fitted: std::collections::HashMap<(String, u32), String>,
+    /// Each name as its column shows it, kept by name with the trackers' revision and the
+    /// measure it was fitted in (ruling M6: its width, font, font generation and scale), so a
+    /// frame with no change neither measures nor shortens it. Its entries end when the columns
+    /// are measured again (a settle or a new width).
+    fitted: Memos<String, (Revision, Measure), String>,
+    /// The history rows' words as fitted (`history::history_row`), by entry. Its entries end
+    /// at each settle, which makes a new revision (`Trackers::settle`).
+    pub(super) history_fits: super::history::RowFits,
     /// How many times a name was shortened.
     #[cfg(test)]
     shortened: usize,
-    /// The panel's columns, with the trackers' revision and the width they were measured for.
-    columns: Option<(u64, u32, Columns)>,
+    /// The panel's columns, with the trackers' revision and the measure they were made in (the
+    /// panel's width in the name font, with its font generation and scale).
+    columns: Option<((Revision, Measure), Columns)>,
     /// The widest value slot this panel needed since its definitions were read: an Undo that
     /// takes `1000` back to `999` keeps the room, so no action moves back and forth. It ends
     /// when the definitions are read again (`Trackers::rules` replaced) or the campaign changes.
@@ -59,6 +66,8 @@ struct Columns {
     /// the next one could share a row. Measured for every definition, pinned or not, with the
     /// columns (`columns`), so opening `More trackers` moves nothing and no frame measures.
     under: std::rc::Rc<HashSet<String>>,
+    /// The trackers' revision they were measured for: the names in them are fitted for it.
+    revision: Revision,
 }
 
 impl Columns {
@@ -87,7 +96,13 @@ fn value_slot(value: i64, goal: Option<i64>) -> String {
 /// Measure the panel's columns: every line of every tracker that can be used, pinned or not,
 /// so opening `More trackers` moves no pinned value. Only `columns` calls it, when the
 /// trackers' revision or the width changed.
-fn measure_columns(ui: &egui::Ui, rules: &Rules, state: &State, view: &mut ViewState) -> Columns {
+fn measure_columns(
+    ui: &egui::Ui,
+    rules: &Rules,
+    state: &State,
+    view: &mut ViewState,
+    revision: Revision,
+) -> Columns {
     #[cfg(feature = "test-support")]
     {
         view.measured += 1;
@@ -130,6 +145,7 @@ fn measure_columns(ui: &egui::Ui, rules: &Rules, state: &State, view: &mut ViewS
     Columns {
         name,
         value,
+        revision,
         under: std::rc::Rc::new(
             pairs
                 .into_iter()
@@ -146,14 +162,19 @@ fn columns(
     rules: &Rules,
     state: &State,
     view: &mut ViewState,
-    revision: u64,
+    revision: Revision,
 ) -> Columns {
-    let width = ui.available_width().to_bits();
+    let key = (
+        revision,
+        Measure::of(ui, ui.available_width(), &Type::Body.font(ui)),
+    );
     match &view.columns {
-        Some((seen, at, columns)) if *seen == revision && *at == width => columns.clone(),
+        Some((seen, columns)) if *seen == key => columns.clone(),
         _ => {
-            let columns = measure_columns(ui, rules, state, view);
-            view.columns = Some((revision, width, columns.clone()));
+            let columns = measure_columns(ui, rules, state, view, revision);
+            // The names were fitted for the old revision or width: none is read again.
+            view.fitted.retain(|_| false);
+            view.columns = Some((key, columns.clone()));
             columns
         }
     }
@@ -384,6 +405,9 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             .filter(move |(_, def)| def.pin == pin)
     };
     if !state.due.is_empty() {
+        // Layout step 11a (SH9, AH6): a heading is one block with its first row, so the pane's
+        // cut never leaves it alone over a cut row; the next rows are blocks of their own.
+        let heading_top = ui.cursor().top();
         design::heading(
             ui,
             Heading::Group {
@@ -391,18 +415,19 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
                 count: state.due.len(),
             },
         );
-        for notice in &state.due {
+        for (at, notice) in state.due.iter().enumerate() {
             let top = ui.cursor().top();
             notice_row(ui, rules, view, notice, act);
-            register_block(ui, top);
+            register_block(ui, if at == 0 { heading_top } else { top });
         }
         // A heading adds its own space above it, so a `Pinned` heading needs none here.
         if usable(true).next().is_none() {
             design::gap(ui, Gap::S);
         }
     }
-    let columns = columns(ui, rules, state, view, *revision);
+    let columns = columns(ui, rules, state, view, revision.revision());
     if usable(true).next().is_some() {
+        let heading_top = ui.cursor().top();
         design::heading(
             ui,
             Heading::Group {
@@ -410,20 +435,26 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
                 count: 0,
             },
         );
-        for (key, def) in usable(true) {
-            tracker_lines(ui, rules, state, view, &columns, key, def, act);
+        for (at, (key, def)) in usable(true).enumerate() {
+            // The heading and its first tracker's first line, as one block (SH9).
+            let heading = (at == 0).then_some(heading_top);
+            tracker_lines(ui, rules, state, view, &columns, key, def, act, heading);
         }
     }
     let more = usable(false).count();
     if more > 0 {
         design::gap(ui, Gap::S);
+        let heading_top = ui.cursor().top();
         design::section_with_id(
             ui,
             "trackers_more",
             design::group_heading_text(ui, "More trackers", more),
             |ui| {
-                for (key, def) in usable(false) {
-                    tracker_lines(ui, rules, state, view, &columns, key, def, act);
+                for (at, (key, def)) in usable(false).enumerate() {
+                    // The open section's heading and its first tracker's first line, as one
+                    // block.
+                    let heading = (at == 0).then_some(heading_top);
+                    tracker_lines(ui, rules, state, view, &columns, key, def, act, heading);
                 }
             },
         );
@@ -702,7 +733,12 @@ fn tracker_lines(
     key: &str,
     def: &super::Definition,
     act: &mut Option<Act>,
+    // The top of the section heading this tracker comes first under, if it does: the heading, the
+    // tracker's own name line and its FIRST line are one block (layout step 11a, SH9); its other
+    // lines are blocks of their own.
+    heading_top: Option<f32>,
 ) {
+    let mut bind = Some(heading_top.unwrap_or_else(|| ui.cursor().top()));
     let value_text = |instance: Option<&str>| {
         let value = state.value(rules, key, instance);
         match def.goal {
@@ -753,7 +789,13 @@ fn tracker_lines(
             }
             let height = Density::Read.control();
             let name = instance.unwrap_or(&def.name);
-            name_cell(ui, view, name, egui::vec2(name_width, height));
+            name_cell(
+                ui,
+                view,
+                columns.revision,
+                name,
+                egui::vec2(name_width, height),
+            );
             design::gap(ui, Gap::S);
             let (rect, _) =
                 ui.allocate_exact_size(egui::vec2(columns.value, height), egui::Sense::hover());
@@ -800,7 +842,7 @@ fn tracker_lines(
             said = true;
             design::outcome::row_fault(ui, &TrackerFault::Problem(super::repeat_words(repeat)));
         }
-        register_block(ui, line_top);
+        register_block(ui, bind.take().map_or(line_top, |top| top.min(line_top)));
     }
     design::gap(ui, Gap::XS);
 }
@@ -871,31 +913,33 @@ const NAME_SHARE: f32 = 0.4;
 
 /// A name in its column: exactly `size`, whatever the name's own width. A name wider than the
 /// column ends at a whole word with `…`, or is `…` alone when its first word does not fit; its
-/// hover says it whole. Only a name that does not fit is shortened, once for each width.
-fn name_cell(ui: &mut egui::Ui, view: &mut ViewState, name: &str, size: egui::Vec2) {
+/// hover says it whole. Each name is measured, and shortened when it does not fit, once for
+/// each revision of the trackers and each measure (`ViewState::fitted`).
+fn name_cell(
+    ui: &mut egui::Ui,
+    view: &mut ViewState,
+    revision: Revision,
+    name: &str,
+    size: egui::Vec2,
+) {
     let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
     let font = Type::Body.font(ui);
-    let shown = if design::number_width(ui, name, &font) <= size.x {
-        name
-    } else {
-        let key = (name.to_owned(), size.x.to_bits());
-        if !view.fitted.contains_key(&key) {
-            // A width that changes with the window makes new keys: keep the map small.
-            if view.fitted.len() >= 64 {
-                view.fitted.clear();
-            }
-            let mut words = design::words_that_fit(ui, name, &font, size.x);
-            if design::number_width(ui, &words, &font) > size.x {
-                words = "…".to_owned();
-            }
-            #[cfg(test)]
-            {
-                view.shortened += 1;
-            }
-            view.fitted.insert(key.clone(), words);
+    let key = (revision, Measure::of(ui, size.x, &font));
+    let shown = view.fitted.get_or(name, key, || {
+        if design::number_width(ui, name, &font) <= size.x {
+            return name.to_owned();
         }
-        view.fitted[&key].as_str()
-    };
+        #[cfg(test)]
+        {
+            view.shortened += 1;
+        }
+        let words = design::words_that_fit(ui, name, &font, size.x);
+        if design::number_width(ui, &words, &font) > size.x {
+            "…".to_owned()
+        } else {
+            words
+        }
+    });
     let mut cell = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(rect)
@@ -947,7 +991,9 @@ fn amount_field(
     }
     if response.lost_focus() {
         let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
-        if enter && let Some(amount) = typed_amount(typed) {
+        // The view writes a negative number with a true minus (`design::signed`), so a typed
+        // `−3` is `-3`, as a typed `-3` is (`design::parse_signed`).
+        if enter && let Some(amount) = design::parse_signed(typed) {
             let (key, instance) = (key.clone(), instance.clone());
             // Enter is the press: the action keeps its place as a click's does.
             hold_press(ui, (&key, &instance, label, at), &response);
@@ -1050,12 +1096,6 @@ fn footer_press(trackers: &Trackers, pressed: Option<TrackerPress>, act: &mut Op
 /// The result's choice that makes a Major event of the act.
 const ADD_TO_TIMELINE: &str = "Add to Timeline";
 
-/// A whole number the DM typed in an action's Amount field. The view writes a negative number
-/// with a true minus (`design::signed`), so a typed `−3` is `-3`, as a typed `-3` is.
-fn typed_amount(typed: &str) -> Option<i64> {
-    typed.trim().replace('\u{2212}', "-").parse().ok()
-}
-
 /// The words of a failed save: the file, the reason, and that nothing was recorded.
 pub fn not_saved(error: &str) -> Sentence {
     TrackerFault::NotSaved(error.to_owned()).cause()
@@ -1066,22 +1106,13 @@ mod tests {
     use super::*;
     use egui_kittest::Harness;
 
-    /// PR 638 review (P2): Enter takes a typed amount with either minus sign; words that are
-    /// not a whole number record nothing.
-    #[test]
-    fn a_typed_amount_takes_either_minus_sign() {
-        assert_eq!(typed_amount("-3"), Some(-3));
-        assert_eq!(typed_amount(" \u{2212}3 "), Some(-3));
-        assert_eq!(typed_amount("4"), Some(4));
-        assert_eq!(typed_amount("+4"), Some(4));
-        assert_eq!(typed_amount("three"), None);
-        assert_eq!(typed_amount(""), None);
-    }
-
     /// X16: a name wider than its column ends at a whole word, or is `…` alone when its first
-    /// word does not fit; unchanged frames do not shorten it again.
+    /// word does not fit; unchanged frames do not shorten it again, and a new revision of the
+    /// trackers, a new font generation or a new display scale fits it again (ruling M6).
     #[test]
     fn a_name_in_its_column_ends_at_a_whole_word_and_is_shortened_once() {
+        use crate::design::memo::Revised;
+        use egui_kittest::kittest::{NodeT, Queryable};
         const NAMES: [&str; 3] = [
             "Party",
             "Ravenholm Ironside Wardens of the Gate",
@@ -1090,43 +1121,73 @@ mod tests {
         let mut h = Harness::builder()
             .with_size(egui::vec2(400.0, 200.0))
             .build_ui_state(
-                |ui, view: &mut ViewState| {
+                |ui, (view, revision): &mut (ViewState, Revised<u64>)| {
                     for name in NAMES {
-                        name_cell(ui, view, name, egui::vec2(110.0, 28.0));
+                        name_cell(ui, view, revision.revision(), name, egui::vec2(110.0, 28.0));
                     }
                 },
-                ViewState::default(),
+                (ViewState::default(), Revised::new(0)),
             );
+        // The harness drew its first frame in egui's own fonts: the theme's fonts are a new
+        // font generation, so the two long names are fitted again (ruling M6).
+        let first = h.state().0.shortened;
         crate::design::theme::install(&h.ctx);
         h.run();
-        let shown = |view: &ViewState, name: &str| {
-            view.fitted
-                .iter()
-                .find(|((full, _), _)| full == name)
-                .map(|(_, shown)| shown.clone())
+        let shown = |h: &Harness<'_, (ViewState, Revised<u64>)>, name: &str| {
+            h.query_all_by_role(egui::accesskit::Role::Label)
+                .filter_map(|node| node.accesskit_node().value())
+                .find(|label| {
+                    label == name
+                        || label
+                            .strip_suffix('…')
+                            .is_some_and(|kept| name.starts_with(&format!("{kept} ")))
+                })
         };
-        let view = h.state();
         assert_eq!(
-            shown(view, NAMES[0]),
-            None,
-            "a name that fits is not shortened"
+            shown(&h, NAMES[0]).as_deref(),
+            Some(NAMES[0]),
+            "a name that fits is shown whole"
         );
-        let words = shown(view, NAMES[1]).unwrap();
+        let words = shown(&h, NAMES[1]).unwrap();
         let kept = words.strip_suffix('…').unwrap();
         assert!(
             !kept.is_empty() && NAMES[1].starts_with(&format!("{kept} ")),
             "{words}"
         );
-        assert_eq!(shown(view, NAMES[2]).as_deref(), Some("…"));
-        let once = view.shortened;
-        assert_eq!(once, 2);
+        let labels: Vec<String> = h
+            .query_all_by_role(egui::accesskit::Role::Label)
+            .filter_map(|node| node.accesskit_node().value())
+            .collect();
+        assert!(labels.iter().any(|label| label == "…"), "{labels:?}");
+        let once = h.state().0.shortened;
+        assert_eq!(
+            once - first,
+            2,
+            "the theme's fonts fit the two long names again"
+        );
         for _ in 0..3 {
             h.step();
         }
         assert_eq!(
-            h.state().shortened,
+            h.state().0.shortened,
             once,
             "unchanged frames shorten nothing"
         );
+        // A settle (a new revision), fonts installed again and a new scale each fit again.
+        let mut fits = once;
+        let mut again = |h: &mut Harness<'_, (ViewState, Revised<u64>)>, what: &str| {
+            h.run();
+            fits += 2;
+            assert_eq!(h.state().0.shortened, fits, "{what} fits the names again");
+        };
+        h.state_mut().1.revise(|n| {
+            *n += 1;
+            crate::design::memo::Changed::Yes
+        });
+        again(&mut h, "a new revision");
+        crate::design::theme::install(&h.ctx);
+        again(&mut h, "a new font generation");
+        h.ctx.set_pixels_per_point(2.0);
+        again(&mut h, "a new display scale");
     }
 }

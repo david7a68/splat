@@ -2,7 +2,6 @@
 //! made from them. Obsidian stays a plain note's editor; an entry also has Edit here. A plain
 //! note becomes a Lookup item, not an entry, so nothing depends on it.
 //! See `docs/design/world-and-house-rules.md`.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 #[path = "world/checks.rs"]
 pub mod checks;
 #[path = "world/edit.rs"]
@@ -21,7 +20,7 @@ pub mod repair;
 use crate::{
     content_workspace::{EntryRef, patch_fields},
     design::{
-        self, Action, Density, Tone, Type, colors,
+        self, Action, Density, Type, colors,
         outcome::{
             BodyFault, Choice, ChoiceWords, Fault, FaultMessage, KeptOutcome, MessageChoice,
             Messages, Notice, Outcome, PaneFrame, Repair, Said, Sentence, Severity, UndoStep, Verb,
@@ -485,20 +484,6 @@ fn world_field<'a>(entry: &'a Entry, name: &str) -> Option<&'a Value> {
 /// Empty optional values have no row in Read mode. The editor keeps the source value.
 fn reader_field<'a>(entry: &'a Entry, key: &str) -> Option<&'a Value> {
     world_field(entry, key).filter(|value| !empty_optional(value))
-}
-
-/// The line under a duplicate's repair action. A duplicate of another kind can leave a World
-/// note with only its own path, so the first action may have no other file to name.
-fn duplicate_consequence(paths: &[String], at: usize) -> Option<String> {
-    if at == 0 {
-        paths
-            .get(1)
-            .map(|other| format!("Existing links keep {other}."))
-    } else {
-        paths
-            .first()
-            .map(|first| format!("Existing links will then use {first}."))
-    }
 }
 
 /// Which group a Part of value names. Two spellings of one link (an alias, a folder path, a
@@ -1980,17 +1965,6 @@ impl IdentityNoun {
         }
     }
 
-    pub fn duplicate_warning(self) -> &'static str {
-        match self {
-            Self::Note => "These two files claim to be the same note.",
-            Self::Entry => DUPLICATE_ENTRY,
-        }
-    }
-
-    pub fn action(self, filename: &str) -> String {
-        format!("Make {filename} a separate {}", self.word())
-    }
-
     fn result(self, filename: &str) -> String {
         format!("{filename} is now a separate {}.", self.word())
     }
@@ -1998,13 +1972,70 @@ impl IdentityNoun {
 
 pub const DUPLICATE_ENTRY: &str = "These two files claim to be the same entry.";
 
-/// The repair that gives a duplicate its own identity. A long filename wraps inside the shared
-/// secondary action (M0583), so the whole filename shows with the action's padding and target.
-pub(crate) fn separate_entry_button(ui: &mut egui::Ui, filename: &str) -> bool {
-    Action::secondary(&IdentityNoun::Note.action(filename))
-        .wraps()
-        .show(ui)
-        .clicked()
+/// The duplicate-identity repair's one form (M0178), on Library, World and Encounters: the
+/// fault is two files that claim one identity, in the warning tone; each file has the repair
+/// `Make <file> a separate <noun>` ([`separate_choice`]), with what it leaves as its help line
+/// ([`duplicate_consequence`]). Library says it in its footer (a `Notice`), World's reader and
+/// Encounters' search in their body (`BodyFault`), with the same words.
+pub struct DuplicateIdentity(pub IdentityNoun);
+
+impl design::outcome::Fault for DuplicateIdentity {
+    fn severity(&self) -> design::outcome::Severity {
+        design::outcome::Severity::NeedsFixing
+    }
+    fn cause(&self) -> design::outcome::Sentence {
+        match self.0 {
+            IdentityNoun::Note => crate::sentence!("These two files claim to be the same note."),
+            IdentityNoun::Entry => crate::sentence!("These two files claim to be the same entry."),
+        }
+    }
+}
+
+/// The repair of one of the files: `Make <file> a separate note` (or `entry`). The file shows
+/// whole: in a narrow reader the words wrap in the action (M0583), never cut.
+pub fn separate_choice(noun: IdentityNoun, file: &str) -> design::outcome::ChoiceWords {
+    match noun {
+        IdentityNoun::Note => crate::choice!("Make {} a separate note", file),
+        IdentityNoun::Entry => crate::choice!("Make {} a separate entry", file),
+    }
+    .whole_objects()
+}
+
+/// The help line under a World note's repair: what its existing links keep. A duplicate of
+/// another kind can leave a World note with only its own path, so the first repair may have no
+/// other file to name.
+fn links_consequence(paths: &[String], at: usize) -> Option<design::outcome::Sentence> {
+    let other = if at == 0 { paths.get(1) } else { paths.first() }?;
+    Some(duplicate_consequence(KeptBy::Links, other, at == 0))
+}
+
+/// What still points at the identity, which a repair's help line names.
+pub enum KeptBy<'a> {
+    /// The encounters that use the entry, by name.
+    Encounters(&'a [String]),
+    /// The links to the note.
+    Links,
+}
+
+/// What a file's repair leaves the identity's users with (ruling M8, its help line): the first
+/// file's repair keeps them on the other file (`keeps`), the others move them to `remaining`.
+pub fn duplicate_consequence(
+    kept: KeptBy<'_>,
+    remaining: &str,
+    keeps: bool,
+) -> design::outcome::Sentence {
+    match kept {
+        KeptBy::Encounters(users) => {
+            let names = crate::library::name_list(users);
+            match (keeps, users.len()) {
+                (true, 1) => crate::sentence!("{} keeps {}.", names, remaining),
+                (true, _) => crate::sentence!("{} keep {}.", names, remaining),
+                (false, _) => crate::sentence!("{} will then use {}.", names, remaining),
+            }
+        }
+        KeptBy::Links if keeps => crate::sentence!("Existing links keep {}.", remaining),
+        KeptBy::Links => crate::sentence!("Existing links will then use {}.", remaining),
+    }
 }
 
 pub fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
@@ -2694,8 +2725,14 @@ pub enum FooterAct {
 pub trait TrackerUi {
     fn show(&mut self, ui: &mut egui::Ui, from_top: bool);
     fn history(&mut self, ui: &mut egui::Ui, note: &Entry);
-    fn history_footer(&self, note: Uuid, messages: &mut design::outcome::Messages<'_, FooterAct>);
-    fn undo_remove(&mut self);
+    fn history_footer<'f>(
+        &self,
+        note: Uuid,
+        frame: &'f design::outcome::PaneFrame,
+        messages: &mut design::outcome::Messages<'f, FooterAct>,
+    );
+    /// The last Remove's Undo, by the press's ticket (M-S0.4).
+    fn undo_remove(&mut self, ticket: Option<design::results::Ticket>);
 }
 
 /// The reader's kinds of kept result, one each: a later one of a kind replaces the earlier
@@ -3402,32 +3439,25 @@ impl Reader {
                 );
                 paths.sort_by_key(|path| Some(campaign.path.join(path)) != first);
                 let spacing = ui.spacing().item_spacing.y;
-                // The choices and their consequences start at the message text, as in Sessions.
-                let chosen = design::message_with_actions(
-                    ui,
-                    Tone::Warning,
-                    IdentityNoun::Note.duplicate_warning(),
-                    |ui| {
-                        let mut chosen = None;
-                        for (at, path) in paths.iter().enumerate() {
-                            // An `L` gap separates the choices, as in Library.
-                            if at > 0 {
-                                ui.add_space((design::L - spacing).max(0.0));
-                            }
-                            let filename = Path::new(path)
-                                .file_name()
-                                .unwrap_or_default()
-                                .to_string_lossy();
-                            if separate_entry_button(ui, &filename) {
-                                chosen = Some(path);
-                            }
-                            if let Some(consequence) = duplicate_consequence(&paths, at) {
-                                ui.label(Type::Small.rich(ui, consequence).color(colors().muted));
-                            }
-                        }
-                        chosen
-                    },
-                );
+                // M0178: the duplicate repair's one form (`DuplicateIdentity`): each file's
+                // repair, with what it leaves existing links in its help line.
+                let mut fault =
+                    design::outcome::BodyFault::new(&DuplicateIdentity(IdentityNoun::Note));
+                for (at, path) in paths.iter().enumerate() {
+                    let filename = Path::new(path)
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy();
+                    let mut repair = design::outcome::Repair::new(
+                        separate_choice(IdentityNoun::Note, &filename),
+                        at,
+                    );
+                    if let Some(help) = links_consequence(&paths, at) {
+                        repair = repair.help(help);
+                    }
+                    fault = fault.repair(repair);
+                }
+                let chosen = fault.show(ui).and_then(|at| paths.get(at));
                 if let Some(path) = chosen {
                     match new_identity(campaign, path) {
                         Ok((undo, id)) => {
@@ -5120,9 +5150,9 @@ impl Reader {
                 let stat_block = &index.items[adding.stat_block?].entry;
                 let total = match adding.initiative.trim() {
                     "" => None,
-                    text => match text.parse::<i64>() {
-                        Ok(total) => Some(total),
-                        Err(_) => {
+                    text => match design::parse_signed(text) {
+                        Some(total) => Some(total),
+                        None => {
                             self.error = Some("Initiative must be a whole number.".to_owned());
                             return None;
                         }
@@ -5290,14 +5320,15 @@ mod tests {
         // Rook.md (world), Rook item.md (same id, an item) and Rook copy.md (world) leave
         // Rook copy.md with one duplicate path; its first action must not read a second one.
         let one = vec!["Rook copy.md".to_string()];
-        assert_eq!(duplicate_consequence(&one, 0), None);
+        assert!(links_consequence(&one, 0).is_none());
         let two = vec!["Rook.md".to_string(), "Rook copy.md".to_string()];
+        let words = |at| links_consequence(&two, at).map(|help| help.as_str().to_owned());
         assert_eq!(
-            duplicate_consequence(&two, 0).as_deref(),
+            words(0).as_deref(),
             Some("Existing links keep Rook copy.md.")
         );
         assert_eq!(
-            duplicate_consequence(&two, 1).as_deref(),
+            words(1).as_deref(),
             Some("Existing links will then use Rook.md.")
         );
     }
