@@ -736,6 +736,8 @@ impl<'a> ReasonSlot<'a> {
 pub fn short_reason(ui: &mut Ui, short: &str, full: &str) {
     let response = ui.label(super::Type::Small.rich(ui, short).color(colors().muted));
     super::named(ui, &response, full);
+    ui.ctx()
+        .accesskit_node_builder(response.id, |node| node.set_description(full));
     let _ = response.on_hover_text(full);
 }
 
@@ -1251,6 +1253,26 @@ mod tests {
         assert!(
             placed.len() >= 2 && short_seen,
             "the sweep reached a reason under the row and a short form on it (M24): {placed:?}, {short_seen}"
+        );
+    }
+
+    /// Ruling M24 (Astra's P3 on PR 668): a short reason on the row paints its short words and
+    /// gives the full reason as its accessible description (and its name and hover text).
+    #[test]
+    fn a_short_reason_describes_the_full_reason() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(400.0, 100.0))
+            .build_ui(|ui| short_reason(ui, SAVE_OR_DISCARD_SHORT, SAVE_OR_DISCARD_TO_SWITCH));
+        harness.run_steps(2);
+        let node = harness
+            .query_by_label(SAVE_OR_DISCARD_TO_SWITCH)
+            .or_else(|| harness.query_by_label(SAVE_OR_DISCARD_SHORT))
+            .expect("the short reason is an accessible node");
+        assert_eq!(
+            node.accesskit_node().description(),
+            Some(SAVE_OR_DISCARD_TO_SWITCH.to_owned()),
+            "the short reason's accessible description is the full reason"
         );
     }
 
