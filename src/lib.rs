@@ -2291,21 +2291,20 @@ impl Splat {
                     self.no_campaign(ui);
                     return;
                 };
-                let mut open_entries = false;
-                design::page_header(
-                    ui,
-                    "Campaign",
-                    (self.campaign_tab == CampaignTab::Packages)
-                        .then(|| self.campaign_content.context())
-                        .as_deref(),
-                    |ui| {
-                        open_entries = Action::quiet("Campaign entries")
+                // The page's header (M0280): the title, its package count, then its action.
+                const ENTRIES: design::Word = crate::word!("Campaign entries");
+                let context = (self.campaign_tab == CampaignTab::Packages)
+                    .then(|| self.campaign_content.context());
+                let header = design::TitleLine::new("Campaign")
+                    .context(context.as_deref())
+                    .action(
+                        design::TitleAction::quiet(ENTRIES)
                             .icon(icons::DOCUMENT)
-                            .hint("This campaign’s own entries, in the Library")
-                            .show(ui)
-                            .clicked();
-                    },
-                );
+                            .hint("This campaign’s own entries, in the Library"),
+                    )
+                    .page()
+                    .show(ui);
+                let open_entries = header.clicked(ENTRIES);
                 if open_entries {
                     self.library.show_campaign_entries();
                     self.page = Page::Library;
