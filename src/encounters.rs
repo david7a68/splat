@@ -1601,6 +1601,55 @@ pub fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>, hp_
     });
 }
 
+const STILL_READING: &str = "Still reading this campaign.";
+const ADD_PARTICIPANTS_FIRST: &str = "Add participants first.";
+
+/// Layout step 6b (ruling M24): the encounter save row's two reason slots. The campaign-switch
+/// reason; then the row's other reason (the creature's open changes, a read in progress, no
+/// participants). Each stands on the row in its full form, else in its short form in every state
+/// (`row_short`; "Add participants first." has no shorter sensible form and keeps its words),
+/// else, only on a row narrower than that, on a line of its own below.
+const ROW_REASONS: [design::save_row::ReasonSlot<'static>; 2] = [
+    design::save_row::ReasonSlot {
+        forms: &[
+            design::save_row::SAVE_OR_DISCARD_TO_SWITCH,
+            design::save_row::DISCARD_TO_SWITCH,
+        ],
+        substitutes: &[],
+        short: &[
+            design::save_row::SAVE_OR_DISCARD_SHORT,
+            design::save_row::DISCARD_SHORT,
+        ],
+    },
+    design::save_row::ReasonSlot {
+        forms: &[BLOCKED_BY_CREATURE, STILL_READING, ADD_PARTICIPANTS_FIRST],
+        substitutes: &[],
+        short: &[
+            design::Unsaved::Creature.short_reason(),
+            "Still reading.",
+            ADD_PARTICIPANTS_FIRST,
+        ],
+    },
+];
+
+/// The short form of the encounter save row's other reason (ruling M24).
+fn row_short(full: &str) -> &'static str {
+    match full {
+        BLOCKED_BY_CREATURE => design::Unsaved::Creature.short_reason(),
+        STILL_READING => "Still reading.",
+        _ => ADD_PARTICIPANTS_FIRST,
+    }
+}
+
+/// A reason on the encounter's save row: its full words, or with `short` its short form and the
+/// full words in hover and the accessible description (ruling M24).
+fn row_reason(ui: &mut egui::Ui, words: Option<&str>, short: Option<fn(&str) -> &'static str>) {
+    match (words, short) {
+        (Some(full), Some(short)) => design::save_row::short_reason(ui, short(full), full),
+        (words, _) => blocked_reason(ui, words),
+    }
+}
+
 /// Layout step 6b: the encounter editor's roster and Add participants as one composite, in panes
 /// `width` wide: the roster has the rest of the room, and Add participants trails at the right
 /// at its own or dragged width (`Column::right`). The head resolves its edges before it paints
@@ -7284,22 +7333,12 @@ impl Encounters {
         let lock_shown = state.lock_reason();
         let other_shown = creature_here
             .then_some(BLOCKED_BY_CREATURE)
-            .or(loading.then_some("Still reading this campaign."))
+            .or(loading.then_some(STILL_READING))
             .or(
                 (!has_run && unfinished.is_none() && draft_ref.setup.roster.is_empty())
-                    .then_some("Add participants first."),
+                    .then_some(ADD_PARTICIPANTS_FIRST),
             );
         let small = Type::Small.font(ui);
-        let other_measure = [
-            BLOCKED_BY_CREATURE,
-            "Still reading this campaign.",
-            "Add participants first.",
-        ]
-        .into_iter()
-        .max_by(|a, b| {
-            design::number_width(ui, a, &small).total_cmp(&design::number_width(ui, b, &small))
-        })
-        .unwrap_or_default();
         let run_width = run_words.as_ref().map_or(0.0, |words| {
             design::number_width(ui, &format!("{} {words}", icons::RUN), &small)
                 + 2.0 * ui.spacing().item_spacing.x
@@ -7307,14 +7346,17 @@ impl Encounters {
         let row_plan = design::save_row::head_plan(
             ui,
             &design::save_row::HeadSpec {
+                // The encounter's draft can be changed on disk and left unsaved by a failed write.
+                words: &design::save_row::ALL_WORDS,
                 column: ui.available_width(),
                 line: ui.available_width(),
                 actions: 0.0,
                 row: ui.available_width() - run_width,
-                reasons: &[design::save_row::SAVE_OR_DISCARD_TO_SWITCH, other_measure],
+                reasons: &ROW_REASONS,
             },
         );
         let (lock_on_row, other_on_row) = (row_plan.on_row[0], row_plan.on_row[1]);
+        let (lock_short, other_short) = (row_plan.short[0], row_plan.short[1]);
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
             // FB9, FC13: the unfinished run's state ends the row, apart from the save state,
@@ -7338,7 +7380,11 @@ impl Encounters {
                             creature_dirty.then_some(BLOCKED_BY_CREATURE),
                         );
                         // FB6: while Save is blocked, Discard is the one way out.
-                        blocked_reason(ui, lock_shown.filter(|_| lock_on_row));
+                        row_reason(
+                            ui,
+                            lock_shown.filter(|_| lock_on_row),
+                            lock_short.then_some(design::save_row::switch_short),
+                        );
                     });
                 });
             } else {
@@ -7349,33 +7395,39 @@ impl Encounters {
                     creature_dirty.then_some(BLOCKED_BY_CREATURE),
                 );
                 // FB6: while Save is blocked, Discard is the one way out.
-                blocked_reason(ui, lock_shown.filter(|_| lock_on_row));
+                row_reason(
+                    ui,
+                    lock_shown.filter(|_| lock_on_row),
+                    lock_short.then_some(design::save_row::switch_short),
+                );
             }
             // The creature's reason has one home: the back line paints it while it holds Back;
             // while the encounter's changes hold Back, this row says it for Start and Save.
-            blocked_reason(ui, other_shown.filter(|_| other_on_row));
+            row_reason(
+                ui,
+                other_shown.filter(|_| other_on_row),
+                other_short.then_some(row_short as fn(&str) -> &'static str),
+            );
         });
-        // The reasons the plan put under the row: each on its own line, kept while it does not
-        // show, so a reason that comes or goes moves no field (I8).
-        for (on_row, measure, shown) in [
-            (
-                lock_on_row,
-                design::save_row::SAVE_OR_DISCARD_TO_SWITCH,
-                lock_shown,
-            ),
-            (other_on_row, other_measure, other_shown),
+        // Ruling M24: a reason the plan could not put on the row even in its short form (a row
+        // narrower than its short form) takes a line of its own below, as tall as its tallest
+        // form, kept while it does not show, so a reason that comes or goes moves no field (I8).
+        for (on_row, slot, shown) in [
+            (lock_on_row, &ROW_REASONS[0], lock_shown),
+            (other_on_row, &ROW_REASONS[1], other_shown),
         ] {
             if on_row {
                 continue;
             }
-            match shown {
-                Some(words) => blocked_reason(ui, Some(words)),
-                None => {
-                    ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
-                        blocked_reason(ui, Some(measure));
-                    });
-                }
-            }
+            let height = design::save_row::slot_height(ui, slot, ui.available_width());
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), height),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_min_height(height);
+                    blocked_reason(ui, shown);
+                },
+            );
         }
 
         if unfinished.is_some() {
