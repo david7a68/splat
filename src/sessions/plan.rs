@@ -5805,6 +5805,8 @@ impl Sessions {
                 .any(|event| event.id == just.id && event.restores)
                 .then(|| timeline::fights_that_keep_hp(&book.events, session, plan.saved_runs));
             let words = as_sentence(&added_message(&just.label, just.to.as_deref(), restores));
+            // M0529 waits for layout 11c: an Add Undo that names its event moves under its words
+            // and makes the footer a line taller, which shifts the plan under the DM.
             Said::new(words)
                 .undo(UndoStep::verb(Verb::Add).pressed_as(pressed(FooterAct::UndoAdd)))
                 .into()
@@ -5815,16 +5817,15 @@ impl Sessions {
             && let Some(shown) = book.results.removal.get(&book.file())
         {
             let days = timeline::day_numbers(&book.events);
-            let words = as_sentence(&removed_event_words(
-                book,
-                session,
-                &days,
-                shown.value().label(),
-                planned,
-            ));
+            let label = shown.value().label().to_owned();
+            let words = as_sentence(&removed_event_words(book, session, &days, &label, planned));
+            // M-N1.7: the Undo names the event, as Timeline's line of the same removal does.
             messages.kept(shown.outcome(frame, |_| {
                 Said::new(words)
-                    .undo(UndoStep::verb(Verb::Remove).pressed_as(pressed(FooterAct::UndoRemove)))
+                    .undo(
+                        UndoStep::of(Verb::Remove, label)
+                            .pressed_as(pressed(FooterAct::UndoRemove)),
+                    )
                     .into()
             }));
         }

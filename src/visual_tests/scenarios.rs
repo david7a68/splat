@@ -11298,7 +11298,7 @@ pub mod column_resize {
                     .filter(|node| node.in_view() && node.name.starts_with("Undo"))
                     .count()
                     == 1
-                    && d.has("Undo add"),
+                    && d.event_undo("add").is_some(),
                 "The plan add has one named Undo at each window size",
             );
         });
@@ -14940,13 +14940,16 @@ pub mod session_notes {
             d.has_containing("Short rest added to Session 1."),
             "An event added here says so, in words",
         );
-        d.click("Undo add");
+        d.click(&d.event_undo("add").expect("an event\u{2019}s Undo add"));
         d.observe(
             "T11.2",
             !d.has("Short rest") && d.has_containing("Removed"),
             "A mis-press has one step of undo, and that has one too",
         );
-        d.click("Undo remove");
+        d.click(
+            &d.event_undo("remove")
+                .expect("an event\u{2019}s Undo remove"),
+        );
         d.expect("Short rest");
         d.click("Short rest");
         d.click("More actions for Short rest");
@@ -15279,16 +15282,19 @@ pub mod session_notes {
         d.click("All");
         d.click("More actions for Rest at the mill");
         d.click("Remove this event");
-        d.expect("Undo remove");
+        d.expect("Undo remove ");
         d.expect("1 note still links to it.");
         d.state("timeline-removed", Sizes::Default);
         d.click_containing("Travel ·");
         d.observe(
             "T11.4",
-            d.has("Undo remove"),
+            d.event_undo("remove").is_some(),
             "Selecting another event keeps the undo for a removal",
         );
-        d.click("Undo remove");
+        d.click(
+            &d.event_undo("remove")
+                .expect("an event\u{2019}s Undo remove"),
+        );
         d.expect("Rest at the mill");
 
         // Round 26 FG4, FD7: a length the clock cannot count is a warning with its icon, in the
@@ -26963,8 +26969,9 @@ pub mod session_plan {
         // at the removed row's place. It stays with its notice, below the remaining row.
         d.observe(
             "iter-10-C-AT2-undo",
-            d.in_view("Undo remove")
-                && d.place_of("Undo remove")
+            d.event_undo("remove").is_some_and(|undo| d.in_view(&undo))
+                && d.event_undo("remove")
+                    .and_then(|undo| d.place_of(&undo))
                     .zip(d.place_of(&notice))
                     .zip(d.place_of(FIRST))
                     .is_some_and(|((undo, words), row)| {
@@ -27007,7 +27014,7 @@ pub mod session_plan {
             "iter-24-S-FL3-undo",
             !d.has("Undo delete run")
                 && d.visible_text(&notice)
-                && d.in_view("Undo remove")
+                && d.event_undo("remove").is_some_and(|undo| d.in_view(&undo))
                 && d.in_view(&format!("Resume: {FIRST}")),
             "Undo delete run brings the run back, and the removal's result returns",
         );
@@ -27016,7 +27023,7 @@ pub mod session_plan {
         d.expect(&format!("Start fight: {FIRST}"));
         d.observe(
             "iter-24-S-FL3",
-            !d.has("Undo remove") && d.in_view("Undo delete run"),
+            d.event_undo("remove").is_none() && d.in_view("Undo delete run"),
             "Deleting the run again replaces the removal's result again",
         );
         // FT4: Timeline names the removed fight as the plan does.
@@ -27024,7 +27031,7 @@ pub mod session_plan {
         d.observe(
             "iter-12-C-FT4",
             d.visible_text(&format!("Removed “{FIRST}” (Round 2 · Paused)."))
-                && d.in_view("Undo remove"),
+                && d.event_undo("remove").is_some_and(|undo| d.in_view(&undo)),
             "Timeline's removal notice names the removed fight, with its Undo",
         );
         d.click(NAV_SESSIONS);
@@ -27530,7 +27537,7 @@ pub mod session_plan {
         // iter-23-S FK2: a run that starts ends the removal's result and its Undo, so no notice
         // sits above rows it no longer names.
         let removal_gone = |d: &Driver<'_>| {
-            !d.has_containing(&format!("Removed “{FIRST}”")) && !d.has("Undo remove")
+            !d.has_containing(&format!("Removed “{FIRST}”")) && d.event_undo("remove").is_none()
         };
         d.state_prepared("plan-after-a-fight", Sizes::All, |d| {
             // Layout PR 5a-2 (I6): the plan's actions start `L` after its widest facts (every
@@ -27686,10 +27693,10 @@ pub mod session_plan {
         d.click("Add Long rest");
         d.observe(
             "S4",
-            d.has("Undo add") && !d.has("Undo everyone to full"),
+            d.event_undo("add").is_some() && !d.has("Undo everyone to full"),
             "The long rest has one Undo",
         );
-        d.click("Undo add");
+        d.click(&d.event_undo("add").expect("an event\u{2019}s Undo add"));
         d.observe(
             "S4",
             !d.has("Everyone at full"),
@@ -27959,7 +27966,7 @@ pub mod session_plan {
         d.click(NAV_TIMELINE);
         d.click("Add Long rest");
         d.expect("Long rest added. Everyone starts the next fight at full.");
-        let undo_add = undo_shape(d, "Undo add");
+        let undo_add = undo_shape(d, &d.event_undo("add").expect("an event\u{2019}s Undo add"));
         d.observe(
             "iter-17-B-AT1-pair",
             saved_hp_undo.is_some() && undo_add == saved_hp_undo,
@@ -27967,7 +27974,7 @@ pub mod session_plan {
                 "The saved-HP Undo {saved_hp_undo:?} has the same shape as Undo add {undo_add:?}"
             ),
         );
-        d.click("Undo add");
+        d.click(&d.event_undo("add").expect("an event\u{2019}s Undo add"));
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.click("Add Long rest");
         d.expect("Everyone at full");
