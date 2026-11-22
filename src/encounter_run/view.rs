@@ -5727,7 +5727,7 @@ impl Run {
             let row = first_line + detail.size().y + design::XS;
             let padding = (row - first_line - detail.size().y) / 2.0;
             // The row's first line, from the row's top: each control stands on it, centred.
-            let line = FirstLine {
+            let line = design::FirstLine {
                 top: padding,
                 height: first_line,
             };
@@ -9598,40 +9598,6 @@ fn in_column<R>(ui: &mut egui::Ui, edge: f32, add: impl FnOnce(&mut egui::Ui) ->
         add,
     )
     .inner
-}
-
-/// The first line of a setup row, from the row's top (`Run::setup_row`). Every control of the
-/// row stands on it, its centre on the line's centre, as the name's first line is.
-#[derive(Clone, Copy)]
-struct FirstLine {
-    top: f32,
-    height: f32,
-}
-
-impl FirstLine {
-    /// A slot of the row (`size`, from the row's top) holding one control `control` high. The
-    /// control is placed by its rect on the line, so a slot taller than its control never moves
-    /// it.
-    fn slot<R>(
-        self,
-        ui: &mut egui::Ui,
-        size: egui::Vec2,
-        control: f32,
-        add: impl FnOnce(&mut egui::Ui) -> R,
-    ) -> R {
-        ui.allocate_ui_with_layout(size, Layout::top_down(Align::LEFT), |ui| {
-            let mut on_line = ui.available_rect_before_wrap();
-            on_line.min.y += self.top + (self.height - control) / 2.0;
-            ui.scope_builder(
-                egui::UiBuilder::new()
-                    .max_rect(on_line)
-                    .layout(Layout::top_down(Align::LEFT)),
-                add,
-            )
-            .inner
-        })
-        .inner
-    }
 }
 
 /// A number that can be unknown. `Clear` empties it, away from the value,

@@ -106,10 +106,6 @@ fn page_row(ui: &mut egui::Ui, index: &ContentIndex, position: usize) -> bool {
 /// History rows put each date in one column, as wide as the widest date plus an `S` gap, so
 /// names and summaries share their left edges. The column takes at most a third of the width,
 /// and a longer date wraps in it. A row without a date keeps the column empty.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn history_rows(ui: &mut egui::Ui, index: &ContentIndex, history: &[usize]) -> Option<Go> {
     let dates: Vec<Option<String>> = history
         .iter()
@@ -138,13 +134,18 @@ fn history_rows(ui: &mut egui::Ui, index: &ContentIndex, history: &[usize]) -> O
                     ui.set_min_size(size);
                     ui.set_max_width(column);
                     // The first line sits on the name's line; a wrapped date grows down.
-                    ui.add_space(((size.y - Type::Small.line()) / 2.0).max(0.0));
-                    if let Some(date) = date {
-                        ui.add(
-                            egui::Label::new(Type::Small.rich(ui, date).color(colors().muted))
-                                .wrap(),
-                        );
-                    }
+                    let line = design::FirstLine {
+                        top: 0.0,
+                        height: size.y,
+                    };
+                    line.slot(ui, egui::vec2(column, size.y), Type::Small.line(), |ui| {
+                        if let Some(date) = date {
+                            ui.add(
+                                egui::Label::new(Type::Small.rich(ui, date).color(colors().muted))
+                                    .wrap(),
+                            );
+                        }
+                    });
                 });
                 ui.spacing_mut().item_spacing.x = gap;
                 page_row(ui, index, position)

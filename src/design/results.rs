@@ -1124,7 +1124,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "members_pane",
             &[Ban::Layout(1)],
         ),
-        ("src/library.rs", "new_entry", &[Ban::Extras(1)]),
         // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
         // `line_row`'s lines are; the list has no typed owner yet.
         (
@@ -1335,19 +1334,16 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M20 (M-W0.4, M-W0.5, M0178): the index's warnings on this note, the renamed-file
         // warning with its two repairs and the duplicate repair, in the reader's body (were
         // `message`, `message_with_actions`).
-        ("src/world.rs", "draw", &[Ban::Extras(1), Ban::Body]),
+        ("src/world.rs", "draw", &[Ban::Body]),
         // M20 (M-W0.4): an unread value's warning (was `message`).
         ("src/world.rs", "unread_warning", &[Ban::Body]),
-        ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         // M20 (M-W0.5): an unread value's warning with its repair, `Edit in Obsidian` (was
         // `message` and a link).
         ("src/world.rs", "unread_groups_message", &[Ban::Body]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
-        ("src/world/page.rs", "list", &[Ban::Extras(1)]),
         // M20 (M-W0.5): a note that cannot be read, in place of its page (was
         // `message_with_actions`).
         ("src/world/page.rs", "unread_pane", &[Ban::Body]),
-        ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "fills_body", &[Ban::Pane(1)]),
         ("src/party.rs", "show", &[Ban::Pane(1)]),
     ]
