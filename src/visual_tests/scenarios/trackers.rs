@@ -382,6 +382,40 @@ fn purses_in_view(d: &mut Driver<'_>) -> bool {
     in_view_after_scroll(d, &["Pay: Ann", "Tip: Bo"])
 }
 
+/// The point the panel's wheel steps go to: under the search field.
+fn panel_wheel(d: &Driver<'_>) -> egui::Pos2 {
+    d.place_of(SEARCH_LOOKUP)
+        .map_or(egui::pos2(780.0, 300.0), |field| {
+            egui::pos2(field.center().x, field.bottom() + 200.0)
+        })
+}
+
+/// Scroll the panel back to its top.
+fn panel_to_top(d: &mut Driver<'_>) {
+    let wheel = panel_wheel(d);
+    for _ in 0..8 {
+        d.scroll_points_at(wheel, -1000.0);
+    }
+}
+
+/// From the panel's top, scroll it until the control whose name starts with `prefix` is wholly in
+/// view in the panel's upper part.
+fn heading_near_top(d: &mut Driver<'_>, prefix: &str) {
+    panel_to_top(d);
+    let wheel = panel_wheel(d);
+    for _ in 0..40 {
+        let up = d.nodes().into_iter().any(|node| {
+            node.name.to_lowercase().starts_with(prefix)
+                && node.fully_in_view()
+                && node.rect.top() < wheel.y
+        });
+        if up {
+            break;
+        }
+        d.scroll_points_at(wheel, 40.0);
+    }
+}
+
 /// Scroll the panel until each named control of Purses is wholly in view.
 fn in_view_after_scroll(d: &mut Driver<'_>, names: &[&str]) -> bool {
     let wheel = d
@@ -514,6 +548,91 @@ fn day_marks(d: &mut Driver<'_>) {
             && ledger(d).contains("day: 32"),
         "A clock that goes back takes the row away and keeps what was done",
     );
+}
+
+/// Layout step 11a (SH9, AH6; Astra's P1s on PR 684): each list heading named in `titles` shows
+/// whole, and the registered block that holds it reaches into its first row and ends whole in its
+/// column: every control in it (the first row's actions too) is fully in view. A heading that does
+/// not show fails: each named section must be found. Returns the failures, by heading.
+fn heading_blocks(d: &Driver<'_>, titles: &[&str]) -> Vec<String> {
+    let rows = d.registered_rows();
+    let nodes = d.nodes();
+    let mut faults = Vec::new();
+    for title in titles {
+        let mut heading = None;
+        d.each_painted_text(|text, clip| {
+            let rect = text.visual_bounding_rect();
+            let words = text.galley.job.text.to_lowercase();
+            if words.trim().starts_with(title) && clip.expand(1.0).contains_rect(rect) {
+                heading = Some((rect, clip));
+            }
+        });
+        let Some((heading, clip)) = heading else {
+            faults.push(format!("{title}: no whole heading"));
+            continue;
+        };
+        let block = rows
+            .iter()
+            .filter(|row| row.contains(heading.center()) && row.bottom() > heading.bottom() + 1.0)
+            .min_by(|a, b| a.height().total_cmp(&b.height()));
+        let Some(block) = block else {
+            faults.push(format!("{title}: no block holds the heading and a row"));
+            continue;
+        };
+        let inside: Vec<_> = nodes
+            .iter()
+            .filter(|node| {
+                block.contains(node.rect.center()) && node.rect.top() >= heading.bottom()
+            })
+            .collect();
+        let cut: Vec<_> = inside
+            .iter()
+            .filter(|node| !node.fully_in_view())
+            .map(|node| node.name.clone())
+            .collect();
+        if inside.is_empty() || !cut.is_empty() || block.bottom() > clip.bottom() + 0.5 {
+            faults.push(format!(
+                "{title}: block {block:?} in {clip:?}, {} controls, cut {cut:?}",
+                inside.len()
+            ));
+        }
+    }
+    faults
+}
+
+/// The names of the controls inside the block that holds the heading `title`.
+fn heading_block_names(d: &Driver<'_>, title: &str) -> Vec<String> {
+    let mut heading = None;
+    d.each_painted_text(|text, clip| {
+        let rect = text.visual_bounding_rect();
+        if text
+            .galley
+            .job
+            .text
+            .to_lowercase()
+            .trim()
+            .starts_with(title)
+            && clip.expand(1.0).contains_rect(rect)
+        {
+            heading = Some(rect);
+        }
+    });
+    let Some(heading) = heading else {
+        return Vec::new();
+    };
+    let Some(block) = d
+        .registered_rows()
+        .into_iter()
+        .filter(|row| row.contains(heading.center()) && row.bottom() > heading.bottom() + 1.0)
+        .min_by(|a, b| a.height().total_cmp(&b.height()))
+    else {
+        return Vec::new();
+    };
+    d.nodes()
+        .into_iter()
+        .filter(|node| block.contains(node.rect.center()) && node.rect.top() >= heading.bottom())
+        .map(|node| node.name)
+        .collect()
 }
 
 pub fn run(d: &mut Driver<'_>) {
@@ -819,6 +938,31 @@ pub fn run(d: &mut Driver<'_>) {
     });
     d.observe("T19.2-beside-1920", whole, whole_at);
     d.state("trackers-three-notices", Sizes::All);
+    // Layout step 11a (SH9, AH6): Due, Pinned and the open More trackers each stand with their
+    // first rows at 960 and 1200, each scrolled up into view and back. More trackers opens and
+    // closes in a window tall enough that nothing scrolls, so neither press moves its header (an
+    // aside: it ends as it began).
+    let tall = (1200.0, 1800.0);
+    let faults = d.aside(|d| {
+        d.act_at_size(tall, |d| d.click_starting("MORE TRACKERS"));
+        let faults = [SMALL, DEFAULT].map(|size| {
+            d.act_at_size(size, |d| {
+                ["due", "pinned", "more trackers"].map(|title| {
+                    heading_near_top(d, title);
+                    let faults = heading_blocks(d, &[title]);
+                    panel_to_top(d);
+                    faults
+                })
+            })
+        });
+        d.act_at_size(tall, |d| d.click_starting("MORE TRACKERS"));
+        faults
+    });
+    d.observe(
+        "l11a-SH9-heading-with-row",
+        faults.iter().flatten().all(Vec::is_empty),
+        format!("Due, Pinned and More trackers at 960 and 1200: {faults:?}"),
+    );
     // Optimizer scan 26: with the result line at the bottom, a press near its edge goes to the
     // action under the pointer, and a press on the footer to the footer's action.
     let (edge, edge_detail) = presses_at_the_footer_edge(d);
@@ -896,44 +1040,7 @@ pub fn run(d: &mut Driver<'_>) {
                 .is_some_and(|frame| frame.stroke.width > 0.0),
         "Add to Timeline, a message action without an icon, has a border",
     );
-    // Layout step 11a (SH9, AH6): a list heading is one block with its first row, so the footer's
-    // cut never leaves `Pinned` (or `Due`) standing alone over a cut row: a heading that shows
-    // whole in its column has whole words under it in that same column.
-    d.state_prepared("trackers-over-an-entry", Sizes::Small, |d| {
-        let mut alone = Vec::new();
-        for title in ["pinned", "due"] {
-            let mut heading = None;
-            d.each_painted_text(|text, clip| {
-                let rect = text.visual_bounding_rect();
-                let words = text.galley.job.text.to_lowercase();
-                if words.trim().starts_with(title) && clip.expand(1.0).contains_rect(rect) {
-                    heading = Some((rect, clip));
-                }
-            });
-            let Some((heading, column)) = heading else {
-                continue;
-            };
-            let mut below = false;
-            d.each_painted_text(|text, clip| {
-                let rect = text.visual_bounding_rect();
-                below |= clip == column
-                    && rect.top() >= heading.bottom()
-                    && clip.expand(1.0).contains_rect(rect)
-                    && !text.galley.job.text.trim().is_empty();
-            });
-            if !below {
-                alone.push((title, heading));
-            }
-        }
-        d.observe(
-            "l11a-SH9-heading-with-row",
-            alone.is_empty(),
-            format!(
-                "At {:?}, headings with no whole row under them: {alone:?}",
-                d.window_size()
-            ),
-        );
-    });
+    d.state("trackers-over-an-entry", Sizes::Small);
     // Words typed there are a new search, which leaves Trackers for its result.
     d.type_into(SEARCH_LOOKUP, VARRA);
     d.wait_for_text(VARRA_WORDS);
@@ -1255,6 +1362,35 @@ pub fn run(d: &mut Driver<'_>) {
     for _ in 0..said.len() {
         d.click("Undo: Tip");
     }
+    // Layout step 11a (Astra's P1 on PR 684): a first pinned tracker of four instances binds the
+    // Pinned heading to its FIRST line only (Ann's), never to its other lines.
+    let four = PURSES.replace("[Ann, Bo]", "[Ann, Bo, Cy, Di]");
+    fs::write(&note, text.replacen("> trackers:\n", &four, 1)).unwrap();
+    d.app_mut().lookup.refresh();
+    d.app_mut().lookup.files_changed = true;
+    d.settle();
+    if !d.has_containing("Elapsed race time") {
+        d.press_ctrl(Key::T);
+    }
+    let first_only = [SMALL, DEFAULT].map(|size| {
+        d.at_size(size, |d| {
+            let names = heading_block_names(d, "pinned");
+            (
+                names.iter().any(|name| name.ends_with(": Ann"))
+                    && !names.iter().any(|name| {
+                        [": Bo", ": Cy", ": Di"]
+                            .iter()
+                            .any(|who| name.ends_with(who))
+                    }),
+                names,
+            )
+        })
+    });
+    d.observe(
+        "l11a-SH9-first-line-only",
+        first_only.iter().all(|(ok, _)| *ok),
+        format!("The Pinned heading's block at 960 and 1200: {first_only:?}"),
+    );
     fs::write(&note, text.replacen("> trackers:\n", PURSES, 1)).unwrap();
     d.app_mut().lookup.refresh();
     d.app_mut().lookup.files_changed = true;
