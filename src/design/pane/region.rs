@@ -150,6 +150,13 @@ pub struct RegionState {
     refused: usize,
     /// The frame a pending request was first seen in, for its end after `REQUEST_FRAMES`.
     asked: Option<u64>,
+    /// Where the keyboard stood at the end of the last pass (a measured body).
+    stand: Option<KeyStand>,
+    /// An arrow pressed at the drawn edge in the last pass, from this control: down or up.
+    arrow: Option<(Id, bool)>,
+    /// The block (by key) whose first control, or last, takes the focus once it draws; the frame
+    /// it was asked in.
+    focus_to: Option<(Id, bool, u64)>,
 }
 
 impl RegionState {
@@ -172,6 +179,9 @@ impl RegionState {
             small_rooms: 0,
             refused: 0,
             asked: None,
+            stand: None,
+            arrow: None,
+            focus_to: None,
         }
     }
 
@@ -349,19 +359,32 @@ impl<'s> BlockRegion<'s> {
         // pass's input), in the content's terms: the mask is decided before any block draws.
         let clip = ui.clip_rect();
         let (offset, view) = (clip.top() - rect.top(), clip.height().max(0.0));
+        let held = cancel_in_place(ui, (&mut state.pending, &mut state.asked));
         let plan = state.plan.plan(content, env);
+        route_keys(
+            ui,
+            Keys {
+                stand: &mut state.stand,
+                arrow: &mut state.arrow,
+                focus_to: &mut state.focus_to,
+                pending: &mut state.pending,
+            },
+            plan,
+        );
         resolve_in_place(
             ui,
             (&mut state.pending, &mut state.asked),
             plan,
-            clip,
+            held,
             (offset, view),
         );
         let mask = state.plan.mask(content, env, offset, view);
         let plan = state.plan.plan(content, env);
         let (ctx, layer) = (ui.ctx().clone(), ui.layer_id());
-        // Each block drawn as parts: its parts' span and its widgets in this pass.
+        // Each block drawn as parts: its parts' span and its widgets in this pass; and every
+        // drawn block's widgets.
         let mut parts = Vec::new();
+        let mut ranges = Vec::new();
         for (at, part) in drawn_blocks(&mask) {
             let block_rect = place(plan, at);
             // A block's `Ui` (and so its controls' ids and their focus) is its own, by its key:
@@ -378,10 +401,20 @@ impl<'s> BlockRegion<'s> {
             }
             let from = widget_count(&ctx, layer);
             block(&mut child, at);
+            let range = from..widget_count(&ctx, layer);
             if let Some(span) = part {
-                parts.push((at, span, from..widget_count(&ctx, layer)));
+                parts.push((at, span, range.clone()));
             }
+            ranges.push((at, range));
         }
+        keyboard_after_draw(
+            &ctx,
+            layer,
+            (&mut state.focus_to, &mut state.stand),
+            plan,
+            &ranges,
+            &mask.whole,
+        );
         // Review of PR 757 (P1): a control of a block drawn as parts that its part's clip hides
         // can take the focus by Tab. When it gains it, the unit that holds it (L6: the head, or
         // the rest) comes whole into view (a queued request), so the control shows and keeps it.
@@ -688,50 +721,39 @@ impl<'s> BlockRegion<'s> {
     }
 }
 
-/// The resolver of a measured body in a `Body::Content` pane (layout 11c, A1b), whose column is
-/// the pane's: run once per pass after that pass's input, before any block draws. In order: the
-/// DM's movement over the column in this pass (a wheel turn, a drag begun in it, Page Up, Page
-/// Down, Home or End that go to it) cancels every older request; a press held in the column makes the requests wait, up to
-/// `REQUEST_FRAMES` (a wheel while it is held still cancels them); then the highest request
-/// (`Pending::take`) becomes the least move of the column that shows its block whole (a block taller than the view: its head at the view's
-/// top), queued for the column's next pass (`reveal::queue`), which another pass of this frame
-/// draws. A request whose block left the plan ends.
+/// The first step of the resolver of a measured body in a `Body::Content` pane (layout 11c),
+/// whose column is the pane's: run once per pass after that pass's input, before any block
+/// draws. The column's one rule (`reveal::column_input`): the DM's movement over the column, or
+/// another input to it (a press, a key that moves a view or a caret), cancels every OLDER
+/// request; a press held still in it makes them wait, up to `REQUEST_FRAMES`. Whether one waits.
+fn cancel_in_place(ui: &Ui, (pending, asked): (&mut Pending, &mut Option<u64>)) -> bool {
+    let frame = ui.ctx().cumulative_frame_nr();
+    let (cancel, held) = crate::design::reveal::column_view(ui)
+        .map(|(key, view)| crate::design::reveal::column_input(ui, key, view, None))
+        .map_or((false, false), |input| {
+            (
+                input.moved || input.other,
+                input.held && !input.moved && !input.other,
+            )
+        });
+    if cancel || asked.is_some_and(|asked| frame > asked + REQUEST_FRAMES) {
+        *pending = Pending::default();
+    }
+    held
+}
+
+/// The last step: the highest request (`Pending::take`, also one a key made in this pass)
+/// becomes the least move of the column that shows its block whole (a block taller than the
+/// view: its head at the view's top), queued for the column's next pass (`reveal::queue`),
+/// which another pass of this frame draws. A request whose block left the plan ends.
 fn resolve_in_place(
     ui: &Ui,
     (pending, asked): (&mut Pending, &mut Option<u64>),
     plan: &BlockPlan,
-    clip: Rect,
+    held: bool,
     (offset, view): (f32, f32),
 ) {
     let frame = ui.ctx().cumulative_frame_nr();
-    // Review of PR 757: a key moves this column only when it goes to it (the focused control is
-    // in it, or with no focus the pointer is over it), never another column's.
-    // The column's own view: egui keeps a sideways clip as wide as the parent's.
-    let column = crate::design::reveal::column_view(ui).unwrap_or(clip);
-    let keys = crate::design::reveal::keys_in(ui, column);
-    let (moved, held) = ui.input(|input| {
-        let pointer = &input.pointer;
-        let in_column = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| column.contains(pos));
-        let wheel = input.raw_scroll_delta.y != 0.0 || input.smooth_scroll_delta.y != 0.0;
-        let page = input.events.iter().any(|event| {
-            matches!(
-                event,
-                egui::Event::Key {
-                    key: Key::PageUp | Key::PageDown | Key::Home | Key::End,
-                    ..
-                }
-            ) && crate::design::reveal::moves_view(event)
-        });
-        (
-            (in_column(pointer.hover_pos()) && wheel)
-                || (pointer.is_decidedly_dragging() && in_column(pointer.press_origin()))
-                || (keys && page),
-            pointer.any_down() && in_column(pointer.press_origin()),
-        )
-    });
-    if moved || asked.is_some_and(|asked| frame > asked + REQUEST_FRAMES) {
-        *pending = Pending::default();
-    }
     if *pending == Pending::default() {
         *asked = None;
         return;
@@ -750,6 +772,159 @@ fn resolve_in_place(
     if (target - offset).abs() > 0.5 {
         crate::design::reveal::queue(ui, target - offset);
     }
+}
+
+/// Where the keyboard stood in a measured body at the end of its last pass: the focused control,
+/// its block, whether it is that block's first and last control, and the blocks drawn whole.
+#[derive(Clone, Debug)]
+struct KeyStand {
+    focused: Id,
+    block: usize,
+    first: bool,
+    last: bool,
+    whole: Range<usize>,
+}
+
+/// A measured body's keyboard state, apart from its plan.
+struct Keys<'s> {
+    stand: &'s mut Option<KeyStand>,
+    arrow: &'s mut Option<(Id, bool)>,
+    focus_to: &'s mut Option<(Id, bool, u64)>,
+    pending: &'s mut Pending,
+}
+
+/// Keyboard routing across masked blocks (layout 11c, A1c; v2 review item 3). egui moves the
+/// focus among the controls drawn; at the body's drawn edge this moves it to a block that is not
+/// drawn: Tab from the last control of the last whole block, Shift+Tab from the first control of
+/// the first, an arrow that egui could not move (nothing drawn beyond), Home and End. Only keys
+/// that go to this column count (`reveal::keys_in`, by the focused control). The key's own
+/// request (`Navigation::Show` of the target's key) is made AFTER the cancel step, so its own
+/// movement cancels only older requests; the target's first control (its last for Shift+Tab)
+/// takes the focus once it draws (`keyboard_after_draw`).
+fn route_keys(ui: &Ui, keys: Keys<'_>, plan: &BlockPlan) {
+    let frame = ui.ctx().cumulative_frame_nr();
+    let focused = ui.ctx().memory(|memory| memory.focused());
+    let Some(stand) = keys
+        .stand
+        .clone()
+        .filter(|stand| Some(stand.focused) == focused)
+    else {
+        *keys.arrow = None;
+        return;
+    };
+    let owns = crate::design::reveal::column_view(ui)
+        .is_some_and(|(key, _)| crate::design::reveal::keys_in(ui, key));
+    let n = plan.len();
+    let mut target = None;
+    // An arrow of the last pass that egui could not move (the focus stayed on its control).
+    if let Some((id, down)) = keys.arrow.take()
+        && id == stand.focused
+    {
+        target = if down {
+            (stand.block + 1 < n).then_some((stand.block + 1, false))
+        } else {
+            stand.block.checked_sub(1).map(|at| (at, false))
+        };
+    }
+    if owns && target.is_none() {
+        let pressed = |key: Key, modifiers: egui::Modifiers| {
+            ui.input(|input| {
+                input.events.iter().any(|event| {
+                    matches!(event, egui::Event::Key { key: k, pressed: true, modifiers: m, .. }
+                        if *k == key && *m == modifiers)
+                })
+            })
+        };
+        let none = egui::Modifiers::NONE;
+        if pressed(Key::Tab, none)
+            && stand.last
+            && stand.block + 1 < n
+            && stand.block + 1 >= stand.whole.end
+        {
+            target = Some((stand.block + 1, false));
+        } else if pressed(Key::Tab, egui::Modifiers::SHIFT)
+            && stand.first
+            && stand.block > 0
+            && stand.block - 1 < stand.whole.start
+        {
+            target = Some((stand.block - 1, true));
+        } else if pressed(Key::Home, none) && n > 0 {
+            target = Some((0, false));
+        } else if pressed(Key::End, none) && n > 0 {
+            target = Some((n - 1, false));
+        } else if pressed(Key::ArrowDown, none) && stand.block + 1 >= stand.whole.end {
+            *keys.arrow = Some((stand.focused, true));
+        } else if pressed(Key::ArrowUp, none) && stand.block <= stand.whole.start {
+            *keys.arrow = Some((stand.focused, false));
+        }
+    }
+    if let Some((at, last)) = target
+        && let Some(key) = plan.key(at)
+    {
+        *keys.focus_to = Some((key, last, frame));
+        if !stand.whole.contains(&at) {
+            keys.pending.navigation = Some(Navigation::Show(key));
+        }
+    }
+    if keys.arrow.is_some() {
+        // egui moves the focus by an arrow at the end of this pass: look again in the next one.
+        ui.ctx()
+            .request_discard("a measured body looks where an arrow left the focus");
+    }
+}
+
+/// After a measured body's blocks draw: a block that a key routed to takes the focus on its first
+/// control (its last for Shift+Tab) once it is drawn whole (`focus_to`, which ends after
+/// `REQUEST_FRAMES`); and where the keyboard stands now, for the next pass's routing.
+fn keyboard_after_draw(
+    ctx: &egui::Context,
+    layer: egui::LayerId,
+    (focus_to, stand): (&mut Option<(Id, bool, u64)>, &mut Option<KeyStand>),
+    plan: &BlockPlan,
+    ranges: &[(usize, Range<usize>)],
+    whole: &Range<usize>,
+) {
+    let controls = |range: &Range<usize>| -> Vec<Id> {
+        ctx.viewport(|viewport| {
+            viewport
+                .this_pass
+                .widgets
+                .get_layer(layer)
+                .skip(range.start)
+                .take(range.len())
+                .filter(|widget| widget.enabled && widget.sense.is_focusable())
+                .map(|widget| widget.id)
+                .collect()
+        })
+    };
+    if let Some((key, last, asked)) = *focus_to {
+        if ctx.cumulative_frame_nr() > asked + REQUEST_FRAMES {
+            *focus_to = None;
+        } else if let Some(at) = plan.find(key)
+            && whole.contains(&at)
+            && let Some((_, range)) = ranges.iter().find(|(block, _)| *block == at)
+        {
+            let ids = controls(range);
+            if let Some(id) = if last { ids.last() } else { ids.first() } {
+                ctx.memory_mut(|memory| memory.request_focus(*id));
+            }
+            *focus_to = None;
+        }
+    }
+    let focused = ctx.memory(|memory| memory.focused());
+    *stand = focused.and_then(|id| {
+        ranges.iter().find_map(|(at, range)| {
+            let ids = controls(range);
+            let place = ids.iter().position(|control| *control == id)?;
+            Some(KeyStand {
+                focused: id,
+                block: *at,
+                first: place == 0,
+                last: place + 1 == ids.len(),
+                whole: whole.clone(),
+            })
+        })
+    });
 }
 
 /// The least move of a view `view` tall at `offset` that shows `top..end` whole (taller than the
