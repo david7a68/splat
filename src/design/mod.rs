@@ -38,8 +38,9 @@ pub use components::*;
 // Wave 2 callers name the extras through `design`, as they name the components.
 #[allow(unused_imports)]
 pub use extras::{
-    FirstLine, Gap, Heading, QUOTE_INDENT, choice, choice_value, choice_wrapped,
-    choice_wrapped_value, dropped, gap, gap_to_next, heading, indent, quote, unless_empty,
+    FirstLine, Gap, Heading, QUOTE_INDENT, at_least, choice, choice_value, choice_wrapped,
+    choice_wrapped_value, dropped, empty_line, gap, gap_to_next, heading, indent, quote,
+    unless_empty,
 };
 // Wave 2 callers name the layout parts through `design`, as they name the components.
 pub use action_rows::{Columns, RowAction, action_row};
@@ -57,9 +58,10 @@ pub use layout::{
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]
 pub use pane::{
-    ACTION_ROW, Block, BlockRegion, Body, ENTRY_ROW_HEIGHT, EditorRegion, Fills, FillsReason, Laid,
-    LaidUi, Navigation, PaneColumns, PaneEdges, Placement, PlanColumns, PlanRow, RegionState, Row,
-    SummaryPart, draw_laid, plan_rule, plan_slot,
+    ACTION_ROW, ActionLine, Block, BlockRegion, Body, ENTRY_ROW_HEIGHT, EditorRegion, Fills,
+    FillsReason, Laid, LaidUi, LineColumns, Navigation, PaneColumns, PaneEdges, Placement,
+    PlanColumns, PlanRow, RegionState, Row, SummaryPart, draw_laid, line_slot, plan_rule,
+    plan_slot,
 };
 // Wave 2 callers name the popup parts through `design`, as they name the components.
 #[allow(unused_imports)]

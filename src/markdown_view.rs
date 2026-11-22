@@ -202,7 +202,10 @@ fn show_with_density(
 ) {
     let from = reader_document(ui);
     let mut ops = prepare(ui, markdown, dense, row, from);
-    let jump = Maps::of(&ops).wanted(ui.ctx());
+    let jump = Jump {
+        at: Maps::of(&ops).wanted(ui.ctx()),
+        kept: None,
+    };
     draw(ui, &mut ops, from, short_links, row.is_some(), jump, None);
 }
 
@@ -360,14 +363,15 @@ fn show_kept(ui: &mut egui::Ui, source: ReaderSource<'_>) {
         // draw, before any block is drawn (note 9b §5: before any clipping); the first draw
         // after a preparation has no offsets yet, so the heading's block jumps as it draws.
         let mut jump = kept.maps.wanted(ui.ctx());
-        if let Some(offset) = jump.and_then(|block| kept.maps.offsets.get(block)) {
-            design::reveal::jump(
-                ui,
-                ui.cursor().top() + offset,
-                design::reveal::JumpTo::LinkedHeading,
-            );
+        let mut kept_jump = None;
+        if let Some(block) = jump
+            && let Some(offset) = kept.maps.offsets.get(block)
+        {
+            let top = ui.cursor().top() + offset;
+            design::reveal::jump(ui, top, design::reveal::JumpTo::LinkedHeading);
             want_heading(ui.ctx(), None);
             jump = None;
+            kept_jump = Some((block, top));
         }
         // The view, from the reader's top (layout PR 9b-R2): a block wholly outside it is not
         // laid out; its room is kept. A new room for wide tables lays every block out again.
@@ -388,7 +392,10 @@ fn show_kept(ui: &mut egui::Ui, source: ReaderSource<'_>) {
             from,
             ShortLinks::Prose,
             false,
-            jump,
+            Jump {
+                at: jump,
+                kept: kept_jump,
+            },
             Some((&mut kept.maps.offsets, &mut kept.maps.height, view)),
         );
     }
@@ -570,15 +577,24 @@ struct Quotes {
 
 /// Draw prepared blocks. A paragraph's link ids come from the reader and the block's place,
 /// never from its words: stable while the document's preparation stands.
-/// `jump` is the block of the heading a typed jump lands on as it draws; `offsets`, a kept
-/// document's map of each block's top below the reader's top, written as the blocks draw.
+/// A typed jump as the blocks draw (layout PR 9b-R1b): the heading's block where it lands as it
+/// draws, and the block and top a jump from its kept offset went to before the blocks drew.
+#[derive(Clone, Copy, Default)]
+struct Jump {
+    at: Option<usize>,
+    kept: Option<(usize, f32)>,
+}
+
+/// `jump` is where a typed jump lands as the blocks draw, or is corrected; `placed`, a kept
+/// document's placement: each block's top below the reader's top, written as the blocks draw,
+/// its height, and the view (layout PR 9b-R2).
 fn draw(
     ui: &mut egui::Ui,
     ops: &mut [Op],
     from: Option<uuid::Uuid>,
     short_links: ShortLinks,
     row: bool,
-    jump: Option<usize>,
+    jump: Jump,
     mut placed: Option<Placed<'_>>,
 ) {
     let reader = egui::Id::new(("markdown_reader", from));
@@ -636,13 +652,27 @@ fn draw(
         match &mut ops[block] {
             Op::Gap(gap) => design::gap(ui, *gap),
             Op::Jump(_) => {
-                if jump == Some(block) {
+                if jump.at == Some(block) {
                     design::reveal::jump(
                         ui,
                         ui.cursor().top(),
                         design::reveal::JumpTo::LinkedHeading,
                     );
                     want_heading(ui.ctx(), None);
+                }
+                // A jump from the kept offset, where the heading no longer stands (a wide table
+                // above it reflowed for a new pane width while the prose kept its measure): the
+                // jump again, to where the heading draws now; the newer request replaces it
+                // (PR 861 review, P2).
+                if let Some((kept, top)) = jump.kept
+                    && kept == block
+                    && (ui.cursor().top() - top).abs() > 0.5
+                {
+                    design::reveal::jump(
+                        ui,
+                        ui.cursor().top(),
+                        design::reveal::JumpTo::LinkedHeading,
+                    );
                 }
             }
             Op::QuoteStart => quotes.tops.push(ui.cursor().top()),
@@ -2167,14 +2197,17 @@ fn draw_laid_links(
             let to = rects.partition_point(|rect| rect.top() + at.y <= clip.bottom());
             from..to.max(from)
         };
+        // The link's words' rows in view (none when the link is out of view).
+        let words_seen = if in_view {
+            let parts = &words[index];
+            let from = parts.partition_point(|part| part.rect.bottom() + at.y < clip.top());
+            let to = parts.partition_point(|part| part.rect.top() + at.y <= clip.bottom());
+            from..to.max(from)
+        } else {
+            0..0
+        };
         if in_view {
-            let seen = {
-                let parts = &words[index];
-                let from = parts.partition_point(|part| part.rect.bottom() + at.y < clip.top());
-                let to = parts.partition_point(|part| part.rect.top() + at.y <= clip.bottom());
-                from..to.max(from)
-            };
-            for part in words[index][seen].iter().map(place) {
+            for part in words[index][words_seen.clone()].iter().map(place) {
                 if underlines[index] != egui::Stroke::NONE {
                     let y = ui
                         .painter()
@@ -2238,8 +2271,8 @@ fn draw_laid_links(
         if parts.first().is_some_and(egui::Response::has_focus) {
             // The ring sits `XS / 2` outside the words, so it never covers a letter, even for a
             // link at the start of a line. It stays inside the reader's visible area, which
-            // keeps a gutter beside the text for it.
-            for part in words[index].iter().map(place) {
+            // keeps a gutter beside the text for it: only on the rows in view (PR 861 review).
+            for part in words[index][words_seen.clone()].iter().map(place) {
                 let ring = part.rect.expand2(egui::vec2(design::XS / 2.0, 0.0));
                 design::focus_ring(ui, ring.intersect(clip));
             }
@@ -4122,6 +4155,63 @@ mod tests {
             "9b-R2-layout: the kept document's texts {:?} are the unkept reader's {:?}",
             texts(&kept),
             texts(&unkept)
+        );
+        // PR 861 review (P2): a new pane width reflows a wide table above the heading while the
+        // prose keeps its measure (so the key and the kept offsets stand). A jump in that very
+        // frame still brings the heading to the view's top: corrected as its block draws.
+        let wide_text: &'static str = Box::leak(
+            format!(
+                "{}| Watch | Words |\n| --- | --- |\n{}\n## The gate\n\n{}",
+                "A line of the night.\n\n".repeat(10),
+                "| First | Ash road and cinder pass, the ferry hands and the pier at dusk, \
+                 the bells and the long walk home |\n"
+                    .repeat(12),
+                "A line after the gate.\n\n".repeat(30),
+            )
+            .into_boxed_str(),
+        );
+        let mut wide = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1000.0, 320.0))
+            .themed_ui_state(
+                move |ui, (): &mut ()| {
+                    design::layout::ScrollColumn::new("reader")
+                        .hosts_reveals()
+                        .show(ui, |ui| {
+                            with_wide_tables(ui, |ui| {
+                                ui.scope(|ui| {
+                                    ui.set_max_width(360.0);
+                                    show_document(
+                                        ui,
+                                        ReaderSource {
+                                            doc: DocumentId::Entry(uuid::Uuid::from_u128(11)),
+                                            revision: 1,
+                                            text: wide_text,
+                                        },
+                                    );
+                                });
+                            });
+                        });
+                    want_heading(ui.ctx(), None);
+                },
+                (),
+            );
+        wide.run_steps(4);
+        // 9b-R2: a heading out of view is not laid out, so it has no label until it draws.
+        let gate = |harness: &egui_kittest::Harness<'_, ()>| {
+            harness
+                .query_by_role_and_label(egui::accesskit::Role::Label, "The gate")
+                .map(|node| node.rect().top())
+        };
+        let before = gate(&wide);
+        wide.set_size(egui::vec2(560.0, 320.0));
+        want_heading(&wide.ctx, Some("The gate".into()));
+        wide.run_steps(2);
+        let at = gate(&wide);
+        assert!(
+            before.is_none_or(|before| before > 320.0)
+                && at.is_some_and(|at| (0.0..=design::XL).contains(&at)),
+            "9b-R1b-reflow: after a resize that reflows the table above it, the heading from \
+             {before:?} (below the view) to the view's top, at {at:?}"
         );
     }
 

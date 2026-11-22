@@ -135,6 +135,9 @@ pub struct RegionState {
     /// The offset and the viewport at the end of its last pass.
     offset: f32,
     rect: Option<Rect>,
+    /// Its column's key and view, as its content saw them in the last pass: the owner the DM's
+    /// input is judged by at the start of the next (`reveal::cancel`; review of #852).
+    column: Option<(Id, Rect)>,
     view: f32,
     /// The block that held keyboard focus at the end of its last pass, and that control.
     focused: Option<usize>,
@@ -177,6 +180,7 @@ impl RegionState {
             pending: Pending::default(),
             offset: 0.0,
             rect: None,
+            column: None,
             view: 0.0,
             focused: None,
             focused_id: None,
@@ -222,6 +226,13 @@ impl RegionState {
     pub(in crate::design) fn work(&self) -> Work {
         self.plan.work()
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The blocks the in-place path of a body that is not measured looked at (tests, #565).
+    pub(in crate::design) static IN_PLACE_EXAMINED: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
 }
 
 /// A list of blocks drawn in its region (see the module).
@@ -354,8 +365,30 @@ impl<'s> BlockRegion<'s> {
         let mut registered = Vec::new();
         let drawn = 'body: {
             if !plan.measured() {
+                // Review of PR 555 (#565): the blocks in the visible clip, found from the plan's
+                // spans (they only grow): the first block that ends below the clip's top, by
+                // halving, then each block until one starts below its bottom. A frame examines
+                // the blocks it draws and about `log n` more, not every block.
+                let clip = ui.clip_rect();
+                let (above, below) = (clip.top() - rect.top(), clip.bottom() - rect.top());
+                let (mut first, mut end) = (0, plan.len());
+                while first < end {
+                    let mid = first + (end - first) / 2;
+                    #[cfg(test)]
+                    IN_PLACE_EXAMINED.with(|count| count.set(count.get() + 1));
+                    if plan.span(mid).1 <= above {
+                        first = mid + 1;
+                    } else {
+                        end = mid;
+                    }
+                }
                 let mut drawn = 0..0;
-                for at in 0..plan.len() {
+                for at in first..plan.len() {
+                    #[cfg(test)]
+                    IN_PLACE_EXAMINED.with(|count| count.set(count.get() + 1));
+                    if plan.span(at).0 >= below {
+                        break;
+                    }
                     let block_rect = place(plan, at);
                     if !ui.is_rect_visible(block_rect) {
                         continue;
@@ -516,19 +549,26 @@ impl<'s> BlockRegion<'s> {
             name,
         } = self;
         let ctx = ui.ctx().clone();
-        // The pass's input first: a user scroll over the region cancels every pending request
-        // (R44); a press held in it makes them wait.
-        let over = |rect: Option<Rect>, pos: Option<egui::Pos2>| {
-            rect.zip(pos).is_some_and(|(rect, pos)| rect.contains(pos))
-        };
-        let (scrolled, held) = ctx.input(|input| {
-            let pointer = &input.pointer;
-            (
-                over(state.rect, pointer.hover_pos())
-                    && (input.raw_scroll_delta.y != 0.0 || input.smooth_scroll_delta.y != 0.0),
-                pointer.any_down() && over(state.rect, pointer.press_origin()),
-            )
-        });
+        // The pass's input first, by the one cancel rule for its column (`reveal::cancel`; review
+        // of #852): the DM's movement over the column or another input to it (a press, a key
+        // that moves a view or a caret) cancels every pending request (R44); a press held still
+        // in it makes them wait. Input to another column never cancels.
+        let input = state
+            .column
+            .map(|(key, view)| {
+                use crate::design::reveal::cancel;
+                cancel::input(
+                    ui,
+                    cancel::Owner {
+                        key,
+                        view,
+                        area: None,
+                    },
+                )
+            })
+            .unwrap_or_default();
+        // A request this pass's own key makes (an arrow, End) waits too while the press is held.
+        let (scrolled, held) = (input.moved || input.other, input.held);
         if scrolled {
             state.pending = Pending::default();
             // A queued arrow Jump's focus goes with it (issue #539): a row drawn later takes no
@@ -601,6 +641,7 @@ impl<'s> BlockRegion<'s> {
         let mut drawn: Vec<(usize, Range<usize>)> = Vec::new();
         let region_from = widget_count(&ctx, layer);
         let output = column.show_viewport(ui, |ui, viewport| {
+            state.column = crate::design::reveal::column_view(ui);
             let mask = state
                 .plan
                 .mask(content, env, viewport.top(), viewport.height());

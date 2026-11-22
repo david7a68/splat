@@ -3290,11 +3290,20 @@ impl SearchRanked {
     }
 }
 
+/// How many times the ledger measured Ready, Groups and History on this thread (review of PR
+/// 581, #589): a test that an unchanged frame measures none.
+#[cfg(any(test, feature = "test-support"))]
+pub fn ledger_measures() -> usize {
+    list::LEDGER_MEASURED.with(std::cell::Cell::get)
+}
+
 // Creatures the encounter search's ranking visited on this thread, for a test that a repaint
 // visits none.
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static SEARCH_RANKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many times the search's results columns were measured on this thread (#565).
+    static RESULT_COLUMNS_MEASURED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// How many times a search copied the roster's creatures for its ranking (issue #518).
     static ROSTER_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -8414,14 +8423,22 @@ impl Encounters {
         // (measured once per query and width), so each `Add` keeps its x as the DM scrolls.
         // FH3, SH2: the results keep the scroll bar's lane whether or not the bar shows.
         let lane = scroll_lane(ui);
-        let columns_id = egui::Id::new(("encounter_results_columns", &query, matches.len()));
-        let key = (lane.to_bits(), ui.ctx().pixels_per_point().to_bits());
-        let columns = match ui
-            .ctx()
-            .data(|data| data.get_temp::<((u32, u32), design::Columns)>(columns_id))
-        {
+        // Review of PR 555 (#565): kept for this search's view by what the results are (the
+        // ranking's own key: the list's revision, the query, the filter, the roster) and by what
+        // they were measured in (the lane, the font, the theme, the scale: `memo::Measure`), so
+        // changed results with the same query and count are measured again.
+        let columns_id = response.id.with("creature_search_columns");
+        let key = (
+            ranked.key.clone(),
+            design::memo::Measure::of(ui, lane, &Type::Body.font(ui)),
+        );
+        let columns = match ui.ctx().data(|data| {
+            data.get_temp::<((SearchKey, design::memo::Measure), design::Columns)>(columns_id)
+        }) {
             Some((kept, columns)) if kept == key => columns,
             _ => {
+                #[cfg(any(test, feature = "test-support"))]
+                RESULT_COLUMNS_MEASURED.with(|count| count.set(count.get() + 1));
                 let columns = design::Columns::measure(
                     lane,
                     matches
@@ -8884,23 +8901,32 @@ impl Encounters {
                                     )
                                 });
                             }
-                        } else if Action::quiet(if creature.is_none() {
-                            "Replace…"
                         } else {
-                            "Edit"
-                        })
-                        .density(Density::Read)
-                        .name(groups::SLOT_OPTIONS)
-                        .selected(is_open)
-                        .show(ui)
-                        .clicked()
-                        {
-                            *expanded = if is_open {
-                                None
+                            let edit = Action::quiet(if creature.is_none() {
+                                "Replace…"
                             } else {
-                                groups::show_form_when_it_opens(ui);
-                                Some(slot.key.clone())
-                            };
+                                "Edit"
+                            })
+                            .density(Density::Read)
+                            .name(groups::SLOT_OPTIONS)
+                            .selected(is_open)
+                            .show(ui);
+                            if edit.clicked() {
+                                *expanded = if is_open {
+                                    None
+                                } else {
+                                    // M0237: the form comes whole into view, by its column's
+                                    // reveal.
+                                    if let Some(act) = design::reveal::Act::clicked(ui, &edit) {
+                                        draft.roster_reveal.ask(
+                                            act,
+                                            draft_id,
+                                            ("roster_form", &slot.key),
+                                        );
+                                    }
+                                    Some(slot.key.clone())
+                                };
+                            }
                         }
                         let actions = ui.min_rect();
                         // The facts keep their old room: the row less this row's actions (the item spacing
@@ -9018,8 +9044,17 @@ impl Encounters {
                                                             egui::Align::Min,
                                                         )),
                                                 );
-                                                if groups::change_link(&mut inline, &word) {
-                                                    groups::show_form_when_it_opens(ui);
+                                                let link = groups::change_link(&mut inline, &word);
+                                                if link.clicked() {
+                                                    if let Some(act) =
+                                                        design::reveal::Act::clicked(&inline, &link)
+                                                    {
+                                                        draft.roster_reveal.ask(
+                                                            act,
+                                                            draft_id,
+                                                            ("roster_form", &slot.key),
+                                                        );
+                                                    }
                                                     *expanded = Some(slot.key.clone());
                                                 }
                                                 // Layout PR 5b: the facts' width holds the
@@ -9184,6 +9219,14 @@ impl Encounters {
                             Some(&sides),
                             &mut draft.typed,
                         );
+                        if let Some(form) = end.form {
+                            draft.roster_reveal.mark(
+                                ui,
+                                draft_id,
+                                ("roster_form", &slot.key),
+                                form,
+                            );
+                        }
                         if end.done {
                             *expanded = None;
                             // The row comes whole into view, by its column's one reveal.
@@ -9942,6 +9985,18 @@ mod tests {
         let copies = ROSTER_COPIES.with(std::cell::Cell::get);
         harness.run_steps(5);
         assert_eq!(ranked(), seen, "an unchanged repaint visits no creature");
+        // Review of PR 555 (#565, `m-p0-columns-key`): the results' columns are kept with the
+        // ranking's key and what they were measured in, so an unchanged repaint measures none,
+        // and another read of the campaign with the same words and count measures them again.
+        let columns = || RESULT_COLUMNS_MEASURED.with(std::cell::Cell::get);
+        let measured = columns();
+        assert!(measured > 0, "the results' columns were measured");
+        harness.run_steps(3);
+        assert_eq!(
+            columns(),
+            measured,
+            "m-p0-columns-key: an unchanged repaint measures no results columns"
+        );
         assert_eq!(
             ROSTER_COPIES.with(std::cell::Cell::get),
             copies,
@@ -9975,10 +10030,14 @@ mod tests {
         harness.state_mut().2 = vec![Uuid::new_v4()];
         harness.run_steps(2);
         assert!(ranked() > seen, "a change of the roster ranks again");
-        let seen = ranked();
+        let (seen, measured) = (ranked(), columns());
         harness.state_mut().0 = Snapshot::load(&active, &[]).unwrap();
         harness.run_steps(2);
         assert!(ranked() > seen, "another read of the campaign ranks again");
+        assert!(
+            columns() > measured,
+            "m-p0-columns-key: another read with the same words and count measures its columns again"
+        );
     }
 
     #[test]
@@ -10044,6 +10103,13 @@ mod tests {
             let lefts: Vec<f32> = records.iter().map(|record| record.action.left()).collect();
             (widest, lefts)
         };
+        // Review of PR 555 (#565, `m-p0-gap-allowance`): a gap above 4L is a counted residual,
+        // and this list's allowance is none, asserted before the column's own check.
+        let residuals = records.iter().filter(|record| record.residual()).count();
+        assert!(
+            residuals == 0,
+            "m-p0-gap-allowance: {residuals} residual gaps above 4L, allowed 0: {records:?}"
+        );
         let (widest, lefts) = column(&records);
         assert!(
             !records.is_empty()
@@ -10061,7 +10127,6 @@ mod tests {
             }),
             "pr4-block: each row's action lies in its block, a 24 pt target: {records:?}"
         );
-        let residuals = records.iter().filter(|record| record.residual()).count();
         assert!(
             records.iter().all(|record| record.gap() >= design::L - 0.5),
             "pr4-gap: each row's gap is measured from its own facts ({residuals} residual): {records:?}"

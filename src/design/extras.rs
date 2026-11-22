@@ -167,6 +167,39 @@ pub fn gap_to_next(ui: &mut Ui, gap: Gap) {
     space(ui, (gap.size() - along).max(0.0));
 }
 
+/// `add`'s block, and room after it so that what follows starts at least `height` below where
+/// the block starts: a line that keeps one height while what it shows changes (a control, then
+/// a status in its place; layout step 11c, M0452), so what follows never moves. `height` comes
+/// from tokens (a control's height and a gap), never from the content.
+pub fn at_least<R>(ui: &mut Ui, height: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let top = ui.cursor().top();
+    let inner = add(ui);
+    let used = ui.cursor().top() - top;
+    space(ui, (height - used).max(0.0));
+    inner
+}
+
+/// The room of one line of `kind` with no words in it (a line kept for words still to come; a
+/// marker's placement line before the marker is added, layout step 11c, M0478): as tall as a
+/// label of that type, with the item gap after it, so what follows stands where it will stand
+/// when the words come. It draws nothing and has no accessible node.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+pub fn empty_line(ui: &mut Ui, kind: super::Type) {
+    let height = egui::WidgetText::from(kind.rich(ui, "M"))
+        .into_galley(
+            ui,
+            Some(egui::TextWrapMode::Extend),
+            f32::INFINITY,
+            egui::TextStyle::Body,
+        )
+        .size()
+        .y;
+    ui.allocate_space(egui::vec2(0.0, height));
+}
+
 /// The design's own space: any amount, for the parts that measure it. Only `src/design/` may use
 /// it, so a caller's space is always a [`Gap`].
 #[allow(
