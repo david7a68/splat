@@ -4679,6 +4679,11 @@ mod editor_region_tests {
         focus: bool,
         /// A caret placed from code (a char index), with focus, after the editor draws.
         set_caret: Option<usize>,
+        /// Draw this document (`EditorRegion::document`, layout PR 9b) in place of `text`.
+        doc: Option<crate::design::text_draft::TextDraft>,
+        /// Each frame's `changed()` of the editor, and the text its galley holds.
+        changed: Vec<bool>,
+        galley_text: String,
     }
 
     fn harness(height: f32, state: State) -> egui_kittest::Harness<'static, State> {
@@ -4754,12 +4759,23 @@ mod editor_region_tests {
                                 ui.label("Title");
                                 let mut caret = None;
                                 if region {
-                                    let output = editor.editor(
-                                        ui,
-                                        FIELD.once(Once::Example),
-                                        text,
-                                        |edit| edit.desired_width(f32::INFINITY),
-                                    );
+                                    let output = match state.doc.as_mut() {
+                                        Some(doc) => editor.document(
+                                            ui,
+                                            FIELD.once(Once::Example),
+                                            doc,
+                                            Face::Font(egui::TextStyle::Body),
+                                            |edit| edit,
+                                        ),
+                                        None => editor.editor(
+                                            ui,
+                                            FIELD.once(Once::Example),
+                                            text,
+                                            |edit| edit.desired_width(f32::INFINITY),
+                                        ),
+                                    };
+                                    state.changed.push(output.response.changed());
+                                    state.galley_text.clone_from(&output.galley.job.text);
                                     if focus {
                                         output.response.request_focus();
                                     }
@@ -5264,5 +5280,90 @@ mod editor_region_tests {
                 "p2-plain: {lines} lines, a body with no region is `Body::Content`"
             );
         }
+    }
+
+    /// A harness on a document (layout PR 9b) of `lines` lines, focused, after warm frames.
+    fn document(lines: usize) -> egui_kittest::Harness<'static, State> {
+        let words: String = (0..lines)
+            .map(|line| format!("Line {line}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut h = harness(
+            400.0,
+            State {
+                messages: 1,
+                region: true,
+                focus: true,
+                doc: Some(crate::design::text_draft::TextDraft::new(words)),
+                ..State::default()
+            },
+        );
+        h.run_steps(4);
+        h
+    }
+
+    fn made() -> usize {
+        KEPT_LAYOUTS_MADE.with(std::cell::Cell::get)
+    }
+
+    fn hashed() -> usize {
+        crate::design::layout::BOUND_TEXT_BYTES.with(std::cell::Cell::get)
+    }
+
+    /// Layout PR 9b (note v2 §3): a document lays out its text once per key. Quiet focused
+    /// frames lay out and hash nothing; each part of the key, alone, lays it out again: an edit,
+    /// two edits in one frame (the galley always holds the words the draft holds), the program's
+    /// replacement with equal words, another draft in the same field, a resize, and a font atlas
+    /// made again with the same fonts (its size and fill can come back equal).
+    #[test]
+    fn a_document_keeps_its_layout_until_its_key_changes() {
+        let mut h = document(40);
+        let (layouts, bytes) = (made(), hashed());
+        h.run_steps(5);
+        assert_eq!(
+            (made() - layouts, hashed() - bytes),
+            (0, 0),
+            "quiet: five focused frames lay out and hash no text"
+        );
+        let relaid =
+            |h: &mut egui_kittest::Harness<'static, State>,
+             case: &str,
+             change: &mut dyn FnMut(&mut egui_kittest::Harness<'static, State>)| {
+                let before = made();
+                change(h);
+                h.run_steps(3);
+                let draft = h.state().doc.as_ref().map(|doc| doc.as_str().to_owned());
+                assert!(
+                    made() > before && Some(h.state().galley_text.clone()) == draft,
+                    "{case}: laid out again ({} more) and the galley holds the draft's words",
+                    made() - before
+                );
+                let quiet = made();
+                h.run_steps(3);
+                assert_eq!(made(), quiet, "{case}: quiet again after");
+            };
+        relaid(&mut h, "edit", &mut |h| {
+            h.event(egui::Event::Text("!".into()))
+        });
+        relaid(&mut h, "two-edits", &mut |h| {
+            h.input_mut().events.push(egui::Event::Text("a".into()));
+            h.input_mut().events.push(egui::Event::Text("b".into()));
+        });
+        relaid(&mut h, "replace-equal", &mut |h| {
+            let doc = h.state_mut().doc.as_mut().expect("a document");
+            let words = doc.as_str().to_owned();
+            doc.replace(words);
+        });
+        relaid(&mut h, "swap", &mut |h| {
+            let doc = h.state_mut().doc.as_mut().expect("a document");
+            let other = doc.copy_as_new();
+            *doc = other;
+        });
+        relaid(&mut h, "resize", &mut |h| h.set_size(vec2(520.0, 400.0)));
+        relaid(&mut h, "atlas", &mut |h| {
+            // The same fonts, set again: egui makes its fonts and atlas again; the app's own
+            // font generation does not change.
+            h.ctx.set_fonts(crate::design::theme::fonts());
+        });
     }
 }
