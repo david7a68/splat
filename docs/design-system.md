@@ -1490,8 +1490,9 @@ the start of one row with `Save run settings` at its end; without room, the stat
 a Save writes (also a repair or a move), the row says `Saved` until the form's next edit, another campaign, or a
 change of the file's settings outside Splat; an edit put back then says `No changes`.
 
-The editor header keeps Save and Start on line one; the name field gives up width, also beside Lookup at the
-minimum window. They take a line of their own only when no name field fits beside them. While Save would refuse a
+The editor header keeps Save and Start on line one, `L` after the name field (the shared draft head, below in Groups
+and changes); the name field gives up width for them, also beside Lookup at the minimum window. They take a line of
+their own, at the text edge, only when the name would be narrower than `NAME_LEAST` (160 px) beside them. While Save would refuse a
 changed draft (a roster row with no creature, or the refusal of the last Save while it still holds), the save row
 says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. A draft whose
 rows match the file again, as after `Undo replacement`, says `No changes`. A Save, also the one a start makes, ends the
@@ -1499,9 +1500,8 @@ replacement's result and its Undo. Save encounter
 also gives the open fight from that encounter its new read-aloud text and notes for Prep; its roster and combat
 state stay, and other changes wait for the next fight. An unfinished encounter
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start
-fight says `Close the open run first.` beside it. The actions are measured as they are drawn, and the name field
-takes the rest of the line: they move to a line under the name only when the saved name does not fit beside them
-(the saved name, so nothing moves while the DM types). Sync and repeat options follow the roster. Use group_heading
+fight says `Close the open run first.` beside it. The actions are measured as they are drawn, in their widest
+weight, and the place is planned from the widths only, so nothing moves while the DM types. Sync and repeat options follow the roster. Use group_heading
 for groups of controls and sentence-case field labels over single inputs; tabbed Add participants has no repeated heading. Group frames choose where Add goes;
 search says `Adding to <name>` as read-only text. The frame's Add slot keeps the width of `Adding here` with its
 check in every frame, so every name field ends at one edge and does not move with the Add target. Each encounter group has a frame below the roster with name,
@@ -1514,11 +1514,22 @@ says so below Belongs to as a warning `small_message`, not as muted field help.
 
 Member rows and Group notes end at the members column's right edge (at most `LIST_MEASURE`), inside the scroll
 content and anchored left. The column keeps the scroll bar's lane whether or not the bar shows, so no field or
-action moves when a long list starts to scroll. The group editor's header starts with the way back, then the name, which
-ends at that column's edge. Save group follows on that line and ends at the editor's right edge, above the Add
-creatures column, where Save encounter ends on the encounter editor's title line: one place in both editors. Then
-the save row with the state and Discard at its start and the reasons. A reason without
-room on the save row takes its own line below it. A group draft that Save's check refuses says `Invalid`, changed
+action moves when a long list starts to scroll. The group editor's header starts with the way back, then the name row. One draft head plan
+(`save_row::head_plan`, layout step 6) places it from the widths only, before it paints. The name field is no wider
+than `FORM_WIDTH` and ends at its owning column's field edge: the members column's, worked out from the same room
+and widths the body draws that column with, never from an earlier frame. Save group follows the field `L` after it
+when both fit (the name keeps at least `NAME_LEAST`); otherwise Save starts on a line of its own at the text edge. The
+encounter editor uses the same rule for Save encounter and Start fight. Save never moves to the far edge of the
+unrelated Add creatures column. Then the save row with the state and Discard at its start and the reasons. The save
+state, Discard and reasons use one plan for every reachable state at that width: each reason is measured beside the
+widest state word and Discard, whether or not they show, so a reason takes the row or its reserved line below in
+every state (clean, new, changed, refused, saved), and its arrival chooses no new place and moves no field. Where the
+campaign-switch reason does not fit there, the row says its short form, `Save or discard to switch.` (`Discard to
+switch.` while Save is blocked), in every state, with the full reason in the hover text and the accessible
+description (ruling M24): no blank line is kept for it. Only a row too narrow for the short form keeps a line below,
+as tall as the tallest of the reason's forms and of the words that can take its place. A resize
+may change the plan. A cause that already shows at its field is not repeated; the existing refusal substitution
+(G122) still applies. A group draft that Save's check refuses says `Invalid`, changed
 or not, in the tone of its cause, and Save group is not primary: the error tone for a member's change that cannot
 stand, the warning tone for a thing that is gone (a creature this campaign cannot find, a deleted encounter; R41).
 The cause's own words (under Belongs to, on the member's row, beside Save, in the footer) take the same tone, from
@@ -1544,9 +1555,9 @@ members, also in compact editors. Member names and stats sit above Count, Edit a
 the left and actions together at the right. Changes stay on one line, such as `Changed · 1 to add by hand`,
 until opened. Empty frames use one muted line, no zero count or duplicate search summary. Empty groups block
 Save group with `Add a creature first.`; the save row says `New` for a new group and `Invalid` for a saved one. The save row's reasons
-(`Add a creature first.`, `Save or discard to switch campaign.`) each have one place, chosen as if both showed: at
-the save row's end, under Save, while there is room, else a line below the save row. Those
-lines are reserved whether or not their reason shows, so the first edit or the first member moves no field.
+(`Add a creature first.`, `Save or discard to switch campaign.`) each have one place in the head plan: at the save
+row's end while there is room beside the widest state word and Discard, else a line below the save row. Those lines
+are reserved whether or not their reason shows, so the first edit or the first member moves no field.
 
 A change form (group member or roster slot) has one right edge: Display name, Note, the Other effect field with its
 Add, and the Loot field end at one x. `Roll on a table` follows the Loot field.
