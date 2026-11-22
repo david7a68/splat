@@ -37,6 +37,14 @@ pub enum SummaryPart<'a> {
     /// A part the row draws itself (`LaidUi::in_slot`), measured by that part: its height, and
     /// the width its facts take.
     Part { height: f32, width: f32 },
+    /// Words of several colours laid out in the summary's width, in at most `max_rows` rows, and
+    /// drawn in their slot by `LaidUi::part` (with a hover, a name, or as a link: its press
+    /// target at least `XL` each way).
+    Job {
+        job: &'a egui::text::LayoutJob,
+        max_rows: usize,
+        link: bool,
+    },
 }
 
 /// A closed Session plan row (layout 11c A2b).
@@ -51,6 +59,9 @@ pub struct PlanRow<'a> {
     pub summary: &'a [SummaryPart<'a>],
     /// The row's own action place: its widest action recipe.
     pub actions: f32,
+    /// The rule after the row is part of the block (a closed row); an opened row draws its
+    /// details first, then the rule.
+    pub rule: bool,
 }
 
 /// The plan's shared column: its widest facts and its widest action recipe, from every closed
@@ -93,6 +104,8 @@ pub fn lead_width() -> f32 {
 struct Summary {
     texts: Vec<LaidText>,
     parts: Vec<Rect>,
+    /// Each part's laid words (a `Job`), in the parts' order.
+    part_texts: Vec<Option<std::sync::Arc<egui::Galley>>>,
     height: f32,
     /// The widest line, from the summary's left.
     width: f32,
@@ -129,6 +142,7 @@ impl PlanRow<'_> {
         let mut summary = Summary {
             texts: Vec::new(),
             parts: Vec::new(),
+            part_texts: Vec::new(),
             height: 0.0,
             width: 0.0,
         };
@@ -162,6 +176,26 @@ impl PlanRow<'_> {
                     summary
                         .parts
                         .push(Rect::from_min_size(pos2(left, y), vec2(room, height)));
+                    summary.part_texts.push(None);
+                }
+                SummaryPart::Job {
+                    job,
+                    max_rows,
+                    link,
+                } => {
+                    let mut job = job.clone();
+                    job.wrap.max_width = room;
+                    job.wrap.max_rows = max_rows;
+                    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+                    let size = if link {
+                        galley.size().max(vec2(XL, XL))
+                    } else {
+                        galley.size()
+                    };
+                    summary.width = summary.width.max(size.x);
+                    summary.height += size.y;
+                    summary.parts.push(Rect::from_min_size(pos2(left, y), size));
+                    summary.part_texts.push(Some(galley));
                 }
             }
         }
@@ -209,7 +243,11 @@ impl PlanRow<'_> {
         let summary = self.summary(ui, (x0, summary_top, Self::summary_width(width)));
         let row = (summary_top + summary.height).max(actions.bottom());
         // The rule after the row: `S`, then the hairline.
-        let rule = Rect::from_min_size(pos2(0.0, row + S), vec2(width, 1.0));
+        let rule = if self.rule {
+            Rect::from_min_size(pos2(0.0, row + S), vec2(width, 1.0))
+        } else {
+            Rect::from_min_size(pos2(0.0, row), vec2(width, 0.0))
+        };
         let mut texts = vec![LaidText {
             at: Pos2::new(lead_at.x, lead_at.y),
             galley: lead,
@@ -217,13 +255,17 @@ impl PlanRow<'_> {
         texts.extend(summary.texts);
         let mut slots = vec![lead_slot, actions, rule];
         slots.extend(summary.parts);
-        Laid::new(self.key, vec2(width, rule.bottom()), None, texts, slots).with_links(vec![(
-            LaidText {
-                at: pos2(x0, 0.0),
-                galley: title,
-            },
-            title_height,
-        )])
+        let mut slot_texts = vec![None, None, None];
+        slot_texts.extend(summary.part_texts);
+        Laid::new(self.key, vec2(width, rule.bottom()), None, texts, slots)
+            .with_slot_texts(slot_texts)
+            .with_links(vec![(
+                LaidText {
+                    at: pos2(x0, 0.0),
+                    galley: title,
+                },
+                title_height,
+            )])
     }
 }
 
@@ -297,6 +339,7 @@ mod tests {
                                 title,
                                 summary: &SUMMARY,
                                 actions: 120.0,
+                                rule: true,
                             })
                             .collect();
                         // The shared column, from every row, before any row draws.
