@@ -1367,6 +1367,12 @@ mod tests {
             pressed,
             modifiers: Modifiers::NONE,
         };
+        // Whether the view is near block 35 now (the request applied, even for one frame).
+        let near = |harness: &Harness<'_, Page>| {
+            let page = harness.state();
+            let target = block_rect(page, 35);
+            target.top() < page.clip.bottom() + 300.0 && target.bottom() > page.clip.top() - 300.0
+        };
         let mut wrong = Vec::new();
         for (name, input, cancels) in rows {
             for in_a in [false, true] {
@@ -1400,6 +1406,7 @@ mod tests {
                     .region
                     .navigate(Navigation::Show(Id::new(35usize)));
                 harness.step();
+                let mut seen = false;
                 let events = &mut harness.input_mut().events;
                 match input {
                     Input::Wheel => events.push(egui::Event::MouseWheel {
@@ -1449,15 +1456,15 @@ mod tests {
                         events.push(egui::Event::Ime(egui::ImeEvent::Commit("x".to_owned())));
                     }
                 }
-                harness.run_steps(3);
-                // Survived: its block is whole in view. Ended: the view is nowhere near its block
-                // (a request that applied and was then scrolled past by the input is not ended).
-                let page = harness.state();
-                let target = block_rect(page, 35);
-                let near = target.top() < page.clip.bottom() + 300.0
-                    && target.bottom() > page.clip.top() - 300.0;
+                for _ in 0..3 {
+                    harness.step();
+                    seen |= near(&harness);
+                }
+                // Survived: its block is whole in view. Ended: the view came nowhere near its block
+                // in any frame (a request that applied for one frame, then was scrolled past by the
+                // input, was not ended).
                 let expected = !(in_a && cancels);
-                let survived = if expected { shown(&harness, 35) } else { near };
+                let survived = if expected { shown(&harness, 35) } else { seen };
                 if survived != expected {
                     wrong.push(format!(
                         "{name} at {}: survived {survived}, expected {expected}",
