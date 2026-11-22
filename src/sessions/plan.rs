@@ -718,48 +718,15 @@ fn plan_row_with(
     design::register_row(ui, row.response.rect);
 }
 
-/// The plan's columns, from its last pass: its widest facts (each row's title and summary lines)
-/// and its widest action recipe. Each row adds its own to this pass's (`plan_measured`) after it
-/// is drawn; when they change, the plan is drawn once more, so its actions settle in their
-/// column on the next frame.
-#[derive(Clone, Copy, Default)]
-struct PlanColumns {
-    pass: u64,
-    last: (f32, f32),
-    next: (f32, f32),
-}
-
-fn plan_kept<R>(ui: &egui::Ui, update: impl FnOnce(&mut PlanColumns) -> R) -> R {
-    let pass = ui.ctx().cumulative_pass_nr();
-    let (out, changed) = ui.ctx().data_mut(|data| {
-        let kept = data.get_temp_mut_or_default::<PlanColumns>(egui::Id::new("plan_row_columns"));
-        let mut changed = false;
-        if kept.pass != pass {
-            changed = kept.pass + 1 == pass && kept.next != kept.last;
-            if kept.pass + 1 == pass {
-                kept.last = kept.next;
-            }
-            kept.next = (0.0, 0.0);
-            kept.pass = pass;
-        }
-        (update(kept), changed)
-    });
-    if changed {
-        ui.ctx().request_repaint();
-    }
-    out
-}
-
-/// The plan's columns from its last pass: (widest facts, widest actions); zero until measured.
+/// The plan's columns (`design::action_rows::columns`): its widest facts (each row's title and
+/// summary lines) and its widest action recipe, from its last pass.
 fn plan_columns(ui: &egui::Ui) -> (f32, f32) {
-    plan_kept(ui, |kept| kept.last)
+    design::action_rows::columns(ui, egui::Id::new("plan_row_columns"))
 }
 
 /// Add a drawn row's facts (every line) and its action recipe to this pass's columns.
 fn plan_measured(ui: &egui::Ui, facts: f32, actions: f32) {
-    plan_kept(ui, |kept| {
-        kept.next = (kept.next.0.max(facts), kept.next.1.max(actions));
-    });
+    design::action_rows::measured(ui, egui::Id::new("plan_row_columns"), facts, actions);
 }
 
 /// Why a played fight's summary cannot show: its run folder's cause (R41, in Encounters' words

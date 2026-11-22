@@ -3810,36 +3810,23 @@ fn members(
                 .unwrap_or_default();
             let key = member_key(&path, member);
             let is_open = expanded.as_deref() == Some(key.as_str());
-            let member_row = ui
-                .label(
-                    Type::Strong
-                        .rich(ui, format!("{number}. {name}"))
-                        .color(colors().text),
-                )
-                .on_hover_text(&name)
-                .rect;
-            // FC9: the change words end the detail line, after the muted pencil, as in the
-            // encounter editor; a closed form only.
-            let word = entry
-                .zip(overrides)
-                .filter(|_| !is_open && !member.overrides.is_empty())
-                .map(|(entry, overrides)| change_word(ui, overrides, entry, &side));
-            if word.is_none() && !detail.is_empty() {
-                let response = ui.add(
-                    egui::Label::new(super::detail_text(
-                        ui,
-                        &super::stat_line(&detail),
-                        hp_missing,
-                    ))
-                    .wrap(),
-                );
-                design::named(ui, &response, &detail);
-            } else if let Some(word) = &word {
-                // G135: the whole link fits after the detail, or it starts its own row under
-                // the whole detail. It is never cut, and no stat is left out for it.
-                let own_row = !detail.is_empty()
-                    && !link_fits_after(ui, &super::stat_line(&detail), word, ui.available_width());
-                if own_row {
+            // Layout PR 5b (I6): the member's facts, measured for the members' action column.
+            let facts = ui.scope(|ui| {
+                let member_row = ui
+                    .label(
+                        Type::Strong
+                            .rich(ui, format!("{number}. {name}"))
+                            .color(colors().text),
+                    )
+                    .on_hover_text(&name)
+                    .rect;
+                // FC9: the change words end the detail line, after the muted pencil, as in the
+                // encounter editor; a closed form only.
+                let word = entry
+                    .zip(overrides)
+                    .filter(|_| !is_open && !member.overrides.is_empty())
+                    .map(|(entry, overrides)| change_word(ui, overrides, entry, &side));
+                if word.is_none() && !detail.is_empty() {
                     let response = ui.add(
                         egui::Label::new(super::detail_text(
                             ui,
@@ -3849,37 +3836,62 @@ fn members(
                         .wrap(),
                     );
                     design::named(ui, &response, &detail);
-                    if change_link_line_start(ui, word) {
-                        show_form_when_it_opens(ui);
-                        *expanded = Some(key.clone());
-                    }
-                } else {
-                    ui.horizontal_wrapped(|ui| {
-                        // One row as tall as the link's target, so the detail and the link share
-                        // their centre line.
-                        ui.set_row_height(design::XL);
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        if !detail.is_empty() {
-                            let response = ui.add(
-                                egui::Label::new(super::detail_text(
-                                    ui,
-                                    &super::stat_line(&detail),
-                                    hp_missing,
-                                ))
-                                .wrap(),
-                            );
-                            design::named(ui, &response, &detail);
-                        }
-                        if !detail.is_empty() {
-                            ui.label(Type::Small.rich(ui, CHANGE_SEPARATOR).color(colors().muted));
-                        }
-                        if change_link(ui, word) {
+                } else if let Some(word) = &word {
+                    // G135: the whole link fits after the detail, or it starts its own row under
+                    // the whole detail. It is never cut, and no stat is left out for it.
+                    let own_row = !detail.is_empty()
+                        && !link_fits_after(
+                            ui,
+                            &super::stat_line(&detail),
+                            word,
+                            ui.available_width(),
+                        );
+                    if own_row {
+                        let response = ui.add(
+                            egui::Label::new(super::detail_text(
+                                ui,
+                                &super::stat_line(&detail),
+                                hp_missing,
+                            ))
+                            .wrap(),
+                        );
+                        design::named(ui, &response, &detail);
+                        if change_link_line_start(ui, word) {
                             show_form_when_it_opens(ui);
                             *expanded = Some(key.clone());
                         }
-                    });
+                    } else {
+                        ui.horizontal_wrapped(|ui| {
+                            // One row as tall as the link's target, so the detail and the link share
+                            // their centre line.
+                            ui.set_row_height(design::XL);
+                            ui.spacing_mut().item_spacing.x = 0.0;
+                            if !detail.is_empty() {
+                                let response = ui.add(
+                                    egui::Label::new(super::detail_text(
+                                        ui,
+                                        &super::stat_line(&detail),
+                                        hp_missing,
+                                    ))
+                                    .wrap(),
+                                );
+                                design::named(ui, &response, &detail);
+                            }
+                            if !detail.is_empty() {
+                                ui.label(
+                                    Type::Small.rich(ui, CHANGE_SEPARATOR).color(colors().muted),
+                                );
+                            }
+                            if change_link(ui, word) {
+                                show_form_when_it_opens(ui);
+                                *expanded = Some(key.clone());
+                            }
+                        });
+                    }
                 }
-            }
+                member_row
+            });
+            let (member_row, facts) = (facts.inner, facts.response.rect);
             ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
                 let count = ui.add(
@@ -3892,45 +3904,101 @@ fn members(
                 if count.changed() {
                     edited = true;
                 }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    super::row_menu(ui, &name, |ui| {
-                        if super::menu_action(
-                            ui,
-                            "Move up",
-                            (index == 0).then_some("Already first."),
-                        ) {
-                            raise = Some(index);
-                        }
-                        if super::menu_action(
-                            ui,
-                            "Move down",
-                            (index + 1 == total).then_some("Already last."),
-                        ) {
-                            lower = Some(index);
-                        }
-                        if super::menu_action(ui, "Remove", None) {
-                            remove = Some(index);
-                        }
-                    });
-                    if Action::quiet(if entry.is_none() {
-                        "Replace…"
-                    } else {
-                        "Edit"
-                    })
-                    .density(Density::Read)
-                    .name(&button)
-                    .selected(is_open)
-                    .show(ui)
-                    .clicked()
-                    {
-                        *expanded = if is_open {
-                            None
+                // Layout PR 5b (I6): Edit and the menu start `L` after the members' widest facts
+                // (the name, its detail, the count) and end at their widest actions, from the
+                // list's last pass; where they do not fit, the far edge, as before.
+                let list = egui::Id::new("member_row_columns");
+                let (kept_facts, kept_actions) = design::action_rows::columns(ui, list);
+                let left = facts.left();
+                let room = ui.max_rect().right() - left;
+                let column =
+                    kept_facts > 0.0 && kept_facts + design::L + kept_actions <= room + 0.5;
+                // The line's far edge, where its actions end when the column does not fit.
+                let far_edge = ui.max_rect().right();
+                let end = if column {
+                    left + kept_facts + design::L + kept_actions
+                } else {
+                    far_edge
+                };
+                let own_facts = facts.width().max(count.rect.right() - left);
+                // The line's own height, as before; its width ends at the column.
+                let region = egui::Rect::from_min_max(
+                    egui::pos2(ui.cursor().left(), ui.max_rect().top()),
+                    egui::pos2(end.max(ui.cursor().left()), ui.max_rect().bottom()),
+                );
+                let actions = ui
+                    .scope_builder(
+                        egui::UiBuilder::new()
+                            .max_rect(region)
+                            .layout(egui::Layout::right_to_left(egui::Align::Center)),
+                        |ui| {
+                            super::row_menu(ui, &name, |ui| {
+                                if super::menu_action(
+                                    ui,
+                                    "Move up",
+                                    (index == 0).then_some("Already first."),
+                                ) {
+                                    raise = Some(index);
+                                }
+                                if super::menu_action(
+                                    ui,
+                                    "Move down",
+                                    (index + 1 == total).then_some("Already last."),
+                                ) {
+                                    lower = Some(index);
+                                }
+                                if super::menu_action(ui, "Remove", None) {
+                                    remove = Some(index);
+                                }
+                            });
+                            if Action::quiet(if entry.is_none() {
+                                "Replace…"
+                            } else {
+                                "Edit"
+                            })
+                            .density(Density::Read)
+                            .name(&button)
+                            .selected(is_open)
+                            .show(ui)
+                            .clicked()
+                            {
+                                *expanded = if is_open {
+                                    None
+                                } else {
+                                    show_form_when_it_opens(ui);
+                                    Some(key.clone())
+                                };
+                            }
+                        },
+                    )
+                    .response
+                    .rect;
+                design::action_rows::measured(ui, list, own_facts, actions.width());
+                #[cfg(any(test, feature = "test-support"))]
+                design::action_rows::keep(
+                    ui,
+                    design::action_rows::RowRecord {
+                        owner: "members",
+                        row: index,
+                        facts: egui::Rect::from_min_size(
+                            facts.min,
+                            egui::vec2(own_facts, facts.height()),
+                        ),
+                        // The actions' line holds the count, after the name and detail lines.
+                        line: egui::Rect::from_min_max(
+                            egui::pos2(left, count.rect.top()),
+                            count.rect.max,
+                        ),
+                        action: actions,
+                        column: if column {
+                            left + kept_facts + design::L
                         } else {
-                            show_form_when_it_opens(ui);
-                            Some(key.clone())
-                        };
-                    }
-                });
+                            actions.left()
+                        },
+                        edge: far_edge,
+                        wrapped: !column,
+                    },
+                );
             });
             // FA1, FJ6: every member fault is in the one member-fault form, with its line while
             // the members are the saved ones (a draft's lines can move).
@@ -4866,6 +4934,8 @@ mod tests {
             "A's draft was typed"
         );
         harness.get_by_label("Done with changes").click();
+        // Layout PR 5b: closing A's form widens its facts; the members' column grows in the same
+        // frame (the pass is discarded and drawn again), so B's Changes is where it is drawn.
         harness.run_steps(2);
         harness.get_by_label("Changes for Wolf").click();
         harness.run_steps(2);

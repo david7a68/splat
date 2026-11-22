@@ -765,7 +765,10 @@ fn words_left_in(d: &Driver<'_>, area: egui::Rect) -> Option<f32> {
     d.each_painted_text(|text, _| {
         let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
         // An empty icon slot (iter-27-B FM1) paints no glyph.
+        // The words start inside the area: a menu that opens over a list does not take the
+        // list's words behind it (layout PR 5b moved row menus over their rows' text).
         if area.contains(rect.center())
+            && rect.left() >= area.left() - 1.0
             && !is_icon(&text.galley.job.text)
             && !text.galley.job.text.trim().is_empty()
         {
@@ -5632,7 +5635,18 @@ pub mod encounter_build {
         d.type_text(BOSS);
         d.click_first(ADD);
         d.expect("8. ");
-        d.state("creatures-added", Sizes::All);
+        // Layout PR 5b (I6): the roster' actions start `L` after their widest facts; at
+        // 1920 they have room for the column.
+        d.state_prepared("creatures-added", Sizes::All, |d| {
+            let (holds, column, detail) =
+                d.kept_columns_hold("roster", true, Some(crate::design::S));
+            let wide = d.window_size().0 >= LARGE.0;
+            d.observe(
+                "pr5b-roster-columns",
+                holds && (column || !wide),
+                format!("At {:?}, column {column}: {detail}", d.window_size()),
+            );
+        });
         d.click(SAVE_ENCOUNTER);
         d.expect(SAVED_NOTE);
         d.state("saved", Sizes::Default);
@@ -11019,11 +11033,18 @@ pub mod column_resize {
         let edge = |d: &Driver<'_>| d.place_of(FIND_CREATURE).map_or(0.0, |r| r.left()) - S;
         let start = edge(d);
         d.drag_column_edge(start, start + 100.0);
+        // Layout PR 5b: the roster's menus follow its facts; its rows' rules end at its edge.
         let roster = d
             .nodes()
             .into_iter()
             .filter(|node| node.name.starts_with("More actions for") && node.in_view())
-            .map(|node| node.rect.right())
+            .flat_map(|node| {
+                d.hairlines_in(egui::Rect::from_min_max(
+                    egui::pos2(0.0, node.rect.bottom()),
+                    egui::pos2(d.window_size().0, node.rect.bottom() + 24.0),
+                ))
+            })
+            .map(|line| line.right())
             .fold(0.0, f32::max);
         d.observe(
             CHECK,
@@ -20373,7 +20394,17 @@ pub mod encounter_groups {
         d.click(&format!("Edit group {GROUP_RIVALS}"));
         d.expect("MEMBERS 3");
         d.expect("XP 600");
-        d.state("group-editor", Sizes::All);
+        // Layout PR 5b (I6): the members' actions start `L` after their widest facts; at
+        // 1920 they have room for the column.
+        d.state_prepared("group-editor", Sizes::All, |d| {
+            let (holds, column, detail) = d.kept_columns_hold("members", true, None);
+            let wide = d.window_size().0 >= LARGE.0;
+            d.observe(
+                "pr5b-members-columns",
+                holds && (column || !wide),
+                format!("At {:?}, column {column}: {detail}", d.window_size()),
+            );
+        });
         // Layout step 6 (SL4, AL9): the clean editor's head and first fields, for the dirty
         // editor of `group-member-removed-with-undo`.
         let clean_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
@@ -20891,21 +20922,41 @@ pub mod encounter_groups {
             "A dirty group opened in Encounters says why the campaign cannot change",
             |d| d.visible_text("Unsaved") && switch_reason_shown(d),
         );
-        // FD4 family: the group notes field ends at the members' right edge, as the encounter
-        // editor's notes field ends at the roster's.
+        // FD4 family: the group notes field ends at the members' column edge, as the encounter
+        // editor's notes field ends at the roster's. Layout PR 5b: a member's menu follows the
+        // members' facts, so it ends within that edge, in the members' column (I6).
         for size in [SMALL, DEFAULT, LARGE] {
-            let edges = d.at_size(size, |d| {
+            // PR 641 review (P1): the notes field's right edge is compared with the members'
+            // rule (the hairline under a member's row, which spans the members column) directly.
+            let (edges, (columns, _, detail)) = d.at_size(size, |d| {
+                let menu = d.place_of("More actions for Cinder Wolf");
+                let rule = menu.and_then(|menu| {
+                    d.hairlines_in(egui::Rect::from_min_max(
+                        egui::pos2(0.0, menu.bottom()),
+                        egui::pos2(d.window_size().0, menu.bottom() + 24.0),
+                    ))
+                    .into_iter()
+                    .map(|line| line.right())
+                    .reduce(f32::max)
+                });
                 (
-                    d.place_of("More actions for Cinder Wolf")
-                        .map(|rect| rect.right()),
-                    d.place_of(&format!("Group notes for {GROUP_RIVALS}"))
-                        .map(|rect| rect.right()),
+                    (
+                        menu.map(|rect| rect.right()),
+                        rule,
+                        d.place_of(&format!("Group notes for {GROUP_RIVALS}"))
+                            .map(|rect| rect.right()),
+                    ),
+                    d.kept_columns_hold("members", true, None),
                 )
             });
             d.observe(
                 "iter-18-B-FD4-group",
-                matches!(edges, (Some(menu), Some(notes)) if (menu - notes).abs() <= 0.5),
-                format!("At {size:?}, the member menu and the notes field end at {edges:?}"),
+                columns
+                    && matches!(edges, (Some(menu), Some(rule), Some(notes))
+                        if (notes - rule).abs() <= 0.5 && menu <= notes + 0.5),
+                format!(
+                    "At {size:?}, the member menu, the members' rule and the notes field end at {edges:?}; {detail}"
+                ),
             );
         }
         // iter-27-B FB7: Save group is on the title line, after the name, as Save encounter is;
@@ -22340,9 +22391,13 @@ fn right_edges(d: &Driver<'_>, name: &str) -> Vec<f32> {
 /// role, just right of the member menus.
 fn members_scroll_bar(d: &Driver<'_>) -> bool {
     let nodes = d.nodes();
+    // Layout PR 5b: the member menus follow the members' facts; the name field still ends at
+    // the column's edge.
     let Some(column) = nodes
         .iter()
-        .filter(|node| node.name.starts_with("More actions for "))
+        .filter(|node| {
+            node.name.starts_with("More actions for ") || node.name.starts_with("Group name")
+        })
         .map(|node| node.rect.right())
         .reduce(f32::max)
     else {
@@ -28260,9 +28315,10 @@ pub mod session_plan {
                 let rule = d
                     .place_of("More actions for Werewolf copy")
                     .and_then(|menu| {
+                        // Layout PR 5b: the menu follows the row's facts; the rule spans the row.
                         d.hairlines_in(egui::Rect::from_min_max(
                             egui::pos2(0.0, menu.bottom()),
-                            egui::pos2(menu.right() + 60.0, menu.bottom() + 24.0),
+                            egui::pos2(d.window_size().0, menu.bottom() + 24.0),
                         ))
                         .into_iter()
                         .map(|line| line.right())
