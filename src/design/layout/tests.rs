@@ -257,7 +257,15 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
     const LOG: Word = crate::word!("Add to Log");
     const START: Word = crate::word!("Start fight");
     const OPEN: Word = crate::word!("Open in Lookup");
-    const WORDS: [&str; 4] = ["Edit", "Add to Log", "Start fight", "Open in Lookup"];
+    // M-Y0.2: a link action is measured and kept as the others are.
+    const CONNECT: Word = crate::word!("Connect to refresh");
+    const WORDS: [&str; 5] = [
+        "Edit",
+        "Add to Log",
+        "Start fight",
+        "Open in Lookup",
+        "Connect to refresh",
+    ];
     const ALL_EVENTS: Word = crate::word!("All events");
     const RECORDINGS: Word = crate::word!("Back to recordings");
     let (title, kind) = ("Cinder Wolf", "Beast · CR 3");
@@ -270,6 +278,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             .action(TitleAction::quiet(LOG))
             .action(TitleAction::quiet(START))
             .action(TitleAction::secondary(OPEN))
+            .action(TitleAction::link(CONNECT))
     };
     let mut need = 0.0;
     let mut row = 0.0;
@@ -288,7 +297,9 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             Action::secondary("Open in Lookup"),
         ]
         .map(|action| action.density(Density::Read).natural_width(ui).ceil());
-        row = actions.iter().sum::<f32>() + 3.0 * XS;
+        // The link's target: its word, at least `XL` wide.
+        let link = text("Connect to refresh", Type::Body).max(XL);
+        row = actions.iter().sum::<f32>() + link + 4.0 * XS;
         need = text(title, Type::Section) + XS + text(kind, Type::Small) + (L - S) + row;
     });
     let at = |width: f32| {

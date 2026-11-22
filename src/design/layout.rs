@@ -23,7 +23,7 @@ use egui::{
 };
 
 use super::{
-    Action, Density, FORM_WIDTH, L, LINE_START_HANG, M, PANEL_MIN_WIDTH, S, Status, Type, XS,
+    Action, Density, FORM_WIDTH, L, LINE_START_HANG, M, PANEL_MIN_WIDTH, S, Status, Type, XL, XS,
     colors, extras::space, field, named, number_width, outcome::Sentence, placeholder, theme,
 };
 
@@ -1526,6 +1526,8 @@ macro_rules! key {
 enum TitleWeight {
     Quiet,
     Secondary,
+    /// A text link (`TitleAction::link`).
+    Link,
 }
 
 /// One action on a title line. It always shows its [`Word`]; an icon goes before the word.
@@ -1573,6 +1575,16 @@ impl<'a> TitleAction<'a> {
         }
     }
 
+    /// A text link (`Connect to refresh`): its word in the link colour, a target at least `XL`
+    /// wide and one `Read` control high (`title_link`), placed and kept as an action is. It has
+    /// no icon, key or lock (M-Y0.2).
+    pub fn link(word: Word) -> Self {
+        Self {
+            weight: TitleWeight::Link,
+            ..Self::quiet(word)
+        }
+    }
+
     pub fn icon(mut self, icon: &'static str) -> Self {
         self.icon = Some(icon);
         self
@@ -1598,6 +1610,11 @@ impl<'a> TitleAction<'a> {
 
     /// Its target's width on one line.
     fn natural_width(&self, ui: &Ui) -> f32 {
+        if matches!(self.weight, TitleWeight::Link) {
+            return number_width(ui, self.word.as_str(), &Type::Body.font(ui))
+                .ceil()
+                .max(XL);
+        }
         if self.menu {
             self.menu_button(&Self::menu_label(self.word))
                 .natural_width(ui)
@@ -1618,7 +1635,7 @@ impl<'a> TitleAction<'a> {
         'a: 'l,
     {
         let mut action = match self.weight {
-            TitleWeight::Quiet => Action::quiet(label),
+            TitleWeight::Quiet | TitleWeight::Link => Action::quiet(label),
             TitleWeight::Secondary => Action::secondary(label),
         }
         .density(Density::Read)
@@ -1632,7 +1649,7 @@ impl<'a> TitleAction<'a> {
 
     fn action(&self) -> Action<'a> {
         let mut action = match self.weight {
-            TitleWeight::Quiet => Action::quiet(self.word.as_str()),
+            TitleWeight::Quiet | TitleWeight::Link => Action::quiet(self.word.as_str()),
             TitleWeight::Secondary => Action::secondary(self.word.as_str()),
         }
         .density(Density::Read)
@@ -2035,6 +2052,9 @@ impl<'a> TitleLine<'a> {
                         self.menu_under(ui, &button).show(menu);
                     }
                     false
+                }
+                None if matches!(self.actions[at].weight, TitleWeight::Link) => {
+                    super::title_link(ui, self.actions[at].word.as_str()).clicked()
                 }
                 None => self.actions[at].action().show(ui).clicked(),
             },
