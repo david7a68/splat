@@ -1578,6 +1578,7 @@ mod tests {
         book: Book,
         fights: Vec<PlanFight>,
     ) -> egui_kittest::Harness<'static, (Sessions, Book)> {
+        use crate::design::test_harness::Themed as _;
         let notes = list_notes(dir);
         let path = notes
             .iter()
@@ -1592,9 +1593,9 @@ mod tests {
             draft: Some(Draft::open(&path).unwrap()),
             ..Sessions::default()
         };
-        let harness = egui_kittest::Harness::builder()
+        egui_kittest::Harness::builder()
             .with_size(egui::vec2(800.0, 300.0))
-            .build_state(
+            .themed_state(
                 move |ctx, (page, book): &mut (Sessions, Book)| {
                     with_plan(&fights, |plan| {
                         egui::CentralPanel::default().show(ctx, |ui| {
@@ -1619,9 +1620,7 @@ mod tests {
                     });
                 },
                 (page, book),
-            );
-        design::theme::install(&harness.ctx);
-        harness
+            )
     }
 
     /// The act from the Last time line, where the DM acted: one save; the result and its Undo
@@ -1950,6 +1949,7 @@ mod tests {
     /// what they are made from changes, not on a quiet frame.
     #[test]
     fn read_draws_a_session_embed_by_its_target() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let root = tempfile::tempdir().unwrap();
         let campaign = crate::persistence::Campaign {
@@ -2019,7 +2019,7 @@ mod tests {
         let shared = std::rc::Rc::clone(&index);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(800.0, 4000.0))
-            .build_state(
+            .themed_state(
                 move |ctx, (page, book): &mut (Sessions, Book)| {
                     let index = Arc::clone(&shared.borrow());
                     ctx.data_mut(|data| {
@@ -2032,7 +2032,6 @@ mod tests {
                 },
                 (page, Book::default()),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let has = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, words: &str| {
             harness.query_by_label_contains(words).is_some()
