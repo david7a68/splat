@@ -11511,9 +11511,11 @@ mod tests {
             measured(&harness) && harness.query_by_label("Long rest").is_some(),
             "the added row is brought into view in the region"
         );
-        // Review of PR 869 (869-a): the last scene removed while a closed fight remains. Its
-        // removal message and its Undo show where they always do (among the rows), and Undo
-        // brings the scene back. Red: the measured mode, which left the message out.
+        // Review of PR 869 (869-a), a row of this proof: the last scene removed while a closed
+        // fight remains, after the switches above. Its removal result and its Undo are reachable
+        // where they always show (among the rows); the DM presses Undo by its label, and the
+        // scene comes back beside the same fight. Red: the measured mode, which left the result
+        // out.
         harness.set_size(egui::vec2(design::FORM_WIDTH, 1400.0));
         {
             let draft = harness.state_mut().0.draft.as_mut().unwrap();
@@ -11530,6 +11532,8 @@ mod tests {
             !measured(&harness) && harness.query_by_label("Open: Pay the toll").is_some(),
             "a scene row draws the rows in place"
         );
+        let ford = top(&harness, "Ford");
+        let scene = top(&harness, "Open: Pay the toll");
         harness
             .get_by_label("More actions for Pay the toll")
             .click();
@@ -11543,11 +11547,13 @@ mod tests {
                     .is_some(),
             "the last scene's removal says so"
         );
-        harness.get_by_label_contains("Undo remove").click();
+        harness.get_by_label("Undo remove Pay the toll").click();
         harness.run_steps(3);
         assert!(
-            harness.query_by_label("Open: Pay the toll").is_some(),
-            "Undo brings the scene back"
+            harness.query_by_label("Open: Pay the toll").is_some()
+                && (top(&harness, "Ford") - ford).abs() < 0.5
+                && (top(&harness, "Open: Pay the toll") - scene).abs() < 0.5,
+            "Undo brings the scene back beside the same fight"
         );
     }
 
