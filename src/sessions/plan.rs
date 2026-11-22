@@ -11372,6 +11372,22 @@ mod tests {
                 "one accessible node for {name}"
             );
         }
+        // Each row the region draws whole is registered as a row (the pane's whole-row cut, and
+        // the gate's row checks). Red: a measured body that registers none.
+        let rows: Vec<egui::Rect> = harness
+            .ctx
+            .data(|data| {
+                data.get_temp::<(u64, Vec<egui::Rect>)>(egui::Id::new(design::ROW_RECTS))
+            })
+            .map(|(_, rows)| rows)
+            .unwrap_or_default();
+        for name in ["Bridge", "Mill", "Ford"] {
+            let title = harness.get_by_label(name).rect();
+            assert!(
+                rows.iter().any(|row| row.contains_rect(title)),
+                "{name}'s row is registered: {rows:?}"
+            );
+        }
         let before = ["Bridge", "Mill", "Ford"].map(|name| top(&harness, name));
         // The first open: the rows draw in place, and the rows above the opened one and the
         // opened one keep their place.
