@@ -28392,8 +28392,32 @@ pub mod share_to_package {
 
 pub mod remove_package_in_use {
     use super::*;
+    /// An item of the package the steps remove that the campaign chooses and no other entry
+    /// needs: Lookup's loot search holds it only while the package is chosen.
+    const ITEM: &str = "Veilglass Lantern";
+    /// A creature of that package. Every chosen creature of it is needed by an encounter, so
+    /// Encounters lists it whether or not the package is chosen.
+    const CREATURE: &str = "Cinder Wolf";
+
+    /// What the two readers give back: whether Lookup's loot search holds `ITEM`, and whether
+    /// Encounters' creature search lists `CREATURE`.
+    fn readers(d: &Driver<'_>) -> (bool, bool) {
+        let item = d.app().lookup.index().is_some_and(|index| {
+            index
+                .loot_sources()
+                .items
+                .iter()
+                .any(|item| item.name == ITEM)
+        });
+        (item, d.app().encounters.searchable_creature(CREATURE))
+    }
+
     pub fn run(d: &mut Driver<'_>) {
-        let package = d.app_mut().campaigns.modules()[0].id;
+        let module = d.app_mut().campaigns.modules()[0].clone();
+        let package = module.id;
+        // P2 of the review of PR 623: the search results before any change, for the Undo of
+        // the removal at the end.
+        let searched = readers(d);
         go_library(d);
         d.click("Packages");
         d.click("Manage packages…");
@@ -28626,6 +28650,29 @@ pub mod remove_package_in_use {
             "A package removal does not say its creature file was deleted",
         );
         d.state("paused-run-after-package-removal", Sizes::All);
+        // P2 of the review of PR 623 (issue #509): the package comes back (registered again,
+        // which Lookup reads at once) while the campaign does not choose it: Lookup's loot search
+        // loses its item. Undo of the removal chooses it again: Lookup gives the item back, and
+        // Encounters reads the campaign again and lists what it listed before the removal.
+        d.app_mut().campaigns.register_module(module).unwrap();
+        go_campaign(d);
+        d.settle();
+        let removed = readers(d);
+        let read = d.app().encounters.snapshot_revision();
+        d.click("Undo remove Ashen Marches");
+        d.settle();
+        let undone = readers(d);
+        d.observe(
+            "m32-C0-509-removal-undo-readers",
+            searched == (true, true)
+                && !removed.0
+                && undone == searched
+                && d.app().encounters.snapshot_revision() != read,
+            format!(
+                "{ITEM} in Lookup's loot search, {CREATURE} listed by Encounters: before {searched:?}, removed and registered again {removed:?}, after Undo {undone:?}; Encounters read again {}",
+                d.app().encounters.snapshot_revision() != read
+            ),
+        );
     }
 }
 
