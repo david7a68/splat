@@ -10659,7 +10659,17 @@ mod tests {
                 Some(focus),
                 "The same notes control keeps focus"
             );
-            let current = egui::scroll_area::State::load(&harness.ctx, scroll_id)
+            // Issue #542: the column recorded after the resize is the same column, with the same
+            // offset; a new column that started at its top would fail here.
+            let recorded = harness
+                .ctx
+                .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(draft.borrow().id)))
+                .expect("the roster column's scroll id after the resize");
+            assert_eq!(
+                recorded, scroll_id,
+                "At {width}, the roster keeps its column"
+            );
+            let current = egui::scroll_area::State::load(&harness.ctx, recorded)
                 .unwrap()
                 .offset
                 .y;

@@ -3104,9 +3104,17 @@ impl Sessions {
                 changes.push((draft, body));
             }
         }
+        // Issue #569: the result and a refused Undo name the links' own words (the reference
+        // label, never blank), not the event's title, which a rename can leave blank.
+        let days = timeline::day_numbers(&book.events);
+        let day = book
+            .events
+            .iter()
+            .position(|item| item.id == event)
+            .map_or(0, |at| days[at]);
         (count > 0).then(|| LinkOffer {
             changes,
-            title: current.title.clone(),
+            title: timeline::reference_label(current, day),
             old: renamed.clone(),
             count,
         })
@@ -9549,6 +9557,28 @@ mod tests {
             ),
             "n0-link-undo-cause: an outside change of the open B"
         );
+        // Issue #569: renamed to a blank title, the offer (and so its result, `Links now say …`,
+        // and a refused Undo) names the links' own words, the reference label, never “”.
+        fs::write(
+            &note_a,
+            format!("## What happened\n\n[[Timeline#^{id}|Rest at the mill]]\n"),
+        )
+        .unwrap();
+        book.events[0].title = String::new();
+        book.touch();
+        let sessions = Sessions {
+            notes: vec![Note {
+                path: note_a.clone(),
+                ..notes[0].clone()
+            }],
+            ..Default::default()
+        };
+        let offer = sessions
+            .event_link_offer(&book, &id)
+            .expect("a blank title still offers to update the links");
+        let label = timeline::reference_label(&book.events[0], 0);
+        assert!(!label.is_empty(), "the reference label is never blank");
+        assert_eq!(offer.title, label, "the offer names the links' words");
     }
 
     /// #597: the page's notice is one entry of its store. A newer notice replaces the older one
