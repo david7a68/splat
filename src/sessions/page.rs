@@ -4102,8 +4102,12 @@ impl Sessions {
 
     /// A note's state says it is the note, beside a control about audio.
     fn note_save_status(draft: &Draft) -> Status<'static> {
+        Self::note_state_status(&draft.state)
+    }
+
+    fn note_state_status(state: &DraftState) -> Status<'static> {
         let c = colors();
-        let (icon, word, color) = match &draft.state {
+        let (icon, word, color) = match state {
             // A saved note is the calm, usual state: muted, never green, in every view.
             DraftState::Clean | DraftState::Saved => (icons::OK, "Notes saved", c.document.clean),
             DraftState::Unsaved => (icons::BUSY, "Saving…", c.muted),
@@ -4128,9 +4132,9 @@ impl Sessions {
     }
 
     /// A template draft's state, for its title line (`TitleLine::state`).
-    fn draft_status(draft: &Draft) -> Status<'static> {
+    fn draft_status(state: &DraftState) -> Status<'static> {
         let c = colors();
-        let (icon, word, color) = match &draft.state {
+        let (icon, word, color) = match state {
             DraftState::Clean => (icons::OK, "Saved", c.document.clean),
             DraftState::Saved => (icons::OK, "Saved", c.document.saved),
             DraftState::Unsaved => (icons::DRAFT, "Unsaved", c.document.unsaved),
@@ -4139,6 +4143,18 @@ impl Sessions {
             DraftState::Failed(_) => (icons::ERROR, "Not saved", c.document.invalid),
         };
         Status { icon, word, color }
+    }
+
+    /// Every state a draft can be in, for the statuses a title line can show (its stable room).
+    fn every_draft_state() -> [DraftState; 6] {
+        [
+            DraftState::Clean,
+            DraftState::Saved,
+            DraftState::Unsaved,
+            DraftState::Conflict,
+            DraftState::Missing,
+            DraftState::Failed(String::new()),
+        ]
     }
 
     /// The message footer of a pane whose body is one draft's editor: the draft's own result
@@ -7143,7 +7159,11 @@ impl Sessions {
                         let name = draft.path.file_stem().unwrap_or_default().to_string_lossy();
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
                             let _ = design::TitleLine::new(&name)
-                                .state(Self::note_save_status(draft))
+                                .state(
+                                    Self::note_save_status(draft),
+                                    &Self::every_draft_state()
+                                        .map(|state| Self::note_state_status(&state)),
+                                )
                                 .show(ui);
                         });
                     }
@@ -7796,16 +7816,20 @@ impl Sessions {
                 },
             );
             if let Some(draft) = &self.template_draft {
-                line = line.state(Self::draft_status(draft));
+                line = line.state(
+                    Self::draft_status(&draft.state),
+                    &Self::every_draft_state().map(|state| Self::draft_status(&state)),
+                );
             }
         } else {
+            let read_only = Status {
+                icon: icons::READ_ONLY,
+                word: "Read-only",
+                color: c.document.read_only,
+            };
             line = line
                 .action(design::TitleAction::secondary(CUSTOMIZE).name("Customize this template"))
-                .state(Status {
-                    icon: icons::READ_ONLY,
-                    word: "Read-only",
-                    color: c.document.read_only,
-                });
+                .state(read_only, &[read_only]);
         }
         let customize = line.show(ui).clicked(CUSTOMIZE);
         if customize && let Some(folder) = &self.folder {

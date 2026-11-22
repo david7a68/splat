@@ -1755,7 +1755,7 @@ pub struct TitleLine<'a> {
     /// whether it is on.
     toggle: Option<(&'static str, &'a str, &'a str, bool)>,
     /// A plain status at the right end of the title's line, left of the toggle (`state`).
-    state: Option<Status<'a>>,
+    state: Option<(Status<'a>, Vec<Status<'a>>)>,
 }
 
 /// A menu's content: the caller draws its own choices.
@@ -2082,40 +2082,51 @@ impl<'a> TitleLine<'a> {
     /// A plain status at the right end of the title's own line, left of a view toggle and a close
     /// icon (a draft's `Saved` or `Unsaved`, a built-in template's `Read-only`): its icon and word
     /// in its tone, not a control. Unlike [`status`](Self::status) it opens nothing and is not
-    /// an action. It keeps its place there however the actions are placed, so a change of its
-    /// word never moves them; the title and the actions beside it keep clear of it.
-    pub fn state(mut self, state: Status<'a>) -> Self {
-        self.state = Some(state);
+    /// an action. `now` is the status shown; `every` holds the statuses the line can show (`now`
+    /// among them or not), and the status keeps the room of the widest of them, so a change of
+    /// its word never reflows the line: the title and the actions beside it keep clear of that
+    /// room, and they place the same with any of the statuses.
+    pub fn state(mut self, now: Status<'a>, every: &[Status<'a>]) -> Self {
+        self.state = Some((now, every.to_vec()));
         self
     }
 
-    /// The plain status's width: its icon, a space and its word in `Small`, as it is drawn.
-    fn state_width(ui: &Ui, state: &Status<'_>) -> f32 {
+    /// One status's width: its icon, a space and its word in `Small`, as it is drawn.
+    fn status_words_width(ui: &Ui, status: &Status<'_>) -> f32 {
         number_width(
             ui,
-            &format!("{} {}", state.icon, state.word),
+            &format!("{} {}", status.icon, status.word),
             &Type::Small.font(ui),
         )
         .ceil()
             + 1.0
     }
 
-    /// The plain status, its right edge at `right` (left of the toggle), on the line from
+    /// The plain status's room: the widest of the statuses the line can show, and the one shown.
+    fn state_room(ui: &Ui, (now, every): &(Status<'_>, Vec<Status<'_>>)) -> f32 {
+        every
+            .iter()
+            .chain(std::iter::once(now))
+            .map(|status| Self::status_words_width(ui, status))
+            .fold(0.0, f32::max)
+    }
+
+    /// The plain status, its room's right edge at `right` (left of the toggle), on the line from
     /// `top`, `line_height` high.
     fn state_at(&self, ui: &mut Ui, right: f32, top: f32, line_height: f32) {
-        let Some(state) = self.state else {
+        let Some(state) = &self.state else {
             return;
         };
-        let width = Self::state_width(ui, &state);
+        let width = Self::state_room(ui, state);
         let rect = Rect::from_min_size(egui::pos2(right - width, top), vec2(width, line_height));
-        // Left to right in exactly its measured room: its words start at the room's left edge
-        // and end at `right`.
+        // Left to right in its room: its words start at the room's left edge, whichever status
+        // is shown, and end at or before `right`.
         let mut child = ui.new_child(
             UiBuilder::new()
                 .max_rect(rect)
                 .layout(Layout::left_to_right(Align::Center)),
         );
-        let _ = super::status(&mut child, state);
+        let _ = super::status(&mut child, state.0);
     }
 
     /// The view toggle, its right edge at `right` (left of the close icon), on the line from
@@ -2144,7 +2155,7 @@ impl<'a> TitleLine<'a> {
         let state = self
             .state
             .as_ref()
-            .map_or(0.0, |state| Self::state_width(ui, state) + ACTION_GAP);
+            .map_or(0.0, |state| Self::state_room(ui, state) + ACTION_GAP);
         let end = close + toggle + state;
         // Issue #567: a title with no actions that is wider than its line (less the close
         // icon) wraps under nothing, as the `Under` form wraps it; it never paints past the
