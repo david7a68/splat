@@ -766,6 +766,87 @@ fn sheet_whole(d: &Driver<'_>) -> (bool, String) {
     )
 }
 
+/// Layout step 11a (SM2/AM2, SB1/AB1): the Arrivals list ends at a whole block. In the panel's
+/// column (from its title, `This fight · Arrivals`): the texts its clip cuts from below, and each
+/// group whose painted title shows whole while its Add's painted words do not. Painted, not the
+/// accessibility tree: a node keeps its whole rect under the column's cut. The reference is the
+/// clip that paints each text. `None` when no group title shows, so the check cannot pass on an
+/// empty match.
+fn arrival_blocks(d: &Driver<'_>) -> Option<(Vec<String>, Vec<String>, Vec<String>)> {
+    let (width, height) = d.window_size();
+    let left = d
+        .painted_rect_in("Arrivals", egui::Rect::EVERYTHING)?
+        .left()
+        - crate::design::S;
+    let area = egui::Rect::from_min_max(egui::pos2(left, 0.0), egui::pos2(width, height));
+    // Each whole painted text in the column, with its bounds.
+    let mut whole: Vec<(String, egui::Rect)> = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let bounds = text.visual_bounding_rect();
+        if area.intersects(bounds) && clip.expand(1.0).contains_rect(bounds) {
+            whole.push((text.galley.job.text.clone(), bounds));
+        }
+    });
+    let nodes = d.nodes();
+    // The groups, by their grips' names (`Drag <name> to the initiative list`).
+    let names: Vec<String> = nodes
+        .iter()
+        .filter_map(|node| node.name.strip_prefix("Drag "))
+        .filter_map(|rest| rest.split_once(" to the initiative list"))
+        .map(|(name, _)| name.to_owned())
+        .collect();
+    let drag = format!("{} ", crate::design::icons::DRAG);
+    let shown: Vec<String> = names
+        .into_iter()
+        .filter(|name| {
+            whole.iter().any(|(words, _)| {
+                words.strip_prefix(&drag).is_some_and(|title| {
+                    let title = title.trim_end_matches('…');
+                    !title.is_empty() && name.starts_with(title)
+                })
+            })
+        })
+        .collect();
+    if shown.is_empty() {
+        return None;
+    }
+    let alone = shown
+        .iter()
+        .cloned()
+        .filter(|name| {
+            let add = format!("Add {name} to the initiative list");
+            !nodes.iter().filter(|node| node.name == add).any(|node| {
+                whole
+                    .iter()
+                    .any(|(_, bounds)| node.rect.contains(bounds.center()))
+            })
+        })
+        .collect();
+    Some((texts_cut_from_below(d, area), alone, shown))
+}
+
+/// `arrival_blocks` with no fault; at 960x640 each group in `shown_at_960` shows its title too
+/// (a group's head is a block of its own: faults that the edge hides take only themselves).
+fn arrival_blocks_whole(d: &mut Driver<'_>, id: &str, shown_at_960: &[&str]) {
+    let size = d.window_size();
+    let found = arrival_blocks(d);
+    d.observe(
+        id,
+        found.as_ref().is_some_and(|(cut, alone, shown)| {
+            cut.is_empty()
+                && alone.is_empty()
+                && (size != SMALL
+                    || shown_at_960
+                        .iter()
+                        .all(|name| shown.iter().any(|shown| shown == name)))
+        }),
+        format!(
+            "At {size:?}, Arrivals texts cut from below, groups whose title shows without a whole \
+             Add, and the groups shown: {found:?}"
+        ),
+    );
+}
+
 fn sheet_rows_whole(d: &mut Driver<'_>, id: &str) {
     let (whole, found) = sheet_whole(d);
     d.observe(id, whole, found);
@@ -23724,7 +23805,14 @@ pub mod encounter_owned_groups {
         let list = d
             .place_of(&add_group(NEW_NAME))
             .expect("the list shows the group that joined");
-        d.scroll_until(list.center(), "Edit group", 5);
+        // Layout step 11a: until its words are painted whole. The list's whole-row cut hides a
+        // fault and its repair together, while the repair's node still says it is in view.
+        for _ in 0..5 {
+            if d.painted_whole_in("Edit group", egui::Rect::EVERYTHING) {
+                break;
+            }
+            d.scroll_at(list.center(), 1);
+        }
         // iter-25-R FB5: a member fault's repair is a bordered secondary button. M0126 (M-R0.9):
         // it is a choice of the fault's typed message, so at every size it stands on the line
         // under the fault, its border starting at the warning text.
@@ -23808,6 +23896,7 @@ pub mod encounter_owned_groups {
         // their member line, at every size; neither heading holds it, so both headings give way
         // in the one order of their `Fight after` line.
         d.state_prepared("own-group-dragged-in-combat", Sizes::All, |d| {
+            arrival_blocks_whole(d, "l11a-SB1-AB1-arrival-blocks", &["Lost Patrol"]);
             let places =
                 [NEW_NAME, GROUP_SHRINE].map(|group| status_places(d, group, "Added in round 1"));
             d.observe(
@@ -24864,6 +24953,7 @@ pub mod run_add_creature {
         // member line, so at 1200 and 1920 its heading keeps its side and the whole name of the
         // creature whose XP is not known (R31), as Goblin Wave's does.
         d.state_prepared("arrivals-made-up-added", Sizes::All, |d| {
+            arrival_blocks_whole(d, "l11a-SM2-AM2-arrival-blocks", &[]);
             let size = d.window_size();
             let rivals = arrival_heading(d, GROUP_RIVALS);
             let wide = size.0 >= DEFAULT.0;
