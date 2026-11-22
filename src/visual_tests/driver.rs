@@ -277,9 +277,14 @@ fn found(node: &Node<'_>, clip: Option<egui::Rect>, viewport: egui::Rect) -> Fou
             min: egui::pos2(rect.x0 as f32, rect.y0 as f32),
             max: egui::pos2(rect.x1 as f32, rect.y1 as f32),
         });
-    let shown = clip
-        .map_or(rect, |clip| rect.intersect(clip))
-        .intersect(viewport);
+    // A node the app hides (a pane's edge cut it away: `design::pane`'s `edge_widgets`) shows
+    // nothing, wherever its bounds are.
+    let shown = if access.is_hidden() {
+        egui::Rect::NOTHING
+    } else {
+        clip.map_or(rect, |clip| rect.intersect(clip))
+            .intersect(viewport)
+    };
     Found {
         id: access.id(),
         name: node_name(node),

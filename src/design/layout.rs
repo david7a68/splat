@@ -1100,6 +1100,22 @@ fn record_field(ui: &Ui, response: &Response) {
     });
 }
 
+/// A pane's edge registered the field `id` again with its rect cut at the edge (`pane`'s
+/// `edge_widgets`): the same widget, so its record takes the cut rect and is no clash.
+pub(super) fn field_cut_at_edge(ctx: &egui::Context, id: Id, rect: Rect) {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data_mut(|data| {
+        let drawn = data.get_temp_mut_or_default::<FieldsDrawn>(fields_drawn_id());
+        if drawn.pass == pass {
+            for (field, kept) in &mut drawn.fields {
+                if *field == id {
+                    *kept = rect;
+                }
+            }
+        }
+    });
+}
+
 /// The ids of the last pass's text fields that another live widget shares: a field drawn twice
 /// with one id, or a field whose record in egui another widget with its id took over (egui keeps
 /// one record per id, the last one; it warns of a clash only when neither rect holds the other,

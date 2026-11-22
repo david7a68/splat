@@ -2197,7 +2197,8 @@ fn edge_widgets(
         let edge = ui.new_child(egui::UiBuilder::new().id_salt(salt).disabled());
         let above = Rect::everything_above(limit);
         for widget in &below {
-            let _ = edge.interact(widget.rect.intersect(above), widget.id, Sense::hover());
+            let cut = edge.interact(widget.rect.intersect(above), widget.id, Sense::hover());
+            super::layout::field_cut_at_edge(ui.ctx(), widget.id, cut.rect);
             if widget.rect.top() >= limit {
                 ui.ctx()
                     .accesskit_node_builder(widget.id, |node| node.set_hidden());
