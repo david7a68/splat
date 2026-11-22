@@ -1109,11 +1109,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // with its file line since migration-32 L2c.
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
-        (
-            "src/encounters/groups.rs",
-            "members",
-            &[Ban::Layout(1), Ban::Body],
-        ),
+        ("src/encounters/groups.rs", "members", &[Ban::Body]),
         (
             "src/encounters/groups.rs",
             "members_pane",
