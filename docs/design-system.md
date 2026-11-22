@@ -183,7 +183,7 @@ reader is private to that module, and a two-column case table runs every request
 cause and Connect whole into view this way (M0279).
 A column that moves by itself with no press in it does so only through a typed jump, `reveal::jump(ui, top,
 JumpTo::…)` (ruling M18, layout PR 10c), from a closed list: `LinkedHeading` (a reader opened at a linked section,
-its heading at the view's top; the World and Lookup reader and the Library reader; a recording's text on the Sessions page opened at a timeline marker, the marker's line at the view's top) and `ListedRow` (a list's row
+its heading at the view's top; the World and Lookup reader and the Library reader; a recording's text on the Sessions page opened at a timeline marker, the marker's line at the view's top, measured again and asked again in each draw until it lands, so a resize before the column moves keeps it right; the DM's own input in that column ends it, input elsewhere does not) and `ListedRow` (a list's row
 the page opened at, with the row before it at the view's top; the Timeline's list, M0556). The column writes the jump as its
 own offset at its next pass, where it writes a reveal's; the DM's own input to that column in between drops it, and so does the DM's scroll that is still going on (a drag of the column, the wheel's smooth rest, a fling after a drag). No raw
 `scroll_to_cursor` or `scroll_to_rect` does this.
