@@ -52,8 +52,5 @@ src/world/lines.rs fact-owner 1
 src/content_ui/tests/quiet_reader.rs late-theme 1
 src/design/pane.rs late-theme 12
 src/design/reveal.rs late-theme 1
-src/markdown_view.rs late-theme 5
 src/settings.rs late-theme 2
-src/timeline/checks.rs late-theme 1
 src/trackers/view.rs late-theme 1
-src/world.rs late-theme 3
