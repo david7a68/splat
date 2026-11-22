@@ -1093,13 +1093,15 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     let title_after = lookup_pane(d).and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane));
     let change_after = d.place_of("Change Status");
     // The new entry lands whole in the body room (`design::pane::keep_room`) and is never cut on
-    // the way; the result's Undo is whole in the footer in the act's own frame and after it, as
-    // the footer grew into room the arbiter kept clear (`reveal_with_focus_and_growth`); and the
-    // title keeps its place in every frame.
+    // the way; the title keeps its place in every frame, the act's own first; and the result's
+    // Undo is whole in every frame it shows, as the footer grew into room the arbiter kept clear
+    // (`reveal_with_focus_and_growth`). Lookup builds its footer before its body draws the act,
+    // so the Undo comes in the frame after the act (a footer fault outside layout step 11b,
+    // reported to the lead); it must be whole there.
     let entry_at_act = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(STATUS_ENTRY))
         && frames.iter().all(|(_, cut, _)| !cut);
     let undo_at_act = frames
-        .first()
+        .get(1)
         .is_some_and(|(_, _, undo)| *undo == Some(true))
         && frames.iter().all(|(_, _, undo)| undo.unwrap_or(true))
         && d.nodes()
@@ -1150,7 +1152,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     });
     // D-2 (a), before and after the act at 960: `Change` stands where the focused field stood,
     // the title does not move in any frame (nothing scrolls when the entry and the result come),
-    // the entry is never cut, and the Undo is whole from the act's own frame on.
+    // the entry is never cut, and the Undo is whole in each frame it shows.
     let still = field_before
         .zip(change_after)
         .is_some_and(|(field, change)| {
