@@ -4888,18 +4888,17 @@ impl<A> PlacedResult<A> {
             return None;
         };
         let body = &result.typed.body;
-        // Its Undo's whole form where it fits in half the line, else its short form (M9); its
-        // accessible name is always the whole form.
-        let room = ui.available_width().min(LIST_MEASURE) / 2.0;
-        let (shown, label) = body
+        // Its Undo's whole form while the words still fit whole beside it, else its short form
+        // (M9, `alone`); its accessible name is always the whole form.
+        let (whole, short) = body
             .undo
             .as_ref()
-            .map(|undo| (undo.alone(ui, room), undo.label()))
+            .map(|undo| (undo.label(), undo.alone(ui, 0.0)))
             .unwrap_or_default();
         let pressed = super::components::result_line(
             ui,
             body.tone,
-            Some((body.words.as_str(), &shown, &label)),
+            Some((body.words.as_str(), &whole, &short)),
         );
         if pressed {
             result.typed.id(Pressed::Undo)
@@ -6185,6 +6184,30 @@ mod tests {
         assert!(
             (words.center().y - undo.center().y).abs() < 2.0 && words.right() <= undo.left(),
             "m-p0-result-line: the cut words and the whole Undo on one line: {words:?} {undo:?}"
+        );
+        // The words come first: the Undo shows its whole form only while the words still fit
+        // whole beside it (here at 900), else its short form (at 320).
+        let undo_shown = |h: &Harness<'_, (Option<u8>, f32)>| -> Vec<String> {
+            h.output()
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.starts_with("Undo") => {
+                        Some(text.galley.job.text.clone())
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        let wide = line(900.0, true);
+        assert_eq!(
+            (undo_shown(&full), undo_shown(&wide)),
+            (
+                vec!["Undo roll".to_owned()],
+                vec!["Undo roll 12 travel checks".to_owned()]
+            ),
+            "m-p0-result-line: the short Undo where the words do not fit whole, the whole one \
+             where they do"
         );
         let mut full = full;
         full.get_by_label("Undo roll 12 travel checks").click();
