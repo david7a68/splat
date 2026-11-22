@@ -1571,6 +1571,12 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "stock_text_edit",
             &[Ban::Layout(1)],
         ),
+        // Layout PR 9b-R1a: the Reader's harness (`quiet_reader`): a bare screen of its size.
+        (
+            "src/design/tests/quiet/counting.rs",
+            "root_sized",
+            &[Ban::Layout(1)],
+        ),
         ("src/design/popups.rs", "list", &[Ban::Layout(1)]),
         ("src/design/popups.rs", "rich_tip", &[Ban::Layout(2)]),
         ("src/design/popups.rs", "drag_source", &[Ban::Layout(3)]),
