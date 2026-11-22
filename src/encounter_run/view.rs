@@ -1125,6 +1125,16 @@ impl Run {
                 )));
             }
         }
+        // Issue #507: a refused Continue fight or Undo of the ending says what did not happen,
+        // why, in its diagnosis's tone (R41), and the next step, until its attempt ends.
+        if let Some((_, refusal)) = self.unend_refused.as_ref().filter(|_| !disk) {
+            messages.outcome(
+                FaultMessage::new(&RunFault::Refused(refusal.clone())).choice(Choice::new(
+                    MessageChoice::Dismiss(Lost::Nothing),
+                    RunPress::DismissRefusal,
+                )),
+            );
+        }
         // Said once: the Log keeps the line, and the next save leaves the steps out.
         if !disk && self.undo_unread {
             messages.outcome(FaultMessage::new(&RunFault::UndoUnread).choice(Choice::new(
@@ -1209,6 +1219,7 @@ impl Run {
                 }
             }
             RunPress::DismissError => self.error = None,
+            RunPress::DismissRefusal => self.unend_refused = None,
             RunPress::ToPackages => self.wants_packages = true,
             RunPress::DismissUnread => self.undo_unread = false,
             RunPress::UseSaved => {
@@ -6633,6 +6644,8 @@ pub(super) enum RunPress {
     SaveAsNew,
     Replace,
     DismissError,
+    /// Dismiss of a refused Continue fight or Undo of the ending.
+    DismissRefusal,
     ToPackages,
     DismissUnread,
     UseSaved,
@@ -6651,6 +6664,8 @@ enum RunFault {
     Carry(design::outcome::Sentence),
     /// FI5: a typed initiative total that cannot be read, named by its group.
     Total(design::outcome::Sentence),
+    /// A refused Continue fight or Undo of the ending (#507): its tone is its diagnosis's.
+    Refused(design::results::Refusal),
 }
 
 impl design::outcome::Fault for RunFault {
@@ -6660,6 +6675,10 @@ impl design::outcome::Fault for RunFault {
             Self::DiskConflict => Severity::NotSaved,
             Self::Error(_) => Severity::CannotRead,
             Self::UndoUnread | Self::Carry(_) | Self::Total(_) => Severity::NeedsFixing,
+            Self::Refused(refusal) => match refusal.tone() {
+                design::Tone::Error => Severity::CannotRead,
+                _ => Severity::NeedsFixing,
+            },
         }
     }
     fn cause(&self) -> design::outcome::Sentence {
@@ -6668,6 +6687,7 @@ impl design::outcome::Fault for RunFault {
                 "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe until you choose. Saving has stopped."
             ),
             Self::Error(words) | Self::Carry(words) | Self::Total(words) => words.clone(),
+            Self::Refused(refusal) => refusal.words(),
             Self::UndoUnread => crate::sentence!(
                 "Splat could not read this run’s saved Undo steps, so Undo starts again from here. No turn, HP or condition was lost."
             ),
