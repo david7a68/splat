@@ -2505,6 +2505,40 @@ impl<'a> Driver<'a> {
         )
     }
 
+    /// Layout L5c (design §5 5b, the whole-member pressure): every row of a measured list
+    /// (`owner`) is whole. No text over its facts is cut by a clip or shortened to an ellipsis,
+    /// and its actions start `S` or more after the facts on their own line and end inside the
+    /// row's far edge. Returns whether it holds, and each fault.
+    pub fn measured_rows_whole(&self, owner: &str) -> (bool, String) {
+        let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
+            .into_iter()
+            .filter(|record| record.owner == owner)
+            .collect();
+        let mut faults = Vec::new();
+        for record in &records {
+            let cut = self.cut_texts_in(record.facts);
+            let mut elided = Vec::new();
+            self.each_painted_text(|text, _| {
+                if text.galley.elided && record.facts.intersects(text.visual_bounding_rect()) {
+                    elided.push(text.galley.job.text.clone());
+                }
+            });
+            let clear = record.action.left() >= record.line.right() + crate::design::S - 0.5
+                && record.action.right() <= record.edge + 0.5;
+            if !cut.is_empty() || !elided.is_empty() || !clear {
+                faults.push(format!(
+                    "row {}: cut {cut:?}, shortened {elided:?}, actions {:?} after the line {:?} \
+                     inside the edge {}",
+                    record.row, record.action, record.line, record.edge
+                ));
+            }
+        }
+        (
+            !records.is_empty() && faults.is_empty(),
+            format!("{owner}: {} rows whole but {faults:?}", records.len()),
+        )
+    }
+
     /// Every whole row the panes registered in the last completed pass (N12, layout step 11a).
     pub fn registered_rows(&self) -> Vec<egui::Rect> {
         super::ergonomics::row_rects(&self.harness.ctx)

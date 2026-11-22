@@ -632,36 +632,27 @@ fn plan_row_with(
                     words(ui);
                 },
             );
-            // Layout PR 5a-2 (I6): each row's actions start `L` after the plan's widest title, in
-            // its own recipe's width (with its alternates); the spare width lies after them. The
-            // column fits beside the plan's widest recipe. Each title keeps the room and the lines
-            // it had, so where the column does not fit the actions keep the far edge.
+            // Layout PR 5a-2 (I6), L5c: each row's actions start `L` after the plan's widest facts,
+            // in its own recipe's width (with its alternates); the spare width lies after them.
+            // The column fits beside the plan's widest recipe. Each title keeps the room and the
+            // lines it had, so where the column does not fit the actions keep the row's far edge
+            // (`MeasuredColumn`).
             let words_width = title.response.rect.width();
-            let (kept, actions) = plan_columns(ui);
-            // Until a pass has measured the plan (or a row's own recipe grew), the far edge.
-            let facts = kept.max(words_width);
-            // The row's far edge: where its actions end when the plan keeps the far edge.
-            let far_edge = ui.max_rect().right();
-            let room = far_edge - left.x;
-            let column = kept > 0.0
-                && actions >= widths[1] - 0.5
-                && facts + design::L + actions <= room + 0.5;
-            let action_rect = if column {
-                egui::Rect::from_min_size(
-                    egui::pos2(left.x + facts + design::L, left.y),
-                    egui::vec2(widths[1], Density::Read.control()),
-                )
-            } else {
-                egui::Rect::from_min_size(
-                    egui::pos2(far_edge - widths[1], left.y),
-                    egui::vec2(widths[1], Density::Read.control()),
-                )
-            };
-            let mut action_ui = ui.new_child(
-                egui::UiBuilder::new()
-                    .max_rect(action_rect)
-                    .layout(egui::Layout::right_to_left(egui::Align::Center)),
+            let slot = design::action_rows::MeasuredColumn::start(
+                "plan_row_columns",
+                widths[1],
+                words_width,
+            )
+            .slot(
+                ui,
+                egui::Rect::from_min_max(
+                    left,
+                    egui::pos2(ui.max_rect().right(), left.y + Density::Read.control()),
+                ),
+                left.x,
             );
+            let action_rect = slot.rect();
+            let mut action_ui = slot.child(ui);
             action(&mut action_ui);
             ui.spacing_mut().item_spacing.y = 0.0;
             ui.advance_cursor_after_rect(
@@ -690,43 +681,23 @@ fn plan_row_with(
             // The row's facts are every line it drew: its title and its summary (PR 605 review,
             // P1: a short title over a long summary set the column inside the summary).
             let facts_width = words_width.max(summary_rect.right() - left.x);
-            plan_measured(ui, facts_width, widths[1]);
-            #[cfg(any(test, feature = "test-support"))]
-            if action_ui.min_rect().is_positive() {
-                design::action_rows::keep(
-                    ui,
-                    design::action_rows::RowRecord {
-                        owner: "plan",
-                        row: 0,
-                        facts: egui::Rect::from_min_max(
-                            left,
-                            egui::pos2(
-                                left.x + facts_width,
-                                summary_rect.bottom().max(title.response.rect.bottom()),
-                            ),
-                        ),
-                        line: title.response.rect,
-                        action: action_ui.min_rect(),
-                        column: action_rect.left(),
-                        edge: far_edge,
-                        wrapped: !column,
-                    },
-                );
-            }
+            slot.done(
+                ui,
+                "plan",
+                0,
+                egui::Rect::from_min_max(
+                    left,
+                    egui::pos2(
+                        left.x + facts_width,
+                        summary_rect.bottom().max(title.response.rect.bottom()),
+                    ),
+                ),
+                title.response.rect,
+                action_ui.min_rect(),
+            );
         });
     });
     design::register_row(ui, row.response.rect);
-}
-
-/// The plan's columns (`design::action_rows::columns`): its widest facts (each row's title and
-/// summary lines) and its widest action recipe, from its last pass.
-fn plan_columns(ui: &egui::Ui) -> (f32, f32) {
-    design::action_rows::columns(ui, egui::Id::new("plan_row_columns"))
-}
-
-/// Add a drawn row's facts (every line) and its action recipe to this pass's columns.
-fn plan_measured(ui: &egui::Ui, facts: f32, actions: f32) {
-    design::action_rows::measured(ui, egui::Id::new("plan_row_columns"), facts, actions);
 }
 
 /// Why a played fight's summary cannot show: its run folder's cause (R41, in Encounters' words
