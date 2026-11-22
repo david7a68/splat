@@ -812,7 +812,6 @@ fn arrival_blocks(d: &Driver<'_>) -> Option<(Vec<String>, Vec<String>, Vec<Strin
     }
     let alone = shown
         .iter()
-        .cloned()
         .filter(|name| {
             let add = format!("Add {name} to the initiative list");
             !nodes.iter().filter(|node| node.name == add).any(|node| {
@@ -821,6 +820,7 @@ fn arrival_blocks(d: &Driver<'_>) -> Option<(Vec<String>, Vec<String>, Vec<Strin
                     .any(|(_, bounds)| node.rect.contains(bounds.center()))
             })
         })
+        .cloned()
         .collect();
     Some((texts_cut_from_below(d, area), alone, shown))
 }
