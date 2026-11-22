@@ -1279,6 +1279,7 @@ pub struct ScrollColumn {
     sideways: bool,
     full_width: bool,
     hosts_reveals: bool,
+    follows_focus: bool,
 }
 
 impl ScrollColumn {
@@ -1292,7 +1293,17 @@ impl ScrollColumn {
             sideways: false,
             full_width: false,
             hosts_reveals: false,
+            follows_focus: false,
         }
+    }
+
+    /// A column outside a pane (the session banner): a control of it that gains keyboard focus
+    /// comes whole into its view by the pane's focus rules (`pane::follow_focus`), so Tab never
+    /// reaches a control the column hides. In a pane's body the pane is that one arbiter, and
+    /// this does nothing.
+    pub fn follows_focus(mut self) -> Self {
+        self.follows_focus = true;
+        self
     }
 
     /// R46: this column may host a reveal (`design::reveal`). Its programmatic scrolls land in
@@ -1407,6 +1418,7 @@ impl ScrollColumn {
             return self.inline(ui, add);
         }
         let (sideways, full, id) = (self.sideways, self.full_width, self.id);
+        let follows = self.follows_focus;
         // In a pane's body, the area starts where a `line_start` hang may reach and its content
         // at the text edge (P3a): the surface covers the hang, and nothing moves.
         let Some(reach) = super::pane::column_reach(ui, lane_width()) else {
@@ -1420,7 +1432,9 @@ impl ScrollColumn {
                         if full {
                             ui.set_min_width(width);
                         }
-                        super::pane::whole_rows(ui, id, add)
+                        super::pane::whole_rows(ui, id, |ui| {
+                            super::pane::follow_focus(ui, follows, id, add)
+                        })
                     })
                 })
             });
