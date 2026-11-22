@@ -1334,4 +1334,72 @@ pub fn run(d: &mut Driver<'_>) {
     );
     d.expect_same("Saving the corrected day returns to the original unflagged Timeline.");
     d.state("timeline-day-renumbered-on-save", Sizes::All);
+    long_issue_list_stays_whole(d, &manifest);
+}
+
+/// Layout step 11c (review of PR 719): the Campaign page's issue list is drawn in place in the
+/// pane's scroll column, each flag a whole row. With dozens of flags and the footer pinned under
+/// them, no flag is cut at the footer's edge, at any scroll offset. The reference is the painted
+/// text: a flag's words whose clip ends at the footer's top while the words go on below it.
+fn long_issue_list_stays_whole(d: &mut Driver<'_>, manifest: &std::path::Path) {
+    let text = fs::read_to_string(manifest).unwrap();
+    let rows =
+        "| Flanking | Imaginary flanking %% splat rule=dnd2024:rules/flanking %% |\n".repeat(40);
+    let long = text.replacen("| --- | --- |\n", &format!("| --- | --- |\n{rows}"), 1);
+    assert_ne!(long, text);
+    fs::write(manifest, &long).unwrap();
+    d.click(NAV_CAMPAIGN);
+    d.click("Reload from disk");
+    d.settle();
+    // A saved choice keeps its result in the footer, under the long page.
+    let page = egui::pos2(500.0, 300.0);
+    d.scroll_until(page, "Use Ashen Marches", 40);
+    d.click("Use Ashen Marches");
+    d.click("Save selections");
+    d.wait_for_text("Campaign selections saved.");
+    d.scroll_up_at(page, 60);
+    let mut footers = Vec::new();
+    let mut cuts = Vec::new();
+    let mut hidden_below = false;
+    let mut offsets = 0;
+    for _ in 0..24 {
+        let Some(footer) = footer_with(d, "Campaign selections saved.") else {
+            break;
+        };
+        footers.push(footer.top());
+        // Over the page, above the footer.
+        let page = egui::pos2(footer.center().x, footer.top() - crate::design::XXL * 2.0);
+        offsets += 1;
+        d.each_painted_text(|text, clip| {
+            let words = &text.galley.job.text;
+            if !(words.contains("Flanking") || words.contains("Rule choice id")) {
+                return;
+            }
+            let rect = text.visual_bounding_rect();
+            // Shown above the footer, and its words go on below the clip: a cut flag.
+            if rect.top() < clip.bottom() - 0.5
+                && clip.bottom() <= footer.top() + 0.5
+                && rect.bottom() > clip.bottom() + 0.5
+            {
+                cuts.push((words.clone(), rect, clip));
+            }
+        });
+        hidden_below |= d
+            .nodes()
+            .into_iter()
+            .any(|node| node.name.contains("Flanking") && node.rect.top() >= footer.top());
+        // A touchpad step, not a whole row: each offset puts a row's edge somewhere new.
+        d.scroll_points_at(page, 37.0);
+    }
+    d.observe(
+        "l11c-C1-long-issue-list-whole-rows",
+        offsets == 24 && hidden_below && cuts.is_empty(),
+        format!(
+            "At {:?}, footer tops {footers:?}, {offsets} offsets, flags below the footer {hidden_below}; flags cut at the footer: {cuts:?}",
+            d.window_size()
+        ),
+    );
+    fs::write(manifest, &text).unwrap();
+    d.click("Reload from disk");
+    d.settle();
 }
