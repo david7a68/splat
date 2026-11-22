@@ -359,6 +359,10 @@ mod tests {
         stray: Option<usize>,
         /// Every block drawn asks egui to scroll to the region's top (a raw `scroll_to_rect`).
         pull: bool,
+        /// Another scroll column beside the pane (its rect in this pass).
+        beside: Option<Rect>,
+        /// Block 1 takes block 0's key.
+        duplicate: bool,
     }
 
     impl Page {
@@ -377,6 +381,8 @@ mod tests {
                 controls: None,
                 stray: None,
                 pull: false,
+                beside: None,
+                duplicate: false,
             }
         }
     }
@@ -384,12 +390,33 @@ mod tests {
     fn harness(page: Page, size: egui::Vec2) -> Harness<'static, Page> {
         let mut harness = Harness::builder().with_size(size).build_ui_state(
             |ui, page: &mut Page| {
+                let full = ui.available_rect_before_wrap();
+                if page.beside.is_some() {
+                    let (_, right) = full.split_left_right_at_fraction(0.5);
+                    page.beside = Some(right);
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
+                        crate::design::layout::ScrollColumn::new("laid_test_beside").show(
+                            ui,
+                            |ui| {
+                                for line in 0..80 {
+                                    let _ = ui.label(format!("Beside {line}"));
+                                }
+                            },
+                        );
+                    });
+                }
+                let left = page
+                    .beside
+                    .map_or(full, |_| full.split_left_right_at_fraction(0.5).0);
+                let mut ui = ui.new_child(egui::UiBuilder::new().max_rect(left));
+                let ui = &mut ui;
                 let frame = PaneFrame::new(ui);
                 let messages = Messages::<NoPress>::new(&frame, "laid_test", ui.available_width());
                 let _ = messages.pane(ui, Body::Content, |ui| {
                     let width = ui.available_width();
                     if page.laid.is_empty() || std::mem::take(&mut page.stale) {
-                        let (split, controls) = (page.split, page.controls);
+                        let (split, controls, duplicate) =
+                            (page.split, page.controls, page.duplicate);
                         page.laid = (0..page.texts.len())
                             .map(|at| match (split, controls) {
                                 (Some(split), _) if split == at => test_block(
@@ -411,6 +438,9 @@ mod tests {
                                     &(0..count).map(|i| 80.0 * i as f32).collect::<Vec<_>>(),
                                     80.0,
                                 ),
+                                _ if duplicate && at == 1 => {
+                                    test_recipe(ui, 0usize, &page.texts[at], width, 80.0)
+                                }
                                 _ => test_recipe(ui, at, &page.texts[at], width, 80.0),
                             })
                             .collect();
@@ -937,5 +967,129 @@ mod tests {
         });
         harness.run_steps(4);
         assert!(!shown(&harness, 33), "the wheel cancels a queued request");
+    }
+
+    fn button_at(at: egui::Pos2, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        }
+    }
+
+    /// Review of PR 757 (P1): in a section drawn as its head (the 300 px section in a 244 px
+    /// room), Tab from the head's control reaches the body's control, which the head's clip hides:
+    /// the body comes whole into view, so the control shows, keeps the focus and paints. Red: no
+    /// clearance for a clipped part's control.
+    #[test]
+    fn tab_into_a_clipped_part_brings_its_unit_into_view() {
+        let mut page = Page::new(texts(8));
+        page.split = Some(3);
+        let mut harness = harness(page, egui::vec2(960.0, 260.0));
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new(3usize)));
+        harness.run_steps(3);
+        harness.get_by_label("Act 3").focus();
+        harness.run_steps(3);
+        key_press(&mut harness, egui::Key::Tab, egui::Modifiers::NONE);
+        let node = harness.get_by_label("Act 3.1");
+        let clip = harness.state().clip;
+        assert!(node.is_focused(), "Tab reaches the body's control");
+        assert!(
+            clip.expand(0.5).contains_rect(node.rect()),
+            "the body's control {:?} is whole in the room {clip:?}",
+            node.rect()
+        );
+        assert!(
+            painted(&harness)
+                .iter()
+                .any(|text| text.starts_with("Body 3 ")),
+            "the body's unit draws"
+        );
+    }
+
+    /// Review of PR 757 (P1, P2): a queued request belongs to its column. With one pass a frame:
+    /// a wheel over another column does not end it; a press held still in its own column makes
+    /// it wait (queued first, then held) and it lands after the release; a drag begun in its
+    /// column ends it, also while the press is held. Red runs: input read window-wide; no wait for
+    /// a held press in the column; a drag that only defers it.
+    #[test]
+    fn a_queued_request_answers_only_its_own_column() {
+        let mut page = Page::new(texts(40));
+        page.beside = Some(Rect::NOTHING);
+        let mut harness = harness(page, egui::vec2(1200.0, 420.0));
+        let show = |harness: &mut Harness<'_, Page>, at: usize| {
+            harness
+                .state_mut()
+                .region
+                .navigate(Navigation::Show(Id::new(at)));
+        };
+        // A wheel over the other column.
+        show(&mut harness, 30);
+        harness.step();
+        let beside = harness.state().beside.expect("the other column").center();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(beside));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 30),
+            "a wheel over another column leaves the request"
+        );
+        // Queued, then a press held still in its column: it waits, and lands after the release.
+        // A point of the pane's own column (the clip spans both columns).
+        let at = harness.state().clip.left_center() + egui::vec2(100.0, 0.0);
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(at));
+        harness.step();
+        show(&mut harness, 5);
+        harness.step();
+        harness.input_mut().events.push(button_at(at, true));
+        harness.run_steps(2);
+        assert!(
+            !shown(&harness, 5),
+            "the queued request waits while the press is held"
+        );
+        harness.input_mut().events.push(button_at(at, false));
+        harness.run_steps(3);
+        assert!(shown(&harness, 5), "it lands after the release");
+        // Queued, then a drag begun in its column: it ends.
+        show(&mut harness, 35);
+        harness.step();
+        harness.input_mut().events.push(button_at(at, true));
+        harness.step();
+        for step in 1..4 {
+            harness.input_mut().events.push(egui::Event::PointerMoved(
+                at + egui::vec2(0.0, 12.0 * step as f32),
+            ));
+            harness.step();
+        }
+        let end = at + egui::vec2(0.0, 36.0);
+        harness.input_mut().events.push(button_at(end, false));
+        harness.run_steps(3);
+        assert!(
+            !shown(&harness, 35),
+            "a drag in its column ends the request"
+        );
+    }
+
+    /// Review of PR 757 (P2): two measured blocks of one region may not share a key.
+    #[test]
+    #[should_panic(expected = "share a key")]
+    fn two_blocks_of_one_key_are_refused() {
+        let mut page = Page::new(texts(6));
+        page.duplicate = true;
+        let _ = harness(page, egui::vec2(960.0, 420.0));
     }
 }

@@ -381,6 +381,15 @@ impl BlockPlan {
             })
             .collect();
         let measured = keys.iter().any(Option::is_some);
+        // Review of PR 757 (P2): a key names one block; two blocks of one key would share their
+        // widget ids and a request could not tell them apart.
+        debug_assert!(
+            {
+                let mut seen = std::collections::HashSet::new();
+                keys.iter().flatten().all(|key| seen.insert(*key))
+            },
+            "two measured blocks of one region share a key"
+        );
         work.builds += 1;
         work.blocks_measured += blocks.len();
         work.bytes_indexed +=
@@ -431,6 +440,11 @@ impl BlockPlan {
     /// Block `at`'s stable key, when a recipe laid it out.
     pub(in crate::design) fn key(&self, at: usize) -> Option<egui::Id> {
         self.keys[at]
+    }
+
+    /// Block `at`'s head (its semantic boundary from its top), if it has one.
+    pub(in crate::design) fn head(&self, at: usize) -> Option<f32> {
+        Reader::new(self).head(at)
     }
 
     /// The block whose key is `key`, if the plan holds it: a scan, made only when a request is

@@ -509,6 +509,9 @@ pub(super) struct Column {
 #[derive(Clone, Copy, Debug)]
 struct Queued {
     offset: f32,
+    /// The column's view (screen points) when it was queued: only input over it is the DM's
+    /// input for this request.
+    view: Rect,
     /// The frame it was queued in, and the last frame it waited in.
     made: u64,
     frame: u64,
@@ -528,6 +531,7 @@ pub(in crate::design) fn queue(ui: &Ui, by: f32) {
     let frame = ui.ctx().cumulative_frame_nr();
     let queued = Queued {
         offset: (region.offset + by).max(0.0),
+        view: region.view,
         made: frame,
         frame,
     };
@@ -537,35 +541,61 @@ pub(in crate::design) fn queue(ui: &Ui, by: f32) {
         .request_discard("a region's request moves its column");
 }
 
-/// The offset queued for the column `key`, taken at the start of its pass. It is applied only
-/// in its own frame or the next one, and never in a pass with the DM's own input (a wheel, a
-/// drag, a press, a key, text: it is cancelled; a release ends a held press and is not one);
-/// while a press is held it waits, up to `QUEUED_FRAMES`.
+/// The offset queued for the column `key`, taken at the start of its pass. Only the DM's input
+/// over that column (or to a control in it) counts (review of PR 757): a wheel turn over it or a
+/// drag begun in it ends the request, also while the press is held; a press held still in it
+/// makes the request wait, up to `QUEUED_FRAMES`; any other press in it, or a key, text or input
+/// method event while the focus is in it, ends it; else it applies in its own frame or the next
+/// one. A release ends a held press and is not input.
 pub(super) fn take_queued(ui: &Ui, key: Id) -> Option<f32> {
     let id = queued_id(key);
     let mut queued = ui.ctx().data(|data| data.get_temp::<Queued>(id))?;
     let frame = ui.ctx().cumulative_frame_nr();
-    if ui.input(|input| input.pointer.any_down()) && frame <= queued.made + QUEUED_FRAMES {
-        // A held press: the request waits, up to its bound.
+    let view = queued.view;
+    let focus_in = ui
+        .ctx()
+        .memory(|memory| memory.focused())
+        .and_then(|focused| ui.ctx().read_response(focused))
+        .is_some_and(|response| view.intersects(response.rect));
+    let (moved, held, other) = ui.input(|input| {
+        let pointer = &input.pointer;
+        let over = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| view.contains(pos));
+        let wheel = input.raw_scroll_delta != Vec2::ZERO
+            || input.smooth_scroll_delta != Vec2::ZERO
+            || input
+                .events
+                .iter()
+                .any(|event| matches!(event, egui::Event::MouseWheel { .. }));
+        let pressed_in = pointer.any_down() && over(pointer.press_origin());
+        let dragged = pressed_in && pointer.is_decidedly_dragging();
+        let other = input.events.iter().any(|event| match event {
+            egui::Event::PointerButton {
+                pos, pressed: true, ..
+            } => view.contains(*pos) && !pressed_in,
+            egui::Event::Text(_)
+            | egui::Event::Paste(_)
+            | egui::Event::Ime(_)
+            | egui::Event::Key { pressed: true, .. } => focus_in,
+            _ => false,
+        });
+        (
+            (wheel && over(pointer.hover_pos())) || dragged,
+            pressed_in,
+            other,
+        )
+    });
+    if !moved && held && frame <= queued.made + QUEUED_FRAMES {
+        // A press held still: the request waits, up to its bound.
         queued.frame = frame;
         ui.ctx().data_mut(|data| data.insert_temp(id, queued));
         return None;
     }
     ui.ctx().data_mut(|data| data.remove::<Queued>(id));
-    let facts = facts(ui);
-    let input = facts.moved
-        || facts.events.iter().any(|event| {
-            matches!(
-                event,
-                egui::Event::Text(_)
-                    | egui::Event::Paste(_)
-                    | egui::Event::MouseWheel { .. }
-                    | egui::Event::PointerButton { pressed: true, .. }
-                    | egui::Event::Key { pressed: true, .. }
-            )
-        });
-    (frame <= queued.frame + 1 && !input).then_some(queued.offset)
+    (frame <= queued.frame + 1 && !moved && !held && !other).then_some(queued.offset)
 }
+
+/// The frames a queued request may wait for a held press to end.
+const QUEUED_FRAMES: u64 = 8;
 
 /// After a column's content, in a pass that queued a region's request or applied one: a raw
 /// `scroll_to_rect` of that content (egui keeps it as a target that lands at the start of the
@@ -580,9 +610,6 @@ fn settle_queued(ui: &mut Ui, column: Column, view: Rect) {
         ui.scroll_to_rect(view.shrink(1.0), None);
     }
 }
-
-/// The frames a queued request may wait for a held press to end.
-const QUEUED_FRAMES: u64 = 8;
 
 /// A `ScrollColumn`'s facts in one pass, recorded where its content starts.
 #[derive(Clone, Copy, Debug)]
