@@ -32,6 +32,8 @@ pub mod value_block;
 pub(crate) mod attributes;
 #[cfg(test)]
 mod lint;
+#[cfg(test)]
+mod typing_history_model;
 
 pub use column::*;
 pub use components::*;
@@ -56,12 +58,14 @@ pub use layout::{
     status_slot, title_lead_in, title_placement, write_under_history,
 };
 // Wave 2 callers name the pane's escape through `design`.
+#[cfg(any(test, feature = "test-support"))]
+pub use pane::notices_laid;
 #[allow(unused_imports)]
 pub use pane::{
     ACTION_ROW, ActionLine, Block, BlockRegion, Body, ENTRY_ROW_HEIGHT, EditorRegion, Fills,
-    FillsReason, Laid, LaidUi, LineColumns, Navigation, PaneColumns, PaneEdges, Placement,
-    PlanColumns, PlanRow, RegionState, Row, SummaryPart, draw_laid, line_slot, plan_rule,
-    plan_slot,
+    FillsReason, Laid, LaidUi, LineAction, LineColumns, Navigation, NoticeRoll, NoticeRow,
+    PaneColumns, PaneEdges, Placement, PlanColumns, PlanRow, RegionState, Row, SummaryPart,
+    check_height, draw_laid, line_slot, notice_slot, plan_rule, plan_slot,
 };
 // Wave 2 callers name the popup parts through `design`, as they name the components.
 #[allow(unused_imports)]

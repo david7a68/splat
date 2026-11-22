@@ -67,10 +67,8 @@ fills	src/encounters.rs	Encounters::creature_pane	1	Encounters	the creature's Ma
 fills	src/encounters.rs	Encounters::editor_view	1	Encounters
 fills	src/encounters/groups.rs	Encounters::group_editor_view	1	Encounters
 fills	src/party.rs	Party::show	1	Party
-fills	src/sessions/page.rs	Sessions::notes_panel	1	Sessions
 fills	src/sessions/page.rs	Sessions::session_body_kind	3	Sessions
 fills	src/sessions/page.rs	Sessions::session_pane	1	Sessions
-fills	src/sessions/page.rs	Sessions::templates_view	1	Sessions
 fills	src/sessions/page.rs	fills_body	1	Sessions	the Sessions wrapper (named `fills` until this PR); each pane that names it is a row
 fills	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
 composite-child	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign	the package list and the chosen package: a shared task (step 7); its children become closed blocks with the forms and lists of steps 10 and 11

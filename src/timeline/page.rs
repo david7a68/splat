@@ -530,9 +530,21 @@ pub enum FileAct {
 /// (`Undo reload Broken.md`, `Undo discard of Broken.md`); a readable note's Undo names the note
 /// (a session note, a World note: M0438). A book with no file gives `Undo reload` (M0548).
 fn reload_step(book: &Book) -> UndoStep {
-    match book.file().0.file_name() {
-        Some(name) => UndoStep::of(Verb::Reload, name.to_string_lossy()),
-        None => UndoStep::verb(Verb::Reload),
+    named_step(
+        Verb::Reload,
+        book.file()
+            .0
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned()),
+    )
+}
+
+/// An Undo that names its object, the one place that falls back to the bare verb when there is
+/// none (a book with no file, an added event no longer in the book).
+fn named_step(verb: Verb, object: Option<String>) -> UndoStep {
+    match object.filter(|object| !object.trim().is_empty()) {
+        Some(object) => UndoStep::of(verb, object),
+        None => UndoStep::verb(verb),
     }
 }
 
@@ -1253,9 +1265,7 @@ impl TimelinePage {
             .refresh(&self.added, &file, inputs, |shown| {
                 let id = &shown.value().id;
                 let at = book.events.iter().position(|event| event.id == *id);
-                let label = at.map_or_else(String::new, |at| {
-                    book.events[at].label(day_numbers(&book.events)[at])
-                });
+                let label = at.map(|at| book.events[at].label(day_numbers(&book.events)[at]));
                 let restores = at
                     .map(|at| &book.events[at])
                     .filter(|event| event.kind == Kind::LongRest && event.restores)
@@ -1263,9 +1273,14 @@ impl TimelinePage {
                         super::fights_that_keep_hp(&book.events, event.session, saved_runs)
                     });
                 // Timeline lists every session, so its result names only the event.
-                let words = as_sentence(&added_message(&label, None, restores));
+                let words = as_sentence(&added_message(
+                    label.as_deref().unwrap_or(""),
+                    None,
+                    restores,
+                ));
+                // The Undo names the added event, as its words do.
                 Said::new(words)
-                    .undo(UndoStep::verb(Verb::Add).pressed_as(ListAct::UndoAdd))
+                    .undo(named_step(Verb::Add, label).pressed_as(ListAct::UndoAdd))
                     .into()
             });
         if let Ok(Some(line)) = self.added.present(frame, projection, &file, inputs) {
@@ -2644,7 +2659,9 @@ mod tests {
         harness.get_by_label("Add Major event").click();
         harness.run_steps(4);
         let undo = |harness: &egui_kittest::Harness<'_, State>| {
-            harness.query_by_label("Undo add").map(|node| node.rect())
+            harness
+                .query_by_label("Undo add Major event")
+                .map(|node| node.rect())
         };
         assert!(undo(&harness).is_some(), "the footer holds the Add result");
         for height in (260..=420).step_by(8) {
@@ -2740,7 +2757,7 @@ mod tests {
         };
         let shows = |harness: &egui_kittest::Harness<'_, State>| {
             (
-                harness.query_by_label("Undo add").is_some(),
+                harness.query_by_label("Undo add Major event").is_some(),
                 harness
                     .query_all_by_label_contains(" added.")
                     .next()
