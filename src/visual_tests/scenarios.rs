@@ -20538,6 +20538,24 @@ pub mod encounter_groups {
                 format!("At {size:?}, the default side's closed value is painted in {families:?}, want {body}"),
             );
         }
+        // Layout 11c (M0246): `Default side` and `Belongs to` stand after their labels' one
+        // column, so both controls start at one x, at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let lefts = d.at_size(size, |d| {
+                let nodes = d.nodes();
+                ["Default side", "Belongs to"].map(|prefix| {
+                    nodes
+                        .iter()
+                        .find(|node| node.name.starts_with(prefix) && node.in_view())
+                        .map(|node| node.rect.left())
+                })
+            });
+            d.observe(
+                "m32-L11c-group-choices-column",
+                matches!(lefts, [Some(a), Some(b)] if (a - b).abs() <= 0.5),
+                format!("At {size:?}, Default side and Belongs to start at {lefts:?}"),
+            );
+        }
         // R38 (structural B4): the back line, its word whole at the text edge, the name below.
         let faults = back_line_faults(d, "Encounters", "Back to encounters", "Group name", None);
         d.observe(
