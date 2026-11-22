@@ -916,27 +916,16 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "selection_bar_content",
             &[Ban::Results],
         ),
-        ("src/campaigns.rs", "at", &[Ban::Results]),
-        ("src/campaigns.rs", "default", &[Ban::Results]),
         (
             "src/campaigns.rs",
             "footer_messages",
-            // Layout PR 2b: typed lines (`outcome_at` keeps the staged orders; `Footer::result`
-            // went); the page's lock words are app-owned `&str`.
-            &[Ban::Order, Ban::Words],
+            // Layout PR 2b: typed lines; the page's lock words are app-owned `&str`.
+            &[Ban::Words],
         ),
         ("src/campaigns.rs", "form", &[Ban::Results]),
-        (
-            "src/campaigns.rs",
-            "one_to_one_links_replace_and_unlink_without_changing_other_campaigns",
-            &[Ban::Results],
-        ),
-        (
-            "src/campaigns.rs",
-            "register_campaign_copy",
-            &[Ban::Results],
-        ),
-        ("src/campaigns.rs", "save_form", &[Ban::Results]),
+        // M20: the first campaign's form has no footer; its error is a typed body fault in
+        // place of `design::message` (`draw_error`, gone).
+        ("src/campaigns.rs", "form_error_inline", &[Ban::Body]),
         // The design system's pane tests with closure lines (the `#[cfg(test)]` `Footer::result`,
         // `legacy_reason`) and a footer placed by hand (migration-32 L2c: no app code can).
         (
@@ -960,21 +949,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Layout(4)],
         ),
         ("src/design/results.rs", "act_order", &[Ban::Results]),
-        // Layout PR 2b: the link's result keeps its staged order through `outcome_at`.
-        ("src/dndbeyond.rs", "footer_messages", &[Ban::Order]),
         // Layout PR 2b: the one escape of the Settings and Link and folder footers' words.
         ("src/campaigns.rs", "footer_words", &[Ban::Words]),
-        ("src/dndbeyond.rs", "show_link", &[Ban::Results]),
         // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c).
         (
             "src/encounter_run/view.rs",
             "groups_tab",
             &[Ban::Layout(1), Ban::Pane(1)],
-        ),
-        (
-            "src/encounters/groups.rs",
-            "discard_group_draft",
-            &[Ban::Results],
         ),
         (
             "src/encounters/groups.rs",
@@ -1052,7 +1033,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "markers",
             &[Ban::Results, Ban::Extras(1)],
         ),
-        ("src/sessions/page.rs", "new_notice", &[Ban::Results]),
         (
             "src/sessions/page.rs",
             "reading_view",
@@ -1070,16 +1050,23 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/sessions/plan.rs",
             "plan_pane",
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            &[Ban::Results, Ban::ByOwner(1)],
+            &[Ban::ByOwner(1)],
         ),
-        (
-            "src/sessions/plan.rs",
-            "record_deleted_run",
-            &[Ban::Results],
-        ),
-        ("src/sessions/plan.rs", "scene_act", &[Ban::Results]),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
+        // M-N1.1 (ruling M20): a result with the note's Undo at its own place
+        // (`PlacedResult`), replacing three `undo_message` calls.
+        (
+            "src/sessions/plan.rs",
+            "removed_scene_message",
+            &[Ban::Body],
+        ),
+        ("src/sessions/plan.rs", "field_result", &[Ban::Body]),
+        (
+            "src/sessions/plan.rs",
+            "removed_fight_message",
+            &[Ban::Body],
+        ),
         ("src/trackers/history.rs", "remove", &[Ban::Results]),
         ("src/trackers/history.rs", "footer", &[Ban::Order]),
         (
@@ -1100,7 +1087,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "selector",
             &[Ban::Layout(1), Ban::Extras(2)],
         ),
-        ("src/copy_dialog.rs", "show", &[Ban::Layout(2)]),
+        // M20: the copy dialog's error is a typed body message (`BodyMessage` of a
+        // `FaultMessage`) in place of an untyped `design::message`.
+        ("src/copy_dialog.rs", "show", &[Ban::Body]),
         ("src/creature_filter.rs", "menu", &[Ban::Layout(1)]),
         (
             "src/encounter_run/ad_hoc.rs",
@@ -1252,6 +1241,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
+            &[Ban::Body],
+        ),
+        (
+            "src/design/outcome.rs",
+            "a_placed_result_shows_its_undo_whole_where_it_fits",
             &[Ban::Body],
         ),
         // N0 (ruling M21): a message holds at most one primary choice.
@@ -1646,13 +1640,8 @@ pub(crate) const STAGED: &[Staged] = &[
         "ResultOrder::issue(",
         "Record the result in a `design::Results` store: it issues the order at the action.",
         &[
-            ("src/campaigns.rs", 9),
             ("src/design/components.rs", 15),
-            ("src/dndbeyond.rs", 1),
-            ("src/encounters/groups.rs", 1),
             ("src/sessions/carry.rs", 1),
-            ("src/sessions/page.rs", 1),
-            ("src/sessions/plan.rs", 4),
             ("src/timeline.rs", 1),
             ("src/trackers/history.rs", 1),
         ],
@@ -1708,7 +1697,7 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/encounters.rs", 4),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 6),
-            ("src/sessions/plan.rs", 4),
+            ("src/sessions/plan.rs", 2),
             ("src/timeline/page.rs", 3),
             ("src/timeline/test_support.rs", 2),
             ("src/world.rs", 1),

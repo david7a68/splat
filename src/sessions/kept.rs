@@ -106,6 +106,34 @@ impl Kept for FolderMoved {
     }
 }
 
+/// The Sessions page's one notice (#597): what the last act or a job said, in its tone, for one
+/// session or for whichever is open (`session: None`), and whether it arrived by itself (a
+/// recording processed while the DM was elsewhere), which places it in the bottom banner. The
+/// page holds one: a new one replaces it (`record`), and a press of its close icon, an act that
+/// answers it or a change of what it was about ends it (`Sessions::end_notice`). A success is a
+/// kept line by the store's order and ticket; the other tones are notices with no order.
+pub(super) struct PageNotice {
+    pub page: Page,
+    pub tone: crate::design::Tone,
+    pub words: String,
+    pub session: Option<Uuid>,
+    pub arrived: bool,
+}
+
+impl Kept for PageNotice {
+    type Owner = Page;
+    const ENDS: Ends = Ends {
+        // The page ends it where its rules say (`end_notice`).
+        owner_changed: OwnerChanged::Ends,
+        disk_changed: DiskChanged::Stays,
+        // Its close icon uses it up.
+        press: Press::Use,
+    };
+    fn owner(&self) -> Page {
+        self.page.clone()
+    }
+}
+
 /// A draft's file: the session note or the template a draft edits. A result of that draft is
 /// its file's; another draft's file hides it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -258,5 +286,52 @@ impl Kept for LinkUpdate {
     };
     fn owner(&self) -> Page {
         self.page.clone()
+    }
+}
+
+/// One kind of the plan's kept result whose data the plan's own fields hold: a scene act's Undo
+/// (`Scenes::added`, `Scenes::removed`), the group removed from tonight (`removed_group`), the
+/// deleted run (`deleted_run`). One of each kind per campaign, as each kind's data is held once.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum PlanKind {
+    SceneAdded,
+    SceneRemoved,
+    GroupRemoved,
+    DeletedRun,
+}
+
+/// Whose plan result it is: the campaign's session folder and its kind. A campaign switch hides
+/// it, and ends its data (`open_campaign`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct PlanOwner {
+    pub root: PathBuf,
+    pub kind: PlanKind,
+}
+
+impl Owner for PlanOwner {
+    type Scope = Path;
+    fn scope(&self) -> &Path {
+        &self.root
+    }
+}
+
+/// A plan result in the plan's store: its owner only, for the footer's order (issued at the act)
+/// and the press's ticket. Its words and its Undo come from the data its kind holds, which ends
+/// it: when that data goes (an Undo, the note's next edit, another act of the kind), the plan
+/// ends this entry before its footer is made (`Sessions::end_plan_marks`).
+pub(super) struct PlanMark(pub PlanOwner);
+
+impl Kept for PlanMark {
+    type Owner = PlanOwner;
+    const ENDS: Ends = Ends {
+        // Its data was dropped (`end_plan_marks`).
+        owner_changed: OwnerChanged::Ends,
+        // A reload keeps the data it undoes; the data's own checks end it.
+        disk_changed: DiskChanged::Stays,
+        // Its Undo puts its data back; it leaves only when that was done.
+        press: Press::Undo,
+    };
+    fn owner(&self) -> PlanOwner {
+        self.0.clone()
     }
 }
