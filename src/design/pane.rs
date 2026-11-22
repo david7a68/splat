@@ -1017,9 +1017,6 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
     let before = ui
         .ctx()
         .data(|data| data.get_temp::<(Option<Id>, Rect, Option<[i32; 2]>)>(seen));
-    if before == Some((focused, room, place)) {
-        return;
-    }
     let pointer = ui.input(|input| {
         let pointer = &input.pointer;
         pointer.any_down() || pointer.any_pressed() || pointer.any_released()
@@ -1031,11 +1028,24 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
     // than the view (an editor's text) is never pulled to its top by a click.
     let cut = block
         .is_some_and(|block| !visible.contains_rect(block) && block.height() <= visible.height());
-    if pointer && cut {
+    let key = (focused, room, place);
+    // The pointer on the focused control itself: a click on it, also again on a field that
+    // already had the focus (layout PR 10c), whose caption the DM's wheel took out of view.
+    // The waiting reveal forgets the seen state, so the release reveals the block even with the
+    // same focus, room and place; a drag of the scroll bar elsewhere is not a click on it.
+    let on_it = own.is_some_and(|own| {
+        ui.input(|input| input.pointer.latest_pos())
+            .is_some_and(|at| own.contains(at))
+    });
+    if pointer && cut && (on_it || before != Some(key)) {
+        ui.ctx()
+            .data_mut(|data| data.remove::<(Option<Id>, Rect, Option<[i32; 2]>)>(seen));
         return;
     }
-    ui.ctx()
-        .data_mut(|data| data.insert_temp(seen, (focused, room, place)));
+    if before == Some(key) {
+        return;
+    }
+    ui.ctx().data_mut(|data| data.insert_temp(seen, key));
     // The same control, a new room or a changed field: scroll only when it is not whole in view.
     // A field taller than the view that changed in the same room (an editor that grows as the DM
     // types) keeps its own caret follow: its top is not pulled into view.
@@ -2657,6 +2667,37 @@ mod hold_tests {
             caption.top() >= viewport.top() - 0.5,
             "i9-click: after a click on the field, its caption {caption:?} is whole in the view \
              {viewport:?}"
+        );
+        // Layout PR 10c: the same field, focused all along. The DM's wheel takes its caption out
+        // of view again (no reveal: the wheel is never pulled back); a second click on the field
+        // brings its whole field into view, with the same focus, room and place as before.
+        let focused = h.ctx.memory(|memory| memory.focused());
+        let up = caption.bottom() - viewport.top() + 2.0;
+        h.hover_at(viewport.center());
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -up),
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(4);
+        let cut = h
+            .get_by_role_and_label(egui::accesskit::Role::Label, "Clip caption")
+            .rect();
+        assert!(
+            cut.top() < viewport.top() - 0.5 && h.ctx.memory(|memory| memory.focused()) == focused,
+            "i9-again-setup: the wheel cut the caption {cut:?} at the view's top {viewport:?}, \
+             the field kept its focus"
+        );
+        h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Clip caption")
+            .click();
+        h.run_steps(4);
+        let caption = h
+            .get_by_role_and_label(egui::accesskit::Role::Label, "Clip caption")
+            .rect();
+        assert!(
+            caption.top() >= viewport.top() - 0.5,
+            "i9-again: a second click on the focused field brings its caption {caption:?} into \
+             the view {viewport:?}"
         );
     }
 

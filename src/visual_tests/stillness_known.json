@@ -332,8 +332,7 @@
     ["N4/quiet-action-line-start","25-marked-transcript","1920x1080","Button \"Earlier part\"",1],
     ["N4/quiet-action-line-start","25-marked-transcript","960x640","Button \"Earlier part\"",1],
     ["N4/quiet-action-line-start","27-recording-part-open","1200x800","Button \"Earlier part\"",1],
-    ["N4/quiet-action-line-start","27-recording-part-open","960x640","Button \"Earlier part\"",1],
-    ["N4/quiet-action-line-start","38-input-during-recording","960x640","Button \"Remove speech key (OpenAI): Speech API key\"",1]
+    ["N4/quiet-action-line-start","27-recording-part-open","960x640","Button \"Earlier part\"",1]
   ],
   "settings": [
     ["G1b/pressed-control-moved","09-edit-campaign","960x640","Button \"Edit details\"",1],

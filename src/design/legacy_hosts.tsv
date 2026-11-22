@@ -131,7 +131,6 @@ scroll-area	src/encounter_run/view.rs	Run::groups_tab	1	Run
 scroll-area	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
 scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
-scroll-area	src/markdown_view.rs	reader_table	1	Reader
 scroll-area	src/sessions/page.rs	Sessions::note_editor	1	Sessions
 scroll-area	src/timeline/page.rs	TimelinePage::detail	1	Timeline
 scroll-request	src/campaign_content.rs	CampaignContent::repair_section_content	1	Campaign
@@ -151,10 +150,7 @@ scroll-request	src/encounters/groups.rs	overrides_form	1	Encounters
 scroll-request	src/encounters/groups.rs	unread_member	1	Encounters
 scroll-request	src/encounters/list.rs	row_menu	1	Encounters
 scroll-request	src/lib.rs	Splat::page	1	App
-scroll-request	src/library/reader.rs	show	1	Library
 scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
-scroll-request	src/markdown_view.rs	show_with_density	1	Reader
-scroll-request	src/processing/settings.rs	ProcessingSettings::input_section	1	Processing
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
 scroll-request	src/sessions/page.rs	Sessions::banner	1	Sessions
 scroll-request	src/sessions/page.rs	Sessions::note_editor	2	Sessions
@@ -173,7 +169,6 @@ scroll-offset	src/design/layout.rs	ScrollColumn::area_in	1	design	design impleme
 scroll-offset	src/design/pane.rs	EditorRegion::editor	1	design	design implementation boundary
 scroll-offset	src/design/pane.rs	Footer::place	2	design	design implementation boundary
 scroll-offset	src/design/popups.rs	Dropdown::list	1	design	design implementation boundary
-scroll-offset	src/markdown_view.rs	reader_table	1	Reader
 scroll-offset	src/sessions/page.rs	Sessions::note_editor	2	Sessions
 scroll-offset	src/timeline/page.rs	TimelinePage::detail	1	Timeline
 virtual-rows	src/design/pane/region.rs	BlockRegion::region	1	design	the region of an owned list body (layout 3b; raised)

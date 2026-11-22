@@ -20137,9 +20137,11 @@ pub mod session_recording {
                 }),
             format!("`Enter the address.` is in view below Address: {address:?}, {reason:?}"),
         );
-        // Round 26 FM6: each missing value says why in one form, the plain `Small` line
-        // directly below its field. Model's reason comes before its help, as Address's comes
-        // before the next field.
+        // Round 26 FM6, round 31 SR4/AR4 (layout PR 10c): each missing value says why in one
+        // form directly below its field: a setting's reason is the field's warning (the warning
+        // icon in the warning colour, then the words in the text colour, `Body`), never muted
+        // help; the key row's reason keeps its own row form. Model's reason comes before its
+        // help, as Address's comes before the next field.
         let reasons = [
             "Enter the address.",
             "Enter the model’s name.",
@@ -20162,11 +20164,27 @@ pub mod session_recording {
                     d.scroll_at(at, 1);
                 }
                 let place = d.place_of(words);
+                // The warning icon on the reason's first line, just left of its words.
+                let icon = place.and_then(|place| {
+                    let scale = d.pixels_per_point();
+                    let left = egui::Rect::from_min_max(
+                        egui::pos2(
+                            place.left() / scale - crate::design::XL,
+                            place.top() / scale - crate::design::XS,
+                        ),
+                        egui::pos2(
+                            place.left() / scale + crate::design::XS,
+                            place.top() / scale + crate::design::XL,
+                        ),
+                    );
+                    d.painted_rect_in(crate::design::icons::WARN, left)
+                });
                 forms.push((
                     words,
                     place.is_some(),
                     d.painted_color(words),
                     place.and_then(|place| d.painted_size(place, words)),
+                    icon.is_some(),
                 ));
                 if words == "Enter the model’s name." {
                     order = (
@@ -20194,10 +20212,17 @@ pub mod session_recording {
         });
         d.observe(
             "iter-26-S-FM6",
-            forms.iter().all(|(_, shown, colour, size)| {
+            forms.iter().all(|(words, shown, colour, size, icon)| {
+                let warning = *words != "Paste a key first.";
                 *shown
-                    && *colour == Some(crate::design::colors().muted)
-                    && *size == Some(crate::design::Type::Small.size())
+                    && if warning {
+                        *colour == Some(crate::design::colors().text)
+                            && *size == Some(crate::design::Type::Body.size())
+                            && *icon
+                    } else {
+                        *colour == Some(crate::design::colors().muted)
+                            && *size == Some(crate::design::Type::Small.size())
+                    }
             }) && model
                 .zip(model_reason)
                 .zip(model_help)

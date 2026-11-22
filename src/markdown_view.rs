@@ -444,8 +444,14 @@ fn show_with_density(
                 heading = Some(level);
             }
             Event::End(TagEnd::Heading(level)) => {
+                // A linked section opens with its heading at the column's top: a typed jump
+                // that the column writes as its own offset (ruling M18).
                 if wanted_heading(ui.ctx(), &job.text) {
-                    ui.scroll_to_cursor(Some(egui::Align::TOP));
+                    design::reveal::jump(
+                        ui,
+                        ui.cursor().top(),
+                        design::reveal::JumpTo::LinkedHeading,
+                    );
                 }
                 draw_figures(ui, &mut figures, &job);
                 flush(ui, &mut job, &mut target);
@@ -779,10 +785,6 @@ fn table_room(ui: &egui::Ui) -> Option<f32> {
 
 /// The row label has its own column. Only the remaining cells belong to the
 /// horizontal scroll area, so its real viewport also supplies the cell padding.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn reader_table(
     ui: &mut egui::Ui,
     rows: &[Vec<String>],
@@ -847,7 +849,8 @@ fn reader_table(
                 .color(colors().muted),
         );
     }
-    // The sideways scroll bar has its own lane below the last row, so it never covers cell text.
+    // The sideways scroll bar has its own lane below the last row (the part's solid bar), so it
+    // never covers cell text.
     let lane = if scrolls {
         let scroll = ui.spacing().scroll;
         scroll.bar_width + scroll.bar_outer_margin
@@ -906,35 +909,24 @@ fn reader_table(
                         (cut, cover),
                         None,
                     );
-                    if lane > 0.0 {
-                        ui.add_space(lane);
-                    }
                 });
             };
             if scrolls {
                 ui.style_mut().always_scroll_the_only_direction = false;
-                let bars = if top < outer_clip.bottom() {
-                    egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
-                } else {
-                    egui::scroll_area::ScrollBarVisibility::AlwaysHidden
-                };
+                // Each surface and document keeps its own sideways place for this table: the
+                // scroll's own id says whose it is, so nothing writes its offset back.
                 let document = reader_document(ui);
                 let surface = ui
                     .ctx()
                     .data(|data| data.get_temp::<egui::Id>(egui::Id::new("reader_surface")));
-                let offset_id = egui::Id::new(("reader_table_offset", surface, document, rows));
-                let offset = ui
-                    .ctx()
-                    .data(|data| data.get_temp::<f32>(offset_id))
-                    .unwrap_or_default();
-                let output = egui::ScrollArea::horizontal()
-                    .id_salt(("reader_table", rows))
-                    .horizontal_scroll_offset(offset)
-                    .max_width(ui.available_width())
-                    .scroll_bar_visibility(bars)
-                    .show(ui, &mut show);
-                ui.ctx()
-                    .data_mut(|data| data.insert_temp(offset_id, output.state.offset.x));
+                let output = design::sideways_scroll(
+                    ui,
+                    ("reader_table", surface, document, rows),
+                    design::Sideways::default()
+                        .fit()
+                        .without_bar(top >= outer_clip.bottom()),
+                    &mut show,
+                );
                 moving_clip = outer_clip.intersect(output.inner_rect);
             } else {
                 ui.allocate_ui_with_layout(
@@ -1225,7 +1217,7 @@ fn display_field_value(value: &str) -> String {
 }
 
 /// Each level of quote moves its words this far right. Its bar is in that gap.
-const QUOTE_INDENT: f32 = design::L;
+const QUOTE_INDENT: f32 = design::QUOTE_INDENT;
 const QUOTE_BAR_WIDTH: f32 = 2.0;
 
 /// What the words waiting to be drawn link to, and the quotes they are in.
@@ -2087,10 +2079,6 @@ fn split_job(job: LayoutJob, cut: usize) -> (LayoutJob, LayoutJob) {
     (part(0..cut), part(cut..job.text.len()))
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
     if job.is_empty() {
         return;
@@ -2147,14 +2135,7 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
     if target.quotes.is_empty() {
         draw(ui);
     } else {
-        let rect = ui
-            .horizontal_top(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.add_space(QUOTE_INDENT * target.quotes.len() as f32);
-                ui.vertical(draw);
-            })
-            .response
-            .rect;
+        let rect = design::quote(ui, target.quotes.len(), draw).response.rect;
         target.quote_bottom = rect.bottom();
     }
     if !target.row {
@@ -2242,11 +2223,13 @@ mod tests {
     fn wide_tables_keep_whole_words_and_can_scroll_to_the_last_column() {
         let markdown = "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
                         | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n\
-                        | 5 | +3 | Memorize Spell | 4 | 9 | 4 | 3 | 2 | 0 | 0 | 0 | 0 | 0 | Ninth-slot |\n";
+                        | 5 | +3 | Memorize Spell | 4 | 9 | 4 | 3 | 2 | 0 | 0 | 0 | 0 | 0 | Ninth-slot |\n\n\
+                        After the table.\n";
         for width in [280.0, 360.0, 488.0] {
             let context = egui::Context::default();
             design::theme::install(&context);
             let mut output = None;
+            let mut first = None;
             for frame in 0..30 {
                 let events = if frame == 2 {
                     vec![
@@ -2293,6 +2276,7 @@ mod tests {
                             && words.iter().any(|row| row.contains("Spell")),
                         "table at {width}px breaks words: {words:?}"
                     );
+                    first = Some(rendered.clone());
                 }
                 output = Some(rendered);
             }
@@ -2314,6 +2298,39 @@ mod tests {
                         && shape.clip_rect.contains_rect(text.visual_bounding_rect()))
                 }),
                 "the last column must be readable after horizontal scrolling at {width}px: {last_column:?}"
+            );
+            // Layout PR 10c (M0406): the sideways part's solid bar has its own lane below the last
+            // row, so it never covers the row's text (the reader adds no space for it).
+            // Before the sideways scroll, the last row's tallest cell (its words wrap) is in view.
+            let first = first.expect("the first frame is kept");
+            let row = first
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == "Memorize Spell" => {
+                        Some(text.pos.y + text.galley.size().y)
+                    }
+                    _ => None,
+                })
+                .expect("the last row is painted");
+            let scroll = design::theme::scroll_style();
+            // The bar, once the table knows it overflows (the frames after the first).
+            let bars: Vec<egui::Rect> = output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Rect(rect)
+                        if rect.rect.width() > 2.0 * scroll.bar_width
+                            && (rect.rect.height() - scroll.bar_width).abs() <= 1.0 =>
+                    {
+                        Some(rect.rect)
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                !bars.is_empty() && bars.iter().all(|bar| bar.top() >= row - 0.5),
+                "lane at {width}px: the sideways bar {bars:?} is below the last row's text {row}"
             );
         }
         // Round 27 FC3 (review repair): a cell that wraps taller than the reader, scrolled until

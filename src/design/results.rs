@@ -1140,11 +1140,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/loot_editor.rs", "line_row", &[Ban::RowKey(1)]),
         (
             "src/markdown_view.rs",
-            "reader_table",
-            &[Ban::Layout(1), Ban::Extras(1)],
-        ),
-        (
-            "src/markdown_view.rs",
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
             &[Ban::Layout(1)],
         ),
@@ -1344,7 +1339,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "use_checkbox",
             &[Ban::Extras(1)],
         ),
-        ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Body]),
         ("src/sessions/page.rs", "record_line", &[Ban::Extras(1)]),

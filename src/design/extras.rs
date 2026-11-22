@@ -68,6 +68,24 @@ pub fn gap(ui: &mut Ui, gap: Gap) {
     space(ui, gap.size());
 }
 
+/// How far one level of a block quote is set in from the text edge (`quote`).
+pub const QUOTE_INDENT: f32 = L;
+
+/// A block quote's words at its `depth` (1 for a quote, 2 for a quote in a quote): set in by
+/// `QUOTE_INDENT` a level from the text edge, on one line with nothing between (layout PR 10c,
+/// inventory M0409: the reader names the depth, the part owns the indent).
+pub fn quote<R>(
+    ui: &mut Ui,
+    depth: usize,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<R> {
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        space(ui, QUOTE_INDENT * depth as f32);
+        ui.vertical(add).inner
+    })
+}
+
 /// Exactly one step of the scale between the item above (or before) and the next, whatever the
 /// item spacing is: the space is the step less the spacing egui already leaves between two items,
 /// along the layout's main axis, and never less than none. `gap` adds a step on top of that
