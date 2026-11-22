@@ -56,12 +56,14 @@ pub use layout::{
     status_slot, title_lead_in, title_placement, write_under_history,
 };
 // Wave 2 callers name the pane's escape through `design`.
+#[cfg(any(test, feature = "test-support"))]
+pub use pane::notices_laid;
 #[allow(unused_imports)]
 pub use pane::{
     ACTION_ROW, ActionLine, Block, BlockRegion, Body, CheckLine, ENTRY_ROW_HEIGHT, EditorRegion,
-    Fills, FillsReason, Laid, LaidUi, LineAction, LineColumns, Navigation, PaneColumns, PaneEdges,
-    Placement, PlanColumns, PlanRow, RegionState, Row, SummaryPart, check_slot, draw_laid,
-    line_slot, plan_rule, plan_slot,
+    Fills, FillsReason, Laid, LaidUi, LineAction, LineColumns, Navigation, NoticeRoll, NoticeRow,
+    PaneColumns, PaneEdges, Placement, PlanColumns, PlanRow, RegionState, Row, SummaryPart,
+    check_height, check_slot, draw_laid, line_slot, notice_slot, plan_rule, plan_slot,
 };
 // Wave 2 callers name the popup parts through `design`, as they name the components.
 #[allow(unused_imports)]
