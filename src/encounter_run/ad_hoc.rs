@@ -115,7 +115,7 @@ impl AdHoc {
     }
 
     pub(super) fn total(&self) -> Option<i64> {
-        self.total.trim().parse().ok()
+        crate::design::parse_signed(&self.total)
     }
 
     /// The creature chosen, or the one whose whole name was typed.
