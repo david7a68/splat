@@ -2800,8 +2800,8 @@ and wider), each column is its own pane with its own footer, `S` below its conte
 column that owns it. The campaigns' footer holds the discard result with its live Undo first (while the form is
 open), then a registered copy with `Undo register campaign` (disabled with the reason while a run, a recording or an
 unsaved draft blocks a campaign change, as the list is), then the error (Save's error with its own recovery, the
-D&D Beyond list's error), then the add result with `Build an encounter`, and the campaign link's result. The
-account's footer holds the account's errors that are not a failed Connect. One column's result never moves the
+D&D Beyond list's error), then the add result with `Build an encounter`. The campaign link's result is not
+here: it belongs to Link and folder. The account's footer holds the account's errors that are not a failed Connect. One column's result never moves the
 other column. The stacked narrow tab keeps one footer for all of them, in that order, then the account's errors:
 two footers in one scroll would leave one in the middle of the page. So no message moves the form, Connect or
 the campaign rows. Campaign → Link and folder has the same footer for the details form and the link's result. The D&D Beyond list's
