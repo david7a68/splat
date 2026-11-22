@@ -65,8 +65,17 @@ const OPENING: &str = "Opening words of the crossing";
 /// A note body of about `bytes` bytes, with the same blocks and links at every size: a heading,
 /// two paragraphs with a link each, a list of two items, a quote and a plain paragraph. Only
 /// the paragraphs' words grow.
-fn note_body(bytes: usize) -> String {
-    let words = |share: usize| "cinder ash road pass ".repeat((bytes / 6 / 21).max(1) * share / 6);
+fn note_body(bytes: usize, linked: bool) -> String {
+    let grown = |share: usize| "cinder ash road pass ".repeat((bytes / 6 / 21).max(1) * share / 6);
+    // The linked variant grows the links' own words (PR 813 review, P2): each paragraph's words
+    // are one link, wrapped over many rows.
+    let words = |share: usize| {
+        if linked {
+            format!("[{}](https://example.com/words)", grown(share))
+        } else {
+            grown(share)
+        }
+    };
     format!(
         "{OPENING} {} by [the ford](https://example.com/ford).\n\n\
          ## The ford\n\n\
@@ -92,11 +101,16 @@ struct Reading {
     campaign: Campaign,
     time: f64,
     width: f32,
+    height: f32,
     _dir: tempfile::TempDir,
 }
 
 impl Reading {
     fn new(host: Host, bytes: usize, accesskit: bool) -> Self {
+        Self::with(host, bytes, accesskit, false, SCREEN_HEIGHT)
+    }
+
+    fn with(host: Host, bytes: usize, accesskit: bool, linked: bool, height: f32) -> Self {
         let dir = tempfile::tempdir().expect("a folder for the campaign");
         let campaign = Campaign {
             id: uuid::Uuid::new_v4(),
@@ -113,7 +127,7 @@ impl Reading {
         assert!(found.is_note(), "the fixture is a plain note");
         let path = dir.path().join(&found.entry.path);
         let mut text = std::fs::read_to_string(&path).expect("the note’s file");
-        text.push_str(&note_body(bytes));
+        text.push_str(&note_body(bytes, linked));
         std::fs::write(&path, text).expect("the note’s body");
         let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).expect("the index"));
         let at = index.position(id).expect("the note in the index");
@@ -132,6 +146,7 @@ impl Reading {
             campaign,
             time: 0.0,
             width: 900.0,
+            height,
             _dir: dir,
         };
         // Warm frames: fonts, the atlas, the preparation.
@@ -146,7 +161,7 @@ impl Reading {
         egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
-                egui::vec2(self.width, SCREEN_HEIGHT),
+                egui::vec2(self.width, self.height),
             )),
             time: Some(self.time),
             ..Default::default()
@@ -162,7 +177,7 @@ impl Reading {
             ctx.data_mut(|data| {
                 data.insert_temp(egui::Id::new("reader_link_index"), self.index.clone());
             });
-            let mut ui = root_sized(ctx, egui::vec2(self.width, SCREEN_HEIGHT));
+            let mut ui = root_sized(ctx, egui::vec2(self.width, self.height));
             let _ = self.reader.read_with(
                 &mut ui,
                 &self.index.items[self.at],
@@ -256,9 +271,12 @@ fn stock_labels(galleys: &[Arc<egui::Galley>], accesskit: bool) -> Allocated {
 
 /// A host's quiet frame over a note of about `bytes` bytes, and the stock reference over its
 /// kept galleys; the host's five quiet frames are equal and parse nothing.
-fn both(host: Host, bytes: usize, accesskit: bool) -> (Allocated, Allocated) {
-    let what = format!("{host:?}, AccessKit {accesskit}, {bytes} B");
-    let mut reading = Reading::new(host, bytes, accesskit);
+fn both(host: Host, bytes: usize, accesskit: bool, linked: bool) -> (Allocated, Allocated) {
+    let what = format!("{host:?}, AccessKit {accesskit}, linked {linked}, {bytes} B");
+    // The linked rows see one screen of the note: a link out of view costs the same whatever its
+    // words (its parts and targets are built only in view).
+    let height = if linked { 800.0 } else { SCREEN_HEIGHT };
+    let mut reading = Reading::with(host, bytes, accesskit, linked, height);
     let parses = MARKDOWN_PARSES.with(std::cell::Cell::get);
     let first = reading.quiet(&what);
     for _ in 0..4 {
@@ -307,14 +325,192 @@ fn prepares_again(
     })
 }
 
+/// A document drawn by the Reader directly, frame by frame: for the cache's content cases,
+/// where the document, its revision, the link index and the art each change on their own.
+struct Direct {
+    ctx: egui::Context,
+    time: f64,
+}
+
+impl Direct {
+    fn new() -> Self {
+        let ctx = egui::Context::default();
+        splat_design::design::theme::install(&ctx);
+        Self { ctx, time: 0.0 }
+    }
+
+    /// One frame of `text` as document `doc` at `revision`, resolving its links in `index`:
+    /// the words it painted.
+    fn frame(
+        &mut self,
+        doc: &markdown_view::DocumentId,
+        revision: u64,
+        text: &str,
+        index: Option<&Arc<ContentIndex>>,
+    ) -> String {
+        self.time += 0.25;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(900.0, 800.0),
+            )),
+            time: Some(self.time),
+            ..Default::default()
+        };
+        let output = self.ctx.clone().run(input, |ctx| {
+            let key = egui::Id::new("reader_link_index");
+            ctx.data_mut(|data| match index {
+                Some(index) => data.insert_temp(key, index.clone()),
+                None => data.remove::<Arc<ContentIndex>>(key),
+            });
+            let mut ui = root_sized(ctx, egui::vec2(900.0, 800.0));
+            markdown_view::show_document(
+                &mut ui,
+                markdown_view::ReaderSource {
+                    doc: doc.clone(),
+                    revision,
+                    text,
+                },
+            );
+        });
+        painted(&output).join(" | ")
+    }
+}
+
+/// The cache's content cases (PR 813 review, P2): each changes one thing the preparation read,
+/// and the next frame must show the new words. A key without that dependency keeps the old ones.
+fn content_cases() -> Vec<String> {
+    use markdown_view::DocumentId;
+    let mut failures = Vec::new();
+    let mut check = |case: &str, before: &str, after: &str, ok: bool| {
+        if !ok {
+            failures.push(format!(
+                "{case}: before {before:?}, the next frame {after:?}"
+            ));
+        }
+    };
+    let (a, b) = (
+        DocumentId::Entry(uuid::Uuid::from_u128(1)),
+        DocumentId::Entry(uuid::Uuid::from_u128(2)),
+    );
+    // A same-length edit: a new revision of the same document.
+    let mut reader = Direct::new();
+    let mut before = String::new();
+    for _ in 0..3 {
+        before = reader.frame(&a, 1, "Ash road at dusk.", None);
+    }
+    let after = reader.frame(&a, 2, "Ash road at dawn.", None);
+    check(
+        "a same-length edit (only the revision)",
+        &before,
+        &after,
+        after.contains("dawn") && !after.contains("dusk"),
+    );
+    // Another document with the same revision.
+    let mut reader = Direct::new();
+    for _ in 0..3 {
+        before = reader.frame(&a, 1, "Words of Hob.", None);
+    }
+    let after = reader.frame(&b, 1, "Words of Wil.", None);
+    check(
+        "another document with the same revision (only the document)",
+        &before,
+        &after,
+        after.contains("Wil") && !after.contains("Hob"),
+    );
+    // The link's target renamed, then deleted: only the link index's load changes.
+    let warn = splat_design::design::icons::WARN;
+    for change in ["renamed", "deleted"] {
+        let dir = tempfile::tempdir().expect("a folder for the campaign");
+        let campaign = Campaign {
+            id: uuid::Uuid::new_v4(),
+            name: "Sample".into(),
+            path: dir.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        let gate = world::create_entry(&campaign, "Gate", "location").expect("the target");
+        let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).expect("the index"));
+        let path = dir.path().join(
+            &index.items[index.position(gate).expect("the target in the index")]
+                .entry
+                .path,
+        );
+        let text = "The [[Gate]] stands.";
+        let mut reader = Direct::new();
+        for _ in 0..3 {
+            before = reader.frame(&a, 1, text, Some(&index));
+        }
+        if change == "renamed" {
+            // The entry's name is in its file: renamed there, and the file with it.
+            let words = std::fs::read_to_string(&path).expect("the target's file");
+            std::fs::write(
+                path.with_file_name("Gatehouse.md"),
+                words.replace("Gate", "Gatehouse"),
+            )
+            .expect("renamed");
+            std::fs::remove_file(&path).expect("the old file");
+        } else {
+            std::fs::remove_file(&path).expect("deleted");
+        }
+        let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).expect("the index again"));
+        let after = reader.frame(&a, 1, text, Some(&index));
+        check(
+            &format!("the link's target {change} (only the index's load)"),
+            &before,
+            &after,
+            !before.contains(warn) && after.contains(warn),
+        );
+    }
+    // The image: a new art index has a local copy of the linked image, which shows in place.
+    let root = tempfile::tempdir().expect("a package folder");
+    std::fs::create_dir(root.path().join("Figures")).expect("a figures folder");
+    image::DynamicImage::new_rgb8(40, 20)
+        .save(root.path().join("Figures/map.png"))
+        .expect("an image");
+    std::fs::write(
+        root.path().join(splat_content_ui::content::art::ART_FILE),
+        "```json\n{\"splat_art\":1,\"links\":{\"https://a/map.png\":\"Figures/map.png\"}}\n```\n",
+    )
+    .expect("the art file");
+    let art = Arc::new(splat_content_ui::content::art::ArtIndex::load(
+        [root.path()],
+    ));
+    let text = "*The keep* ([image](https://a/map.png))";
+    let mut reader = Direct::new();
+    for _ in 0..3 {
+        before = reader.frame(&a, 1, text, None);
+    }
+    reader
+        .ctx
+        .data_mut(|data| data.insert_temp(egui::Id::new("art_index"), art));
+    let after = reader.frame(&a, 1, text, None);
+    check(
+        "the image's local copy (only the art index)",
+        &before,
+        &after,
+        before.contains("image") && !after.contains("image"),
+    );
+    failures
+}
+
 fn main() {
     let sizes = [10_000, 100_000, 1_000_000];
     let mut failures = Vec::new();
-    for host in [Host::World, Host::Lookup] {
-        for accesskit in [false, true] {
+    let rows = [
+        (Host::World, false, false),
+        (Host::World, true, false),
+        (Host::Lookup, false, false),
+        (Host::Lookup, true, false),
+        // The links' own words grow (PR 813 review, P2), AccessKit off: what grows with them
+        // is the app's, not egui's text runs.
+        (Host::World, false, true),
+    ];
+    for (host, accesskit, linked) in rows {
+        {
             let frames: Vec<_> = sizes
                 .iter()
-                .map(|&bytes| both(host, bytes, accesskit))
+                .map(|&bytes| both(host, bytes, accesskit, linked))
                 .collect();
             let (host_small, stock_small) = frames[0];
             for (&bytes, &(reader, stock)) in sizes.iter().zip(&frames).skip(1) {
@@ -344,6 +540,8 @@ fn main() {
                 }
             }
         }
+    }
+    for host in [Host::World, Host::Lookup] {
         failures.extend(prepares_again(host, "a resize", 1, |reading| {
             // Below the reader's measure: the note's column gets narrower.
             reading.width = 480.0;
@@ -394,7 +592,11 @@ fn main() {
                 );
             });
         }));
+        failures.extend(prepares_again(host, "a new scale", 1, |reading| {
+            reading.ctx.set_pixels_per_point(1.5);
+        }));
     }
+    failures.extend(content_cases());
     assert!(
         failures.is_empty(),
         "quiet_reader:\n{}",

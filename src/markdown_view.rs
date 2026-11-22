@@ -1938,8 +1938,21 @@ fn draw_laid_links(ui: &mut egui::Ui, laid: &LaidLinks, links_id: egui::Id) -> e
         // A link out of view: its first target only, so Tab still reaches it, at the same cost
         // whatever its words.
         let in_view = shown && clip.intersects(bounds[index].translate(at));
+        // A link's parts are in row order: only the rows in view draw (a link that wraps over
+        // thousands of rows costs what its rows in view cost).
+        let rows = |rects: &[egui::Rect]| {
+            let from = rects.partition_point(|rect| rect.bottom() + at.y < clip.top());
+            let to = rects.partition_point(|rect| rect.top() + at.y <= clip.bottom());
+            from..to.max(from)
+        };
         if in_view {
-            for part in words[index].iter().map(place) {
+            let seen = {
+                let parts = &words[index];
+                let from = parts.partition_point(|part| part.rect.bottom() + at.y < clip.top());
+                let to = parts.partition_point(|part| part.rect.top() + at.y <= clip.bottom());
+                from..to.max(from)
+            };
+            for part in words[index][seen].iter().map(place) {
                 if underlines[index] != egui::Stroke::NONE {
                     let y = ui
                         .painter()
@@ -1961,17 +1974,19 @@ fn draw_laid_links(ui: &mut egui::Ui, laid: &LaidLinks, links_id: egui::Id) -> e
                 }
             }
         }
-        let rects = if in_view {
-            &targets[index][..]
-        } else {
-            &targets[index][..targets[index].len().min(1)]
-        };
+        // The first part always (Tab reaches the link wherever it is); the others in view.
+        let all = &targets[index];
+        let seen = if in_view { rows(all) } else { 0..0 };
+        let rects = all.iter().enumerate().take(1).chain(
+            all.iter()
+                .enumerate()
+                .skip(seen.start.max(1))
+                .take(seen.end.saturating_sub(seen.start.max(1))),
+        );
         let words_text = &galley.job.text[range.clone()];
         let id = links_id.with((index, keys[index]));
         // Only the first part of a wrapped link takes focus, so Tab stops once per link.
         let parts: Vec<egui::Response> = rects
-            .iter()
-            .enumerate()
             .map(|(part, rect)| {
                 let first = part == 0 && !matches!(destination, LinkTarget::Missing);
                 let sense = if first {
