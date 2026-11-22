@@ -3412,7 +3412,7 @@ fn add_pane(
         peek,
         super::SearchRoster {
             already: &|_| false,
-            on_roster: &[],
+            on_roster: super::OnRoster::Ids(&[]),
             separated,
         },
         &summary,
