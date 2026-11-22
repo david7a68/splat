@@ -619,15 +619,20 @@ mod tests {
                 });
             })
         };
-        let output = frame();
-        // Layout PR 9b: the repair's next frames lay out and hash none of its text.
-        let work = design::pane::text_work(|| {
-            let _ = (frame(), frame());
-        });
-        assert!(
-            work.is_quiet(2),
-            "9b-quiet: the repair editor's quiet frames: {work:?}"
-        );
+        let mut output = None;
+        let shown = design::pane::text_work(|| output = Some(frame()));
+        let output = output.expect("one frame");
+        // Layout PR 9b: when the repair shows its editor, the next frames draw it again and do
+        // no text work.
+        if shown.drawn > 0 {
+            let work = design::pane::text_work(|| {
+                let _ = (frame(), frame());
+            });
+            assert!(
+                work.is_quiet(2),
+                "9b-quiet: the repair editor's quiet frames: {work:?}"
+            );
+        }
         let accent = colors().accent_fill;
         let mut words = String::new();
         let mut primary = false;

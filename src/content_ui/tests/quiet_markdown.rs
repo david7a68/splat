@@ -184,7 +184,7 @@ fn both(text: &str, case: Case) -> (Allocated, Allocated) {
     assert_eq!(
         stock_rows,
         Some(rows),
-        "the reference has the document's rows"
+        "the reference has the document’s rows"
     );
     (
         quiet_frame(Side::Document, text, case),
@@ -214,12 +214,12 @@ fn main() {
                 );
                 if doc_count != stock_count {
                     failures.push(format!(
-                        "{case:?}, {bytes} B: the document's allocation count grows by {doc_count}, stock egui's by {stock_count}"
+                        "{case:?}, {bytes} B: the document’s allocation count grows by {doc_count}, stock egui’s by {stock_count}"
                     ));
                 }
                 if doc_bytes != stock_bytes {
                     failures.push(format!(
-                        "{case:?}, {bytes} B: the document's gross bytes grow by {doc_bytes}, stock egui's by {stock_bytes}"
+                        "{case:?}, {bytes} B: the document’s gross bytes grow by {doc_bytes}, stock egui’s by {stock_bytes}"
                     ));
                 }
             }
