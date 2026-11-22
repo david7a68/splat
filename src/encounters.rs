@@ -3696,6 +3696,8 @@ enum DraftUndo {
         before: Vec<Slot>,
         after: Vec<Slot>,
         words: String,
+        /// The replaced creature, as the rows named it: its Undo names it.
+        replaced: String,
     },
 }
 
@@ -3741,8 +3743,13 @@ impl DraftUndo {
                     step.pressed_as(FooterPress::UndoEditor),
                 )
             }
-            Self::Replacement { words, .. } => Said::new(outcome_words(words))
-                .undo(UndoStep::verb(Verb::Replace).pressed_as(FooterPress::UndoEditor))
+            Self::Replacement {
+                words, replaced, ..
+            } => Said::new(outcome_words(words))
+                .undo(
+                    UndoStep::of(Verb::Replace, replaced.clone())
+                        .pressed_as(FooterPress::UndoEditor),
+                )
                 .into(),
         }
     }
@@ -9236,6 +9243,7 @@ impl Encounters {
                 before,
                 after: draft.setup.roster.clone(),
                 words: replacement_words(&old, rows, &new),
+                replaced: old,
             });
         }
         for side in draft.setup.roster.iter().flat_map(|slot| {
@@ -11769,6 +11777,7 @@ mod tests {
             before: before.clone(),
             after: roster.clone(),
             words: "1 Wolf row replaced with Wolf.".into(),
+            replaced: "Wolf".into(),
         });
         let owner = EditorOwner {
             root: active.path.clone(),
@@ -11943,7 +11952,7 @@ mod tests {
         );
         harness.run_steps(1);
         *hold.borrow_mut() = Some(None);
-        harness.get_by_label("Undo replace").click();
+        harness.get_by_label("Undo replace Wolf").click();
         harness.run_steps(1);
         assert!(
             matches!(*hold.borrow(), Some(Some(_))),
@@ -11965,7 +11974,7 @@ mod tests {
         );
         assert!(
             harness.query_by_label(WORDS).is_none()
-                && harness.query_by_label("Undo replace").is_none(),
+                && harness.query_by_label("Undo replace Wolf").is_none(),
             "the result no longer holds: its words and its Undo leave"
         );
         // The same for a move and a removal of a row in the pass of the press. Each starts
@@ -11994,7 +12003,7 @@ mod tests {
             });
             harness.run_steps(2);
             *hold.borrow_mut() = Some(None);
-            harness.get_by_label("Undo replace").click();
+            harness.get_by_label("Undo replace Wolf").click();
             harness.run_steps(1);
             assert!(matches!(*hold.borrow(), Some(Some(_))), "held");
             harness
