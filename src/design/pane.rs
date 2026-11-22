@@ -355,6 +355,37 @@ struct LaidKey {
     caret: Option<(bool, Option<(usize, usize)>)>,
 }
 
+/// The kept layouts of the document editors, one per field. egui runs [`update`] at the end of
+/// each pass (`CacheStorage::update`), also a pass that draws no document: a field not drawn in
+/// a pass loses its kept galley then (note v2 §3, eviction), so a closed editor keeps no text.
+///
+/// [`update`]: egui::cache::CacheTrait::update
+#[derive(Default)]
+struct KeptLayouts {
+    kept: egui::IdMap<KeptLayout>,
+}
+
+struct KeptLayout {
+    key: LaidKey,
+    galley: std::sync::Arc<egui::Galley>,
+    /// Drawn in this pass.
+    used: bool,
+}
+
+impl egui::cache::CacheTrait for KeptLayouts {
+    fn update(&mut self) {
+        self.kept.retain(|_, kept| std::mem::take(&mut kept.used));
+    }
+
+    fn len(&self) -> usize {
+        self.kept.len()
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
 /// The layouter of a document editor: the laid-out text kept for its [`LaidKey`]. egui calls
 /// it with the text it was given and again after each edit in its own pass (several in one
 /// frame too); each call reads the draft's live key (`text_draft::Lent`), so an edited text is
@@ -364,7 +395,6 @@ pub(in crate::design) fn kept_layouter(
     face: Face,
     live: std::rc::Rc<std::cell::Cell<super::text_draft::DraftKey>>,
 ) -> impl FnMut(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley> {
-    let store = field.with("kept_layout");
     move |ui: &Ui, text: &dyn egui::TextBuffer, wrap: f32| {
         let font = match &face {
             Face::Font(style) => style.resolve(ui.style()),
@@ -391,12 +421,12 @@ pub(in crate::design) fn kept_layouter(
             },
             caret,
         };
-        if let Some(galley) = ui
-            .ctx()
-            .data(|data| data.get_temp::<(LaidKey, std::sync::Arc<egui::Galley>)>(store))
-            .filter(|(kept, _)| *kept == key)
-            .map(|(_, galley)| galley)
-        {
+        let hit = ui.memory_mut(|memory| {
+            let kept = memory.caches.cache::<KeptLayouts>().kept.get_mut(&field)?;
+            kept.used = true;
+            (kept.key == key).then(|| kept.galley.clone())
+        });
+        if let Some(galley) = hit {
             return galley;
         }
         #[cfg(any(test, feature = "test-support"))]
@@ -413,8 +443,18 @@ pub(in crate::design) fn kept_layouter(
             }
             Face::Laid { layout, .. } => layout(ui, text, wrap),
         };
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(store, (key, galley.clone())));
+        ui.memory_mut(|memory| {
+            let kept = KeptLayout {
+                key,
+                galley: galley.clone(),
+                used: true,
+            };
+            memory
+                .caches
+                .cache::<KeptLayouts>()
+                .kept
+                .insert(field, kept);
+        });
         galley
     }
 }
@@ -5670,6 +5710,27 @@ mod editor_region_tests {
             h.ctx
                 .all_styles_mut(|style| style.visuals.text_alpha_from_coverage = alpha);
         });
+        // Eviction (note v2 §3): a field not drawn in a pass loses its kept galley at the end of
+        // that pass, so a closed editor keeps no text; drawn again, it lays out again.
+        let kept = |h: &mut egui_kittest::Harness<'static, State>| {
+            h.ctx.memory_mut(|memory| {
+                egui::cache::CacheTrait::len(memory.caches.cache::<KeptLayouts>())
+            })
+        };
+        assert_eq!(
+            kept(&mut h),
+            1,
+            "folds {folds}: the drawn document keeps its layout"
+        );
+        h.state_mut().region = false;
+        h.step();
+        assert_eq!(
+            kept(&mut h),
+            0,
+            "folds {folds}: one pass not drawn drops it"
+        );
+        h.state_mut().region = true;
+        relaid(&mut h, "drawn again", &mut |_| {});
     }
 
     /// Layout PR 9b (note v2 §6.4): through the real part (guard, kept layouter), a document
@@ -5746,6 +5807,13 @@ mod editor_region_tests {
                     _ => None,
                 })
                 .unwrap_or_default();
+            let before = (
+                text(&doc),
+                doc.state()
+                    .doc
+                    .as_ref()
+                    .map(crate::design::text_draft::TextDraft::key),
+            );
             for h in [&mut plain, &mut doc] {
                 h.state_mut().changed.clear();
                 h.input_mut().modifiers = modifiers;
@@ -5763,6 +5831,18 @@ mod editor_region_tests {
                 doc.state().caret,
                 plain.state().caret,
                 "{step}: the same caret"
+            );
+            // Revision stability: the key changes exactly when the words change (a no-op, such
+            // as an empty paste or Delete at the end, keeps it and lays out nothing).
+            let key = doc
+                .state()
+                .doc
+                .as_ref()
+                .map(crate::design::text_draft::TextDraft::key);
+            assert_eq!(
+                key != before.1,
+                text(&doc) != before.0,
+                "{step}: a new revision exactly when the words changed"
             );
         }
     }

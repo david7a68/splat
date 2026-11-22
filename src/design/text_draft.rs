@@ -8,7 +8,8 @@
 //! - **Revision.** Each change of the bytes is a new [`Revision`] (`design::memo`), new in this
 //!   run. Per buffer operation:
 //!   - `insert_text`: a new revision when it inserted at least one character;
-//!   - `delete_char_range`: a new revision when the range was not empty;
+//!   - `delete_char_range`: a new revision when it removed at least one character (egui asks
+//!     past the end for Delete at the end; that removes nothing and keeps the key);
 //!   - egui's default `replace_with`, `clear` and `take` run through those two, so a clear then
 //!     an insert of the same words gives two new revisions: the words end equal, the key does
 //!     not;
@@ -133,8 +134,11 @@ impl egui::TextBuffer for TextDraft {
     }
 
     fn delete_char_range(&mut self, char_range: std::ops::Range<usize>) {
-        if char_range.start < char_range.end {
-            self.text.delete_char_range(char_range);
+        // egui asks past the end (Delete at the end asks for `len..len + 1`), and `String`
+        // clamps that to nothing: only a deletion that removed bytes is a new revision.
+        let before = self.text.len();
+        self.text.delete_char_range(char_range);
+        if self.text.len() != before {
             self.revise();
         }
     }
@@ -193,6 +197,12 @@ mod tests {
         assert_eq!(draft.key(), start, "an empty delete keeps the key");
         draft.insert_text("", 0);
         assert_eq!(draft.key(), start, "an empty insert keeps the key");
+        draft.delete_char_range(8..9);
+        assert_eq!(
+            draft.key(),
+            start,
+            "a delete past the end (Delete at the end) removes nothing and keeps the key"
+        );
         draft.delete_char_range(0..3);
         let deleted = draft.key();
         assert_ne!(deleted, start);
