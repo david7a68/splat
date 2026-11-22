@@ -766,6 +766,87 @@ fn sheet_whole(d: &Driver<'_>) -> (bool, String) {
     )
 }
 
+/// Layout step 11a (SM2/AM2, SB1/AB1): the Arrivals list ends at a whole block. In the panel's
+/// column (from its title, `This fight · Arrivals`): the texts its clip cuts from below, and each
+/// group whose painted title shows whole while its Add's painted words do not. Painted, not the
+/// accessibility tree: a node keeps its whole rect under the column's cut. The reference is the
+/// clip that paints each text. `None` when no group title shows, so the check cannot pass on an
+/// empty match.
+fn arrival_blocks(d: &Driver<'_>) -> Option<(Vec<String>, Vec<String>, Vec<String>)> {
+    let (width, height) = d.window_size();
+    let left = d
+        .painted_rect_in("Arrivals", egui::Rect::EVERYTHING)?
+        .left()
+        - crate::design::S;
+    let area = egui::Rect::from_min_max(egui::pos2(left, 0.0), egui::pos2(width, height));
+    // Each whole painted text in the column, with its bounds.
+    let mut whole: Vec<(String, egui::Rect)> = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let bounds = text.visual_bounding_rect();
+        if area.intersects(bounds) && clip.expand(1.0).contains_rect(bounds) {
+            whole.push((text.galley.job.text.clone(), bounds));
+        }
+    });
+    let nodes = d.nodes();
+    // The groups, by their grips' names (`Drag <name> to the initiative list`).
+    let names: Vec<String> = nodes
+        .iter()
+        .filter_map(|node| node.name.strip_prefix("Drag "))
+        .filter_map(|rest| rest.split_once(" to the initiative list"))
+        .map(|(name, _)| name.to_owned())
+        .collect();
+    let drag = format!("{} ", crate::design::icons::DRAG);
+    let shown: Vec<String> = names
+        .into_iter()
+        .filter(|name| {
+            whole.iter().any(|(words, _)| {
+                words.strip_prefix(&drag).is_some_and(|title| {
+                    let title = title.trim_end_matches('…');
+                    !title.is_empty() && name.starts_with(title)
+                })
+            })
+        })
+        .collect();
+    if shown.is_empty() {
+        return None;
+    }
+    let alone = shown
+        .iter()
+        .filter(|name| {
+            let add = format!("Add {name} to the initiative list");
+            !nodes.iter().filter(|node| node.name == add).any(|node| {
+                whole
+                    .iter()
+                    .any(|(_, bounds)| node.rect.contains(bounds.center()))
+            })
+        })
+        .cloned()
+        .collect();
+    Some((texts_cut_from_below(d, area), alone, shown))
+}
+
+/// `arrival_blocks` with no fault; at 960x640 each group in `shown_at_960` shows its title too
+/// (a group's head is a block of its own: faults that the edge hides take only themselves).
+fn arrival_blocks_whole(d: &mut Driver<'_>, id: &str, shown_at_960: &[&str]) {
+    let size = d.window_size();
+    let found = arrival_blocks(d);
+    d.observe(
+        id,
+        found.as_ref().is_some_and(|(cut, alone, shown)| {
+            cut.is_empty()
+                && alone.is_empty()
+                && (size != SMALL
+                    || shown_at_960
+                        .iter()
+                        .all(|name| shown.iter().any(|shown| shown == name)))
+        }),
+        format!(
+            "At {size:?}, Arrivals texts cut from below, groups whose title shows without a whole \
+             Add, and the groups shown: {found:?}"
+        ),
+    );
+}
+
 fn sheet_rows_whole(d: &mut Driver<'_>, id: &str) {
     let (whole, found) = sheet_whole(d);
     d.observe(id, whole, found);
@@ -969,6 +1050,38 @@ fn painted_bounds(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
         }
     });
     found
+}
+
+/// Layout 11c (M0153): the ended view's pane, from the pane solver's own record: the pane whose
+/// scroll viewport holds the first Final state row.
+#[derive(Debug)]
+pub(crate) struct EndedPane {
+    /// A `Body::Content` pane.
+    pub(crate) content: bool,
+    /// Its footer is pinned at the pane's bottom (it does not follow the content).
+    pub(crate) pinned: bool,
+    /// Its scroll viewport's height.
+    pub(crate) view: f32,
+    /// Its content's height as laid out.
+    pub(crate) height: Option<f32>,
+    /// Its footer, when it holds a message, and the footer's focus group.
+    pub(crate) footer: Option<(egui::Rect, egui::Id)>,
+}
+
+pub(crate) fn ended_pane(d: &Driver<'_>) -> Option<EndedPane> {
+    let row = roster_places(d).first().map(|(_, rect)| *rect)?;
+    d.pane_records().into_iter().find_map(|record| {
+        let viewport = record.viewport()?;
+        viewport.contains(row.center()).then(|| EndedPane {
+            content: matches!(record.body(), crate::design::pane::Body::Content),
+            pinned: record.placement() == crate::design::pane::Placement::Pinned,
+            view: viewport.height(),
+            height: record.content_height(),
+            footer: record
+                .footer()
+                .map(|footer| (footer, record.id().with("focus"))),
+        })
+    })
 }
 
 /// Layout PR 8: where the Settings footer that holds the control or text named `name` stands,
@@ -2256,7 +2369,9 @@ pub mod creature_filter {
         d.click("Filter Habitat: Underdark");
         d.click_starting("Type");
         d.click("Filter Type: Aberration");
-        d.press(Key::Escape);
+        // Filter again closes the menu in one act (review of PR 759: Escape now closes the open
+        // facts first, one per press, and the menu only when none is open).
+        d.click(FILTER);
         d.expect(UNDERDARK);
         d.expect(ABERRATION);
         d.expect("MATCHES 9");
@@ -9450,35 +9565,39 @@ pub mod prep_to_table {
                         egui::Rect::from_min_size(text.pos, text.galley.size()),
                     ));
                 });
+                // Every field needs its reference: a row whose name is not painted inside it
+                // (missing or moved out of the row) fails here, never drops out of the check.
                 let off_line: Vec<(String, f32)> = fields
                     .iter()
-                    .filter_map(|field| {
+                    .flat_map(|field| {
                         let name = field.name.trim_start_matches("Initiative for ");
-                        let row = nodes
+                        let title = nodes
                             .iter()
-                            .find(|node| node.name.starts_with(&format!("{name} · ")))?;
-                        let title = painted
+                            .find(|node| node.name.starts_with(&format!("{name} · ")))
+                            .and_then(|row| {
+                                painted.iter().find(|(words, rect)| {
+                                    words == name && row.rect.contains_rect(*rect)
+                                })
+                            })
+                            .map(|(_, rect)| *rect);
+                        let Some(title) = title else {
+                            return vec![(format!("no painted name for {name}"), f32::INFINITY)];
+                        };
+                        nodes
                             .iter()
-                            .find(|(words, rect)| words == name && row.rect.contains_rect(*rect))?
-                            .1;
-                        Some(
-                            nodes
-                                .iter()
-                                .filter(|node| {
-                                    node.name == field.name
-                                        || node.name == format!("Roll for {name}")
-                                        || node.name.starts_with(&format!("Place for {name}:"))
-                                        || node.name == format!("Absent: {name}")
-                                        || node.name == format!("More actions for {name}")
-                                        || node.name.starts_with(&format!("Move {name} "))
-                                })
-                                .map(|node| {
-                                    (node.name.clone(), node.rect.center().y - title.center().y)
-                                })
-                                .collect::<Vec<_>>(),
-                        )
+                            .filter(|node| {
+                                node.name == field.name
+                                    || node.name == format!("Roll for {name}")
+                                    || node.name.starts_with(&format!("Place for {name}:"))
+                                    || node.name == format!("Absent: {name}")
+                                    || node.name == format!("More actions for {name}")
+                                    || node.name.starts_with(&format!("Move {name} "))
+                            })
+                            .map(|node| {
+                                (node.name.clone(), node.rect.center().y - title.center().y)
+                            })
+                            .collect::<Vec<_>>()
                     })
-                    .flatten()
                     .filter(|(_, off)| off.abs() > 1.0)
                     .collect();
                 let heading = painted
@@ -12583,10 +12702,11 @@ pub mod run_sync_states {
             );
         }
         for size in [SMALL, LARGE] {
-            let (row_edge, undo_edge) = d.at_size(size, |d| {
+            let (row_edge, undo_edge, pane) = d.at_size(size, |d| {
                 (
                     roster_places(d).first().map(|(_, rect)| rect.right()),
                     d.place_of("Undo: end encounter").map(|rect| rect.right()),
+                    ended_pane(d),
                 )
             });
             d.observe(
@@ -12595,6 +12715,23 @@ pub mod run_sync_states {
                     .zip(undo_edge)
                     .is_some_and(|(row, undo)| (row - undo).abs() <= 1.0),
                 format!("At {size:?}, Undo ends at {undo_edge:?} and the roster at {row_edge:?}"),
+            );
+            // The final state and the panel are one shared task in a `Content` pane: its footer
+            // follows the taller column when both fit (the short ended view at 1920) and is
+            // pinned when one is taller (960). The pane solver's record is the reference.
+            d.observe(
+                "m32-L11c-ended-columns-pane",
+                pane.as_ref().is_some_and(|pane| {
+                    pane.content
+                        && pane.height.is_some_and(|height| {
+                            if size == LARGE {
+                                !pane.pinned && height < pane.view
+                            } else {
+                                pane.pinned == (height >= pane.view - 0.5)
+                            }
+                        })
+                }),
+                format!("At {size:?}, the ended pane: {pane:?}"),
             );
         }
         // A pair of choices is never cut: both are in view, at the minimum window too.
@@ -23771,7 +23908,14 @@ pub mod encounter_owned_groups {
         let list = d
             .place_of(&add_group(NEW_NAME))
             .expect("the list shows the group that joined");
-        d.scroll_until(list.center(), "Edit group", 5);
+        // Layout step 11a: until its words are painted whole. The list's whole-row cut hides a
+        // fault and its repair together, while the repair's node still says it is in view.
+        for _ in 0..5 {
+            if d.painted_whole_in("Edit group", egui::Rect::EVERYTHING) {
+                break;
+            }
+            d.scroll_at(list.center(), 1);
+        }
         // iter-25-R FB5: a member fault's repair is a bordered secondary button. M0126 (M-R0.9):
         // it is a choice of the fault's typed message, so at every size it stands on the line
         // under the fault, its border starting at the warning text.
@@ -23855,6 +23999,7 @@ pub mod encounter_owned_groups {
         // their member line, at every size; neither heading holds it, so both headings give way
         // in the one order of their `Fight after` line.
         d.state_prepared("own-group-dragged-in-combat", Sizes::All, |d| {
+            arrival_blocks_whole(d, "l11a-SB1-AB1-arrival-blocks", &["Lost Patrol"]);
             let places =
                 [NEW_NAME, GROUP_SHRINE].map(|group| status_places(d, group, "Added in round 1"));
             d.observe(
@@ -24911,6 +25056,7 @@ pub mod run_add_creature {
         // member line, so at 1200 and 1920 its heading keeps its side and the whole name of the
         // creature whose XP is not known (R31), as Goblin Wave's does.
         d.state_prepared("arrivals-made-up-added", Sizes::All, |d| {
+            arrival_blocks_whole(d, "l11a-SM2-AM2-arrival-blocks", &[]);
             let size = d.window_size();
             let rivals = arrival_heading(d, GROUP_RIVALS);
             let wide = size.0 >= DEFAULT.0;

@@ -951,12 +951,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/design/results.rs", "act_order", &[Ban::Results]),
         // Layout PR 2b: the one escape of the Settings and Link and folder footers' words.
         ("src/campaigns.rs", "footer_words", &[Ban::Words]),
-        // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c).
-        (
-            "src/encounter_run/view.rs",
-            "groups_tab",
-            &[Ban::Layout(1), Ban::Pane(1)],
-        ),
+        // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c), a design
+        // `ScrollColumn` since layout step 11a (no raw scroll area is left).
+        ("src/encounter_run/view.rs", "groups_tab", &[Ban::Pane(1)]),
         (
             "src/encounters/groups.rs",
             "group_editor_view",
@@ -1085,7 +1082,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M20: the copy dialog's error is a typed body message (`BodyMessage` of a
         // `FaultMessage`) in place of an untyped `design::message`.
         ("src/copy_dialog.rs", "show", &[Ban::Body]),
-        ("src/creature_filter.rs", "menu", &[Ban::Layout(1)]),
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
@@ -1100,11 +1096,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/encounter_run/view.rs",
             "conditions_tab",
             &[Ban::RowKey(1)],
-        ),
-        (
-            "src/encounter_run/view.rs",
-            "ended_view",
-            &[Ban::Layout(2), Ban::Pane(1)],
         ),
         ("src/encounter_run/view.rs", "record_tab", &[Ban::RowKey(1)]),
         ("src/encounter_run/view.rs", "roster", &[Ban::Layout(1)]),
@@ -1128,7 +1119,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "members_pane",
             &[Ban::Layout(1)],
         ),
-        ("src/library.rs", "new_entry", &[Ban::Extras(1)]),
         // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
         // `line_row`'s lines are; the list has no typed owner yet.
         (
@@ -1339,19 +1329,16 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M20 (M-W0.4, M-W0.5, M0178): the index's warnings on this note, the renamed-file
         // warning with its two repairs and the duplicate repair, in the reader's body (were
         // `message`, `message_with_actions`).
-        ("src/world.rs", "draw", &[Ban::Extras(1), Ban::Body]),
+        ("src/world.rs", "draw", &[Ban::Body]),
         // M20 (M-W0.4): an unread value's warning (was `message`).
         ("src/world.rs", "unread_warning", &[Ban::Body]),
-        ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         // M20 (M-W0.5): an unread value's warning with its repair, `Edit in Obsidian` (was
         // `message` and a link).
         ("src/world.rs", "unread_groups_message", &[Ban::Body]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
-        ("src/world/page.rs", "list", &[Ban::Extras(1)]),
         // M20 (M-W0.5): a note that cannot be read, in place of its page (was
         // `message_with_actions`).
         ("src/world/page.rs", "unread_pane", &[Ban::Body]),
-        ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "fills_body", &[Ban::Pane(1)]),
         ("src/party.rs", "show", &[Ban::Pane(1)]),
     ]
@@ -1532,6 +1519,14 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // Package K2: the popup parts.
         ("src/design/outcome.rs", "measuring", &[Ban::Layout(1)]),
         ("src/design/pane.rs", "stop_body", &[Ban::Layout(1)]),
+        // Layout PR 9b: the quiet-text harness's bare screen and its stock reference, egui's
+        // own text edit, whose cost the document editor is measured against.
+        ("src/design/tests/quiet_text.rs", "root", &[Ban::Layout(1)]),
+        (
+            "src/design/tests/quiet_text.rs",
+            "stock_text_edit",
+            &[Ban::Layout(1)],
+        ),
         ("src/design/popups.rs", "list", &[Ban::Layout(1)]),
         ("src/design/popups.rs", "rich_tip", &[Ban::Layout(2)]),
         ("src/design/popups.rs", "drag_source", &[Ban::Layout(3)]),
