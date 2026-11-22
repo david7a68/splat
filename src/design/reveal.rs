@@ -549,15 +549,6 @@ fn enqueue(ui: &Ui, region: &Region, by: f32, why: Option<JumpTo>) {
     ui.ctx().request_discard("a request moves its column");
 }
 
-/// A column's reach for the pointer: its view and its scroll bar's lane at the right (a drag of the
-/// bar is the DM's scroll of the column).
-pub(in crate::design) fn with_lane(view: Rect) -> Rect {
-    Rect::from_min_max(
-        view.min,
-        egui::pos2(view.max.x + super::layout::lane_width(), view.max.y),
-    )
-}
-
 /// The view of the `ScrollColumn` that `ui` is drawn in, in screen points (its area's viewport
 /// inside its clip): a sideways clip egui keeps wider than the column is cut to the column.
 pub(in crate::design) fn column_view(ui: &Ui) -> Option<Rect> {
@@ -583,8 +574,7 @@ pub(super) fn take_queued(ui: &Ui, key: Id, area: Id) -> Option<f32> {
     let keys = keys_in(ui, view);
     let (moved, held, other) = ui.input(|input| {
         let pointer = &input.pointer;
-        let reach = with_lane(view);
-        let over = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| reach.contains(pos));
+        let over = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| view.contains(pos));
         let wheel = input.raw_scroll_delta != Vec2::ZERO
             || input.smooth_scroll_delta != Vec2::ZERO
             || input
@@ -596,7 +586,7 @@ pub(super) fn take_queued(ui: &Ui, key: Id, area: Id) -> Option<f32> {
         let other = input.events.iter().any(|event| match event {
             egui::Event::PointerButton {
                 pos, pressed: true, ..
-            } => reach.contains(*pos) && !pressed_in,
+            } => view.contains(*pos) && !pressed_in,
             event => keys && moves_view(event),
         });
         (

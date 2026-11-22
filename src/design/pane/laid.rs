@@ -1319,7 +1319,8 @@ mod tests {
     /// request queued for column A (the pane), and each input the cancel rule handles, aimed at
     /// column B (the pointer over it, the focus in it) and then at A. A's request survives every
     /// input at B; every input at A ends it, except a shortcut that moves nothing (Ctrl+S). Each
-    /// cancel branch of `take_queued` has a row.
+    /// cancel branch of `take_queued` has a row. (A press on A's scroll bar sets A's offset in
+    /// egui's own pass, after a queued one, so the bar always wins; its row checks that.)
     #[test]
     fn the_resolver_cancels_only_on_its_own_columns_input() {
         use egui::{Key, Modifiers};
