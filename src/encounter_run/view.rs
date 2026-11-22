@@ -3266,9 +3266,16 @@ impl Run {
     }
 
     fn notes_tab(&mut self, ui: &mut egui::Ui) {
+        design::ScrollColumn::new("run_encounter_notes").show(ui, |ui| self.prep_notes(ui));
+    }
+
+    /// The encounter's prep: its read-aloud text and technical details, or what to do when it
+    /// has none. In its own column on the Prep tab (`notes_tab`); in the ended view's panel, in
+    /// the sync block's column, which is its scroll (`ended_panel`).
+    fn prep_notes(&mut self, ui: &mut egui::Ui) {
         let (prep, technical) = self.prep();
         let mut pressed = false;
-        design::ScrollColumn::new("run_encounter_notes").show(ui, |ui| {
+        {
             if prep.is_empty() {
                 // Round 30 AP1: a sentence that names an act offers it. The run's own
                 // record of its encounter decides, not Lookup's index, which can lag behind
@@ -3315,7 +3322,7 @@ impl Run {
                     style::markdown(ui, technical);
                 });
             }
-        });
+        }
         if pressed {
             self.prep_refusal = None;
         }
@@ -6092,10 +6099,6 @@ impl Run {
 
     // ---- Ended ------------------------------------------------------------------
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn ended_view(&mut self, ui: &mut egui::Ui) -> bool {
         self.back_out_on_escape(ui);
         let c = colors();
@@ -6121,6 +6124,26 @@ impl Run {
                 - design::S
         };
         let (reason_room, second_line) = self.ended_second_line(ui, line_width, undo_room);
+        // The final state and the panel beside it: one task of two columns
+        // (`PaneColumns::shared_task`), whose edges are resolved now, before the header paints,
+        // in the pane's body (its room less the pane's scroll lane, `edges_in`).
+        let panes_width = ui.available_width() - design::lane_width();
+        let columns = design::PaneColumns::shared_task("run_ended_columns").rest(0.0);
+        let columns = if self.hide_panel {
+            columns
+        } else {
+            columns.trailing(
+                0.0,
+                design::Column::panel(
+                    "run_ended_log",
+                    design::side_panel_width(ui.ctx().content_rect().width()),
+                )
+                .page_keeps(design::RUN_LIST_KEEPS)
+                .frame(side_frame()),
+            )
+        };
+        let edges = columns.edges_in(ui, panes_width);
+        let rest = edges.child_within(ui, panes_width, 0);
         let (header_rect, _) = ui.allocate_exact_size(
             vec2(
                 ui.available_width(),
@@ -6134,105 +6157,148 @@ impl Run {
             egui::Sense::hover(),
         );
         design::rule(ui);
+        // The rows' size comes from the pane's whole room, so a footer that comes or goes
+        // changes no row. They end the panel's `S` gutter and the column's lane before the
+        // panel's edge, at most `max_width` from the column's left.
+        let scale = RunScale::fit(
+            ui.available_height(),
+            rest.span() - design::S - design::lane_width(),
+            self.state.order.len(),
+        );
+        let roster_right =
+            rest.min + (rest.span() - design::S - design::lane_width()).min(scale.max_width);
+        // The header comes before the pane, so it is first in Tab order, and outside the pane's
+        // scroll and clip. Its Undo ends at the final state's rows' edge, from the edges above.
+        let mut header_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("ended_header")
+                .max_rect(header_rect.with_max_y(header_rect.top() + first_line)),
+        );
+        header_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.set_min_height(60.0);
+            let close_reason = self.close_reason();
+            let close_width = close_reason.as_ref().map_or_else(
+                || {
+                    Action::primary("Close run")
+                        .density(Density::Glance)
+                        .natural_width(ui)
+                },
+                |reason| {
+                    design::number_width(ui, reason, &Type::Small.font(ui))
+                        .min(ui.available_width() / 2.0)
+                },
+            );
+            ui.allocate_ui_with_layout(
+                vec2(
+                    close_width,
+                    Density::Glance.control()
+                        + if close_reason.is_some() {
+                            Type::Small.line() + ui.spacing().item_spacing.y
+                        } else {
+                            0.0
+                        },
+                ),
+                Layout::top_down(Align::RIGHT),
+                |ui| {
+                    if Action::primary(if self.close_block().is_some() {
+                        "Close after sync"
+                    } else {
+                        "Close run"
+                    })
+                    .name("Close run")
+                    .density(Density::Glance)
+                    .blocked(self.close_block())
+                    .show(ui)
+                    .clicked()
+                    {
+                        closed = self.request_close();
+                    }
+                    design::blocked_reason(ui, close_reason.as_deref());
+                },
+            );
+            if one_line {
+                self.ended_continue(ui, f32::INFINITY);
+                let room = ui.available_width() - title_width - gap;
+                // Undo stays at the roster's right edge, but never gives its target to it.
+                let align = (ui.available_rect_before_wrap().right() - roster_right).max(0.0);
+                let align = match self.ended_undo_whole(ui) {
+                    Some(whole) => align.min((room - whole).max(0.0)),
+                    None => align,
+                };
+                let edge = ui.available_rect_before_wrap().right() - align;
+                in_column(ui, edge, |ui| self.ended_undo(ui, room - align));
+            }
+            self.save_status(ui);
+            ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                self.run_title(ui, &self.state_words(false));
+                ui.label(
+                    Type::Small
+                        .rich(ui, format!("Outcome: {outcome}"))
+                        .color(c.muted),
+                );
+            });
+        });
+        if !one_line {
+            let mut second = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt("ended_header_actions")
+                    .max_rect(
+                        header_rect
+                            .with_min_y(header_rect.top() + first_line)
+                            .with_max_x(if self.hide_panel {
+                                header_rect.right()
+                            } else {
+                                roster_right
+                            }),
+                    ),
+            );
+            second.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                self.ended_continue(ui, reason_room);
+                let room = ui.available_width();
+                self.ended_undo(ui, room);
+            });
+        }
+
         // FI2: errors and a changed file sit in the message footer at the bottom of the view,
         // below the final state and the panel, so neither moves when one comes or goes.
-        // The ended view is the footer's pane: the final state and the panel's column, each
-        // with its own scroll (`FillsReason::Columns`).
+        // The ended view is the footer's pane, and its content is one task of two columns
+        // (`PaneColumns::shared_task`): the final state, and the panel's column beside it. The
+        // footer follows the taller column by `S` when both fit, and is pinned at the pane's
+        // bottom when one is taller (each column then scrolls on its own).
         let frame = design::outcome::PaneFrame::new(ui);
         let messages = self.run_messages(&frame, false, ui.available_width());
         let pressed = messages
-            .pane(
-                ui,
-                design::pane::Body::Fills(design::pane::Fills::because(
-                    design::pane::FillsReason::Columns,
-                )),
-                |ui| {
-                    if self.closing.is_open() {
-                        ui.horizontal(|ui| {
-                            closed = self.close_confirmation(ui, "The run stays saved.");
-                        });
+            .pane(ui, design::pane::Body::Content, |ui| {
+                if self.closing.is_open() {
+                    ui.horizontal(|ui| {
+                        closed = self.close_confirmation(ui, "The run stays saved.");
+                    });
+                }
+                // Beside a panel, the final state comes first.
+                edges.show_children(ui, |ui, index| {
+                    if index == 1 {
+                        self.ended_panel(ui);
+                        return;
                     }
-                    // Beside a panel, the final state comes first.
-                    if !self.hide_panel {
-                        let width = design::side_panel_width(ui.ctx().content_rect().width());
-                        design::Column::panel("run_ended_log", width)
-                            .page_keeps(design::RUN_LIST_KEEPS)
-                            .frame(side_frame())
-                            .show_inside(ui, |ui| {
-                                // With choices to make, they have the column, and the log waits behind a
-                                // heading. Never a pair of choices cut by a second scroll.
-                                let choosing = self.conflict_count() > 0;
-                                let room = if choosing {
-                                    ui.available_height() - Density::Read.control() - design::M
-                                } else {
-                                    ui.available_height() * 0.6
-                                };
-                                // A quiet action at the text edge (`Stop sync for …`) reaches `S` into the
-                                // panel's gutter. The scroll area starts there too, so it shows the whole
-                                // target, and its margin keeps the text where it was.
-                                let area = ui.available_rect_before_wrap();
-                                ui.scope_builder(
-                                    egui::UiBuilder::new()
-                                        .max_rect(area.with_min_x(area.min.x - design::S)),
-                                    |ui| {
-                                        egui::ScrollArea::vertical()
-                                            .id_salt("run_ended_sync")
-                                            .max_height(room)
-                                            .auto_shrink([false, true])
-                                            .show(ui, |ui| {
-                                                egui::Frame::new()
-                                                    .inner_margin(egui::Margin {
-                                                        left: design::S as i8,
-                                                        ..egui::Margin::ZERO
-                                                    })
-                                                    .show(ui, |ui| {
-                                                        self.sync_block(ui);
-                                                        if !self.setup_details.is_empty() {
-                                                            design::section(ui, "Prep", |ui| {
-                                                                self.notes_tab(ui);
-                                                            });
-                                                        }
-                                                    });
-                                            });
-                                    },
-                                );
-                                // The scroll area's margin, so `Combat log` starts where `Prep` does.
-                                egui::Frame::new()
-                                    .inner_margin(egui::Margin {
-                                        left: design::S as i8,
-                                        ..egui::Margin::ZERO
-                                    })
-                                    .show(ui, |ui| {
-                                        // SM11, AM14: Prep's peer, so one form, closed, with
-                                        // or without choices to make.
-                                        design::section(ui, "Combat log", |ui| self.log_tab(ui));
-                                    });
-                            });
-                    }
-                    let mut roster_right = ui.available_rect_before_wrap().left();
-                    egui::CentralPanel::default()
-                        // The panel's drag handle lies on this edge, so the rows stop short of it.
-                        .frame(egui::Frame::new().inner_margin(egui::Margin {
+                    // The panel's drag handle lies on this column's right edge, so the rows
+                    // stop `S` short of it.
+                    egui::Frame::new()
+                        .inner_margin(egui::Margin {
                             right: design::S as i8,
                             ..egui::Margin::ZERO
-                        }))
-                        .show_inside(ui, |ui| {
-                            let scale = RunScale::fit(
-                                ui.available_height(),
-                                ui.available_width(),
-                                self.state.order.len(),
-                            );
-                            egui::ScrollArea::vertical()
-                                .id_salt("run_final_state")
-                                .auto_shrink([false, false])
+                        })
+                        .show(ui, |ui| {
+                            // As tall as its content: the shared columns follow the taller one.
+                            design::ScrollColumn::new("run_final_state")
+                                .fit_height()
                                 .show(ui, |ui| {
                                     ui.set_max_width(ui.available_width().min(scale.max_width));
-                                    // SI1: how everyone ended comes first, so the whole party's HP is in
-                                    // view; what the party takes follows.
+                                    // SI1: how everyone ended comes first, so the whole party's HP
+                                    // is in view; what the party takes follows.
                                     design::heading(ui, design::Heading::Label("Final state"));
                                     let spacing = ui.spacing().item_spacing.y;
                                     ui.spacing_mut().item_spacing.y = 0.0;
-                                    roster_right = ui.available_rect_before_wrap().right();
                                     for index in &self.state.order {
                                         let p = &self.state.participants[*index];
                                         let sync = self.row_sync_word(*index);
@@ -6275,102 +6341,10 @@ impl Run {
                                     self.loot_section(ui);
                                 });
                         });
-                    let mut header_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .id_salt("ended_header")
-                            .max_rect(header_rect.with_max_y(header_rect.top() + first_line)),
-                    );
-                    header_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.set_min_height(60.0);
-                        let close_reason = self.close_reason();
-                        let close_width = close_reason.as_ref().map_or_else(
-                            || {
-                                Action::primary("Close run")
-                                    .density(Density::Glance)
-                                    .natural_width(ui)
-                            },
-                            |reason| {
-                                design::number_width(ui, reason, &Type::Small.font(ui))
-                                    .min(ui.available_width() / 2.0)
-                            },
-                        );
-                        ui.allocate_ui_with_layout(
-                            vec2(
-                                close_width,
-                                Density::Glance.control()
-                                    + if close_reason.is_some() {
-                                        Type::Small.line() + ui.spacing().item_spacing.y
-                                    } else {
-                                        0.0
-                                    },
-                            ),
-                            Layout::top_down(Align::RIGHT),
-                            |ui| {
-                                if Action::primary(if self.close_block().is_some() {
-                                    "Close after sync"
-                                } else {
-                                    "Close run"
-                                })
-                                .name("Close run")
-                                .density(Density::Glance)
-                                .blocked(self.close_block())
-                                .show(ui)
-                                .clicked()
-                                {
-                                    closed = self.request_close();
-                                }
-                                design::blocked_reason(ui, close_reason.as_deref());
-                            },
-                        );
-                        if one_line {
-                            self.ended_continue(ui, f32::INFINITY);
-                            let room = ui.available_width() - title_width - gap;
-                            // Undo stays at the roster's right edge, but never gives its target to it.
-                            let align =
-                                (ui.available_rect_before_wrap().right() - roster_right).max(0.0);
-                            let align = match self.ended_undo_whole(ui) {
-                                Some(whole) => align.min((room - whole).max(0.0)),
-                                None => align,
-                            };
-                            let edge = ui.available_rect_before_wrap().right() - align;
-                            in_column(ui, edge, |ui| self.ended_undo(ui, room - align));
-                        }
-                        self.save_status(ui);
-                        ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
-                            ui.spacing_mut().item_spacing.y = 0.0;
-                            self.run_title(ui, &self.state_words(false));
-                            ui.label(
-                                Type::Small
-                                    .rich(ui, format!("Outcome: {outcome}"))
-                                    .color(c.muted),
-                            );
-                        });
-                    });
-                    if !one_line {
-                        let mut second = ui.new_child(
-                            egui::UiBuilder::new()
-                                .id_salt("ended_header_actions")
-                                .max_rect(
-                                    header_rect
-                                        .with_min_y(header_rect.top() + first_line)
-                                        .with_max_x(if self.hide_panel {
-                                            header_rect.right()
-                                        } else {
-                                            roster_right
-                                        }),
-                                ),
-                        );
-                        second.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                            self.ended_continue(ui, reason_room);
-                            let room = ui.available_width();
-                            self.ended_undo(ui, room);
-                        });
-                    }
-                },
-            )
+                });
+            })
             .pressed;
         self.run_press(pressed, &mut None);
-
         closed
     }
 
@@ -6453,6 +6427,49 @@ impl Run {
 
     /// The width of Undo with its whole target, when the ended header shows it beside
     /// Continue fight or its reason. Then Undo never gives up its target.
+    /// The ended view's panel column (`ended_view`'s trailing child): the sync block and Prep,
+    /// then the Combat log. With choices to make, they have the column, and the log waits behind
+    /// a heading. Never a pair of choices cut by a second scroll.
+    fn ended_panel(&mut self, ui: &mut egui::Ui) {
+        // The Combat log's own line while it is closed: its heading and the gap above it.
+        let log_line = Density::Read.control() + design::M;
+        let log_id = ui.make_persistent_id("run_ended_combat_log");
+        let log_open = egui::collapsing_header::CollapsingState::load(ui.ctx(), log_id)
+            .is_some_and(|state| state.is_open());
+        let top = ui.cursor().top();
+        // An open log shares the column (the sync block up to 60%, as before); a closed one
+        // takes only its line, so the sync block is whole while the column has room for it.
+        let room = if log_open && self.conflict_count() == 0 {
+            ui.available_height() * 0.6
+        } else {
+            ui.available_height() - log_line
+        };
+        // A quiet action at the text edge (`Stop sync for …`) hangs into the panel's gutter: the
+        // column's scroll area starts where it reaches (`ScrollColumn`), so it shows the whole
+        // target, and the text stays at the panel's text edge.
+        let sync = design::ScrollColumn::new("run_ended_sync")
+            .max_height(room.max(0.0))
+            .fit_height()
+            .show(ui, |ui| {
+                self.sync_block(ui);
+                if !self.setup_details.is_empty() {
+                    design::section(ui, "Prep", |ui| self.prep_notes(ui));
+                }
+            })
+            .content_size
+            .y
+            .min(room.max(0.0));
+        // SM11, AM14: Prep's peer, so one form, closed, with or without choices to make.
+        design::section_with_id(ui, "run_ended_combat_log", "Combat log", |ui| {
+            self.log_tab(ui)
+        });
+        // The shared columns measure this column (`PaneColumns::shared_task`): a closed log's
+        // whole line counts, so the room it gives the sync block is the room it was measured with.
+        if !log_open {
+            ui.expand_to_include_y(top + sync + log_line);
+        }
+    }
+
     fn ended_undo_whole(&self, ui: &egui::Ui) -> Option<f32> {
         let continues = !self.undo_continues() || self.undo_blocked().is_some();
         (continues && !self.history.is_empty() && self.undo_blocked().is_none()).then(|| {

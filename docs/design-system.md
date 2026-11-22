@@ -2112,7 +2112,12 @@ line. In History it is the line under Read-only, `S` below it and `M` above `FIN
 footer's End step starts its outcome field with the outcome of the ending that went. Whenever that field opens
 with text, the text is selected, so that Enter keeps it and typing replaces it.
 
-The run has one message footer, pinned below the roster in the live, setup and ended views (`design::Footer`). The
+The run has one message footer, pinned below the roster in the live and setup views (`design::Footer`). In the ended
+view the footer's pane is a `Body::Content` pane, and its content is one task of two columns
+(`PaneColumns::shared_task`): Final state, and the panel's column (the sync block, Prep and Combat log) beside it. The
+footer follows the taller column, `S` below it, when both fit the room, and is pinned at the pane's bottom when one is
+taller; each column then scrolls on its own. A message that comes below short columns moves nothing in them (layout
+11c, M23: the shared columns' rule replaces the ended view's own `Fills` body, whose footer was always pinned). The
 notices that come by themselves sit in it: the changed-on-disk choices, an error, and the warning that the saved Undo
 steps cannot be read; in setup also the carry-over warning and the long-rest offer, whose result (`Party HP set to the
 saved values.` with `Undo use saved HP`) leads the footer while its step is the newest. The roster sizes its rows from
