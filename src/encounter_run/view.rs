@@ -6429,8 +6429,9 @@ impl Run {
                     design::section(ui, "Prep", |ui| self.prep_notes(ui));
                 }
             })
-            .inner_rect
-            .height();
+            .content_size
+            .y
+            .min(room.max(0.0));
         // SM11, AM14: Prep's peer, so one form, closed, with or without choices to make.
         design::section_with_id(ui, "run_ended_combat_log", "Combat log", |ui| {
             self.log_tab(ui)

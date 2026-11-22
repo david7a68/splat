@@ -334,7 +334,8 @@ fn death_saves_move_nothing(d: &mut Driver<'_>) {
 
 /// Layout 11c (review of PR 750): the ended view opened first at 1920, with no height kept from
 /// a smaller window (a restart): its short columns are measured as they are, so the footer
-/// follows them (P1). Then the base size again.
+/// follows them (P1); and its header comes before the footer in Tab order (P2). Then the base
+/// size again.
 fn ended_fresh_at_1920(d: &mut Driver<'_>) {
     let base = d.window_size();
     d.set_base(LARGE);
@@ -347,6 +348,11 @@ fn ended_fresh_at_1920(d: &mut Driver<'_>) {
         }),
         format!("Opened first at 1920, the ended pane: {pane:?}"),
     );
+    // A refused Undo of the saved ending puts its message, with Dismiss, in the footer. The
+    // caller's restart then starts from the saved run again, with no focus or scroll from here.
+    d.app_mut().encounters.run_mut().unwrap().wants_unend = Some(crate::encounter_run::Unend::Undo);
+    d.settle();
+    ended_tab_order(d);
     d.set_base(base);
 }
 
@@ -516,7 +522,6 @@ pub fn run(d: &mut Driver<'_>) {
         still,
         "No restart bypass: an Undo of the saved ending leaves the fight ended after a later rest",
     );
-    ended_tab_order(d);
     if d.has("Dismiss this message") {
         d.click("Dismiss this message");
     }
