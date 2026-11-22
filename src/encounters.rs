@@ -7553,7 +7553,7 @@ impl Encounters {
                 design::pane::FillsReason::Columns,
             )),
             move |ui| {
-                this.editor_panes(ui, active, campaigns, party, compact, difficulty, panes);
+                this.editor_panes(ui, active, campaigns, party, difficulty, panes);
                 this
             },
             |this, messages| {
@@ -7586,11 +7586,12 @@ impl Encounters {
         active: &Campaign,
         campaigns: &Campaigns,
         party: &Party,
-        compact: bool,
         difficulty: Option<Arc<crate::difficulty::Difficulty>>,
-        // The roster's and Add participants' edges, resolved before the head (`editor_view`).
+        // The roster's and Add participants' edges, resolved before the head (`editor_view`);
+        // none while the panes are tabs (a compact editor).
         panes: Option<design::PaneEdges>,
     ) {
+        let compact = panes.is_none();
         let Some(snapshot) = &self.snapshot else {
             crate::design::spinner(ui);
             return;
