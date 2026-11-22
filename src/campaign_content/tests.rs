@@ -242,7 +242,7 @@ fn an_unclosed_list_names_and_marks_its_opening_line() {
     let mut repair = refusal(&rule);
     repair.failure = Some("This file is read only.".into());
     let mut checks = 0;
-    repair.draft = package.clone();
+    let _ = repair.draft.replace(package.clone());
     repair.draft_changed(&active, &mut checks);
     assert_eq!(
         (repair.refusal, repair.failure, checks),

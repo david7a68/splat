@@ -45,7 +45,7 @@ pub use action_rows::{Columns, RowAction, action_row};
 pub use layout::{
     ACTION_GAP, BackEdge, BackLink, BackTo, CREATE_FIELD_MIN, Create, CreateChoice, CreateDropdown,
     CreateField, CreateReasons, DraftOwner, Editor, EditorHead, EditorKind, FieldId, FieldName,
-    GuardedText, InlineCreate, KeptLine, KeyName, MAX_WORD_CHARS, NARROWEST_PANE, NoReason, Once,
+    InlineCreate, KeptLine, KeyName, MAX_WORD_CHARS, NARROWEST_PANE, NoReason, Once,
     ParticipantKey, RowIndex, RowKey, ScrollColumn, Selection, SideAction, Sideways, Slot,
     SlotType, Submenus, TextKey, TextOwner, TitleAction, TitleActionRow, TitleLine, TitlePlacement,
     TitleType, Unsaved, Word, edit_in_place, first_unsaved, labelled_field, lane_width, line_field,
