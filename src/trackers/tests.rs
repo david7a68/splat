@@ -2052,7 +2052,10 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
     assert!(laid() > before, "a new font atlas lays the Due rows again");
     let before = laid();
     let visuals = h.ctx.style().visuals.clone();
-    h.ctx.set_visuals(eframe::egui::Visuals::light());
+    // Light colours with the same text alpha, so the atlas stays: only the theme changes.
+    let mut light = eframe::egui::Visuals::light();
+    light.text_alpha_from_coverage = visuals.text_alpha_from_coverage;
+    h.ctx.set_visuals(light);
     h.run_steps(3);
     assert!(laid() > before, "the other theme lays the Due rows again");
     h.ctx.set_visuals(visuals);
