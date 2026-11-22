@@ -1673,7 +1673,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/library/catalogue.rs", 1),
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
-            ("src/trackers.rs", 1),
         ],
     ),
     (

@@ -626,7 +626,9 @@ pub struct Sessions {
     /// planned fights they were last trimmed to. Ended by `forget_plan_lines` (plan change,
     /// session change, campaign change); a new content key replaces an entry.
     plan_lines: plan::PlanLines,
-    plan_lines_seen: Vec<(Option<Uuid>, usize, Uuid)>,
+    /// The planned fights whose lines `plan_lines` keeps, each with its day: its revision keys
+    /// those lines with each roster's (ruling M6), so a new day fits them again.
+    plan_lines_seen: crate::design::memo::Revised<Vec<(plan::PlanLineId, Option<String>)>>,
     /// `<file> is now a separate session.` and its Undo.
     separate: design::Results<kept::Page, kept::Separate>,
     /// The DM showed or hid the party bar. Otherwise it shows while a session is played.
@@ -2571,7 +2573,7 @@ impl Sessions {
         // Row 123: a journey's acts, results and plan line are the campaign's: the change ends
         // them here, as it happens.
         self.travel = plan::Travel::default();
-        self.forget_plan_lines(&[]);
+        self.forget_plan_lines(Vec::new());
         // A saved recording's result is its campaign's: the change ends it, not only hides it.
         self.saved = design::Results::new();
         self.campaign = active.cloned();
@@ -9861,7 +9863,7 @@ mod tests {
             name: "Bridge Ambush".into(),
             path: String::new(),
             summary: Default::default(),
-            key: 0,
+            revision: None,
             difficulty: Default::default(),
         }];
         let source = "## Plan for tonight\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n## What happened\n\nWe crossed the bridge.\n";
@@ -9942,7 +9944,7 @@ mod tests {
             name: "Bridge Ambush".into(),
             path: String::new(),
             summary: Default::default(),
-            key: 0,
+            revision: None,
             difficulty: Default::default(),
         }];
         for (links, count) in [

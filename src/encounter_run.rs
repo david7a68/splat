@@ -176,6 +176,13 @@ type ArrivalKey = (
     crate::design::memo::Revision,
     crate::design::memo::Revision,
 );
+/// What an Arrivals line says comes from the run's steps, the groups' read and the scale's read
+/// (ruling M6: the owner's revisions, never a hash of the line's parts).
+type ArrivalLineKey = (
+    crate::design::memo::Revision,
+    crate::design::memo::Revision,
+    crate::design::memo::Revision,
+);
 /// The typed totals' revision, the groups' revision, the run's encounter, the count of steps
 /// kept or taken back and the grouping rule, for the Arrivals reasons (a step or the rule can
 /// give a side the initiative that a group without a bonus joins).
@@ -327,8 +334,8 @@ pub struct Run {
     /// not one, and neither is opening a run to read it. Never saved.
     dm_steps: usize,
     /// Counts every kept step and every Undo, so a result can name the step it belongs to.
-    /// Never saved.
-    revision: u64,
+    /// Its revision keys Arrivals' kept lines (`arrival_lines`). Never saved.
+    revision: crate::design::memo::Revised<u64>,
     /// `Loot copied.`: the copy action, at the `revision` it was made. Undo and any new step
     /// (a roll among them) end it. Never saved.
     loot_copied: Option<u64>,
@@ -337,7 +344,7 @@ pub struct Run {
     arrival_words: Option<(ArrivalKey, ArrivalWords)>,
     /// Arrivals' difficulty lines, fitted and kept by group (point 1 of the round 29 review):
     /// this run's own, so they die with it and no other run reads them.
-    arrival_lines: crate::difficulty::Kept<Uuid>,
+    arrival_lines: crate::difficulty::Kept<Uuid, Option<crate::difficulty::Fitted>, ArrivalLineKey>,
     /// The turn heading's one kept candidate (M5): this run's own, so it ends with the run.
     /// The part chooses again when the heading's data or metrics change.
     turn_heading: crate::design::KeptTurnHeading,
@@ -855,7 +862,7 @@ impl Run {
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
-            revision: 0,
+            revision: crate::design::memo::Revised::new(0),
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
@@ -1055,7 +1062,7 @@ impl Run {
         self.history_labels.push(label);
         self.history_from_sheet.push(from_sheet);
         self.history_targets.push(target);
-        self.revision += 1;
+        self.count_step();
     }
     /// Keep a step that the DM took, which counts as play.
     fn keep_own_step(&mut self, before: State, named: Named, from_sheet: bool) {
@@ -2183,7 +2190,7 @@ impl Run {
     }
     fn take_back(&mut self) {
         if let Some(previous) = self.history.pop() {
-            self.revision += 1;
+            self.count_step();
             self.saved_steps = self.saved_steps.min(self.history.len());
             self.notice = None;
             self.dm_steps += 1;
@@ -3592,6 +3599,14 @@ impl Run {
         self.set_scale(Arc::clone(scale));
     }
     /// A new read of the groups: a new revision.
+    /// A kept step or an Undo: the count, and so its revision, moves on.
+    fn count_step(&mut self) {
+        self.revision.revise(|steps| {
+            *steps += 1;
+            crate::design::memo::Changed::Yes
+        });
+    }
+
     fn set_groups(&mut self, groups: Arc<Vec<Arc<RunGroup>>>) {
         self.groups = Some(groups);
         self.groups_read
@@ -3916,7 +3931,7 @@ impl Run {
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
-            revision: 0,
+            revision: crate::design::memo::Revised::new(0),
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
@@ -4301,7 +4316,7 @@ impl Run {
             .expect("participant in this run");
         participant.name = to.to_owned();
         // A rename in play is a step, which counts in `revision`.
-        self.revision += 1;
+        self.count_step();
     }
     /// A read of this sheet with the damage it had at the last match, plus `more_damage`. Test
     /// builds have no live sheet, so this goes through the same comparison that a live read does.
@@ -10025,7 +10040,7 @@ mod tests {
         run.set_reads(Uuid::new_v4(), &groups, &scale);
         // A step that marks a character or a creature absent changes the budgets and the XP.
         let weigh = |run: &mut Run| {
-            run.revision += 1;
+            run.count_step();
             run.arrival_words().unwrap().get(&group.id).cloned()
         };
         run.state.participants[0].present = false;
@@ -10091,7 +10106,7 @@ mod tests {
         );
         run.set_groups(Arc::new(vec![group.clone(), allies.clone()]));
         let word = |run: &mut Run, id| {
-            run.revision += 1;
+            run.count_step();
             run.arrival_words().unwrap()[&id]
                 .0
                 .rating
@@ -10116,7 +10131,7 @@ mod tests {
             .unwrap(),
         );
         let missing = |run: &mut Run, id| {
-            run.revision += 1;
+            run.count_step();
             let (fight, _) = &run.arrival_words().unwrap()[&id];
             (
                 fight.rating.is_some(),
