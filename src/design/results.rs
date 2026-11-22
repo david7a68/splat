@@ -1570,7 +1570,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/visual_tests/ergonomics.rs",
             "only_the_real_scroll_bar_is_chrome",
-            &[Ban::Extras(1)],
+            &[Ban::Layout(1), Ban::Extras(1)],
         ),
         (
             "src/visual_tests/ergonomics.rs",
