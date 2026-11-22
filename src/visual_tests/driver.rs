@@ -3287,13 +3287,18 @@ impl<'a> Driver<'a> {
 
     /// The actual source editor's focus and scroll, for a layout transition check.
     pub fn note_editor_view(&self) -> (bool, f32) {
-        let (id, offset) = self.harness.ctx.data(|data| {
-            data.get_temp::<(egui::Id, egui::Vec2)>(egui::Id::new("session_editor_proof"))
+        let id = self.harness.ctx.data(|data| {
+            data.get_temp::<egui::Id>(egui::Id::new("session_editor_proof"))
                 .expect("The note editor was painted")
         });
+        // The editor viewport's own record of its text's offset (`pane::editor_view`).
+        let offset = crate::design::pane::editor_frames(&self.harness.ctx)
+            .into_iter()
+            .find(|frame| frame.field() == id)
+            .map_or(0.0, |frame| frame.offset());
         (
             self.harness.ctx.memory(|memory| memory.has_focus(id)),
-            offset.y,
+            offset,
         )
     }
 
