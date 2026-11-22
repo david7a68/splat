@@ -710,6 +710,11 @@ pub struct Sessions {
     plan_projection: plan::ProjectionCache,
     /// The plan's closed rows as their recipe laid them, kept by their inputs (layout 11c A2c).
     plan_rows: plan::PlanRowsCache,
+    /// The plan's measured region, while its body is one (layout 11c A2c-3): its offset, its
+    /// requests and its mask.
+    plan_region: Option<crate::design::RegionState>,
+    /// Whether the plan's body was its measured region in the last frame (A2c-3).
+    pub(super) plan_measured: bool,
     /// The fight behind the open event, read once.
     /// The open played fight's summary, kept with the run's file as last found (or why not):
     /// a different answer from the folder reads it again (R41, round 30 review F2).
@@ -2297,7 +2302,10 @@ impl Sessions {
                 // window. The banner is at most a third of it, and scrolls; the recording alerts
                 // stay first, at its top.
                 let most = ui.ctx().content_rect().height() / 3.0;
+                // A choice that gains keyboard focus comes whole into view (M0450): the
+                // column's one focus arbiter, by the pane's rules.
                 design::ScrollColumn::new("session_banner_scroll")
+                    .follows_focus()
                     .max_height(most)
                     // Short content takes its own height; long content takes the whole third.
                     .min_scrolled_height(most)
@@ -2433,20 +2441,6 @@ impl Sessions {
                         }
                         // After the recording alerts, in the banner's order: what arrived on its own.
                         self.banner_notices(ui);
-                        // A control that gains keyboard focus scrolls into view.
-                        let focus = ui.ctx().memory(|memory| memory.focused());
-                        let seen_id = egui::Id::new("session_banner_focus");
-                        let seen: Option<egui::Id> =
-                            ui.data(|data| data.get_temp(seen_id)).flatten();
-                        if focus != seen {
-                            if let Some(response) = focus.and_then(|id| ui.ctx().read_response(id))
-                                && response.layer_id == ui.layer_id()
-                                && ui.min_rect().contains_rect(response.rect)
-                            {
-                                ui.scroll_to_rect(response.rect, None);
-                            }
-                            ui.data_mut(|data| data.insert_temp(seen_id, focus));
-                        }
                     });
             });
         if let Some((session, path)) = retry {
@@ -6648,8 +6642,14 @@ impl Sessions {
                 match at {
                     Some(at) => {
                         markdown_view::show_reader(ui, &body[..at]);
+                        // Opened at a timeline marker: its line at the view's top, once (M0481,
+                        // ruling M18's linked-reader jump).
                         if reading.mark.is_some() {
-                            ui.scroll_to_cursor(Some(egui::Align::TOP));
+                            design::reveal::jump(
+                                ui,
+                                ui.cursor().top(),
+                                design::reveal::JumpTo::LinkedHeading,
+                            );
                         }
                         if let Some((marker, key)) = &reading.marker {
                             let line_end = body[at..].find('\n').map_or(body.len(), |end| at + end);
@@ -10536,6 +10536,69 @@ mod tests {
         assert!(rendered.contains("[Bridge Ambush](<splat-note:Bridge Ambush>)"));
         assert!(rendered.contains(&format!("[Old name](<splat-note:Timeline#^{id}>)")));
         assert!(source.contains("|Old name]]"));
+    }
+
+    /// M0481 (ruling M18): a recording's text opened at a timeline marker opens with the
+    /// marker's line at the view's top, once (the reader's typed jump); the DM's wheel after it
+    /// is not pulled back.
+    #[test]
+    fn a_text_opened_at_a_marker_shows_the_marker_line_at_the_top_once() {
+        use crate::design::test_harness::Themed as _;
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let recording = dir.path().join("Session 1.wav");
+        fs::write(Made::Marked.path(&recording), "").unwrap();
+        let before: String = (1..=60)
+            .map(|line| format!("Line {line} of what the table said before.\n\n"))
+            .collect();
+        let sessions = Sessions {
+            reading: Some(Reading {
+                recording,
+                name: "Session 1".to_owned(),
+                made: Made::Marked,
+                parts: vec![(
+                    "00:10:00".to_owned(),
+                    format!("{before}We rest at the mill.\n\n{before}"),
+                )],
+                part: 0,
+                mark: Some("We rest at the mill.".to_owned()),
+                marker: None,
+                short_of: None,
+            }),
+            ..Sessions::default()
+        };
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(800.0, 400.0))
+            .themed_state(
+                |ctx, (page, book): &mut (Sessions, Book)| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let frame = PaneFrame::new(ui);
+                        let messages = Messages::<()>::new(&frame, "reading", ui.available_width());
+                        let _ = messages.pane(ui, design::pane::Body::Content, |ui| {
+                            page.reading_view(ui, book);
+                        });
+                    });
+                },
+                (sessions, Book::default()),
+            );
+        harness.run_steps(4);
+        let line = harness.get_by_label("We rest at the mill.").rect();
+        assert!(
+            (0.0..40.0).contains(&line.top()),
+            "m0481-jump: the marker's line {line:?} is at the view's top"
+        );
+        harness.hover_at(egui::pos2(400.0, 200.0));
+        harness.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, 120.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(4);
+        let moved = harness.get_by_label("We rest at the mill.").rect();
+        assert!(
+            moved.top() > line.top() + 60.0,
+            "m0481-once: the wheel moved the line from {line:?} to {moved:?}, and it stays"
+        );
     }
 
     /// W14's one test for the session being played. Its callers are the Log stamp

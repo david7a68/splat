@@ -275,6 +275,13 @@ pub(in crate::design) fn render(
     true
 }
 
+/// The `Ui` id of the block keyed `key`, in a region or in place (`draw_laid`): its key's own,
+/// so its controls keep their ids, and their focus, whichever draws it and whatever draws before
+/// it.
+pub(in crate::design) fn block_scope(key: Id) -> Id {
+    Id::new(("laid_block", key))
+}
+
 /// Draw `laid` in place in `ui`, outside a region: its laid size at the cursor, its texts, and
 /// `draw`'s controls in its slots (layout 11c A2c). A host whose rows are not yet a region (the
 /// Session plan while a row is open) draws its closed rows through the same recipe, so they keep
@@ -292,7 +299,7 @@ pub fn draw_laid(ui: &mut Ui, laid: &Laid, draw: impl FnOnce(&mut LaidUi<'_>)) -
     // whatever rows draw before it (review of PR 840).
     let mut child = ui.new_child(
         UiBuilder::new()
-            .id_salt(ui.id().with(("laid", laid.key)))
+            .id_salt(block_scope(laid.key))
             .global_scope(true)
             .max_rect(rect),
     );

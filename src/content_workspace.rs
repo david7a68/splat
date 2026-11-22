@@ -1283,6 +1283,12 @@ impl Catalogue {
                     .find(|note| note.key.as_deref() == Some(key))
             })
     }
+    /// The package that an unresolved entry reference points into, when no such package is
+    /// loaded: the creature's file may still exist, but its package is not in the campaign
+    /// (issue #530).
+    pub fn missing_package_of(&self, reference: &EntryRef) -> Option<String> {
+        self.missing_package(&reference.reference().ok()?)
+    }
     /// The package an unresolved reference points into, when no such package is loaded.
     fn missing_package(&self, reference: &Reference) -> Option<String> {
         let Reference::Key(key) = reference else {
@@ -3696,6 +3702,24 @@ mod tests {
         assert_eq!(
             issues(),
             ["Package not found: Player's Handbook (2024)", lost]
+        );
+        // Issue #530: one reference into the package that is not loaded names that package (a
+        // refused Start says so, never "deleted"); a reference into a loaded package names none.
+        let catalogue = Catalogue::load(&modules, None).unwrap();
+        let reference = |key: &str| EntryRef {
+            id: None,
+            key: Some(key.into()),
+            link: None,
+        };
+        assert_eq!(
+            catalogue
+                .missing_package_of(&reference("phb:spells/wish"))
+                .as_deref(),
+            Some("Player's Handbook (2024)")
+        );
+        assert_eq!(
+            catalogue.missing_package_of(&reference("book:spells/lost")),
+            None
         );
         // With nothing beside the package to name it, the namespace still identifies it.
         fs::remove_dir_all(neighbour).unwrap();

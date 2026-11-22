@@ -1997,6 +1997,34 @@ fn claimed_id() -> Id {
     Id::new("design_pane_claimed_rows")
 }
 
+/// The content of a `ScrollColumn::follows_focus` column outside a pane (the session banner): a
+/// control of it that gains keyboard focus comes whole into the column's view, by the rules of
+/// the pane's one focus arbiter ([`reveal_focus`]: once per focus, room or place; never while the
+/// pointer presses; the DM's wheel is not pulled back). In a pane's body the pane is that
+/// arbiter, so it only runs `add`; so it does without `follows`.
+pub(super) fn follow_focus<R>(
+    ui: &mut Ui,
+    follows: bool,
+    column: Id,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    if !follows || innermost(ui).is_some() {
+        return add(ui);
+    }
+    let first = widget_count(ui);
+    let inner = add(ui);
+    let last = widget_count(ui);
+    let view = ui.clip_rect();
+    reveal_focus(
+        ui,
+        column.with("design_column_focus"),
+        first..last,
+        view,
+        view,
+    );
+    inner
+}
+
 /// The content of a `ScrollColumn` (`ui` is its content `Ui`, its clip the column's view).
 /// Directly in a `Body::Fills` pane that an edge ends (the footer, the session banner), the
 /// column never cuts through a registered row (N12, ruling R4): its clip ends at the top of the

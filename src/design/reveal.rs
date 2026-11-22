@@ -1008,7 +1008,8 @@ fn owning_region(ui: &Ui) -> Option<(Id, Region)> {
 /// offset the column writes at its next pass, as it writes a reveal's; none is an `Act`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JumpTo {
-    /// A reader opened at a linked section: the section's heading at the view's top.
+    /// A reader opened at a linked section: the section's heading at the view's top; a
+    /// recording's text opened at a timeline marker: the marker's line at the view's top.
     LinkedHeading,
     /// An open menu's control after its pane changed size under it (a list row's `⋯`, M0259):
     /// the least scroll that shows it whole ([`bring_into_view`]), so the menu does not hang
@@ -1339,6 +1340,8 @@ mod tests {
         beside: bool,
         /// `Beside`, in that column, takes the focus in the next frame.
         focus_beside: bool,
+        /// The outer column follows the keyboard focus (`ScrollColumn::follows_focus`).
+        follows: bool,
     }
 
     impl Page {
@@ -1378,6 +1381,7 @@ mod tests {
                 came: false,
                 beside: false,
                 focus_beside: false,
+                follows: false,
             }
         }
     }
@@ -1518,6 +1522,9 @@ mod tests {
                         let mut column = super::super::ScrollColumn::new("outer");
                         if !page.plain {
                             column = column.hosts_reveals();
+                        }
+                        if page.follows {
+                            column = column.follows_focus();
                         }
                         column.show(ui, |ui| content(ui, page));
                     }
@@ -2163,6 +2170,51 @@ mod tests {
             dragging && (after - (before - 60.0)).abs() <= 2.0,
             "jump-while-dragging: asked during the DM's drag ({dragging}), the jump moved the \
              target's top from {before} to {after} (the view's top is {view_top})"
+        );
+        // M0450: a column outside a pane that follows the focus (the session banner) brings a
+        // control that gains keyboard focus whole into its view, by the pane's rules; the DM's
+        // wheel after it is not pulled back.
+        h.event(egui::Event::PointerButton {
+            pos: grab - egui::vec2(0.0, 140.0),
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(2);
+        h.state_mut().follows = true;
+        let whole = |h: &egui_kittest::Harness<'_, Page>, name: &str| {
+            let rect = h.get_by_label(name).rect();
+            (
+                rect.top() >= view_top - 0.5 && rect.bottom() <= HEIGHT + 0.5,
+                rect,
+            )
+        };
+        assert!(
+            !whole(&h, "Other").0,
+            "the case starts with Other out of view"
+        );
+        h.state_mut().focus_inside = Some(false);
+        h.run_steps(4);
+        let (shown, other) = whole(&h, "Other");
+        assert!(
+            h.get_by_label("Other").is_focused() && shown,
+            "m0450-focus: Other took the focus and is whole in the view: {other:?}"
+        );
+        h.input_mut().events.push(key(egui::Key::Tab));
+        h.run_steps(4);
+        let focused = h.get_by_label("Field").is_focused();
+        let (shown, field) = whole(&h, "Field");
+        assert!(
+            focused && shown,
+            "m0450-tab: Tab gave the hidden Field the focus ({focused}) and it is whole in the \
+             view: {field:?}"
+        );
+        wheel(&mut h, 120.0);
+        h.run_steps(4);
+        let moved = h.get_by_label("Field").rect();
+        assert!(
+            moved.top() > field.top() + 60.0,
+            "m0450-wheel: the wheel moved Field from {field:?} to {moved:?}, and it stays"
         );
     }
 
