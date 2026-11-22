@@ -11376,9 +11376,7 @@ mod tests {
         // the gate's row checks). Red: a measured body that registers none.
         let rows: Vec<egui::Rect> = harness
             .ctx
-            .data(|data| {
-                data.get_temp::<(u64, Vec<egui::Rect>)>(egui::Id::new(design::ROW_RECTS))
-            })
+            .data(|data| data.get_temp::<(u64, Vec<egui::Rect>)>(egui::Id::new(design::ROW_RECTS)))
             .map(|(_, rows)| rows)
             .unwrap_or_default();
         for name in ["Bridge", "Mill", "Ford"] {
