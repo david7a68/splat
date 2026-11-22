@@ -2314,10 +2314,13 @@ mod tests {
         let pick =
             |harness: &mut egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
              choice: &str| {
-                harness
-                    .get_by_label_contains("D&D Beyond campaign link")
-                    .click();
-                harness.run_steps(2);
+                // The list may still be open from the last pick (a failed link keeps it).
+                if harness.query_by_label(choice).is_none() {
+                    harness
+                        .get_by_label_contains("D&D Beyond campaign link")
+                        .click();
+                    harness.run_steps(2);
+                }
                 harness.get_by_label(choice).click();
                 harness.run_steps(3);
             };
@@ -2375,20 +2378,7 @@ mod tests {
         // Unrelated B: A's link changes (a result of its own). Undo of A then puts A's draft
         // back, and B's change and its result stay.
         pick(&mut harness, "Not linked");
-        assert!(
-            shows(&harness, SAVED),
-            "DBG link {:?} error {:?} labels {:?}",
-            harness
-                .state()
-                .0
-                .active_campaign()
-                .map(|c| c.dndbeyond_campaign_id),
-            harness.state().1.error_for_test(),
-            harness
-                .query_all_by_label_contains("link")
-                .map(|n| format!("{n:?}").chars().take(120).collect::<String>())
-                .collect::<Vec<_>>()
-        );
+        assert!(shows(&harness, SAVED), "B's link change says its result");
         harness.get_by_label(UNDO).click();
         harness.run_steps(3);
         assert_eq!(
