@@ -943,10 +943,11 @@ pub fn edit_in_place(
 /// reading's summary, a plan's rewards, a renamed link, all reaching the Notes panel's part of
 /// a note): the words become `after`, and the DM's Undo history goes on UNDER the write. Each
 /// earlier step gets the same change, so Ctrl+Z takes back what the DM typed and leaves the
-/// app's words. The change is placed in a step by the words after it: a step that does not
-/// end with them, and the changed words before them, stays as it was. The guard's record moves
-/// as in [`edit_in_place`]. Not for a change the field's owner did not make (a reload of an
-/// outside edit): that history must end.
+/// app's words. The change is placed in a step by the words after it. When any step does not
+/// end with them, and the changed words before them, the write cannot reach it, and the history
+/// ends at the write: a step is changed safely or not kept at all, so Ctrl+Z never takes the
+/// app's words out. The guard's record moves as in [`edit_in_place`]. Not for a change the
+/// field's owner did not make (a reload of an outside edit): that history must end.
 pub fn write_under_history(
     ctx: &egui::Context,
     id: Id,
@@ -977,26 +978,29 @@ pub fn write_under_history(
     }
     let mut rebuilt = egui::util::undoer::Undoer::default();
     for (cursor, words) in steps.into_iter().rev() {
-        let step =
-            under_write(&words, &before, after).map_or((cursor, words), |(words, at, by)| {
-                let moved = |cursor: egui::text::CCursor| egui::text::CCursor {
-                    index: if cursor.index > at {
-                        cursor.index.saturating_add_signed(by)
-                    } else {
-                        cursor.index
-                    },
-                    ..cursor
-                };
-                (
-                    egui::text::CCursorRange {
-                        primary: moved(cursor.primary),
-                        secondary: moved(cursor.secondary),
-                        ..cursor
-                    },
-                    words,
-                )
-            });
-        rebuilt.add_undo(&step);
+        let Some((words, at, by)) = under_write(&words, &before, after) else {
+            // A step the write cannot reach: Ctrl+Z to it would take the app's words out (review
+            // of PR 825, P1 825-b). The history ends at the write.
+            state.clear_undoer();
+            state.store(ctx, id);
+            return;
+        };
+        let moved = |cursor: egui::text::CCursor| egui::text::CCursor {
+            index: if cursor.index > at {
+                cursor.index.saturating_add_signed(by)
+            } else {
+                cursor.index
+            },
+            ..cursor
+        };
+        rebuilt.add_undo(&(
+            egui::text::CCursorRange {
+                primary: moved(cursor.primary),
+                secondary: moved(cursor.secondary),
+                ..cursor
+            },
+            words,
+        ));
     }
     state.set_undoer(rebuilt);
     state.store(ctx, id);

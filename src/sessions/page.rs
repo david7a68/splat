@@ -9962,21 +9962,111 @@ mod tests {
              ({undone:?})",
             body(&harness)
         );
-        // A renamed link is the note's own write as well: the panel keeps its Undo through it.
-        harness
-            .get_by_label("Note text")
-            .type_text(" Typed [[Old place]].");
+        // Review of PR 825 (P1 825-b; Sol 2-012): the app's write is placed in each older Undo
+        // step, or the panel's history ends at the write. Either way no Ctrl+Z takes the app's
+        // words out. A note with a section below What happened:
+        {
+            let draft = harness.state_mut().0.draft.as_mut().unwrap();
+            let words = format!("{}\n## Open threads\n- The bell.\n", draft.body.as_str());
+            let _ = draft.body.replace(words);
+            draft.edited();
+        }
         harness.run_steps(2);
-        harness.state_mut().0.rename_links("Old place", "New place");
+        harness.get_by_label("Note text").focus();
         harness.run_steps(2);
+        let field = NOTE_IN_PANEL.of(harness.state().0.selected).id();
+        // The panel's caret at a place in its words (characters), then words typed there.
+        let type_at = |harness: &mut egui_kittest::Harness<'_, (Sessions, bool, bool)>,
+                       at: usize,
+                       words: &str| {
+            let mut state = egui::TextEdit::load_state(&harness.ctx, field).unwrap_or_default();
+            state
+                .cursor
+                .set_char_range(Some(egui::text::CCursorRange::one(
+                    egui::text::CCursor::new(at),
+                )));
+            egui::TextEdit::store_state(&harness.ctx, field, state);
+            harness.run_steps(2);
+            harness.get_by_label("Note text").type_text(words);
+            harness.run_steps(2);
+        };
+        let presses = |harness: &mut egui_kittest::Harness<'_, (Sessions, bool, bool)>| {
+            let mut undone = Vec::new();
+            for _ in 0..4 {
+                harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+                harness.run_steps(2);
+                undone.push(body(harness));
+            }
+            undone
+        };
+        // Refused: typed in the thread, then a summary at the end of What happened, above the
+        // typing. The step before the typing has no place for it: the history ends.
+        let end = panel(&harness).chars().count();
+        type_at(&mut harness, end, " Thread typed.");
+        assert!(harness.state_mut().0.add_to_note(&ctx, "A summary 2."));
+        harness.run_steps(2);
+        let note = body(&harness);
         assert!(
-            body(&harness).contains("[[New place]]"),
-            "the link is renamed"
+            note.contains("A summary 2.\n\n## Open threads")
+                && note.find("## Open threads") < note.find(" Thread typed."),
+            "the summary is above the thread typed in its section: {note:?}"
         );
-        let undone = undo(&mut harness, " Typed");
+        let undone = presses(&mut harness);
+        let (words, file) = (panel(&harness), saved(&mut harness));
         assert!(
-            !body(&harness).contains(" Typed"),
-            "n0-panel-rename-undo: after a renamed link, Ctrl+Z in the panel still takes back what was typed: {undone:?}"
+            words.contains("A summary 2.")
+                && words.contains(" Thread typed.")
+                && file.contains("A summary 2.")
+                && file.contains(" Thread typed."),
+            "n0-panel-refused: the summary could not reach the step before the typed thread, so \
+             the panel's Undo ended and Ctrl+Z changes nothing: panel {words:?}, saved {file:?} \
+             ({undone:?})"
+        );
+        // Placed, after that refusal: typed at the end of What happened, then a summary below
+        // the typing. Ctrl+Z takes back only the typing; neither summary goes, also not the one
+        // whose write ended the history before.
+        let at = panel(&harness)
+            .find("\n\n## Open threads")
+            .map(|at| panel(&harness)[..at].chars().count())
+            .unwrap();
+        type_at(&mut harness, at, " Night typed.");
+        assert!(harness.state_mut().0.add_to_note(&ctx, "A summary 4."));
+        harness.run_steps(2);
+        assert!(
+            body(&harness).contains(" Night typed.\n\nA summary 4.\n\n## Open threads"),
+            "the later summary is below the typing: {:?}",
+            body(&harness)
+        );
+        let undone = presses(&mut harness);
+        let (words, file) = (panel(&harness), saved(&mut harness));
+        assert!(
+            !words.contains(" Night typed.")
+                && words.contains("A summary 2.")
+                && words.contains("A summary 4.")
+                && !file.contains(" Night typed.")
+                && file.contains("A summary 2.")
+                && file.contains("A summary 4."),
+            "n0-panel-placed-after-refused: Ctrl+Z takes back only the typing after a placed \
+             summary, and the earlier refused write stays: panel {words:?}, saved {file:?} \
+             ({undone:?})"
+        );
+        // The reviewer's sequence: a renamed link and a summary before Notes draws again.
+        let end = panel(&harness).chars().count();
+        type_at(&mut harness, end, " Typed [[Old place]].");
+        harness.state_mut().0.rename_links("Old place", "New place");
+        assert!(harness.state_mut().0.add_to_note(&ctx, "A summary 3."));
+        harness.run_steps(2);
+        let undone = presses(&mut harness);
+        let (words, file) = (panel(&harness), saved(&mut harness));
+        assert!(
+            words.contains("[[New place]]")
+                && words.contains("A summary 3.")
+                && !words.contains("[[Old place]]")
+                && file.contains("[[New place]]")
+                && file.contains("A summary 3.")
+                && !file.contains("[[Old place]]"),
+            "n0-panel-refused-rename: Ctrl+Z after a renamed link and a summary keeps both: \
+             panel {words:?}, saved {file:?} ({undone:?})"
         );
         // (b) Typed and saved, Notes hidden; an outside edit of the note's end, which the disk
         // check reloads; the app's summary before Notes draws again. The reload ends the panel's
