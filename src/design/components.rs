@@ -6214,6 +6214,7 @@ mod tests {
 
     #[test]
     fn iter10_b_stepper_limit_reasons_are_optional_and_yield_to_a_lock() {
+        use crate::design::test_harness::Themed as _;
         let describe = |low: Option<&str>, high: Option<&str>, lock: Option<&str>, value: i64| {
             let ctx = egui::Context::default();
             super::super::theme::install(&ctx);
@@ -6356,13 +6357,12 @@ mod tests {
         use egui_kittest::kittest::Queryable;
         let mut h = egui_kittest::Harness::builder()
             .with_size(vec2(400.0, 120.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, value: &mut i64| {
                     grouped_stepper(ui, "How many", value, 1..=99_999);
                 },
                 7_i64,
             );
-        super::super::theme::install(&h.ctx);
         h.run_steps(2);
         // A pointer click on the count opens it for typing.
         let at = h.get_by_label("How many").rect().center();
@@ -6658,15 +6658,16 @@ mod tests {
     /// over the message's icon column. Beside the message, it keeps its icon before its words.
     #[test]
     fn iter18_a_sd1_a_wrapped_undo_starts_its_words_at_the_message_words() {
+        use crate::design::test_harness::Themed as _;
+        use crate::design::test_harness::ThemedPage as _;
         const TEXT: &str = "Ashen Reaches is registered and used here.";
         const UNDO: &str = "Undo package registration";
         for (width, wraps) in [(260.0, true), (360.0, true), (900.0, false)] {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 200.0))
-                .build_ui(|ui| {
+                .themed_ui(|ui| {
                     undo_message(ui, Tone::Success, TEXT, UNDO);
                 });
-            super::super::theme::install(&harness.ctx);
             harness.run_steps(2);
             let texts = painted_texts(&harness);
             let left = |words: &str| {
@@ -6699,7 +6700,7 @@ mod tests {
         use egui_kittest::kittest::{NodeT, Queryable};
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(360.0, 200.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, count: &mut usize| {
                     // Behind a parent clip from x 100, so a pointer at x 40 is outside its room;
                     // 260 px of room wraps the line, so the Undo hangs (`line_start_in_column`).
@@ -6713,7 +6714,6 @@ mod tests {
                 },
                 0_usize,
             );
-        super::super::theme::install(&harness.ctx);
         harness.run_steps(2);
         let undo = harness.get_by_label(UNDO).accesskit_node().id();
         harness.get_by_label(UNDO).focus();
@@ -6769,11 +6769,12 @@ mod tests {
     /// and the state follows a click on its own header only.
     #[test]
     fn a_section_says_whether_it_is_open() {
+        use crate::design::test_harness::ThemedPage as _;
         let notes = std::rc::Rc::new(std::cell::Cell::new("3 notes"));
         let title = notes.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(400.0, 300.0))
-            .build_ui(move |ui| {
+            .themed_ui(move |ui| {
                 let _ = section(ui, "Details", |ui| ui.label("Inside details"));
                 let _ = section_with_id(ui, "notes", title.get(), |ui| ui.label("Inside notes"));
                 let _ = quiet_section(ui, "Technical", |ui| ui.label("Inside technical"));
@@ -6787,7 +6788,6 @@ mod tests {
                     .default_open(true)
                     .show(ui, |ui| ui.label("Inside the form"));
             });
-        super::super::theme::install(&harness.ctx);
         harness.run_steps(2);
         let expanded = |harness: &egui_kittest::Harness<'_>| {
             use egui_kittest::kittest::{NodeT, Queryable};
@@ -6860,10 +6860,11 @@ mod tests {
     /// A normal quiet action keeps its icon and words inside its target from the edge.
     #[test]
     fn iter18_a_a_line_start_action_hangs_its_icon_and_padding() {
+        use crate::design::test_harness::ThemedPage as _;
         const EDGE: f32 = 60.0;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(400.0, 200.0))
-            .build_ui(|ui| {
+            .themed_ui(|ui| {
                 // P3a: the last two rows' clip leaves the hang short: none at all (a menu's
                 // content edge), and 10 px for an icon's 28.
                 for (label, icon, line_start, room) in [
@@ -6895,7 +6896,6 @@ mod tests {
                     });
                 }
             });
-        super::super::theme::install(&harness.ctx);
         harness.run_steps(2);
         let texts = painted_texts(&harness);
         let node = |name: &str| {
@@ -6951,12 +6951,13 @@ mod tests {
     /// iter-25-A: `help` and a field's help wrap at `READER_MEASURE` in a wide pane.
     #[test]
     fn iter25_a_help_keeps_the_reader_measure() {
+        use crate::design::test_harness::ThemedPage as _;
         const HELP: &str = "Built-in names stay as they are. A name you add here shows in every \
             list of this campaign, and Lookup finds it by its first word or its whole name.";
         for in_field in [false, true] {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(1600.0, 240.0))
-                .build_ui(move |ui| {
+                .themed_ui(move |ui| {
                     if in_field {
                         field(ui, "Name", Some(HELP), None, |ui| ui.label("control"));
                         // N3: the next field's label, with no space from the caller.
@@ -6976,7 +6977,6 @@ mod tests {
                         help(ui, HELP);
                     }
                 });
-            super::super::theme::install(&harness.ctx);
             harness.run_steps(2);
             let texts = painted_texts(&harness);
             let rect = texts
@@ -7029,10 +7029,11 @@ mod tests {
     /// segment moves when the choice changes.
     #[test]
     fn segments_keep_their_place_when_the_choice_changes() {
+        use crate::design::test_harness::ThemedPage as _;
         let place = |chosen: u8| {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(600.0, 80.0))
-                .build_ui(move |ui| {
+                .themed_ui(move |ui| {
                     let mut value = chosen;
                     ui.horizontal(|ui| {
                         segmented(
@@ -7043,7 +7044,6 @@ mod tests {
                         ui.label("After");
                     });
                 });
-            super::super::theme::install(&harness.ctx);
             harness.run_steps(2);
             let texts = painted_texts(&harness);
             ["Recordings", "Transcript", "Notes", "After"].map(|word| {
@@ -7071,6 +7071,7 @@ mod tests {
     /// the order drawn.
     #[test]
     fn iter25_a_message_space_keeps_what_follows_still() {
+        use crate::design::test_harness::ThemedPage as _;
         const LONG: &str = "Line 4 opens a list with [ that never closes. Close the list with ], \
             or remove the [ at the start of the line. Then save the entry again to check it.";
         const REASON: &str = "Splat cannot read Notes/Broken.md as text.";
@@ -7083,7 +7084,7 @@ mod tests {
             let seen = ran.clone();
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(330.0, 400.0))
-                .build_ui(move |ui| {
+                .themed_ui(move |ui| {
                     ui.label("Above the space");
                     let mut space = MessageSpace::new("test_space", 330.0);
                     if let Some(words) = reason {
@@ -7101,7 +7102,6 @@ mod tests {
                     space.show(ui);
                     ui.label("Below the space");
                 });
-            super::super::theme::install(&harness.ctx);
             harness.run_steps(2);
             let texts = painted_texts(&harness);
             let top = |words: &str| {
@@ -7166,6 +7166,7 @@ mod tests {
     /// wide pane, the links stay on one line and the header keeps its height.
     #[test]
     fn iter25_a_page_header_keeps_its_count_whole() {
+        use crate::design::test_harness::ThemedPage as _;
         const COUNT: &str = "5 notes";
         const FIXING: &str = "1 note needs fixing";
         const UNREAD: &str = "2 notes cannot be read";
@@ -7173,7 +7174,7 @@ mod tests {
         for (width, actions) in [(465.0, true), (1200.0, true), (1200.0, false)] {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 200.0))
-                .build_ui(move |ui| {
+                .themed_ui(move |ui| {
                     page_header(ui, "World", Some(COUNT), |ui| {
                         if !actions {
                             return;
@@ -7192,7 +7193,6 @@ mod tests {
                     });
                     ui.label("Below the header");
                 });
-            super::super::theme::install(&harness.ctx);
             harness.run_steps(2);
             let mut painted = Vec::new();
             for shape in &harness.output().shapes {
@@ -7241,6 +7241,7 @@ mod tests {
     /// status starts them.
     #[test]
     fn iter25_a_two_line_status_shares_the_one_line_edges() {
+        use crate::design::test_harness::ThemedPage as _;
         let state = || Status {
             icon: icons::WARN,
             word: "Connected",
@@ -7248,11 +7249,10 @@ mod tests {
         };
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(200.0, 200.0))
-            .build_ui(move |ui| {
+            .themed_ui(move |ui| {
                 status(ui, state());
                 rail_status_detail(ui, state(), "Not remembered");
             });
-        super::super::theme::install(&harness.ctx);
         harness.run_steps(2);
         // Each painted text with the x of each of its glyphs.
         let mut glyphs = Vec::new();
@@ -7295,6 +7295,7 @@ mod tests {
     /// `status_link`, starts its second line at the word, where a one-line status starts it.
     #[test]
     fn iter26_a_a_wrapped_status_starts_its_second_line_at_the_word() {
+        use crate::design::test_harness::ThemedPage as _;
         const WRAPPED: &str = "Timeline not readable";
         const LINKED: &str = "Session folder not found";
         let state = |word: &'static str| Status {
@@ -7304,14 +7305,13 @@ mod tests {
         };
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(200.0, 300.0))
-            .build_ui(move |ui| {
+            .themed_ui(move |ui| {
                 status(ui, state("Connected"));
                 // As narrow as a rail at 960, so both wrap.
                 ui.set_max_width(100.0);
                 wrapped_status(ui, state(WRAPPED));
                 let _ = status_link(ui, state(LINKED));
             });
-        super::super::theme::install(&harness.ctx);
         harness.run_steps(2);
         // The x of each row's first glyph, by the words of the painted text.
         let mut rows = Vec::new();
@@ -7363,6 +7363,7 @@ mod tests {
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         use std::{cell::RefCell, rc::Rc};
         const BODY: &str = "The body starts here.";
@@ -7377,7 +7378,7 @@ mod tests {
             let mut harness =
                 egui_kittest::Harness::builder()
                     .with_size(size)
-                    .build_ui(move |ui| {
+                    .themed_ui(move |ui| {
                         let words: Vec<String> = (0..count)
                             .map(|at| format!("Result {at} of {count} kept with its Undo."))
                             .collect();
@@ -7416,7 +7417,6 @@ mod tests {
                         ui.ctx()
                             .data_mut(|data| data.insert_temp(Id::new("test_body"), body));
                     });
-            super::super::theme::install(&harness.ctx);
             harness.run_steps(3);
             harness
         };
@@ -7769,6 +7769,7 @@ mod tests {
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn iter27_a_the_footer_follows_a_short_body() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         use std::{
             cell::{Cell, RefCell},
@@ -7819,7 +7820,7 @@ mod tests {
             let mut harness =
                 egui_kittest::Harness::builder()
                     .with_size(size)
-                    .build_ui(move |ui| {
+                    .themed_ui(move |ui| {
                         // The outside field in a column of its own, beside the pane.
                         let (left, right) = ui.max_rect().split_left_right_at_fraction(0.7);
                         let mut column = ui.new_child(egui::UiBuilder::new().max_rect(right));
@@ -7891,7 +7892,6 @@ mod tests {
                             });
                         }
                     });
-            super::super::theme::install(&harness.ctx);
             harness.run_steps(3);
             let text = |harness: &egui_kittest::Harness<'_>, words: &str| {
                 harness
@@ -8307,6 +8307,7 @@ mod tests {
                 short_body_gap,
             },
         };
+        use crate::design::test_harness::ThemedPage as _;
         use std::{cell::Cell, rc::Rc};
         #[derive(Clone, Copy, Debug, PartialEq)]
         enum Shape {
@@ -8378,7 +8379,7 @@ mod tests {
                     let mut harness =
                         egui_kittest::Harness::builder()
                             .with_size(size)
-                            .build_ui(move |ui| {
+                            .themed_ui(move |ui| {
                                 ui.label("Title");
                                 let mut footer = Footer::new("shape_footer", ui.available_width());
                                 footer.legacy_reason(REASON, |ui| {
@@ -8509,7 +8510,6 @@ mod tests {
                                     }
                                 });
                             });
-                    super::super::theme::install(&harness.ctx);
                     harness.run_steps(4);
                     let case = format!("{shape:?} with {count} lines at {size:?}");
                     let footer = footer_rect(&harness.ctx, Id::new("shape_footer"))
@@ -8686,7 +8686,7 @@ mod tests {
             let mut harness =
                 egui_kittest::Harness::builder()
                     .with_size(size)
-                    .build_ui(move |ui| {
+                    .themed_ui(move |ui| {
                         ui.label("Title");
                         let mut footer = Footer::new("small_footer", ui.available_width());
                         footer.legacy_reason(REASON, |ui| {
@@ -8699,7 +8699,6 @@ mod tests {
                             }
                         });
                     });
-            super::super::theme::install(&harness.ctx);
             harness.run_steps(4);
             let footer = footer_rect(&harness.ctx, Id::new("small_footer")).expect("the footer");
             let room = pane_record(&harness.ctx, Id::new("small_footer"))
@@ -8754,7 +8753,7 @@ mod tests {
             let mut harness =
                 egui_kittest::Harness::builder()
                     .with_size(size)
-                    .build_ui(move |ui| {
+                    .themed_ui(move |ui| {
                         ui.label("Title");
                         let mut footer = Footer::new("qc_footer", ui.available_width());
                         for at in 0..reasons_in.get() {
@@ -8768,7 +8767,6 @@ mod tests {
                             ui.label("Body end");
                         });
                     });
-            super::super::theme::install(&harness.ctx);
             let id = Id::new("qc_footer");
             let run = |harness: &mut egui_kittest::Harness<'_>| {
                 harness.run_steps(4);
@@ -8891,7 +8889,7 @@ mod tests {
         let row_in = row_pressed.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(960.0, 640.0))
-            .build_ui(move |ui| {
+            .themed_ui(move |ui| {
                 ui.label("Title");
                 // The typed footer (layout PR 2b): each reason a notice with its choice.
                 use super::super::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
@@ -8937,7 +8935,6 @@ mod tests {
                     pressed_in.set(Some(press.id));
                 }
             });
-        super::super::theme::install(&harness.ctx);
         harness
             .ctx
             .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
@@ -9172,7 +9169,7 @@ mod tests {
         let (b_in, undone_in) = (b_shows.clone(), undone.clone());
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(960.0, 640.0))
-            .build_ui(move |ui| {
+            .themed_ui(move |ui| {
                 let pane_of = |ui: &mut Ui, side: usize, message: bool| {
                     let mut footer = Footer::new("shared_footer", ui.available_width());
                     if message {
@@ -9192,7 +9189,6 @@ mod tests {
                     columns[1].push_id("b", |ui| pane_of(ui, 1, b));
                 });
             });
-        super::super::theme::install(&harness.ctx);
         harness.run_steps(4);
         let a_footer = |harness: &egui_kittest::Harness<'_>| {
             pane_records(&harness.ctx)
@@ -9277,7 +9273,7 @@ mod tests {
         for count in [2, 200] {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(960.0, 640.0))
-                .build_ui(move |ui| {
+                .themed_ui(move |ui| {
                     let mut footer = Footer::new("inline_footer", ui.available_width());
                     footer.legacy_reason(REASON, |ui| {
                         message(ui, Tone::Error, REASON);
@@ -9286,7 +9282,6 @@ mod tests {
                         let _ = ScrollColumn::new("inner").inline(ui, |ui| rows(ui, count));
                     });
                 });
-            super::super::theme::install(&harness.ctx);
             harness.run_steps(4);
             let footer = footer_rect(&harness.ctx, Id::new("inline_footer")).expect("the footer");
             let record = pane_record(&harness.ctx, Id::new("inline_footer")).unwrap();
@@ -9484,6 +9479,7 @@ mod tests {
         reason = "the test of the staged keys-only add field itself"
     )]
     fn iter29_p1_an_opened_add_field_shows_add_and_cancel() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         const NAME: &str = "Log line for Hob";
         /// The field, and what each frame gave back: (enter, cancel, the words then).
@@ -9496,7 +9492,7 @@ mod tests {
             let id = crate::field_id!("test_add_field").once(super::super::layout::Once::Example);
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 240.0))
-                .build_ui_state(
+                .themed_ui_state(
                     move |ui, (field, seen): &mut Seen| {
                         let result = add_field::<()>(id, NAME, "What happened?")
                             .actions(crate::word!("Add"), crate::word!("Cancel"))
@@ -9518,7 +9514,6 @@ mod tests {
                     },
                     (field, Vec::new()),
                 );
-            super::super::theme::install(&harness.ctx);
             harness.run_steps(2);
             harness
         };
@@ -9669,7 +9664,7 @@ mod tests {
         }
         let mut wheel = egui_kittest::Harness::builder()
             .with_size(vec2(480.0, 300.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, state: &mut Scrolled| {
                     state.frame += 1;
                     let cut = state.frame.is_multiple_of(2);
@@ -9701,7 +9696,6 @@ mod tests {
                     offset: 0.0,
                 },
             );
-        super::super::theme::install(&wheel.ctx);
         wheel.run_steps(6);
         let opened = wheel.state().offset;
         assert!(
@@ -9728,7 +9722,7 @@ mod tests {
         let owner = crate::field_id!("test_keys_field").of(uuid::Uuid::from_u128(7));
         let mut keys = egui_kittest::Harness::builder()
             .with_size(vec2(480.0, 200.0))
-            .build_ui_state(
+            .themed_ui_state(
                 move |ui, (field, seen): &mut Seen| {
                     let result = add_field::<()>(owner, NAME, "What happened?")
                         .keys_only(0.0, |_| None)
@@ -9745,7 +9739,6 @@ mod tests {
                     Vec::new(),
                 ),
             );
-        super::super::theme::install(&keys.ctx);
         keys.run_steps(2);
         assert!(
             keys.query_by_label("Add").is_none() && keys.query_by_label("Cancel").is_none(),

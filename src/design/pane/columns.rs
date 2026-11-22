@@ -547,6 +547,7 @@ mod tests {
     /// again: across a resize they would draw the header at the old width.
     #[test]
     fn a_composite_header_and_its_children_share_their_edges() {
+        use crate::design::test_harness::ThemedPage as _;
         let stale = Rc::new(Cell::new(false));
         let stale_in = stale.clone();
         // What `outer` and `child` say in the pass, from the edges the pass uses.
@@ -555,7 +556,7 @@ mod tests {
         let mut kept: Option<PaneEdges> = None;
         let mut harness = Harness::builder()
             .with_size(vec2(1920.0, 640.0))
-            .build_ui(move |ui| {
+            .themed_ui(move |ui| {
                 let spec = PaneColumns::shared_task("edges_test")
                     .fixed(0.0, 200.0)
                     .resizable(
@@ -585,7 +586,6 @@ mod tests {
                     let _ = ui.add_sized([width, 20.0], egui::Button::new(format!("Fill {index}")));
                 });
             });
-        crate::design::theme::install(&harness.ctx);
         harness.run_steps(3);
         let check = |harness: &Harness<'_>, case: &str| {
             let (record, read, fill) = (
@@ -668,7 +668,7 @@ mod tests {
         // of its splitter.
         let mut trailing = Harness::builder()
             .with_size(vec2(1920.0, 640.0))
-            .build_ui(move |ui| {
+            .themed_ui(move |ui| {
                 let width = (ui.available_width() - 100.0).min(1200.0);
                 let spec = || {
                     PaneColumns::shared_task("trailing_test")
@@ -695,7 +695,6 @@ mod tests {
                     },
                 );
             });
-        crate::design::theme::install(&trailing.ctx);
         let check = |harness: &Harness<'_>, case: &str| {
             let head = right_of(harness, "Head");
             let rest = right_of(harness, "Part 0");
@@ -739,7 +738,7 @@ mod tests {
         let three_in = three.clone();
         let mut both = Harness::builder()
             .with_size(vec2(1600.0, 640.0))
-            .build_ui(move |ui| {
+            .themed_ui(move |ui| {
                 let edges = PaneColumns::shared_task("three_test")
                     .resizable(0.0, Column::left("three_left", 300.0, 200.0..=400.0))
                     .rest(0.0)
@@ -752,7 +751,6 @@ mod tests {
                         ui.add_sized([width, 20.0], egui::Button::new(format!("Third {index}")));
                 });
             });
-        crate::design::theme::install(&both.ctx);
         both.run_steps(3);
         let planned = three.borrow().clone();
         for (index, planned) in planned.iter().enumerate() {

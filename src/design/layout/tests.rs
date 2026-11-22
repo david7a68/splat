@@ -2807,6 +2807,7 @@ fn the_gate_finds_two_live_widgets_with_one_id() {
 /// deleting it moves and resizes nothing, and the hint stays inside the text area.
 #[test]
 fn a_search_field_always_draws_its_clear() {
+    use crate::design::test_harness::Themed as _;
     use egui_kittest::kittest::Queryable;
     const SEARCH: FieldId = crate::field_id!("test_search").once(Once::PageSearch);
     #[derive(Default)]
@@ -2817,7 +2818,7 @@ fn a_search_field_always_draws_its_clear() {
     }
     let mut h = egui_kittest::Harness::builder()
         .with_size(vec2(500.0, 120.0))
-        .build_ui_state(
+        .themed_ui_state(
             |ui, state: &mut State| {
                 let search =
                     SEARCH.search(ui, "Search", &mut state.query, "Search by name…", 300.0);
@@ -2829,7 +2830,6 @@ fn a_search_field_always_draws_its_clear() {
                 ..State::default()
             },
         );
-    theme::install(&h.ctx);
     h.run_steps(2);
     let clear = h.get_by_label("Clear").rect();
     let field = h.state().field.expect("drawn");

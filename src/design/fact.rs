@@ -282,6 +282,7 @@ mod tests {
     /// across, it copies exactly its words; with a screen reader, Tab focuses it.
     #[test]
     fn a_fact_says_label_colon_values_and_never_ends_a_line_at_a_dot() {
+        use crate::design::test_harness::ThemedPage as _;
         const WORDS: &str = "Languages: Common · Elvish · Dwarvish · Sylvan · Thieves’ Cant";
         let languages = ["Common", "Elvish", "Dwarvish", "Sylvan", "Thieves’ Cant"];
         assert_eq!(words("Languages", languages), WORDS);
@@ -323,10 +324,9 @@ mod tests {
                 let shown = values.clone();
                 let mut harness = egui_kittest::Harness::builder()
                     .with_size(egui::vec2(width as f32, 400.0))
-                    .build_ui(move |ui| {
+                    .themed_ui(move |ui| {
                         let _ = line(ui, label, &shown);
                     });
-                super::super::theme::install(&harness.ctx);
                 harness.run();
                 assert_eq!(
                     node_values(&harness, label),
@@ -359,10 +359,9 @@ mod tests {
         // line exactly that line's words; Tab with a screen reader focuses it.
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(300.0, 200.0))
-            .build_ui(|ui| {
+            .themed_ui(|ui| {
                 let _ = line(ui, "Languages", languages);
             });
-        super::super::theme::install(&harness.ctx);
         harness.run();
         let rect = harness
             .root()
@@ -390,10 +389,9 @@ mod tests {
         );
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(300.0, 200.0))
-            .build_ui(|ui| {
+            .themed_ui(|ui| {
                 let _ = line(ui, "Languages", languages);
             });
-        super::super::theme::install(&harness.ctx);
         harness
             .ctx
             .options_mut(|options| options.screen_reader = true);
