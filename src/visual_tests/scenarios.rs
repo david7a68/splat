@@ -26873,13 +26873,14 @@ pub mod session_plan {
             !d.has_containing(&format!("Removed “{FIRST}”")) && !d.has("Undo remove")
         };
         d.state_prepared("plan-after-a-fight", Sizes::All, |d| {
-            // Layout PR 5a-2 (I6): the plan's actions start `L` after its widest title, in one
-            // column; at 1920 the plan has room for it.
+            // Layout PR 5a-2 (I6): the plan's actions start `L` after its widest facts (every
+            // title and summary line) where that column fits, else at the far edge. Here the
+            // fights' summaries are too wide for it, so the plan keeps the far edge; the unit
+            // test `plan_summary_follows_the_title_without_an_extra_gap` proves the column.
             let (holds, column, detail) = d.plan_columns_hold();
-            let wide = d.window_size().0 >= LARGE.0;
             d.observe(
                 "pr5a2-plan-columns",
-                holds && (column || !wide),
+                holds,
                 format!("At {:?}, column {column}: {detail}", d.window_size()),
             );
             d.observe(

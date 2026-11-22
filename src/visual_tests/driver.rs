@@ -2314,9 +2314,10 @@ impl<'a> Driver<'a> {
         )
     }
 
-    /// Layout PR 5a-2 (I6): the Session plan's rows. Each row's actions start at the column.
+    /// Layout PR 5a-2 (I6): the Session plan's rows. Each row's actions start at the column; in
+    /// the far-edge layout its summary lines may reach under them (every line is measured).
     pub fn plan_columns_hold(&self) -> (bool, bool, String) {
-        self.kept_columns_hold("plan", false, Some(crate::design::S))
+        self.kept_columns_hold("plan", false, None)
     }
 
     /// Layout PR 5a-2 and 5b (I6): the rows of a list measured in its last pass (`owner`), from
