@@ -15,8 +15,8 @@
 //! - **The summary**, under the title and the action place, in `width − x0 − Read.control − S`:
 //!   words that wrap (in at most so many rows), and parts the row draws itself in slots of their
 //!   own measured height (a status, a run link, a message).
-//! - **The rule** after the row (the line gap, `S`, the hairline, the line gap), part of the
-//!   block.
+//! - **The rule** after the row (the line gap, `S`, the hairline), part of the block; the
+//!   column leaves its own gap after each block.
 //!
 //! The row's facts (its title and its summary lines) and its action recipe make the shared
 //! column; a change of either lays every row out again (each row's layout revision changes).
@@ -271,15 +271,14 @@ impl PlanRow<'_> {
         let summary = self.summary(ui, (x0, summary_top, Self::summary_width(width)));
         let row = (summary_top + summary.height).max(actions.bottom());
         // After the row, the plan column's line gap (`LINE_GAP`, egui's item gap there); then,
-        // for a closed row, `S`, the hairline and the line gap again, as `plan_rule` draws them
-        // after an opened row's details (layout 11c A2c: the same height in place and in the
-        // region).
+        // for a closed row, `S` and the hairline, as `plan_rule` draws them after an opened row's
+        // details. The block ends there: the column leaves its own gap after each block.
         let rule = if self.rule {
             Rect::from_min_size(pos2(0.0, row + LINE_GAP + S), vec2(width, 1.0))
         } else {
             Rect::from_min_size(pos2(0.0, row + LINE_GAP), vec2(width, 0.0))
         };
-        let height = rule.bottom() + if self.rule { LINE_GAP } else { 0.0 };
+        let height = rule.bottom();
         let mut texts = vec![LaidText {
             at: Pos2::new(lead_at.x, lead_at.y),
             galley: lead,
@@ -358,8 +357,7 @@ mod tests {
     }
 
     /// The row's height by a separate layout (the test's own): the title (at least 24 px) beside
-    /// the actions, the summary under the taller, then the line gap, `S`, the rule and the line gap (review of
-    /// PR 820).
+    /// the actions, the summary under the taller, then the line gap, `S` and the rule (review of PR 820).
     fn expected_height(ui: &Ui, title: &str, width: f32, stacked: bool) -> f32 {
         let x0 = Type::Body.size() + S;
         let title = egui::WidgetText::from(Type::Body.rich(
@@ -392,12 +390,7 @@ mod tests {
         job.wrap.max_width = (width - x0 - Density::Read.control() - S).max(XL);
         job.wrap.max_rows = max_rows;
         let summary = ui.fonts_mut(|fonts| fonts.layout_job(job)).size().y;
-        title.size().y.max(24.0).max(actions_height(stacked))
-            + summary
-            + LINE_GAP
-            + S
-            + 1.0
-            + LINE_GAP
+        title.size().y.max(24.0).max(actions_height(stacked)) + summary + LINE_GAP + S + 1.0
     }
 
     fn harness(titles: &[&str], size: Vec2, scale: f32) -> Harness<'static, Rows> {

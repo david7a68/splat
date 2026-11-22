@@ -143,8 +143,8 @@ fn apply_type(style: &mut egui::Style) {
 pub const INTERACT_HEIGHT: f32 = 26.0;
 
 /// The gap egui leaves after each item in a column (`item_spacing.y`): a laid block that stands
-/// among a column's items owns it (the Session plan's rows, `PlanRow`), so the block's height is
-/// the same in place and in a region.
+/// among a column's items lays out the gaps inside it by this (the Session plan's rows,
+/// `PlanRow`), and the column leaves it after the block.
 pub const LINE_GAP: f32 = 6.0;
 
 fn apply_spacing(style: &mut egui::Style) {

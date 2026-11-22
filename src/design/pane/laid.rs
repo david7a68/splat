@@ -281,7 +281,8 @@ pub(in crate::design) fn render(
 /// their height and place in both of its modes. The block registers its whole rect as a row
 /// (`register_row`: a footer never cuts through it) and returns it.
 pub fn draw_laid(ui: &mut Ui, laid: &Laid, draw: impl FnOnce(&mut LaidUi<'_>)) -> Rect {
-    // The block owns its gaps (`theme::LINE_GAP`): the column adds none after it.
+    // The block's own gaps are laid out inside it (`theme::LINE_GAP`): the caller's scope leaves
+    // the column's gap after it.
     let gap = ui.spacing().item_spacing.y;
     ui.spacing_mut().item_spacing.y = 0.0;
     let (rect, _) = ui.allocate_exact_size(laid.size, egui::Sense::hover());

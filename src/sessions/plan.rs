@@ -823,12 +823,14 @@ impl RowWords {
     }
 }
 
-/// A closed plan row as drawn: its title link, its summary part, its block, and the height of
-/// the rule its block holds (zero for an opened row, whose rule follows its details).
+/// A closed plan row as drawn: its title link and its summary part. The fold counts
+/// the row as `plan_row_with` and `plan_rule` measure it: `row`, the row with the column's gap
+/// after it; `rule`, the rule its block holds with the gap the column leaves after the block
+/// (zero for an opened row, whose rule follows its details).
 struct DrawnRow {
     title: egui::Response,
     summary: Option<egui::Response>,
-    rect: egui::Rect,
+    row: f32,
     rule: f32,
 }
 
@@ -845,8 +847,8 @@ fn draw_plan_row(
     actions: impl FnOnce(&mut egui::Ui),
 ) -> DrawnRow {
     let part = words.part();
-    let row = words.row(key, part.as_slice(), rule);
-    let laid = row.lay(ui, width, columns);
+    let laid_row = words.row(key, part.as_slice(), rule);
+    let laid = laid_row.lay(ui, width, columns);
     let mut title = None;
     let mut summary = None;
     let mut drawn = (
@@ -882,10 +884,12 @@ fn draw_plan_row(
         .zip(words.summary.as_ref())
         .map(|(response, part)| plan_hover(ui, response, &part.hover));
     let (slot, shown, rule_slot) = drawn;
-    let rule = if rule {
-        rect.bottom() - rule_slot.top() + design::S
+    // The block ends at its rule; the column leaves its own gap after it (`theme::LINE_GAP`).
+    let (row, rule) = if rule {
+        let row = rule_slot.top() - design::S - rect.top();
+        (row, rect.height() - row + design::theme::LINE_GAP)
     } else {
-        0.0
+        (rect.height(), 0.0)
     };
     #[cfg(any(test, feature = "test-support"))]
     {
@@ -897,13 +901,16 @@ fn draw_plan_row(
                 row: 0,
                 facts: egui::Rect::from_min_max(
                     egui::pos2(left, rect.top()),
-                    egui::pos2(left + row.facts(ui, width).0, rect.bottom() - rule),
+                    egui::pos2(
+                        left + laid_row.facts(ui, width).0,
+                        rect.top() + row - design::theme::LINE_GAP,
+                    ),
                 ),
                 line: title.rect,
                 action: shown,
                 column: slot.left(),
                 edge: rect.right(),
-                wrapped: !row.in_column(ui, width, columns),
+                wrapped: !laid_row.in_column(ui, width, columns),
             },
         );
     }
@@ -912,7 +919,7 @@ fn draw_plan_row(
     DrawnRow {
         title,
         summary,
-        rect,
+        row,
         rule,
     }
 }
@@ -5233,7 +5240,7 @@ impl Sessions {
                         if running && drawn.summary.as_ref().is_some_and(egui::Response::clicked) {
                             self.wants_back_to_run = true;
                         }
-                        closed += drawn.rect.height() - drawn.rule;
+                        closed += drawn.row;
                         let details_top = ui.cursor().top();
                         if is_open {
                             plan_details(ui, |ui| {
@@ -5328,7 +5335,7 @@ impl Sessions {
                         if running && drawn.summary.as_ref().is_some_and(egui::Response::clicked) {
                             self.wants_back_to_run = true;
                         }
-                        closed += drawn.rect.height() - drawn.rule;
+                        closed += drawn.row;
                         let details_top = ui.cursor().top();
                         if open {
                             plan_details(ui, |ui| {
@@ -5384,13 +5391,14 @@ impl Sessions {
                         // B4 review F1: the refusal shows under the row, before its rule.
                         let refused = plan.group_blocked.is_some() && self.plan_group_refused == Some((self.selected, group.id));
                         let top = ui.cursor().top();
-                        // The rule the row's block holds; zero when it follows the row.
-                        let mut in_block = 0.0;
+                        // The row and the rule its block holds, as the fold counts them; `None` when
+                        // the rule follows the row.
+                        let mut in_block = None;
                         if let Some(words) = &words {
                             let key = egui::Id::new(("plan_group", group.id));
                             let drawn = draw_plan_row(ui, words, (key, row_width, columns), (None, !refused), actions);
                             read_group = drawn.title.clicked();
-                            in_block = drawn.rule;
+                            in_block = (drawn.rule > 0.0).then_some(drawn.row + drawn.rule);
                         } else {
                             let group_widths = [width - action_width - design::S, action_width];
                             plan_row(ui, (&group_widths, columns), icons::GROUP, |ui| {
@@ -5418,7 +5426,7 @@ impl Sessions {
                         if read_group {
                             if plan.group_blocked.is_some() {
                                 self.plan_group_refused = Some((self.selected, group.id));
-                                if in_block > 0.0 {
+                                if in_block.is_some() {
                                     // The row's block holds its rule; the reason goes before it.
                                     ui.ctx().request_discard("the refusal of a plan group shows before its rule");
                                 }
@@ -5432,10 +5440,10 @@ impl Sessions {
                         {
                             design::blocked_reason(ui, Some(reason));
                         }
-                        closed += ui.cursor().top() - top;
-                        if in_block == 0.0 {
-                            closed += plan_rule(ui);
-                        }
+                        closed += match in_block {
+                            Some(height) => height,
+                            None => ui.cursor().top() - top + plan_rule(ui),
+                        };
                     });
                     if let Some((at, _, height)) = &mut remove_group && *at == position { *height = row.response.rect.height(); }
                     reveal.after(ui, None, row.response.rect);
@@ -10146,6 +10154,49 @@ mod tests {
         assert!(
             heading(&harness, 4),
             "another session's heading counts its own rows on the next frame"
+        );
+        // Layout 11c A2c: the plan's shared column comes from every closed row, laid out before
+        // any row draws. In one pass, with no second pass to fix a column kept from the last
+        // one, a longer title moves every row's action: all stand in one column, `L` after the
+        // widest facts. Red: the column from the last pass.
+        harness.state_mut().0.selected = Some(here.id);
+        harness.set_size(egui::vec2(1200.0, 900.0));
+        harness.run_steps(3);
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        let column = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>| {
+            let records: Vec<_> = design::action_rows::row_records(&harness.ctx)
+                .into_iter()
+                .filter(|record| record.owner == "plan")
+                .collect();
+            let widest = records
+                .iter()
+                .map(|record| record.facts.right())
+                .fold(f32::MIN, f32::max);
+            let holds = records.len() >= 4
+                && records.iter().all(|record| {
+                    !record.wrapped
+                        && (record.column - (widest + design::L)).abs() <= 0.5
+                        && record.action.left() >= record.column - 0.5
+                });
+            (holds, widest, records)
+        };
+        let (holds, before, records) = column(&harness);
+        assert!(holds, "one column before: {records:?}");
+        {
+            let book = &mut harness.state_mut().1;
+            let long = book.add(Kind::Encounter, Some(here.id));
+            book.event_mut(&long).unwrap().title =
+                "The long road along the river to the old mill below the burning shrine".into();
+            book.touch();
+        }
+        harness.step();
+        let (holds, after, records) = column(&harness);
+        assert!(
+            holds && after > before + design::L,
+            "in one pass every row's action moves to the new column, L after the widest facts \
+             ({before} to {after}): {records:?}"
         );
     }
 
