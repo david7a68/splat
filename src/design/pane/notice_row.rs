@@ -30,11 +30,14 @@
 //! Each part after the first stands the column's gap (`LINE_GAP`) below the one before.
 use egui::{Id, Rect, Ui, pos2, vec2};
 
+use super::action_line::wrap_actions;
 use super::laid::{Laid, LaidText};
 use crate::design::components::group_heading_text;
 use crate::design::extras::Heading;
 use crate::design::theme::LINE_GAP;
 use crate::design::tokens::{Density, L, S, Type, XS, colors};
+use egui::Galley;
+use std::sync::Arc;
 
 /// One roll of a notice row: its own key, its action's width as it measures, and why it is
 /// blocked, if it is.
@@ -196,55 +199,89 @@ impl NoticeRow<'_> {
             });
             y += height;
         }
-        // The rolls: each action, then its reason, wrapping at the row's edge.
+        // The rolls: each action, then its reason, wrapping at the row's edge by the one rule of
+        // a list's actions (`action_line::wrap_actions`), rows the column's gap apart. A roll
+        // whose action and reason do not fit the row together takes a row of its own: its action
+        // cut to the row, its reason on the lines under it; the next rolls start under those.
         if !self.rolls.is_empty() {
             y += LINE_GAP;
             let small = Type::Small.font(ui);
-            let mut x = 0.0;
-            // The bottom of the parts in the current row (an action, or a reason under it).
-            let mut bottom = y + control;
-            for roll in self.rolls {
-                let reason = roll.reason.map(|reason| {
-                    ui.fonts_mut(|fonts| {
-                        fonts.layout_no_wrap(reason.to_owned(), small.clone(), c.muted)
+            let reasons: Vec<Option<Arc<Galley>>> = self
+                .rolls
+                .iter()
+                .map(|roll| {
+                    roll.reason.map(|reason| {
+                        ui.fonts_mut(|fonts| {
+                            fonts.layout_no_wrap(reason.to_owned(), small.clone(), c.muted)
+                        })
                     })
-                });
-                // An action wider than the row is cut to it.
-                let action = roll.width.min(width);
-                let item = action + reason.as_ref().map_or(0.0, |galley| S + galley.size().x);
-                if x > 0.5 && x + item > width + 0.5 {
-                    x = 0.0;
-                    y = bottom + LINE_GAP;
-                    bottom = y + control;
+                })
+                .collect();
+            let item = |at: usize| {
+                self.rolls[at].width
+                    + reasons[at]
+                        .as_ref()
+                        .map_or(0.0, |galley| S + galley.size().x)
+            };
+            let mut at = 0;
+            // A run or a wide roll after another part of the rolls stands the column's gap under
+            // it.
+            let mut placed = false;
+            while at < self.rolls.len() {
+                // The next run of rolls that each fit the row whole.
+                let end = (at..self.rolls.len())
+                    .find(|&next| item(next) > width + 0.5)
+                    .unwrap_or(self.rolls.len());
+                if end > at {
+                    if placed {
+                        y += LINE_GAP;
+                    }
+                    placed = true;
+                    let widths: Vec<f32> = (at..end).map(item).collect();
+                    let (rects, bottom) = wrap_actions(&widths, (0.0, width), y, LINE_GAP);
+                    for (rect, roll) in rects.iter().zip(at..end) {
+                        let action = self.rolls[roll].width;
+                        slots.push(Rect::from_min_size(rect.min, vec2(action, control)));
+                        if let Some(galley) = reasons[roll].clone() {
+                            texts.push(LaidText {
+                                at: pos2(
+                                    rect.left() + action + S,
+                                    rect.top() + (control - galley.size().y) / 2.0,
+                                ),
+                                galley,
+                            });
+                        }
+                    }
+                    y = bottom;
+                    at = end;
                 }
-                slots.push(Rect::from_min_size(pos2(x, y), vec2(action, control)));
-                match reason {
-                    // After its action, on its row.
-                    Some(galley) if x + item <= width + 0.5 => {
+                if at < self.rolls.len() {
+                    // A roll too wide for the row with its reason: a row of its own.
+                    if placed {
+                        y += LINE_GAP;
+                    }
+                    placed = true;
+                    let roll = &self.rolls[at];
+                    slots.push(Rect::from_min_size(
+                        pos2(0.0, y),
+                        vec2(roll.width.min(width), control),
+                    ));
+                    y += control;
+                    if let Some(reason) = roll.reason {
+                        let galley = ui.fonts_mut(|fonts| {
+                            fonts.layout(reason.to_owned(), small.clone(), c.muted, width)
+                        });
+                        y += XS;
+                        let height = galley.size().y;
                         texts.push(LaidText {
-                            at: pos2(x + action + S, y + (control - galley.size().y) / 2.0),
+                            at: pos2(0.0, y),
                             galley,
                         });
-                        x += item + S;
+                        y += height;
                     }
-                    // On the lines under its action, wrapped at the row's edge; the next roll
-                    // starts under them.
-                    Some(_) => {
-                        let words = roll.reason.unwrap_or_default().to_owned();
-                        let galley = ui
-                            .fonts_mut(|fonts| fonts.layout(words, small.clone(), c.muted, width));
-                        let top = y + control + XS;
-                        bottom = top + galley.size().y;
-                        texts.push(LaidText {
-                            at: pos2(0.0, top),
-                            galley,
-                        });
-                        x = width + S;
-                    }
-                    None => x += item + S,
+                    at += 1;
                 }
             }
-            y = bottom;
         }
         if let Some(results) = self.results {
             y += LINE_GAP;
@@ -736,6 +773,59 @@ mod tests {
             seen.push(place);
         }
         assert_eq!(seen, ["beside", "under", "cut"]);
+    }
+
+    /// Astra's P2 on PR 885: a check box's control is keyed by its own key, not its place. The
+    /// second check box has the keyboard; the first goes (its change was taken back); the one
+    /// that stays keeps its focus. Red: slots by their place.
+    #[test]
+    fn a_check_keeps_its_focus_when_the_one_before_it_goes() {
+        use egui_kittest::kittest::Queryable;
+        let mut h = Harness::builder()
+            .with_size(vec2(500.0, 300.0))
+            .themed_ui_state(
+                |ui, words: &mut Vec<&'static str>| {
+                    let checks: Vec<NoticeCheck<'_>> = words
+                        .iter()
+                        .map(|words| NoticeCheck {
+                            key: Id::new(("check", *words)),
+                            words,
+                        })
+                        .collect();
+                    let laid = NoticeRow {
+                        key: Id::new("keys"),
+                        heading: None,
+                        first: false,
+                        words: "Day 32: Move the rival powers.",
+                        rolls: &[],
+                        results: None,
+                        checks: &checks,
+                        finish: finish_width(ui),
+                        tail: TAIL,
+                    }
+                    .lay(ui, 480.0);
+                    let _ = draw_laid(ui, &laid, |ui| {
+                        for (at, words) in words.iter().enumerate() {
+                            let mut on = true;
+                            let _ = ui
+                                .in_slot(slot::FIRST_ROLL + at, |ui| ui.checkbox(&mut on, *words));
+                        }
+                    });
+                },
+                vec!["Seals (Party) +1", "Torches set to 3"],
+            );
+        h.run_steps(2);
+        h.get_by_label("Torches set to 3").focus();
+        h.run_steps(2);
+        let focused = h.ctx.memory(|memory| memory.focused());
+        assert!(focused.is_some(), "the second check box has the keyboard");
+        h.state_mut().remove(0);
+        h.run_steps(3);
+        assert_eq!(
+            h.ctx.memory(|memory| memory.focused()),
+            focused,
+            "notice-row-keys: the check box that stays keeps its id and its focus"
+        );
     }
 
     /// The heading leaves out its space above when it starts its column, as `design::heading`

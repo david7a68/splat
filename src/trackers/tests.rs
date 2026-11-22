@@ -2007,14 +2007,57 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
         h.query_by_label(done).is_some(),
         "the new Due row draws its Done"
     );
-    let after = laid();
+    let made = Trackers::test_due_parts_made;
+    let (after, parts) = (laid(), made());
     h.run_steps(5);
     assert!(
-        h.query_by_label(done).is_some() && laid() == after,
-        "an unchanged frame with Due rows lays none out: {} then {}",
-        after,
-        laid()
+        h.query_by_label(done).is_some() && laid() == after && made() == parts,
+        "an unchanged frame with Due rows lays none out and makes no parts, from the host's \
+         entry through paint: laid {after} then {}, parts {parts} then {}",
+        laid(),
+        made()
     );
+    // Astra's P2 on PR 885: a change of content at the same length. The mark's words change in
+    // the note ("First" to "Final"); the next press reads the note (and records nothing), and
+    // the row shows the new words.
+    let note = race.campaign.path.join("Tournament.md");
+    let text = fs::read_to_string(&note).unwrap();
+    assert!(text.contains("say: First seal."));
+    fs::write(&note, text.replace("say: First seal.", "say: Final seal.")).unwrap();
+    h.state_mut().press("favor", None, "Crowd loves it", None);
+    h.run_steps(4);
+    let painted = |h: &Harness<'_, Trackers>, words: &str| {
+        // A label's words are its accessible value.
+        h.query_all(
+            egui_kittest::kittest::By::new()
+                .predicate(|node| node.value().is_some_and(|value| value.contains(words))),
+        )
+        .count()
+    };
+    assert!(
+        painted(&h, "Party: Final seal.") > 0 && painted(&h, "Party: First seal.") == 0,
+        "a same-length change of a Due row's words shows the new words"
+    );
+    // A new font atlas, and the other theme, each lay the rows again (the galleys hold the
+    // atlas's places and their colours).
+    let before = laid();
+    let alpha = h.ctx.style().visuals.text_alpha_from_coverage;
+    h.ctx.all_styles_mut(|style| {
+        style.visuals.text_alpha_from_coverage = eframe::egui::epaint::AlphaFromCoverage::Linear;
+    });
+    h.step();
+    h.ctx
+        .all_styles_mut(|style| style.visuals.text_alpha_from_coverage = alpha);
+    h.run_steps(3);
+    assert!(laid() > before, "a new font atlas lays the Due rows again");
+    let before = laid();
+    let visuals = h.ctx.style().visuals.clone();
+    h.ctx.set_visuals(eframe::egui::Visuals::light());
+    h.run_steps(3);
+    assert!(laid() > before, "the other theme lays the Due rows again");
+    h.ctx.set_visuals(visuals);
+    h.run_steps(3);
+    let after = laid();
     // A change of the width is a new measure: the rows are laid again.
     h.set_size(eframe::egui::vec2(520.0, 640.0));
     h.run_steps(4);
