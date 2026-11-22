@@ -738,7 +738,6 @@ fn plan_columns(ui: &egui::Ui) -> (f32, f32) {
 fn plan_measured(ui: &egui::Ui, facts: f32, actions: f32) {
     design::action_rows::measured(ui, egui::Id::new("plan_row_columns"), facts, actions);
 }
-}
 
 /// Why a played fight's summary cannot show: its run folder's cause (R41, in Encounters' words
 /// and tone), or another cause in words.
