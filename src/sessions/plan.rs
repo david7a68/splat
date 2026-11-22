@@ -4856,24 +4856,27 @@ impl Sessions {
                     let _ = problems(ui, book);
                 }
             };
-            // M0245 (ruling M27): with a page or without one, the editor has its own pane, a
-            // `Fills(Columns)` body, so its column is never inside a `Content` body. With no page
-            // the footer has no messages of the page's.
-            let frame = PaneFrame::new(ui);
-            let width = ui.available_width();
-            let messages = match page {
+            match page {
                 Some((settings, note)) => {
-                    self.session_messages(&frame, settings, book, plan, note, width)
+                    let frame = PaneFrame::new(ui);
+                    let messages = self.session_messages(
+                        &frame,
+                        settings,
+                        book,
+                        plan,
+                        note,
+                        ui.available_width(),
+                    );
+                    let paned = messages.pane(
+                        ui,
+                        super::fills_body(design::pane::FillsReason::Columns),
+                        |ui| draw(ui, book),
+                    );
+                    if let Some(press) = paned.pressed {
+                        self.session_press(press, book, plan);
+                    }
                 }
-                None => Messages::new(&frame, "session_group_pane", width),
-            };
-            let paned = messages.pane(
-                ui,
-                super::fills_body(design::pane::FillsReason::Columns),
-                |ui| draw(ui, book),
-            );
-            if let Some(press) = paned.pressed {
-                self.session_press(press, book, plan);
+                None => draw(ui, book),
             }
             return;
         }
