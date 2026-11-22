@@ -9113,7 +9113,7 @@ pub mod prep_to_table {
         );
         d.state("all-initiative-entered", Sizes::All);
         for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
-            let (aligned, compact) = d.at_size(size, |d| {
+            let measured = d.at_size(size, |d| {
                 let nodes = d.nodes();
                 let fields: Vec<_> = nodes
                     .iter()
@@ -9159,13 +9159,65 @@ pub mod prep_to_table {
                     node.name.starts_with("Brannoch Vale · ")
                         && node.rect.height() <= crate::design::RUN_REGULAR.row
                 });
-                (aligned, compact)
+                // Layout 11c (M0138, M0142 to M0152): every control of a row stands on the
+                // row's first line, its centre on the centre of the name that the row paints
+                // there; INITIATIVE stands over the totals' column.
+                let mut painted = Vec::new();
+                d.each_painted_text(|text, _| {
+                    painted.push((
+                        text.galley.job.text.clone(),
+                        egui::Rect::from_min_size(text.pos, text.galley.size()),
+                    ));
+                });
+                let off_line: Vec<(String, f32)> = fields
+                    .iter()
+                    .filter_map(|field| {
+                        let name = field.name.trim_start_matches("Initiative for ");
+                        let row = nodes
+                            .iter()
+                            .find(|node| node.name.starts_with(&format!("{name} · ")))?;
+                        let title = painted
+                            .iter()
+                            .find(|(words, rect)| words == name && row.rect.contains_rect(*rect))?
+                            .1;
+                        Some(
+                            nodes
+                                .iter()
+                                .filter(|node| {
+                                    node.name == field.name
+                                        || node.name == format!("Roll for {name}")
+                                        || node.name.starts_with(&format!("Place for {name}:"))
+                                        || node.name == format!("Absent: {name}")
+                                        || node.name == format!("More actions for {name}")
+                                        || node.name.starts_with(&format!("Move {name} "))
+                                })
+                                .map(|node| {
+                                    (node.name.clone(), node.rect.center().y - title.center().y)
+                                })
+                                .collect::<Vec<_>>(),
+                        )
+                    })
+                    .flatten()
+                    .filter(|(_, off)| off.abs() > 1.0)
+                    .collect();
+                let heading = painted
+                    .iter()
+                    .find(|(words, _)| words == "INITIATIVE")
+                    .map(|(_, rect)| rect.left());
+                let on_line = off_line.is_empty()
+                    && heading.is_some_and(|left| {
+                        fields
+                            .iter()
+                            .all(|field| (field.rect.left() - left).abs() <= 1.0)
+                    });
+                (aligned, compact, on_line, off_line, heading)
             });
+            let (aligned, compact, on_line, off_line, heading) = measured;
             d.observe(
                 "Setup row controls",
-                aligned && compact,
+                aligned && compact && on_line,
                 format!(
-                    "At {size:?}, all seven totals align, both Roll controls precede them, Absent and menus follow, and an untied row fits RUN_REGULAR: aligned {aligned}, compact {compact}"
+                    "At {size:?}, all seven totals align, both Roll controls precede them, Absent and menus follow, and an untied row fits RUN_REGULAR: aligned {aligned}, compact {compact}; every control on its row's name line and INITIATIVE at the totals' left: {on_line}, off the line {off_line:?}, INITIATIVE at {heading:?}"
                 ),
             );
         }
@@ -9217,11 +9269,18 @@ pub mod prep_to_table {
                 .collect()
         };
         let (ups, downs) = (arrows(d, " before "), arrows(d, " after "));
+        // Layout 11c (M0152): a row with one arrow keeps the other's slot empty, so the down
+        // arrow is one icon button right of the up arrow in every tied row, also in a row
+        // without an up arrow.
         d.observe(
             "T4.3",
             !ups.is_empty()
+                && !downs.is_empty()
                 && ups.windows(2).all(|x| x[0] == x[1])
-                && downs.windows(2).all(|x| x[0] == x[1]),
+                && downs.windows(2).all(|x| x[0] == x[1])
+                && downs.iter().all(|down| {
+                    (down - ups[0] - crate::design::Density::Read.control()).abs() <= 1.0
+                }),
             format!("Tie arrows have fixed places: up {ups:?}, down {downs:?}"),
         );
         d.begin_task();
@@ -21275,6 +21334,35 @@ pub mod encounter_groups {
                     .iter()
                     .all(|f| (f.left() - fields[0].left()).abs() <= 1.0),
                 format!("Initiative fields keep one column: {fields:?}"),
+            );
+            // Layout 11c (M0122, M0125): Add ends at its group's block edge, the right edge of
+            // the group's heading (its drag handle), and Initiative stands just before Add: no
+            // more than `L` (the line's item gap and the field's margin) between them.
+            // A changed group's handle adds `. Changed.` to its name.
+            let nodes = d.nodes();
+            let grips = groups.map(|name| {
+                let grip = format!("Drag {name} to the initiative list");
+                nodes
+                    .iter()
+                    .find(|node| node.name.starts_with(&grip))
+                    .map(|node| node.rect)
+                    .expect("Required group heading")
+            });
+            let placed: Vec<_> = (0..groups.len())
+                .map(|at| {
+                    (
+                        buttons[at].right() - grips[at].right(),
+                        buttons[at].left() - fields[at].right(),
+                    )
+                })
+                .collect();
+            d.observe(
+                "m32-L11c-arrival-controls-edge",
+                placed.iter().all(|(edge, before)| {
+                    edge.abs() <= 1.0
+                        && (0.0..=crate::design::L + 1.0).contains(before)
+                }),
+                format!("Add's right edge from its heading's, and the gap from the field to Add, per group: {placed:?}"),
             );
             // AH1: the groups share one block at the pane's left edge, no wider than a list,
             // so Add stays near the names it adds in a wide pane.
