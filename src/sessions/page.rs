@@ -7897,9 +7897,7 @@ impl Sessions {
         // The template's text field is its file's (M0495, M0496). A template has no typed owner
         // key yet: its path is the key (`TextKey::from_data`, counted).
         let field = TEMPLATE_TEXT.of(design::TextKey::from_data(
-            template
-                .path
-                .as_deref()
+            path.as_deref()
                 .map_or_else(|| name.clone(), |path| path.display().to_string()),
         ));
         if let Some(draft) = &mut self.template_draft {
