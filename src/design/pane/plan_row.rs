@@ -441,7 +441,7 @@ mod tests {
                                             vec2(120.0, Density::Read.control()),
                                             egui::Button::new(format!("Act {at}")),
                                         );
-                                        ui.add_space(S);
+                                        crate::design::extras::space(ui, S);
                                         let second = ui.add_sized(
                                             vec2(120.0, Density::Read.control()),
                                             egui::Button::new(format!("More {at}")),
