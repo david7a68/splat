@@ -1147,7 +1147,8 @@ mod tests {
             shown(&harness, 8),
             "Page Down in another column leaves a queued request"
         );
-        // Focus in this column: a shortcut (Ctrl+S) moves nothing and leaves a queued request;
+        // Focus in this column: a shortcut (Ctrl+S, Ctrl+Page Down) moves nothing and leaves a
+        // queued request;
         // Page Down ends a request.
         harness.get_by_label("Act 8").focus();
         harness.run_steps(2);
@@ -1156,7 +1157,16 @@ mod tests {
         key(&mut harness, egui::Key::S, egui::Modifiers::CTRL);
         harness.run_steps(3);
         assert!(shown(&harness, 30), "a shortcut leaves a queued request");
-        harness.get_by_label("Act 30").focus();
+        // A shortcut on a key that would move the view (Ctrl+Page Down: the next tab) too.
+        show(&mut harness, 12);
+        harness.step();
+        key(&mut harness, egui::Key::PageDown, egui::Modifiers::CTRL);
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 12),
+            "a shortcut on a view key leaves a queued request"
+        );
+        harness.get_by_label("Act 12").focus();
         harness.run_steps(2);
         show(&mut harness, 2);
         key(&mut harness, egui::Key::PageDown, egui::Modifiers::NONE);
