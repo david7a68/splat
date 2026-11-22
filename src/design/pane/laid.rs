@@ -113,6 +113,12 @@ impl Laid {
         }
     }
 
+    /// Its head (its semantic boundary from its top), for a recipe's proofs.
+    #[cfg(test)]
+    pub(in crate::design) fn head(&self) -> Option<f32> {
+        self.head
+    }
+
     /// The block the plan measures: this layout's height, head, key and revision.
     pub fn block(&self) -> Block {
         Block::Measured(Measured::new(
