@@ -566,13 +566,41 @@ pub(super) fn take_queued(ui: &Ui, key: Id, area: Id) -> Option<f32> {
     let id = queued_id(key);
     let mut queued = ui.ctx().data(|data| data.get_temp::<Queued>(id))?;
     let _ = queued.why;
-    // The column's own fling after a drag still moves it: the DM's scroll goes on.
-    let fling = egui::scroll_area::State::load(ui.ctx(), area)
-        .is_some_and(|state| state.velocity() != Vec2::ZERO);
     let frame = ui.ctx().cumulative_frame_nr();
-    let view = queued.view;
+    let input = column_input(ui, queued.view, Some(area));
+    if !input.moved && input.held && frame <= queued.made + QUEUED_FRAMES {
+        // A press held still: the request waits, up to its bound.
+        queued.frame = frame;
+        ui.ctx().data_mut(|data| data.insert_temp(id, queued));
+        return None;
+    }
+    ui.ctx().data_mut(|data| data.remove::<Queued>(id));
+    (frame <= queued.frame + 1 && !input.moved && !input.held && !input.other)
+        .then_some(queued.offset)
+}
+
+/// The DM's input to one column in this pass (reviews of PRs 757, 770 and 780): the one rule
+/// every request that moves a column by itself answers to (a region's request, a jump,
+/// `bring_into_view`, a retry).
+#[derive(Clone, Copy, Debug)]
+struct ColumnInput {
+    /// The DM scrolls it: a wheel with the pointer over its view, a drag begun in it, or (with
+    /// its area's id) its own fling after a drag.
+    moved: bool,
+    /// A press that began in it is held.
+    held: bool,
+    /// Another input to it: a press in it, or a key that moves a view or a caret
+    /// (`moves_view`) that goes to it (`keys_in`).
+    other: bool,
+}
+
+/// The DM's input in this pass to the column whose view (screen points) is `view`.
+fn column_input(ui: &Ui, view: Rect, area: Option<Id>) -> ColumnInput {
+    let fling = area
+        .and_then(|area| egui::scroll_area::State::load(ui.ctx(), area))
+        .is_some_and(|state| state.velocity() != Vec2::ZERO);
     let keys = keys_in(ui, view);
-    let (moved, held, other) = ui.input(|input| {
+    ui.input(|input| {
         let pointer = &input.pointer;
         let over = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| view.contains(pos));
         let wheel = input.raw_scroll_delta != Vec2::ZERO
@@ -581,28 +609,20 @@ pub(super) fn take_queued(ui: &Ui, key: Id, area: Id) -> Option<f32> {
                 .events
                 .iter()
                 .any(|event| matches!(event, egui::Event::MouseWheel { .. }));
-        let pressed_in = pointer.any_down() && over(pointer.press_origin());
-        let dragged = pressed_in && pointer.is_decidedly_dragging();
+        let held = pointer.any_down() && over(pointer.press_origin());
+        let dragged = held && pointer.is_decidedly_dragging();
         let other = input.events.iter().any(|event| match event {
             egui::Event::PointerButton {
                 pos, pressed: true, ..
-            } => view.contains(*pos) && !pressed_in,
+            } => view.contains(*pos) && !held,
             event => keys && moves_view(event),
         });
-        (
-            (wheel && over(pointer.hover_pos())) || dragged || fling,
-            pressed_in,
+        ColumnInput {
+            moved: (wheel && over(pointer.hover_pos())) || dragged || fling,
+            held,
             other,
-        )
-    });
-    if !moved && held && frame <= queued.made + QUEUED_FRAMES {
-        // A press held still: the request waits, up to its bound.
-        queued.frame = frame;
-        ui.ctx().data_mut(|data| data.insert_temp(id, queued));
-        return None;
-    }
-    ui.ctx().data_mut(|data| data.remove::<Queued>(id));
-    (frame <= queued.frame + 1 && !moved && !held && !other).then_some(queued.offset)
+        }
+    })
 }
 
 /// The DM's keyboard input that moves a view or a caret (review of PR 757): Tab, an arrow, Page
