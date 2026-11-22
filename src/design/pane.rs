@@ -318,6 +318,77 @@ enum Host {
     Alone { fills: bool },
 }
 
+/// How a document editor lays its text out ([`EditorRegion::document`]).
+#[derive(Clone, Copy, Debug)]
+pub enum Face {
+    /// Plain text in one font (a note's source in monospace, prose).
+    Font(egui::TextStyle),
+    /// Text laid out by a styling layouter (Markdown's source).
+    Laid(fn(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley>),
+}
+
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// How many times a document editor laid out its text (layout PR 9b's quiet-frame proof).
+    pub(crate) static KEPT_LAYOUTS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The layouter of a document editor: the laid-out text kept for its revision and measure.
+/// egui calls it once with the text it was given, and again only after an edit in its own
+/// pass: only the first call reads and writes the kept text, so a text that an edit changed
+/// is laid out fresh and kept under its new revision in the next frame.
+fn kept_layouter(
+    field: Id,
+    face: Face,
+    revision: super::memo::Revision,
+) -> impl FnMut(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley> {
+    let key = field.with("kept_layout");
+    let mut first = true;
+    move |ui: &Ui, text: &dyn egui::TextBuffer, wrap: f32| {
+        let fresh = std::mem::take(&mut first);
+        let font = match face {
+            Face::Font(style) => style.resolve(ui.style()),
+            Face::Laid(_) => super::tokens::Type::Body.font(ui),
+        };
+        let measure = super::memo::Measure::of(ui, wrap, &font);
+        if fresh
+            && let Some(galley) = ui
+                .ctx()
+                .data(|data| {
+                    data.get_temp::<(
+                        super::memo::Revision,
+                        super::memo::Measure,
+                        std::sync::Arc<egui::Galley>,
+                    )>(key)
+                })
+                .filter(|(kept, at, _)| *kept == revision && *at == measure)
+                .map(|(_, _, galley)| galley)
+        {
+            return galley;
+        }
+        #[cfg(any(test, feature = "test-support"))]
+        KEPT_LAYOUTS_MADE.with(|made| made.set(made.get() + 1));
+        let galley = match face {
+            Face::Font(_) => {
+                let color = ui
+                    .visuals()
+                    .override_text_color
+                    .unwrap_or_else(|| ui.visuals().widgets.inactive.text_color());
+                let job =
+                    egui::text::LayoutJob::simple(text.as_str().to_owned(), font, color, wrap);
+                ui.fonts_mut(|fonts| fonts.layout_job(job))
+            }
+            Face::Laid(layout) => layout(ui, text, wrap),
+        };
+        if fresh {
+            ui.ctx().data_mut(|data| {
+                data.insert_temp(key, (revision, measure, galley.clone()));
+            });
+        }
+        galley
+    }
+}
+
 /// How tall an editor viewport of its own is ([`editor_view`]).
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ViewHeight {
@@ -349,6 +420,29 @@ pub fn editor_view<T: super::layout::GuardedText>(
         _scope: std::marker::PhantomData,
     }
     .editor(ui, field, text, style)
+}
+
+/// [`editor_view`] for a document with a trusted revision: the same viewport, with its laid-out
+/// text kept by revision as [`EditorRegion::document`] keeps it.
+pub fn document_view(
+    ui: &mut Ui,
+    height: ViewHeight,
+    field: super::layout::FieldId,
+    text: &mut super::memo::Revised<String>,
+    face: Face,
+    style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
+) -> super::layout::Editor {
+    let (max, fills) = match height {
+        ViewHeight::AtMost(most) => (most, false),
+        ViewHeight::Fills => (ui.available_height(), true),
+    };
+    EditorRegion {
+        pane: field.id().with("editor_view"),
+        max: max.floor().max(0.0),
+        host: Host::Alone { fills },
+        _scope: std::marker::PhantomData,
+    }
+    .document(ui, field, text, face, style)
 }
 
 /// The fixed frame of every editor viewport: the field's well, its hairline and an `S` inner
@@ -473,6 +567,33 @@ impl EditorRegion<'_> {
         text: &mut T,
         style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
     ) -> super::layout::Editor {
+        self.draw(ui, field, text, None, style)
+    }
+
+    /// [`editor`](Self::editor) for a document with a trusted revision (layout PR 9b, ruling
+    /// L8). The part lays the text out in `face` and keeps the laid-out text by the document's
+    /// revision and its measure (width, font, fonts' generation, scale): a quiet frame lays out,
+    /// hashes and copies none of it. `style` sets the rest of the text edit, not its font.
+    pub fn document(
+        self,
+        ui: &mut Ui,
+        field: super::layout::FieldId,
+        text: &mut super::memo::Revised<String>,
+        face: Face,
+        style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
+    ) -> super::layout::Editor {
+        let revision = text.revision();
+        self.draw(ui, field, text, Some((face, revision)), style)
+    }
+
+    fn draw<T: super::layout::GuardedText>(
+        self,
+        ui: &mut Ui,
+        field: super::layout::FieldId,
+        text: &mut T,
+        kept: Option<(Face, super::memo::Revision)>,
+        style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
+    ) -> super::layout::Editor {
         let pane = innermost(ui);
         assert!(
             self.host != Host::Pane
@@ -571,13 +692,20 @@ impl EditorRegion<'_> {
                 // Where the content starts in this layout (the view's top less the offset used).
                 let origin = ui.max_rect().top();
                 let least_text = if fills { max } else { 0.0 };
-                let editor = field.editor(ui, text, |edit| {
+                let shaped = |edit: egui::TextEdit<'_>| {
                     style(edit)
                         .frame(false)
                         .margin(egui::Vec2::ZERO)
                         .desired_width(f32::INFINITY)
                         .min_size(vec2(0.0, least_text))
-                });
+                };
+                let editor = match kept {
+                    None => field.editor(ui, text, shaped),
+                    Some((face, revision)) => {
+                        let mut layouter = kept_layouter(field.id(), face, revision);
+                        field.editor_laid(ui, text, &mut layouter, shaped)
+                    }
+                };
                 // The editor asks its scroll area to follow a caret that moved (egui's
                 // `scroll_to_rect`, animated, to the nearest edge). The region follows the caret
                 // itself, so that ask is replaced by one that moves nothing: no animated target

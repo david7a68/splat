@@ -554,6 +554,33 @@ impl FieldId {
         }
     }
 
+    /// [`editor`](Self::editor) with the part's own `layouter` (an editor viewport keeps its laid
+    /// out text by revision: `pane::EditorRegion::document`).
+    pub(in crate::design) fn editor_laid<T: GuardedText>(
+        self,
+        ui: &mut Ui,
+        text: &mut T,
+        layouter: &mut dyn FnMut(&Ui, &dyn TextBuffer, f32) -> std::sync::Arc<egui::Galley>,
+        style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
+    ) -> Editor {
+        let id = self.id();
+        let guard = TextGuard::before(ui, id, &|| text.bound().0);
+        let output = style(TextEdit::multiline(text).id(id))
+            .layouter(layouter)
+            .show(ui);
+        guard.after(ui, &|| text.bound().0, &output.response);
+        record_field(ui, &output.response);
+        Editor {
+            frame: output.response.rect,
+            view: output.text_clip_rect,
+            response: output.response,
+            galley: output.galley,
+            galley_pos: output.galley_pos,
+            text_clip_rect: output.text_clip_rect,
+            cursor_range: output.cursor_range,
+        }
+    }
+
     /// A search field with this id: the search icon, the hint (what can be searched) and, while
     /// it holds text, a quiet `Clear` inside the field's right end. `Clear` empties the text and
     /// gives the field its focus back; `cleared` says so, for a caller that resets more (the
