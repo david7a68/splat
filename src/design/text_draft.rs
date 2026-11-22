@@ -38,7 +38,6 @@
 //! let _ = draft.clone();
 //! ```
 use super::memo::Revision;
-use egui::TextBuffer as _;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// One document's identity: never shared by two drafts.
