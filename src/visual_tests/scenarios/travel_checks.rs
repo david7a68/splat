@@ -378,7 +378,7 @@ pub fn run(d: &mut Driver<'_>) {
         file.contains("  - Check at 0h: \"") && file.contains("  - Check at 24h: \""),
         format!("Each check is a quoted line of the event: {file}"),
     );
-    d.click("Undo roll");
+    d.click_starting("Undo roll ");
     d.observe(
         "T11.9",
         checks(d).is_empty() && d.has("Roll all 2"),
@@ -518,7 +518,7 @@ pub fn run(d: &mut Driver<'_>) {
             && checks(d).len() == 1,
         "Undo plan line takes back the plan line and leaves the cleared check",
     );
-    d.click("Undo clear");
+    d.click_starting("Undo clear ");
     d.observe(
         "T11.9",
         checks(d).len() == 2,
@@ -674,7 +674,7 @@ pub fn run(d: &mut Driver<'_>) {
     let seen = d
         .nodes()
         .iter()
-        .any(|node| node.name == "Undo roll" && node.fully_in_view())
+        .any(|node| node.name.starts_with("Undo roll ") && node.fully_in_view())
         && d.visible_text("1 travel check rolled.");
     d.observe(
         "T11.9",
@@ -775,10 +775,10 @@ pub fn run(d: &mut Driver<'_>) {
     d.click_starting("Travel ·");
     d.observe(
         "T11.9",
-        d.has("Undo roll") && journey(d, "Travel").checks.len() == 1,
+        d.has_containing("Undo roll ") && journey(d, "Travel").checks.len() == 1,
         "Timeline: another journey's act leaves this journey's Undo",
     );
-    d.click("Undo roll");
+    d.click_starting("Undo roll ");
     d.observe(
         "T11.9",
         journey(d, "Travel").checks.is_empty()
@@ -796,10 +796,10 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Travel");
     d.observe(
         "T11.9",
-        d.has("Undo roll") && journey(d, "Travel").checks.len() == 1,
+        d.has_containing("Undo roll ") && journey(d, "Travel").checks.len() == 1,
         "Plan: another journey's act leaves this journey's Undo",
     );
-    d.click("Undo roll");
+    d.click_starting("Undo roll ");
     d.observe(
         "T11.9",
         journey(d, "Travel").checks.is_empty() && journey(d, "Journey B").checks.len() == 1,
