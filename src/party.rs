@@ -84,24 +84,29 @@ impl Party<'_> {
             .map(|name| format!(" · Sheets save on {name}"))
             .unwrap_or_default();
         let context = format!("{status_icon} {status_word}{fetched}{writer}");
-        let mut refresh = false;
-        design::page_header(ui, "Party", Some(&context), |ui| {
-            if linked && !reader.members.is_empty() {
-                refresh = Action::quiet("Refresh party")
-                    .icon(icons::REFRESH)
-                    .blocked(can_refresh)
-                    .show(ui)
-                    .clicked();
-                // A signed-out local-edit notice has its own Connect D&D Beyond, so the
-                // header then shows only the state: one action, one name.
-                if session.is_none()
-                    && reader.conflicts.is_empty()
-                    && design::link(ui, "Connect to refresh").clicked()
-                {
-                    self.view.wants_settings = true;
-                }
+        // The page's header (M0410): the title, its state, then its actions by measure.
+        const REFRESH: design::Word = crate::word!("Refresh party");
+        const CONNECT: design::Word = crate::word!("Connect to refresh");
+        let mut line = design::TitleLine::new("Party")
+            .context(Some(&context))
+            .page();
+        if linked && !reader.members.is_empty() {
+            // A signed-out local-edit notice has its own Connect D&D Beyond, so the header then
+            // shows only the state: one action, one name.
+            if session.is_none() && reader.conflicts.is_empty() {
+                line = line.action(design::TitleAction::link(CONNECT));
             }
-        });
+            line = line.action(
+                design::TitleAction::quiet(REFRESH)
+                    .icon(icons::REFRESH)
+                    .blocked(can_refresh),
+            );
+        }
+        let header = line.show(ui);
+        let refresh = header.clicked(REFRESH);
+        if header.clicked(CONNECT) {
+            self.view.wants_settings = true;
+        }
         if linked && session.is_some() {
             design::blocked_reason(ui, can_refresh);
         }

@@ -476,16 +476,34 @@ impl PaneEdges {
                         .show_inside(&mut beside, |ui| child(ui, index));
                     if let Some(next) = spec.children.get(index + 1) {
                         index += 1;
+                        // A trailing column after the rest (Astra's P2 on PR 668): its side panel
+                        // at the room's right, drawn before the rest takes what is left.
+                        let trailing = match spec.children.get(index + 1) {
+                            Some(Child {
+                                before,
+                                width: Width::Trailing(trailing),
+                            }) => {
+                                (**trailing)
+                                    .clone()
+                                    .show_inside(&mut beside, |ui| child(ui, index + 1));
+                                Some(*before)
+                            }
+                            _ => None,
+                        };
                         let rest = beside.available_rect_before_wrap();
+                        let rest = rest
+                            .with_min_x((rest.left() + next.before).min(rest.right()))
+                            .with_max_x((rest.right() - trailing.unwrap_or(0.0)).max(rest.left()));
                         let mut ui = beside.new_child(
                             egui::UiBuilder::new()
                                 .id_salt(spec.id.with(("column", index)))
-                                .max_rect(
-                                    rest.with_min_x((rest.left() + next.before).min(rest.right())),
-                                )
+                                .max_rect(rest)
                                 .layout(layout),
                         );
                         child(&mut ui, index);
+                        if trailing.is_some() {
+                            index += 1;
+                        }
                     }
                 }
             }
@@ -715,5 +733,34 @@ mod tests {
         trailing.set_size(vec2(960.0, 640.0));
         trailing.run_steps(3);
         check(&trailing, "960");
+        // A resizable column, the rest and a trailing column (Astra's P2 on PR 668): all three
+        // draw, each in its resolved edges, the rest between the two splitters.
+        let three = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let three_in = three.clone();
+        let mut both = Harness::builder()
+            .with_size(vec2(1600.0, 640.0))
+            .build_ui(move |ui| {
+                let edges = PaneColumns::shared_task("three_test")
+                    .resizable(0.0, Column::left("three_left", 300.0, 200.0..=400.0))
+                    .rest(0.0)
+                    .trailing(0.0, Column::right("three_right", 300.0, 200.0..=400.0))
+                    .edges(ui);
+                *three_in.borrow_mut() = (0..3).map(|at| edges.child(ui, at)).collect();
+                edges.show_children(ui, |ui, index| {
+                    let width = ui.available_width();
+                    let _ =
+                        ui.add_sized([width, 20.0], egui::Button::new(format!("Third {index}")));
+                });
+            });
+        crate::design::theme::install(&both.ctx);
+        both.run_steps(3);
+        let planned = three.borrow().clone();
+        for (index, planned) in planned.iter().enumerate() {
+            let drawn = edges_of(&both, &format!("Third {index}"));
+            assert!(
+                (drawn.0 - planned.min).abs() <= 1.0 && (drawn.1 - planned.max).abs() <= 1.0,
+                "child {index} is drawn at {drawn:?}, planned at {planned:?}"
+            );
+        }
     }
 }
