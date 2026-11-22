@@ -2334,10 +2334,6 @@ impl Run {
 
     /// The official conditions, one click each. A second click removes one. This sits
     /// beside the roster and needs no typing, so a mistyped name cannot lose its sync.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn conditions_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         let mut command = None;
         let mut added = false;
@@ -2459,7 +2455,7 @@ impl Run {
             };
             // The draft is this participant's, in this run: its field keeps its own cursor
             // and Undo (two runs can reuse a roster slot's key).
-            let owner = design::TextKey::from_data(format!("{}:{}", run_id, p.key));
+            let owner = design::ParticipantKey::of(run_id, p);
             let (add, field) =
                 other_effect_field(ui, owner, &mut draft.words, (width, placeholder), focus);
             // Escape clears the participant's draft, as in the dock's field.
@@ -4921,10 +4917,6 @@ impl Run {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn record_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         let mut command = None;
         design::ScrollColumn::new("run_record").show(ui, |ui| {
@@ -5033,9 +5025,7 @@ impl Run {
                         correction_label(ui, "Note");
                         design::line_field(
                             ui,
-                            DM_NOTE_FIELD
-                                .of(self.id)
-                                .with(design::TextKey::from_data(p.key.clone())),
+                            DM_NOTE_FIELD.of(design::ParticipantKey::of(self.id, p)),
                             "DM note",
                             &mut self.note,
                             "What happened",

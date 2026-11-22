@@ -1129,12 +1129,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "effect_line",
             &[Ban::Extras(1)],
         ),
-        (
-            "src/encounter_run/view.rs",
-            "conditions_tab",
-            &[Ban::RowKey(1)],
-        ),
-        ("src/encounter_run/view.rs", "record_tab", &[Ban::RowKey(1)]),
         ("src/encounter_run/view.rs", "roster", &[Ban::Layout(1)]),
         (
             "src/encounter_run/view.rs",
