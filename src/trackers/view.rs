@@ -660,6 +660,7 @@ fn due_rows(
                     .map(|((label, reason), table)| design::NoticeRoll {
                         key: egui::Id::new(("trackers_due_roll", &notice.id, table.key())),
                         width: roll_action(label).natural_width(ui),
+                        least: roll_action(label).least_width(ui),
                         reason: *reason,
                     })
                     .collect();
@@ -702,9 +703,12 @@ fn due_rows(
         design::draw_laid(ui, laid, |ui| {
             for (at, (label, reason)) in parts.rolls.iter().enumerate() {
                 let slot = design::notice_slot::FIRST_ROLL + at;
-                if ui.in_slot(slot, |ui| {
-                    roll_action(label).blocked(*reason).show(ui).clicked()
-                }) {
+                // A roll with no place (a row narrower than it can be) draws nothing.
+                if ui.slot(slot).width() > 0.5
+                    && ui.in_slot(slot, |ui| {
+                        roll_action(label).blocked(*reason).show(ui).clicked()
+                    })
+                {
                     let key = mark.tables[at].key();
                     *act = Some(Act::Roll(notice.clone(), key.to_owned()));
                 }
@@ -720,9 +724,12 @@ fn due_rows(
                     }
                 }
             }
-            ui.actions(design::notice_slot::FINISH, |ui| {
-                finish(ui, parts, notice, unticked, act);
-            });
+            // Finish actions with no place (a row narrower than they are) draw nothing.
+            if ui.slot(design::notice_slot::FINISH).width() > 0.5 {
+                ui.actions(design::notice_slot::FINISH, |ui| {
+                    finish(ui, parts, notice, unticked, act);
+                });
+            }
         });
     }
 }

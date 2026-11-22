@@ -1199,6 +1199,17 @@ impl<'a> Action<'a> {
         self.icon.map_or(0.0, |_| ICON_SLOT)
     }
 
+    /// The narrowest it paints (Astra's P2 on PR 897): its words cut to their least (one
+    /// character and an ellipsis), with its padding and icon, never narrower than it is tall. A
+    /// place narrower than this cannot hold it: `paint` keeps this width whatever its room.
+    pub fn least_width(&self, ui: &Ui) -> f32 {
+        let key_room = self
+            .key
+            .map_or(0.0, |key| number_width(ui, key, &Type::Small.font(ui)) + S);
+        let words = self.laid_words(ui, 0.0).size().x;
+        (words + 2.0 * self.padding() + self.icon_width() + key_room).max(self.height)
+    }
+
     /// What its natural width is made of (`natural_width`), apart from the fonts and the scale.
     fn width_facts(&self, state: &mut impl std::hash::Hasher) {
         use std::hash::Hash;
