@@ -2050,8 +2050,9 @@ impl Footer<'_> {
         };
         let body_from = paint_at(ui);
         let widgets_from = widget_count(ui);
-        // An edge (the footer, the session banner) ends the body: no registered row is cut.
-        let edge = held || banner_below(ui.ctx());
+        // An edge (the footer, the session banner, or the body's own bottom where the pane asks
+        // for it, `Messages::rows_end_whole`) ends the body: no registered row is cut.
+        let edge = held || banner_below(ui.ctx()) || self.whole_rows;
         // What a layer opened from the body may use: the body's room, inside the clip.
         let usable = visible.intersect(body_room);
         let mut hold_facts = None;
@@ -2801,14 +2802,18 @@ mod row_cut_tests {
     /// cut; and with no footer, the rows keep the plain cut of the scroll column. Rung 1 for a
     /// caller (the clip is the pane's; no caller sets one), this test for the part. Round 28, P2:
     /// the same in a `Body::Fills` pane for the rows of its scroll columns, two side by side with
-    /// rows of different heights: each column cuts at its own last whole row.
+    /// rows of different heights: each column cuts at its own last whole row. Layout step 11a
+    /// (SM5, AM16): with no footer line, a pane whose messages ask for it (`rows_end_whole`) cuts
+    /// at its own bottom as at a footer.
     #[test]
     fn a_footer_never_cuts_through_a_registered_row() {
         use crate::design::layout::ScrollColumn;
-        let mut hidden_by_the_cut = 0;
+        let (mut hidden_by_the_cut, mut hidden_when_asked) = (0, 0);
         let (mut columns_apart, mut plain_fills_cut) = (0, 0);
         for fills in [false, true] {
-            for message in [true, false] {
+            for (message, whole) in [(true, false), (false, false), (false, true)] {
+                // A whole-row cut: at the footer, or at the body's own bottom when asked.
+                let cuts = message || whole;
                 for height in (300..=360).step_by(7) {
                     let mut harness = egui_kittest::Harness::builder()
                         .with_size(vec2(600.0, height as f32))
@@ -2823,6 +2828,9 @@ mod row_cut_tests {
                                 messages.outcome(Outcome::Refused(crate::sentence!(
                                     "Save the draft first."
                                 )));
+                            }
+                            if whole {
+                                messages.rows_end_whole();
                             }
                             let rows = |ui: &mut Ui, name: &str, height: f32| {
                                 for at in 0..30 {
@@ -2921,19 +2929,23 @@ mod row_cut_tests {
                             pos2(view.right(), body_bottom),
                         ));
                         // With no footer the column keeps its plain cut (a row may show in part).
-                        for row in side.iter().filter(|_| message) {
+                        for row in side.iter().filter(|_| cuts) {
                             assert!(
                                 row.bottom() <= clip + 0.5 || row.top() >= clip - 0.5,
-                                "n12-cut: fills {fills}, message {message}, height {height}: row {row:?} cut at {clip}"
+                                "n12-cut: fills {fills}, message {message}, whole {whole}, height {height}: row {row:?} cut at {clip}"
                             );
                         }
-                        if message {
-                            hidden_by_the_cut += side
+                        if cuts {
+                            let hidden = side
                                 .iter()
                                 .filter(|row| {
                                     row.top() >= clip - 0.5 && row.top() < viewport.bottom()
                                 })
                                 .count();
+                            hidden_by_the_cut += hidden;
+                            if whole {
+                                hidden_when_asked += hidden;
+                            }
                             let hairline = output.shapes.iter().any(|clipped| {
                                 matches!(&clipped.shape, egui::Shape::LineSegment { points, .. }
                                     if (points[0].y - clip).abs() <= 1.0 && points[0].y == points[1].y
@@ -2941,7 +2953,7 @@ mod row_cut_tests {
                             });
                             assert!(
                                 hairline || clip >= viewport.bottom() - 0.5,
-                                "n12-hairline: fills {fills}, height {height}, cut {clip}"
+                                "n12-hairline: fills {fills}, whole {whole}, height {height}, cut {clip}"
                             );
                         } else if fills {
                             plain_fills_cut += side
@@ -2962,6 +2974,10 @@ mod row_cut_tests {
             }
         }
         assert!(hidden_by_the_cut > 0, "n12-reached: some height cut a row");
+        assert!(
+            hidden_when_asked > 0,
+            "n12-rows-end-whole: with no footer line, `rows_end_whole` cut a row at the body's bottom"
+        );
         assert!(
             columns_apart > 0,
             "n12-columns: each column cuts at its own last whole row"

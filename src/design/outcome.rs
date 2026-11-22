@@ -2684,6 +2684,8 @@ pub struct Messages<'f, A: 'static> {
     answered: bool,
     /// The newest act order of this footer's kept lines ([`refusal_rank`]).
     newest: Option<ResultOrder>,
+    /// The body ends at its last whole registered row at its own bottom too ([`Self::rows_end_whole`]).
+    rows_end_whole: bool,
 }
 
 /// One line of a [`Messages`] footer, as data.
@@ -2714,7 +2716,18 @@ impl<'f, A: 'static> Messages<'f, A> {
             frame: std::marker::PhantomData,
             answered: false,
             newest: None,
+            rows_end_whole: false,
         }
+    }
+
+    /// Layout step 11a (SM5, AM16): the body's own bottom is an edge as the footer is, so its
+    /// content never stops through a registered row there either: it ends at the last whole row,
+    /// with the hairline. For a body of short rows that goes on below its room with no footer
+    /// line (a sheet at the window's bottom). Without it only the footer and the session banner
+    /// cut at a whole row (N12).
+    pub fn rows_end_whole(&mut self) -> &mut Self {
+        self.rows_end_whole = true;
+        self
     }
 
     /// A reason or a notice, at the place its variant gives it in the footer's order.
@@ -2802,6 +2815,7 @@ impl<'f, A: 'static> Messages<'f, A> {
             width,
             mut lines,
             newest,
+            rows_end_whole,
             ..
         } = self;
         // Each Undo's short form (`undo_alone`) is the footer's plan's, worked out when it is
@@ -2818,7 +2832,9 @@ impl<'f, A: 'static> Messages<'f, A> {
             retained: None,
             plan: None,
         };
-        (Footer::typed(id, width, Box::new(typed)), sink)
+        let mut footer = Footer::typed(id, width, Box::new(typed));
+        footer.whole_rows = rows_end_whole;
+        (footer, sink)
     }
 
     /// The pane: the body (`add`, which may change any of the app), then the footer, placed by

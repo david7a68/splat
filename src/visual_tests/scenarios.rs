@@ -653,10 +653,22 @@ fn sheet_cut_texts(d: &Driver<'_>) -> Option<Vec<String>> {
     .filter_map(|words| d.painted_rect_in(words, egui::Rect::EVERYTHING))
     .map(|rect| rect.left())
     .reduce(f32::min)?;
-    Some(d.cut_texts_in(egui::Rect::from_min_max(
+    // Only a cut from below: a sheet scrolled down shows its top row part-way, as any scroll does.
+    let area = egui::Rect::from_min_max(
         egui::pos2(left - crate::design::S, 0.0),
         egui::pos2(width, height),
-    )))
+    );
+    let mut cut = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let bounds = text.visual_bounding_rect();
+        if area.intersects(bounds)
+            && clip.intersects(bounds)
+            && bounds.bottom() > clip.bottom() + 1.0
+        {
+            cut.push(text.galley.job.text.clone());
+        }
+    });
+    Some(cut)
 }
 
 fn sheet_rows_whole(d: &mut Driver<'_>, id: &str) {
