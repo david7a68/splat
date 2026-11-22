@@ -2229,6 +2229,7 @@ mod tests {
             let context = egui::Context::default();
             design::theme::install(&context);
             let mut output = None;
+            let mut first = None;
             for frame in 0..30 {
                 let events = if frame == 2 {
                     vec![
@@ -2275,6 +2276,7 @@ mod tests {
                             && words.iter().any(|row| row.contains("Spell")),
                         "table at {width}px breaks words: {words:?}"
                     );
+                    first = Some(rendered.clone());
                 }
                 output = Some(rendered);
             }
@@ -2299,19 +2301,20 @@ mod tests {
             );
             // Layout PR 10c (M0406): the sideways part's solid bar has its own lane below the last
             // row, so it never covers the row's text (the reader adds no space for it).
-            let row = output
+            // Before the sideways scroll, the last row's tallest cell (its words wrap) is in view.
+            let first = first.expect("the first frame is kept");
+            let row = first
                 .shapes
                 .iter()
                 .find_map(|shape| match &shape.shape {
-                    // The last row's label, in the table's fixed first column (always painted).
-                    egui::Shape::Text(text) if text.galley.job.text == "5" => {
+                    egui::Shape::Text(text) if text.galley.job.text == "Memorize Spell" => {
                         Some(text.pos.y + text.galley.size().y)
                     }
                     _ => None,
                 })
                 .expect("the last row is painted");
             let scroll = design::theme::scroll_style();
-            let bars: Vec<egui::Rect> = output
+            let bars: Vec<egui::Rect> = first
                 .shapes
                 .iter()
                 .filter_map(|shape| match &shape.shape {
