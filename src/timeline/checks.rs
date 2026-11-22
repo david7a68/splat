@@ -544,32 +544,13 @@ fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &m
         let no_checks = Action::quiet("No checks")
             .blocked_if(results, "Clear the results first.")
             .show(ui);
-        // Where the choice paints its words: its rect, in by the quiet action's padding `S`.
-        let words_left = no_checks.rect.left() + design::S;
         if no_checks.clicked() {
             *act = Some(Act::Choose(None));
             ui.close();
         }
         if results {
-            // The reason is a note under its choice (M-T0.7): it starts at the choice's measured
-            // words and ends `S` before the menu's edge, in a column that does not justify its
-            // words as the menu's own layout does.
-            let room = ui.available_rect_before_wrap();
-            let column = egui::Rect::from_min_max(
-                egui::pos2(words_left.max(room.left()), room.top()),
-                egui::pos2(room.right() - design::S, room.bottom()),
-            );
-            let note = ui
-                .scope_builder(
-                    egui::UiBuilder::new()
-                        .max_rect(column)
-                        .layout(egui::Layout::top_down(egui::Align::Min)),
-                    |ui| design::blocked_reason(ui, Some("Clear the results first.")),
-                )
-                .response
-                .rect;
-            // The menu takes its width from what it holds: the note keeps the padding after it.
-            ui.expand_to_include_x(note.right() + design::S);
+            // A note under its choice, at its words (M-P0.26).
+            design::choice_note(ui, false, Some("Clear the results first."));
         }
     });
     let Some(table) = table else {

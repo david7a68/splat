@@ -598,6 +598,49 @@ pub fn bring_into_view(ui: &Ui, rect: Rect, why: JumpTo) -> bool {
     true
 }
 
+/// Whether the DM's own input scrolls or holds the `ScrollColumn` that holds `ui` in this pass
+/// (review of PR 770): a wheel over it, a press or a drag that started on its content or its
+/// bar, or a scroll key. A retry that would move the column by itself (a row menu's bring-back
+/// after a resize, M0259) ends on it, so the column stays where the DM leaves it. Outside a
+/// `ScrollColumn` it is false.
+pub fn dm_scrolls(ui: &Ui) -> bool {
+    let Some((_, region)) = owning_region(ui) else {
+        return false;
+    };
+    // The content's view and the scroll bar's lane right of it.
+    let column = Rect::from_min_max(
+        region.view.min,
+        egui::pos2(
+            region.view.right() + super::layout::lane_width(),
+            region.view.bottom(),
+        ),
+    );
+    ui.input(|input| {
+        let over = input
+            .pointer
+            .hover_pos()
+            .is_some_and(|at| column.contains(at));
+        let wheel = over
+            && (input.raw_scroll_delta != Vec2::ZERO || input.smooth_scroll_delta != Vec2::ZERO);
+        let held = input.pointer.any_down()
+            && input
+                .pointer
+                .press_origin()
+                .is_some_and(|at| column.contains(at));
+        let keys = [
+            egui::Key::PageUp,
+            egui::Key::PageDown,
+            egui::Key::Home,
+            egui::Key::End,
+            egui::Key::ArrowUp,
+            egui::Key::ArrowDown,
+        ]
+        .into_iter()
+        .any(|key| input.key_pressed(key));
+        wheel || held || keys
+    })
+}
+
 /// Queue the column's offset `by` points from where it is now, for its next pass.
 fn queue_jump(ui: &Ui, region: &Region, by: f32, why: JumpTo) {
     let to = (region.offset + by).max(0.0);
@@ -845,6 +888,8 @@ mod tests {
         plain: bool,
         /// Ask the least scroll that shows the target (`bring_into_view`) in this pass.
         least: bool,
+        /// What `dm_scrolls` said in the target's column in the last pass.
+        scrolled: Option<bool>,
         /// A typed jump to the target's top (`jump`), asked once.
         heading: bool,
     }
@@ -880,6 +925,7 @@ mod tests {
                 after: 0.0,
                 plain: false,
                 least: false,
+                scrolled: None,
                 heading: false,
             }
         }
@@ -909,6 +955,7 @@ mod tests {
             if std::mem::take(&mut page.least) {
                 bring_into_view(ui, rect, JumpTo::OpenMenuControl);
             }
+            page.scrolled = Some(dm_scrolls(ui));
             if page.focus_inside == Some(true)
                 && let Some(field) = field
             {
@@ -1461,6 +1508,49 @@ mod tests {
             top(&h, "Target top")
         );
         h.state_mut().after = 0.0;
+        // Review of PR 770: the DM's own scroll of the column, here a press on its bar and a
+        // drag of it, is seen (`dm_scrolls`) while it lasts and not after it, so a retry that
+        // would move the column (the row menu's bring-back) ends on it.
+        let bar = egui::pos2(WIDTH - 8.0 - super::super::lane_width() / 2.0, 40.0);
+        let press = |pressed: bool, pos: egui::Pos2| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        h.input_mut().events.push(egui::Event::PointerMoved(bar));
+        h.step();
+        assert_eq!(
+            h.state().scrolled,
+            Some(false),
+            "m-p0-dm-scrolls: no input yet"
+        );
+        h.input_mut().events.push(press(true, bar));
+        h.step();
+        assert_eq!(
+            h.state().scrolled,
+            Some(true),
+            "m-p0-dm-scrolls: a press on the column's bar"
+        );
+        h.input_mut()
+            .events
+            .push(egui::Event::PointerMoved(bar + egui::vec2(0.0, 20.0)));
+        h.step();
+        assert_eq!(
+            h.state().scrolled,
+            Some(true),
+            "m-p0-dm-scrolls: the bar's drag"
+        );
+        h.input_mut()
+            .events
+            .push(press(false, bar + egui::vec2(0.0, 20.0)));
+        h.step();
+        h.step();
+        assert_eq!(
+            h.state().scrolled,
+            Some(false),
+            "m-p0-dm-scrolls: after the release"
+        );
         // Layout PR 10d: a jump asked while the DM drags the column's content (the pointer still
         // down, moving it) is dropped: the DM's scroll wins, and the column moves only with the
         // drag.

@@ -1347,7 +1347,7 @@ impl TimelinePage {
             .and_then(|id| book.events.iter().position(|event| event.id == *id));
         checks::settle_length(book, index);
         let Some(index) = index else {
-            ui.label(Type::Heading.rich(ui, "An event").color(c.text));
+            design::heading(ui, design::Heading::Panel("An event"));
             ui.add(
                 egui::Label::new(
                     Type::Small
@@ -1412,86 +1412,45 @@ impl TimelinePage {
         }
         let event = &book.events[index];
         let title = event.label(days[index]);
-        let icon_only = event.kind == Kind::Day || event.own_title().is_none();
         let kind = header_kind(event);
-        let needed = design::number_width(ui, &title, &Type::Heading.font(ui))
-            + design::number_width(ui, &kind, &Type::Small.font(ui))
-            + design::number_width(ui, "Saving blocked", &Type::Small.font(ui))
-            + design::number_width(ui, icons::OK, &Type::Small.font(ui))
-            + Action::secondary("Copy link")
-                .icon(icons::COPY)
-                .density(Density::Read)
-                .natural_width(ui)
-            + Density::Read.control()
-            + design::S * 5.0;
-        let title_line = |ui: &mut egui::Ui| {
-            let kind_label = ui.label(Type::Small.rich(ui, &kind).color(c.muted));
-            if icon_only {
-                design::named(ui, &kind_label, event.kind.word());
-                kind_label.on_hover_text(event.kind.word());
-            }
-            let shown =
-                design::words_that_fit(ui, &title, &Type::Heading.font(ui), ui.available_width());
-            ui.label(Type::Heading.rich(ui, shown).color(c.text))
-                .on_hover_text(&title);
+        // M0558 (M-P0.26): the header is a title line: the kind before the title (its icon alone
+        // for a day or an untitled event, named by its word), Copy link, the save status in the
+        // room of the widest of its four words, and the `⋯` menu at the line's right end.
+        let saving = [
+            Status {
+                icon: icons::OK,
+                word: "Saved",
+                color: c.document.clean,
+            },
+            Status {
+                icon: icons::BUSY,
+                word: "Saving…",
+                color: c.muted,
+            },
+            Status {
+                icon: icons::WARN,
+                word: "Unsaved",
+                color: c.document.external,
+            },
+            Status {
+                icon: icons::WARN,
+                word: "Saving blocked",
+                color: c.document.external,
+            },
+        ];
+        let now = if blocked.is_some() {
+            saving[if unsaved { 2 } else { 3 }]
+        } else if unsaved {
+            saving[1]
+        } else {
+            saving[0]
         };
-        let mut actions = |ui: &mut egui::Ui| {
-            let (icon, word, color) = if blocked.is_some() {
-                (
-                    icons::WARN,
-                    if unsaved { "Unsaved" } else { "Saving blocked" },
-                    c.document.external,
-                )
-            } else if unsaved {
-                (icons::BUSY, "Saving…", c.muted)
-            } else {
-                (icons::OK, "Saved", c.document.clean)
-            };
-
-            let more = design::icon_button(
-                ui,
-                icons::EXPAND,
-                &format!("More actions for {}", event.label(days[index])),
-            );
-            design::menu_popup(ui, &more).show(|ui| {
-                if checks::offered(event, tables)
-                    && Action::quiet("Roll for encounters").show(ui).clicked()
-                {
-                    checks_act = Some(checks::Act::Start);
-                    ui.close();
-                }
-                let open_run = event.run.is_some() && event.run == self.open_run;
-                removed = Action::quiet("Remove")
-                    .name("Remove this event")
-                    .blocked_if(open_run, "This run is open. Close it first.")
-                    .show(ui)
-                    .clicked();
-                if open_run {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "This run is open. Close it first.")
-                            .color(c.muted),
-                    );
-                }
-                if removed {
-                    ui.close();
-                }
-            });
-            let copied = self
-                .copied
-                .as_ref()
-                .is_some_and(|(copied, _)| *copied == id);
-            if Action::secondary(if copied { "Copied" } else { "Copy link" })
-                .icon(if copied { icons::OK } else { icons::COPY })
-                .density(Density::Read)
-                .show(ui)
-                .clicked()
-            {
-                ui.ctx().copy_text(link.clone());
-                self.copied = Some((id.clone(), Instant::now()));
-            }
-            design::status(ui, design::Status { icon, word, color });
-        };
+        let copied = self
+            .copied
+            .as_ref()
+            .is_some_and(|(copied, _)| *copied == id);
+        let copy = if copied { COPIED } else { COPY_LINK };
+        let more = format!("More actions for {}", event.label(days[index]));
         let width_id = ui
             .id()
             .with(("timeline_form_width", ui.available_width().to_bits()));
@@ -1502,28 +1461,52 @@ impl TimelinePage {
                 (ui.available_width() - ui.spacing().scroll.allocated_width())
                     .min(design::FORM_WIDTH)
             });
+        let mut copy_pressed = false;
         ui.allocate_ui_with_layout(
             egui::vec2(header_width, 0.0),
             egui::Layout::top_down(egui::Align::Min),
             |ui| {
-                if needed <= ui.available_width() {
-                    ui.horizontal(|ui| {
-                        title_line(ui);
-                        ui.with_layout(
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            &mut actions,
+                let shown = design::TitleLine::new(&title)
+                    .role(design::TitleType::Panel)
+                    .kind(&kind, event.kind.word())
+                    .actions_at_end()
+                    .action(design::TitleAction::secondary(copy).icon(if copied {
+                        icons::OK
+                    } else {
+                        icons::COPY
+                    }))
+                    .state(now, &saving)
+                    .more(&more, |ui| {
+                        if checks::offered(event, tables)
+                            && Action::quiet("Roll for encounters").show(ui).clicked()
+                        {
+                            checks_act = Some(checks::Act::Start);
+                            ui.close();
+                        }
+                        let open_run = event.run.is_some() && event.run == self.open_run;
+                        removed = Action::quiet("Remove")
+                            .name("Remove this event")
+                            .blocked_if(open_run, "This run is open. Close it first.")
+                            .show(ui)
+                            .clicked();
+                        // A note under its choice, at its words (M-P0.26).
+                        design::choice_note(
+                            ui,
+                            false,
+                            open_run.then_some("This run is open. Close it first."),
                         );
-                    });
-                } else {
-                    ui.horizontal(title_line);
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), Density::Read.control()),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        actions,
-                    );
-                }
+                        if removed {
+                            ui.close();
+                        }
+                    })
+                    .show(ui);
+                copy_pressed = shown.clicked(copy);
             },
         );
+        if copy_pressed {
+            ui.ctx().copy_text(link.clone());
+            self.copied = Some((id.clone(), Instant::now()));
+        }
         if let Some(reason) = blocked {
             ui.label(Type::Small.rich(ui, reason).color(c.muted));
         }
@@ -2130,6 +2113,10 @@ fn second_line(
     job.wrap.break_anywhere = true;
     ui.fonts_mut(|fonts| fonts.layout_job(job))
 }
+
+/// The Copy link action's words, before and after a copy (M0558).
+const COPY_LINK: design::Word = crate::word!("Copy link");
+const COPIED: design::Word = crate::word!("Copied");
 
 fn header_kind(event: &Event) -> String {
     if event.kind == Kind::Day || event.own_title().is_none() {
