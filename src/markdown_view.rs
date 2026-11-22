@@ -3532,6 +3532,9 @@ mod tests {
                                 },
                             );
                         });
+                    // A request lasts one draw, as World's reader makes it: a jump asked in the
+                    // draw that prepares a document lands then, or never.
+                    want_heading(ui.ctx(), None);
                 },
                 1,
             );
