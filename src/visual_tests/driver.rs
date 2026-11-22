@@ -1152,6 +1152,20 @@ impl<'a> Driver<'a> {
             .unwrap_or_default()
     }
 
+    /// The whole name of a Timeline event's Undo on screen (M-N1.7: `Undo add <label>`,
+    /// `Undo remove <label>`, on the plan as on Timeline), never a scene's `Undo add scene`.
+    pub fn event_undo(&self, verb: &str) -> Option<String> {
+        let start = format!("Undo {verb} ");
+        self.nodes()
+            .into_iter()
+            .find(|node| {
+                node.name.starts_with(&start)
+                    && node.name != "Undo add scene"
+                    && Self::is_control(node)
+            })
+            .map(|node| node.name)
+    }
+
     pub fn has_containing(&self, name: &str) -> bool {
         self.nodes().iter().any(|node| node.name.contains(name))
     }

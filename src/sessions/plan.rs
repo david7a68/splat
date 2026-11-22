@@ -5733,7 +5733,10 @@ impl Sessions {
                 .then(|| timeline::fights_that_keep_hp(&book.events, session, plan.saved_runs));
             let words = as_sentence(&added_message(&just.label, just.to.as_deref(), restores));
             Said::new(words)
-                .undo(UndoStep::verb(Verb::Add).pressed_as(pressed(FooterAct::UndoAdd)))
+                .undo(
+                    UndoStep::of(Verb::Add, just.label.as_str())
+                        .pressed_as(pressed(FooterAct::UndoAdd)),
+                )
                 .into()
         });
         if let Ok(Some(line)) = self.added.present(frame, projection, &key, inputs) {
@@ -5742,16 +5745,15 @@ impl Sessions {
             && let Some(shown) = book.results.removal.get(&book.file())
         {
             let days = timeline::day_numbers(&book.events);
-            let words = as_sentence(&removed_event_words(
-                book,
-                session,
-                &days,
-                shown.value().label(),
-                planned,
-            ));
+            let label = shown.value().label().to_owned();
+            let words = as_sentence(&removed_event_words(book, session, &days, &label, planned));
+            // M-N1.7: the Undo names the event, as Timeline's line of the same removal does.
             messages.kept(shown.outcome(frame, |_| {
                 Said::new(words)
-                    .undo(UndoStep::verb(Verb::Remove).pressed_as(pressed(FooterAct::UndoRemove)))
+                    .undo(
+                        UndoStep::of(Verb::Remove, label)
+                            .pressed_as(pressed(FooterAct::UndoRemove)),
+                    )
                     .into()
             }));
         }
@@ -8160,7 +8162,10 @@ mod tests {
                 .is_some()
         };
         let rest_stands = |harness: &egui_kittest::Harness<'_, State>| {
-            harness.query_by_label("Undo add").is_some()
+            harness
+                .query_all_by_label_contains("Undo add ")
+                .next()
+                .is_some()
                 && harness
                     .query_all_by_label_contains("Long rest added.")
                     .next()
@@ -8726,7 +8731,9 @@ mod tests {
         }
         harness.run_steps(4);
         assert!(
-            harness.query_by_label("Undo add").is_some(),
+            harness
+                .query_by_label(&format!("Undo add {label}"))
+                .is_some(),
             "the footer holds a result"
         );
         assert!(
@@ -8752,7 +8759,9 @@ mod tests {
         let start = crate::design::results::projection_work();
         let stands = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>| {
             (
-                harness.query_by_label("Undo add").is_some(),
+                harness
+                    .query_by_label(&format!("Undo add {label}"))
+                    .is_some(),
                 harness.query_all_by_label(&words).next().is_some(),
             )
         };

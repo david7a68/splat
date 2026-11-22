@@ -1200,13 +1200,11 @@ impl TimelinePage {
         if let Some(shown) = book.results.removal.get(&book.file()) {
             // The removal keeps its own count, so a campaign switch and back keeps the warning.
             let mentions = shown.value().mentions();
-            let words = as_sentence(&timeline_removal_words(
-                book,
-                shown.value().label(),
-                mentions,
-            ));
+            let label = shown.value().label().to_owned();
+            let words = as_sentence(&timeline_removal_words(book, &label, mentions));
             messages.kept(shown.outcome(frame, |_| {
-                let undo = UndoStep::verb(Verb::Remove).pressed_as(ListAct::UndoRemove);
+                // M-N1.7: the Undo names the event, as the Session plan's line of it does.
+                let undo = UndoStep::of(Verb::Remove, label).pressed_as(ListAct::UndoRemove);
                 // A finished change has the success tone; links left to it make it a warning.
                 if mentions > 0 {
                     KeptOutcome::Fault(FaultMessage::new(&FileFault::Linked(words)), undo)
@@ -1241,7 +1239,7 @@ impl TimelinePage {
                 // Timeline lists every session, so its result names only the event.
                 let words = as_sentence(&added_message(&label, None, restores));
                 Said::new(words)
-                    .undo(UndoStep::verb(Verb::Add).pressed_as(ListAct::UndoAdd))
+                    .undo(UndoStep::of(Verb::Add, label.as_str()).pressed_as(ListAct::UndoAdd))
                     .into()
             });
         if let Ok(Some(line)) = self.added.present(frame, projection, &file, inputs) {
@@ -2262,7 +2260,10 @@ mod tests {
         };
         let shows = |harness: &egui_kittest::Harness<'_, State>| {
             (
-                harness.query_by_label("Undo add").is_some(),
+                harness
+                    .query_all_by_label_contains("Undo add ")
+                    .next()
+                    .is_some(),
                 harness
                     .query_all_by_label_contains(" added.")
                     .next()
@@ -2826,7 +2827,11 @@ mod tests {
         }
         harness.run_steps(3);
         assert!(warned(&harness), "A's warning came back with A's removal");
-        harness.get_by_label("Undo remove").click();
+        harness
+            .query_all_by_label_contains("Undo remove ")
+            .next()
+            .expect("the removal\u{2019}s Undo")
+            .click();
         harness.run_steps(3);
         assert!(
             harness.state().1.events.iter().any(|event| event.id == id),
