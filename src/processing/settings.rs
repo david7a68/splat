@@ -225,6 +225,9 @@ pub struct ProcessingSettings {
     /// A recording is live, so a new input cannot apply to it.
     pub recording_now: bool,
     pub focus_input: bool,
+    /// The Input took the focus from `focus_input`: while it keeps it, the Recording heading
+    /// belongs to its field's reveal. Ends when the Input loses the focus.
+    input_heading: bool,
     pub focus_speech_key: bool,
     started: bool,
     load_error: Option<String>,
@@ -253,6 +256,7 @@ impl Default for ProcessingSettings {
             config: Config::default(),
             recording_now: false,
             focus_input: false,
+            input_heading: false,
             focus_speech_key: false,
             started: false,
             load_error: None,
@@ -629,7 +633,7 @@ impl ProcessingSettings {
                         .clone()
                         .filter(|name| !inputs.iter().any(|input| input.name == *name));
                     let mut changed = false;
-                    let mut focused = false;
+                    let mut focused = None;
                     design::small_field(ui, "Input", None, None, |ui| {
                         let shown =
                             design::Dropdown::new(INPUT, "Recording input")
@@ -645,14 +649,20 @@ impl ProcessingSettings {
                         changed = shown.changed;
                         if std::mem::take(&mut self.focus_input) {
                             shown.response.request_focus();
-                            focused = true;
+                            self.input_heading = true;
                         }
+                        focused = Some(shown.response.has_focus());
                     });
                     // Opened from elsewhere (a session's "Choose input"): the input takes the
                     // focus, and the pane's one focus arbiter brings it into view with its
                     // field and the Recording heading above it (layout PR 10c), no scroll of its
-                    // own.
-                    if focused {
+                    // own. The heading stays part of the field's reveal in every pass while the
+                    // Input keeps that focus (a click that opened the tab makes the reveal wait
+                    // for its release).
+                    if focused == Some(false) {
+                        self.input_heading = false;
+                    }
+                    if self.input_heading {
                         design::pane::reveal_with_focus(ui, heading.rect);
                     }
                     if changed {
