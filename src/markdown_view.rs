@@ -3569,12 +3569,20 @@ mod tests {
             if round == 1 {
                 // Away from the heading again, so the second jump has to move the column; and a
                 // new revision, so the jump comes in the frame the document is prepared again.
+                harness.hover_at(egui::pos2(240.0, 160.0));
                 harness.event(egui::Event::MouseWheel {
                     unit: egui::MouseWheelUnit::Point,
                     delta: egui::vec2(0.0, 400.0),
                     modifiers: egui::Modifiers::NONE,
                 });
                 harness.run_steps(10);
+                harness.remove_cursor();
+                harness.run_steps(2);
+                let away = heading(&harness);
+                assert!(
+                    away > design::XL,
+                    "9b-R1b-jump-setup: the wheel took the heading away from the top ({away})"
+                );
                 *harness.state_mut() = 2;
             }
             want_heading(&harness.ctx, Some("The ford".into()));
