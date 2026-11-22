@@ -218,6 +218,15 @@ impl Settings {
         self.account_epoch += 1;
     }
 
+    /// An account error that is not a failed Connect (a failed removal, restore or worker), so
+    /// that it stands in the account's footer, as `request` sets it; `None` ends it.
+    #[cfg(test)]
+    pub fn simulate_error(&mut self, error: Option<&str>) {
+        self.error = error.map(str::to_owned);
+        self.connect_failed = false;
+        self.account_epoch += 1;
+    }
+
     fn account(&self) -> Account {
         #[cfg(test)]
         if let Some(account) = self.simulated {

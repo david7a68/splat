@@ -612,6 +612,9 @@ impl EditorRegion<'_> {
         );
         editor.frame = frame_rect;
         editor.view = view;
+        // The pane's focus arbiter reveals the fixed frame, not the text edit (as tall as all its
+        // text): a click into a whole frame moves nothing.
+        super::components::reveal_as(ui, editor.response.id, frame_rect);
         // The text is clipped to the part of it in view: a caller that paints over the text
         // from outside the scroll (a rule, a mark) stays inside the frame's view.
         editor.text_clip_rect = editor.text_clip_rect.intersect(view);
@@ -967,24 +970,36 @@ fn widget_count(ui: &Ui) -> usize {
 /// help, a reason comes, the content above it moves it): it then scrolls only when the field is
 /// not whole in view. The DM's own wheel moves neither the room nor the field's place in the
 /// content, so it is never pulled back. Only a control that the body added (`widgets`, on the
-/// pane's layer) is scrolled to. A focus that comes with a pointer press, hold or release on the
-/// focused control itself is not, so the pressed control never moves under the pointer; a focus
-/// that a press gave to another control (a drop-down's chosen row gives it back to its control)
-/// waits for the release, and a block that is not whole then comes into view.
+/// pane's layer) is scrolled to. Nothing moves while the pointer presses, holds or releases; a
+/// focus that came with a press and whose block is cut waits for the release, and the block then
+/// comes whole into view (a click on a cut field, a drop-down's chosen row). An editor viewport's
+/// block is its fixed frame (`components::reveal_as`), not its text.
 fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect, visible: Rect) {
-    let focused = ui.ctx().memory(|memory| memory.focused());
     let seen = id.with("seen_focus");
     let layer = ui.layer_id();
-    // The focused control's own rect, and its field's whole block, in this pass.
-    let own = focused.and_then(|focused| {
+    // A control of this body and its rect in this pass, if it is one.
+    let in_body = |control: Id| {
         ui.ctx().viewport(|viewport| {
             let widgets_now = &viewport.this_pass.widgets;
-            let (at_layer, at) = widgets_now.order(focused)?;
+            let (at_layer, at) = widgets_now.order(control)?;
             (at_layer == layer && widgets.contains(&at))
-                .then(|| widgets_now.get(focused).map(|widget| widget.rect))
+                .then(|| widgets_now.get(control).map(|widget| widget.rect))
                 .flatten()
         })
-    });
+    };
+    // The subject: the focused control of this body, else the body's control whose list is
+    // open (the keyboard is on the list's rows; layout PR 10b).
+    let focused = ui.ctx().memory(|memory| memory.focused());
+    let (focused, own) =
+        match focused.and_then(|focused| in_body(focused).map(|own| (focused, own))) {
+            Some((focused, own)) => (Some(focused), Some(own)),
+            None => match super::components::open_owner(ui.ctx())
+                .and_then(|owner| in_body(owner).map(|own| (owner, own)))
+            {
+                Some((owner, own)) => (Some(owner), Some(own)),
+                None => (focused, None),
+            },
+        };
     let block = focused
         .zip(own)
         .map(|(focused, rect)| super::components::reveal_rect(ui.ctx(), focused, rect));
@@ -1009,13 +1024,14 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
         let pointer = &input.pointer;
         pointer.any_down() || pointer.any_pressed() || pointer.any_released()
     });
-    // A press does not scroll its own control away under the pointer: a control the pointer is
-    // on keeps its place. A focus that a press gave to ANOTHER control (a drop-down's chosen row
-    // gives it back to its control) waits, unseen, for the pointer's release while its block is
-    // not whole, and then comes whole above the footer (I9).
-    let under = ui.input(|input| input.pointer.latest_pos());
-    let given = own.is_some_and(|own| under.is_none_or(|at| !own.contains(at)));
-    if pointer && given && block.is_some_and(|block| !visible.contains_rect(block)) {
+    // Nothing moves while the pointer presses, holds or releases. A focused block that is not
+    // whole and fits the view waits, unseen, for the pointer's release, and then comes whole
+    // above the footer (I9, layout PR 10b): a click on a field whose caption or control is cut,
+    // and a drop-down's chosen row that gives the focus back to its control. A block taller
+    // than the view (an editor's text) is never pulled to its top by a click.
+    let cut = block
+        .is_some_and(|block| !visible.contains_rect(block) && block.height() <= visible.height());
+    if pointer && cut {
         return;
     }
     ui.ctx()
@@ -2407,6 +2423,8 @@ mod hold_tests {
         help: bool,
         /// A field near the top, under `Next control`.
         near: bool,
+        /// A text field under it, with its words.
+        clip: Option<String>,
     }
 
     impl State {
@@ -2422,6 +2440,7 @@ mod hold_tests {
                 gone: false,
                 help: false,
                 near: false,
+                clip: None,
             }
         }
     }
@@ -2464,6 +2483,18 @@ mod hold_tests {
                 crate::design::small_field(ui, "Near caption", None, None, |ui| {
                     let _ = ui.button("Near control");
                 });
+            }
+            if let Some(text) = state.clip.as_mut() {
+                const CLIP: crate::design::layout::FieldName =
+                    crate::field_id!("hold_test_clip_text");
+                let _ = crate::design::labelled_field(
+                    ui,
+                    CLIP.once(crate::design::layout::Once::Example),
+                    "Clip caption",
+                    text,
+                    None,
+                    None,
+                );
             }
             for row in 0..state.below {
                 ui.label(format!("Row below {row}"));
@@ -2585,6 +2616,47 @@ mod hold_tests {
             caption.top() >= viewport.top() - 0.5 && control.bottom() <= viewport.bottom() + 0.5,
             "i9-caption-up: the field above the view comes whole, caption {caption:?} and control \
              {control:?}, into the view {viewport:?}"
+        );
+        // Layout PR 10b: a direct click on a text field whose caption the view's edge cuts. At
+        // the release, its whole field comes into view, caption included.
+        h.state_mut().clip = Some("Words".to_owned());
+        h.run_steps(2);
+        let caption = |h: &Harness<'_, State>| {
+            h.get_by_role_and_label(egui::accesskit::Role::Label, "Clip caption")
+                .rect()
+        };
+        let viewport = pane_records(&h.ctx)
+            .into_iter()
+            .next()
+            .unwrap()
+            .viewport()
+            .unwrap();
+        let top = caption(&h).bottom() - viewport.top() + 2.0;
+        h.hover_at(viewport.center());
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -top),
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(4);
+        let (cut, field) = (
+            caption(&h),
+            h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Clip caption")
+                .rect(),
+        );
+        assert!(
+            cut.top() < viewport.top() - 0.5 && field.bottom() <= viewport.bottom(),
+            "i9-click-setup: the caption {cut:?} is cut at the view's top {viewport:?}, the field \
+             {field:?} is in view"
+        );
+        h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Clip caption")
+            .click();
+        h.run_steps(4);
+        let caption = caption(&h);
+        assert!(
+            caption.top() >= viewport.top() - 0.5,
+            "i9-click: after a click on the field, its caption {caption:?} is whole in the view \
+             {viewport:?}"
         );
     }
 

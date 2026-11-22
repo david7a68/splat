@@ -1232,6 +1232,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "cause", &[Ban::Words]),
         ("src/encounters.rs", "kept_outcome", &[Ban::Words]),
         ("src/encounters.rs", "outcome_words", &[Ban::Words]),
+        // Ruling M20 (M0178): the duplicate repair in the search results; it replaces an
+        // untyped `design::message_with_actions`.
+        (
+            "src/encounters.rs",
+            "duplicate_creature_results",
+            &[Ban::Body],
+        ),
         // Ruling M20 (M0192): the page's placeholder while another campaign's encounter is open;
         // it replaces an untyped `design::message`.
         ("src/encounters.rs", "show_page", &[Ban::Body]),
@@ -1384,9 +1391,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
         ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
-        // M20 (M-W0.4, M-W0.5): the index's warnings on this note and the renamed-file warning
-        // with its two repairs, in the reader's body (were `message`, `message_with_actions`).
-        ("src/world.rs", "draw", &[Ban::Extras(3), Ban::Body]),
+        // M20 (M-W0.4, M-W0.5, M0178): the index's warnings on this note, the renamed-file
+        // warning with its two repairs and the duplicate repair, in the reader's body (were
+        // `message`, `message_with_actions`).
+        ("src/world.rs", "draw", &[Ban::Extras(2), Ban::Body]),
         // M20 (M-W0.4): an unread value's warning (was `message`).
         ("src/world.rs", "unread_warning", &[Ban::Body]),
         ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
@@ -1695,7 +1703,6 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/design/outcome.rs", 7),
             ("src/encounters.rs", 4),
-            ("src/sessions/page.rs", 6),
             ("src/sessions/plan.rs", 2),
             ("src/timeline/page.rs", 3),
             ("src/timeline/test_support.rs", 2),
@@ -1703,14 +1710,11 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/world/repair.rs", 1),
         ],
     ),
+    // M-S0.3: a tracker's `min` and every name rolled (M13), in `trackers::refusal`.
     (
         "Refusal::at_limit(",
         "A refusal ends at its cause only at a limit the DM cannot change: a tracker's `min`, every name rolled (M13), or the run rule after the fight's encounter was deleted (M15). A fault in the tracker rules, and every other cause, gets its next step: `Refusal::new`.",
-        &[
-            ("src/design/results/refusal.rs", 5),
-            // M-S0.3: a tracker's `min` and every name rolled (M13), in `trackers::refusal`.
-            ("src/trackers.rs", 2),
-        ],
+        &[("src/design/results/refusal.rs", 3), ("src/trackers.rs", 2)],
     ),
 ];
 
