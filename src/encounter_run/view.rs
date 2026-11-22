@@ -3275,53 +3275,51 @@ impl Run {
     fn prep_notes(&mut self, ui: &mut egui::Ui) {
         let (prep, technical) = self.prep();
         let mut pressed = false;
-        {
-            if prep.is_empty() {
-                // Round 30 AP1: a sentence that names an act offers it. The run's own
-                // record of its encounter decides, not Lookup's index, which can lag behind
-                // a fight made a moment ago. With no saved encounter, it says why.
-                match self.source {
-                    Some(id) => design::empty_state(
-                        ui,
-                        icons::SESSIONS,
-                        "No prep notes yet",
-                        "Add read-aloud text or notes when you edit the encounter.",
-                        |ui| {
-                            if Action::quiet("Edit encounter")
-                                .line_start()
-                                .show(ui)
-                                .clicked()
-                            {
-                                pressed = true;
-                                ui.ctx().data_mut(|data| {
-                                    data.insert_temp(egui::Id::new("edit_run_encounter"), id);
-                                });
-                            }
-                            // R35: why the press did not open it, under the action, until
-                            // the next press. The run owns it and ends with the run.
-                            if let Some(refusal) = &self.prep_refusal {
-                                design::blocked_reason(ui, Some(refusal.reason()));
-                            }
-                        },
-                    ),
-                    None => design::empty_state(
-                        ui,
-                        icons::SESSIONS,
-                        "No prep notes",
-                        "This fight did not start from a saved encounter, so it has no prep notes.",
-                        |_| {},
-                    ),
-                }
-            } else {
-                design::heading(ui, design::Heading::Label(READ_ALOUD));
-                style::markdown(ui, prep);
+        if prep.is_empty() {
+            // Round 30 AP1: a sentence that names an act offers it. The run's own
+            // record of its encounter decides, not Lookup's index, which can lag behind
+            // a fight made a moment ago. With no saved encounter, it says why.
+            match self.source {
+                Some(id) => design::empty_state(
+                    ui,
+                    icons::SESSIONS,
+                    "No prep notes yet",
+                    "Add read-aloud text or notes when you edit the encounter.",
+                    |ui| {
+                        if Action::quiet("Edit encounter")
+                            .line_start()
+                            .show(ui)
+                            .clicked()
+                        {
+                            pressed = true;
+                            ui.ctx().data_mut(|data| {
+                                data.insert_temp(egui::Id::new("edit_run_encounter"), id);
+                            });
+                        }
+                        // R35: why the press did not open it, under the action, until
+                        // the next press. The run owns it and ends with the run.
+                        if let Some(refusal) = &self.prep_refusal {
+                            design::blocked_reason(ui, Some(refusal.reason()));
+                        }
+                    },
+                ),
+                None => design::empty_state(
+                    ui,
+                    icons::SESSIONS,
+                    "No prep notes",
+                    "This fight did not start from a saved encounter, so it has no prep notes.",
+                    |_| {},
+                ),
             }
-            if let Some(technical) = technical {
-                design::gap(ui, design::Gap::M);
-                design::quiet_section(ui, "Technical details", |ui| {
-                    style::markdown(ui, technical);
-                });
-            }
+        } else {
+            design::heading(ui, design::Heading::Label(READ_ALOUD));
+            style::markdown(ui, prep);
+        }
+        if let Some(technical) = technical {
+            design::gap(ui, design::Gap::M);
+            design::quiet_section(ui, "Technical details", |ui| {
+                style::markdown(ui, technical);
+            });
         }
         if pressed {
             self.prep_refusal = None;
@@ -5105,21 +5103,25 @@ impl Run {
     }
 
     fn log_tab(&mut self, ui: &mut egui::Ui) {
+        design::ScrollColumn::new("run_log").show(ui, |ui| self.log_lines(ui));
+    }
+
+    /// The log, newest first, or what to do while it is empty. In the Log tab's own column
+    /// (`log_tab`), or in the ended panel's column, as tall as its lines (`ended_panel`).
+    fn log_lines(&self, ui: &mut egui::Ui) {
         let c = colors();
-        design::ScrollColumn::new("run_log").show(ui, |ui| {
-            if self.state.log.is_empty() {
-                design::empty_state(
-                    ui,
-                    icons::SESSIONS,
-                    "No log entries yet",
-                    "Begin combat, or add a note on the Correct tab, to record what happens.",
-                    |_| {},
-                );
-            }
-            for line in self.state.log.iter().rev() {
-                ui.add(egui::Label::new(Type::Small.rich(ui, line).color(c.text)).wrap());
-            }
-        });
+        if self.state.log.is_empty() {
+            design::empty_state(
+                ui,
+                icons::SESSIONS,
+                "No log entries yet",
+                "Begin combat, or add a note on the Correct tab, to record what happens.",
+                |_| {},
+            );
+        }
+        for line in self.state.log.iter().rev() {
+            ui.add(egui::Label::new(Type::Small.rich(ui, line).color(c.text)).wrap());
+        }
     }
 
     // ---- Setup ------------------------------------------------------------------
@@ -6460,8 +6462,12 @@ impl Run {
             .y
             .min(room.max(0.0));
         // SM11, AM14: Prep's peer, so one form, closed, with or without choices to make.
+        // An open log is as tall as its lines (up to the column's room), so the shared columns
+        // measure it as it is: closing a section above it lets the footer follow again.
         design::section_with_id(ui, "run_ended_combat_log", "Combat log", |ui| {
-            self.log_tab(ui)
+            design::ScrollColumn::new("run_log")
+                .fit_height()
+                .show(ui, |ui| self.log_lines(ui));
         });
         // The shared columns measure this column (`PaneColumns::shared_task`): a closed log's
         // whole line counts, so the room it gives the sync block is the room it was measured with.
