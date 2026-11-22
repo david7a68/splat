@@ -5,7 +5,7 @@ use super::{
     Rules, Says, State, TrackerFault, Trackers, Unrecorded, ledger::Entry, ledger::NoticeRef,
     mark_of,
 };
-use crate::design::memo::{Measure, Memo, Memos, Revision};
+use crate::design::memo::{Measure, Memos, Revision};
 use crate::design::outcome::PaneFrame;
 use crate::design::outcome::{
     Banner, Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, PagePlaceholder,
@@ -51,7 +51,7 @@ pub(crate) struct ViewState {
     /// The Due rows as laid out before paint (layout 11c scope C, `design::NoticeRow`), kept by
     /// the trackers' revision and the panel's measure: a quiet frame lays none out. One for each
     /// place of the `Due` heading: at the panel's top (no space above it), or under a banner.
-    due_laid: [Memo<(Revision, Measure), DueLaid>; 2],
+    due_laid: Option<(DueKey, DueLaid)>,
 }
 
 /// The columns that every tracker line of the panel shares, so the values end at one edge
@@ -459,6 +459,27 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
 /// The Due rows laid out: each row's parts and its layout, in the Due list's order.
 type DueLaid = Vec<(DueParts, design::Laid)>;
 
+/// What the Due rows were laid out from (Astra's P2 on PR 885): the trackers' revision (each
+/// settle), the measure (the panel's width, the font, the fonts' generation, the scale), the font
+/// atlas's epoch (egui makes its atlas again, and a kept galley would point into the old one),
+/// the light or dark visuals (the galleys hold their colours), and whether the `Due` heading
+/// starts the panel.
+#[derive(Clone, PartialEq)]
+struct DueKey {
+    revision: Revision,
+    measure: Measure,
+    atlas: u64,
+    dark: bool,
+    first: bool,
+}
+
+#[cfg(feature = "test-support")]
+thread_local! {
+    /// How many times the host made a Due row's parts (its words, names, labels, widths and
+    /// layout): from its entry through paint, a quiet frame makes none.
+    pub(super) static DUE_PARTS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// A Due row's parts, as `design::NoticeRow` lays them: its words, each roll's label with why
 /// it is blocked, the rolls' results, and each proposed change's words.
 struct DueParts {
@@ -466,6 +487,12 @@ struct DueParts {
     rolls: Vec<(String, Option<&'static str>)>,
     results: Option<String>,
     checks: Vec<String>,
+    /// The notice's short name (the row's menu's), `Done`'s label and its accessible name.
+    short: String,
+    finish: String,
+    done_name: String,
+    /// Each check's place in the DM's unticked set.
+    ticks: Vec<(NoticeRef, usize)>,
 }
 
 /// Why a roll is blocked: each name of its table has its roll.
@@ -519,8 +546,17 @@ fn due_parts(rules: &Rules, notice: &super::Notice, mark: Says<'_>) -> DueParts 
             format!("{name} {amount}")
         })
         .collect();
+    #[cfg(feature = "test-support")]
+    DUE_PARTS_MADE.with(|made| made.set(made.get() + 1));
+    let short = notice.name(rules);
     DueParts {
         words: notice_words(rules, notice, mark),
+        ticks: (0..mark.changes.len())
+            .map(|at| (notice.id.clone(), at))
+            .collect(),
+        done_name: format!("Done: {short}"),
+        finish: finish_label(notice),
+        short,
         rolls,
         results,
         checks,
@@ -549,13 +585,19 @@ fn due_rows(
     // The heading starts the panel unless a banner stands above it (`design::heading`'s rule).
     let first = ui.cursor().top() <= ui.max_rect().top() + 0.5;
     let width = ui.available_width();
-    let key = (revision, Measure::of(ui, width, &Type::Body.font(ui)));
+    let key = DueKey {
+        revision,
+        measure: Measure::of(ui, width, &Type::Body.font(ui)),
+        atlas: design::theme::atlas_epoch(ui.ctx()),
+        dark: ui.visuals().dark_mode,
+        first,
+    };
     let count = state.due.len();
     let ViewState {
         due_laid, unticked, ..
     } = view;
-    let rows = due_laid[usize::from(first)].get_or(key, || {
-        state
+    if due_laid.as_ref().is_none_or(|(kept, _)| *kept != key) {
+        let rows = state
             .due
             .iter()
             .enumerate()
@@ -565,12 +607,22 @@ fn due_rows(
                 let rolls: Vec<design::NoticeRoll<'_>> = parts
                     .rolls
                     .iter()
-                    .map(|(label, reason)| design::NoticeRoll {
+                    .zip(mark.tables)
+                    .map(|((label, reason), table)| design::NoticeRoll {
+                        key: egui::Id::new(("trackers_due_roll", &notice.id, table.key())),
                         width: roll_action(label).natural_width(ui),
                         reason: *reason,
                     })
                     .collect();
-                let checks: Vec<&str> = parts.checks.iter().map(String::as_str).collect();
+                let checks: Vec<design::NoticeCheck<'_>> = parts
+                    .checks
+                    .iter()
+                    .zip(&parts.ticks)
+                    .map(|(words, tick)| design::NoticeCheck {
+                        key: egui::Id::new(("trackers_due_check", tick)),
+                        words,
+                    })
+                    .collect();
                 let laid = design::NoticeRow {
                     key: egui::Id::new(("trackers_due", &notice.id)),
                     heading: (at == 0).then_some(("Due", count)),
@@ -585,15 +637,19 @@ fn due_rows(
                 .lay(ui, width);
                 Some((parts, laid))
             })
-            .collect()
-    });
+            .collect();
+        *due_laid = Some((key, rows));
+    }
+    let rows = due_laid
+        .as_ref()
+        .map(|(_, rows)| rows.as_slice())
+        .unwrap_or_default();
     // The rows are laid only for notices with a mark, in the Due list's order.
     let shown = state
         .due
         .iter()
         .filter_map(|notice| mark_of(rules, notice).map(|mark| (notice, mark)));
     for ((notice, mark), (parts, laid)) in shown.zip(rows) {
-        let short = notice.name(rules);
         design::draw_laid(ui, laid, |ui| {
             for (at, (label, reason)) in parts.rolls.iter().enumerate() {
                 let slot = design::notice_slot::FIRST_ROLL + at;
@@ -604,20 +660,19 @@ fn due_rows(
                     *act = Some(Act::Roll(notice.clone(), key.to_owned()));
                 }
             }
-            for (at, words) in parts.checks.iter().enumerate() {
+            for (at, (words, tick)) in parts.checks.iter().zip(&parts.ticks).enumerate() {
                 let slot = design::notice_slot::FIRST_ROLL + parts.rolls.len() + at;
-                let ticked = (notice.id.clone(), at);
-                let mut on = !unticked.contains(&ticked);
+                let mut on = !unticked.contains(tick);
                 if ui.in_slot(slot, |ui| ui.checkbox(&mut on, words).changed()) {
                     if on {
-                        unticked.remove(&ticked);
+                        unticked.remove(tick);
                     } else {
-                        unticked.insert(ticked);
+                        unticked.insert(tick.clone());
                     }
                 }
             }
             ui.actions(design::notice_slot::FINISH, |ui| {
-                finish(ui, &short, notice, mark, unticked, act);
+                finish(ui, parts, notice, unticked, act);
             });
         });
     }
@@ -662,13 +717,12 @@ fn finish_width(ui: &egui::Ui, notice: &super::Notice) -> f32 {
 /// laid out from the right.
 fn finish(
     ui: &mut egui::Ui,
-    short: &str,
+    parts: &DueParts,
     notice: &super::Notice,
-    mark: Says<'_>,
     unticked: &HashSet<(NoticeRef, usize)>,
     act: &mut Option<Act>,
 ) {
-    design::row_menu(ui, short, |ui| {
+    design::row_menu(ui, &parts.short, |ui| {
         if Action::quiet("Dismiss")
             .density(Density::Read)
             .show(ui)
@@ -687,16 +741,16 @@ fn finish(
             ui.close();
         }
     });
-    let finish = finish_label(notice);
-    let name = format!("Done: {short}");
-    if Action::quiet(&finish)
+    if Action::quiet(&parts.finish)
         .density(Density::Read)
-        .name(&name)
+        .name(&parts.done_name)
         .show(ui)
         .clicked()
     {
-        let ticked = (0..mark.changes.len())
-            .map(|at| !unticked.contains(&(notice.id.clone(), at)))
+        let ticked = parts
+            .ticks
+            .iter()
+            .map(|tick| !unticked.contains(tick))
             .collect();
         *act = Some(Act::Done(notice.clone(), ticked));
     }

@@ -15,7 +15,11 @@
 //!   take a line of their own at the right.
 //! - **The rolls** (optional): each roll's action, as wide as the caller measured it, then its
 //!   reason (Small, muted) `S` after it when it has one; `S` apart, wrapping at the row's edge, a
-//!   control tall each, the rows the column's gap apart.
+//!   control tall each, the rows the column's gap apart. An action wider than the row takes a row
+//!   of its own, cut to the row (it cuts its words there); a reason that does not fit after its
+//!   action takes the lines under it, wrapped at the row's edge, and the next roll starts under
+//!   them. Every part stays in the block. Each roll and each check box has its own key, so its
+//!   control keeps its id when another roll or check comes or goes.
 //! - **The results** (optional): Body words set in by `L`, wrapped there.
 //! - **The checks**: one check box per proposed change, each a row of the column's width as
 //!   tall as the check box draws its words there (`check_height`).
@@ -30,14 +34,22 @@ use super::laid::{Laid, LaidText};
 use crate::design::components::group_heading_text;
 use crate::design::extras::Heading;
 use crate::design::theme::LINE_GAP;
-use crate::design::tokens::{Density, L, S, Type, colors};
+use crate::design::tokens::{Density, L, S, Type, XS, colors};
 
-/// One roll of a notice row: its action's width, as it measures, and why it is blocked, if it
-/// is.
+/// One roll of a notice row: its own key, its action's width as it measures, and why it is
+/// blocked, if it is.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NoticeRoll<'a> {
+    pub key: Id,
     pub width: f32,
     pub reason: Option<&'a str>,
+}
+
+/// One check of a notice row: its own key and its check box's words.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NoticeCheck<'a> {
+    pub key: Id,
+    pub words: &'a str,
 }
 
 /// A notice's row in a list (layout 11c scope C).
@@ -54,8 +66,8 @@ pub struct NoticeRow<'a> {
     pub rolls: &'a [NoticeRoll<'a>],
     /// The rolls' results, one line each.
     pub results: Option<&'a str>,
-    /// Each check box's words.
-    pub checks: &'a [&'a str],
+    /// Each check box: its key and its words.
+    pub checks: &'a [NoticeCheck<'a>],
     /// The finish actions' width (`Done` and the row's menu, with the gap between).
     pub finish: f32,
     /// The gap after the row, inside the block.
@@ -189,27 +201,50 @@ impl NoticeRow<'_> {
             y += LINE_GAP;
             let small = Type::Small.font(ui);
             let mut x = 0.0;
+            // The bottom of the parts in the current row (an action, or a reason under it).
+            let mut bottom = y + control;
             for roll in self.rolls {
                 let reason = roll.reason.map(|reason| {
                     ui.fonts_mut(|fonts| {
                         fonts.layout_no_wrap(reason.to_owned(), small.clone(), c.muted)
                     })
                 });
-                let item = roll.width + reason.as_ref().map_or(0.0, |galley| S + galley.size().x);
+                // An action wider than the row is cut to it.
+                let action = roll.width.min(width);
+                let item = action + reason.as_ref().map_or(0.0, |galley| S + galley.size().x);
                 if x > 0.5 && x + item > width + 0.5 {
                     x = 0.0;
-                    y += control + LINE_GAP;
+                    y = bottom + LINE_GAP;
+                    bottom = y + control;
                 }
-                slots.push(Rect::from_min_size(pos2(x, y), vec2(roll.width, control)));
-                if let Some(galley) = reason {
-                    texts.push(LaidText {
-                        at: pos2(x + roll.width + S, y + (control - galley.size().y) / 2.0),
-                        galley,
-                    });
+                slots.push(Rect::from_min_size(pos2(x, y), vec2(action, control)));
+                match reason {
+                    // After its action, on its row.
+                    Some(galley) if x + item <= width + 0.5 => {
+                        texts.push(LaidText {
+                            at: pos2(x + action + S, y + (control - galley.size().y) / 2.0),
+                            galley,
+                        });
+                        x += item + S;
+                    }
+                    // On the lines under its action, wrapped at the row's edge; the next roll
+                    // starts under them.
+                    Some(_) => {
+                        let words = roll.reason.unwrap_or_default().to_owned();
+                        let galley = ui
+                            .fonts_mut(|fonts| fonts.layout(words, small.clone(), c.muted, width));
+                        let top = y + control + XS;
+                        bottom = top + galley.size().y;
+                        texts.push(LaidText {
+                            at: pos2(0.0, top),
+                            galley,
+                        });
+                        x = width + S;
+                    }
+                    None => x += item + S,
                 }
-                x += item + S;
             }
-            y += control;
+            y = bottom;
         }
         if let Some(results) = self.results {
             y += LINE_GAP;
@@ -221,9 +256,9 @@ impl NoticeRow<'_> {
             });
             y += height;
         }
-        for words in self.checks {
+        for check in self.checks {
             y += LINE_GAP;
-            let height = check_height(ui, words, width);
+            let height = check_height(ui, check.words, width);
             slots.push(Rect::from_min_size(pos2(0.0, y), vec2(width, height)));
             y += height;
         }
@@ -233,7 +268,13 @@ impl NoticeRow<'_> {
                 Rect::from_min_size(pos2(width - self.finish, y), vec2(self.finish, control));
             y += control;
         }
-        Laid::new(self.key, vec2(width, y + self.tail), head, texts, slots)
+        // Each roll's and check's slot follows its own key, not its place.
+        let keys = [None; slot::FIRST_ROLL]
+            .into_iter()
+            .chain(self.rolls.iter().map(|roll| Some(roll.key)))
+            .chain(self.checks.iter().map(|check| Some(check.key)))
+            .collect();
+        Laid::new(self.key, vec2(width, y + self.tail), head, texts, slots).with_slot_keys(keys)
     }
 }
 
@@ -300,6 +341,9 @@ mod tests {
         ]
     }
 
+    /// A nonzero tail, so the block's end is the lowest painted part plus it.
+    const TAIL: f32 = XS;
+
     fn roll_action(words: &str) -> Action<'_> {
         Action::secondary(words).density(Density::Read)
     }
@@ -335,8 +379,17 @@ mod tests {
                                 .rolls
                                 .iter()
                                 .map(|(words, reason)| NoticeRoll {
+                                    key: Id::new(("roll", *words)),
                                     width: roll_action(words).natural_width(ui),
                                     reason: *reason,
+                                })
+                                .collect();
+                            let checks: Vec<NoticeCheck<'_>> = row
+                                .checks
+                                .iter()
+                                .map(|words| NoticeCheck {
+                                    key: Id::new(("check", *words)),
+                                    words,
                                 })
                                 .collect();
                             let recipe = NoticeRow {
@@ -346,9 +399,9 @@ mod tests {
                                 words: row.words,
                                 rolls: &rolls,
                                 results: row.results,
-                                checks: &row.checks,
+                                checks: &checks,
                                 finish,
-                                tail: 0.0,
+                                tail: TAIL,
                             };
                             let laid = recipe.lay(ui, width);
                             let mut controls = Vec::new();
@@ -419,7 +472,7 @@ mod tests {
                 vec![300.0, 340.0, 420.0, 560.0, 720.0]
             }
         };
-        let mut gaps_seen = 0;
+        let (mut gaps_seen, mut centred) = (0, 0);
         for scale in [1.0, 1.5] {
             for width in widths(scale) {
                 let harness = harness(width, scale);
@@ -516,21 +569,28 @@ mod tests {
                         );
                         gaps_seen += 1;
                     }
-                    // The lowest painted part of the row ends at the row's laid bottom.
-                    let lowest = controls
-                        .iter()
-                        .map(|(_, drew, _)| drew.bottom())
-                        .chain(
-                            texts
-                                .iter()
-                                .filter(|text| rect.contains(text.center()))
-                                .map(|text| text.bottom()),
-                        )
-                        .fold(rect.top(), f32::max);
-                    assert!(
-                        (rect.bottom() - lowest).abs() < 0.5,
-                        "notice-row-height: {width}@{scale}: row {index} laid {rect:?}, lowest painted {lowest}"
-                    );
+                    // Every painted part lies in the row's block, and the lowest painted bottom
+                    // with the row's nonzero tail ends it (live bounds, read from what painted).
+                    if let Err(why) = crate::design::pane::painted_in_block(*rect, TAIL, &parts) {
+                        panic!("notice-row-height: {width}@{scale}: row {index}: {why}");
+                    }
+                    // A finish at the end of the words' last line stands on that line's centre.
+                    if at_line_end {
+                        let last = texts
+                            .iter()
+                            .filter(|text| {
+                                rect.contains(text.center())
+                                    && text.center().y > finish.top()
+                                    && text.center().y < finish.bottom()
+                            })
+                            .map(|text| text.center().y)
+                            .next();
+                        assert!(
+                            last.is_some_and(|y| (y - finish.center().y).abs() < 0.5),
+                            "notice-row-centre: {width}@{scale}: row {index}: finish {finish:?}, its line's centre {last:?}"
+                        );
+                        centred += 1;
+                    }
                 }
                 let checks = &drawn[2].1;
                 wrapped_checks +=
@@ -542,11 +602,140 @@ mod tests {
                     usize::from(finish.top() < drawn[3].0.top() + Density::Read.control());
             }
         }
-        assert!(gaps_seen > 0, "notice-row-gap-reached");
+        assert!(
+            gaps_seen > 0 && centred > 0,
+            "notice-row-reached: gaps {gaps_seen}, centred finishes {centred}"
+        );
         assert!(
             at_line_end > 0 && wrapped_checks > 0 && wrapped_rolls > 0,
             "notice-row-reached: finish on the words' line {at_line_end}, a wrapped check {wrapped_checks}, wrapped rolls {wrapped_rolls}"
         );
+    }
+
+    /// Astra's P2 on PR 885 (Sol 2-018): a roll with the live dice icon and its reason wrap at
+    /// their threshold. One point wider than the width where the action and its reason just fit
+    /// one row, the reason stands after the action; one point narrower, it takes the line under
+    /// it; narrower than the action itself, the action is cut to the row. At each, everything
+    /// painted lies in the measured block, which the lowest painted bottom and a nonzero tail
+    /// end. The reference: the drawn action's rect and the painted words' line boxes.
+    #[test]
+    fn a_roll_and_its_reason_wrap_at_their_threshold() {
+        use crate::design::icons;
+        const LABEL: &str = "Roll Wandering, 0:40 to 1:19 at the cistern gate";
+        const REASON: &str = "Each name has its roll.";
+        let action = || {
+            Action::secondary(LABEL)
+                .icon(icons::DICE)
+                .density(Density::Read)
+        };
+        // (the action's width, the reason's width), measured in the test's own harness.
+        let widths = {
+            let mut h = Harness::builder()
+                .with_size(vec2(1200.0, 300.0))
+                .themed_ui_state(
+                    move |ui, widths: &mut (f32, f32)| {
+                        let reason = ui
+                            .fonts_mut(|fonts| {
+                                fonts.layout_no_wrap(
+                                    REASON.to_owned(),
+                                    Type::Small.font(ui),
+                                    colors().muted,
+                                )
+                            })
+                            .size()
+                            .x;
+                        *widths = (action().natural_width(ui), reason);
+                    },
+                    (0.0, 0.0),
+                );
+            h.run_steps(2);
+            *h.state()
+        };
+        let threshold = widths.0 + S + widths.1;
+        let mut seen = Vec::new();
+        for (width, place) in [
+            (threshold + 1.0, "beside"),
+            (threshold - 1.0, "under"),
+            (widths.0 - 30.0, "cut"),
+        ] {
+            let mut h = Harness::builder()
+                .with_size(vec2(1200.0, 400.0))
+                .themed_ui_state(
+                    move |ui, drawn: &mut (Rect, Rect, Vec<Rect>)| {
+                        let rolls = [NoticeRoll {
+                            key: Id::new("roll"),
+                            width: action().natural_width(ui),
+                            reason: Some(REASON),
+                        }];
+                        let laid = NoticeRow {
+                            key: Id::new(("threshold", width.to_bits())),
+                            heading: None,
+                            first: false,
+                            words: "Bell.",
+                            rolls: &rolls,
+                            results: None,
+                            checks: &[],
+                            finish: finish_width(ui),
+                            tail: TAIL,
+                        }
+                        .lay(ui, width);
+                        let mut controls = Vec::new();
+                        let block = draw_laid(ui, &laid, |ui| {
+                            controls.push(ui.in_slot(slot::FIRST_ROLL, |ui| {
+                                action().blocked(Some(REASON)).show(ui).rect
+                            }));
+                            controls.push(ui.actions(slot::FINISH, |ui| {
+                                Action::quiet("Done").density(Density::Read).show(ui).rect
+                            }));
+                        });
+                        *drawn = (block, controls[0], controls);
+                    },
+                    (Rect::NOTHING, Rect::NOTHING, Vec::new()),
+                );
+            h.run_steps(3);
+            let (block, roll, controls) = h.state().clone();
+            let texts: Vec<(String, Rect)> = h
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text) => Some((
+                        text.galley.job.text.clone(),
+                        Rect::from_min_size(text.pos, text.galley.size()),
+                    )),
+                    _ => None,
+                })
+                .filter(|(_, text)| block.contains(text.center()))
+                .collect();
+            let parts: Vec<Rect> = controls
+                .iter()
+                .copied()
+                .chain(texts.iter().map(|(_, text)| *text))
+                .collect();
+            if let Err(why) = crate::design::pane::painted_in_block(block, TAIL, &parts) {
+                panic!("notice-row-threshold: {place} at {width}: {why}");
+            }
+            // The reason, by its words: in the roll's row after it (beside), or under it.
+            let reason = texts
+                .iter()
+                .find(|(words, _)| words == REASON)
+                .map(|(_, text)| *text);
+            let beside = reason.is_some_and(|text| {
+                (text.center().y - roll.center().y).abs() < 1.0 && text.left() > roll.right()
+            });
+            let under = reason.is_some_and(|text| text.top() >= roll.bottom());
+            let ok = match place {
+                "beside" => beside,
+                "under" => under,
+                _ => under && roll.width() <= width + 0.5,
+            };
+            assert!(
+                ok,
+                "notice-row-threshold: {place} at {width}: roll {roll:?}, reason {reason:?}, block {block:?}"
+            );
+            seen.push(place);
+        }
+        assert_eq!(seen, ["beside", "under", "cut"]);
     }
 
     /// The heading leaves out its space above when it starts its column, as `design::heading`
