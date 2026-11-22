@@ -1065,11 +1065,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "banner_notices",
             &[Ban::Results, Ban::Body],
         ),
-        (
-            "src/sessions/page.rs",
-            "markers",
-            &[Ban::Results, Ban::Extras(1)],
-        ),
+        ("src/sessions/page.rs", "markers", &[Ban::Results]),
         (
             "src/sessions/page.rs",
             "reading_view",
@@ -1156,11 +1152,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
         ("src/encounters/groups.rs", "members", &[Ban::Body]),
-        (
-            "src/encounters/groups.rs",
-            "members_pane",
-            &[Ban::Layout(1)],
-        ),
         ("src/loot_editor.rs", "add_row", &[Ban::Extras(1)]),
         (
             "src/markdown_view.rs",
@@ -1342,12 +1333,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Body]),
-        ("src/sessions/page.rs", "record_line", &[Ban::Extras(1)]),
-        (
-            "src/sessions/page.rs",
-            "recording_row",
-            &[Ban::Extras(1), Ban::Body],
-        ),
+        ("src/sessions/page.rs", "recording_row", &[Ban::Body]),
         (
             "src/sessions/plan.rs",
             "gone_scene_words",
@@ -1475,6 +1461,8 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/design/components.rs", "text_input", &[Ban::Layout(1)]),
         ("src/design/components.rs", "paint", &[Ban::Extras(1)]),
         ("src/design/extras.rs", "space", &[Ban::Extras(1)]),
+        // Layout step 11c (M0478): an empty line as tall as a label, allocated as a label is.
+        ("src/design/extras.rs", "empty_line", &[Ban::Extras(1)]),
         ("src/design/gallery.rs", "markdown", &[Ban::Layout(1)]),
         ("src/design/gallery.rs", "show", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "area", &[Ban::Layout(2)]),

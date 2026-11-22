@@ -53,3 +53,8 @@ src/content_ui/tests/quiet_reader.rs late-theme 1
 src/design/pane.rs late-theme 12
 src/design/reveal.rs late-theme 1
 src/trackers/view.rs late-theme 1
+# Sol 2-011, review of #852 (`raw-scroll-input`): a raw read of the DM's scroll or drag. The one cancel entry point
+# (`design::reveal::cancel::read`) holds src/design/reveal.rs's three; every pending request judges input through it.
+# src/lookup.rs keeps 1: a scroll over the reader closes the results list above it (no request of a column).
+src/design/reveal.rs raw-scroll-input 3
+src/lookup.rs raw-scroll-input 1

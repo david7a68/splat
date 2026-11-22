@@ -2658,8 +2658,10 @@ impl<'a> Driver<'a> {
     /// recipe starts there and its rows' actions end at one edge; each row's gap from its own
     /// facts is at least `L` (a gap above 4L is a counted residual). At 1200 and 1920 no list
     /// gives way. At 960 a list that does not fit keeps its actions at the far edge, `L` or more
-    /// after each row's facts.
-    pub fn ledger_columns(&self) -> (bool, String) {
+    /// after each row's facts. Review of PR 581 (#589): `allowed` is the state's allowance of
+    /// residual gaps above 4L (rows whose facts are much shorter than the widest), so their count
+    /// cannot grow while the check passes.
+    pub fn ledger_columns(&self, allowed: usize) -> (bool, String) {
         let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
             .into_iter()
             .filter(|record| record.owner.starts_with("ledger"))
@@ -2709,9 +2711,9 @@ impl<'a> Driver<'a> {
             })
             .collect();
         (
-            !records.is_empty() && columns && records.iter().all(gap),
+            !records.is_empty() && columns && records.iter().all(gap) && residuals <= allowed,
             format!(
-                "the widest facts end at {widest:.1}; {residuals} residual gaps above 4L; rows (list, facts end, actions start, actions end, gave way): {rows:?}"
+                "the widest facts end at {widest:.1}; {residuals} residual gaps above 4L (allowed {allowed}); rows (list, facts end, actions start, actions end, gave way): {rows:?}"
             ),
         )
     }
@@ -2906,6 +2908,28 @@ impl<'a> Driver<'a> {
         self.interactions += 1;
         self.settle();
         self.film_result(&caption);
+    }
+
+    /// The pointer moved over `pos`, one frame, and left there for the next step (`wheel_here`).
+    pub fn hover_over(&mut self, pos: egui::Pos2) {
+        self.harness.hover_at(pos);
+        self.harness.step();
+    }
+
+    /// Wheel notches up where the pointer is now (`hover_over`), each in its own frame, so the
+    /// first notch is the first frame after what came before; then the pointer leaves.
+    pub fn wheel_here(&mut self, notches: u32) {
+        for _ in 0..notches {
+            self.harness.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, 100.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+            self.harness.step();
+            self.interactions += 1;
+        }
+        self.harness.remove_cursor();
+        self.settle();
     }
 
     /// Shift+key.

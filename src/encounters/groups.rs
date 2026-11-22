@@ -3463,10 +3463,6 @@ fn members_edge(ui: &egui::Ui, compact: bool) -> f32 {
         + (members - ui.spacing().scroll.allocated_width()).clamp(0.0, design::LIST_MEASURE)
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn members_pane(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
@@ -3475,25 +3471,22 @@ fn members_pane(
     name_right: f32,
     refused: Option<RefusalPlace>,
 ) -> bool {
-    let top = ui.cursor().top();
-    let mut gone_shown = false;
     // FH3: the column leaves the scroll bar's lane free whether or not the bar shows, so the
     // name field, `Edit` and `⋯` keep their x when a long list (a replacement search) scrolls.
     let width = super::scroll_lane(ui).min(design::LIST_MEASURE);
-    egui::ScrollArea::vertical()
-        .id_salt("group_editor")
-        .auto_shrink([false, false])
+    // M0245 (ruling M27): the editor's own column, in its pane's `Fills(Columns)` body on the
+    // Encounters page and in the Session plan; it hosts the reveals of its forms.
+    design::ScrollColumn::new("group_editor")
+        .hosts_reveals()
         .show(ui, |ui| {
-            let mut clip = ui.clip_rect();
-            clip.min.y = clip.min.y.max(top);
-            ui.set_clip_rect(clip);
             // Its width is the one `members_edge` gives the head before it paints.
             ui.scope(|ui| {
                 ui.set_width(width.min(ui.available_width()));
-                gone_shown = group_fields(ui, draft, snapshot, expanded, None, name_right, refused);
-            });
-        });
-    gone_shown
+                group_fields(ui, draft, snapshot, expanded, None, name_right, refused)
+            })
+            .inner
+        })
+        .inner
 }
 
 /// FB4: `Default side` and `Belongs to` share one label column, the wider label plus `S`, so
