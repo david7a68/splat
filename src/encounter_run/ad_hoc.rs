@@ -367,10 +367,6 @@ impl Run {
     }
 
     /// `block` is the width of Arrivals' group block, when it has groups.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub(super) fn add_creature_form(&mut self, ui: &mut egui::Ui, block: Option<f32>) {
         let c = colors();
         let known = self.creatures.clone().unwrap_or_default();
@@ -431,11 +427,6 @@ impl Run {
                         &creature.entry.name,
                         |_, _| {},
                     );
-                    // egui does not scroll to a widget that Tab focuses. The list does, so every
-                    // match can be reached from the keyboard.
-                    if row.gained_focus() {
-                        row.scroll_to_me(None);
-                    }
                     // A long list lays out only the rows in view. Every row keeps its control and
                     // name, so focus and the accessible list stay whole. The words go in a child
                     // that does not move the cursor, and a hidden row skips the one id that child
@@ -472,10 +463,14 @@ impl Run {
             if all {
                 // A bounded list, so the field above and the form below stay in reach.
                 let step = Density::Scan.row() + design::S + ui.spacing().item_spacing.y;
-                egui::ScrollArea::vertical()
-                    .id_salt("run_creature_matches")
+                // The design's column: as tall as its matches up to the bound, as wide as the
+                // form, and a match that Tab focuses comes into its view, so every match can be
+                // reached from the keyboard.
+                design::layout::ScrollColumn::new("run_creature_matches")
                     .max_height(MATCHES_LISTED as f32 * step)
-                    .auto_shrink([false, true])
+                    .fit_height()
+                    .full_width()
+                    .follows_focus()
                     .show(ui, |ui| rows(ui));
             } else {
                 rows(ui);

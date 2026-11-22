@@ -124,7 +124,6 @@ scroll-area	src/design/components.rs	draft_comparison_labeled	1	design	design im
 scroll-area	src/design/components.rs	scroll_part	1	design	design implementation boundary
 scroll-area	src/design/layout.rs	ScrollColumn::area	2	design	design implementation boundary
 scroll-area	src/design/layout.rs	sideways_scroll	1	design	design implementation boundary
-scroll-area	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run
 scroll-area	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
 scroll-request	src/design/components.rs	reveal_least	1	design	design implementation boundary
@@ -132,7 +131,6 @@ scroll-request	src/design/components.rs	scroll_part	2	design	design implementati
 scroll-request	src/design/pane.rs	EditorRegion::editor	1	design	design implementation boundary
 scroll-request	src/design/pane.rs	reveal_focus	1	design	design implementation boundary
 scroll-request	src/design/reveal.rs	settle_queued	1	design	no egui target writes a column after a region request (layout 11c A1b; raised)
-scroll-request	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run	named follow-selection exception (PR 403)
 scroll-request	src/encounter_run/view.rs	Run::group_row	1	Run
 scroll-request	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-request	src/encounters/groups.rs	of_encounter	1	Encounters

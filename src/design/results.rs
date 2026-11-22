@@ -1125,11 +1125,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // `FaultMessage`) in place of an untyped `design::message`.
         ("src/copy_dialog.rs", "show", &[Ban::Body]),
         (
-            "src/encounter_run/ad_hoc.rs",
-            "add_creature_form",
-            &[Ban::Layout(1)],
-        ),
-        (
             "src/encounter_run/dock.rs",
             "effect_line",
             &[Ban::Extras(1)],
