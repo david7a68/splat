@@ -128,6 +128,8 @@ mod action_line;
 mod columns;
 /// A block laid out before paint by a design recipe (layout 11c).
 mod laid;
+/// A notice's row in a list (layout 11c scope C): the Trackers panel's Due rows.
+mod notice_row;
 /// The whole-block plan of a body and its index (layout step 3a; step 3b draws from it).
 mod plan;
 /// The Session plan's closed row as a recipe (layout 11c A2b).
@@ -140,6 +142,7 @@ pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
 use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
 pub use laid::{Laid, LaidUi, draw_laid};
+pub use notice_row::{NoticeRoll, NoticeRow, check_height, slot as notice_slot};
 pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Measured, Row};
 pub use plan_row::{PlanColumns, PlanRow, SummaryPart, rule as plan_rule, slot as plan_slot};
 pub use region::{BlockRegion, Navigation, RegionState};
