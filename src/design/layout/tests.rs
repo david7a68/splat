@@ -484,6 +484,11 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                 "Hide the list (Ctrl+\\)",
                 true,
             )
+            .state(Status {
+                icon: crate::design::icons::DRAFT,
+                word: "Unsaved",
+                color: colors().document.unsaved,
+            })
     }
     for (width, beside, blocked) in [
         (900.0, true, false),
@@ -553,6 +558,39 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         assert!(
             new.right() <= toggle.left() && status.right() <= toggle.left() || !beside,
             "n0-title-toggle: {width}: the actions keep clear of the toggle: {new:?} {status:?} {toggle:?}"
+        );
+        // N0 (ruling M21): the plain status stands left of the toggle on the title's line,
+        // wherever the actions go; the actions keep clear of it.
+        // Its painted words, so a status drawn outside its room fails too.
+        let words = format!("{} Unsaved", crate::design::icons::DRAFT);
+        let state = painted
+            .iter()
+            .find(|text| text.text == words)
+            .map(|text| text.rect)
+            .expect("the state is painted");
+        assert!(
+            state.right() <= toggle.left() - ACTION_GAP + 0.5
+                && state.right() >= toggle.left() - ACTION_GAP - 3.0
+                && (state.center().y - toggle.center().y).abs() <= 2.0,
+            "n0-title-state: {width}: the state left of the toggle, on its line: {state:?}, toggle {toggle:?}"
+        );
+        assert!(
+            new.right() <= state.left() && status.right() <= state.left() || !beside,
+            "n0-title-state: {width}: the actions keep clear of the state: {new:?} {status:?} {state:?}"
+        );
+        // What assistive tools read is in its room too: the state's text run ends left of the
+        // toggle (a right-to-left room put it over the toggle).
+        let run = nodes
+            .iter()
+            .find(|(_, node)| {
+                node.role() == egui::accesskit::Role::TextRun
+                    && node.value() == Some(words.as_str())
+            })
+            .and_then(|(_, node)| node.bounds())
+            .expect("the state's text run");
+        assert!(
+            run.x1 as f32 <= toggle.left() - ACTION_GAP + 0.5,
+            "n0-title-state: {width}: the state's text run ends left of the toggle: {run:?}, toggle {toggle:?}"
         );
         // Review of PR 618: assistive tools read the toggle's state, not only its name.
         assert_eq!(

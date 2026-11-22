@@ -1737,6 +1737,8 @@ pub struct TitleLine<'a> {
     /// A view toggle left of the close icon: its icon, its accessible name, its hint and
     /// whether it is on.
     toggle: Option<(&'static str, &'a str, &'a str, bool)>,
+    /// A plain status at the right end of the title's line, left of the toggle (`state`).
+    state: Option<Status<'a>>,
 }
 
 /// A menu's content: the caller draws its own choices.
@@ -1853,6 +1855,7 @@ impl<'a> TitleLine<'a> {
             page: false,
             close: None,
             toggle: None,
+            state: None,
         }
     }
 
@@ -2056,6 +2059,45 @@ impl<'a> TitleLine<'a> {
         super::icon_button(&mut child, super::icons::CLOSE, name).clicked()
     }
 
+    /// A plain status at the right end of the title's own line, left of a view toggle and a close
+    /// icon (a draft's `Saved` or `Unsaved`, a built-in template's `Read-only`): its icon and word
+    /// in its tone, not a control. Unlike [`status`](Self::status) it opens nothing and is not
+    /// an action. It keeps its place there however the actions are placed, so a change of its
+    /// word never moves them; the title and the actions beside it keep clear of it.
+    pub fn state(mut self, state: Status<'a>) -> Self {
+        self.state = Some(state);
+        self
+    }
+
+    /// The plain status's width: its icon, a space and its word in `Small`, as it is drawn.
+    fn state_width(ui: &Ui, state: &Status<'_>) -> f32 {
+        number_width(
+            ui,
+            &format!("{} {}", state.icon, state.word),
+            &Type::Small.font(ui),
+        )
+        .ceil()
+            + 1.0
+    }
+
+    /// The plain status, its right edge at `right` (left of the toggle), on the line from
+    /// `top`, `line_height` high.
+    fn state_at(&self, ui: &mut Ui, right: f32, top: f32, line_height: f32) {
+        let Some(state) = self.state else {
+            return;
+        };
+        let width = Self::state_width(ui, &state);
+        let rect = Rect::from_min_size(egui::pos2(right - width, top), vec2(width, line_height));
+        // Left to right in exactly its measured room: its words start at the room's left edge
+        // and end at `right`.
+        let mut child = ui.new_child(
+            UiBuilder::new()
+                .max_rect(rect)
+                .layout(Layout::left_to_right(Align::Center)),
+        );
+        let _ = super::status(&mut child, state);
+    }
+
     /// The view toggle, its right edge at `right` (left of the close icon), on the line from
     /// `top`, `line_height` high.
     fn toggle_at(&self, ui: &mut Ui, right: f32, top: f32, line_height: f32) -> bool {
@@ -2074,11 +2116,16 @@ impl<'a> TitleLine<'a> {
     pub fn show(mut self, ui: &mut Ui) -> TitleLineResponse {
         let metrics = self.metrics(ui);
         let room = ui.available_width();
-        // The close icon and the view toggle keep their targets and a gap each at the title
-        // line's right end; `close` is the close icon's part, `end` both.
+        // The close icon, the view toggle and the plain status keep their room and a gap each at
+        // the title line's right end, in that order from the end; `end` is all of it.
         let end_icon = Density::Read.control() + ACTION_GAP;
         let close = if self.close.is_some() { end_icon } else { 0.0 };
-        let end = close + if self.toggle.is_some() { end_icon } else { 0.0 };
+        let toggle = if self.toggle.is_some() { end_icon } else { 0.0 };
+        let state = self
+            .state
+            .as_ref()
+            .map_or(0.0, |state| Self::state_width(ui, state) + ACTION_GAP);
+        let end = close + toggle + state;
         // Issue #567: a title with no actions that is wider than its line (less the close
         // icon) wraps under nothing, as the `Under` form wraps it; it never paints past the
         // line or under the close icon.
@@ -2144,6 +2191,7 @@ impl<'a> TitleLine<'a> {
                     }
                 }
                 // Drawn in their order on the line, so the keyboard reaches the toggle first.
+                self.state_at(ui, line.right() - close - toggle, line.top(), line_height);
                 toggled = self.toggle_at(ui, line.right() - close, line.top(), line_height);
                 closed = self.close_at(ui, line.right(), line.top(), line_height);
                 0
@@ -2162,6 +2210,7 @@ impl<'a> TitleLine<'a> {
                     .response
                     .rect;
                 let right = line_left + room;
+                self.state_at(ui, right - close - toggle, line_top, font.line());
                 toggled = self.toggle_at(ui, right - close, line_top, font.line());
                 closed = self.close_at(ui, right, line_top, font.line());
                 for row in &rows {
