@@ -49,7 +49,6 @@ const MOVE_FILES: &str = "Move files and save";
 const SAVED_WORD_FOR: Duration = Duration::from_secs(8);
 const LIST_WIDTH: f32 = 216.0;
 const LIST_WIDTHS: std::ops::RangeInclusive<f32> = 170.0..=420.0;
-const STATUS_WIDTH: f32 = 128.0;
 const TWO_COLUMNS_FROM: f32 = 640.0;
 /// The note's column beside the plan: the DM drags its edge into the room beside it.
 const NOTE_COLUMN: &str = "session_note_frame";
@@ -61,6 +60,9 @@ const NOTE_FRAME_EDGES: f32 = 2.0 * (design::S + design::HAIRLINE_WIDTH);
 pub const LIST_TOGGLE: &str = "Session list";
 /// The page header's actions (M0498).
 const NEW_SESSION: design::Word = crate::word!("New session");
+/// The template editor's title line (M0493).
+const MORE: design::Word = crate::word!("More");
+const CUSTOMIZE: design::Word = crate::word!("Customize");
 const NEW_TEMPLATE: design::Word = crate::word!("New template");
 const STOP_RECORDING: design::Word = crate::word!("Stop recording");
 const TEMPLATES: design::Word = crate::word!("Templates");
@@ -4104,8 +4106,12 @@ impl Sessions {
 
     /// A note's state says it is the note, beside a control about audio.
     fn note_save_status(draft: &Draft) -> Status<'static> {
+        Self::note_state_status(&draft.state)
+    }
+
+    fn note_state_status(state: &DraftState) -> Status<'static> {
         let c = colors();
-        let (icon, word, color) = match &draft.state {
+        let (icon, word, color) = match state {
             // A saved note is the calm, usual state: muted, never green, in every view.
             DraftState::Clean | DraftState::Saved => (icons::OK, "Notes saved", c.document.clean),
             DraftState::Unsaved => (icons::BUSY, "Saving…", c.muted),
@@ -4129,9 +4135,10 @@ impl Sessions {
         design::status(ui, Self::note_save_status(draft));
     }
 
-    fn draft_status(ui: &mut egui::Ui, draft: &Draft) {
+    /// A template draft's state, for its title line (`TitleLine::state`).
+    fn draft_status(state: &DraftState) -> Status<'static> {
         let c = colors();
-        let (icon, word, color) = match &draft.state {
+        let (icon, word, color) = match state {
             DraftState::Clean => (icons::OK, "Saved", c.document.clean),
             DraftState::Saved => (icons::OK, "Saved", c.document.saved),
             DraftState::Unsaved => (icons::DRAFT, "Unsaved", c.document.unsaved),
@@ -4139,7 +4146,19 @@ impl Sessions {
             DraftState::Missing => (icons::WARN, "File gone", c.document.external),
             DraftState::Failed(_) => (icons::ERROR, "Not saved", c.document.invalid),
         };
-        design::status(ui, Status { icon, word, color });
+        Status { icon, word, color }
+    }
+
+    /// Every state a draft can be in, for the statuses a title line can show (its stable room).
+    fn every_draft_state() -> [DraftState; 6] {
+        [
+            DraftState::Clean,
+            DraftState::Saved,
+            DraftState::Unsaved,
+            DraftState::Conflict,
+            DraftState::Missing,
+            DraftState::Failed(String::new()),
+        ]
     }
 
     /// The message footer of a pane whose body is one draft's editor: the draft's own result
@@ -7124,7 +7143,6 @@ impl Sessions {
         book: &mut Book,
         plan: &Plan<'_>,
     ) {
-        let c = colors();
         let Some(note) = self
             .selected
             .and_then(|id| self.notes.iter().find(|note| note.id == id))
@@ -7138,18 +7156,19 @@ impl Sessions {
                 .edges(ui);
             edges.header(ui, |ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                    // M0485: the record control stays beside the title line; the title (the
+                    // file's name) and the draft's state are the shared part's.
                     self.record_control(ui, settings);
                     if let Some(draft) = &self.draft {
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(STATUS_WIDTH, Density::Scan.control()),
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            |ui| Self::note_status(ui, draft),
-                        );
                         let name = draft.path.file_stem().unwrap_or_default().to_string_lossy();
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                            ui.add(
-                                egui::Label::new(Type::Title.rich(ui, name).color(c.text)).wrap(),
-                            );
+                            let _ = design::TitleLine::new(&name)
+                                .state(
+                                    Self::note_save_status(draft),
+                                    &Self::every_draft_state()
+                                        .map(|state| Self::note_state_status(&state)),
+                                )
+                                .show(ui);
                         });
                     }
                 })
@@ -7768,58 +7787,55 @@ impl Sessions {
         else {
             return;
         };
-        let mut customize = false;
+        // M0493: the template's title line, the shared part: `More` (its menu: Delete, or Go
+        // back to built-in) and the draft's state for a template file; `Customize` and
+        // `Read-only` for a built-in one.
         let mut delete = false;
-        ui.horizontal(|ui| {
-            ui.label(Type::Heading.rich(ui, &template.name).color(c.text));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if template.path.is_some() {
-                    let more = design::icon_button(
-                        ui,
-                        icons::EXPAND,
-                        &format!("More actions for {}", template.name),
-                    );
-                    design::menu_popup(ui, &more).show(|ui| {
-                        let built_in = super::BUILT_IN_TEMPLATES
-                            .iter()
-                            .any(|(name, _)| *name == template.name);
-                        delete = Action::quiet(if built_in {
-                            "Go back to built-in"
-                        } else {
-                            "Delete"
-                        })
-                        .name(if built_in {
-                            "Go back to built-in"
-                        } else {
-                            "Delete this template"
-                        })
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked();
-                        if delete {
-                            ui.close();
-                        }
-                    });
-                    if let Some(draft) = &self.template_draft {
-                        Self::draft_status(ui, draft);
+        let more_name = format!("More actions for {}", template.name);
+        let mut line = design::TitleLine::new(&template.name).role(design::TitleType::Section);
+        if template.path.is_some() {
+            let built_in = super::BUILT_IN_TEMPLATES
+                .iter()
+                .any(|(name, _)| *name == template.name);
+            let delete = &mut delete;
+            line = line.menu(
+                design::TitleAction::quiet(MORE).name(&more_name),
+                move |ui| {
+                    *delete = Action::quiet(if built_in {
+                        "Go back to built-in"
+                    } else {
+                        "Delete"
+                    })
+                    .name(if built_in {
+                        "Go back to built-in"
+                    } else {
+                        "Delete this template"
+                    })
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked();
+                    if *delete {
+                        ui.close();
                     }
-                } else {
-                    customize = Action::secondary("Customize")
-                        .name("Customize this template")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked();
-                    design::status(
-                        ui,
-                        Status {
-                            icon: icons::READ_ONLY,
-                            word: "Read-only",
-                            color: c.document.read_only,
-                        },
-                    );
-                }
-            });
-        });
+                },
+            );
+            if let Some(draft) = &self.template_draft {
+                line = line.state(
+                    Self::draft_status(&draft.state),
+                    &Self::every_draft_state().map(|state| Self::draft_status(&state)),
+                );
+            }
+        } else {
+            let read_only = Status {
+                icon: icons::READ_ONLY,
+                word: "Read-only",
+                color: c.document.read_only,
+            };
+            line = line
+                .action(design::TitleAction::secondary(CUSTOMIZE).name("Customize this template"))
+                .state(read_only, &[read_only]);
+        }
+        let customize = line.show(ui).clicked(CUSTOMIZE);
         if customize && let Some(folder) = &self.folder {
             match create_template(folder, &template.name, &template.body) {
                 Ok(created) => {
