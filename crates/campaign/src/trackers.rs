@@ -918,15 +918,13 @@ fn end_below_marks(
 /// The notice the DM clicked, as the files on disk hold it now: the same change and mark, for
 /// the same tracker and name, or the same day of the same day mark. An outside edit that moved
 /// it, or a day count that went back, writes nothing.
-fn open_as_drawn<'a>(state: &'a State, drawn: &Notice) -> Result<&'a Notice, String> {
-    if let (NoticeRef::Day { .. }, Some(why)) = (&drawn.id, &state.clock_not_read) {
-        return Err(format!("{why} Nothing was recorded."));
+fn open_as_drawn<'a>(state: &'a State, drawn: &Notice) -> Result<&'a Notice, Refused> {
+    if let (NoticeRef::Day { .. }, Some(_)) = (&drawn.id, &state.clock_not_read) {
+        return Err(Refused::TimelineUnreadable);
     }
-    let open = state
-        .notice(&drawn.id)
-        .ok_or("That notice is no longer due. Nothing was recorded.")?;
+    let open = state.notice(&drawn.id).ok_or(Refused::NoLongerDue)?;
     if open.key != drawn.key || open.instance != drawn.instance {
-        return Err("That notice changed on disk. Nothing was recorded.".into());
+        return Err(Refused::Changed(Part::Notice));
     }
     Ok(open)
 }
@@ -1127,22 +1125,81 @@ pub fn undo_op(
     ledger: &Ledger,
     session: Option<Uuid>,
     expected: &[Entry],
-) -> Result<Op, String> {
+) -> Result<Op, Refused> {
     let target = undo_target(ledger, session);
     if target != expected {
-        return Err("The ledger changed on disk. Nothing was undone.".into());
+        return Err(Refused::LedgerChanged);
     }
     let op = Op::Remove(target);
     if let Some(name) = orphaned(rules, today, ledger, &ledger.apply(&op)?) {
-        return Err(format!("{name} depends on this act. Nothing was undone."));
+        return Err(Refused::DependsOn(name));
     }
     Ok(op)
 }
 
 /// Why entries removed from a tracker history cannot go back.
 pub enum RestoreFault {
-    Stale(String),
+    Stale(Refused),
     Dependent(String),
+}
+
+/// Why a tracker act wrote nothing: a closed list of causes, with names but no words (ruling M7).
+/// The app writes every word, with the act it was (`design::results::Refusal`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Refused {
+    /// The tracker's `min` (ruling M13): no next step.
+    BelowMin { tracker: String, min: i64 },
+    /// Every name of the table was rolled (ruling M13): no next step.
+    EveryNameRolled,
+    /// A fault in the tracker rules: the change names a line its tracker does not have. No line
+    /// when the action names none.
+    NoLine {
+        tracker: String,
+        line: Option<String>,
+    },
+    /// A fault in the tracker rules: no tracker in play has this key.
+    UnknownTracker(String),
+    /// A fault in the tracker rules: a change of this tracker has no add or set.
+    NoAmount(String),
+    /// A change of this tracker has an amount Splat cannot read.
+    BadAmount(String),
+    /// No roll table has this key.
+    UnknownTable(String),
+    /// This roll table cannot roll: its dice or rows have a fault.
+    TableCannotRoll(String),
+    /// The dice rolled a total that no row of the table has.
+    NoRow { table: String, total: i64 },
+    /// An action that asks for a number got none.
+    NoNumber,
+    /// The thing the DM pressed changed since it was drawn.
+    Changed(Part),
+    /// The notice the DM pressed is no longer due.
+    NoLongerDue,
+    /// An entry, or the entry before it, is no longer in `Trackers.md`.
+    Gone(Part),
+    /// `Trackers.md` changed on disk since the Undo was drawn.
+    LedgerChanged,
+    /// A house rule note changed on disk since the view drew it.
+    RulesChanged,
+    /// The tracker rules cannot be read.
+    RulesUnreadable,
+    /// The day count cannot be read from the Timeline.
+    TimelineUnreadable,
+    /// A later entry needs this one: its label.
+    DependsOn(String),
+}
+
+/// The part of the files that a refused act was about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Part {
+    Notice,
+    Mark,
+    Table,
+    Name,
+    Action,
+    Entry,
+    EntryBefore,
+    DayCount,
 }
 
 /// Put removed entries back only while their places and later acts still allow it.
