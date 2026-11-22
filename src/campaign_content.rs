@@ -57,7 +57,7 @@ impl Snapshot {
 pub struct Repair {
     path: String,
     baseline: String,
-    draft: String,
+    draft: crate::design::text_draft::TextDraft,
     /// Why Save would refuse `draft`: Save's own check without writing, shared with World.
     refusal: Option<String>,
     /// The line of `draft` to mark.
@@ -71,7 +71,7 @@ impl Repair {
         let mut repair = Self {
             path,
             baseline: text.clone(),
-            draft: text,
+            draft: crate::design::text_draft::TextDraft::new(text),
             refusal: None,
             error_line: None,
             failure: None,
@@ -91,7 +91,7 @@ impl Repair {
         self.failure = None;
     }
     fn dirty(&self) -> bool {
-        self.draft != self.baseline
+        self.draft.as_str() != self.baseline
     }
     /// Save's check of the draft as the save row's typed diagnosis: the one value that gives
     /// the save row's `Invalid` and the footer's message of the same fault their tone (R41).
@@ -118,7 +118,7 @@ impl Repair {
             &self.draft,
         ) {
             Ok(_) => {
-                self.baseline = self.draft.clone();
+                self.baseline = self.draft.as_str().to_owned();
                 self.failure = None;
                 true
             }
@@ -1691,7 +1691,7 @@ impl CampaignContent {
                 if let Some(repair) = self.repairs.iter_mut().find(|r| &r.path == path)
                     && let Some(active) = self.active.clone()
                 {
-                    repair.draft = text.clone();
+                    let _ = repair.draft.replace(text.clone());
                     repair.draft_changed(&active, &mut self.repair_checks);
                 }
             }
@@ -1993,10 +1993,10 @@ impl CampaignContent {
                             Payload::RepairDiscard {
                                 stamp,
                                 path: path.clone(),
-                                text: repair.draft.clone(),
+                                text: repair.draft.as_str().to_owned(),
                             }
                         );
-                        repair.draft = repair.baseline.clone();
+                        let _ = repair.draft.replace(repair.baseline.clone());
                         repair.draft_changed(active, checks);
                     }
                     if repair.dirty() {

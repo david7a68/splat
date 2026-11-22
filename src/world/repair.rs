@@ -2,6 +2,7 @@
 #![warn(deprecated)] // Its old message functions are gone; the parent file still allows them.
 use super::file_fault::FileFault;
 use crate::design::memo::Changed;
+use crate::design::text_draft::{DraftKey, TextDraft};
 use crate::{
     design::{
         self, colors,
@@ -29,6 +30,12 @@ pub fn editor_name(path: &str) -> String {
 const REPAIR_TEXT: design::layout::FieldName = crate::field_id!("world_repair_text");
 
 /// The source editor's face: the note's text in monospace, as wide as its room.
+/// The source editor's face: the note's text in monospace, laid out once per change (layout
+/// PR 9b).
+fn source_face(ui: &egui::Ui) -> design::pane::Face {
+    design::pane::Face::Font(egui::TextStyle::Monospace.resolve(ui.style()))
+}
+
 fn source_style(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
     edit.font(egui::TextStyle::Monospace)
         .desired_width(f32::INFINITY)
@@ -55,17 +62,19 @@ fn source_editor(
     ui: &mut egui::Ui,
     place: Place<'_>,
     path: &str,
-    draft: &mut String,
+    draft: &mut TextDraft,
     error_line: Option<usize>,
 ) -> ((bool, bool), egui::Rect, egui::Id) {
     let field = REPAIR_TEXT.of(design::TextKey::from_data(path));
+    let face = source_face(ui);
     let output = match place {
-        Place::Region(region) => region.editor(ui, field, draft, source_style),
+        Place::Region(region) => region.editor(ui, field, draft, face, source_style),
         Place::AtMost(most) => design::pane::editor_view(
             ui,
             design::pane::ViewHeight::AtMost(most),
             field,
             draft,
+            face,
             source_style,
         ),
     };
@@ -101,7 +110,7 @@ fn editor_in_pane(
     ui: &mut egui::Ui,
     region: EditorRegion<'_>,
     path: &str,
-    draft: &mut String,
+    draft: &mut TextDraft,
     error_line: Option<usize>,
 ) -> (bool, bool) {
     source_editor(ui, Place::Region(region), path, draft, error_line).0
@@ -113,7 +122,7 @@ fn editor_in_pane(
 pub fn editor_events(
     ui: &mut egui::Ui,
     path: &str,
-    draft: &mut String,
+    draft: &mut TextDraft,
     error_line: Option<usize>,
 ) -> (bool, bool) {
     const MAX_HEIGHT: f32 = design::XXL * 6.0 + design::L + design::S + design::XS;
@@ -141,13 +150,23 @@ pub fn editor_events(
 /// line to fix, or an identity that the campaign does not allow. It writes nothing and reads no
 /// file: a refusal from the disk (read only, missing, a write error) is Save's own failure. Save, the save row's state, its cause
 /// and Save's availability all use it, so `Unsaved` always means that Save would write.
-pub fn refusal(campaign: &Campaign, path: &str, draft: &str) -> (Option<String>, Option<usize>) {
-    // The save row asks on every frame; a parse of a long note takes about 1 ms.
+pub fn refusal(
+    campaign: &Campaign,
+    path: &str,
+    draft: &TextDraft,
+) -> (Option<String>, Option<usize>) {
+    // The save row asks on every frame; a parse of a long note takes about 1 ms. The result is
+    // kept by the draft's key (layout PR 9b): a quiet frame hashes none of its words.
     static REFUSALS: splat::memo::Memo<(Option<String>, Option<usize>)> =
         splat::memo::Memo::new(64);
     REFUSALS.get_or(
-        &[campaign.id.as_bytes(), path.as_bytes(), draft.as_bytes()],
+        &[
+            campaign.id.as_bytes(),
+            path.as_bytes(),
+            &draft.key().to_bytes(),
+        ],
         || {
+            let draft = draft.as_str();
             if let Some(rule) = crate::library::note_path_rule(path) {
                 return (Some(rule.into()), None);
             }
@@ -266,14 +285,14 @@ pub struct Repair {
     pub path: String,
     campaign: Uuid,
     baseline: String,
-    draft: String,
+    draft: TextDraft,
     /// The Undo of the last Discard or Reload of this draft.
     undos: design::Results<RepairOwner, RepairUndo>,
     disk: Option<String>,
     /// Save's failure on the disk (read only, missing, a write error): the draft it tried to
     /// write and Save's reason. This draft owns it. Each end event clears it: an edit, Discard
     /// or its Undo, Reload or its Undo, the file followed from disk, and a successful Save.
-    failed: Option<(String, String)>,
+    failed: Option<(DraftKey, String)>,
 }
 
 impl Repair {
@@ -287,7 +306,7 @@ impl Repair {
             path: path.into(),
             campaign: campaign.id,
             baseline: text.clone(),
-            draft: text,
+            draft: TextDraft::new(text),
             undos: design::Results::new(),
             disk: None,
             failed: None,
@@ -308,14 +327,14 @@ impl Repair {
     }
 
     pub fn dirty(&self) -> bool {
-        self.draft != self.baseline
+        self.draft.as_str() != self.baseline
     }
 
     /// Save's last failure on the disk, while the draft is still the one it tried to write.
     fn failure(&self) -> Option<&str> {
         self.failed
             .as_ref()
-            .filter(|(tried, _)| *tried == self.draft)
+            .filter(|(tried, _)| *tried == self.draft.key())
             .map(|(_, reason)| reason.as_str())
     }
 
@@ -330,7 +349,7 @@ impl Repair {
                 self.disk = Some(text);
             } else {
                 self.baseline = text.clone();
-                self.draft = text;
+                let _ = self.draft.replace(text);
                 // A newer file ends the Undo of Discard and of Reload, so Undo never hides that
                 // change.
                 self.undos.disk_changed(|_| false);
@@ -342,7 +361,7 @@ impl Repair {
         if self
             .failed
             .as_ref()
-            .is_some_and(|(tried, _)| *tried != self.draft)
+            .is_some_and(|(tried, _)| *tried != self.draft.key())
         {
             self.failed = None;
         }
@@ -401,7 +420,7 @@ impl Repair {
                     };
                     // A replaced or ended result (`Gone`) does nothing.
                     if let Ok((undo, ())) = self.undos.undo_by(ticket, |_| Ok::<_, ()>(())) {
-                        self.draft = undo.draft().to_owned();
+                        let _ = self.draft.replace(undo.draft());
                         self.failed = None;
                         // The draft changed, so Save's check runs again on the words now in the
                         // editor.
@@ -463,7 +482,7 @@ impl Repair {
         self.disk = None;
         match choice {
             design::DiskConflictChoice::Reload => {
-                let draft = std::mem::replace(&mut self.draft, self.baseline.clone());
+                let draft = self.draft.replace(self.baseline.clone());
                 // Reload replaces Discard's Undo: one Undo per draft.
                 self.undos.record(RepairUndo::Reload {
                     owner: self.owner(),
@@ -531,7 +550,7 @@ impl Repair {
             saved = self.save(campaign);
         }
         if pressed.discard {
-            let draft = std::mem::replace(&mut self.draft, self.baseline.clone());
+            let draft = self.draft.replace(self.baseline.clone());
             // Discard replaces Reload's Undo: one Undo per draft.
             self.undos.record(RepairUndo::Discard {
                 owner: self.owner(),
@@ -556,14 +575,14 @@ impl Repair {
         };
         match result {
             Ok(_) => {
-                self.baseline = self.draft.clone();
+                self.baseline = self.draft.as_str().to_owned();
                 // A saved draft ends its Undo results.
                 self.undos.owner_changed(&self.owner());
                 self.failed = None;
                 true
             }
             Err(error) => {
-                self.failed = Some((self.draft.clone(), error));
+                self.failed = Some((self.draft.key(), error));
                 false
             }
         }
@@ -593,11 +612,19 @@ mod tests {
     fn painted(repair: &mut Repair, campaign: &Campaign, run_open: bool) -> (bool, String) {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
-        let output = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                assert!(!repair.show(ui, campaign, run_open));
-            });
+        let mut frame = || {
+            ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    assert!(!repair.show(ui, campaign, run_open));
+                });
+            })
+        };
+        let output = frame();
+        // Layout PR 9b: the repair's next frames lay out and hash none of its text.
+        let work = design::pane::text_work(|| {
+            let _ = (frame(), frame());
         });
+        assert_eq!(work, (0, 0), "9b-quiet: the repair editor's quiet frames");
         let accent = colors().accent_fill;
         let mut words = String::new();
         let mut primary = false;
@@ -639,9 +666,9 @@ mod tests {
             std::fs::write(&path, &text).unwrap();
             let mut repair = Repair::open(&campaign, "Broken.md").unwrap();
             repair.draft.push_str("\nMy unsent text.\n");
-            let draft = repair.draft.clone();
+            let draft = repair.draft.as_str().to_owned();
             show(&mut repair, &campaign);
-            assert_eq!(repair.draft, draft, "{row}");
+            assert_eq!(repair.draft.as_str(), draft, "{row}");
             assert_eq!(std::fs::read_to_string(&path).unwrap(), text, "{row}");
         }
         for value in ["[", "", "not-an-id"] {
@@ -649,9 +676,9 @@ mod tests {
             std::fs::write(&path, &text).unwrap();
             let mut repair = Repair::open(&campaign, "Broken.md").unwrap();
             repair.draft.push_str("\nMy unsent text.\n");
-            let draft = repair.draft.clone();
+            let draft = repair.draft.as_str().to_owned();
             assert!(!repair.save(&campaign), "{value}");
-            assert_eq!(repair.draft, draft);
+            assert_eq!(repair.draft.as_str(), draft);
             assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
         }
         std::fs::write(&path, [0xff]).unwrap();
@@ -691,14 +718,14 @@ mod tests {
                 && words.contains("Line 3 opens a list with [ that never closes."),
             "iter-24-FD2-unchanged-invalid\n{words}"
         );
-        repair.draft = format!("{before}\nStill broken.\n");
+        let _ = repair.draft.replace(format!("{before}\nStill broken.\n"));
         let (primary, words) = painted(&mut repair, &campaign, false);
         assert!(!primary, "FD3-invalid");
         assert!(
             words.contains("Invalid") && !words.contains("Unsaved"),
             "FF2-invalid\n{words}"
         );
-        repair.draft = draft.clone();
+        let _ = repair.draft.replace(draft.clone());
         let (primary, words) = painted(&mut repair, &campaign, false);
         assert!(primary, "FD3-changed");
         assert!(
@@ -721,7 +748,7 @@ mod tests {
             splat::content::Entry::parse("Broken.md", &other).is_ok(),
             "fixture parses"
         );
-        repair.draft = other.clone();
+        let _ = repair.draft.replace(other.clone());
         for attempt in ["before", "after"] {
             let (primary, words) = painted(&mut repair, &campaign, false);
             assert!(!primary, "review-refused-primary-{attempt}");
@@ -738,10 +765,10 @@ mod tests {
                 "review-refused-bytes-{attempt}"
             );
         }
-        assert_eq!(repair.draft, other);
-        repair.draft = draft.clone();
+        assert_eq!(repair.draft.as_str(), other);
+        let _ = repair.draft.replace(draft.clone());
         assert!(!show_with(&mut repair, &campaign, true), "FD3-run-open");
-        assert_eq!(repair.draft, draft);
+        assert_eq!(repair.draft.as_str(), draft);
         // Round 23 re-check: before Save the state comes from the draft's own checks, with no
         // disk read. A Save that fails on the disk shows Save's own reason and `Not saved` in
         // place of `Unsaved` until the draft changes. The expected reason is the one the write
@@ -776,10 +803,10 @@ mod tests {
                 std::fs::remove_file(&path).unwrap();
             }
             show(&mut repair, &campaign);
-            assert_eq!(repair.draft, draft);
+            assert_eq!(repair.draft.as_str(), draft);
             failed_save(&mut repair, if moved { "moved" } else { "missing" });
             assert!(!path.exists());
-            assert_eq!(repair.draft, draft);
+            assert_eq!(repair.draft.as_str(), draft);
             std::fs::write(&path, before).unwrap();
             // The file coming back is not an edit of the draft: the cause stays until one.
             let (_, words) = painted(&mut repair, &campaign, false);
@@ -787,9 +814,9 @@ mod tests {
                 words.contains("Not saved"),
                 "recheck-{moved}-file-back\n{words}"
             );
-            repair.draft.push(' ');
+            repair.draft.push_str(" ");
             show(&mut repair, &campaign);
-            repair.draft = draft.clone();
+            let _ = repair.draft.replace(draft.clone());
         }
         // A read-only file: Save refuses, the bytes stay, and the next edit ends the cause.
         let mut permissions = std::fs::metadata(&path).unwrap().permissions();
@@ -810,7 +837,7 @@ mod tests {
         // Round 24 contract: one key after the disk failure gives Save the primary back.
         assert!(primary, "iter-24-D-read-only-key-primary");
         // Going back to the same words does not bring the old cause back.
-        repair.draft = draft.clone();
+        let _ = repair.draft.replace(draft.clone());
         let (_, words) = painted(&mut repair, &campaign, false);
         assert!(
             !words.contains("Not saved"),
@@ -835,7 +862,7 @@ mod tests {
             .clone()
             .expect("the outside write shows the disk choices");
         assert!(!repair.choose(&campaign, design::DiskConflictChoice::Reload, disk, false));
-        assert_eq!(repair.draft, draft);
+        assert_eq!(repair.draft.as_str(), draft);
         let (_, words) = painted(&mut repair, &campaign, false);
         assert!(
             words.contains("No changes")
@@ -849,7 +876,7 @@ mod tests {
             path: "../Outside.md".into(),
             campaign: campaign.id,
             baseline: before.into(),
-            draft: draft.clone(),
+            draft: draft.clone().into(),
             undos: design::Results::new(),
             disk: None,
             failed: None,

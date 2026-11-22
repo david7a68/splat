@@ -183,7 +183,7 @@ impl Slash {
         &mut self,
         ui: &mut egui::Ui,
         output: &crate::design::Editor,
-        body: &mut String,
+        body: &mut crate::design::text_draft::TextDraft,
         place: &Place<'_>,
     ) -> Done {
         let mut done = Done::default();
@@ -740,7 +740,7 @@ mod tests {
         crate::field_id!("slash_test_note").once(crate::design::Once::Example);
 
     struct Note {
-        body: String,
+        body: crate::design::text_draft::TextDraft,
         slash: Slash,
         index: ContentIndex,
         campaign: Campaign,
@@ -774,7 +774,10 @@ mod tests {
                         ui.memory_mut(|memory| memory.request_focus(id));
                     }
                     note.slash.take_keys(ui, Some(id));
-                    let output = EDITOR.editor(ui, &mut note.body, |edit| edit);
+                    let face = crate::design::pane::Face::Font(
+                        egui::FontSelection::default().resolve(ui.style()),
+                    );
+                    let output = EDITOR.editor(ui, &mut note.body, face, |edit| edit);
                     let place = Place {
                         session: None,
                         campaign: Some(&note.campaign),
@@ -784,7 +787,7 @@ mod tests {
                     note.created |= note.slash.show(ui, &output, &mut note.body, &place).created;
                 },
                 Note {
-                    body: body.to_owned(),
+                    body: crate::design::text_draft::TextDraft::new(body),
                     slash: Slash::default(),
                     index,
                     campaign,
@@ -831,14 +834,14 @@ mod tests {
         type_text(&mut harness, "se");
         press(&mut harness, egui::Key::Enter);
         // The command's words are gone, and the search has the keyboard.
-        assert_eq!(harness.state().body, "Met ");
+        assert_eq!(harness.state().body.as_str(), "Met ");
         type_text(&mut harness, "verori");
         press(&mut harness, egui::Key::Enter);
-        assert_eq!(harness.state().body, "Met [[Verori]]");
+        assert_eq!(harness.state().body.as_str(), "Met [[Verori]]");
         assert!(!harness.state().slash.is_open());
         // The keyboard is back in the note, after the link.
         type_text(&mut harness, " today");
-        assert_eq!(harness.state().body, "Met [[Verori]] today");
+        assert_eq!(harness.state().body.as_str(), "Met [[Verori]] today");
     }
 
     #[test]
@@ -851,7 +854,7 @@ mod tests {
         type_text(&mut harness, "culture");
         harness.get_by_label_contains("Culture").click();
         harness.run_steps(3);
-        assert_eq!(harness.state().body, "[[Verori#Culture]]");
+        assert_eq!(harness.state().body.as_str(), "[[Verori#Culture]]");
     }
 
     #[test]
@@ -861,12 +864,12 @@ mod tests {
         type_text(&mut harness, "/");
         type_text(&mut harness, "gen");
         press(&mut harness, egui::Key::Enter);
-        assert_eq!(harness.state().body, "Hired ");
+        assert_eq!(harness.state().body.as_str(), "Hired ");
         // While the card is open, what is typed does not go in before the link.
         type_text(&mut harness, "Bob");
         press(&mut harness, egui::Key::Tab);
         press(&mut harness, egui::Key::Backspace);
-        assert_eq!(harness.state().body, "Hired ");
+        assert_eq!(harness.state().body.as_str(), "Hired ");
         harness.get_by_label("Save NPC").click();
         harness.run_steps(3);
         let state = harness.state();
@@ -878,7 +881,7 @@ mod tests {
             .collect();
         assert_eq!(files.len(), 1);
         let stem = files[0].file_stem().unwrap().to_string_lossy();
-        assert_eq!(state.body, format!("Hired [[{stem}]]"));
+        assert_eq!(state.body.as_str(), format!("Hired [[{stem}]]"));
     }
 
     #[test]
@@ -889,13 +892,13 @@ mod tests {
         press(&mut harness, egui::Key::Escape);
         assert!(!harness.state().slash.is_open());
         type_text(&mut harness, "x");
-        assert_eq!(harness.state().body, "/x");
+        assert_eq!(harness.state().body.as_str(), "/x");
         // No command starts with these letters, so the menu goes and the words stay.
         type_text(&mut harness, " /");
         assert!(harness.state().slash.is_open());
         type_text(&mut harness, "zz");
         assert!(!harness.state().slash.is_open());
-        assert_eq!(harness.state().body, "/x /zz");
+        assert_eq!(harness.state().body.as_str(), "/x /zz");
         // In a word, a slash is only a slash.
         type_text(&mut harness, " and/");
         assert!(!harness.state().slash.is_open());
@@ -928,13 +931,13 @@ mod tests {
         harness.run_steps(2);
         type_text(&mut harness, "/");
         press(&mut harness, egui::Key::Enter);
-        assert_eq!(harness.state().body, "/\n");
+        assert_eq!(harness.state().body.as_str(), "/\n");
         assert!(!harness.state().slash.is_open());
         type_text(&mut harness, "/");
         type_text(&mut harness, "se");
         harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Enter);
         harness.run_steps(3);
-        assert_eq!(harness.state().body, "/\n/se\n");
+        assert_eq!(harness.state().body.as_str(), "/\n/se\n");
         assert!(!harness.state().slash.is_open());
     }
 
@@ -949,9 +952,9 @@ mod tests {
         press(&mut harness, egui::Key::Tab);
         press(&mut harness, egui::Key::Tab);
         type_text(&mut harness, "ori");
-        assert_eq!(harness.state().body, "Met ");
+        assert_eq!(harness.state().body.as_str(), "Met ");
         press(&mut harness, egui::Key::Enter);
-        assert_eq!(harness.state().body, "Met [[Verori]]");
+        assert_eq!(harness.state().body.as_str(), "Met [[Verori]]");
     }
 
     #[test]
@@ -964,7 +967,7 @@ mod tests {
         press(&mut harness, egui::Key::Escape);
         assert!(!harness.state().slash.is_open());
         type_text(&mut harness, "x");
-        assert_eq!(harness.state().body, "Met x");
+        assert_eq!(harness.state().body.as_str(), "Met x");
         // Words typed and taken out before a command come back with Ctrl+Z after it: the
         // command's own change keeps the note's Undo history (review of PR 594).
         type_text(&mut harness, " lost");
@@ -977,16 +980,16 @@ mod tests {
         press(&mut harness, egui::Key::Enter);
         harness.get_by_label("Save NPC");
         press(&mut harness, egui::Key::Escape);
-        assert_eq!(harness.state().body, "Met x ");
+        assert_eq!(harness.state().body.as_str(), "Met x ");
         // Each Backspace is a step of the history, so Ctrl+Z goes back one at a time.
         let mut undone = Vec::new();
-        while undone.len() < 6 && harness.state().body != "Met x lost" {
+        while undone.len() < 6 && harness.state().body.as_str() != "Met x lost" {
             harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
             harness.run_steps(3);
             undone.push(harness.state().body.clone());
         }
         assert_eq!(
-            harness.state().body,
+            harness.state().body.as_str(),
             "Met x lost",
             "n0-slash-undo: Ctrl+Z after a command brings back the words typed before it: {undone:?}"
         );

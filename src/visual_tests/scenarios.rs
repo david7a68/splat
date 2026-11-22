@@ -5153,6 +5153,14 @@ pub mod campaign_content {
         let unchanged = d.app_mut().campaign_content.repair_checks();
         d.replace_text_in(&b_editor, &format!("{second}\nB edit.\n"));
         let edited = d.app_mut().campaign_content.repair_checks();
+        // Layout PR 9b: once settled, the repair editors' frames lay out and hash no text.
+        d.settle();
+        let work = crate::design::pane::text_work(|| d.settle());
+        d.observe(
+            "9b-quiet-campaign-repair",
+            work == (0, 0),
+            format!("Layouts made and bytes hashed on settled frames: {work:?}"),
+        );
         d.observe(
             "iter-23-C-check-once",
             unchanged == checks && edited > unchanged,
@@ -21740,6 +21748,14 @@ pub mod encounter_groups {
         // An unrelated edit keeps the result; Undo puts back only the creature, and its words
         // go with it.
         d.type_into(&format!("Group notes for {GROUP_LOST}"), " Arrive at dusk.");
+        // Layout PR 9b: once settled, the group notes' frames lay out and hash no text.
+        d.settle();
+        let work = crate::design::pane::text_work(|| d.settle());
+        d.observe(
+            "9b-quiet-group-notes",
+            work == (0, 0),
+            format!("Layouts made and bytes hashed on settled frames: {work:?}"),
+        );
         let typed = d.visible_text("Arrive at dusk.");
         d.click("Undo replace member");
         d.expect("Replace Unknown creature");

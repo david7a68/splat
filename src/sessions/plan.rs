@@ -1933,7 +1933,9 @@ impl Scenes {
     /// when the words come back to what the act left.
     fn end_what_changed(&mut self, draft: Option<&crate::sessions::Draft>) {
         if self.fault.as_ref().is_some_and(|fault| {
-            draft.is_none_or(|draft| draft.body != fault.met || (fault.waits && !draft.unsaved()))
+            draft.is_none_or(|draft| {
+                draft.body.as_str() != fault.met || (fault.waits && !draft.unsaved())
+            })
         }) {
             self.fault = None;
         }
@@ -4228,7 +4230,7 @@ impl Sessions {
         if let Some((_, _, before, _, _, _)) = self.removed_group.take()
             && let Some(draft) = &mut self.draft
         {
-            draft.body = before;
+            let _ = draft.body.replace(before);
             draft.edited();
         }
     }
@@ -4391,7 +4393,11 @@ impl Sessions {
             .removed_group
             .as_ref()
             .is_some_and(|(id, _, _, after, _, _)| {
-                *id == session && self.draft.as_ref().is_none_or(|draft| draft.body != *after)
+                *id == session
+                    && self
+                        .draft
+                        .as_ref()
+                        .is_none_or(|draft| draft.body.as_str() != *after)
             })
         {
             self.removed_group = None;
@@ -4399,7 +4405,7 @@ impl Sessions {
         let body = self
             .draft
             .as_ref()
-            .map_or_else(String::new, |draft| draft.body.clone());
+            .map_or_else(String::new, |draft| draft.body.as_str().to_owned());
         let mut played: BTreeMap<String, usize> = BTreeMap::new();
         for event in &book.events {
             if event.is_in(session) && event.run.is_some() {
@@ -5165,17 +5171,23 @@ impl Sessions {
         if let Some((position, name, height)) = remove_group
             && let Some(draft) = &mut self.draft
         {
-            let before = draft.body.clone();
-            unlink_group(&mut draft.body, &name);
+            let before = draft.body.as_str().to_owned();
+            draft.body.edit(|body| unlink_group(body, &name));
             draft.edited();
             Self::mark_plan(
                 &mut self.plan_marks,
                 self.folder.as_deref(),
                 PlanKind::GroupRemoved,
             );
-            self.removed_group =
-                Some((session, position, before, draft.body.clone(), height, name));
-            self.plan_notice_state = Some((draft.body.clone(), book.events.clone()));
+            self.removed_group = Some((
+                session,
+                position,
+                before,
+                draft.body.as_str().to_owned(),
+                height,
+                name,
+            ));
+            self.plan_notice_state = Some((draft.body.as_str().to_owned(), book.events.clone()));
         }
         if changed {
             book.touch();
@@ -5199,7 +5211,7 @@ impl Sessions {
                     self.plan_notice_state = Some((
                         self.draft
                             .as_ref()
-                            .map_or_else(String::new, |draft| draft.body.clone()),
+                            .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
                         book.events.clone(),
                     ));
                     self.record_deleted_run(book, deleted, saved.id);
@@ -5219,7 +5231,7 @@ impl Sessions {
             self.plan_notice_state = Some((
                 self.draft
                     .as_ref()
-                    .map_or_else(String::new, |draft| draft.body.clone()),
+                    .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
                 book.events.clone(),
             ));
             self.open_event = None;
@@ -5663,7 +5675,7 @@ impl Sessions {
                 ))
             };
             scenes.fault = Some(Fault {
-                met: draft.body.clone(),
+                met: draft.body.as_str().to_owned(),
                 place,
                 waits: matches!(what, SceneFault::NotSaved),
                 what,
@@ -5707,7 +5719,10 @@ impl Sessions {
     /// The plan's results end at the next edit of the note or the timeline events.
     fn end_plan_results_after_edits(&mut self, book: &Book) {
         if let Some((body, events)) = &self.plan_notice_state
-            && (self.draft.as_ref().is_none_or(|draft| draft.body != *body)
+            && (self
+                .draft
+                .as_ref()
+                .is_none_or(|draft| draft.body.as_str() != *body)
                 || book.events != *events)
         {
             self.deleted_run = None;
@@ -6730,7 +6745,7 @@ mod tests {
                 planned_fight("Bridge Ambush", "Encounters/Bridge Ambush.md"),
             ];
             let mut days_of = |fights: &[PlanFight], fights_revision| {
-                let body = sessions.draft.as_ref().unwrap().body.clone();
+                let body = sessions.draft.as_ref().unwrap().body.as_str().to_owned();
                 let planned: Vec<&PlanFight> =
                     plan_links(&body, &book.events, Some(session), fights)
                         .into_iter()
@@ -6913,7 +6928,7 @@ mod tests {
         let mut field = design::AddField::default();
         field.words = "Unsent scene".into();
         sessions.scenes.field = Some(field);
-        let a_words = sessions.draft.as_ref().unwrap().body.clone();
+        let a_words = sessions.draft.as_ref().unwrap().body.as_str().to_owned();
         let b_file = |shrine: usize| {
             let text = fs::read_to_string(&b_note.path).unwrap();
             assert_eq!(
@@ -6936,7 +6951,7 @@ mod tests {
         b_file(1);
         assert_eq!(sessions.selected, Some(a));
         assert_eq!(sessions.draft.as_ref().unwrap().path, a_note.path);
-        assert_eq!(sessions.draft.as_ref().unwrap().body, a_words);
+        assert_eq!(sessions.draft.as_ref().unwrap().body.as_str(), a_words);
         assert_eq!(sessions.scenes.added.as_ref(), Some(&scene));
         assert_eq!(
             sessions
@@ -7232,16 +7247,16 @@ mod tests {
         };
         frame(&mut sessions);
         assert!(!sessions.travel.planned.is_empty());
-        let restored = sessions.draft.as_ref().unwrap().body.clone();
+        let restored = sessions.draft.as_ref().unwrap().body.as_str().to_owned();
         for words in [format!("{restored}x"), restored.clone()] {
             let draft = sessions.draft.as_mut().unwrap();
-            draft.body = words;
+            let _ = draft.body.replace(words);
             draft.edited();
             frame(&mut sessions);
             sessions.draft.as_mut().unwrap().save();
             frame(&mut sessions);
         }
-        assert_eq!(sessions.draft.as_ref().unwrap().body, restored);
+        assert_eq!(sessions.draft.as_ref().unwrap().body.as_str(), restored);
         assert!(
             !sessions.plan_line_shown_in(Some(b)),
             "the plan offers no result"
@@ -7444,7 +7459,7 @@ mod tests {
             "{}Typed, not saved.\n",
             sessions.draft.as_ref().unwrap().body
         );
-        sessions.draft.as_mut().unwrap().body = dirty.clone();
+        let _ = sessions.draft.as_mut().unwrap().body.replace(dirty.clone());
         sessions.draft.as_mut().unwrap().edited();
         let renamed = dir.path().join("Renamed road.md");
         fs::rename(&b_note.path, &renamed).unwrap();
@@ -7455,7 +7470,7 @@ mod tests {
             Some(refused.as_str()),
             "the rename keeps A's answer"
         );
-        assert_eq!(sessions.draft.as_ref().unwrap().body, dirty);
+        assert_eq!(sessions.draft.as_ref().unwrap().body.as_str(), dirty);
         assert!(
             sessions.draft.as_ref().unwrap().unsaved(),
             "the dirty draft is not saved"
@@ -7463,7 +7478,12 @@ mod tests {
         fs::rename(&renamed, &b_note.path).unwrap();
         sessions.notes[1].path = b_note.path.clone();
         sessions.notes_revision += 1;
-        sessions.draft.as_mut().unwrap().body = dirty.replace("Typed, not saved.\n", "");
+        let _ = sessions
+            .draft
+            .as_mut()
+            .unwrap()
+            .body
+            .replace(dirty.replace("Typed, not saved.\n", ""));
         sessions.draft.as_mut().unwrap().save();
         // E6 (R41): an unreadable file is an error, a missing one a warning, by one rule that
         // both readers' lines take (`Shown::outcome`). Each is a fresh plan line's first Undo.
@@ -9328,7 +9348,7 @@ mod tests {
             )
         );
         assert_eq!(
-            page.draft.as_ref().unwrap().body,
+            page.draft.as_ref().unwrap().body.as_str(),
             crate::sessions::body_of(&changed)
         );
 
@@ -10062,7 +10082,7 @@ mod tests {
             let body = sessions
                 .draft
                 .as_ref()
-                .map_or_else(String::new, |draft| draft.body.clone());
+                .map_or_else(String::new, |draft| draft.body.as_str().to_owned());
             sessions.plan_notice_state = Some((body, book.events.clone()));
         };
         let mut sessions = Sessions::default();
