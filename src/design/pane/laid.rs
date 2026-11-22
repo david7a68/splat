@@ -44,7 +44,10 @@ impl Laid {
     /// A recipe's layout of the block `key`. Each text and slot must lie in the block.
     #[cfg_attr(
         not(test),
-        expect(dead_code, reason = "layout 11c A2's `PlanRow` recipe is the first to lay out a block")
+        expect(
+            dead_code,
+            reason = "layout 11c A2's `PlanRow` recipe is the first to lay out a block"
+        )
     )]
     pub(in crate::design) fn new(
         key: Id,
