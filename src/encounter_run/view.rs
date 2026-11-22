@@ -5390,102 +5390,104 @@ impl Run {
                                         ui.set_min_height(room);
                                         let mut spans = Vec::new();
                                         // SJ1 (iter-27-R): the roster keeps the scroll bar's lane whether or not the
-                                        // bar shows (the design's column always does), as Arrivals does, so adding
-                                        // arrivals moves no field, Absent or menu.
-                                        let output =
-                                            design::layout::ScrollColumn::new("run_setup_rows")
-                                                .max_height((room - OVERFLOW_LINE).max(0.0))
-                                                .full_width()
-                                                .show(ui, |ui| {
-                                                    // Include the heading when comparing rows with the scroll viewport.
-                                                    let origin = ui.cursor().min.y;
-                                                    ui.spacing_mut().item_spacing.y = 0.0;
-                                                    let (_, right) = self.setup_slots(ui, false);
-                                                    let number = design::L * 3.0;
-                                                    // Over the rows' Initiative column, which
-                                                    // starts `right` and `number` before the
-                                                    // rows' right edge.
-                                                    ui.horizontal(|ui| {
-                                                        let edge =
-                                                            ui.available_rect_before_wrap().right()
-                                                                - right
-                                                                - number;
-                                                        in_column(ui, edge, |ui| {
-                                                            ui.label(
-                                                                Type::Label
-                                                                    .rich(ui, "INITIATIVE")
-                                                                    .color(colors().muted),
-                                                            );
-                                                        });
+                                        // bar shows, as Arrivals does, so adding arrivals moves no field, Absent or menu.
+                                        let lane = (ui.available_width()
+                                            - ui.spacing().scroll.allocated_width())
+                                        .max(0.0);
+                                        let output = egui::ScrollArea::vertical()
+                                            .id_salt("run_setup_rows")
+                                            .max_height((room - OVERFLOW_LINE).max(0.0))
+                                            .auto_shrink([false, false])
+                                            .show(ui, |ui| {
+                                                ui.set_max_width(lane);
+                                                // Include the heading when comparing rows with the scroll viewport.
+                                                let origin = ui.cursor().min.y;
+                                                ui.spacing_mut().item_spacing.y = 0.0;
+                                                let (_, right) = self.setup_slots(ui, false);
+                                                let number = design::L * 3.0;
+                                                // Over the rows' Initiative column, which
+                                                // starts `right` and `number` before the
+                                                // rows' right edge.
+                                                ui.horizontal(|ui| {
+                                                    let edge =
+                                                        ui.available_rect_before_wrap().right()
+                                                            - right
+                                                            - number;
+                                                    in_column(ui, edge, |ui| {
+                                                        ui.label(
+                                                            Type::Label
+                                                                .rich(ui, "INITIATIVE")
+                                                                .color(colors().muted),
+                                                        );
                                                     });
-                                                    // Roster order. Rows hold still while the DM types (T4.3).
-                                                    for index in 0..self.state.participants.len() {
-                                                        let row = ui.push_id(index, |ui| {
-                                                            if let Some(picked) =
-                                                                self.setup_row(ui, index)
-                                                            {
-                                                                command = Some(picked);
-                                                            }
-                                                        });
-                                                        spans.push((
-                                                            row.response.rect.top() - origin,
-                                                            row.response.rect.bottom() - origin,
-                                                            index,
-                                                        ));
-                                                    }
-                                                    let mut shared: std::collections::BTreeMap<
-                                                        &str,
-                                                        Vec<Rect>,
-                                                    > = std::collections::BTreeMap::new();
-                                                    for p in &self.state.participants {
-                                                        if let Some(key) = p.shared_roll.as_deref()
-                                                            && let Some(field) =
-                                                                ui.ctx().read_response(
-                                                                    self.setup_initiative_id(p),
-                                                                )
-                                                        {
-                                                            shared
-                                                                .entry(key)
-                                                                .or_default()
-                                                                .push(field.rect);
-                                                        }
-                                                    }
-                                                    for fields in shared
-                                                        .values()
-                                                        .filter(|fields| fields.len() > 1)
-                                                    {
-                                                        let top = fields
-                                                            .iter()
-                                                            .map(Rect::top)
-                                                            .fold(f32::INFINITY, f32::min);
-                                                        let bottom = fields
-                                                            .iter()
-                                                            .map(Rect::bottom)
-                                                            .fold(f32::NEG_INFINITY, f32::max);
-                                                        let x = fields[0].left() - design::XS;
-                                                        let stroke = egui::Stroke::new(
-                                                            design::HAIRLINE_WIDTH,
-                                                            colors().muted,
-                                                        );
-                                                        for field in fields {
-                                                            ui.painter().vline(
-                                                                x,
-                                                                field.y_range(),
-                                                                stroke,
-                                                            );
-                                                        }
-                                                        ui.painter().hline(
-                                                            x..=x + design::XS,
-                                                            top,
-                                                            stroke,
-                                                        );
-                                                        ui.painter().hline(
-                                                            x..=x + design::XS,
-                                                            bottom,
-                                                            stroke,
-                                                        );
-                                                    }
                                                 });
+                                                // Roster order. Rows hold still while the DM types (T4.3).
+                                                for index in 0..self.state.participants.len() {
+                                                    let row = ui.push_id(index, |ui| {
+                                                        if let Some(picked) =
+                                                            self.setup_row(ui, index)
+                                                        {
+                                                            command = Some(picked);
+                                                        }
+                                                    });
+                                                    spans.push((
+                                                        row.response.rect.top() - origin,
+                                                        row.response.rect.bottom() - origin,
+                                                        index,
+                                                    ));
+                                                }
+                                                let mut shared: std::collections::BTreeMap<
+                                                    &str,
+                                                    Vec<Rect>,
+                                                > = std::collections::BTreeMap::new();
+                                                for p in &self.state.participants {
+                                                    if let Some(key) = p.shared_roll.as_deref()
+                                                        && let Some(field) = ui.ctx().read_response(
+                                                            self.setup_initiative_id(p),
+                                                        )
+                                                    {
+                                                        shared
+                                                            .entry(key)
+                                                            .or_default()
+                                                            .push(field.rect);
+                                                    }
+                                                }
+                                                for fields in shared
+                                                    .values()
+                                                    .filter(|fields| fields.len() > 1)
+                                                {
+                                                    let top = fields
+                                                        .iter()
+                                                        .map(Rect::top)
+                                                        .fold(f32::INFINITY, f32::min);
+                                                    let bottom = fields
+                                                        .iter()
+                                                        .map(Rect::bottom)
+                                                        .fold(f32::NEG_INFINITY, f32::max);
+                                                    let x = fields[0].left() - design::XS;
+                                                    let stroke = egui::Stroke::new(
+                                                        design::HAIRLINE_WIDTH,
+                                                        colors().muted,
+                                                    );
+                                                    for field in fields {
+                                                        ui.painter().vline(
+                                                            x,
+                                                            field.y_range(),
+                                                            stroke,
+                                                        );
+                                                    }
+                                                    ui.painter().hline(
+                                                        x..=x + design::XS,
+                                                        top,
+                                                        stroke,
+                                                    );
+                                                    ui.painter().hline(
+                                                        x..=x + design::XS,
+                                                        bottom,
+                                                        stroke,
+                                                    );
+                                                }
+                                            });
                                         self.overflow_note(ui, &output, &spans);
                                     },
                                 );
