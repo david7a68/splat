@@ -3905,6 +3905,12 @@ impl Body {
         place: MessagePlace,
         detail: Option<&str>,
     ) -> Option<Pressed> {
+        // Review of PR 592: the compact form draws no choice's help line and no lock's reason
+        // line, so a test or debug build refuses a choice with either: draw the full form.
+        debug_assert!(
+            self.helps.iter().all(Option::is_none) && self.locks.iter().all(Option::is_none),
+            "a compact message draws no choice help and no lock reason: draw the full form"
+        );
         let gap = ui.spacing().item_spacing.x;
         let words = self.words.as_str();
         let choices: Vec<(usize, MessageChoice<'_>)> =
@@ -3927,7 +3933,7 @@ impl Body {
         let (icon, _) = self.tone.parts();
         let inset =
             S + HAIRLINE_WIDTH + number_width(ui, icon, &Type::Small.font(ui)) + 2.0 * gap - XS;
-        let one_line = inset + number_width(ui, words, &Type::Small.font(ui));
+        let one_line = inset + compact_words_width(ui, words);
         // The band follows the words one item gap after them (its sum holds the gaps).
         let room = ui.available_width() - band;
         let beside = file.filter(|file| !helped && one_line + L + file <= room);
@@ -5050,6 +5056,52 @@ impl<A> Repair<A> {
 }
 
 /// A compact message's link's width: its `Small` words, at least its `XL` target.
+/// A compact message's words as last measured at one place: the words, what they were measured
+/// in, and their width.
+#[derive(Clone, Default)]
+struct CompactWords {
+    words: String,
+    measure: Option<super::memo::Measure>,
+    width: f32,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times a compact message's words were measured (tests).
+    static COMPACT_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The compact form's words' own width (review of PR 592): measured once per change of the
+/// words or of what they are measured in (font, theme, scale; `memo::Measure`), and kept at the
+/// message's place, so an unchanged message copies and lays out nothing in a frame. The words
+/// are compared where they are kept.
+fn compact_words_width(ui: &Ui, words: &str) -> f32 {
+    let font = Type::Small.font(ui);
+    let measure = super::memo::Measure::whole(ui, &font);
+    let id = ui.next_auto_id().with("design_compact_words");
+    let kept = ui.ctx().data_mut(|data| {
+        let kept = data.get_temp_mut_or_default::<CompactWords>(id);
+        (kept.words == words && kept.measure.as_ref() == Some(&measure)).then_some(kept.width)
+    });
+    if let Some(width) = kept {
+        return width;
+    }
+    #[cfg(test)]
+    COMPACT_MEASURES.with(|count| count.set(count.get() + 1));
+    let width = number_width(ui, words, &font);
+    ui.ctx().data_mut(|data| {
+        data.insert_temp(
+            id,
+            CompactWords {
+                words: words.to_owned(),
+                measure: Some(measure),
+                width,
+            },
+        );
+    });
+    width
+}
+
 fn compact_link_width(ui: &Ui, word: &str) -> f32 {
     number_width(ui, word, &Type::Small.font(ui)).max(XL)
 }
@@ -6699,6 +6751,57 @@ mod tests {
         });
     }
 
+    /// Review of PR 592 (`m-p0-compact-refuses`): the compact form draws no choice's help line
+    /// and no lock's reason line, so a test build refuses a compact message with either.
+    #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the body place `BodyMessage::show` itself"
+    )]
+    fn a_compact_message_refuses_choice_help_and_locks() {
+        for (case, choice) in [
+            (
+                "help",
+                Choice::new(MessageChoice::Choice("Read again"), 1)
+                    .help(crate::sentence!("Reads the file again.")),
+            ),
+            (
+                "lock",
+                Choice::new(MessageChoice::Choice("Read again"), 1)
+                    .blocked(crate::sentence!("Wait for the read.")),
+            ),
+        ] {
+            let mut choice = Some(choice);
+            let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let ctx = egui::Context::default();
+                let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        if let Some(choice) = choice.take() {
+                            let _ = BodyMessage::from(
+                                Notice::new(crate::sentence!("The file changed.")).choice(choice),
+                            )
+                            .compact()
+                            .show(ui);
+                        }
+                    });
+                });
+            }));
+            let message = refused
+                .err()
+                .and_then(|panic| {
+                    panic
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .or_else(|| panic.downcast_ref::<&str>().map(|said| (*said).to_owned()))
+                })
+                .unwrap_or_default();
+            assert!(
+                message.contains("a compact message draws no choice help and no lock reason"),
+                "m-p0-compact-refuses: a compact message with a choice's {case} is refused: {message:?}"
+            );
+        }
+    }
+
     #[test]
     #[allow(
         clippy::disallowed_methods,
@@ -7132,6 +7235,15 @@ mod tests {
                     "{width}: under the words, at the words: {cause:?} {path:?}"
                 );
             }
+            // Review of PR 592 (P2, `m-p0-compact-measure`): unchanged frames measure no compact
+            // message's words.
+            let measured = COMPACT_MEASURES.with(std::cell::Cell::get);
+            h.run_steps(3);
+            assert_eq!(
+                COMPACT_MEASURES.with(std::cell::Cell::get),
+                measured,
+                "{width}: unchanged frames measure no compact words"
+            );
             h.get_by_label("Log").click();
             h.run_steps(2);
             h.get_by_label(DISMISS_NAME).click();

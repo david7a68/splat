@@ -28,7 +28,9 @@
 //! - **A press whose result comes later** ([`Reveal::ask_on_result`], issue #698): the request
 //!   waits, moving nothing and with no deadline, until the owner says the result came
 //!   ([`Reveal::result_came`]); its passes and its deadline start then. Every other end applies
-//!   while it waits, so the DM's own input in between, or leaving the page, ends it.
+//!   while it waits, judged by its own column (review of #838): the DM's input to that column
+//!   (the column queue's rule) or leaving the page ends it, and input to another column, a focus
+//!   in another column included, does not.
 //!
 //! A run that ended leaves the registry of live requests at once (its `End` stays with its
 //! owner), so a column's work per pass is a look at the requests that run now.
@@ -359,9 +361,10 @@ impl Reveal {
     /// At the press that starts work whose result comes later, such as a Connect that a worker
     /// answers (issue #698, M0279): the request waits for [`Reveal::result_came`], bound to the
     /// press's column, and moves nothing. While it waits it ends as an asked reveal ends (the
-    /// DM's input after the act's frame, a focus change, the owner's end or another visit, a
-    /// frame without its column, a newer ask), but it has no deadline: the work sets the time,
-    /// and the owner ends it when the work ends with no result to show.
+    /// DM's input to its column after the act's frame, by the column queue's rule; a focus that
+    /// moves into its column; the owner's end or another visit; a frame without its column; a
+    /// newer ask), but it has no deadline: the work sets the time, and the owner ends it when
+    /// the work ends with no result to show. Input to another column never ends it.
     pub fn ask_on_result(&mut self, act: Act, visit: impl Hash, target: impl Hash) {
         self.ask(act, visit, target);
         if let Some(run) = &self.run {
@@ -542,6 +545,32 @@ fn dm_input(facts: &Facts, run: &Run) -> bool {
         }
     }
     false
+}
+
+/// Whether the DM's input in this pass goes to the column of `region` (review of #838): the
+/// rule of the column's queue (`column_input`: a wheel over it, a press or drag that started in
+/// it, a key that moves its view), and any key, text or accessibility action while the keys go
+/// to it (`keys_in`: the focused control is in it, or, with nothing focused, the pointer is over
+/// it). A request that waits for a result (`Reveal::ask_on_result`) ends only on this, so the
+/// DM's input to another column, for seconds while the work runs, leaves it waiting.
+fn waiting_input(ui: &Ui, region: &Region) -> bool {
+    let column = column_input(ui, region.key, region.view, None);
+    if column.moved || column.held || column.other {
+        return true;
+    }
+    keys_in(ui, region.key, region.view)
+        && ui.input(|input| {
+            input.events.iter().any(|event| {
+                matches!(
+                    event,
+                    egui::Event::Text(_)
+                        | egui::Event::Paste(_)
+                        | egui::Event::Ime(_)
+                        | egui::Event::Key { pressed: true, .. }
+                        | egui::Event::AccessKitActionRequest(_)
+                )
+            })
+        })
 }
 
 /// A `ScrollColumn`: its persistent key, whether it may host a reveal (R46,
@@ -1052,7 +1081,11 @@ pub(super) fn region<R>(
         .find(|run| lock(run).column == key);
     if let Some(run) = run {
         let mut run = lock(&run);
-        let input = dm_input(&facts, &run);
+        let input = if run.waiting && facts.frame != run.act_frame {
+            waiting_input(ui, &region)
+        } else {
+            dm_input(&facts, &run)
+        };
         resolve(ui, &mut run, &region, content, input);
     }
     inner
@@ -1086,6 +1119,14 @@ fn resolve(ui: &Ui, run: &mut Run, region: &Region, content: Id, input: bool) {
         .marked
         .filter(|&(_, at, marked)| at == content && marked == pass)
         .map(|(rect, ..)| rect);
+    // A waiting request takes a focus that went to another column as its own (review of #838):
+    // that is input to another column, which never ends it.
+    if run.waiting && frame != run.act_frame {
+        let focused = focus(ui.ctx(), run.act_id);
+        if focused.is_some() && focused != run.focus && !keys_in(ui, region.key, region.view) {
+            run.focus = focused;
+        }
+    }
     // A control that took the focus since the ask, other than the opener's field.
     if !focus_allowed(ui.ctx(), run, target) {
         run.end(End::Focus);
@@ -1199,6 +1240,10 @@ mod tests {
         awaited: bool,
         /// The awaited result comes in the next pass (`result_came`).
         came: bool,
+        /// A second column beside the page's, in the right half of the window.
+        beside: bool,
+        /// `Beside`, in that column, takes the focus in the next frame.
+        focus_beside: bool,
     }
 
     impl Page {
@@ -1236,6 +1281,8 @@ mod tests {
                 heading: false,
                 awaited: false,
                 came: false,
+                beside: false,
+                focus_beside: false,
             }
         }
     }
@@ -1350,6 +1397,28 @@ mod tests {
                             super::super::Sideways::default(),
                             |ui| content(ui, page),
                         );
+                    } else if page.beside {
+                        // The page's column in the left half, another column in the right half.
+                        ui.horizontal_top(|ui| {
+                            let half = egui::vec2(WIDTH / 2.0, HEIGHT);
+                            let down = egui::Layout::top_down(egui::Align::Min);
+                            ui.allocate_ui_with_layout(half, down, |ui| {
+                                super::super::ScrollColumn::new("outer")
+                                    .hosts_reveals()
+                                    .show(ui, |ui| content(ui, page));
+                            });
+                            ui.allocate_ui_with_layout(half, down, |ui| {
+                                super::super::ScrollColumn::new("beside")
+                                    .hosts_reveals()
+                                    .show(ui, |ui| {
+                                        let beside = ui.button("Beside");
+                                        if std::mem::take(&mut page.focus_beside) {
+                                            beside.request_focus();
+                                        }
+                                        room(ui, 2000.0);
+                                    });
+                            });
+                        });
                     } else {
                         let mut column = super::super::ScrollColumn::new("outer");
                         if !page.plain {
@@ -1688,6 +1757,61 @@ mod tests {
                 assert!(
                     in_view(&h),
                     "m-p0-awaited: the result brings its target whole into view"
+                );
+            }
+        }
+        // Review of #838 (P2, `m-p0-awaited-beside`): the DM's wheel over another column while
+        // the request waits is input to that column, not to the request's: it keeps waiting,
+        // and its result still brings the target into view. A wheel over its own column ends it.
+        // So does a control of the other column that takes the focus: it keeps waiting.
+        {
+            let mut page = quiet();
+            page.drawn = false;
+            page.awaited = true;
+            page.beside = true;
+            let mut h = harness(page);
+            h.state_mut().ask = true;
+            h.step();
+            h.run_steps(4);
+            h.state_mut().focus_beside = true;
+            h.run_steps(4);
+            assert!(
+                h.state().reveal.waits(),
+                "m-p0-awaited-beside: a focus in another column, {:?}",
+                h.state().reveal.ended()
+            );
+        }
+        for own in [false, true] {
+            let mut page = quiet();
+            page.drawn = false;
+            page.awaited = true;
+            page.beside = true;
+            let mut h = harness(page);
+            h.state_mut().ask = true;
+            h.step();
+            h.run_steps(4);
+            let x = if own { WIDTH / 4.0 } else { 3.0 * WIDTH / 4.0 };
+            h.event(egui::Event::PointerMoved(egui::pos2(x, 100.0)));
+            h.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -40.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+            h.run_steps(4);
+            assert_eq!(
+                h.state().reveal.waits(),
+                !own,
+                "m-p0-awaited-beside: a wheel over {} column",
+                if own { "its own" } else { "another" }
+            );
+            h.state_mut().drawn = true;
+            h.state_mut().came = true;
+            h.run_steps(8);
+            if !own {
+                assert_eq!(h.state().reveal.ended(), Some(End::Whole));
+                assert!(
+                    in_view(&h),
+                    "m-p0-awaited-beside: the result still shows its target"
                 );
             }
         }
