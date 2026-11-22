@@ -5375,4 +5375,100 @@ mod editor_region_tests {
                 .all_styles_mut(|style| style.visuals.text_alpha_from_coverage = alpha);
         });
     }
+
+    /// Layout PR 9b (note v2 §6.4): through the real part (guard, kept layouter), a document
+    /// answers each event exactly as a plain text does: the same words, caret and `changed()` in
+    /// every frame, for typing, paste, an empty paste, Delete at the end, select all and type,
+    /// Undo and Redo, and IME preedit, commit and cancel.
+    #[test]
+    fn a_document_answers_as_a_plain_text_does() {
+        let words = "Ash road\nCinder pass";
+        let make = |doc: bool| {
+            let mut h = harness(
+                400.0,
+                State {
+                    messages: 1,
+                    region: true,
+                    focus: true,
+                    text: words.to_owned(),
+                    lines: 2,
+                    doc: doc.then(|| crate::design::text_draft::TextDraft::new(words)),
+                    ..State::default()
+                },
+            );
+            h.run_steps(2);
+            h
+        };
+        let (mut plain, mut doc) = (make(false), make(true));
+        let key = |key, modifiers| {
+            vec![
+                egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                },
+                egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: false,
+                    repeat: false,
+                    modifiers,
+                },
+            ]
+        };
+        let ime = |event| vec![egui::Event::Ime(event)];
+        let script: Vec<(&str, Vec<egui::Event>)> = vec![
+            ("end", key(egui::Key::End, egui::Modifiers::COMMAND)),
+            ("type", vec![egui::Event::Text("!".into())]),
+            ("paste", vec![egui::Event::Paste(" ford".into())]),
+            ("empty-paste", vec![egui::Event::Paste(String::new())]),
+            (
+                "delete-at-end",
+                key(egui::Key::Delete, egui::Modifiers::NONE),
+            ),
+            ("select-all", key(egui::Key::A, egui::Modifiers::COMMAND)),
+            ("replace", vec![egui::Event::Text("New".into())]),
+            ("undo", key(egui::Key::Z, egui::Modifiers::COMMAND)),
+            ("redo", key(egui::Key::Y, egui::Modifiers::COMMAND)),
+            ("ime-on", ime(egui::ImeEvent::Enabled)),
+            ("preedit", ime(egui::ImeEvent::Preedit("ka".into()))),
+            ("commit", ime(egui::ImeEvent::Commit("か".into()))),
+            ("preedit-again", ime(egui::ImeEvent::Preedit("ki".into()))),
+            ("cancel", ime(egui::ImeEvent::Preedit(String::new()))),
+            ("ime-off", ime(egui::ImeEvent::Disabled)),
+        ];
+        let text = |h: &egui_kittest::Harness<'static, State>| match &h.state().doc {
+            Some(doc) => doc.as_str().to_owned(),
+            None => h.state().text.clone(),
+        };
+        for (step, events) in script {
+            let modifiers = events
+                .iter()
+                .find_map(|event| match event {
+                    egui::Event::Key { modifiers, .. } => Some(*modifiers),
+                    _ => None,
+                })
+                .unwrap_or_default();
+            for h in [&mut plain, &mut doc] {
+                h.state_mut().changed.clear();
+                h.input_mut().modifiers = modifiers;
+                crate::input_frame::one_pass(h, events.clone());
+                h.input_mut().modifiers = egui::Modifiers::NONE;
+                h.run_steps(1);
+            }
+            assert_eq!(text(&doc), text(&plain), "{step}: the same words");
+            assert_eq!(
+                doc.state().changed,
+                plain.state().changed,
+                "{step}: the same changed() in each frame"
+            );
+            assert_eq!(
+                doc.state().caret,
+                plain.state().caret,
+                "{step}: the same caret"
+            );
+        }
+    }
 }
