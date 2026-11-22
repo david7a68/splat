@@ -127,6 +127,12 @@ impl Laid {
         self.size.y
     }
 
+    /// Slot `at`'s size as laid (no width: a part the recipe gave no place). A host lays an
+    /// action's words in it before paint (`Action::laid_words`).
+    pub fn slot_size(&self, at: usize) -> Vec2 {
+        self.slots.get(at).map_or(Vec2::ZERO, Rect::size)
+    }
+
     pub fn revision(&self) -> Revision {
         self.revision
     }

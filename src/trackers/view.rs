@@ -541,6 +541,10 @@ struct DueParts {
     done_name: String,
     /// Each check's place in the DM's unticked set: its notice and its change's own key.
     ticks: Vec<Tick>,
+    /// The words each roll and `Done` paint, laid before paint in their places (Astra's P2 on
+    /// PR 897): a quiet frame lays no action's words. A roll with no place has none.
+    roll_words: Vec<Option<std::sync::Arc<egui::Galley>>>,
+    done_words: Option<std::sync::Arc<egui::Galley>>,
 }
 
 /// Why a roll is blocked: each name of its table has its roll.
@@ -609,6 +613,8 @@ fn due_parts(rules: &Rules, notice: &super::Notice, mark: Says<'_>) -> DueParts 
         rolls,
         results,
         checks,
+        roll_words: Vec::new(),
+        done_words: None,
     }
 }
 
@@ -685,6 +691,22 @@ fn due_rows(
                     tail: design::XS,
                 }
                 .lay(ui, width);
+                let mut parts = parts;
+                // Each action's words, laid in the place the row gave it.
+                parts.roll_words = parts
+                    .rolls
+                    .iter()
+                    .enumerate()
+                    .map(|(at, (label, _))| {
+                        let room = laid.slot_size(design::notice_slot::FIRST_ROLL + at).x;
+                        (room > 0.5).then(|| roll_action(label).laid_words(ui, room))
+                    })
+                    .collect();
+                parts.done_words =
+                    (laid.slot_size(design::notice_slot::FINISH).x > 0.5).then(|| {
+                        let done = Action::quiet(&parts.finish).density(Density::Read);
+                        done.laid_words(ui, done.natural_width(ui))
+                    });
                 Some((parts, laid))
             })
             .collect();
@@ -703,12 +725,18 @@ fn due_rows(
         design::draw_laid(ui, laid, |ui| {
             for (at, (label, reason)) in parts.rolls.iter().enumerate() {
                 let slot = design::notice_slot::FIRST_ROLL + at;
-                // A roll with no place (a row narrower than it can be) draws nothing.
-                if ui.slot(slot).width() > 0.5
-                    && ui.in_slot(slot, |ui| {
-                        roll_action(label).blocked(*reason).show(ui).clicked()
-                    })
-                {
+                // A roll with no place (a row narrower than it can be) draws nothing; one with a
+                // place paints the words laid for it.
+                let Some(words) = &parts.roll_words[at] else {
+                    continue;
+                };
+                if ui.in_slot(slot, |ui| {
+                    roll_action(label)
+                        .laid(std::sync::Arc::clone(words))
+                        .blocked(*reason)
+                        .show(ui)
+                        .clicked()
+                }) {
                     let key = mark.tables[at].key();
                     *act = Some(Act::Roll(notice.clone(), key.to_owned()));
                 }
@@ -797,12 +825,14 @@ fn finish(
             ui.close();
         }
     });
-    if Action::quiet(&parts.finish)
+    let done = Action::quiet(&parts.finish)
         .density(Density::Read)
-        .name(&parts.done_name)
-        .show(ui)
-        .clicked()
-    {
+        .name(&parts.done_name);
+    let done = match &parts.done_words {
+        Some(words) => done.laid(std::sync::Arc::clone(words)),
+        None => done,
+    };
+    if done.show(ui).clicked() {
         let ticked = parts
             .ticks
             .iter()
@@ -834,8 +864,9 @@ struct LineParts {
     name: String,
     fitted: String,
     value: String,
-    /// The actions it shows, by their place in `quick`, with each one's accessible name.
-    shown: Vec<(usize, String)>,
+    /// The actions it shows, by their place in `quick`, with each one's accessible name and its
+    /// words laid in its place before paint (a quiet frame lays no action's words).
+    shown: Vec<(usize, String, std::sync::Arc<egui::Galley>)>,
     /// The line's tracker and instance, as the view's acts and the hold name them.
     place: (String, Option<String>),
     /// A repeated amount field's warning under the line, once for the tracker.
@@ -892,7 +923,7 @@ fn lay_tracker(
             .filter(|_| leaves_out && !said)
             .map(|repeat| TrackerFault::Problem(super::repeat_words(repeat)));
         said |= fault.is_some();
-        let shown: Vec<(usize, String)> = (0..def.quick.len())
+        let named: Vec<(usize, String)> = (0..def.quick.len())
             .filter(|at| !left_out(*at))
             .map(|at| {
                 let label = &def.quick[at].label;
@@ -909,7 +940,7 @@ fn lay_tracker(
             None => state.value(rules, key, instance).to_string(),
         };
         let fitted = fit_name(ui, view, columns.revision, &name, columns.name - indent);
-        let actions: Vec<design::LineAction> = shown
+        let actions: Vec<design::LineAction> = named
             .iter()
             .map(|(at, _)| design::LineAction {
                 key: egui::Id::new(("trackers_action", key, line, *at)),
@@ -938,6 +969,16 @@ fn lay_tracker(
             tail: if line + 1 == count { design::XS } else { 0.0 },
         }
         .lay(ui, width);
+        // Each action's words, laid in the place the line gave it.
+        let shown = named
+            .into_iter()
+            .enumerate()
+            .map(|(slot, (at, name))| {
+                let room = laid.slot_size(design::line_slot::FIRST_ACTION + slot).x;
+                let words = quick_action(&def.quick[at].label).laid_words(ui, room);
+                (at, name, words)
+            })
+            .collect();
         lines.push((
             LineParts {
                 name,
@@ -1015,7 +1056,7 @@ fn tracker_lines(
                 shown_name.on_hover_text(&parts.name);
             }
             let _ = ui.part(design::line_slot::VALUE, &parts.value, false);
-            for (slot, (at, named)) in parts.shown.iter().enumerate() {
+            for (slot, (at, named, words)) in parts.shown.iter().enumerate() {
                 let quick = &def.quick[*at];
                 ui.in_slot(design::line_slot::FIRST_ACTION + slot, |ui| {
                     quick_action_in(
@@ -1024,7 +1065,7 @@ fn tracker_lines(
                         &parts.place,
                         quick,
                         *at,
-                        named,
+                        (named, words),
                         act,
                     );
                 });
@@ -1063,8 +1104,8 @@ fn quick_action_in(
     place: &(String, Option<String>),
     quick: &super::Quick,
     at: usize,
-    // Its accessible name: `Pay: Ann` on an instance's line.
-    named: &str,
+    // Its accessible name (`Pay: Ann` on an instance's line) and its words laid in its place.
+    (named, words): (&str, &std::sync::Arc<egui::Galley>),
     act: &mut Option<Act>,
 ) {
     let here = asking
@@ -1076,7 +1117,10 @@ fn quick_action_in(
         amount_field(ui, (asking, focus_asking), &quick.label, at, width, act);
         return;
     }
-    let response = quick_action(&quick.label).name(named).show(ui);
+    let response = quick_action(&quick.label)
+        .name(named)
+        .laid(std::sync::Arc::clone(words))
+        .show(ui);
     let control = (&place.0, &place.1, &quick.label, at);
     held_seen(ui, control, response.rect.top());
     if response.clicked() {

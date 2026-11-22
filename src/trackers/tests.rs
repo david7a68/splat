@@ -2115,6 +2115,25 @@ fn a_due_check_keeps_its_focus_when_the_change_before_it_goes() {
         .with_size(eframe::egui::vec2(640.0, 900.0))
         .themed_ui_state(|ui, t: &mut Trackers| view::show(ui, t, false), t);
     h.run_steps(4);
+    // Astra's P2 on PR 897: the whole host, from its entry through paint, on unchanged frames
+    // with a Due row and the lines (and no footer line: the wagon came due with no act): no
+    // action lays its own words (each paints the words laid with its parts) and no text is
+    // measured.
+    let words = || crate::design::components::ACTION_WORDS_LAID.with(std::cell::Cell::get);
+    let measures = || crate::design::components::TEXT_MEASURES.with(std::cell::Cell::get);
+    let before = (words(), measures());
+    h.run_steps(5);
+    assert!(
+        h.query_by_label("Seals (Party) +1").is_some()
+            && h.query_by_label("Enter room").is_some(),
+        "quiet-host-reached: the Due row and the lines drew"
+    );
+    assert_eq!(
+        (words(), measures()),
+        before,
+        "quiet-host: an unchanged frame with a Due row and the lines lays no action's words and \
+         measures no text"
+    );
     const SECOND: &str = "Seals (Party) +1";
     h.get_by_label(SECOND).focus();
     h.run_steps(2);
