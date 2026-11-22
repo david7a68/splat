@@ -35,7 +35,8 @@ pub use components::*;
 // Wave 2 callers name the extras through `design`, as they name the components.
 #[allow(unused_imports)]
 pub use extras::{
-    Gap, Heading, choice, choice_value, choice_wrapped, choice_wrapped_value, gap, heading,
+    Gap, Heading, choice, choice_value, choice_wrapped, choice_wrapped_value, gap, gap_to_next,
+    heading,
 };
 // Wave 2 callers name the layout parts through `design`, as they name the components.
 pub use action_rows::{Columns, RowAction, action_row};

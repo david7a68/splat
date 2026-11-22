@@ -1061,7 +1061,7 @@ impl Reader {
                         ui.add(egui::Label::new(role.rich(ui, words).color(color)).wrap());
                     },
                 );
-                ui.add_space((design::L - ui.spacing().item_spacing.x).max(0.0));
+                design::gap_to_next(ui, design::Gap::L);
                 change.show(ui).clicked()
             })
             .inner

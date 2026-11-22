@@ -68,6 +68,20 @@ pub fn gap(ui: &mut Ui, gap: Gap) {
     space(ui, gap.size());
 }
 
+/// Exactly one step of the scale between the item above (or before) and the next, whatever the
+/// item spacing is: the space is the step less the spacing egui already leaves between two items,
+/// along the layout's main axis, and never less than none. `gap` adds a step on top of that
+/// spacing; this keeps the step the whole distance. A caller no longer reads `item_spacing`.
+pub fn gap_to_next(ui: &mut Ui, gap: Gap) {
+    let spacing = ui.spacing().item_spacing;
+    let along = if ui.layout().main_dir().is_horizontal() {
+        spacing.x
+    } else {
+        spacing.y
+    };
+    space(ui, (gap.size() - along).max(0.0));
+}
+
 /// The design's own space: any amount, for the parts that measure it. Only `src/design/` may use
 /// it, so a caller's space is always a [`Gap`].
 #[allow(
@@ -473,6 +487,43 @@ mod tests {
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| add(ui));
         });
+    }
+
+    /// `gap_to_next`: the whole distance between two items is one step, at the default item
+    /// spacing and at another one, down a column and along a line. `gap` leaves a step plus the
+    /// spacing.
+    #[test]
+    fn gap_to_next_leaves_exactly_one_step_whatever_the_spacing() {
+        for spacing in [6.0_f32, 8.0] {
+            for step in [Gap::S, Gap::L] {
+                for horizontal in [false, true] {
+                    let mut measured = None;
+                    run(|ui| {
+                        ui.spacing_mut().item_spacing = egui::vec2(spacing, spacing);
+                        let mut between = |ui: &mut Ui| {
+                            let first = ui.label("first").rect;
+                            gap_to_next(ui, step);
+                            let second = ui.label("second").rect;
+                            measured = Some(if horizontal {
+                                second.left() - first.right()
+                            } else {
+                                second.top() - first.bottom()
+                            });
+                        };
+                        if horizontal {
+                            ui.horizontal(|ui| between(ui));
+                        } else {
+                            between(ui);
+                        }
+                    });
+                    let distance = measured.expect("the labels were laid out");
+                    assert!(
+                        (distance - step.size()).abs() < 0.01,
+                        "{step:?} at spacing {spacing}, horizontal {horizontal}: {distance}"
+                    );
+                }
+            }
+        }
     }
 
     /// N3: a heading adds its own space above it (none when it is first in its column), and the
