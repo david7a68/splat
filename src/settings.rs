@@ -784,16 +784,16 @@ mod tests {
     /// holds Disconnect.
     #[test]
     fn sign_in_details_is_a_caret_section_that_opens_by_keyboard() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         let mut settings = Settings::default();
         settings.simulate(Account::Connected);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(600.0, 600.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, settings: &mut Settings| settings.show_compact(ui),
                 settings,
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(3);
         let expanded = |harness: &egui_kittest::Harness<'_, Settings>| {
             harness
@@ -895,7 +895,7 @@ mod tests {
         use egui_kittest::kittest::Queryable;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, settings: &mut Settings| {
                     let frame = design::outcome::PaneFrame::new(ui);
                     let mut messages = design::outcome::Messages::<design::outcome::NoPress>::new(
@@ -908,7 +908,6 @@ mod tests {
                 },
                 std::mem::take(&mut settings),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(3);
         assert!(
             harness
