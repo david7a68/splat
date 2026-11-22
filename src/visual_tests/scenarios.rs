@@ -19860,6 +19860,17 @@ pub mod encounter_groups {
                 format!("At {:?}, column {column}: {detail}", d.window_size()),
             );
         });
+        // Layout PR 6 (SL4): the clean editor's Default side and Belongs to, at 960, to compare
+        // with the same group once it is dirty (below).
+        let editor_tops = |d: &Driver<'_>| {
+            ["Default side for ", "Belongs to"].map(|start| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with(start) && node.in_view())
+                    .map(|node| node.rect.top())
+            })
+        };
+        let clean_tops = d.at_size(SMALL, editor_tops);
         // Lane E2's pressure caller (round 31 SD11, chosen-value-weight): the side picker's closed
         // value is the `Dropdown` part's, in regular `Body` weight, at 960 and at 1920.
         for size in [SMALL, LARGE] {
@@ -20450,6 +20461,14 @@ pub mod encounter_groups {
                 format!("At {size:?}: Save group {save:?} on the name's line {name:?}, above Unsaved {unsaved:?}"),
             );
         }
+        // Layout PR 6 (SL4): the first edits showed Discard and the switch reason; at 960 no
+        // field moved (on main Default side moved 22 px).
+        let dirty_tops = d.at_size(SMALL, editor_tops);
+        d.observe(
+            "pr6-SL4-clean-dirty",
+            clean_tops.iter().all(Option::is_some) && clean_tops == dirty_tops,
+            format!("At 960, Default side and Belongs to tops, clean {clean_tops:?}, dirty {dirty_tops:?}"),
+        );
         d.state("group-member-removed-with-undo", Sizes::All);
         d.click("Undo remove member");
         d.expect(CHANGES);
