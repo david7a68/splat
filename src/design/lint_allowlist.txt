@@ -74,7 +74,7 @@ src/party.rs late-theme 1
 src/party_support/sheets.rs late-theme 3
 src/sessions/carry.rs late-theme 2
 src/sessions/slash.rs late-theme 1
-src/settings.rs late-theme 3
+src/settings.rs late-theme 2
 src/timeline/checks.rs late-theme 1
 src/timeline/test_support.rs late-theme 1
 src/trackers/view.rs late-theme 1

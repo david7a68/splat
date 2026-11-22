@@ -636,9 +636,11 @@ impl Settings {
                     .ctx()
                     .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("focus_cookie")))
                     .unwrap_or(false);
+                // M0541 (M-P0.31): the field takes the keyboard; the pane's focus arbiter
+                // brings it whole into view above the footer, by the least scroll, also when the
+                // request came from another page (`focus_sign_in`).
                 if std::mem::take(&mut self.focus_cookie) {
                     response.request_focus();
-                    response.scroll_to_me(Some(egui::Align::Center));
                 }
                 response.rect.width()
             });
@@ -817,21 +819,49 @@ mod tests {
         );
     }
 
+    /// The keyring warning names the sign-in and offers Connect again. M0541 (M-P0.31,
+    /// `m-p0-sign-in-focus`): drawn in a pane under 120 px of other content in a 300 px window,
+    /// Connect again gives the cookie field the keyboard, and the pane's focus arbiter brings it
+    /// whole into view by the least scroll: its bottom near the view's bottom, not at its centre.
     #[test]
     fn a_keyring_warning_names_the_sign_in() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let mut settings = Settings::default();
         settings.simulate(Account::KeyringWarning);
-        let mut harness = egui_kittest::Harness::new_ui_state(
-            |ui, settings: &mut Settings| settings.show_account(ui, true, true),
-            settings,
-        );
-        design::theme::install(&harness.ctx);
+        const SIZE: egui::Vec2 = egui::vec2(600.0, 300.0);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(SIZE)
+            .themed_ui_state(
+                |ui, settings: &mut Settings| {
+                    let footer = design::Footer::new("keyring_test", SIZE.x);
+                    footer.pane_content(ui, design::pane::ContentScroll::default(), |ui| {
+                        ui.allocate_exact_size(egui::vec2(1.0, 120.0), egui::Sense::hover());
+                        settings.show_account(ui, true, true);
+                    });
+                },
+                settings,
+            );
         harness.run();
         harness.get_by_label(
             "This computer did not save your sign-in. Unlock your password manager, then connect again.",
         );
-        harness.get_by_label("Connect again");
+        let link = harness.get_by_label("Connect again").rect();
+        assert!(
+            link.bottom() <= SIZE.y,
+            "Connect again is in view: {link:?}"
+        );
+        harness.get_by_label("Connect again").click();
+        harness.run_steps(6);
+        let field = harness.get_by_label("Paste sign-in cookie").rect();
+        assert!(
+            harness.ctx.memory(|memory| memory.focused()).is_some(),
+            "m-p0-sign-in-focus: the field has the keyboard"
+        );
+        assert!(
+            field.top() >= 0.0 && field.bottom() <= SIZE.y && field.bottom() > 0.6 * SIZE.y,
+            "m-p0-sign-in-focus: the field is whole, at the view's lower part: {field:?} in {SIZE:?}"
+        );
     }
 
     #[test]
