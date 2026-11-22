@@ -3575,7 +3575,9 @@ mod tests {
                 *harness.state_mut() = 2;
             }
             want_heading(&harness.ctx, Some("The ford".into()));
-            harness.run_steps(6);
+            // Two frames: the one that asks queues the jump, the column moves at its next pass.
+            // A jump that waited a frame for its offset would not be there yet.
+            harness.run_steps(2);
             let at = heading(&harness);
             assert!(
                 below > 320.0 && (0.0..=design::XL).contains(&at),
