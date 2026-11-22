@@ -333,7 +333,8 @@ mod tests {
             counted: Vec::new(),
         };
         let mut harness = Harness::builder()
-            .with_size(vec2(width / scale, 900.0))
+            // A logical width: the Trackers panel is never narrower than `PANEL_MIN_WIDTH`.
+            .with_size(vec2(width, 900.0))
             .with_pixels_per_point(scale)
             .themed_ui_state(
                 |ui, list: &mut List| {

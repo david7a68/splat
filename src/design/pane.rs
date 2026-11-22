@@ -123,6 +123,7 @@ pub use super::components::Footer;
 use super::{layout::ScrollColumn, tokens::S};
 
 /// Composite columns and their edges, resolved before the pane paints (layout step 7).
+/// A line of a list whose rows vary in height, as a recipe (layout 11c, issue #683).
 mod action_line;
 mod columns;
 /// A block laid out before paint by a design recipe (layout 11c).
@@ -133,8 +134,8 @@ mod plan;
 mod plan_row;
 /// The scroll region of an owned list body over its plan (layout step 3b).
 mod region;
-#[cfg(any(test, feature = "test-support"))]
 pub use action_line::{ActionLine, LineColumns, slot as line_slot};
+#[cfg(any(test, feature = "test-support"))]
 pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
 use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
