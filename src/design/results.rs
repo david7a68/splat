@@ -1080,7 +1080,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/campaigns.rs",
             "selector",
-            &[Ban::Layout(1), Ban::Extras(2)],
+            &[Ban::Layout(1), Ban::Extras(1)],
         ),
         // M20: the copy dialog's error is a typed body message (`BodyMessage` of a
         // `FaultMessage`) in place of an untyped `design::message`.
@@ -1342,7 +1342,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world.rs", "draw", &[Ban::Extras(1), Ban::Body]),
         // M20 (M-W0.4): an unread value's warning (was `message`).
         ("src/world.rs", "unread_warning", &[Ban::Body]),
-        ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         // M20 (M-W0.5): an unread value's warning with its repair, `Edit in Obsidian` (was
         // `message` and a link).
@@ -1354,7 +1353,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world/page.rs", "unread_pane", &[Ban::Body]),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "fills_body", &[Ban::Pane(1)]),
-        ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
         ("src/party.rs", "show", &[Ban::Pane(1)]),
     ]
 };

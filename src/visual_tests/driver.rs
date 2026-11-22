@@ -1152,19 +1152,24 @@ impl<'a> Driver<'a> {
             .unwrap_or_default()
     }
 
-    /// The whole name of a Timeline event's Undo on screen (M-N1.7: `Undo remove <label>`, on
-    /// the plan as on Timeline; `Undo add` for an added event), never a scene's `Undo add scene`.
-    pub fn event_undo(&self, verb: &str) -> Option<String> {
-        let start = format!("Undo {verb} ");
+    /// The removal's Undo of the event shown as `event` (M-N1.7: `Undo remove <event>`, on the
+    /// plan as on Timeline), by its exact name, when that control is on screen: another event's
+    /// Undo (a wrong owner's) is not it.
+    pub fn removal_undo(&self, event: &str) -> Option<String> {
+        let name = format!("Undo remove {event}");
         self.nodes()
-            .into_iter()
-            .find(|node| {
-                // An added event's Undo keeps no object yet (M0529 waits for layout 11c).
-                (node.name.starts_with(&start) || (verb == "add" && node.name == "Undo add"))
-                    && node.name != "Undo add scene"
-                    && Self::is_control(node)
-            })
-            .map(|node| node.name)
+            .iter()
+            .any(|node| node.name == name && Self::is_control(node))
+            .then_some(name)
+    }
+
+    /// An added event's Undo (`Undo add`: M0529 waits for layout 11c), when it is on screen; never
+    /// a scene's `Undo add scene`.
+    pub fn add_undo(&self) -> Option<String> {
+        self.nodes()
+            .iter()
+            .any(|node| node.name == "Undo add" && Self::is_control(node))
+            .then(|| "Undo add".to_owned())
     }
 
     pub fn has_containing(&self, name: &str) -> bool {
@@ -1395,6 +1400,27 @@ impl<'a> Driver<'a> {
         (first, next)
     }
 
+    /// One input frame of `events`, with egui's own layout passes, and the `frames` frames after
+    /// it with no input: `look` at what each presented frame painted and named, the act's own
+    /// frame first, before the app settles; then the app settles. A move or a cut that lasts a
+    /// frame and is gone when the app settles shows here (Astra's review of PR 736).
+    pub fn each_frame_after<T>(
+        &mut self,
+        events: impl IntoIterator<Item = egui::Event>,
+        frames: usize,
+        look: impl Fn(&Self) -> T,
+    ) -> Vec<T> {
+        super::input_frame::one_pass(&mut self.harness, events);
+        let mut seen = vec![look(self)];
+        for _ in 0..frames {
+            self.harness.step();
+            seen.push(look(self));
+        }
+        self.interactions += 1;
+        self.settle();
+        seen
+    }
+
     /// A screen reader's Click on the visible control named `name`, as one input event.
     pub fn click_event(&self, name: &str) -> egui::Event {
         let target = self
@@ -1537,6 +1563,40 @@ impl<'a> Driver<'a> {
         self.interactions += 1;
         self.settle();
         self.film_result("Dropped");
+    }
+
+    /// Press the primary button at a point and keep it held, one frame for the press. The
+    /// caller looks at the screen, may `hold_step`, and ends with `release_at`.
+    pub fn press_hold_at(&mut self, pos: egui::Pos2) {
+        self.film_aim(egui::Rect::from_center_size(pos, egui::Vec2::ZERO), "Press");
+        self.harness.hover_at(pos);
+        self.harness.step();
+        self.harness.event(egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        self.harness.step();
+    }
+
+    /// One more frame with the press of `press_hold_at` held, the pointer still.
+    pub fn hold_step(&mut self) {
+        self.harness.step();
+    }
+
+    /// Let go of the press of `press_hold_at`: one frame, not settled, so the caller sees the
+    /// release frame itself; `settle` after it.
+    pub fn release_at(&mut self, pos: egui::Pos2) {
+        self.harness.event(egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        self.harness.step();
+        self.harness.remove_cursor();
+        self.interactions += 1;
     }
 
     fn is_control(node: &Found) -> bool {

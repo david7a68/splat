@@ -604,10 +604,10 @@ fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
             },
         ));
         if let Some((_, feature)) = &profile.background_feature {
-            design::fact::line(ui, "Feature", [&feature.name]);
+            sheet_fact(ui, "Feature", [&feature.name]);
         }
         if !background.feats.is_empty() {
-            design::fact::line(ui, "Feats", &background.feats);
+            sheet_fact(ui, "Feats", &background.feats);
         }
         if !background.description.is_empty() || profile.background_feature.is_some() {
             design::quiet_section(ui, "Background text", |ui| {
@@ -622,9 +622,9 @@ fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
     }
     if !details.is_empty() {
         sheet_section(ui, "Details");
-        sheet_columns(ui, details.len(), |ui, at| {
+        sheet_columns(ui, details.len(), true, |ui, at| {
             let (label, value) = &details[at];
-            design::fact::line(ui, label, [value]);
+            sheet_fact(ui, label, [value]);
         });
     }
     for (title, rows) in [("Characteristics", characteristics), ("Notes", story)] {
@@ -674,7 +674,53 @@ pub fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
 fn sheet_section(ui: &mut egui::Ui, title: &str) {
+    let top = ui.cursor().top();
     sheet_heading(ui, title, 0);
+    // Layout step 11a (SF4, SM5, AM16, AH6): the heading is one block with the row under it.
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.data_mut(|data| data.insert_temp(heading_id(), (pass, top)));
+}
+
+fn heading_id() -> egui::Id {
+    egui::Id::new("sheet_heading_top")
+}
+
+/// Layout step 11a (SF4, SM5, AM16, AH6): a sheet row is one whole row of the pane, so the
+/// pane's edge (its footer, the session banner) ends the sheet at the row's top with its
+/// hairline, never through a label without its value. The first row under a section heading
+/// takes the heading with it.
+fn sheet_rect(ui: &egui::Ui, rect: egui::Rect) {
+    let pass = ui.ctx().cumulative_pass_nr();
+    let heading = ui
+        .data_mut(|data| data.remove_temp::<(u64, f32)>(heading_id()))
+        .filter(|(at, _)| *at == pass)
+        .map(|(_, top)| top);
+    let top = heading.map_or(rect.top(), |heading| heading.min(rect.top()));
+    if rect.bottom() > top {
+        design::register_row(ui, rect.with_min_y(top));
+    }
+}
+
+/// A row the host draws under the sheet (Party's `Technical details` heading): one whole row of
+/// the sheet, so the pane's edge never cuts it through (layout step 11a).
+pub fn sheet_row(ui: &egui::Ui, rect: egui::Rect) {
+    sheet_rect(ui, rect);
+}
+
+/// A sheet fact line (`fact::line`), one whole row (`sheet_rect`).
+fn sheet_fact(
+    ui: &mut egui::Ui,
+    label: &str,
+    values: impl IntoIterator<Item = impl std::fmt::Display>,
+) {
+    let rect = design::fact::line(ui, label, values).rect;
+    sheet_rect(ui, rect);
+}
+
+/// A plain line of the sheet (a condition, `None`), one whole row.
+fn sheet_line(ui: &mut egui::Ui, words: impl Into<egui::WidgetText>) {
+    let rect = ui.label(words).rect;
+    sheet_rect(ui, rect);
 }
 const TILE_WIDTH: f32 = 112.0;
 
@@ -700,11 +746,18 @@ fn sheet_column_widths(room: f32, gap: f32) -> Vec<f32> {
     widths
 }
 
-fn sheet_columns(ui: &mut egui::Ui, count: usize, mut row: impl FnMut(&mut egui::Ui, usize)) {
+/// `register`: each line is one whole row (`sheet_rect`); off for columns whose own rows are
+/// registered, so a line as tall as two sections is never one block.
+fn sheet_columns(
+    ui: &mut egui::Ui,
+    count: usize,
+    register: bool,
+    mut row: impl FnMut(&mut egui::Ui, usize),
+) {
     let widths = sheet_column_widths(ui.available_width(), ui.spacing().item_spacing.x);
     let rows = count.div_ceil(widths.len());
     for line in 0..rows {
-        ui.horizontal_top(|ui| {
+        let shown = ui.horizontal_top(|ui| {
             for (column, width) in widths.iter().copied().enumerate() {
                 ui.allocate_ui_with_layout(
                     egui::vec2(width, 0.0),
@@ -719,6 +772,9 @@ fn sheet_columns(ui: &mut egui::Ui, count: usize, mut row: impl FnMut(&mut egui:
                 );
             }
         });
+        if register {
+            sheet_rect(ui, shown.response.rect);
+        }
     }
 }
 
@@ -747,11 +803,13 @@ fn roll_metric(ui: &mut egui::Ui, label: &str, value: &str, link: &RollLink) {
 }
 /// A tile's room, the same for every tile in a row.
 fn tile(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
-    ui.allocate_ui(egui::vec2(TILE_WIDTH, 44.0), |ui| {
+    let shown = ui.allocate_ui(egui::vec2(TILE_WIDTH, 44.0), |ui| {
         ui.set_min_height(design::XXL + design::M);
         ui.set_width(TILE_WIDTH);
         add(ui);
     });
+    // A tile is whole: its label never shows without its value (SF4).
+    sheet_rect(ui, shown.response.rect);
 }
 
 /// A bonus in the sheet's numeral type that rolls, or a dash when the sheet has none.
@@ -887,7 +945,7 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
         }
     });
     sheet_section(ui, "Saving throws");
-    sheet_columns(ui, ABILITIES.len(), |ui, at| {
+    sheet_columns(ui, ABILITIES.len(), true, |ui, at| {
         let ability = ABILITIES[at];
         ui.horizontal(|ui| {
             numeral_link(ui, record.stat(&format!("{ability}_save")), |bonus| {
@@ -900,7 +958,7 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
     });
     sheet_section(ui, "Skills");
     let skills = skill_order(record);
-    sheet_columns(ui, skills.len(), |ui, at| {
+    sheet_columns(ui, skills.len(), true, |ui, at| {
         let skill = &record.character.skills[skills[at]];
         ui.horizontal(|ui| {
             numeral_link(ui, record.stat(&skill.stat), |bonus| {
@@ -949,7 +1007,7 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
         ui.weak("No limited-use pools returned.");
     }
     for (key, pool) in &record.definition.splat_resources {
-        design::fact::line(
+        sheet_fact(
             ui,
             &pool.name,
             [format!(
@@ -971,7 +1029,7 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
         for group in &record.character.proficiencies {
             let values = text(&group["values"]);
             if !values.is_empty() {
-                design::fact::line(ui, text(&group["group"]), values.split(", "));
+                sheet_fact(ui, text(&group["group"]), values.split(", "));
             }
         }
     };
@@ -983,15 +1041,15 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
             ("Vulnerability", &record.character.vulnerabilities),
         ] {
             if !values.is_empty() {
-                design::fact::line(ui, label, values.iter().map(|value| text(&value["name"])));
+                sheet_fact(ui, label, values.iter().map(|value| text(&value["name"])));
             }
         }
         for sense in &record.character.senses {
-            design::fact::line(ui, text(&sense["name"]), [text(&sense["distance"])]);
+            sheet_fact(ui, text(&sense["name"]), [text(&sense["distance"])]);
         }
         if let Some(words) = overview_death_saves(record, live) {
             sheet_section(ui, "Death saves");
-            ui.label(words);
+            sheet_line(ui, words);
         }
         sheet_section(ui, "Conditions");
         let names: Vec<String> = live.map_or_else(
@@ -1011,10 +1069,10 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
             |live| live.conditions.iter().map(Condition::words).collect(),
         );
         if names.is_empty() {
-            ui.label("None");
+            sheet_line(ui, "None");
         }
         for name in names {
-            ui.label(name);
+            sheet_line(ui, name);
         }
     };
     if narrow {
@@ -1023,7 +1081,7 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
     } else {
         // A column's heading is first in its column, so no space comes from it: `S` is here.
         design::gap(ui, design::Gap::S);
-        sheet_columns(ui, 2, |ui, column| {
+        sheet_columns(ui, 2, false, |ui, column| {
             if column == 0 {
                 proficiencies(ui);
             } else {
@@ -1329,7 +1387,7 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
                     } else {
                         value["value"].to_string()
                     };
-                    design::fact::line(
+                    sheet_fact(
                         ui,
                         label,
                         std::iter::once(number.as_str())
@@ -1341,7 +1399,7 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
                 if pool.kind.as_deref() != Some("spell_slot") {
                     continue;
                 }
-                design::fact::line(
+                sheet_fact(
                     ui,
                     &pool.name,
                     [format!(
@@ -1389,7 +1447,7 @@ pub fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: 
     }
     if page == 3 {
         use splat::character::profile;
-        design::fact::line(
+        sheet_fact(
             ui,
             "Coins",
             [profile::coins(&record.source.raw)
@@ -1621,7 +1679,7 @@ mod sheet_now_tests {
             let _ = ctx.run(Default::default(), |ctx| {
                 eframe::egui::CentralPanel::default().show(ctx, |ui| {
                     ui.set_width(280.0);
-                    super::sheet_columns(ui, 4, |ui, at| {
+                    super::sheet_columns(ui, 4, true, |ui, at| {
                         cells[at] = ui
                             .allocate_exact_size(
                                 eframe::egui::vec2(
@@ -1640,6 +1698,11 @@ mod sheet_now_tests {
         assert!(cells[1].top() >= cells[2].bottom());
     }
     fn wizard(fetched: u64) -> EntitySnapshot {
+        wizard_with(fetched, json!({}))
+    }
+
+    /// `wizard`, with `extra`'s keys added to its computed sheet.
+    fn wizard_with(fetched: u64, extra: serde_json::Value) -> EntitySnapshot {
         let abilities: Vec<_> = ["str", "dex", "con", "int", "wis", "cha"]
             .iter()
             .map(|name| json!({"name": name, "score": 14, "modifier": 2, "save": 4}))
@@ -1652,9 +1715,13 @@ mod sheet_now_tests {
         .iter()
         .map(|name| json!({"name": name, "modifier": 5, "isProficient": true, "isExpert": false, "isHalfProficient": false, "isAdvantage": false, "isDisadvantage": false}))
         .collect();
+        let mut computed = json!({"characterId": 123, "name": "Example", "campaign": {"id": 456}, "level": 1, "armorClass": 19, "proficiencyBonus": 2, "initiativeBonus": 7, "passivePerception": 15, "passiveInsight": 12, "passiveInvestigation": 13, "abilities": abilities, "skills": skills, "hitPointInfo": {"maximum": 25, "current": 17, "temp": 4}, "deathSaveInfo": {"successCount": 0, "failCount": 0}, "speeds": [{"name": "Walking", "distance": 40}], "race": {"name": "Goblin"}, "classes": [], "attacks": [], "castingInfo": {"saveDcs": []}, "conditions": [{"name": "Poisoned"}], "inspiration": false});
+        if let (Some(computed), Some(extra)) = (computed.as_object_mut(), extra.as_object()) {
+            computed.extend(extra.clone());
+        }
         EntitySnapshot::from_beyond(
             json!({"id": 123, "name": "Example", "campaign": {"id": 456}, "race": {"sizeId": 3, "creatureTypeId": 11}, "classes": [{"id": 8, "level": 1, "hitDiceUsed": 0, "definition": {"name": "Wizard", "spellRules": {"levelSpellSlots": [[], [2]]}}}], "spellSlots": [{"level": 1, "used": 1}], "notes": {"otherNotes": ""}}),
-            json!({"characterId": 123, "name": "Example", "campaign": {"id": 456}, "level": 1, "armorClass": 19, "proficiencyBonus": 2, "initiativeBonus": 7, "passivePerception": 15, "passiveInsight": 12, "passiveInvestigation": 13, "abilities": abilities, "skills": skills, "hitPointInfo": {"maximum": 25, "current": 17, "temp": 4}, "deathSaveInfo": {"successCount": 0, "failCount": 0}, "speeds": [{"name": "Walking", "distance": 40}], "race": {"name": "Goblin"}, "classes": [], "attacks": [], "castingInfo": {"saveDcs": []}, "conditions": [{"name": "Poisoned"}], "inspiration": false}),
+            computed,
             "456",
             "123",
             fetched,
@@ -1694,6 +1761,70 @@ mod sheet_now_tests {
                 );
             }
         }
+    }
+
+    /// Layout step 11a (Astra's P1 on PR 700): the sheet's two wide columns end whole together
+    /// at the pane's edge (`rows_end_whole`, as the run's sheet). A wrapped Armor fact in the left column, Resistance and then Darkvision in
+    /// the right: at some heights the edge crosses Darkvision only, and a cut moved to
+    /// Darkvision's top would cross Armor's lower lines. At every height from 300 to 1300 px, no
+    /// text of the body is cut from below. The reference is the clip that paints each text,
+    /// against the text's own bounds.
+    #[test]
+    fn both_wide_columns_end_whole_at_every_height() {
+        use crate::design::outcome::{Messages, NoPress, PaneFrame};
+        let record = std::sync::Arc::new(wizard_with(
+            10,
+            json!({
+                "proficiencyGroups": [
+                    {"group": "Armor", "values": "Light, Medium, Heavy, Shields, Padded, Leather, Studded leather, Hide, Chain shirt"},
+                    {"group": "Weapons", "values": "Simple, Martial"},
+                ],
+                "resistances": [{"name": "Fire"}],
+                "senses": [{"name": "Darkvision", "distance": "60 ft."}],
+            }),
+        ));
+        let (mut hidden, mut faults) = (0, Vec::new());
+        for height in (300..=1300).step_by(2) {
+            let record = record.clone();
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(760.0, height as f32))
+                .build_ui(move |ui| {
+                    let frame = PaneFrame::new(ui);
+                    let mut messages =
+                        Messages::<NoPress>::new(&frame, "sheet_probe", ui.available_width());
+                    // The body's own bottom is its edge, as the run's sheet has it.
+                    messages.rows_end_whole();
+                    let _ = messages.pane(ui, design::pane::Body::Content, |ui| {
+                        overview(ui, &record, None)
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(4);
+            let output = harness.output();
+            let mut darkvision = false;
+            for clipped in &output.shapes {
+                if let egui::Shape::Text(text) = &clipped.shape {
+                    let (bounds, clip) = (text.visual_bounding_rect(), clipped.clip_rect);
+                    if clip.intersects(bounds) && bounds.bottom() > clip.bottom() + 1.0 {
+                        faults.push(format!(
+                            "{height} px: {:?} {bounds:?} cut by {clip:?}",
+                            text.galley.job.text
+                        ));
+                    }
+                    darkvision |=
+                        clip.intersects(bounds) && text.galley.job.text.starts_with("Darkvision");
+                }
+            }
+            // egui paints no text wholly outside its clip.
+            if !darkvision {
+                hidden += 1;
+            }
+        }
+        assert!(
+            hidden > 0,
+            "sheet-columns-reached: some height hides Darkvision"
+        );
+        assert!(faults.is_empty(), "sheet-columns-whole: {faults:#?}");
     }
 
     #[test]
