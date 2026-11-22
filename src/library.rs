@@ -1116,7 +1116,7 @@ impl Library {
                 .entry
                 .clone()
                 .ok_or("The linked entry cannot be read.")?,
-            text: source.text.clone(),
+            text: source.text.to_string(),
             root: source.owner.root().map(Path::to_path_buf),
             campaign: None,
         };
@@ -1142,7 +1142,7 @@ impl Library {
         kept.push_copy(DependencyUndo {
             root: package.path.clone(),
             path: note.path.clone(),
-            before: note.text.clone(),
+            before: note.text.to_string(),
             after,
             copied_path: plan.relative.clone(),
             copied_text: plan.text.clone(),
@@ -1161,7 +1161,7 @@ impl Library {
             .root()
             .ok_or("Built-in entries are read only.")?
             .to_path_buf();
-        let before = note.text.clone();
+        let before = note.text.to_string();
         let id = crate::hermetic::new_uuid();
         let after = crate::content_workspace::new_note_identity(&before, &note.path, id)?;
         let updated = write_note(&root, &note.path, Some(&before), &after)?;
@@ -1173,7 +1173,7 @@ impl Library {
         });
         let loaded = self.loaded.as_mut().unwrap();
         loaded.notes[index].entry = Some(updated);
-        loaded.notes[index].text = after.clone();
+        loaded.notes[index].text = crate::design::memo::Revised::new(after.clone());
         loaded.invalidate();
         loaded.refresh_diagnostics();
         let _ = self.draft.replace(after);
@@ -1192,9 +1192,9 @@ impl Library {
         if let Some(index) = self.selected {
             let note = &mut self.loaded.as_mut().unwrap().notes[index];
             if note.path == undo.path && note.owner.root() == Some(undo.root.as_path()) {
-                note.text = undo.before.clone();
+                note.text = crate::design::memo::Revised::new(undo.before.clone());
                 note.entry = Entry::parse(&note.path, &note.text).ok();
-                let _ = self.draft.replace(note.text.clone());
+                let _ = self.draft.replace(note.text.as_str());
                 // The draft changed: a failed Save of the old words no longer owns it.
                 self.draft_revision += 1;
             }
@@ -1267,7 +1267,7 @@ impl Library {
             note.entry = None;
             note.error = Some(fault.cause().to_owned());
             note.fault = Some(fault);
-            note.text = String::new();
+            note.text = crate::design::memo::Revised::default();
             self.stale = true;
             if let Some(loaded) = &mut self.loaded {
                 loaded.invalidate();
@@ -1289,7 +1289,7 @@ impl Library {
                         note.error = Some(error);
                     }
                 }
-                note.text = text.clone();
+                note.text = crate::design::memo::Revised::new(text.clone());
                 let _ = self.draft.replace(text);
             }
             None => {
@@ -1307,7 +1307,7 @@ impl Library {
                     chosen,
                     campaign: None,
                 });
-                let _ = self.draft.replace(note.text.clone());
+                let _ = self.draft.replace(note.text.as_str());
                 self.stale = true;
                 self.selected = None;
             }
@@ -1336,7 +1336,7 @@ impl Library {
                 .set_scope_notice((note.name().to_owned(), Scope::All));
         }
         self.selected = Some(index);
-        let _ = self.draft.replace(note.text.clone());
+        let _ = self.draft.replace(note.text.as_str());
         self.disk_change = None;
         self.section = if note.is_manifest() {
             Section::All
@@ -1438,7 +1438,7 @@ impl Library {
         self.selected = Some(index);
         let _ = self
             .draft
-            .replace(self.loaded.as_ref().unwrap().notes[index].text.clone());
+            .replace(self.loaded.as_ref().unwrap().notes[index].text.as_str());
         true
     }
     pub fn edit_copy(&mut self, entry: Entry) {
@@ -1818,7 +1818,7 @@ impl Library {
                                 .as_ref()
                                 .and_then(|(owner, path)| file_at(&l.notes, (*owner, path)));
                             if let Some(i) = self.selected {
-                                let _ = self.draft.replace(l.notes[i].text.clone());
+                                let _ = self.draft.replace(l.notes[i].text.as_str());
                                 // The draft changed: a failed Save of the old words no longer owns it.
                                 self.draft_revision += 1;
                             }
@@ -2233,7 +2233,7 @@ impl Library {
                         ));
                     }
                     self.selected = Some(index);
-                    let _ = self.draft.replace(note.text.clone());
+                    let _ = self.draft.replace(note.text.as_str());
                     self.section = Section::All;
                     self.unreadable_kind = None;
                     self.source = false;
@@ -2507,7 +2507,7 @@ impl Library {
                         ));
                     }
                     self.selected = Some(index);
-                    let _ = self.draft.replace(note.text.clone());
+                    let _ = self.draft.replace(note.text.as_str());
                     self.section = Section::All;
                     self.unreadable_kind = None;
                     self.source = false;
@@ -2701,7 +2701,7 @@ impl Library {
             self.selected = Some(i);
             let _ = self
                 .draft
-                .replace(self.loaded.as_ref().unwrap().notes[i].text.clone());
+                .replace(self.loaded.as_ref().unwrap().notes[i].text.as_str());
             self.error = None;
             self.source = false;
         }
@@ -2804,7 +2804,7 @@ impl Library {
                             (
                                 root.to_path_buf(),
                                 note.path.clone(),
-                                note.text.clone(),
+                                note.text.to_string(),
                                 after,
                             )
                         })
@@ -3788,7 +3788,7 @@ impl Library {
                                 let created_owner = owner.key();
                                 l.notes.push(Note {
                                     path,
-                                    text: text.clone(),
+                                    text: crate::design::memo::Revised::new(text.clone()),
                                     entry: Some(entry),
                                     error: None,
                                     fault: None,
@@ -3857,7 +3857,7 @@ impl Library {
         self.reveal_row = true;
         let _ = self
             .draft
-            .replace(self.loaded.as_ref().unwrap().notes[index].text.clone());
+            .replace(self.loaded.as_ref().unwrap().notes[index].text.as_str());
         self.disk_change = None;
         let _ = self.kept.take_scope_notice();
         self.scope = target.scope;
@@ -3933,7 +3933,7 @@ impl Library {
                     let note = &mut self.loaded.as_mut().unwrap().notes[i];
                     note.path = path;
                     note.owner = owner;
-                    if note.text != text {
+                    if *note.text != text {
                         self.disk_change = Some(DiskChange {
                             text: Some(text),
                             moved_to: Some(note.path.clone()),
@@ -4073,7 +4073,7 @@ impl Library {
                     .as_ref()
                     .is_none_or(|old| old.id != entry.id);
                 l.notes[i].entry = Some(entry);
-                l.notes[i].text = self.draft.as_str().to_owned();
+                l.notes[i].text = crate::design::memo::Revised::new(self.draft.as_str().to_owned());
                 l.notes[i].error = None;
                 // A manifest written from its draft is on disk again.
                 l.notes[i].manifest_gone = false;
@@ -4314,7 +4314,10 @@ impl Library {
                 self.stale = true;
             }
             match change.text {
-                Some(text) => self.loaded.as_mut().unwrap().notes[i].text = text,
+                Some(text) => {
+                    self.loaded.as_mut().unwrap().notes[i].text =
+                        crate::design::memo::Revised::new(text)
+                }
                 None => file_gone = true,
             }
             self.loaded.as_mut().unwrap().invalidate();
@@ -4972,7 +4975,7 @@ impl Library {
         if copy_clicked {
             self.copy = Some(crate::content_workspace::CopySource {
                 entry: note.entry.as_ref().unwrap().clone(),
-                text: note.text.clone(),
+                text: note.text.to_string(),
                 root: note.owner.root().map(Path::to_path_buf),
                 campaign: match &note.owner {
                     Owner::Campaign(campaign) => Some(campaign.clone()),
