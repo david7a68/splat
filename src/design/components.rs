@@ -5162,18 +5162,34 @@ pub(in crate::design) fn menu_submenus<W: AsRef<str>>(
     let key = ui.make_persistent_id(id);
     let mut state: SubmenuState = ui.data(|data| data.get_temp(key)).unwrap_or_default();
     // Review of PR 759: Escape closes the innermost open submenu first (the one that held the
-    // keyboard in the last frame, else the last opened) and gives the keyboard to its row; the
-    // menu closes on an Escape only when no submenu is open. egui drops the focus on an Escape
-    // before the menu draws, so the last frame's focus says where the keyboard was.
+    // keyboard at the end of the last frame, else the last opened) and gives the keyboard to its
+    // row; the menu closes on an Escape only when no submenu is open. egui drops the focus on an
+    // Escape before the menu draws, and moves it by the arrow keys after the menu drew, so the
+    // widget that had it at the end of the last frame (`had_focus_last_frame`, after that move)
+    // is found among the menu layer's widgets of the last pass, on an Escape only.
     if !state.open.is_empty() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
-        let held = state.focus.and_then(|focus| {
+        let layer = ui.layer_id();
+        let widgets: Vec<(Id, Rect)> = ui.ctx().viewport(|viewport| {
+            viewport
+                .prev_pass
+                .widgets
+                .get_layer(layer)
+                .map(|widget| (widget.id, widget.rect))
+                .collect()
+        });
+        let had = ui.memory(|memory| {
+            widgets
+                .iter()
+                .copied()
+                .find(|(id, _)| memory.had_focus_last_frame(*id))
+        });
+        let held = had.and_then(|(focus, rect)| {
             state.open.iter().rev().copied().find(|at| {
                 state.rows.get(at) == Some(&focus)
-                    || state.blocks.get(at).is_some_and(|block| {
-                        ui.ctx()
-                            .read_response(focus)
-                            .is_some_and(|response| block.contains_rect(response.rect))
-                    })
+                    || state
+                        .blocks
+                        .get(at)
+                        .is_some_and(|block| block.contains_rect(rect))
             })
         });
         if let Some(at) = held.or_else(|| state.open.last().copied()) {
@@ -5193,7 +5209,9 @@ pub(in crate::design) fn menu_submenus<W: AsRef<str>>(
         })
         .fold(0.0, f32::max);
     let full = (width + S).max(rows) + super::layout::lane_width();
-    ui.set_width(full);
+    // Review of PR 759 (P1): never wider than the menu has. In the narrowest column the menu is
+    // narrower than `full`: the block is laid out in what is there, and its choices wrap.
+    ui.set_width(full.min(ui.available_width()));
     let room = ui.ctx().content_rect().height() * 0.6;
     // Review of PR 759 (P1): the rows and the open submenus are one block of the menu, `full`
     // wide (wrapped choices and the scroll lane included): the choices in it note no width of
@@ -5208,18 +5226,16 @@ pub(in crate::design) fn menu_submenus<W: AsRef<str>>(
                 }
             });
     });
-    state.focus = ui.memory(|memory| memory.focused());
     ui.data_mut(|data| data.insert_temp(key, state));
 }
 
 /// What `menu_submenus` keeps between frames: the open submenus in the order they opened, and,
-/// from the last frame, each row's id, each open submenu's block and the focused widget.
+/// from the last frame, each row's id and each open submenu's block.
 #[derive(Clone, Default)]
 struct SubmenuState {
     open: Vec<usize>,
     rows: std::collections::HashMap<usize, Id>,
     blocks: std::collections::HashMap<usize, Rect>,
-    focus: Option<Id>,
 }
 
 /// One row of `menu_submenus` and, while it is open, its choices under it. A click, Space or

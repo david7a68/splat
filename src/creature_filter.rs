@@ -152,7 +152,8 @@ fn challenge_width(ui: &egui::Ui) -> f32 {
 /// Two rows of challenge ratings: the lowest and the highest. A second click on a bound
 /// removes it.
 fn challenge_menu(ui: &mut egui::Ui, filter: &mut Filter, values: &[(String, usize)]) {
-    ui.set_max_width(challenge_width(ui));
+    // Never wider than the menu has: in the narrowest column the ratings wrap (review of PR 759).
+    ui.set_max_width(challenge_width(ui).min(ui.available_width()));
     for (title, high) in [("Lowest", false), ("Highest", true)] {
         ui.label(Type::Small.rich(ui, title).color(colors().muted));
         ui.horizontal_wrapped(|ui| {
