@@ -1230,6 +1230,7 @@ impl ScrollColumn {
         let column = super::reveal::Column {
             key: ui.make_persistent_id(("design_reveal_column", self.id)),
             hosts: self.hosts_reveals,
+            area: ui.make_persistent_id(self.id),
         };
         let mut area = self.area();
         if let Some(offset) = super::reveal::take_offset(ui, column) {
