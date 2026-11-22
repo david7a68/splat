@@ -281,7 +281,7 @@ pub(crate) struct Control {
 }
 
 /// A kept document's heading map (each heading's words and block) and its control map.
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub(crate) type DocumentMaps = (Vec<(String, usize)>, Vec<Control>);
 
 impl Maps {
@@ -407,7 +407,7 @@ pub fn kept_galleys(ctx: &egui::Context) -> Vec<Arc<egui::Galley>> {
 
 /// The control map and the heading map of every document a reader keeps prepared (layout PR
 /// 9b-R1b's checks).
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub(crate) fn kept_maps(ctx: &egui::Context) -> Vec<DocumentMaps> {
     let readers = ctx.data_mut(|data| {
         data.get_temp_mut_or_default::<KeptReaders>(egui::Id::new("markdown_kept_readers"))
@@ -469,14 +469,20 @@ enum Laid {
 }
 
 /// A paragraph with links, laid out: its words (its accessible name), its galley, and each link
-/// with its spare width, its underline and its words' parts at the galley's origin.
+/// with its underline, its words' parts, its targets and their bounds at the galley's origin,
+/// and the key of its destination, all made once (layout PR 9b-R1b: a quiet frame copies no
+/// part and builds no target for a link out of view).
 struct LaidLinks {
     text: String,
     galley: Arc<egui::Galley>,
     links: Vec<(std::ops::Range<usize>, LinkTarget)>,
-    spare: Vec<Spare>,
     underlines: Vec<egui::Stroke>,
     words: Vec<Vec<LinkPart>>,
+    targets: Vec<Vec<egui::Rect>>,
+    bounds: Vec<egui::Rect>,
+    /// Each link's destination, as part of its id: a focused link whose destination changed
+    /// has another id, so it loses the focus and never acts (note 9b §10.6).
+    keys: Vec<u64>,
 }
 
 /// A table's cells, its shown columns, and its roll marker.
@@ -1851,13 +1857,35 @@ fn lay_out_links(
     }
     let galley = lay_out(ui, job, true);
     let words = link_words(&galley, egui::Pos2::ZERO, &links);
+    let targets = link_targets(
+        &words,
+        &spare,
+        egui::Rect::from_min_size(egui::Pos2::ZERO, galley.size()),
+    );
+    let bounds = words
+        .iter()
+        .zip(&targets)
+        .map(|(parts, rects)| {
+            parts
+                .iter()
+                .map(|part| part.rect)
+                .chain(rects.iter().copied())
+                .fold(egui::Rect::NOTHING, egui::Rect::union)
+        })
+        .collect();
+    let keys = links
+        .iter()
+        .map(|(_, destination)| egui::Id::new(format!("{destination:?}")).value())
+        .collect();
     LaidLinks {
         text,
         galley,
         links,
-        spare,
         underlines,
         words,
+        targets,
+        bounds,
+        keys,
     }
 }
 
@@ -1869,9 +1897,11 @@ fn draw_laid_links(ui: &mut egui::Ui, laid: &LaidLinks, links_id: egui::Id) -> e
         text,
         galley,
         links,
-        spare,
         underlines,
         words,
+        targets,
+        bounds,
+        keys,
     } = laid;
     let (position, galley, response) = egui::Label::new(galley.clone())
         .sense(egui::Sense::hover())
@@ -1894,53 +1924,50 @@ fn draw_laid_links(ui: &mut egui::Ui, laid: &LaidLinks, links_id: egui::Id) -> e
         );
     }
     let at = position.to_vec2();
-    let words: Vec<Vec<LinkPart>> = words
-        .iter()
-        .map(|parts| {
-            parts
-                .iter()
-                .map(|part| LinkPart {
-                    left: part.left + at.x,
-                    right: part.right + at.x,
-                    y: part.y + at.y,
-                    rect: part.rect.translate(at),
-                    row_start: part.row_start,
-                    entry_left: part.entry_left.map(|left| left + at.x),
-                })
-                .collect()
-        })
-        .collect();
-    for (stroke, parts) in underlines.iter().zip(&words) {
-        if *stroke == egui::Stroke::NONE || !shown {
-            continue;
-        }
-        for part in parts {
-            let y = ui
-                .painter()
-                .round_to_pixel_center(part.y + UNDERLINE_BELOW_BASELINE);
-            ui.painter().hline(part.left..=part.right, y, *stroke);
-        }
-    }
-    for ((_, destination), parts) in links.iter().zip(&words) {
-        if shown && matches!(destination, LinkTarget::Missing) {
-            for part in parts {
-                let y = part.y + UNDERLINE_BELOW_BASELINE;
-                let mut dot = part.left;
-                while dot < part.right {
-                    ui.painter().circle_filled(
-                        egui::pos2(dot, y),
-                        design::HAIRLINE_WIDTH / 2.0,
-                        colors().muted,
-                    );
-                    dot += design::XS;
+    let place = |part: &LinkPart| LinkPart {
+        left: part.left + at.x,
+        right: part.right + at.x,
+        y: part.y + at.y,
+        rect: part.rect.translate(at),
+        row_start: part.row_start,
+        entry_left: part.entry_left.map(|left| left + at.x),
+    };
+    let clip = ui.clip_rect();
+    for (index, (range, destination)) in links.iter().enumerate() {
+        // A link in view: its underline, a missing link's dots and every part of its target.
+        // A link out of view: its first target only, so Tab still reaches it, at the same cost
+        // whatever its words.
+        let in_view = shown && clip.intersects(bounds[index].translate(at));
+        if in_view {
+            for part in words[index].iter().map(place) {
+                if underlines[index] != egui::Stroke::NONE {
+                    let y = ui
+                        .painter()
+                        .round_to_pixel_center(part.y + UNDERLINE_BELOW_BASELINE);
+                    ui.painter()
+                        .hline(part.left..=part.right, y, underlines[index]);
+                }
+                if matches!(destination, LinkTarget::Missing) {
+                    let y = part.y + UNDERLINE_BELOW_BASELINE;
+                    let mut dot = part.left;
+                    while dot < part.right {
+                        ui.painter().circle_filled(
+                            egui::pos2(dot, y),
+                            design::HAIRLINE_WIDTH / 2.0,
+                            colors().muted,
+                        );
+                        dot += design::XS;
+                    }
                 }
             }
         }
-    }
-    let targets = link_targets(&words, spare, response.rect);
-    for (index, ((range, destination), rects)) in links.iter().zip(&targets).enumerate() {
+        let rects = if in_view {
+            &targets[index][..]
+        } else {
+            &targets[index][..targets[index].len().min(1)]
+        };
         let words_text = &galley.job.text[range.clone()];
-        let id = links_id.with(index);
+        let id = links_id.with((index, keys[index]));
         // Only the first part of a wrapped link takes focus, so Tab stops once per link.
         let parts: Vec<egui::Response> = rects
             .iter()
@@ -1952,7 +1979,7 @@ fn draw_laid_links(ui: &mut egui::Ui, laid: &LaidLinks, links_id: egui::Id) -> e
                 } else {
                     egui::Sense::CLICK
                 };
-                let part_response = ui.interact(*rect, id.with(part), sense);
+                let part_response = ui.interact(rect.translate(at), id.with(part), sense);
                 let role = if first {
                     egui::WidgetType::Link
                 } else {
@@ -1969,9 +1996,9 @@ fn draw_laid_links(ui: &mut egui::Ui, laid: &LaidLinks, links_id: egui::Id) -> e
             // The ring sits `XS / 2` outside the words, so it never covers a letter, even for a
             // link at the start of a line. It stays inside the reader's visible area, which
             // keeps a gutter beside the text for it.
-            for part in &words[index] {
+            for part in words[index].iter().map(place) {
                 let ring = part.rect.expand2(egui::vec2(design::XS / 2.0, 0.0));
-                design::focus_ring(ui, ring.intersect(ui.clip_rect()));
+                design::focus_ring(ui, ring.intersect(clip));
             }
         }
         // A click by key or pointer wins over the pointer resting on another row of the link.
@@ -3416,6 +3443,46 @@ mod tests {
              {:?}",
             link_names(&harness)
         );
+        // Layout PR 9b-R1b (review of PR 813, P2): a focused link whose destination changed
+        // loses the focus and never acts. The document's next revision puts a linked paragraph
+        // above the focused link, where the focused link's block was: Enter follows nothing.
+        use crate::design::test_harness::Themed;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(480.0, 320.0))
+            .themed_ui_state(
+                |ui, (revision, text): &mut (u64, String)| {
+                    show_document(
+                        ui,
+                        ReaderSource {
+                            doc: DocumentId::Entry(uuid::Uuid::from_u128(7)),
+                            revision: *revision,
+                            text,
+                        },
+                    );
+                },
+                (1, "Ask [Wren](splat-note:Wren) about the bells.".to_owned()),
+            );
+        harness.run_steps(3);
+        harness.key_press(egui::Key::Tab);
+        harness.run_ok();
+        assert_eq!(
+            focused(&harness).as_deref(),
+            Some("Wren (opens Wren)"),
+            "9b-R1b-stale-setup"
+        );
+        *harness.state_mut() = (
+            2,
+            "See [Oskar](splat-note:Oskar) first.\n\nAsk [Wren](splat-note:Wren) about the bells."
+                .to_owned(),
+        );
+        harness.run_steps(2);
+        harness.key_press(egui::Key::Enter);
+        harness.step();
+        assert_eq!(
+            take_note_link(&harness.ctx),
+            None,
+            "9b-R1b-stale: Enter on a link whose destination changed under the focus follows nothing"
+        );
     }
 
     /// Layout PR 9b-R1b: a kept document's maps are complete (every heading, every link control
@@ -3432,9 +3499,11 @@ mod tests {
             )
             .into_boxed_str(),
         );
+        use crate::design::test_harness::ThemedPage;
+        use egui_kittest::kittest::Queryable;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(480.0, 320.0))
-            .build_ui(move |ui| {
+            .themed_ui(move |ui| {
                 design::layout::ScrollColumn::new("reader")
                     .hosts_reveals()
                     .show(ui, |ui| {
@@ -3448,7 +3517,6 @@ mod tests {
                         );
                     });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(4);
         let maps = kept_maps(&harness.ctx);
         let controls: Vec<_> = maps.iter().flat_map(|(_, controls)| controls).collect();
