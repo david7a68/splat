@@ -20810,7 +20810,21 @@ pub mod encounter_groups {
         // actions stand clear of its Count line and inside the row.
         d.state_prepared("group-editor", Sizes::All, |d| {
             let (holds, column, detail) = d.kept_columns_hold("members", true, None);
-            let (whole, rows) = d.measured_rows_whole("members");
+            // The group's members, from the fixture: each member's number and name, and the
+            // stats its detail line shows (Rival Captain is an Ember Cultist renamed).
+            let (whole, rows) = d.measured_rows_whole(
+                "members",
+                &[
+                    &[
+                        "1. Rival Captain",
+                        "CR 1",
+                        "HP 43",
+                        "AC 15",
+                        "as Ember Cultist",
+                    ],
+                    &["2. Cinder Wolf", "CR 1", "HP 22", "AC 13"],
+                ],
+            );
             let wide = d.window_size().0 >= LARGE.0;
             d.observe(
                 "pr5b-members-columns",

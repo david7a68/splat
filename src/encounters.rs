@@ -8500,7 +8500,7 @@ impl Encounters {
                             ),
                             left,
                         );
-                    place.scope(ui, |ui| {
+                    let drawn = place.scope(ui, |ui| {
                         row_menu(ui, &name, |ui| {
                             if menu_action(ui, "Edit", None) {
                                 *expanded = Some(slot.key.clone());
@@ -8732,12 +8732,16 @@ impl Encounters {
                             .response
                             .rect;
                         // The row's facts share the actions' line.
-                        let facts = egui::Rect::from_min_size(
-                            egui::pos2(left, facts.top()),
-                            egui::vec2(facts.width(), facts.height()),
-                        );
-                        place.done(ui, "roster", i, facts, facts, actions);
+                        (
+                            egui::Rect::from_min_size(
+                                egui::pos2(left, facts.top()),
+                                egui::vec2(facts.width(), facts.height()),
+                            ),
+                            actions,
+                        )
                     });
+                    // After the scope: the slot is not `Copy`, and its row ends once.
+                    place.done(ui, "roster", i, drawn.inner.0, drawn.inner.0, drawn.inner.1);
                 });
                 let member_row = member_row.response.rect;
                 draft

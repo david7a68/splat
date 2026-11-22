@@ -347,7 +347,8 @@ impl MeasuredColumn {
 
     /// The slot of one row's actions. `line` is the actions' line: its top and bottom, its left
     /// where the actions may start, its right the row's far edge. `left` is where the row's
-    /// facts start.
+    /// facts start. Give the drawn row to [`ActionSlot::done`].
+    #[must_use = "a slot's row is measured and recorded only by `ActionSlot::done`"]
     pub fn slot(self, ui: &Ui, line: Rect, left: f32) -> ActionSlot {
         let (kept_facts, kept_actions) = columns(ui, self.list);
         let far_edge = line.right();
@@ -387,14 +388,18 @@ impl MeasuredColumn {
             start,
             rect,
             far_edge,
+            finished: false,
         }
     }
 }
 
 /// Where one row's actions stand in a [`MeasuredColumn`], and their region. Draw them with
 /// [`ActionSlot::scope`] or [`ActionSlot::child`], then give the drawn row to
-/// [`ActionSlot::done`].
-#[derive(Clone, Copy, Debug)]
+/// [`ActionSlot::done`]. It is not `Copy`, and a slot dropped before `done` fails a debug
+/// assertion: a row that skipped `done` would not count in its list's column, would not draw
+/// its list again when the column grew, and would not be recorded (PR 772 review, P2).
+#[derive(Debug)]
+#[must_use = "a slot's row is measured and recorded only by `ActionSlot::done`"]
 pub struct ActionSlot {
     list: Id,
     at: ColumnAt,
@@ -404,6 +409,19 @@ pub struct ActionSlot {
     start: Option<f32>,
     rect: Rect,
     far_edge: f32,
+    /// `done` ran.
+    finished: bool,
+}
+
+impl Drop for ActionSlot {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            debug_assert!(
+                self.finished,
+                "a measured row's slot was dropped before `ActionSlot::done`"
+            );
+        }
+    }
 }
 
 impl ActionSlot {
@@ -434,7 +452,7 @@ impl ActionSlot {
     /// facts on the actions' own line; `actions`, its drawn actions. Adds the row to the list's
     /// columns for the next pass and, in test builds, records it as `owner`'s row `row`.
     pub fn done(
-        self,
+        mut self,
         ui: &Ui,
         owner: &'static str,
         row: usize,
@@ -465,6 +483,7 @@ impl ActionSlot {
         }
         #[cfg(not(any(test, feature = "test-support")))]
         let _ = (owner, row, line, self.column, self.start, self.far_edge);
+        self.finished = true;
     }
 }
 
