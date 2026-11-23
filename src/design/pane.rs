@@ -138,7 +138,7 @@ mod plan_row;
 /// The scroll region of an owned list body over its plan (layout step 3b).
 mod region;
 pub use action_line::{
-    ActionLine, LineAction, LineColumns, WrapRoom, Wrapped, slot as line_slot, wrap,
+    ActionLine, LineAction, LineColumns, LineHeading, WrapRoom, Wrapped, slot as line_slot, wrap,
 };
 #[cfg(any(test, feature = "test-support"))]
 pub use action_line::{one_row_width, painted_in_block};
@@ -2378,6 +2378,18 @@ impl Footer<'_> {
             |ui, _| add(ui),
             then,
         )
+    }
+
+    /// `pane_editor` whose messages also come after the body, from `then` (`pane_then`): a body
+    /// with one editor whose acts start or end the footer's lines (Lookup's reader, issue #761),
+    /// so the frame of an act shows the message it brought.
+    pub fn pane_editor_then<R, T>(
+        self,
+        ui: &mut Ui,
+        add: impl for<'r> FnOnce(&mut Ui, EditorRegion<'r>) -> R,
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> T {
+        self.place(ui, Body::Content, ContentScroll::default(), true, add, then)
     }
 
     /// `pane_then` with `Body::Content`, whose scroll column behaves as `scroll` says.

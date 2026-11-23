@@ -33,6 +33,7 @@ pane-host	src/design/outcome.rs	Messages::pane_content	1	design
 pane-host	src/design/outcome.rs	Messages::pane_editor	1	design
 pane-host	src/design/outcome.rs	Messages::pane_then	1	design	the typed footer's lines after the body (L1c; raised)
 pane-host	src/design/outcome.rs	Messages::pane_content_then	1	design	the typed footer's lines after a Content body with its scroll options (L2c; raised)
+pane-host	src/design/outcome.rs	Messages::pane_editor_then	1	design	the typed footer's lines after an editor body (issue #761; raised)
 pane-host	src/encounter_run/view.rs	Run::ended_view	1	Run
 pane-host	src/encounter_run/view.rs	Run::groups_tab	1	Run	Arrivals' typed footer (migration-32 L2c), was a hand footer over a raw scroll area
 pane-host	src/encounter_run/view.rs	Run::live_view	1	Run

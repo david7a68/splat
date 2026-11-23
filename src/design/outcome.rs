@@ -2894,6 +2894,38 @@ impl<'f, A: 'static> Messages<'f, A> {
         }
     }
 
+    /// `pane_editor` whose messages also come after the body, from `then`
+    /// (`Footer::pane_editor_then`; issue #761): the act of the frame says its result and its
+    /// Undo in that frame.
+    pub fn pane_editor_then<R, T>(
+        self,
+        ui: &mut Ui,
+        add: impl for<'r> FnOnce(&mut Ui, super::pane::EditorRegion<'r>) -> R,
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> Paned<T, A> {
+        let (id, width) = (self.id, self.width);
+        let mut messages = self;
+        let mut sink = None;
+        let empty: TypedFooter<A> = TypedFooter {
+            lines: Vec::new(),
+            sink: PressSink(std::rc::Rc::default()),
+            retained: None,
+            plan: None,
+        };
+        let footer = Footer::typed(id, width, Box::new(empty));
+        let body = footer.pane_editor_then(ui, add, |inner, footer| {
+            let out = then(inner, &mut messages);
+            let (lines, press) = messages.into_footer();
+            footer.take_typed(lines);
+            sink = Some(press);
+            out
+        });
+        Paned {
+            body,
+            pressed: sink.and_then(|sink| sink.0.borrow_mut().take()),
+        }
+    }
+
     /// `pane_then` with a `Body::Content` scroll column that behaves as `scroll` says
     /// (`Footer::pane_content_then`).
     pub fn pane_content_then<R, T>(
