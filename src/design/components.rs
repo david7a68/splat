@@ -8968,7 +8968,7 @@ mod tests {
                             );
                         };
                         let short = vec2(size.x, 360.0);
-                        for passes in [1, 2] {
+                        for passes in [2, 1] {
                             let budget = std::num::NonZeroUsize::new(passes).unwrap();
                             harness
                                 .ctx
