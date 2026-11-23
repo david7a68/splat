@@ -519,9 +519,9 @@ impl ProcessingSettings {
                         .hint_text(hint)
                 });
                 design::named(ui, &response, label);
+                // The pane's focus arbiter brings the focused field whole into view.
                 if focus {
                     response.request_focus();
-                    response.scroll_to_me(None);
                 }
                 if show_save {
                     save = Action::secondary("Save key")
