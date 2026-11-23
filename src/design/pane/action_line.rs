@@ -90,8 +90,25 @@ pub(in crate::design) fn lay_group_heading(
     (title, count): (&str, usize),
     first: bool,
 ) -> (LaidText, f32) {
+    lay_group_heading_in(ui, (title, count), first, f32::INFINITY)
+}
+
+/// `lay_group_heading` in a block `width` wide: its words on one line, cut at the block's edge
+/// (a Trackers panel at 40 px gives a 12 px line: L7's case).
+pub(in crate::design) fn lay_group_heading_in(
+    ui: &Ui,
+    (title, count): (&str, usize),
+    first: bool,
+    width: f32,
+) -> (LaidText, f32) {
     let group = Heading::Group { title, count };
-    let galley = ui.fonts_mut(|fonts| fonts.layout_job(group_heading_text(ui, title, count)));
+    let mut job = group_heading_text(ui, title, count);
+    if width.is_finite() {
+        job.wrap.max_width = width.max(0.0);
+        job.wrap.max_rows = 1;
+        job.wrap.break_anywhere = true;
+    }
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
     let above = if first { 0.0 } else { group.above() };
     let height = above + galley.size().y + group.below();
     (
@@ -204,7 +221,7 @@ impl ActionLine<'_> {
         let mut y = 0.0;
         if let Some(heading) = self.heading {
             let (text, height) =
-                lay_group_heading(ui, (heading.title, heading.count), heading.first);
+                lay_group_heading_in(ui, (heading.title, heading.count), heading.first, width);
             texts.push(text);
             slots[slot::HEADING] = Rect::from_min_size(pos2(0.0, 0.0), vec2(width, height));
             y = height;
@@ -230,19 +247,24 @@ impl ActionLine<'_> {
         let name = ui.fonts_mut(|fonts| {
             fonts.layout_no_wrap(self.name.to_owned(), Type::Body.font(ui), colors().text)
         });
-        slots[slot::NAME] = Rect::from_min_size(
-            pos2(self.indent, y),
-            vec2((self.columns.name - self.indent).max(0.0), row),
+        // The name's cell from the indent, cut at the block's edge.
+        let indent = self.indent.clamp(0.0, width);
+        slots[slot::NAME] = Rect::from_min_max(
+            pos2(indent, y),
+            pos2(self.columns.name.clamp(indent, width.max(indent)), y + row),
         );
         slot_texts[slot::NAME] = Some(name);
         // The value, at its cell's right edge.
         let value = ui.fonts_mut(|fonts| {
             fonts.layout_no_wrap(self.value.to_owned(), Type::Numeral.font(ui), colors().text)
         });
-        let right = self.columns.name + S + self.columns.value;
-        slots[slot::VALUE] = Rect::from_min_size(
-            pos2(right - value.size().x, y + (row - control) / 2.0),
-            vec2(value.size().x, control),
+        // At the value column's right edge, and never past the block's (a Trackers panel at
+        // 40 px gives a 12 px line whose columns are wider: L7's case).
+        let right = (self.columns.name + S + self.columns.value).min(width);
+        let top = y + (row - control) / 2.0;
+        slots[slot::VALUE] = Rect::from_min_max(
+            pos2((right - value.size().x).max(0.0), top),
+            pos2(right.max(0.0), top + control),
         );
         slot_texts[slot::VALUE] = Some(value);
         let (actions, bottom) = self.flow(width, y);
@@ -1210,6 +1232,35 @@ mod tests {
                     tail: 0.0,
                 }
                 .lay(ui, 340.0);
+                // L7's Trackers case at a 40 px panel (a 12 px line whose name and value columns
+                // are wider): every slot of the line lies in its block, or `Laid::new` refuses it.
+                let narrow = [LineAction {
+                    key: Id::new("narrow"),
+                    width: 47.1875,
+                }];
+                let _ = ActionLine {
+                    key: Id::new("narrow"),
+                    heading: Some(LineHeading {
+                        title: "Pinned",
+                        count: 1,
+                        first: true,
+                    }),
+                    title: None,
+                    over: &[],
+                    row: 0.0,
+                    indent: 0.0,
+                    name: "…",
+                    value: "0",
+                    columns: LineColumns {
+                        name: 4.8,
+                        value: 62.40625,
+                    },
+                    actions: &narrow,
+                    beside: false,
+                    below: &[1392.0],
+                    tail: XS,
+                }
+                .lay(ui, 12.0);
                 slots.clear();
                 let block = draw_laid(ui, &laid, |ui| {
                     for at in 0..3 {
