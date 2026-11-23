@@ -1102,36 +1102,46 @@ pub fn write_under_history(
 mod composition {
     use egui::{Context, Event, Id, ImeEvent};
 
-    /// The focused field whose caret or selection an app write moved, until that field draws.
+    /// The fields whose caret or selection an app write moved, each until it draws with the
+    /// focus (newest first). A field moved without the focus waits here too: a `Commit` after the
+    /// focus comes back finds the place as stale. More than these few at once: the oldest is
+    /// dropped, and its place stays as it was.
     #[derive(Clone, Copy, Default)]
-    struct Moved(Option<Id>);
+    struct Moved([Option<Id>; 4]);
 
     fn id() -> Id {
         Id::new("splat_text_composition_moved")
     }
 
-    /// An app write moved the caret or the selection of `field`. Only the focused field can
-    /// compose.
+    /// An app write moved the caret or the selection of `field`.
     pub(super) fn moved(ctx: &Context, field: Id) {
-        if ctx.memory(|memory| memory.has_focus(field)) {
-            ctx.data_mut(|data| data.insert_temp(id(), Moved(Some(field))));
-        }
+        ctx.data_mut(|data| {
+            let fields = &mut data.get_temp_mut_or_default::<Moved>(id()).0;
+            if !fields.contains(&Some(field)) {
+                fields.rotate_right(1);
+                fields[0] = Some(field);
+            }
+        });
     }
 
-    /// Before the field `field` draws with the words `text`: after a write that moved it, egui
-    /// takes its selection as the composition's place again.
+    /// Before the field `field` draws with the words `text`: with the focus, after a write that
+    /// moved it, egui takes its selection as the composition's place again.
     pub(super) fn before_field(ctx: &Context, field: Id, focused: bool, text: &str) {
-        if ctx
-            .data(|data| data.get_temp::<Moved>(id()))
-            .map(|moved| moved.0)
-            != Some(Some(field))
-        {
-            return;
-        }
-        ctx.data_mut(|data| data.insert_temp(id(), Moved(None)));
         if !focused {
             return;
         }
+        let waits = ctx
+            .data(|data| data.get_temp::<Moved>(id()))
+            .is_some_and(|moved| moved.0.contains(&Some(field)));
+        if !waits {
+            return;
+        }
+        ctx.data_mut(|data| {
+            let fields = &mut data.get_temp_mut_or_default::<Moved>(id()).0;
+            for slot in fields.iter_mut().filter(|slot| **slot == Some(field)) {
+                *slot = None;
+            }
+        });
         let Some(range) = egui::text_edit::TextEditState::load(ctx, field)
             .and_then(|state| state.cursor.char_range())
         else {

@@ -1111,7 +1111,6 @@ impl Composition {
             }
             Composes::Disabled => self.enabled = false,
             Composes::Blur => {
-                self.moved = false;
                 if std::mem::take(&mut self.enabled) {
                     self.from = self.caret;
                 }
