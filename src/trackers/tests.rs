@@ -2031,6 +2031,50 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
         laid(),
         made()
     );
+    // The footer's line (its words, `Undo: Take seal` and the `Add to Timeline` choice) is laid
+    // out once per change of the footer's plan: from the page's entry through paint, an
+    // unchanged frame with that line measures no text (`design::TEXT_MEASURES`; the panel's
+    // own body measures none). Red: a footer that measures its choices every frame. (Laid words
+    // are counted by the design crate's footer and body tests: this panel's lines lay their own
+    // until they move onto `ActionLine`.)
+    assert!(
+        h.query_by_label("Add to Timeline").is_some()
+            && h.query_by_label("Undo: Take seal").is_some(),
+        "footer-reached: the footer line draws its Undo and its choice"
+    );
+    let measures = || crate::design::components::TEXT_MEASURES.with(std::cell::Cell::get);
+    let before = measures();
+    h.run_steps(5);
+    assert_eq!(
+        measures(),
+        before,
+        "footer-quiet: an unchanged frame with a footer line measures no text"
+    );
+    // A change of the laid words at the same length: `Lose seal` after `Take seal` makes the
+    // footer's Undo `Undo: Lose seal`. The footer is planned again, and the painted words are
+    // the new ones (read from the paint, not from the accessible name).
+    let painted = |h: &Harness<'_, Trackers>, words: &str| {
+        h.output().shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, eframe::egui::Shape::Text(text) if text.galley.job.text == words)
+        })
+    };
+    assert!(painted(&h, "Undo: Take seal"), "footer-paint-reached");
+    h.state_mut()
+        .press("seals", Some("Party"), "Lose seal", None);
+    h.run_steps(4);
+    assert!(
+        painted(&h, "Undo: Lose seal") && !painted(&h, "Undo: Take seal"),
+        "footer-same-length: the footer paints its new Undo words"
+    );
+    // The Due row's checks below start where they did before this footer case: the Party's
+    // first seal taken, its row due.
+    h.state_mut()
+        .press("seals", Some("Party"), "Take seal", None);
+    h.run_steps(4);
+    assert!(
+        h.query_by_label(done).is_some(),
+        "the Party's first seal is due again"
+    );
     // Astra's P2 on PR 885: a change of content at the same length. The mark's words change in
     // the note ("First" to "Final"); the next press reads the note (and records nothing), and
     // the row shows the new words.
