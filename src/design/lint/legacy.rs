@@ -43,7 +43,7 @@ const CAPABILITIES: [(&str, &str); 12] = [
     (
         "pane-host",
         ".pane/3 Footer::pane Messages::pane Self::pane pane_content pane_editor pane_then \
-         pane_content_then",
+         pane_content_then pane_editor_then",
     ),
     // A footer placed by hand.
     ("hand-footer", "show_by_hand"),
