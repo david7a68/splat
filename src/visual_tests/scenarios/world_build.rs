@@ -8851,7 +8851,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         format!("The frame of Use and the next (one pass each): (result, its Undo) = {used:?}"),
     );
     d.expect("as\u{a0}Guard");
-    d.expect("Undo replace");
+    d.expect("Undo replace Cinder Wolf");
     let with_result = roster_tops(d);
     d.observe(
         "iter-26-B-FA2",
@@ -8981,12 +8981,12 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     );
     for size in [SMALL, DEFAULT, LARGE] {
         let (icon, clear) = d.at_size(size, |d| {
-            let target = d.place_of("Undo replace");
+            let target = d.place_of("Undo replace Cinder Wolf");
             (
                 target.map(|rect| d.painted_in(rect)),
                 target.map_or_else(
                     || Err("Undo replacement is not in view".to_owned()),
-                    |target| super::press_area_clear(d, target, "Undo replace", None),
+                    |target| super::press_area_clear(d, target, "Undo replace Cinder Wolf", None),
                 ),
             )
         });
@@ -9026,7 +9026,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         .join("Encounters/Bridge Ambush.md");
     let on_disk = fs::read(&bridge).unwrap();
     let replaced_dirty = d.app_mut().encounters.draft_dirty();
-    d.click("Undo replace");
+    d.click("Undo replace Cinder Wolf");
     d.expect("Not found. Its package entry was deleted.");
     let clean = !d.app_mut().encounters.draft_dirty();
     d.observe(
@@ -9075,7 +9075,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.expect("Replacement creature");
     d.replace_text_in("Replacement creature", "Guard");
     d.click("Use Guard");
-    d.expect("Undo replace");
+    d.expect("Undo replace Cinder Wolf");
     d.click("More actions for Bridge Ambush");
     d.click("Start another fight");
     d.expect("Begin combat");
@@ -9086,7 +9086,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     let written = fs::read_to_string(&bridge).unwrap();
     let (changed, undo, clean) = (
         written != String::from_utf8_lossy(&on_disk),
-        d.has("Undo replace"),
+        d.has("Undo replace Cinder Wolf"),
         d.visible_text("Saved") && !d.visible_text("Unsaved") && !d.visible_text("Invalid"),
     );
     d.observe(

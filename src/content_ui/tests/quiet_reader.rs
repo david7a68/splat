@@ -28,6 +28,13 @@
 //! atlas made again, the link index loaded again, a new art index) prepares again exactly as
 //! often as its dependency changed, then is quiet again.
 //!
+//! Layout PR 9b-R2: what a quiet frame lays out does not grow with the note. Per host, with one
+//! screen in view (800 px), over notes of 40, 400 and 4,000 blocks (headings, paragraphs and a
+//! link every fourth block): the blocks laid out per frame (`markdown_view::BLOCKS_LAID`) are
+//! equal at every size, and so are the allocation counts and gross bytes. A block out of view is
+//! not laid out, and its links stay controls (AccessKit off: with it on, each control's node is
+//! egui's own cost per control, as it is for a label).
+//!
 //! Its own process (`harness = false`): a global allocator counts every thread of the process.
 #[path = "../../design/tests/quiet/counting.rs"]
 #[allow(
@@ -40,7 +47,7 @@ use counting::{Allocated, measured, root_sized, stock_label};
 use eframe::egui;
 use splat_content_ui::{
     lookup::ContentIndex,
-    markdown_view::{self, MARKDOWN_PARSES},
+    markdown_view::{self, BLOCKS_LAID, MARKDOWN_PARSES},
     persistence::Campaign,
     world::{self, Reader},
 };
@@ -58,6 +65,9 @@ enum Host {
 /// Every row sees the whole note: egui reads out a label's words only where the label can be
 /// seen, so the host and the stock labels must see the same paragraphs.
 const SCREEN_HEIGHT: f32 = 1_000_000.0;
+
+/// The linked rows' view: the host's title and facts, and a part of the first paragraph.
+const LINKED_HEIGHT: f32 = 300.0;
 
 /// The first words of the note’s body: the frame proves the host drew them.
 const OPENING: &str = "Opening words of the crossing";
@@ -92,6 +102,20 @@ fn note_body(bytes: usize, linked: bool) -> String {
     )
 }
 
+/// A note body of `blocks` blocks after the opening words: sections of a heading and three
+/// paragraphs, one of them with a link.
+fn blocks_body(blocks: usize) -> String {
+    let mut body = format!("{OPENING} at the start of the watch.\n\n");
+    for part in 0..blocks / 4 {
+        body.push_str(&format!(
+            "## Part {part}\n\nThe watch of part {part} keeps the road.\n\n\
+             Ask [the warden](https://example.com/warden/{part}) of part {part}.\n\n\
+             The last words of part {part}.\n\n"
+        ));
+    }
+    body
+}
+
 /// A campaign with one note on disk, its loaded index, and a reader host drawing it.
 struct Reading {
     ctx: egui::Context,
@@ -111,6 +135,10 @@ impl Reading {
     }
 
     fn with(host: Host, bytes: usize, accesskit: bool, linked: bool, height: f32) -> Self {
+        Self::with_body(host, &note_body(bytes, linked), accesskit, height)
+    }
+
+    fn with_body(host: Host, body: &str, accesskit: bool, height: f32) -> Self {
         let dir = tempfile::tempdir().expect("a folder for the campaign");
         let campaign = Campaign {
             id: uuid::Uuid::new_v4(),
@@ -127,7 +155,7 @@ impl Reading {
         assert!(found.is_note(), "the fixture is a plain note");
         let path = dir.path().join(&found.entry.path);
         let mut text = std::fs::read_to_string(&path).expect("the note’s file");
-        text.push_str(&note_body(bytes, linked));
+        text.push_str(body);
         std::fs::write(&path, text).expect("the note’s body");
         let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).expect("the index"));
         let at = index.position(id).expect("the note in the index");
@@ -320,27 +348,31 @@ fn stock_labels(galleys: &[Arc<egui::Galley>], accesskit: bool) -> Allocated {
     first
 }
 
-/// A host's quiet frame over a note of about `bytes` bytes, and the stock reference over its
-/// kept galleys; the host's five quiet frames are equal and parse nothing.
+/// A host's quiet frame over a note of about `bytes` bytes, the stock reference over its kept
+/// galleys, and the blocks the frame laid out; the host's five quiet frames are equal and parse
+/// nothing.
 fn both(
     host: Host,
     bytes: usize,
     accesskit: bool,
     linked: bool,
     focused: bool,
-) -> (Allocated, Allocated) {
+) -> (Allocated, Allocated, usize) {
     let what = format!(
         "{host:?}, AccessKit {accesskit}, linked {linked}, a link focused {focused}, {bytes} B"
     );
-    // The linked rows see one screen of the note: a link out of view costs the same whatever its
-    // words (its parts and targets are built only in view).
-    let height = if linked { 800.0 } else { SCREEN_HEIGHT };
+    // The linked rows see a part of the first paragraph only, at every size: a link out of view
+    // costs the same whatever its words (its parts and targets are built only in view), and the
+    // same blocks are laid out (layout PR 9b-R2: a block out of view is not).
+    let height = if linked { LINKED_HEIGHT } else { SCREEN_HEIGHT };
     let mut reading = Reading::with(host, bytes, accesskit, linked, height);
     if focused {
         reading.focus_a_link();
     }
     let parses = MARKDOWN_PARSES.with(std::cell::Cell::get);
+    let laid = BLOCKS_LAID.with(std::cell::Cell::get);
     let first = reading.quiet(&what);
+    let laid = BLOCKS_LAID.with(std::cell::Cell::get) - laid;
     for _ in 0..4 {
         assert_eq!(
             reading.quiet(&what),
@@ -359,7 +391,32 @@ fn both(
         "{what}: the reader keeps its paragraphs laid out ({})",
         galleys.len()
     );
-    (first, stock_labels(&galleys, accesskit))
+    (first, stock_labels(&galleys, accesskit), laid)
+}
+
+/// Layout PR 9b-R2: a host's quiet frame over a note of `blocks` blocks with one screen in view:
+/// what it costs, and how many blocks it laid out. Its five quiet frames are equal.
+fn in_view(host: Host, blocks: usize) -> (Allocated, usize) {
+    let what = format!("{host:?}, {blocks} blocks in one screen");
+    let mut reading = Reading::with_body(host, &blocks_body(blocks), false, 800.0);
+    let laid = BLOCKS_LAID.with(std::cell::Cell::get);
+    let first = reading.quiet(&what);
+    let laid = BLOCKS_LAID.with(std::cell::Cell::get) - laid;
+    for _ in 0..4 {
+        let before = BLOCKS_LAID.with(std::cell::Cell::get);
+        assert_eq!(
+            reading.quiet(&what),
+            first,
+            "{what}: the quiet frames are equal"
+        );
+        assert_eq!(
+            BLOCKS_LAID.with(std::cell::Cell::get) - before,
+            laid,
+            "{what}: the quiet frames lay out as many blocks"
+        );
+    }
+    assert!(laid > 0, "{what}: the blocks in view are laid out");
+    (first, laid)
 }
 
 /// After `change`, the reader prepares again exactly `expected` times, then is quiet again.
@@ -623,8 +680,15 @@ fn main() {
                 .iter()
                 .map(|&bytes| both(host, bytes, accesskit, linked, focused))
                 .collect();
-            let (host_small, stock_small) = frames[0];
-            for (&bytes, &(reader, stock)) in sizes.iter().zip(&frames).skip(1) {
+            let (host_small, stock_small, laid_small) = frames[0];
+            for (&bytes, &(reader, stock, laid)) in sizes.iter().zip(&frames).skip(1) {
+                if laid != laid_small {
+                    failures.push(format!(
+                        "{host:?}, AccessKit {accesskit}, linked {linked}, {bytes} B: {laid} blocks \
+                         laid out against {laid_small} at the smallest size: the sizes see \
+                         different views"
+                    ));
+                }
                 let count = |a: Allocated, b: Allocated| a.count as i64 - b.count as i64;
                 let gross = |a: Allocated, b: Allocated| a.bytes as i64 - b.bytes as i64;
                 let (host_count, stock_count) =
@@ -634,7 +698,7 @@ fn main() {
                 println!(
                     "{:<7} accesskit {accesskit:<5} {bytes:>8} B: host +{host_count} allocations \
                      +{host_bytes} B, stock +{stock_count} +{stock_bytes} B (host {reader:?}, \
-                     stock {stock:?})",
+                     stock {stock:?}, {laid} blocks laid out)",
                     format!("{host:?}")
                 );
                 if host_count != stock_count {
@@ -653,6 +717,27 @@ fn main() {
         }
     }
     for host in [Host::World, Host::Lookup] {
+        let frames: Vec<_> = [40, 400, 4_000]
+            .into_iter()
+            .map(|blocks| (blocks, in_view(host, blocks)))
+            .collect();
+        let (_, (small, laid_small)) = frames[0];
+        for &(blocks, (frame, laid)) in &frames {
+            println!(
+                "{:<7} {blocks:>5} blocks in one screen: {laid} laid out, {frame:?}",
+                format!("{host:?}")
+            );
+            if laid != laid_small
+                || frame.count != small.count
+                || frame.bytes.abs_diff(small.bytes) > 4096
+            {
+                failures.push(format!(
+                    "{host:?}, {blocks} blocks in one screen: {laid} blocks laid out and {frame:?}, \
+                     against {laid_small} and {small:?} for {} blocks",
+                    frames[0].0
+                ));
+            }
+        }
         failures.extend(prepares_again(host, "a resize", 1, |reading| {
             // Below the reader's measure: the note's column gets narrower.
             reading.width = 480.0;
