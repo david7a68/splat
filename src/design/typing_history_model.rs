@@ -929,6 +929,8 @@ fn an_app_write_at_a_composition_loses_no_word() {
             end: "APP oneか two",
         },
     ];
+    // Every row runs; the rows that fail are named together, each with its texts.
+    let mut failed = Vec::new();
     for row in rows {
         let Row {
             name,
@@ -944,33 +946,35 @@ fn an_app_write_at_a_composition_loses_no_word() {
         let mut stages = vec![shown(&harness)];
         app_writes_at_the_start(&mut harness);
         stages.push(shown(&harness));
-        assert_eq!(
-            stages[1],
-            format!("APP {}", stages[0]),
-            "{name}: the app's write stands before the words"
-        );
+        let mut wrong = Vec::new();
+        if stages[1] != format!("APP {}", stages[0]) {
+            wrong.push("the app's write does not stand before the words".to_owned());
+        }
         for (event, text) in after {
             ime(&mut harness, event);
             stages.push(shown(&harness));
-            assert_eq!(
-                shown(&harness),
-                text,
-                "{name}: the composition goes on in its own words after the app's write: \
-                 {stages:?}"
-            );
+            if shown(&harness) != text {
+                wrong.push(format!("after an event the text is not {text:?}"));
+            }
         }
-        assert_eq!(
-            shown(&harness),
-            end,
-            "{name}: the DM's words stand where the DM put them: {stages:?}"
-        );
+        if shown(&harness) != end {
+            wrong.push(format!(
+                "the DM's words do not stand where the DM put them ({end:?})"
+            ));
+        }
         undo_and_redo_keep(&mut harness, &mut stages);
-        assert_eq!(
-            shown(&harness),
-            end,
-            "{name}: the same words are there after Ctrl+Z and Ctrl+Y: {stages:?}"
-        );
+        if shown(&harness) != end {
+            wrong.push(format!("after Ctrl+Z and Ctrl+Y the text is not {end:?}"));
+        }
+        if !wrong.is_empty() {
+            failed.push(format!("{name}: {wrong:?}; the texts: {stages:?}"));
+        }
     }
+    assert!(
+        failed.is_empty(),
+        "a composition and the app's write, the rows that failed:\n{}",
+        failed.join("\n")
+    );
 }
 
 /// A write among typed words that equal letters hide (issue #900): `éa`; the DM types `é` after
