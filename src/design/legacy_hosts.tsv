@@ -78,13 +78,11 @@ composite-child	src/lib.rs	Splat::page	1	App	the Settings tab's two independent 
 composite-child	src/sessions/page.rs	Sessions::session_content	1	Sessions	the plan and the note beside it: a shared task (step 7) in the edges the session header was drawn in; its children become closed blocks with the plan recipes and the Editor and Reader blocks of steps 9 and 11
 footer-feed	src/lib.rs	Splat::page	5	App	the stacked narrow Settings tab's one footer for Campaigns, Settings and D&D Beyond (3), fed by the same three feeders as the wide tab's two footers, and the campaign link's for Campaigns and D&D Beyond (2)
 footer-feed	src/party.rs	Party::sheet_view	1	Party
-virtual-rows	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign
 virtual-rows	src/design/components.rs	draft_comparison_labeled	1	design	design implementation boundary
 virtual-rows	src/design/layout.rs	ScrollColumn::show	2	design	design implementation boundary
 virtual-rows	src/design/layout.rs	ScrollColumn::show_in_region	1	design	design implementation boundary
 virtual-rows	src/design/layout.rs	ScrollColumn::show_rows	1	design	design implementation boundary
 virtual-rows	src/design/layout.rs	ScrollColumn::show_viewport	1	design	design implementation boundary
-row-register	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign
 row-register	src/campaign_content.rs	whole_row	1	Campaign
 row-register	src/design/components.rs	row	1	design	design implementation boundary
 row-register	src/dndbeyond.rs	DndBeyond::show_import	1	Settings

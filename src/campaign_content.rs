@@ -588,6 +588,11 @@ pub struct CampaignContent {
     notice_scope: Option<(Option<Uuid>, bool)>,
     search: String,
     entry_matches: Option<(Uuid, String, Vec<Uuid>)>,
+    /// The package's entry list: its region, its one-line blocks, and the package and words it
+    /// was built for (a new list starts at the top).
+    entry_region: Option<design::RegionState>,
+    entry_blocks: Option<design::memo::Revised<Vec<design::Block>>>,
+    entry_list_key: Option<(Uuid, String)>,
     /// The DM's choice of list. Until they choose, a package opens on the list it needs.
     pub run_open: bool,
     pub open_lookup: Option<Uuid>,
@@ -3162,18 +3167,39 @@ impl CampaignContent {
             }
             let ids = &self.entry_matches.as_ref().unwrap().2;
             let mut toggled = None;
-            design::ScrollColumn::new(("package_entries", module.id, &query))
+            let mut open_lookup = None;
+            // The list is a fit-height region of one-line blocks (layout 11c, M23): whole rows
+            // only, as tall as its rows up to the room, so a short list leaves the footer to
+            // follow it; a new package or new words start at the top.
+            let key = (module.id, query.clone());
+            let region = self
+                .entry_region
+                .get_or_insert_with(|| design::RegionState::new("package_entries"));
+            if self.entry_list_key.as_ref() != Some(&key) {
+                region.navigate(design::Navigation::Reset);
+                self.entry_list_key = Some(key);
+            }
+            let blocks = self
+                .entry_blocks
+                .get_or_insert_with(|| design::memo::Revised::new(Vec::new()));
+            if blocks.len() != ids.len() {
+                blocks.revise(|blocks| {
+                    *blocks = vec![design::Block::Row(design::Row::OneLine); ids.len()];
+                    design::memo::Changed::Yes
+                });
+            }
+            design::BlockRegion::new(("package_entries", module.id, &query), region, blocks)
+                .name("Package entries")
                 .fit_height()
-                .show_rows(ui, 30.0, ids.len(), |ui, range| {
-                    for index in range {
+                .show(ui, |ui, index| {
+                    {
                         let id = ids[index];
                         let entry = &catalogue.entries[&id].entry;
                         let required = closure.required.contains_key(&id);
                         let mut selected = closure.direct.contains(&id) || required;
                         ui.push_id(id, |ui| {
-                            let row = ui.horizontal(|ui| {
+                            ui.horizontal(|ui| {
                                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-                                ui.set_min_height(30.0);
                                 let why = closure.required.get(&id).map(|reasons| {
                                     reasons.iter().cloned().collect::<Vec<_>>().join(", ")
                                 });
@@ -3193,7 +3219,7 @@ impl CampaignContent {
                                 if crate::content_actions::creature_name_link(ui, &entry.name)
                                     .clicked()
                                 {
-                                    self.open_lookup = Some(id);
+                                    open_lookup = Some(id);
                                 }
                                 if response.changed() {
                                     toggled = Some((id, selected));
@@ -3220,10 +3246,12 @@ impl CampaignContent {
                                 }
                                 ui.label(job);
                             });
-                            design::register_row(ui, row.response.rect);
                         });
                     }
                 });
+            if open_lookup.is_some() {
+                self.open_lookup = open_lookup;
+            }
             if let Some((id, checked)) = toggled {
                 let selection_index = document
                     .selections
