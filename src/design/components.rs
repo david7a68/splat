@@ -9037,26 +9037,189 @@ mod tests {
                         );
                     }
                     // A fit region that grows under a composite measured short (a package with
-                    // more entries chosen next): the composite grows with it, by the height its
-                    // column hides, until the region's last row is whole and the footer follows
-                    // it by `S` (note C0-parts Part A; the Campaign page showed 3 of 6 rows).
+                    // more entries chosen next), and a window that shrinks under it (note
+                    // C0-parts Part A; the Campaign page showed 3 of 6 rows). The FIRST presented
+                    // frame after each change is checked, before any settling (Sol 2-021), with
+                    // one pass and with the normal budget: with one pass the composite's discard
+                    // is denied and it may keep its old height for that frame, but the frame is
+                    // safe (no body words under the footer or cut by their clip, the required
+                    // controls whole and pressable); with the normal budget it is already final.
+                    // The quiet frame after it is final in both, and the next one moves nothing.
                     if shape == Shape::RegionComposite && count == 2 {
-                        *blocks.borrow_mut() = row_blocks(12);
-                        harness.run_steps(4);
-                        let footer = footer_rect(&harness.ctx, Id::new("shape_footer"))
-                            .unwrap_or_else(|| panic!("{case}: the footer shows"));
-                        let last = access(&harness)
-                            .into_iter()
-                            .find(|(label, _)| label == "Line 11")
-                            .map(|(_, rect)| rect);
-                        // The row's label stands at its row's top; the row is one `OneLine` block.
                         let row = crate::design::Density::Scan.row();
-                        assert!(
-                            last.is_some_and(
-                                |last| (footer.top() - (last.top() + row + S)).abs() <= 1.0
-                            ),
-                            "{case}, grown to 12 rows: the last row's label {last:?} shows, and the footer {footer:?} follows its row ({row} px) by `S`"
-                        );
+                        // The footer as THIS frame painted it: `footer_rect` reads the pane's
+                        // record of the last completed pass, one frame behind on a first frame.
+                        // Its painted reason stands at a fixed place in it (taken once, settled).
+                        let reason_at = |harness: &egui_kittest::Harness<'_>| {
+                            harness
+                                .output()
+                                .shapes
+                                .iter()
+                                .find_map(|shape| match &shape.shape {
+                                    egui::Shape::Text(text) if text.galley.job.text == REASON => {
+                                        Some(text.pos.y)
+                                    }
+                                    _ => None,
+                                })
+                                .unwrap_or_else(|| panic!("{case}: the footer's reason is painted"))
+                        };
+                        let settled = footer_rect(&harness.ctx, Id::new("shape_footer"))
+                            .unwrap_or_else(|| panic!("{case}: the footer shows"));
+                        let inset = reason_at(&harness) - settled.top();
+                        let footer_of = |harness: &egui_kittest::Harness<'_>| {
+                            let top = reason_at(harness) - inset;
+                            Rect::from_min_size(pos2(settled.left(), top), settled.size())
+                        };
+                        let node = |harness: &egui_kittest::Harness<'_>, name: &str| {
+                            access(harness)
+                                .into_iter()
+                                .find(|(label, _)| label == name)
+                                .map(|(_, rect)| rect)
+                        };
+                        // The safe frame: every painted body word lies whole in its clip and
+                        // `S` above the footer; Line 0 and Last action show above it.
+                        let safe = |harness: &egui_kittest::Harness<'_>, step: &str| {
+                            let footer = footer_of(harness);
+                            for shape in &harness.output().shapes {
+                                if let egui::Shape::Text(text) = &shape.shape
+                                    && body_word(&text.galley.job.text)
+                                {
+                                    let rect = Rect::from_min_size(text.pos, text.galley.size());
+                                    let shown = rect.intersect(shape.clip_rect);
+                                    if shown.is_positive() {
+                                        assert!(
+                                            shape.clip_rect.expand(0.5).contains_rect(rect)
+                                                && rect.bottom() <= footer.top() - S + 0.5,
+                                            "{case}, {step}, a presented frame: {:?} at {rect:?} is whole in its clip {:?} and `S` above the footer {footer:?}",
+                                            text.galley.job.text,
+                                            shape.clip_rect
+                                        );
+                                    }
+                                }
+                            }
+                            for name in ["Line 0", "Last action"] {
+                                let rect = node(harness, name);
+                                assert!(
+                                    rect.is_some_and(|rect| rect.bottom()
+                                        <= footer.top() - S + 0.5),
+                                    "{case}, {step}, a presented frame: {name} {rect:?} shows above the footer {footer:?}"
+                                );
+                            }
+                        };
+                        // The final geometry of each step.
+                        let grown = |harness: &egui_kittest::Harness<'_>, step: &str| {
+                            let footer = footer_of(harness);
+                            let last = node(harness, "Line 11");
+                            assert!(
+                                last.is_some_and(|last| (footer.top() - (last.top() + row + S))
+                                    .abs()
+                                    <= 1.0),
+                                "{case}, {step}: the last row's label {last:?} shows, and the footer {footer:?} follows its row ({row} px) by `S`"
+                            );
+                        };
+                        let pinned = |harness: &egui_kittest::Harness<'_>, step: &str| {
+                            let footer = footer_of(harness);
+                            let room = pane_record(&harness.ctx, Id::new("shape_footer"))
+                                .map(|record| record.room());
+                            assert!(
+                                room.is_some_and(
+                                    |room| (footer.bottom() - room.bottom()).abs() <= 1.0
+                                ) && node(harness, "Line 11").is_none(),
+                                "{case}, {step}: the composite stops at the room {room:?}: the footer {footer:?} is pinned and the 12th row is out of view"
+                            );
+                        };
+                        // With one pass a measured composite takes a frame more (its discard
+                        // is denied): every frame stays safe until nothing moves, within three.
+                        // With the normal budget nothing moves after the first frame.
+                        let settle = |harness: &mut egui_kittest::Harness<'_>, step: &str| {
+                            let mut frames = 1;
+                            loop {
+                                let seen = |harness: &egui_kittest::Harness<'_>| {
+                                    (
+                                        footer_of(harness),
+                                        node(harness, "Line 0"),
+                                        node(harness, "Line 11"),
+                                    )
+                                };
+                                let before = seen(harness);
+                                harness.step();
+                                safe(harness, step);
+                                if before == seen(harness) {
+                                    break frames;
+                                }
+                                frames += 1;
+                                assert!(
+                                    frames <= 3,
+                                    "{case}, {step}: the frame settles within 3 frames"
+                                );
+                            }
+                        };
+                        let quiet = |harness: &mut egui_kittest::Harness<'_>| {
+                            let before = (footer_of(harness), node(harness, "Line 0"));
+                            harness.step();
+                            assert_eq!(
+                                before,
+                                (footer_of(harness), node(harness, "Line 0")),
+                                "{case}: a quiet frame moves nothing"
+                            );
+                        };
+                        let short = vec2(size.x, 360.0);
+                        for passes in [2, 1] {
+                            let budget = std::num::NonZeroUsize::new(passes).unwrap();
+                            harness
+                                .ctx
+                                .options_mut(|options| options.max_passes = budget);
+                            // Back to 2 rows at the full size, settled.
+                            *blocks.borrow_mut() = row_blocks(2);
+                            harness.set_size(size);
+                            harness.run_steps(4);
+                            // Growth: 12 rows, one presented frame.
+                            *blocks.borrow_mut() = row_blocks(12);
+                            harness.step();
+                            let step = format!("grown to 12 rows with {passes} pass(es)");
+                            safe(&harness, &step);
+                            if passes > 1 {
+                                grown(&harness, &step);
+                            }
+                            let frames = settle(&mut harness, &step);
+                            assert!(
+                                passes == 1 || frames == 1,
+                                "{case}, {step}: with the normal budget the first frame is final ({frames} frames)"
+                            );
+                            grown(&harness, &format!("{step}, settled"));
+                            quiet(&mut harness);
+                            // Resize: a window too short for the 12 rows, one presented frame.
+                            harness.set_size(short);
+                            harness.step();
+                            let step = format!("resized to {short:?} with {passes} pass(es)");
+                            safe(&harness, &step);
+                            if passes > 1 {
+                                pinned(&harness, &step);
+                            }
+                            let frames = settle(&mut harness, &step);
+                            assert!(
+                                passes == 1 || frames == 1,
+                                "{case}, {step}: with the normal budget the first frame is final ({frames} frames)"
+                            );
+                            pinned(&harness, &format!("{step}, settled"));
+                            quiet(&mut harness);
+                            // The control next to the footer takes its press there.
+                            let last = node(&harness, "Last action")
+                                .unwrap_or_else(|| panic!("{case}, {step}: Last action shows"));
+                            pressed.set(None);
+                            click(&mut harness, pos2(last.center().x, last.bottom() - 2.0));
+                            assert_eq!(
+                                pressed.get(),
+                                Some("Last action"),
+                                "{case}, {step}: Last action, next to the footer, takes its press"
+                            );
+                        }
+                        harness.ctx.options_mut(|options| {
+                            options.max_passes = std::num::NonZeroUsize::new(2).unwrap()
+                        });
+                        *blocks.borrow_mut() = row_blocks(2);
+                        harness.set_size(size);
+                        harness.run_steps(4);
                     }
                     // The body control next to the footer takes its press.
                     let target = match shape {

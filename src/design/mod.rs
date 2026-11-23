@@ -62,10 +62,11 @@ pub use layout::{
 pub use pane::notices_laid;
 #[allow(unused_imports)]
 pub use pane::{
-    ACTION_ROW, ActionLine, Block, BlockRegion, Body, ENTRY_ROW_HEIGHT, EditorRegion, Fills,
-    FillsReason, Laid, LaidUi, LineAction, LineColumns, Navigation, NoticeRoll, NoticeRow,
-    PaneColumns, PaneEdges, Placement, PlanColumns, PlanRow, RegionState, Row, SummaryPart,
-    check_height, draw_laid, line_slot, notice_slot, plan_rule, plan_slot,
+    ACTION_ROW, ActionLine, Block, BlockRegion, Body, CheckInputs, CheckLine, ENTRY_ROW_HEIGHT,
+    EditorRegion, Fills, FillsReason, Laid, LaidUi, LineAction, LineColumns, Navigation,
+    NoticeCheck, NoticeRoll, NoticeRow, PaneColumns, PaneEdges, Placement, PlanColumns, PlanRow,
+    RegionState, Row, SummaryPart, check_height, check_slot, draw_laid, line_slot, notice_slot,
+    plan_rule, plan_slot,
 };
 // Wave 2 callers name the popup parts through `design`, as they name the components.
 #[allow(unused_imports)]
