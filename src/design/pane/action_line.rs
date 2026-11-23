@@ -257,17 +257,22 @@ pub fn wrap(widths: &[f32], room: WrapRoom) -> Wrapped {
     }
     // A row starts at its start, or at its right edge when the start passes it: never outside.
     let start = room.start.min(room.width);
-    let row = (room.width - start).max(0.0);
     let (mut x, mut y) = (start, room.top);
     let mut rects = Vec::with_capacity(widths.len());
     for &item in widths {
-        if x > start + 0.5 && x + item > room.width + 0.5 {
+        let item = item.max(0.0);
+        // Exact, with no slack: an item that would end past the room's right edge starts the
+        // next row, unless it is the row's first (review of PR 895: 20 + S + 20 in 47.75 ended at
+        // 48).
+        if x > start && x + item > room.width {
             x = start;
             y += room.height + room.row_gap;
         }
-        let shown = item.clamp(0.0, row);
-        rects.push(Rect::from_min_size(pos2(x, y), vec2(shown, room.height)));
-        x += shown + S;
+        // The room's right edge bounds every rect, so a row's first item wider than the row
+        // ends there; the rect is made from its edges, so no sum can pass it.
+        let right = (x + item).min(room.width);
+        rects.push(Rect::from_min_max(pos2(x, y), pos2(right, y + room.height)));
+        x = right + S;
     }
     Wrapped {
         rects,
@@ -558,7 +563,7 @@ mod tests {
         let mut rows = 0;
         let mut used = 0.0;
         for action in actions(ui, at, line) {
-            if rows == 0 || (used > 0.0 && start + used + action.width > width + 0.5) {
+            if rows == 0 || (used > 0.0 && start + used + action.width > width) {
                 rows += 1;
                 used = 0.0;
             }
@@ -773,9 +778,12 @@ mod tests {
         assert!(wrapped > 0, "some width wraps a line's actions");
     }
     /// W1 (invariants note, class 8): for any widths and any room, every rect `wrap` gives lies
-    /// inside its room, a row's items do not overlap and stand `S` apart, and the bottom follows
-    /// the rows; also one point below and one point above the width at which the items take one
-    /// row. Red: an item that keeps its width past the room.
+    /// inside its room EXACTLY (no tolerance: no rect ends past `start + width`, ever), a row's
+    /// items do not overlap and stand `S` apart, and the bottom follows the rows. Widths and rooms
+    /// are not whole numbers and come at the app's scales, with each case also at a quarter and
+    /// one point either side of the width at which the items take one row, and the review's case
+    /// (20 and 20 in 47.75, which ended at 48). Red: an item that keeps its width past the room;
+    /// a fit test with half a point of slack.
     #[test]
     fn a_wrap_never_leaves_its_room() {
         // A fixed sequence (xorshift), so every run checks the same cases.
@@ -791,20 +799,23 @@ mod tests {
             let start = room.start.min(room.width);
             let rects = wrapped.rects();
             assert_eq!(rects.len(), widths.len());
+            // Sums of floats only (the gap after an item, the rows' bottom) get this much; the
+            // room's edges get none.
+            const SUM: f32 = 1e-3;
             for (at, rect) in rects.iter().enumerate() {
                 assert!(
-                    rect.left() >= start - 0.5
-                        && rect.right() <= room.width.max(start) + 0.5
-                        && rect.top() >= room.top - 0.5
-                        && rect.bottom() <= wrapped.bottom() + 0.5
-                        && (rect.height() - room.height).abs() < 0.5,
+                    rect.left() >= start
+                        && rect.right() <= room.width
+                        && rect.top() >= room.top
+                        && rect.bottom() <= wrapped.bottom()
+                        && (rect.height() - room.height).abs() < SUM,
                     "item {at} {rect:?} leaves its room {room:?} ({widths:?})"
                 );
                 if let Some(before) = at.checked_sub(1).map(|at| rects[at])
-                    && (before.top() - rect.top()).abs() < 0.5
+                    && before.top() == rect.top()
                 {
                     assert!(
-                        rect.left() >= before.right() + S - 0.5,
+                        rect.left() >= before.right() + S - SUM,
                         "items {} and {at} overlap in a row: {before:?} {rect:?}",
                         at - 1
                     );
@@ -812,7 +823,7 @@ mod tests {
             }
             let rows = rects
                 .windows(2)
-                .filter(|pair| pair[1].top() > pair[0].top() + 0.5)
+                .filter(|pair| pair[1].top() > pair[0].top())
                 .count()
                 + usize::from(!rects.is_empty());
             let expected = if rows == 0 {
@@ -821,25 +832,52 @@ mod tests {
                 room.top + rows as f32 * room.height + (rows - 1) as f32 * room.row_gap
             };
             assert!(
-                (wrapped.bottom() - expected).abs() < 0.5,
+                (wrapped.bottom() - expected).abs() < SUM,
                 "the bottom {} follows {rows} rows ({room:?})",
                 wrapped.bottom()
             );
         };
+        let read = WrapRoom {
+            start: 0.0,
+            width: 47.75,
+            top: 0.0,
+            height: Density::Read.control(),
+            row_gap: XS,
+        };
+        check(&[20.0, 20.0], read);
+        assert!(
+            wrap(&[20.0, 20.0], read).rects()[1].top() > 0.0,
+            "20, S and 20 do not fit in 47.75: the second takes the next row"
+        );
+        check(
+            &[20.0, 20.0],
+            WrapRoom {
+                width: 48.0,
+                ..read
+            },
+        );
         for case in 0..2_000 {
-            let width = 40.0 + next();
-            let start = next() % (width * 1.2);
-            let widths: Vec<f32> = (0..1 + case % 7).map(|_| next() * 0.4).collect();
+            // The app's scales: a logical point at 1, 1.25, 1.5, 1.75 and 2 pixels.
+            let scale = [1.0, 1.25, 1.5, 1.75, 2.0][case % 5];
+            let width = (40.0 + next()) / scale;
+            let start = (next() % (width * 1.2)) / scale;
+            let widths: Vec<f32> = (0..1 + case % 7).map(|_| next() * 0.4 / scale).collect();
             let room = WrapRoom {
                 start,
                 width,
-                top: 10.0,
+                top: 10.0 + next() / scale,
                 height: Density::Read.control(),
                 row_gap: XS,
             };
             check(&widths, room);
             let one_row = start + widths.iter().sum::<f32>() + S * (widths.len() - 1) as f32;
-            for edge in [one_row - 1.0, one_row + 1.0] {
+            for edge in [
+                one_row - 1.0,
+                one_row - 0.25,
+                one_row,
+                one_row + 0.25,
+                one_row + 1.0,
+            ] {
                 check(
                     &widths,
                     WrapRoom {
@@ -854,7 +892,11 @@ mod tests {
 
     /// W1: a real long item ("Score for Old Guard") in a room one point wider than it and one
     /// point narrower: it keeps its width, then takes its row's width and cuts its own words;
-    /// at both, the action painted in its rect lies inside the room.
+    /// at both, the action painted in its rect lies inside the room. Review of PR 895 (P2): the
+    /// same action with an icon and a keyboard hint, in slots from one point over its width down
+    /// to 0 (in steps that are not whole points): its rect and everything it paints that shows
+    /// lie inside the slot, exactly, and it gives up its hint, then its words, then its icon, in
+    /// that order. Red: an action at least a control wide whatever its slot.
     #[test]
     fn a_wrapped_long_action_paints_inside_its_room() {
         let mut harness = Harness::builder()
@@ -896,6 +938,80 @@ mod tests {
             state[1].1.width() < state[0].1.width(),
             "one point narrower, the item takes its row's width: {state:?}"
         );
+        let full = || {
+            action("Score for Old Guard")
+                .icon(crate::design::icons::ADD)
+                .key("G")
+        };
+        // The slot's width in, the slot and the action's rect out.
+        let mut sweep = Harness::builder()
+            .with_size(vec2(600.0, 200.0))
+            .themed_ui_state(
+                |ui, (width, slot, drew): &mut (f32, Rect, Rect)| {
+                    *slot = Rect::from_min_size(
+                        ui.max_rect().min + vec2(20.0, 20.0),
+                        vec2(*width, 40.0),
+                    );
+                    *drew = ui
+                        .new_child(egui::UiBuilder::new().max_rect(*slot))
+                        .add_enabled_ui(true, |ui| full().show(ui).rect)
+                        .inner;
+                },
+                (0.0, Rect::NOTHING, Rect::NOTHING),
+            );
+        let natural = {
+            sweep.state_mut().0 = 600.0;
+            sweep.run_steps(2);
+            sweep.state().2.width()
+        };
+        let mut width = natural + 1.0;
+        let mut seen = Vec::new();
+        while width >= 0.0 {
+            sweep.state_mut().0 = width;
+            sweep.run_steps(2);
+            let (_, slot, drew) = *sweep.state();
+            assert!(
+                slot.contains_rect(drew),
+                "at {width}: the action's rect {drew:?} leaves its slot {slot:?}"
+            );
+            let (mut words, mut icon, mut key) = (false, false, false);
+            for clipped in &sweep.output().shapes {
+                let shown = clipped
+                    .shape
+                    .visual_bounding_rect()
+                    .intersect(clipped.clip_rect);
+                // The panel's own background is not the action's.
+                if !shown.is_positive() || shown.width() >= 599.0 {
+                    continue;
+                }
+                assert!(
+                    slot.contains_rect(shown),
+                    "at {width}: a part shows at {shown:?}, outside its slot {slot:?}"
+                );
+                if let egui::Shape::Text(text) = &clipped.shape {
+                    match text.galley.text() {
+                        "G" => key = true,
+                        glyph if glyph == crate::design::icons::ADD => icon = true,
+                        _ => words = true,
+                    }
+                }
+            }
+            assert!(
+                (!key || words) && (!words || icon),
+                "at {width}: the hint goes first, then the words, then the icon \
+                 (hint {key}, words {words}, icon {icon})"
+            );
+            seen.push((key, words, icon));
+            width -= 0.75;
+        }
+        for stage in [
+            (true, true, true),
+            (false, true, true),
+            (false, false, true),
+            (false, false, false),
+        ] {
+            assert!(seen.contains(&stage), "the sweep shows the stage {stage:?}");
+        }
     }
 
     /// Review of PR 876 (P2): an action wider than a whole row of actions takes a row of its
@@ -1073,7 +1189,9 @@ mod tests {
     /// font.
     #[test]
     fn a_laid_action_paints_in_its_state() {
-        let save = || Action::primary("Save").density(Density::Read);
+        // With a keyboard hint, so a hint laid again by paint fails this test too (review of
+        // PR 895, P3).
+        let save = || Action::primary("Save").density(Density::Read).key("S");
         let mut harness = Harness::builder()
             .with_size(vec2(400.0, 300.0))
             .themed_ui_state(

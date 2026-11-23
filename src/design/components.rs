@@ -1340,9 +1340,26 @@ impl<'a> Action<'a> {
             self.height
         };
         let key_width = key.as_ref().map_or(0.0, |key| key.size().x + S);
+        // The room its `Ui` gives it bounds it (review of PR 895, P2): its square and its least
+        // width never take it past that room. A `line_start` action may also hang its padding and
+        // icon into the gutter, as below.
+        let given = ui.available_width().max(0.0)
+            + if self.kind == Kind::Quiet && self.line_start {
+                padding + icon_width
+            } else {
+                0.0
+            };
         let width = (galley.size().x + 2.0 * padding + icon_width + key_width)
             .max(self.height)
-            .max(self.min_width.unwrap_or_default());
+            .max(self.min_width.unwrap_or_default())
+            .min(given);
+        // In a narrower room it gives up its parts in turn (its words were already cut to the
+        // room when they were laid): first its keyboard hint, then its words (its icon alone),
+        // then its icon. A part shows only where it fits, so nothing paints outside its rect.
+        let inner = width - 2.0 * padding;
+        let show_key = galley.size().x + icon_width + key_width <= inner;
+        let show_words = galley.size().x + icon_width <= inner;
+        let show_icon = icon_width <= width;
         // The padding before the icon and the words: less only for a `line_start` hang that
         // the clip leaves short (below).
         let mut left_padding = padding;
@@ -1437,20 +1454,29 @@ impl<'a> Action<'a> {
             stroke,
             StrokeKind::Inside,
         );
-        let mut x = rect.left() + left_padding;
-        if let Some(icon) = icon {
+        // Each part it shows fits its rect (above), so none paints outside it.
+        let painter = ui.painter();
+        let mut x = if show_words {
+            rect.left() + left_padding
+        } else {
+            // Its icon alone, centred in what is left.
+            rect.left() + ((rect.width() - icon_width) / 2.0).max(0.0)
+        };
+        if let Some(icon) = icon.filter(|_| show_icon) {
             let at = pos2(x, rect.center().y - icon.size().y / 2.0);
-            ui.painter().galley(at, icon, foreground);
+            painter.galley(at, icon, foreground);
             x += icon_width;
         }
         let label_width = galley.size().x;
-        ui.painter().galley(
-            pos2(x, rect.center().y - galley.size().y / 2.0),
-            galley,
-            foreground,
-        );
-        if let Some(key) = key {
-            ui.painter().galley(
+        if show_words {
+            painter.galley(
+                pos2(x, rect.center().y - galley.size().y / 2.0),
+                galley,
+                foreground,
+            );
+        }
+        if let Some(key) = key.filter(|_| show_key) {
+            painter.galley(
                 pos2(x + label_width + S, rect.center().y - key.size().y / 2.0),
                 key,
                 key_color,
