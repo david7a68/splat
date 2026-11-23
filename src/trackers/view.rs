@@ -916,7 +916,10 @@ fn lay_tracker(
     let instances = def.instances();
     let count = instances.len();
     let mut lines = Vec::with_capacity(count);
-    for (line, instance) in instances.into_iter().enumerate() {
+    for (line, &instance) in instances.iter().enumerate() {
+        // The line by its own identity: its instance, and how many lines before it have the same
+        // one (`per` can name a line twice).
+        let twin = instances[..line].iter().filter(|&&i| i == instance).count();
         // The first line of a repeated name keeps its fields; a later one leaves them out.
         let repeated_line = match repeat {
             Some(super::Repeat::Line { word, .. }) if instance == Some(word.as_str()) => {
@@ -963,7 +966,7 @@ fn lay_tracker(
         let actions: Vec<design::LineAction> = named
             .iter()
             .map(|(at, _)| design::LineAction {
-                key: action_key(key, instance, &def.quick, *at),
+                key: action_key(key, (instance, twin), &def.quick, *at),
                 width: quick_action(&def.quick[*at].label).natural_width(ui),
             })
             .collect();
@@ -972,7 +975,7 @@ fn lay_tracker(
             .map(|fault| design::outcome::row_fault_height(ui, fault, width))
             .collect();
         let laid = design::ActionLine {
-            key: egui::Id::new(("trackers_line", key, instance)),
+            key: egui::Id::new(("trackers_line", key, instance, twin)),
             heading: heading
                 .filter(|_| line == 0)
                 .map(|first| design::LineHeading {
@@ -1022,12 +1025,12 @@ fn lay_tracker(
     lines
 }
 
-/// A line's action by its own identity, not its place: the tracker, the line's instance, the
-/// action's label, and how many of the tracker's actions with that label come before it (two
-/// actions can share a label).
+/// A line's action by its own identity, not its place: the tracker, the line's instance (with how
+/// many lines before it have the same one), the action's label, and how many of the tracker's
+/// actions with that label come before it (two actions can share a label).
 fn action_key(
     key: &str,
-    instance: Option<&str>,
+    instance: (Option<&str>, usize),
     quick: &[splat_campaign::trackers::Quick],
     at: usize,
 ) -> egui::Id {
