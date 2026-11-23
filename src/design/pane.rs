@@ -2068,13 +2068,24 @@ pub(super) fn follow_focus<R>(
 /// lowest row that its view's bottom would cut, as measured in the last pass with the same view
 /// (a new cut draws the pass again), and a hairline marks it. Each column cuts at its own last
 /// whole row; a row that starts at the view's top keeps the plain cut, as in `Body::Content`.
-/// Elsewhere it only runs `add`.
+/// Directly in a `Body::Fills` pane with no edge, there is no cut, but the pane is still the
+/// column's one focus arbiter: a control of it that gains keyboard focus comes whole into the
+/// column's view (review of PR 906: Tab reached an off-screen row unseen). Elsewhere it only
+/// runs `add`.
 pub(super) fn whole_rows<R>(ui: &mut Ui, column: Id, add: impl FnOnce(&mut Ui) -> R) -> R {
-    let Some(pane) = innermost(ui).filter(|pane| !pane.content && pane.edge) else {
+    let Some(pane) = innermost(ui).filter(|pane| !pane.content) else {
         return add(ui);
     };
-    let view = ui.clip_rect();
     let key = pane.pane.with(("column_cut", column));
+    if !pane.edge {
+        let first = widget_count(ui);
+        let inner = add(ui);
+        let last = widget_count(ui);
+        let view = ui.clip_rect();
+        reveal_focus(ui, key, first..last, view, view);
+        return inner;
+    }
+    let view = ui.clip_rect();
     let kept = ui
         .ctx()
         .data(|data| data.get_temp::<(Rect, f32)>(key))
@@ -4619,6 +4630,22 @@ mod row_cut_tests {
                     State::default(),
                 );
             harness.run_steps(3);
+            // Review of PR 906: with no edge yet, a row below the view that gains focus comes
+            // whole into view, in a `Fills` pane's column as in a `Content` body.
+            let clip = harness.state().clip;
+            let below = harness
+                .state()
+                .rows
+                .iter()
+                .position(|row| row.top() >= clip)
+                .expect("a row is below the view");
+            harness.state_mut().focus = Some(below);
+            harness.run_steps(3);
+            let (row, clip) = (harness.state().rows[below], harness.state().clip);
+            assert!(
+                row.bottom() <= clip + 0.5 && row.top() >= 0.0,
+                "n12-focus-no-edge fills {fills}: row {below} {row:?} not whole above {clip}"
+            );
             // The last row whole in view with no edge: focus it.
             let clip = harness.state().clip;
             let target = harness
