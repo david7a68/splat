@@ -1115,13 +1115,13 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     // The new entry lands whole in the body room (`design::pane::keep_room`) and is never cut on
     // the way; the title keeps its place in every frame, the act's own first; and the result's
     // Undo is whole in every frame it shows, as the footer grew into room the arbiter kept clear
-    // (`reveal_with_focus_and_growth`). Lookup builds its footer before its body draws the act,
-    // so the Undo comes in the frame after the act (a footer fault outside layout step 11b,
-    // reported to the lead); it must be whole there.
+    // (`reveal_with_focus_and_growth`). Issue #761 (`m-p0-lookup-undo-at-act`): Lookup builds its
+    // footer after its body draws the act (`pane_editor_then`), so the Undo is there, whole, in
+    // the act's own frame.
     let entry_at_act = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(STATUS_ENTRY))
         && frames.iter().all(|(_, cut, _)| !cut);
     let undo_at_act = frames
-        .get(1)
+        .first()
         .is_some_and(|(_, _, undo)| *undo == Some(true))
         && frames.iter().all(|(_, _, undo)| undo.unwrap_or(true))
         && d.nodes()
