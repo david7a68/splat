@@ -5,14 +5,14 @@ use super::{
     Rules, Says, State, TrackerFault, Trackers, Unrecorded, ledger::Entry, ledger::NoticeRef,
     mark_of,
 };
-use crate::design::memo::{Measure, Memo, Memos, Revision};
+use crate::design::memo::{Measure, Memos, Revision};
 use crate::design::outcome::PaneFrame;
 use crate::design::outcome::{
     Banner, Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, PagePlaceholder,
     Said, Sentence, UndoStep, Verb,
 };
 use crate::design::pane::{Body, ContentScroll, held_seen, hold_press};
-use crate::design::{self, Action, Density, Gap, Heading, TextKey, Type, colors, icons};
+use crate::design::{self, Action, Density, Gap, TextKey, Type, icons};
 use egui;
 use std::collections::HashSet;
 
@@ -22,8 +22,9 @@ pub(crate) struct ViewState {
     /// A typed amount: the tracker, its instance, the action's label, and the words so far.
     asking: Option<(String, Option<String>, String, String)>,
     focus_asking: bool,
-    /// Proposed changes the DM unticked, by notice. Ticked is the default.
-    unticked: HashSet<(NoticeRef, usize)>,
+    /// Proposed changes the DM unticked, by notice and the change's own key. Ticked is the
+    /// default.
+    unticked: HashSet<Tick>,
     /// The act pressed in this frame. The shell applies it after Lookup drew, once it has read
     /// the day count again, so an act uses the day at the click.
     pressed: Option<Act>,
@@ -51,7 +52,12 @@ pub(crate) struct ViewState {
     /// The Due rows as laid out before paint (layout 11c scope C, `design::NoticeRow`), kept by
     /// the trackers' revision and the panel's measure: a quiet frame lays none out. One for each
     /// place of the `Due` heading: at the panel's top (no space above it), or under a banner.
-    due_laid: [Memo<(Revision, Measure), DueLaid>; 2],
+    due_laid: Option<(DueKey, DueLaid)>,
+    /// Each tracker's lines as laid out before paint (layout 11c scope C, `design::ActionLine`),
+    /// in their order (two instances can share a name, and a repeated one leaves its fields
+    /// out), by the tracker, all kept by one key (the trackers' revision, the panel's measure, the
+    /// font atlas's epoch and the theme): a new key lays each tracker out again as it is drawn.
+    line_laid: Option<(DueKey, LinesLaid)>,
 }
 
 /// The columns that every tracker line of the panel shares, so the values end at one edge
@@ -207,6 +213,32 @@ impl ViewState {
     pub(super) fn typed(&self) -> Option<&str> {
         self.asking.as_ref().map(|(_, _, _, typed)| typed.as_str())
     }
+}
+
+/// A proposed change of a Due row, by its notice and its own key (`ChangeKey`).
+type Tick = (NoticeRef, ChangeKey);
+
+/// A mark's change by its own identity, not its place in the mark (Astra's P2 on PR 897): the
+/// tracker it changes, its line, what it does there (its `add` and `set`), and which of the
+/// mark's changes that are the same in all of these it is (Astra's P2 on PR 904). A change that
+/// leaves the mark before it moves no other change's key, also on the same line: its check box
+/// keeps its id (and its focus), and the DM's untick stays with its change.
+type ChangeKey = (String, Option<String>, String, usize);
+
+/// Each change's key, in the mark's order (`ChangeKey`).
+fn change_keys(notice: &super::Notice, mark: Says<'_>) -> Vec<ChangeKey> {
+    let mut keys: Vec<ChangeKey> = Vec::with_capacity(mark.changes.len());
+    for change in mark.changes {
+        let tracker = change.tracker.clone().unwrap_or_else(|| notice.key.clone());
+        let instance = change.instance.clone();
+        let does = format!("{:?} {:?}", change.add, change.set);
+        let nth = keys
+            .iter()
+            .filter(|(t, i, d, _)| *t == tracker && *i == instance && *d == does)
+            .count();
+        keys.push((tracker, instance, does, nth));
+    }
+    keys
 }
 
 /// The empty state's route to the switches of the house rules in play.
@@ -417,17 +449,15 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     }
     let columns = columns(ui, rules, state, view, revision.revision());
     if usable(true).next().is_some() {
-        let heading_top = ui.cursor().top();
-        design::heading(
-            ui,
-            Heading::Group {
-                title: "Pinned",
-                count: 0,
-            },
-        );
+        // The `Pinned` heading is laid with its first tracker's first line, one block (SH9), with
+        // no space above it where it starts the panel (`design::heading`'s rule).
+        let first = ui.cursor().top() <= ui.max_rect().top() + 0.5;
         for (at, (key, def)) in usable(true).enumerate() {
-            // The heading and its first tracker's first line, as one block (SH9).
-            let heading = (at == 0).then_some(heading_top);
+            let heading = if at == 0 {
+                LineHead::Laid { first }
+            } else {
+                LineHead::None
+            };
             tracker_lines(ui, rules, state, view, &columns, key, def, act, heading);
         }
     }
@@ -443,7 +473,11 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
                 for (at, (key, def)) in usable(false).enumerate() {
                     // The open section's heading and its first tracker's first line, as one
                     // block.
-                    let heading = (at == 0).then_some(heading_top);
+                    let heading = if at == 0 {
+                        LineHead::Bound(heading_top)
+                    } else {
+                        LineHead::None
+                    };
                     tracker_lines(ui, rules, state, view, &columns, key, def, act, heading);
                 }
             },
@@ -459,6 +493,45 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
 /// The Due rows laid out: each row's parts and its layout, in the Due list's order.
 type DueLaid = Vec<(DueParts, design::Laid)>;
 
+/// What the Due rows were laid out from (Astra's P2 on PR 885): the trackers' revision (each
+/// settle), the measure (the panel's width, the font, the fonts' generation, the scale), the font
+/// atlas's epoch (egui makes its atlas again, and a kept galley would point into the old one),
+/// the light or dark visuals (the galleys hold their colours), and whether the `Due` heading
+/// starts the panel.
+#[derive(Clone, PartialEq)]
+struct DueKey {
+    revision: Revision,
+    measure: Measure,
+    atlas: u64,
+    dark: bool,
+    first: bool,
+}
+
+#[cfg(feature = "test-support")]
+thread_local! {
+    /// How many times the host made a Due row's parts (its words, names, labels, widths and
+    /// layout): from its entry through paint, a quiet frame makes none.
+    static DUE_PARTS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(feature = "test-support")]
+thread_local! {
+    /// How many times the host laid out a tracker's lines (`lay_tracker`): a quiet frame lays none.
+    static TRACKERS_LAID: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times this thread's host laid out a tracker's lines (test builds).
+#[cfg(feature = "test-support")]
+pub(super) fn trackers_laid() -> usize {
+    TRACKERS_LAID.with(std::cell::Cell::get)
+}
+
+/// How many times this thread's host made a Due row's parts (test builds).
+#[cfg(feature = "test-support")]
+pub(super) fn due_parts_made() -> usize {
+    DUE_PARTS_MADE.with(std::cell::Cell::get)
+}
+
 /// A Due row's parts, as `design::NoticeRow` lays them: its words, each roll's label with why
 /// it is blocked, the rolls' results, and each proposed change's words.
 struct DueParts {
@@ -466,6 +539,16 @@ struct DueParts {
     rolls: Vec<(String, Option<&'static str>)>,
     results: Option<String>,
     checks: Vec<String>,
+    /// The notice's short name (the row's menu's), `Done`'s label and its accessible name.
+    short: String,
+    finish: String,
+    done_name: String,
+    /// Each check's place in the DM's unticked set: its notice and its change's own key.
+    ticks: Vec<Tick>,
+    /// The words each roll and `Done` paint, laid before paint in their places (Astra's P2 on
+    /// PR 897): a quiet frame lays no action's words.
+    roll_words: Vec<Option<design::LaidAction>>,
+    done_words: Option<design::LaidAction>,
 }
 
 /// Why a roll is blocked: each name of its table has its roll.
@@ -519,11 +602,23 @@ fn due_parts(rules: &Rules, notice: &super::Notice, mark: Says<'_>) -> DueParts 
             format!("{name} {amount}")
         })
         .collect();
+    #[cfg(feature = "test-support")]
+    DUE_PARTS_MADE.with(|made| made.set(made.get() + 1));
+    let short = notice.name(rules);
     DueParts {
         words: notice_words(rules, notice, mark),
+        ticks: change_keys(notice, mark)
+            .into_iter()
+            .map(|key| (notice.id.clone(), key))
+            .collect(),
+        done_name: format!("Done: {short}"),
+        finish: finish_label(notice),
+        short,
         rolls,
         results,
         checks,
+        roll_words: Vec::new(),
+        done_words: None,
     }
 }
 
@@ -549,13 +644,19 @@ fn due_rows(
     // The heading starts the panel unless a banner stands above it (`design::heading`'s rule).
     let first = ui.cursor().top() <= ui.max_rect().top() + 0.5;
     let width = ui.available_width();
-    let key = (revision, Measure::of(ui, width, &Type::Body.font(ui)));
+    let key = DueKey {
+        revision,
+        measure: Measure::of(ui, width, &Type::Body.font(ui)),
+        atlas: design::theme::atlas_epoch(ui.ctx()),
+        dark: ui.visuals().dark_mode,
+        first,
+    };
     let count = state.due.len();
     let ViewState {
         due_laid, unticked, ..
     } = view;
-    let rows = due_laid[usize::from(first)].get_or(key, || {
-        state
+    if due_laid.as_ref().is_none_or(|(kept, _)| *kept != key) {
+        let rows = state
             .due
             .iter()
             .enumerate()
@@ -565,12 +666,22 @@ fn due_rows(
                 let rolls: Vec<design::NoticeRoll<'_>> = parts
                     .rolls
                     .iter()
-                    .map(|(label, reason)| design::NoticeRoll {
+                    .zip(mark.tables)
+                    .map(|((label, reason), table)| design::NoticeRoll {
+                        key: egui::Id::new(("trackers_due_roll", &notice.id, table.key())),
                         width: roll_action(label).natural_width(ui),
                         reason: *reason,
                     })
                     .collect();
-                let checks: Vec<&str> = parts.checks.iter().map(String::as_str).collect();
+                let checks: Vec<design::NoticeCheck<'_>> = parts
+                    .checks
+                    .iter()
+                    .zip(&parts.ticks)
+                    .map(|(words, tick)| design::NoticeCheck {
+                        key: egui::Id::new(("trackers_due_check", tick)),
+                        words,
+                    })
+                    .collect();
                 let laid = design::NoticeRow {
                     key: egui::Id::new(("trackers_due", &notice.id)),
                     heading: (at == 0).then_some(("Due", count)),
@@ -583,41 +694,68 @@ fn due_rows(
                     tail: design::XS,
                 }
                 .lay(ui, width);
+                let mut parts = parts;
+                // Each action's words, laid in the place the row gave it.
+                parts.roll_words = parts
+                    .rolls
+                    .iter()
+                    .enumerate()
+                    .map(|(at, (label, _))| {
+                        let room = laid.slot_size(design::notice_slot::FIRST_ROLL + at).x;
+                        (room > 0.5).then(|| roll_action(label).laid_words(ui, room))
+                    })
+                    .collect();
+                parts.done_words =
+                    (laid.slot_size(design::notice_slot::FINISH).x > 0.5).then(|| {
+                        let done = Action::quiet(&parts.finish).density(Density::Read);
+                        done.laid_words(ui, done.natural_width(ui))
+                    });
                 Some((parts, laid))
             })
-            .collect()
-    });
+            .collect();
+        *due_laid = Some((key, rows));
+    }
+    let rows = due_laid
+        .as_ref()
+        .map(|(_, rows)| rows.as_slice())
+        .unwrap_or_default();
     // The rows are laid only for notices with a mark, in the Due list's order.
     let shown = state
         .due
         .iter()
         .filter_map(|notice| mark_of(rules, notice).map(|mark| (notice, mark)));
     for ((notice, mark), (parts, laid)) in shown.zip(rows) {
-        let short = notice.name(rules);
         design::draw_laid(ui, laid, |ui| {
             for (at, (label, reason)) in parts.rolls.iter().enumerate() {
                 let slot = design::notice_slot::FIRST_ROLL + at;
+                // Each roll paints the words laid for it with its parts.
+                let Some(words) = &parts.roll_words[at] else {
+                    continue;
+                };
                 if ui.in_slot(slot, |ui| {
-                    roll_action(label).blocked(*reason).show(ui).clicked()
+                    roll_action(label)
+                        .laid(words.clone())
+                        .blocked(*reason)
+                        .show(ui)
+                        .clicked()
                 }) {
                     let key = mark.tables[at].key();
                     *act = Some(Act::Roll(notice.clone(), key.to_owned()));
                 }
             }
-            for (at, words) in parts.checks.iter().enumerate() {
+            for (at, (words, tick)) in parts.checks.iter().zip(&parts.ticks).enumerate() {
                 let slot = design::notice_slot::FIRST_ROLL + parts.rolls.len() + at;
-                let ticked = (notice.id.clone(), at);
-                let mut on = !unticked.contains(&ticked);
+                let mut on = !unticked.contains(tick);
                 if ui.in_slot(slot, |ui| ui.checkbox(&mut on, words).changed()) {
                     if on {
-                        unticked.remove(&ticked);
+                        unticked.remove(tick);
                     } else {
-                        unticked.insert(ticked);
+                        unticked.insert(tick.clone());
                     }
                 }
             }
             ui.actions(design::notice_slot::FINISH, |ui| {
-                finish(ui, &short, notice, mark, unticked, act);
+                finish(ui, parts, notice, unticked, act);
             });
         });
     }
@@ -662,13 +800,12 @@ fn finish_width(ui: &egui::Ui, notice: &super::Notice) -> f32 {
 /// laid out from the right.
 fn finish(
     ui: &mut egui::Ui,
-    short: &str,
+    parts: &DueParts,
     notice: &super::Notice,
-    mark: Says<'_>,
-    unticked: &HashSet<(NoticeRef, usize)>,
+    unticked: &HashSet<Tick>,
     act: &mut Option<Act>,
 ) {
-    design::row_menu(ui, short, |ui| {
+    design::row_menu(ui, &parts.short, |ui| {
         if Action::quiet("Dismiss")
             .density(Density::Read)
             .show(ui)
@@ -687,16 +824,18 @@ fn finish(
             ui.close();
         }
     });
-    let finish = finish_label(notice);
-    let name = format!("Done: {short}");
-    if Action::quiet(&finish)
+    let done = Action::quiet(&parts.finish)
         .density(Density::Read)
-        .name(&name)
-        .show(ui)
-        .clicked()
-    {
-        let ticked = (0..mark.changes.len())
-            .map(|at| !unticked.contains(&(notice.id.clone(), at)))
+        .name(&parts.done_name);
+    let done = match &parts.done_words {
+        Some(words) => done.laid(words.clone()),
+        None => done,
+    };
+    if done.show(ui).clicked() {
+        let ticked = parts
+            .ticks
+            .iter()
+            .map(|tick| !unticked.contains(tick))
             .collect();
         *act = Some(Act::Done(notice.clone(), ticked));
     }
@@ -717,54 +856,70 @@ fn register_block(ui: &egui::Ui, top: f32) {
     }
 }
 
-/// A tracker's lines: one line, or a heading and one line for each instance. Every line stands
-/// in the panel's columns. Of two amount fields with one owner (`Repeat`), the line that leaves
-/// one out says why under it, once for the tracker.
+/// The section heading a tracker comes first under.
+#[derive(Clone, Copy)]
+enum LineHead {
+    None,
+    /// `Pinned`, laid with the first line (`design::LineHeading`); whether it starts the panel.
+    Laid {
+        first: bool,
+    },
+    /// A heading the host draws (`More trackers`, a toggle), bound to the first line from its top.
+    Bound(f32),
+}
+
+/// One tracker line's parts, as `design::ActionLine` lays them and the view draws them, kept with
+/// its layout so a quiet frame builds none.
+struct LineParts {
+    /// The line's name whole (its hover), and as its column shows it.
+    name: String,
+    fitted: String,
+    value: String,
+    /// The actions it shows, by their place in `quick`, with each one's accessible name and its
+    /// words laid in its place before paint (a quiet frame lays no action's words).
+    shown: Vec<(usize, String, design::LaidAction)>,
+    /// The line's tracker and instance, as the view's acts and the hold name them.
+    place: (String, Option<String>),
+    /// A repeated amount field's warning under the line, once for the tracker.
+    fault: Option<TrackerFault>,
+}
+
+/// A tracker's lines laid out: each line's parts and its layout.
+type TrackerLaid = Vec<(LineParts, design::Laid)>;
+
+/// Each tracker's lines, by the tracker, with the laid heading over its first line (whether it
+/// starts the panel), if any.
+type LinesLaid = std::collections::HashMap<String, (Option<bool>, TrackerLaid)>;
+
+/// A tracker's lines, laid out before paint: one line, or its name over one line for each
+/// instance, each in the panel's columns. Of two amount fields with one owner (`Repeat`), the line
+/// that leaves one out says why under it, once for the tracker.
 #[allow(clippy::too_many_arguments)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "a repeated amount field’s problem: a row fault at the line that leaves the field out"
-)]
-fn tracker_lines(
-    ui: &mut egui::Ui,
+fn lay_tracker(
+    ui: &egui::Ui,
     rules: &Rules,
     state: &State,
     view: &mut ViewState,
     columns: &Columns,
     key: &str,
     def: &super::Definition,
-    act: &mut Option<Act>,
-    // The top of the section heading this tracker comes first under, if it does: the heading, the
-    // tracker's own name line and its FIRST line are one block (layout step 11a, SH9); its other
-    // lines are blocks of their own.
-    heading_top: Option<f32>,
-) {
-    let mut bind = Some(heading_top.unwrap_or_else(|| ui.cursor().top()));
-    let value_text = |instance: Option<&str>| {
-        let value = state.value(rules, key, instance);
-        match def.goal {
-            Some(goal) => format!("{value} / {goal}"),
-            None => value.to_string(),
-        }
-    };
+    width: f32,
+    // A laid `Pinned` heading over the first line, and whether it starts the panel.
+    heading: Option<bool>,
+) -> TrackerLaid {
+    #[cfg(feature = "test-support")]
+    TRACKERS_LAID.with(|laid| laid.set(laid.get() + 1));
     let indented = !def.per.is_empty();
-    let indent = if indented {
-        ui.label(Type::Body.rich(ui, &def.name));
-        design::L
-    } else {
-        0.0
-    };
-    // Names and values stand in the panel's columns, so the values read down one edge and the
-    // first actions start at one edge. A long name is cut at a whole word, and its hover keeps it.
-    let name_width = (columns.name - indent).max(0.0);
-    let top = egui::Layout::left_to_right(egui::Align::Min);
-    // The rows of one line stand `XS` apart, closer than two lines (the panel's spacing), so a
-    // wrapped action reads with its own line (FA2).
-    let one_line = |ui: &mut egui::Ui| ui.spacing_mut().item_spacing.y = design::XS;
+    let indent = if indented { design::L } else { 0.0 };
     let repeat = def.repeat.as_ref();
     let (mut word_seen, mut said) = (false, false);
-    for instance in def.instances() {
-        let line_top = ui.cursor().top();
+    let instances = def.instances();
+    let count = instances.len();
+    let mut lines = Vec::with_capacity(count);
+    for (line, &instance) in instances.iter().enumerate() {
+        // The line by its own identity: its instance, and how many lines before it have the same
+        // one (`per` can name a line twice).
+        let twin = instances[..line].iter().filter(|&&i| i == instance).count();
         // The first line of a repeated name keeps its fields; a later one leaves them out.
         let repeated_line = match repeat {
             Some(super::Repeat::Line { word, .. }) if instance == Some(word.as_str()) => {
@@ -784,127 +939,274 @@ fn tracker_lines(
             Some(super::Repeat::Label { .. }) => true,
             None => false,
         };
-        let head = |ui: &mut egui::Ui, view: &mut ViewState| {
-            if indented {
-                design::gap(ui, Gap::L);
-            }
-            let height = Density::Read.control();
-            let name = instance.unwrap_or(&def.name);
-            name_cell(
-                ui,
-                view,
-                columns.revision,
-                name,
-                egui::vec2(name_width, height),
-            );
-            design::gap(ui, Gap::S);
-            let (rect, _) =
-                ui.allocate_exact_size(egui::vec2(columns.value, height), egui::Sense::hover());
-            design::number(
-                ui.painter(),
-                rect.right(),
-                rect.center().y,
-                &value_text(instance),
-                &Type::Numeral.font(ui),
-                colors().text,
-            );
+        let fault = repeat
+            .filter(|_| leaves_out && !said)
+            .map(|repeat| TrackerFault::Problem(super::repeat_words(repeat)));
+        said |= fault.is_some();
+        let named: Vec<(usize, String)> = (0..def.quick.len())
+            .filter(|at| !left_out(*at))
+            .map(|at| {
+                let label = &def.quick[at].label;
+                let named = match instance {
+                    Some(name) => format!("{label}: {name}"),
+                    None => label.clone(),
+                };
+                (at, named)
+            })
+            .collect();
+        let name = instance.unwrap_or(&def.name).to_owned();
+        let value = match def.goal {
+            Some(goal) => format!("{} / {goal}", state.value(rules, key, instance)),
+            None => state.value(rules, key, instance).to_string(),
         };
-        if columns.beside(key) {
-            // The actions follow the value, at least two to a row, and the ones that do not fit
-            // wrap to the first action's edge, never left of the line's name.
-            ui.with_layout(top, |ui| {
-                head(ui, view);
-                design::gap(ui, Gap::S);
-                ui.horizontal_wrapped(|ui| {
-                    one_line(ui);
-                    quick_actions(ui, view, key, def, instance, &left_out, act);
-                });
-            });
-        } else {
-            // This tracker's first two actions do not fit after the values: its actions stand on
-            // the rows under it, from its name's edge, as many to a row as the panel holds.
-            ui.vertical(|ui| {
-                one_line(ui);
-                ui.with_layout(top, |ui| head(ui, view));
-                if !def.quick.is_empty() {
-                    ui.with_layout(top, |ui| {
-                        if indented {
-                            design::gap(ui, Gap::L);
-                        }
-                        ui.horizontal_wrapped(|ui| {
-                            one_line(ui);
-                            quick_actions(ui, view, key, def, instance, &left_out, act);
-                        });
-                    });
-                }
-            });
+        let fitted = fit_name(ui, view, columns.revision, &name, columns.name - indent);
+        // Each action by its own identity (Astra's P2 on PR 904): the tracker, the line's instance
+        // and the action's label, with how many actions of the same label come before it. A rules
+        // reload that reorders the lines or the actions moves no focus to another control.
+        let actions: Vec<design::LineAction> = named
+            .iter()
+            .map(|(at, _)| design::LineAction {
+                key: action_key(key, (instance, twin), &def.quick, *at),
+                width: quick_action(&def.quick[*at].label).natural_width(ui),
+            })
+            .collect();
+        let below: Vec<f32> = fault
+            .iter()
+            .map(|fault| design::outcome::row_fault_height(ui, fault, width))
+            .collect();
+        let laid = design::ActionLine {
+            key: egui::Id::new(("trackers_line", key, instance, twin)),
+            heading: heading
+                .filter(|_| line == 0)
+                .map(|first| design::LineHeading {
+                    title: "Pinned",
+                    count: 0,
+                    first,
+                }),
+            over: &[],
+            row: 0.0,
+            title: (indented && line == 0).then_some(def.name.as_str()),
+            indent,
+            name: &fitted,
+            value: &value,
+            columns: design::LineColumns {
+                name: columns.name,
+                value: columns.value,
+            },
+            actions: &actions,
+            beside: columns.beside(key),
+            below: &below,
+            // A tracker's last line keeps `XS` under it, as its lines did.
+            tail: if line + 1 == count { design::XS } else { 0.0 },
         }
-        if let Some(repeat) = repeat.filter(|_| leaves_out && !said) {
-            said = true;
-            design::outcome::row_fault(ui, &TrackerFault::Problem(super::repeat_words(repeat)));
-        }
-        register_block(ui, bind.take().map_or(line_top, |top| top.min(line_top)));
+        .lay(ui, width);
+        // Each action's words, laid in the place the line gave it.
+        let shown = named
+            .into_iter()
+            .enumerate()
+            .map(|(slot, (at, name))| {
+                let room = laid.slot_size(design::line_slot::FIRST_ACTION + slot).x;
+                let words = quick_action(&def.quick[at].label).laid_words(ui, room);
+                (at, name, words)
+            })
+            .collect();
+        lines.push((
+            LineParts {
+                name,
+                fitted,
+                value,
+                shown,
+                place: (key.to_owned(), instance.map(str::to_owned)),
+                fault,
+            },
+            laid,
+        ));
     }
-    design::gap(ui, Gap::XS);
+    lines
 }
 
-/// A line's quick actions, or the amount field in the place of the one that asks. An action
-/// `left_out` (a repeated amount field, by its place in `quick`) is not drawn.
-fn quick_actions(
+/// A line's action by its own identity, not its place: the tracker, the line's instance (with how
+/// many lines before it have the same one), the action's label, and how many of the tracker's
+/// actions with that label come before it (two actions can share a label).
+fn action_key(
+    key: &str,
+    instance: (Option<&str>, usize),
+    quick: &[splat_campaign::trackers::Quick],
+    at: usize,
+) -> egui::Id {
+    let label = &quick[at].label;
+    let nth = quick[..at]
+        .iter()
+        .filter(|action| action.label == *label)
+        .count();
+    egui::Id::new(("trackers_action", key, instance, label, nth))
+}
+
+/// A tracker's lines (`lay_tracker`), laid out once per key of the panel (its revision, measure,
+/// font atlas and theme) and drawn in place, each a whole row of the pane (`design::draw_laid`).
+#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a repeated amount field’s problem: a row fault at the line that leaves the field out"
+)]
+fn tracker_lines(
     ui: &mut egui::Ui,
+    rules: &Rules,
+    state: &State,
     view: &mut ViewState,
+    columns: &Columns,
     key: &str,
     def: &super::Definition,
-    instance: Option<&str>,
-    left_out: &dyn Fn(usize) -> bool,
     act: &mut Option<Act>,
+    // The section heading this tracker comes first under, if it does: the heading and the
+    // tracker's FIRST line are one block (layout step 11a, SH9); its other lines are blocks of
+    // their own.
+    heading: LineHead,
 ) {
-    let place = (key.to_owned(), instance.map(str::to_owned));
-    for (at, quick) in def.quick.iter().enumerate() {
-        if left_out(at) {
-            continue;
+    let width = ui.available_width();
+    let panel = DueKey {
+        revision: columns.revision,
+        measure: Measure::of(ui, width, &Type::Body.font(ui)),
+        atlas: design::theme::atlas_epoch(ui.ctx()),
+        dark: ui.visuals().dark_mode,
+        first: false,
+    };
+    if view
+        .line_laid
+        .as_ref()
+        .is_none_or(|(kept, _)| *kept != panel)
+    {
+        view.line_laid = Some((panel, std::collections::HashMap::new()));
+    }
+    // A laid heading is part of the first line's layout: a tracker laid with another heading
+    // (it became the first pinned, or `Pinned` began to start the panel) is laid again.
+    let laid_heading = match heading {
+        LineHead::Laid { first } => Some(first),
+        _ => None,
+    };
+    if !view.line_laid.as_ref().is_some_and(|(_, lines)| {
+        lines
+            .get(key)
+            .is_some_and(|(kept, _)| *kept == laid_heading)
+    }) {
+        let lines = lay_tracker(
+            ui,
+            rules,
+            state,
+            view,
+            columns,
+            key,
+            def,
+            width,
+            laid_heading,
+        );
+        if let Some((_, kept)) = view.line_laid.as_mut() {
+            kept.insert(key.to_owned(), (laid_heading, lines));
         }
-        let here = view
-            .asking
-            .as_ref()
-            .is_some_and(|(k, i, l, _)| *k == place.0 && *i == place.1 && *l == quick.label);
-        if here {
-            // The field takes exactly its action's column, so nothing after it moves.
-            let width = Action::secondary(&quick.label)
-                .density(Density::Read)
-                .natural_width(ui);
-            amount_field(ui, view, &quick.label, at, width, act);
-            continue;
-        }
-        let response = Action::secondary(&quick.label)
-            .density(Density::Read)
-            .name(&match instance {
-                Some(name) => format!("{}: {name}", quick.label),
-                None => quick.label.clone(),
-            })
-            .show(ui);
-        let control = (&place.0, &place.1, &quick.label, at);
-        held_seen(ui, control, response.rect.top());
-        if response.clicked() {
-            hold_press(ui, control, &response);
-            // Read on the click only: a dice amount is parsed to tell it from `ask`.
-            if quick.asks() {
-                view.asking = Some((
-                    place.0.clone(),
-                    place.1.clone(),
-                    quick.label.clone(),
-                    String::new(),
-                ));
-                view.focus_asking = true;
-            } else {
-                *act = Some(Act::Press {
-                    key: key.to_owned(),
-                    instance: place.1.clone(),
-                    label: quick.label.clone(),
-                    at,
-                    asked: None,
+    }
+    let ViewState {
+        line_laid,
+        asking,
+        focus_asking,
+        ..
+    } = &mut *view;
+    let Some((_, lines)) = line_laid.as_ref().and_then(|(_, lines)| lines.get(key)) else {
+        return;
+    };
+    for (line, (parts, laid)) in lines.iter().enumerate() {
+        design::draw_laid(ui, laid, |ui| {
+            let shown_name = ui.part(design::line_slot::NAME, &parts.fitted, false);
+            if parts.fitted != parts.name {
+                shown_name.on_hover_text(&parts.name);
+            }
+            let _ = ui.part(design::line_slot::VALUE, &parts.value, false);
+            for (slot, (at, named, words)) in parts.shown.iter().enumerate() {
+                let quick = &def.quick[*at];
+                ui.in_slot(design::line_slot::FIRST_ACTION + slot, |ui| {
+                    quick_action_in(
+                        ui,
+                        (&mut *asking, &mut *focus_asking),
+                        &parts.place,
+                        quick,
+                        *at,
+                        (named, words),
+                        act,
+                    );
                 });
             }
+            if let Some(fault) = &parts.fault {
+                let slot = design::line_slot::FIRST_ACTION + parts.shown.len();
+                ui.in_slot(slot, |ui| {
+                    design::outcome::row_fault(ui, fault);
+                });
+            }
+        });
+        // A host-drawn heading (`More trackers`, a toggle) and this tracker's first line, as one
+        // block (SH9).
+        if line == 0
+            && let LineHead::Bound(top) = heading
+        {
+            register_block(ui, top);
+        }
+    }
+}
+
+/// A quick action's button.
+fn quick_action(label: &str) -> Action<'_> {
+    Action::secondary(label).density(Density::Read)
+}
+
+/// The typed amount, as `ViewState` keeps it, and whether its field takes focus next.
+type Asking<'a> = (
+    &'a mut Option<(String, Option<String>, String, String)>,
+    &'a mut bool,
+);
+
+/// A quick action in its slot, or the amount field in its place while it asks.
+fn quick_action_in(
+    ui: &mut egui::Ui,
+    (asking, focus_asking): Asking<'_>,
+    place: &(String, Option<String>),
+    quick: &super::Quick,
+    at: usize,
+    // Its accessible name (`Pay: Ann` on an instance's line) and its words laid in its place.
+    (named, words): (&str, &design::LaidAction),
+    act: &mut Option<Act>,
+) {
+    let here = asking
+        .as_ref()
+        .is_some_and(|(k, i, l, _)| *k == place.0 && *i == place.1 && *l == quick.label);
+    if here {
+        // The field takes exactly its action's slot, so nothing after it moves.
+        let width = ui.max_rect().width();
+        amount_field(ui, (asking, focus_asking), &quick.label, at, width, act);
+        return;
+    }
+    let response = quick_action(&quick.label)
+        .name(named)
+        .laid(words.clone())
+        .show(ui);
+    let control = (&place.0, &place.1, &quick.label, at);
+    held_seen(ui, control, response.rect.top());
+    if response.clicked() {
+        hold_press(ui, control, &response);
+        // Read on the click only: a dice amount is parsed to tell it from `ask`.
+        if quick.asks() {
+            *asking = Some((
+                place.0.clone(),
+                place.1.clone(),
+                quick.label.clone(),
+                String::new(),
+            ));
+            *focus_asking = true;
+        } else {
+            *act = Some(Act::Press {
+                key: place.0.clone(),
+                instance: place.1.clone(),
+                label: quick.label.clone(),
+                at,
+                asked: None,
+            });
         }
     }
 }
@@ -912,44 +1214,36 @@ fn quick_actions(
 /// The most of a tracker's line that its name column takes, so the value and an action keep room.
 const NAME_SHARE: f32 = 0.4;
 
-/// A name in its column: exactly `size`, whatever the name's own width. A name wider than the
-/// column ends at a whole word with `…`, or is `…` alone when its first word does not fit; its
-/// hover says it whole. Each name is measured, and shortened when it does not fit, once for
+/// A name as its column shows it: whole, or cut at a whole word with `…` (`…` alone when its
+/// first word does not fit). Each name is measured, and shortened when it does not fit, once for
 /// each revision of the trackers and each measure (`ViewState::fitted`).
-fn name_cell(
-    ui: &mut egui::Ui,
+fn fit_name(
+    ui: &egui::Ui,
     view: &mut ViewState,
     revision: Revision,
     name: &str,
-    size: egui::Vec2,
-) {
-    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    width: f32,
+) -> String {
+    let width = width.max(0.0);
     let font = Type::Body.font(ui);
-    let key = (revision, Measure::of(ui, size.x, &font));
-    let shown = view.fitted.get_or(name, key, || {
-        if design::number_width(ui, name, &font) <= size.x {
-            return name.to_owned();
-        }
-        #[cfg(test)]
-        {
-            view.shortened += 1;
-        }
-        let words = design::words_that_fit(ui, name, &font, size.x);
-        if design::number_width(ui, &words, &font) > size.x {
-            "…".to_owned()
-        } else {
-            words
-        }
-    });
-    let mut cell = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(rect)
-            .layout(egui::Layout::left_to_right(egui::Align::Center)),
-    );
-    let response = cell.add(egui::Label::new(Type::Body.rich(ui, shown)));
-    if shown != name {
-        response.on_hover_text(name);
-    }
+    let key = (revision, Measure::of(ui, width, &font));
+    view.fitted
+        .get_or(name, key, || {
+            if design::number_width(ui, name, &font) <= width {
+                return name.to_owned();
+            }
+            #[cfg(test)]
+            {
+                view.shortened += 1;
+            }
+            let words = design::words_that_fit(ui, name, &font, width);
+            if design::number_width(ui, &words, &font) > width {
+                "…".to_owned()
+            } else {
+                words
+            }
+        })
+        .clone()
 }
 
 const AMOUNT: design::FieldName = crate::field_id!("trackers_amount");
@@ -961,13 +1255,13 @@ const AMOUNT: design::FieldName = crate::field_id!("trackers_amount");
 )]
 fn amount_field(
     ui: &mut egui::Ui,
-    view: &mut ViewState,
+    (asking, focus_asking): Asking<'_>,
     label: &str,
     at: usize,
     width: f32,
     act: &mut Option<Act>,
 ) {
-    let Some((key, instance, _, typed)) = view.asking.as_mut() else {
+    let Some((key, instance, _, typed)) = asking.as_mut() else {
         return;
     };
     // One id for the field, from its tracker, line and action, whatever layout holds it: the
@@ -987,7 +1281,7 @@ fn amount_field(
         },
     );
     design::named(ui, &response, label);
-    if std::mem::take(&mut view.focus_asking) {
+    if std::mem::take(focus_asking) {
         response.request_focus();
     }
     if response.lost_focus() {
@@ -1006,7 +1300,7 @@ fn amount_field(
                 asked: Some(amount),
             });
         }
-        view.asking = None;
+        *asking = None;
     }
 }
 
@@ -1125,7 +1419,9 @@ mod tests {
             .themed_ui_state(
                 |ui, (view, revision): &mut (ViewState, Revised<u64>)| {
                     for name in NAMES {
-                        name_cell(ui, view, revision.revision(), name, egui::vec2(110.0, 28.0));
+                        // As a line's name slot shows it: the fitted words in a label.
+                        let shown = fit_name(ui, view, revision.revision(), name, 110.0);
+                        ui.label(shown);
                     }
                 },
                 (ViewState::default(), Revised::new(0)),

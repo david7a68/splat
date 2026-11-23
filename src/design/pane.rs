@@ -125,6 +125,7 @@ use super::{layout::ScrollColumn, tokens::S};
 /// Composite columns and their edges, resolved before the pane paints (layout step 7).
 /// A line of a list whose rows vary in height, as a recipe (layout 11c, issue #683).
 mod action_line;
+mod check_line;
 mod columns;
 /// A block laid out before paint by a design recipe (layout 11c).
 mod laid;
@@ -137,10 +138,11 @@ mod plan_row;
 /// The scroll region of an owned list body over its plan (layout step 3b).
 mod region;
 pub use action_line::{
-    ActionLine, LineAction, LineColumns, WrapRoom, Wrapped, slot as line_slot, wrap,
+    ActionLine, LineAction, LineColumns, LineHeading, WrapRoom, Wrapped, slot as line_slot, wrap,
 };
 #[cfg(any(test, feature = "test-support"))]
 pub use action_line::{one_row_width, painted_in_block};
+pub use check_line::{CheckInputs, CheckLine, slot as check_slot};
 #[cfg(any(test, feature = "test-support"))]
 pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
@@ -148,7 +150,7 @@ use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
 pub use laid::{Laid, LaidPart, LaidUi, draw_laid};
 #[cfg(any(test, feature = "test-support"))]
 pub use notice_row::notices_laid;
-pub use notice_row::{NoticeRoll, NoticeRow, check_height, slot as notice_slot};
+pub use notice_row::{NoticeCheck, NoticeRoll, NoticeRow, check_height, slot as notice_slot};
 pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Measured, Row};
 pub use plan_row::{PlanColumns, PlanRow, SummaryPart, rule as plan_rule, slot as plan_slot};
 pub use region::{BlockRegion, Navigation, RegionState};
@@ -2376,6 +2378,18 @@ impl Footer<'_> {
             |ui, _| add(ui),
             then,
         )
+    }
+
+    /// `pane_editor` whose messages also come after the body, from `then` (`pane_then`): a body
+    /// with one editor whose acts start or end the footer's lines (Lookup's reader, issue #761),
+    /// so the frame of an act shows the message it brought.
+    pub fn pane_editor_then<R, T>(
+        self,
+        ui: &mut Ui,
+        add: impl for<'r> FnOnce(&mut Ui, EditorRegion<'r>) -> R,
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> T {
+        self.place(ui, Body::Content, ContentScroll::default(), true, add, then)
     }
 
     /// `pane_then` with `Body::Content`, whose scroll column behaves as `scroll` says.

@@ -218,6 +218,12 @@ impl Laid {
         }
     }
 
+    /// Its head (its semantic boundary from its top), for a recipe's proofs.
+    #[cfg(test)]
+    pub(in crate::design) fn head(&self) -> Option<f32> {
+        self.head
+    }
+
     /// The block the plan measures: this layout's height, head, key and revision.
     pub fn block(&self) -> Block {
         Block::Measured(Measured::new(
@@ -230,6 +236,12 @@ impl Laid {
 
     pub fn height(&self) -> f32 {
         self.size.y
+    }
+
+    /// Slot `at`'s size as laid (no width: a part the recipe gave no place). A host lays an
+    /// action's words in it before paint (`Action::laid_words`).
+    pub fn slot_size(&self, at: usize) -> Vec2 {
+        self.slots.get(at).map_or(Vec2::ZERO, Rect::size)
     }
 
     pub fn revision(&self) -> Revision {

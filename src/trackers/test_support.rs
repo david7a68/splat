@@ -76,4 +76,14 @@ impl Trackers {
     pub fn test_measured(&self) -> usize {
         self.view.measured
     }
+
+    /// How many times this thread's view laid out a tracker's lines (layout 11c scope C).
+    pub fn test_trackers_laid() -> usize {
+        super::view::trackers_laid()
+    }
+
+    /// How many times this thread's view made a Due row's parts (layout 11c scope C).
+    pub fn test_due_parts_made() -> usize {
+        super::view::due_parts_made()
+    }
 }

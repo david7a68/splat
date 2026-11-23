@@ -2117,6 +2117,10 @@ struct Body {
     /// No other kept result of its Undo's verb stands in its footer (`undo_alone`): the Undo
     /// paints `UndoStep::alone` for its room, else `UndoStep::fit`.
     undo_alone: bool,
+    /// The place its owner gives it (`BodyMessage::show`: the next widget's id before its words'
+    /// scope), which keys its kept Undo words and choices (`body_kept`): one slot per place,
+    /// whatever its words. None: the place where it draws.
+    place: Option<egui::Id>,
 }
 
 /// Whether `undo` is the only kept Undo of its verb among a footer's kept Undos (`kept`): the
@@ -2209,6 +2213,7 @@ impl<A> Typed<A> {
                 words_hover: None,
                 help: Vec::new(),
                 undo_alone: false,
+                place: None,
             },
             undo: undo_id,
             choices: ids,
@@ -2889,6 +2894,38 @@ impl<'f, A: 'static> Messages<'f, A> {
         }
     }
 
+    /// `pane_editor` whose messages also come after the body, from `then`
+    /// (`Footer::pane_editor_then`; issue #761): the act of the frame says its result and its
+    /// Undo in that frame.
+    pub fn pane_editor_then<R, T>(
+        self,
+        ui: &mut Ui,
+        add: impl for<'r> FnOnce(&mut Ui, super::pane::EditorRegion<'r>) -> R,
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> Paned<T, A> {
+        let (id, width) = (self.id, self.width);
+        let mut messages = self;
+        let mut sink = None;
+        let empty: TypedFooter<A> = TypedFooter {
+            lines: Vec::new(),
+            sink: PressSink(std::rc::Rc::default()),
+            retained: None,
+            plan: None,
+        };
+        let footer = Footer::typed(id, width, Box::new(empty));
+        let body = footer.pane_editor_then(ui, add, |inner, footer| {
+            let out = then(inner, &mut messages);
+            let (lines, press) = messages.into_footer();
+            footer.take_typed(lines);
+            sink = Some(press);
+            out
+        });
+        Paned {
+            body,
+            pressed: sink.and_then(|sink| sink.0.borrow_mut().take()),
+        }
+    }
+
     /// `pane_then` with a `Body::Content` scroll column that behaves as `scroll` says
     /// (`Footer::pane_content_then`).
     pub fn pane_content_then<R, T>(
@@ -2987,6 +3024,9 @@ struct PlanEnv {
     style: std::sync::Arc<egui::Style>,
     /// The fonts in effect (`font_key`): new fonts, or a family's font replaced, plan again.
     fonts: u64,
+    /// The font atlas's epoch (`theme::atlas_epoch`): the plan keeps laid words (its Undos' and
+    /// choices'), whose galleys hold places in the atlas, so a new atlas plans again.
+    atlas: u64,
     /// The footer followed its content in the last pass (`pane::footer_follows`): an answer to a
     /// pressed line stands under it (`Messages::answer`).
     follows: bool,
@@ -3039,6 +3079,9 @@ struct FooterPlan {
     alone: Vec<bool>,
     /// For each line, its Undo's words as fitted to the line's room (`Body::undo_form`).
     forms: std::sync::Arc<[Option<std::sync::Arc<UndoForm>>]>,
+    /// For each line, its choices' widths and laid words (`Body::plan_choices`): a pass that does
+    /// not measure measures no choice and lays out no action's words.
+    choices: std::sync::Arc<[Option<std::sync::Arc<[ChoiceLaid]>>]>,
     /// The room the lines take, without their open locks' reasons.
     bare: f32,
     /// The room the open locks' reasons want (ruling R29).
@@ -3228,6 +3271,7 @@ impl<A: 'static> TypedFooter<A> {
             scale: ui.ctx().pixels_per_point().to_bits(),
             style: ui.style().clone(),
             fonts: font_key(ui.ctx()),
+            atlas: super::theme::atlas_epoch(ui.ctx()),
             follows: super::pane::footer_follows(ui.ctx(), id),
         }
     }
@@ -3372,6 +3416,8 @@ impl<A: 'static> TypedFooter<A> {
             line: 0,
             forms: std::sync::Arc::from([]),
             fitted: vec![None; lines.len()],
+            choices: std::sync::Arc::from([]),
+            laid_choices: vec![None; lines.len()],
         };
         // The state the file lines draw from (a file that is gone adds a reason line).
         let gone = file_states(ui.ctx(), lines);
@@ -3406,6 +3452,7 @@ impl<A: 'static> TypedFooter<A> {
             name,
             alone,
             forms: std::sync::Arc::from(std::mem::take(&mut room.fitted)),
+            choices: std::sync::Arc::from(std::mem::take(&mut room.laid_choices)),
             bare: content - room.drawn,
             reserved: room.reserved,
             rooms: std::sync::Arc::from(std::mem::take(&mut room.measured)),
@@ -3617,6 +3664,8 @@ impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
             line: 0,
             forms: plan.forms.clone(),
             fitted: Vec::new(),
+            choices: plan.choices.clone(),
+            laid_choices: Vec::new(),
         };
         let (_, content, part) =
             super::components::scroll_part(ui, rect, id, &plan.name, fit, |ui| {
@@ -3855,6 +3904,10 @@ pub(in crate::design) struct FooterPass {
     forms: std::sync::Arc<[Option<std::sync::Arc<UndoForm>>]>,
     /// What a measuring pass fitted for each line.
     fitted: Vec<Option<std::sync::Arc<UndoForm>>>,
+    /// The plan's choices for each line (`FooterPlan::choices`).
+    choices: std::sync::Arc<[Option<std::sync::Arc<[ChoiceLaid]>>]>,
+    /// What a measuring pass laid for each line's choices.
+    laid_choices: Vec<Option<std::sync::Arc<[ChoiceLaid]>>>,
 }
 
 impl Body {
@@ -3915,6 +3968,8 @@ impl Body {
         let words = self.words.as_str();
         let choices: Vec<(usize, MessageChoice<'_>)> =
             self.choices.iter().copied().enumerate().collect();
+        // The choices' widths and words, laid once per change (`body_kept`).
+        let kept = self.body_kept(ui, "body_choices", 0.0, || self.plan_choices(ui));
         // Review of PR 677: help comes before the file line and the choices, so a fault with
         // help keeps nothing beside its words.
         let helped = !self.help.is_empty();
@@ -3924,7 +3979,7 @@ impl Body {
             .map(|(at, choice)| match choice {
                 MessageChoice::Dismiss(_) => Density::Read.control() + gap,
                 MessageChoice::Link { word, .. } => compact_link_width(ui, word) + gap,
-                choice => self.choice_width(ui, *at, *choice) + gap,
+                choice => self.choice_width(ui, *at, *choice, kept.get(*at)) + gap,
             })
             .sum();
         let file = self.file.as_ref().map(|file| file.natural_width(ui));
@@ -3974,7 +4029,7 @@ impl Body {
                 );
             }
             if !helped {
-                self.compact_choices(ui, &choices, &mut pressed);
+                self.compact_choices(ui, &choices, &kept, &mut pressed);
             }
             message.rect.left()
         });
@@ -4004,7 +4059,7 @@ impl Body {
             let inset = row.inner - ui.cursor().left();
             ui.horizontal(|ui| {
                 space(ui, inset);
-                self.compact_choices(ui, &choices, &mut pressed);
+                self.compact_choices(ui, &choices, &kept, &mut pressed);
             });
         }
         register(ui, row.response.rect, place, self.tone);
@@ -4017,6 +4072,7 @@ impl Body {
         &self,
         ui: &mut Ui,
         choices: &[(usize, MessageChoice<'_>)],
+        kept: &[ChoiceLaid],
         pressed: &mut Option<Pressed>,
     ) {
         let control = Density::Read.control();
@@ -4064,12 +4120,12 @@ impl Body {
                     .inner
                 }
                 choice => {
-                    let width = self.choice_width(ui, *at, *choice);
+                    let width = self.choice_width(ui, *at, *choice, kept.get(*at));
                     ui.allocate_ui_with_layout(
                         egui::vec2(width, control),
                         egui::Layout::left_to_right(egui::Align::Center),
                         |ui| {
-                            self.draw_choice(ui, *at, *choice, f32::INFINITY, None)
+                            self.draw_choice(ui, *at, *choice, f32::INFINITY, None, kept.get(*at))
                                 .is_some_and(|response| response.clicked())
                         },
                     )
@@ -4110,6 +4166,9 @@ impl Body {
         reasons: &mut Reasons<'_>,
     ) -> f32 {
         let mut line = ui.cursor().top() + Type::Body.line() / 2.0;
+        // The footer's plan keeps the choices' widths and laid words (none outside a footer).
+        let planned = self.planned_choices(ui, reasons);
+        let planned = planned.as_deref();
         let response = ui
             .scope(|ui| {
                 ui.set_max_width(ui.available_width().min(LIST_MEASURE));
@@ -4129,7 +4188,7 @@ impl Body {
                                 ui,
                                 self.tone,
                                 words,
-                                &form.shown,
+                                (&form.shown, Some((form.laid.clone(), form.width))),
                                 name,
                                 lock,
                                 true,
@@ -4155,7 +4214,10 @@ impl Body {
                 // else Undo on its line and the choices on the lines under it, from the words.
                 let choices: f32 = self
                     .row_choices()
-                    .map(|(at, choice)| self.choice_width(ui, at, choice) + gap)
+                    .map(|(at, choice)| {
+                        let kept = planned.and_then(|planned| planned.get(at));
+                        self.choice_width(ui, at, choice, kept) + gap
+                    })
                     .sum();
                 // Ruling M8: a choice with help stands on a line of its own, its help under it, as
                 // a body fault's repair does; then so does every choice of the message.
@@ -4174,6 +4236,7 @@ impl Body {
                                 .icon(icons::UNDO)
                                 .density(Density::Read)
                                 .line_start_in_column()
+                                .laid(form.laid.clone())
                                 .blocked(holding(&self.undo_lock));
                             if shown != label {
                                 action = action.name(label);
@@ -4187,7 +4250,7 @@ impl Body {
                             space(ui, (L - gap).max(0.0));
                         }
                         if one_line {
-                            self.draw_choices(ui, pressed);
+                            self.draw_choices(ui, pressed, planned);
                         }
                     });
                 }
@@ -4209,7 +4272,8 @@ impl Body {
                         }
                         let shown = message_choice_row(ui, self.tone, |ui| {
                             let room = ui.available_width();
-                            self.draw_choice(ui, at, choice, room, None)
+                            let kept = planned.and_then(|planned| planned.get(at));
+                            self.draw_choice(ui, at, choice, room, None, kept)
                         });
                         let clicked = shown.as_ref().is_some_and(Response::clicked);
                         activated(ui, pressed, clicked, words, Pressed::Choice(at));
@@ -4227,7 +4291,7 @@ impl Body {
                     ui.horizontal_top(|ui| {
                         space(ui, inset);
                         ui.horizontal_wrapped(|ui| {
-                            self.draw_choices(ui, pressed);
+                            self.draw_choices(ui, pressed, planned);
                         });
                     });
                 }
@@ -4369,8 +4433,73 @@ impl Body {
         }
     }
 
-    /// A choice's whole width, with the `L` before a red one.
-    fn choice_width(&self, ui: &Ui, at: usize, choice: MessageChoice<'_>) -> f32 {
+    /// Each choice as the footer's plan keeps it (`ChoiceLaid`), in the choices' order.
+    fn plan_choices(&self, ui: &Ui) -> std::sync::Arc<[ChoiceLaid]> {
+        self.choices
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(at, choice)| {
+                let width = self.choice_width(ui, at, choice, None);
+                let plain = match (choice, self.named.get(at).and_then(Option::as_ref)) {
+                    (MessageChoice::Choice(word), None) => {
+                        Some(Action::secondary(word).density(Density::Read))
+                    }
+                    (MessageChoice::Primary(word), None) => {
+                        Some(Action::primary(word).density(Density::Read))
+                    }
+                    (MessageChoice::Lose(word), None) => {
+                        Some(Action::destructive(word).density(Density::Read))
+                    }
+                    _ => None,
+                };
+                let action = plain
+                    .as_ref()
+                    .map_or(0.0, |action| action.natural_width(ui));
+                ChoiceLaid {
+                    width,
+                    action,
+                    laid: plain.map(|plain| plain.laid_words(ui, action)),
+                }
+            })
+            .collect()
+    }
+
+    /// The choices as laid once per change: a footer's plan's for this line (the kept ones, or
+    /// ones laid now and recorded by a measuring pass), else the body message's own (`body_kept`).
+    fn planned_choices(
+        &self,
+        ui: &Ui,
+        reasons: &mut Reasons<'_>,
+    ) -> Option<std::sync::Arc<[ChoiceLaid]>> {
+        let Reasons::Planned(pass) = reasons else {
+            return Some(self.body_kept(ui, "body_choices", 0.0, || self.plan_choices(ui)));
+        };
+        if !pass.measure
+            && let Some(Some(kept)) = pass.choices.get(pass.line)
+        {
+            return Some(kept.clone());
+        }
+        let laid = self.plan_choices(ui);
+        if pass.measure
+            && let Some(slot) = pass.laid_choices.get_mut(pass.line)
+        {
+            *slot = Some(laid.clone());
+        }
+        Some(laid)
+    }
+
+    /// A choice's whole width, with the `L` before a red one: the plan's (`planned`), else measured.
+    fn choice_width(
+        &self,
+        ui: &Ui,
+        at: usize,
+        choice: MessageChoice<'_>,
+        planned: Option<&ChoiceLaid>,
+    ) -> f32 {
+        if let Some(planned) = planned {
+            return planned.width;
+        }
         if let Some(Some((kind, words))) = self.named.get(at) {
             let lose = if *kind == ChoiceKind::Lose { L } else { 0.0 };
             return kind.action(&words.label()).natural_width(ui) + lose;
@@ -4397,12 +4526,18 @@ impl Body {
 
     /// The choices, in order, on wrapped lines: a red one keeps exactly `L` from the one before it
     /// on its line, or starts a line of its own `M` below the others (`before_lose`).
-    fn draw_choices(&self, ui: &mut Ui, pressed: &mut Option<Pressed>) {
+    fn draw_choices(
+        &self,
+        ui: &mut Ui,
+        pressed: &mut Option<Pressed>,
+        planned: Option<&[ChoiceLaid]>,
+    ) {
         let gap = ui.spacing().item_spacing.x;
         for (at, choice) in self.row_choices() {
             let room = ui.max_rect().width();
+            let kept = planned.and_then(|planned| planned.get(at));
             let clicked = self
-                .draw_choice(ui, at, choice, room, Some(gap))
+                .draw_choice(ui, at, choice, room, Some(gap), kept)
                 .is_some_and(|response| response.clicked());
             activated(
                 ui,
@@ -4432,8 +4567,20 @@ impl Body {
         choice: MessageChoice<'_>,
         room: f32,
         wrapped: Option<f32>,
+        planned: Option<&ChoiceLaid>,
     ) -> Option<Response> {
         let lock = self.locks.get(at).and_then(holding);
+        // A plain choice paints the words its plan laid.
+        let laid = planned.and_then(|planned| planned.laid.clone());
+        fn laid_words<'a>(
+            action: Action<'a>,
+            words: Option<super::components::LaidAction>,
+        ) -> Action<'a> {
+            match words {
+                Some(words) => action.laid(words),
+                None => action,
+            }
+        }
         match (choice, self.named.get(at).and_then(Option::as_ref)) {
             // Words with objects: cut to the row's width, named with the whole words.
             (_, Some((kind, words))) => {
@@ -4446,14 +4593,12 @@ impl Body {
                 Some(data_choice(ui, words, *kind, room, lock))
             }
             (MessageChoice::Choice(word), None) => Some(
-                Action::secondary(word)
-                    .density(Density::Read)
+                laid_words(Action::secondary(word).density(Density::Read), laid.clone())
                     .blocked(lock)
                     .show(ui),
             ),
             (MessageChoice::Primary(word), None) => Some(
-                Action::primary(word)
-                    .density(Density::Read)
+                laid_words(Action::primary(word).density(Density::Read), laid.clone())
                     .blocked(lock)
                     .show(ui),
             ),
@@ -4461,16 +4606,23 @@ impl Body {
                 if let Some(gap) = wrapped
                     && at > 0
                 {
-                    let width = Action::destructive(word)
-                        .density(Density::Read)
-                        .natural_width(ui);
+                    let width = planned.map_or_else(
+                        || {
+                            Action::destructive(word)
+                                .density(Density::Read)
+                                .natural_width(ui)
+                        },
+                        |planned| planned.action,
+                    );
                     before_lose(ui, width, gap);
                 }
                 Some(
-                    Action::destructive(word)
-                        .density(Density::Read)
-                        .blocked(lock)
-                        .show(ui),
+                    laid_words(
+                        Action::destructive(word).density(Density::Read),
+                        laid.clone(),
+                    )
+                    .blocked(lock)
+                    .show(ui),
                 )
             }
             (MessageChoice::Link { word, hover }, None) => match lock {
@@ -4510,23 +4662,12 @@ impl Body {
         {
             return form.clone();
         }
-        count(|work| work.undo_fits += 1);
-        let label = step.label();
-        let room = undo_room(ui, self.tone, &label);
-        let shown = if self.undo_alone {
-            step.alone(ui, room)
-        } else {
-            step.fit(ui, room)
-        };
-        let width = Action::quiet(&shown)
-            .icon(icons::UNDO)
-            .density(Density::Read)
-            .natural_width(ui);
-        let form = std::sync::Arc::new(UndoForm {
-            label,
-            shown,
-            width,
-        });
+        if let Reasons::Body = reasons {
+            // The room is the line's (`undo_room`), so it is in the key.
+            let room = ui.available_width();
+            return self.body_kept(ui, "body_undo_form", room, || self.fit_undo(ui, step));
+        }
+        let form = self.fit_undo(ui, step);
         if let Reasons::Planned(pass) = reasons
             && pass.measure
             && let Some(slot) = pass.fitted.get_mut(pass.line)
@@ -4535,6 +4676,136 @@ impl Body {
         }
         form
     }
+
+    /// Undo's words fitted to the room now, and laid (`undo_form`).
+    fn fit_undo(&self, ui: &Ui, step: &UndoStep) -> std::sync::Arc<UndoForm> {
+        count(|work| work.undo_fits += 1);
+        let label = step.label();
+        let room = undo_room(ui, self.tone, &label);
+        let shown = if self.undo_alone {
+            step.alone(ui, room)
+        } else {
+            step.fit(ui, room)
+        };
+        let action = Action::quiet(&shown)
+            .icon(icons::UNDO)
+            .density(Density::Read);
+        let width = action.natural_width(ui);
+        let laid = action.laid_words(ui, width);
+        std::sync::Arc::new(UndoForm {
+            label,
+            shown,
+            width,
+            laid,
+        })
+    }
+
+    /// What a body message outside a footer (`Reasons::Body`) keeps of `tag`, made by `make` once
+    /// per change: of the body itself, the room `width`, the scale, the style (the theme in it),
+    /// the fonts and the atlas epoch (the kept words' galleys hold places in the atlas). A quiet
+    /// frame measures and lays out nothing. The slot is the message's place (its owner's, else the
+    /// next widget's id in its Ui), so a message whose words change takes no new slot; a different
+    /// body in it makes the value again. The slots live in one store swept each frame
+    /// (`BodyStore`), so a slot no message used in the last frame goes.
+    fn body_kept<T: Clone + Send + std::marker::Sync + 'static>(
+        &self,
+        ui: &Ui,
+        tag: &'static str,
+        width: f32,
+        make: impl FnOnce() -> T,
+    ) -> T {
+        let slot = egui::Id::new((tag, self.place.unwrap_or_else(|| ui.next_auto_id())));
+        let frame = ui.ctx().cumulative_frame_nr();
+        let key = BodyKey {
+            width: width.to_bits(),
+            scale: ui.ctx().pixels_per_point().to_bits(),
+            style: ui.style().clone(),
+            fonts: font_key(ui.ctx()),
+            atlas: super::theme::atlas_epoch(ui.ctx()),
+        };
+        let kept = ui.data_mut(|data| {
+            let store = data.get_temp_mut_or_default::<BodyStore>(body_store_id());
+            store.sweep(frame);
+            store.slots.get_mut(&slot).map(|(drawn, kept)| {
+                *drawn = frame;
+                kept.clone()
+            })
+        });
+        if let Some(kept) = kept.and_then(|kept| kept.downcast::<BodyKept<T>>().ok())
+            && kept.key == key
+            && kept.body == *self
+        {
+            return kept.value.clone();
+        }
+        let value = make();
+        let kept = std::sync::Arc::new(BodyKept {
+            body: self.clone(),
+            key,
+            value: value.clone(),
+        });
+        ui.data_mut(|data| {
+            data.get_temp_mut_or_default::<BodyStore>(body_store_id())
+                .slots
+                .insert(slot, (frame, kept));
+        });
+        value
+    }
+}
+
+/// Every body message's kept values (`Body::body_kept`), by slot, with the frame that last used
+/// each. Swept once per frame: a slot that no message used in the last frame goes, so the store
+/// holds only the messages on screen, whatever their words and places do (review of PR 925).
+#[derive(Clone, Default)]
+struct BodyStore {
+    swept: u64,
+    slots: std::collections::HashMap<
+        egui::Id,
+        (
+            u64,
+            std::sync::Arc<dyn std::any::Any + Send + std::marker::Sync>,
+        ),
+    >,
+}
+
+impl BodyStore {
+    /// Drop each slot not used in this frame or the one before, once per frame.
+    fn sweep(&mut self, frame: u64) {
+        if self.swept != frame {
+            self.swept = frame;
+            self.slots.retain(|_, (drawn, _)| *drawn + 1 >= frame);
+        }
+    }
+}
+
+fn body_store_id() -> egui::Id {
+    egui::Id::new("design_body_kept")
+}
+
+/// How many kept values the body messages hold now (`BodyStore`), for a test.
+#[cfg(any(test, feature = "test-support"))]
+pub fn body_kept_entries(ctx: &egui::Context) -> usize {
+    ctx.data_mut(|data| {
+        data.get_temp_mut_or_default::<BodyStore>(body_store_id())
+            .slots
+            .len()
+    })
+}
+
+/// What decides a body message's kept Undo words and choices besides the body (`body_kept`).
+#[derive(Clone, PartialEq)]
+struct BodyKey {
+    width: u32,
+    scale: u32,
+    style: std::sync::Arc<egui::Style>,
+    fonts: u64,
+    atlas: u64,
+}
+
+/// A body message's kept value, with the body and the key it was made for.
+struct BodyKept<T> {
+    body: Body,
+    key: BodyKey,
+    value: T,
 }
 
 /// A message's Undo words for one room: the whole form (its accessible name and tip), the
@@ -4543,6 +4814,19 @@ pub(in crate::design) struct UndoForm {
     label: String,
     shown: String,
     width: f32,
+    /// The visible form's words, laid before paint (`Action::laid`): a pass that keeps the form
+    /// lays out no Undo words.
+    laid: super::components::LaidAction,
+}
+
+/// One choice of a footer line as its plan keeps it: its whole width (with the `L` before a red
+/// one), its action's own width, and its words laid before paint for a plain choice (`Choice`,
+/// `Primary`, `Lose`). A pass that keeps the plan measures no choice and lays out no words.
+#[derive(Clone)]
+pub(in crate::design) struct ChoiceLaid {
+    width: f32,
+    action: f32,
+    laid: Option<super::components::LaidAction>,
 }
 
 /// The room for an Undo's words on a line of its own under a message of `tone`: the line
@@ -4888,7 +5172,10 @@ impl<A> BodyMessage<A> {
         // that replaces another in the same place has new ids, so it never takes a press that
         // was meant for the old one's focused control; two equal messages side by side differ
         // by their place.
-        let scope = (ui.next_auto_id(), "body_message", typed.body.words.clone());
+        let place = ui.next_auto_id();
+        let mut typed = typed;
+        typed.body.place = Some(place);
+        let scope = (place, "body_message", typed.body.words.clone());
         let pressed = ui
             .push_id(scope, |ui| {
                 if self.compact {
@@ -5488,6 +5775,15 @@ mod tests {
     use super::*;
     use egui;
     use egui_kittest::{Harness, kittest::Queryable};
+
+    /// The whole host's text measures and laid action words (`TEXT_MEASURES`,
+    /// `ACTION_WORDS_LAID`): every widget of the test, from its entry through paint.
+    fn host_work() -> (usize, usize) {
+        (
+            super::super::components::TEXT_MEASURES.with(std::cell::Cell::get),
+            super::super::components::ACTION_WORDS_LAID.with(std::cell::Cell::get),
+        )
+    }
 
     #[allow(
         clippy::disallowed_methods,
@@ -6245,7 +6541,7 @@ mod tests {
     #[test]
     #[allow(
         clippy::disallowed_methods,
-        reason = "the test of the body place `PlacedResult::show` itself"
+        reason = "the test of the body places `PlacedResult::show` and `BodyMessage::show` themselves"
     )]
     fn a_placed_result_shows_its_undo_whole_where_it_fits() {
         use crate::design::test_harness::Themed as _;
@@ -6379,6 +6675,98 @@ mod tests {
             full.state().0,
             Some(9),
             "m-p0-result-line: the Undo's id comes back"
+        );
+        // The typed message's draw path outside a footer (`Reasons::Body`): a body message keeps
+        // its Undo's words and its choices' widths and words by the body and what lays them out
+        // (`Body::body_kept`), as a footer's plan does. This host draws only body messages.
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(480.0, 320.0))
+            .themed_ui_state(
+                // The result's object; the notice's count; whether the notice moves to a place of
+                // its own for each count.
+                |ui, (name, count, moving): &mut (&'static str, usize, bool)| {
+                    let name = *name;
+                    let _ = PlacedResult::new(
+                        crate::sentence!("Removed “{}” from tonight.", name),
+                        UndoStep::of(Verb::Remove, name).pressed_as(1),
+                    )
+                    .show(ui);
+                    let notice = |ui: &mut Ui| {
+                        let _ = BodyMessage::from(
+                            Notice::new(crate::sentence!("{} sessions wait.", *count))
+                                .choice(Choice::new(MessageChoice::Primary("New session"), 2))
+                                .choice(Choice::new(MessageChoice::Choice("Open the plan"), 3)),
+                        )
+                        .show(ui);
+                    };
+                    if *moving {
+                        ui.push_id(("moving", *count), notice);
+                    } else {
+                        notice(ui);
+                    }
+                },
+                ("Kaya", 0, false),
+            );
+        h.run_steps(4);
+        assert!(
+            h.query_by_label("Undo remove Kaya").is_some()
+                && h.query_by_label("New session").is_some()
+                && h.query_by_label("Open the plan").is_some(),
+            "body-reached: the result draws its Undo and the notice its choices"
+        );
+        // The whole host, from its entry through paint: a quiet frame measures no text and lays
+        // out no action's words. Red: an Undo fitted, or a choice measured or laid, every frame.
+        let host = host_work();
+        h.run_steps(5);
+        assert_eq!(
+            host_work(),
+            host,
+            "body-quiet: an unchanged frame with body messages measures no text and lays no words"
+        );
+        // A change of the words at the same length: the body is laid again, and the painted
+        // Undo words are the new ones (read from the paint, not from the accessible name).
+        let painted = |h: &Harness<'_, (&'static str, usize, bool)>, words: &str| {
+            h.output().shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == words)
+            })
+        };
+        assert!(painted(&h, "Undo remove Kaya"), "body-paint-reached");
+        h.state_mut().0 = "Bram";
+        h.run_steps(4);
+        assert!(
+            painted(&h, "Undo remove Bram") && !painted(&h, "Undo remove Kaya"),
+            "body-same-length: the result paints its new Undo words"
+        );
+        // Review of PR 925 (P2): the kept values are bounded. Fifty different notices in one
+        // place take its one slot, each replacing the last: the store's count stays flat. Red: a
+        // slot keyed by the words' scope (`BodyMessage::show`'s), one more for each text.
+        let entries = |h: &Harness<'_, (&'static str, usize, bool)>| body_kept_entries(&h.ctx);
+        let before = entries(&h);
+        for count in 1..=50 {
+            h.state_mut().1 = count;
+            h.run_steps(1);
+        }
+        assert!(
+            before > 0 && painted(&h, "50 sessions wait."),
+            "body-store-reached: the fiftieth notice drew, {before} kept values"
+        );
+        assert_eq!(
+            entries(&h),
+            before,
+            "body-store-place: fifty notices in one place keep one slot"
+        );
+        // Fifty notices, each at a place of its own: a slot no message used in the last frame
+        // goes (`BodyStore::sweep`), so the store holds at most one more than before. Red: no
+        // sweep, one more for each place.
+        h.state_mut().2 = true;
+        for count in 51..=100 {
+            h.state_mut().1 = count;
+            h.run_steps(1);
+        }
+        assert!(
+            painted(&h, "100 sessions wait.") && entries(&h) <= before + 1,
+            "body-store-sweep: fifty places keep at most one more slot than before: {before} then {}",
+            entries(&h)
         );
     }
 
@@ -8557,9 +8945,18 @@ mod tests {
         let mut h = harness_sized(app, 1200.0);
         h.run_steps(4);
         let quiet = footer_work();
+        let host = host_work();
         let frame = h.ctx.cumulative_frame_nr();
         h.run_steps(6);
         let after = footer_work();
+        // The whole host, from its entry through paint: the footers' lines (their words, their
+        // Undos, their choices) measure no text and lay out no action's words on a quiet frame;
+        // the plan keeps the choices' widths and the laid words.
+        assert_eq!(
+            host_work(),
+            host,
+            "footer-quiet: an unchanged frame with footer lines measures no text and lays no words"
+        );
         let frames = h.ctx.cumulative_frame_nr() - frame;
         assert!(
             after.compared > quiet.compared,

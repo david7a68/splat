@@ -523,8 +523,10 @@ struct Paragraph {
     task: Option<(bool, f32, Type)>,
     /// A plan row's leading icon, in its own column: its words, then their galley.
     lead: Option<Lead>,
-    /// Where its linked galley was drawn last, from the reader's top left (layout PR 9b-R2): a
-    /// paragraph out of view registers its links there without being laid out.
+    /// Where its linked galley was drawn last, from its block's top left (layout PR 9b-R2): a
+    /// paragraph out of view registers its links there, below its block's kept top, without
+    /// being laid out. (From the block, not the reader: a block above that drew at a new height
+    /// moves the block's kept top, and its links with it.)
     origin: Option<egui::Vec2>,
 }
 
@@ -618,22 +620,30 @@ fn draw(
         offsets.resize(ops.len(), 0.0);
     }
     // How far this draw's blocks moved from their kept tops (a block drawn again at another
-    // height moves the ones after it).
+    // height moves the ones after it), and whether the block before this one drew.
     let mut moved = 0.0;
+    let mut drew = false;
     for block in 0..ops.len() {
         if let Some((offsets, _, _)) = placed.as_mut() {
             let kept = (skip.is_some() && block < offsets.len()).then(|| offsets[block]);
             if let Some((height, (from, to))) = skip {
+                // After a block that drew, this one starts where the reader's cursor is: a block
+                // that drew at a new height (a wide table that gains its scroll bar's lane as it
+                // comes into view) moves this one, skipped or not (review of PR 882, P2).
+                if drew && let Some(kept) = kept {
+                    moved = ui.cursor().top() - top - kept;
+                }
                 let kept_top = kept.unwrap_or_default() + moved;
                 let kept_bottom = offsets.get(block + 1).copied().unwrap_or(height) + moved;
                 let out = kept_bottom < from || kept_top > to;
                 if out && skippable(&ops[block]) {
+                    drew = false;
                     offsets[block] = kept_top;
                     skipped(
                         ui,
                         &mut ops[block],
                         (reader, block),
-                        origin + egui::vec2(0.0, moved),
+                        origin.x,
                         (top + kept_top, top + kept_bottom),
                         &mut quotes,
                     );
@@ -646,6 +656,7 @@ fn draw(
             if let Some(kept) = kept {
                 moved = offsets[block] - kept;
             }
+            drew = true;
         }
         #[cfg(any(test, feature = "test-support"))]
         BLOCKS_LAID.with(|laid| laid.set(laid.get() + 1));
@@ -692,11 +703,13 @@ fn draw(
                         }
                     }
                     Op::Paragraph(paragraph) => {
+                        // The block's top left: its links' kept places are from it.
+                        let at = egui::pos2(origin.x, ui.cursor().top());
                         draw_paragraph(
                             ui,
                             paragraph,
                             (reader, block),
-                            origin,
+                            at,
                             short_links,
                             row,
                             &mut quotes,
@@ -769,13 +782,13 @@ fn skippable(op: &Op) -> bool {
 
 /// A block out of view (layout PR 9b-R2), at its kept place `(top, bottom)`: nothing is laid
 /// out. A quote's start and end still say where its bar goes, and a paragraph's links are still
-/// controls, each at its kept first target (`origin`: the reader's top left as this draw places
-/// it), so Tab and a screen reader reach them wherever they are.
+/// controls, each at its kept first target (from the block's top and the reader's `left`
+/// edge), so Tab and a screen reader reach them wherever they are.
 fn skipped(
     ui: &mut egui::Ui,
     op: &mut Op,
     links: (egui::Id, usize),
-    origin: egui::Pos2,
+    left: f32,
     (top, bottom): (f32, f32),
     quotes: &mut Quotes,
 ) {
@@ -787,7 +800,12 @@ fn skipped(
                 quotes.bottom = bottom;
             }
             if let (Some(Laid::Linked(laid)), Some(at)) = (&paragraph.laid, paragraph.origin) {
-                register_links(ui, laid, block_id(ui.ctx(), links), origin + at);
+                register_links(
+                    ui,
+                    laid,
+                    block_id(ui.ctx(), links),
+                    egui::pos2(left, top) + at,
+                );
             }
         }
         _ => {}
@@ -4155,6 +4173,105 @@ mod tests {
             "9b-R2-layout: the kept document's texts {:?} are the unkept reader's {:?}",
             texts(&kept),
             texts(&unkept)
+        );
+        // Review of PR 882 (P2): a wide table below the view draws with no scroll bar lane and
+        // gains it as it comes into view. The blocks after it, skipped in that frame, move with
+        // it: a link far below is a control where it draws, and the heading's kept top (where a
+        // typed jump goes) is where it draws, as when every block draws (a held selection).
+        let lane_text: &'static str = Box::leak(
+            format!(
+                "{}| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | \
+                 2nd | 3rd | 4th | 5th |\n| --- | --- | --- | --- | --- | --- | --- | --- | \
+                 --- | --- |\n{}\n{}## The gate\n\nAsk [Rook](splat-note:Rook) at the gate.\n\n{}",
+                "A line of the night.\n\n".repeat(15),
+                "| 5 | +3 | Memorize Spell | 4 | 9 | 4 | 3 | 2 | 0 | 0 |\n".repeat(6),
+                "A line after the table.\n\n".repeat(20),
+                "A line after the gate.\n\n".repeat(10),
+            )
+            .into_boxed_str(),
+        );
+        let mut lane = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(560.0, 320.0))
+            .themed_ui_state(
+                move |ui, (): &mut ()| {
+                    design::layout::ScrollColumn::new("reader")
+                        .hosts_reveals()
+                        .show(ui, |ui| {
+                            with_wide_tables(ui, |ui| {
+                                ui.scope(|ui| {
+                                    ui.set_max_width(360.0);
+                                    show_document(
+                                        ui,
+                                        ReaderSource {
+                                            doc: DocumentId::Entry(uuid::Uuid::from_u128(13)),
+                                            revision: 1,
+                                            text: lane_text,
+                                        },
+                                    );
+                                });
+                            });
+                        });
+                },
+                (),
+            );
+        lane.run_steps(4);
+        // Rook's link, from the last line of the night (in view whenever the table is: the
+        // selection below may scroll the column a little).
+        let rook = |harness: &egui_kittest::Harness<'_, ()>| {
+            let night = harness
+                .query_all_by_role_and_label(egui::accesskit::Role::Label, "A line of the night.")
+                .map(|node| node.rect().top())
+                .next_back()
+                .unwrap_or_default();
+            harness
+                .query_all_by_role_and_label(egui::accesskit::Role::Link, "Rook (opens Rook)")
+                .map(|node| node.rect().translate(egui::vec2(0.0, -night)))
+                .collect::<Vec<_>>()
+        };
+        let gate_block = kept_maps(&lane.ctx)[0]
+            .0
+            .iter()
+            .find(|(words, _)| words == "The gate")
+            .map(|(_, block)| *block)
+            .expect("the gate in the heading map");
+        let gate_top =
+            |harness: &egui_kittest::Harness<'_, ()>| kept_offsets(&harness.ctx)[0][gate_block];
+        let before = (rook(&lane), gate_top(&lane));
+        // The table's top comes into view; the blocks after it stay below the view.
+        lane.hover_at(egui::pos2(200.0, 160.0));
+        lane.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -400.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        lane.run_steps(10);
+        lane.remove_cursor();
+        lane.run_steps(2);
+        let seen = (rook(&lane), gate_top(&lane));
+        let line = lane
+            .query_all_by_role_and_label(egui::accesskit::Role::Label, "A line of the night.")
+            .map(|node| node.rect())
+            .find(|rect| rect.top() > 0.0 && rect.bottom() < 320.0)
+            .expect("a line of the night in view");
+        let (from, to) = (
+            line.left_center() + egui::vec2(2.0, 0.0),
+            line.right_center() - egui::vec2(2.0, 0.0),
+        );
+        lane.hover_at(from);
+        lane.event(press(from, true));
+        lane.run_ok();
+        lane.event(egui::Event::PointerMoved(to));
+        lane.run_ok();
+        lane.event(press(to, false));
+        lane.run_steps(3);
+        let drawn = (rook(&lane), gate_top(&lane));
+        assert!(
+            seen.1 > before.1 && seen.0.len() == 1 && seen.0[0].top() > 320.0 && seen == drawn,
+            "9b-R2-lane: with the table in view (its lane gained: the gate from {} to {}), the \
+             link far below and the gate's kept top {seen:?} are where every block draws them \
+             {drawn:?}",
+            before.1,
+            seen.1
         );
         // PR 861 review (P2): a new pane width reflows a wide table above the heading while the
         // prose keeps its measure (so the key and the kept offsets stand). A jump in that very
