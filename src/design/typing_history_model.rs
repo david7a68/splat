@@ -955,3 +955,78 @@ fn an_app_write_at_a_composition_loses_no_word() {
         );
     }
 }
+
+/// A write among typed words that equal letters hide (issue #900): `éa`; the DM types `é` after
+/// the first `é`, then another `é` at the same place, with no pause; the app changes the second
+/// typed `é` to `X`; Undo. The step holds two edits, and its caret names a wrong place for
+/// them (the start). Read so, the write would stand at the older `é` and take it out (`Xa`).
+/// The step is not kept: Undo changes nothing, and no letter is lost.
+#[test]
+fn a_write_among_typed_equal_letters_ends_the_history() {
+    let typed = || Step::Type {
+        at: 1,
+        words: "é".to_owned(),
+        settle: false,
+    };
+    let result = run_with(
+        "éa",
+        &[typed(), typed(), app(2, 1, "X"), Step::Undo],
+        Order::Characters,
+        &[],
+    );
+    assert_eq!(result, Ok("ééXa".to_owned()));
+}
+
+/// The Notes panel's sequence (`sessions::page`'s panel test), in letters: typing below, a
+/// summary above it, Undo; then typing after the summary, a second summary below it, Undo.
+#[test]
+fn the_notes_panels_sequence() {
+    let typed = |at: u16, words: &str| Step::Type {
+        at,
+        words: words.to_owned(),
+        settle: false,
+    };
+    let start = "N.\n\n## T\n- b.\n";
+    let result = run(
+        start,
+        &[
+            typed(14, " Th."),
+            app(2, 0, "\n\nS2."),
+            Step::Undo,
+            Step::Undo,
+            typed(7, " Ni."),
+            app(11, 0, "\n\nS4."),
+            Step::Undo,
+        ],
+    );
+    assert_eq!(result, Ok("N.\n\nS2.\n\nS4.\n\n## T\n- b.\n".to_owned()));
+}
+
+/// A write over a part of the typed words (the Notes panel's renamed link with a summary above
+/// it: one change from the first changed letter to the last): the DM types a link at the end;
+/// the app's write runs from the summary's place into the typed link. The step is not kept:
+/// Undo changes nothing. Placed, it would take back half of the typing and leave a broken link.
+#[test]
+fn a_write_over_a_part_of_the_typed_words_ends_the_history() {
+    let typed = Step::Type {
+        at: 9,
+        words: " [[Old p]].".to_owned(),
+        settle: false,
+    };
+    let write = app(2, 13, "\n\nS3.\n\n## T\n [[New");
+    let result = run("S.\n\n## T\n", &[typed, write, Step::Undo]);
+    assert_eq!(
+        result,
+        Ok("S.\n\nS3.\n\n## T\n [[New p]].".to_owned()),
+        "a write over a part of the typed words ends the history"
+    );
+}
+
+/// Typed words at a place that equal letters hide, and a write that adds words there: `a`; the
+/// DM types `a` after it; the app writes `b` between them; Undo. The typed `a` can be the first
+/// or the second, and the two readings give other texts (`ba`, `ab`), so the step is not kept.
+#[test]
+fn typed_words_at_a_hidden_place_keep_no_uncertain_step() {
+    let result = run("a", &[type_at(1, "a"), app(1, 0, "b"), Step::Undo]);
+    assert_eq!(result, Ok("aba".to_owned()));
+}
