@@ -846,52 +846,79 @@ fn an_app_write_at_a_composition_loses_no_word() {
     use egui::ImeEvent::{Commit, Disabled, Enabled, Preedit};
     let preedit = |words: &str| Preedit(words.to_owned());
     let commit = || Commit("か".to_owned());
-    // Each trace: the events before the app's write, the events after it, and the text after
-    // each of those. The write lands while the composition is open in all but the last.
-    let traces: [(&str, Vec<egui::ImeEvent>, Vec<egui::ImeEvent>, Vec<&str>); 6] = [
-        (
-            "more open words, an empty Preedit, then the Commit (as a platform sends them)",
-            vec![Enabled, preedit("k")],
-            vec![preedit("ka"), preedit(""), commit(), Disabled],
-            vec![
-                "APP oneka two",
-                "APP one two",
-                "APP oneか two",
-                "APP oneか two",
+    // One setup: `one two`, the caret after `one`, a composition open with `k`, then the app
+    // writes `APP ` at the start. Each row is one way the composition ends (the last row: it
+    // ended before the write).
+    struct Row {
+        name: &'static str,
+        /// The events before the app's write.
+        before: Vec<egui::ImeEvent>,
+        /// The events after it, and the whole text after each.
+        after: Vec<(egui::ImeEvent, &'static str)>,
+        /// The whole text at the end.
+        end: &'static str,
+    }
+    let open = || vec![Enabled, preedit("k")];
+    let rows = [
+        Row {
+            name: "a direct Commit (910-a)",
+            before: open(),
+            after: vec![(commit(), "APP oneか two")],
+            end: "APP oneか two",
+        },
+        Row {
+            name: "a direct Commit, with no Enabled before the composition",
+            before: vec![preedit("k")],
+            after: vec![(commit(), "APP oneか two")],
+            end: "APP oneか two",
+        },
+        Row {
+            name: "more open words, an empty Preedit, then the Commit (a platform's order)",
+            before: open(),
+            after: vec![
+                (preedit("ka"), "APP oneka two"),
+                (preedit(""), "APP one two"),
+                (commit(), "APP oneか two"),
+                (Disabled, "APP oneか two"),
             ],
-        ),
-        (
-            "a direct Commit (910-a)",
-            vec![Enabled, preedit("k")],
-            vec![commit()],
-            vec!["APP oneか two"],
-        ),
-        (
-            "a direct Commit, with no Enabled before the composition",
-            vec![preedit("k")],
-            vec![commit()],
-            vec!["APP oneか two"],
-        ),
-        (
-            "Disabled, then the Commit",
-            vec![Enabled, preedit("k")],
-            vec![Disabled, commit()],
-            vec!["APP onek two", "APP oneか two"],
-        ),
-        (
-            "Disabled, Enabled, then the Commit",
-            vec![Enabled, preedit("k")],
-            vec![Disabled, Enabled, commit()],
-            vec!["APP onek two", "APP onek two", "APP oneか two"],
-        ),
-        (
-            "the write right after the Commit",
-            vec![Enabled, preedit("k"), preedit(""), commit(), Disabled],
-            vec![],
-            vec![],
-        ),
+            end: "APP oneか two",
+        },
+        Row {
+            name: "ended with no Commit (Disabled): the open words stay as they are",
+            before: open(),
+            after: vec![(Disabled, "APP onek two")],
+            end: "APP onek two",
+        },
+        Row {
+            name: "Disabled, then the Commit",
+            before: open(),
+            after: vec![(Disabled, "APP onek two"), (commit(), "APP oneか two")],
+            end: "APP oneか two",
+        },
+        Row {
+            name: "Disabled, Enabled, then the Commit",
+            before: open(),
+            after: vec![
+                (Disabled, "APP onek two"),
+                (Enabled, "APP onek two"),
+                (commit(), "APP oneか two"),
+            ],
+            end: "APP oneか two",
+        },
+        Row {
+            name: "the write right after the Commit",
+            before: vec![Enabled, preedit("k"), preedit(""), commit(), Disabled],
+            after: Vec::new(),
+            end: "APP oneか two",
+        },
     ];
-    for (name, before, after, texts) in traces {
+    for row in rows {
+        let Row {
+            name,
+            before,
+            after,
+            end,
+        } = row;
         let mut harness = page("one two");
         select(&harness, 3, 3);
         for event in before {
@@ -905,28 +932,26 @@ fn an_app_write_at_a_composition_loses_no_word() {
             format!("APP {}", stages[0]),
             "{name}: the app's write stands before the words"
         );
-        let after: Vec<String> = after
-            .into_iter()
-            .map(|event| {
-                ime(&mut harness, event);
-                shown(&harness)
-            })
-            .collect();
-        assert_eq!(
-            after, texts,
-            "{name}: the composition goes on in its own words after the app's write"
-        );
-        stages.extend(after);
+        for (event, text) in after {
+            ime(&mut harness, event);
+            stages.push(shown(&harness));
+            assert_eq!(
+                shown(&harness),
+                text,
+                "{name}: the composition goes on in its own words after the app's write: \
+                 {stages:?}"
+            );
+        }
         assert_eq!(
             shown(&harness),
-            "APP oneか two",
-            "{name}: the DM's committed words stand where the DM put them: {stages:?}"
+            end,
+            "{name}: the DM's words stand where the DM put them: {stages:?}"
         );
         undo_and_redo_keep(&mut harness, &mut stages);
         assert_eq!(
             shown(&harness),
-            "APP oneか two",
-            "{name}: the committed words are there after Ctrl+Z and Ctrl+Y: {stages:?}"
+            end,
+            "{name}: the same words are there after Ctrl+Z and Ctrl+Y: {stages:?}"
         );
     }
 }
