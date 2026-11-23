@@ -2214,6 +2214,10 @@ impl Splat {
                         &encounters::Story {
                             events: &self.timeline.events,
                             sessions: &sessions,
+                            revision: Some((
+                                self.timeline.revision(),
+                                self.sessions.notes_revision(),
+                            )),
                         },
                     );
                 } else {

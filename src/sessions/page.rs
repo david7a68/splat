@@ -2759,6 +2759,12 @@ impl Sessions {
         self.select(self.current().or(self.notes.first().map(|note| note.id)));
     }
 
+    /// A count that changes when a listing of the folder finds other notes (an id, a file or a
+    /// label): what `links` says changes only with it, but for the mentions.
+    pub fn notes_revision(&self) -> u64 {
+        self.notes_revision
+    }
+
     /// The session the DM chose to play, when they chose.
     pub fn chosen_session(&self) -> Option<Option<Uuid>> {
         self.events_to

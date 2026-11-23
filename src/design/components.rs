@@ -975,7 +975,19 @@ pub struct Action<'a> {
     /// ellipsis (a choice whose fixed words must all show).
     wraps: bool,
     /// Its words as its caller laid them before paint (`Action::laid`): paint lays out none.
-    laid: Option<Arc<egui::Galley>>,
+    laid: Option<LaidAction>,
+}
+
+/// An action's words, keyboard hint and icon laid before paint ([`Action::laid_words`]),
+/// without colour: paint gives them the colour of the action's kind and state as it paints
+/// (a blocked primary's muted words, a selected one's). Paint uses them only while their font
+/// is the one it would lay its words in: a primary that a selection or the reserved primary
+/// turns secondary lays its own words (and a test build counts them, `ACTION_WORDS_LAID`).
+#[derive(Clone, Debug)]
+pub struct LaidAction {
+    words: Arc<egui::Galley>,
+    key: Option<Arc<egui::Galley>>,
+    icon: Option<Arc<egui::Galley>>,
 }
 
 /// How far a quiet `line_start` action hangs left of the text edge: its padding.
@@ -1126,15 +1138,7 @@ impl<'a> Action<'a> {
     }
 
     pub fn show(mut self, ui: &mut Ui) -> Response {
-        if self.kind == Kind::Primary
-            && (self.selected
-                || ui.ctx().data(|data| {
-                    data.get_temp::<bool>(Id::new("primary_reserved"))
-                        .unwrap_or(false)
-                }))
-        {
-            self.kind = Kind::Secondary;
-        }
+        self.kind = self.shown_kind(ui);
         let enabled = self.blocked.is_none();
         // `add_enabled` keeps the parent's layout, so wrapped rows still wrap.
         let mut response = ui.add_enabled(enabled, |ui: &mut Ui| self.paint(ui));
@@ -1151,8 +1155,28 @@ impl<'a> Action<'a> {
         response
     }
 
+    /// The kind it paints as: a primary that is selected, or that comes after the reserved
+    /// primary, paints as a secondary.
+    fn shown_kind(&self, ui: &Ui) -> Kind {
+        if self.kind == Kind::Primary
+            && (self.selected
+                || ui.ctx().data(|data| {
+                    data.get_temp::<bool>(Id::new("primary_reserved"))
+                        .unwrap_or(false)
+                }))
+        {
+            Kind::Secondary
+        } else {
+            self.kind
+        }
+    }
+
     fn font(&self) -> Type {
-        if self.kind == Kind::Primary {
+        self.font_of(self.kind)
+    }
+
+    fn font_of(&self, kind: Kind) -> Type {
+        if kind == Kind::Primary {
             Type::Heading
         } else if self.plain {
             Type::Body
@@ -1169,30 +1193,38 @@ impl<'a> Action<'a> {
         }
     }
 
-    /// Its words as laid before paint by a caller that keeps its layout (a measured list's line,
-    /// layout 11c): paint draws them and lays out no words. Lay them with [`Self::laid_words`]
-    /// in the room the action has, and lay them again when that room, the fonts, the scale or
-    /// the theme change. Not for an action whose words wrap.
-    pub fn laid(mut self, words: Arc<egui::Galley>) -> Self {
+    /// Its words, keyboard hint and icon as laid before paint by a caller that keeps its layout
+    /// (a measured list's line, layout 11c): paint draws them and lays out no text. Lay them
+    /// with [`Self::laid_words`] in the room the action has, and lay them again when that room,
+    /// the fonts, the scale or the atlas change; they hold no colour, so the theme and the
+    /// action's state need no new layout. Not for an action whose words wrap.
+    pub fn laid(mut self, laid: LaidAction) -> Self {
         debug_assert!(!self.wraps, "a wrapping action lays out its own words");
-        self.laid = Some(words);
+        self.laid = Some(laid);
         self
     }
 
-    /// Its words laid as paint lays them in a place `width` wide: one line, cut at its room, in
-    /// its kind's colour (an enabled action's), for [`Self::laid`].
-    pub fn laid_words(&self, ui: &Ui, width: f32) -> Arc<egui::Galley> {
+    /// Its words, keyboard hint and icon laid as paint lays them in a place `width` wide (the
+    /// words on one line, cut at their room; in the font of the kind it paints as), without
+    /// colour, for [`Self::laid`].
+    pub fn laid_words(&self, ui: &Ui, width: f32) -> LaidAction {
+        let small = Type::Small.font(ui);
         let key_room = self
             .key
-            .map_or(0.0, |key| number_width(ui, key, &Type::Small.font(ui)) + S);
+            .map_or(0.0, |key| number_width(ui, key, &small) + S);
         let room = width - 2.0 * self.padding() - self.icon_width() - key_room;
-        let c = colors();
-        let foreground = match self.kind {
-            Kind::Primary => c.on_accent,
-            Kind::Secondary | Kind::Quiet => c.text,
-            Kind::Destructive => c.destructive,
-        };
-        one_line(ui, self.label, self.font().font(ui), foreground, room)
+        let font = self.font_of(self.shown_kind(ui)).font(ui);
+        LaidAction {
+            words: one_line(ui, self.label, font, Color32::PLACEHOLDER, room),
+            key: self
+                .key
+                .map(|key| one_line(ui, key, small, Color32::PLACEHOLDER, 60.0)),
+            icon: self.icon.map(|icon| {
+                ui.fonts_mut(|fonts| {
+                    fonts.layout_no_wrap(icon.to_owned(), Type::Body.font(ui), Color32::PLACEHOLDER)
+                })
+            }),
+        }
     }
 
     fn icon_width(&self) -> f32 {
@@ -1226,32 +1258,23 @@ impl<'a> Action<'a> {
             .max(self.height)
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-    )]
-    fn paint(&self, ui: &mut Ui) -> Response {
-        let c = colors();
-        let font = self.font().font(ui);
-        let padding = self.padding();
-        let icon_width = self.icon_width();
+    /// Its words, keyboard hint and icon laid by paint itself, in their colours: every text
+    /// paint lays out comes from here (a test build counts each call, `ACTION_WORDS_LAID`), so
+    /// an action given what was laid ([`Self::laid`]) lays out none.
+    fn lay_own(
+        &self,
+        ui: &Ui,
+        font: FontId,
+        (foreground, key_color): (Color32, Color32),
+    ) -> LaidAction {
+        #[cfg(any(test, feature = "test-support"))]
+        ACTION_WORDS_LAID.with(|laid| laid.set(laid.get() + 1));
+        let small = Type::Small.font(ui);
         let key_room = self
             .key
-            .map_or(0.0, |key| number_width(ui, key, &Type::Small.font(ui)) + S);
-        let room = ui.available_width() - 2.0 * padding - icon_width - key_room;
-        let foreground = match self.kind {
-            Kind::Primary if !ui.is_enabled() => c.muted,
-            Kind::Primary => c.on_accent,
-            Kind::Secondary | Kind::Quiet => c.text,
-            Kind::Destructive => c.destructive,
-        };
-        #[cfg(any(test, feature = "test-support"))]
-        if self.laid.is_none() {
-            ACTION_WORDS_LAID.with(|laid| laid.set(laid.get() + 1));
-        }
-        let galley = if let Some(laid) = &self.laid {
-            Arc::clone(laid)
-        } else if self.wraps {
+            .map_or(0.0, |key| number_width(ui, key, &small) + S);
+        let room = ui.available_width() - 2.0 * self.padding() - self.icon_width() - key_room;
+        let words = if self.wraps {
             let mut job = LayoutJob::simple(
                 self.label.replace(['\n', '\r'], " "),
                 font,
@@ -1263,25 +1286,80 @@ impl<'a> Action<'a> {
         } else {
             one_line(ui, self.label, font, foreground, room)
         };
+        LaidAction {
+            words,
+            key: self
+                .key
+                .map(|key| one_line(ui, key, small, key_color, 60.0)),
+            icon: self.icon.map(|icon| {
+                ui.fonts_mut(|fonts| {
+                    fonts.layout_no_wrap(icon.to_owned(), Type::Body.font(ui), foreground)
+                })
+            }),
+        }
+    }
+
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
+    fn paint(&self, ui: &mut Ui) -> Response {
+        let c = colors();
+        let font = self.font().font(ui);
+        let padding = self.padding();
+        let icon_width = self.icon_width();
+        let foreground = match self.kind {
+            Kind::Primary if !ui.is_enabled() => c.muted,
+            Kind::Primary => c.on_accent,
+            Kind::Secondary | Kind::Quiet => c.text,
+            Kind::Destructive => c.destructive,
+        };
+        // Laid words in another font (a primary that paints as a secondary) are not its words.
+        let laid = self.laid.as_ref().filter(|laid| {
+            laid.words
+                .job
+                .sections
+                .first()
+                .is_none_or(|section| section.format.font_id == font)
+                && laid.key.is_some() == self.key.is_some()
+                && laid.icon.is_some() == self.icon.is_some()
+        });
+        let key_color = foreground.gamma_multiply(0.75);
+        let LaidAction {
+            words: galley,
+            key,
+            icon,
+        } = match laid {
+            Some(laid) => laid.clone(),
+            None => self.lay_own(ui, font, (foreground, key_color)),
+        };
         // A wrapped label grows the control by its extra lines; one line keeps its height.
         let height = if self.wraps {
             self.height.max(galley.size().y + 2.0 * XS)
         } else {
             self.height
         };
-        let key = self.key.map(|key| {
-            one_line(
-                ui,
-                key,
-                Type::Small.font(ui),
-                foreground.gamma_multiply(0.75),
-                60.0,
-            )
-        });
         let key_width = key.as_ref().map_or(0.0, |key| key.size().x + S);
+        // The room its `Ui` gives it bounds it (review of PR 895, P2): its square and its least
+        // width never take it past that room. A `line_start` action may also hang its padding and
+        // icon into the gutter, as below.
+        let given = ui.available_width().max(0.0)
+            + if self.kind == Kind::Quiet && self.line_start {
+                padding + icon_width
+            } else {
+                0.0
+            };
         let width = (galley.size().x + 2.0 * padding + icon_width + key_width)
             .max(self.height)
-            .max(self.min_width.unwrap_or_default());
+            .max(self.min_width.unwrap_or_default())
+            .min(given);
+        // In a narrower room it gives up its parts in turn (its words were already cut to the
+        // room when they were laid): first its keyboard hint, then its words (its icon alone),
+        // then its icon. A part shows only where it fits, so nothing paints outside its rect.
+        let inner = width - 2.0 * padding;
+        let show_key = galley.size().x + icon_width + key_width <= inner;
+        let show_words = galley.size().x + icon_width <= inner;
+        let show_icon = icon_width <= width;
         // The padding before the icon and the words: less only for a `line_start` hang that
         // the clip leaves short (below).
         let mut left_padding = padding;
@@ -1376,28 +1454,32 @@ impl<'a> Action<'a> {
             stroke,
             StrokeKind::Inside,
         );
-        let mut x = rect.left() + left_padding;
-        if let Some(icon) = self.icon {
-            ui.painter().text(
-                pos2(x, rect.center().y),
-                Align2::LEFT_CENTER,
-                icon,
-                Type::Body.font(ui),
-                foreground,
-            );
+        // Each part it shows fits its rect (above), so none paints outside it.
+        let painter = ui.painter();
+        let mut x = if show_words {
+            rect.left() + left_padding
+        } else {
+            // Its icon alone, centred in what is left.
+            rect.left() + ((rect.width() - icon_width) / 2.0).max(0.0)
+        };
+        if let Some(icon) = icon.filter(|_| show_icon) {
+            let at = pos2(x, rect.center().y - icon.size().y / 2.0);
+            painter.galley(at, icon, foreground);
             x += icon_width;
         }
         let label_width = galley.size().x;
-        ui.painter().galley(
-            pos2(x, rect.center().y - galley.size().y / 2.0),
-            galley,
-            foreground,
-        );
-        if let Some(key) = key {
-            ui.painter().galley(
+        if show_words {
+            painter.galley(
+                pos2(x, rect.center().y - galley.size().y / 2.0),
+                galley,
+                foreground,
+            );
+        }
+        if let Some(key) = key.filter(|_| show_key) {
+            painter.galley(
                 pos2(x + label_width + S, rect.center().y - key.size().y / 2.0),
                 key,
-                foreground,
+                key_color,
             );
         }
         if response.has_focus() {
@@ -3868,23 +3950,49 @@ pub(super) fn scroll_part<R>(
             }
             let out = add(ui);
             // A control inside that gains keyboard focus scrolls into view, once: Tab to an Undo
-            // the part has scrolled away shows it. A later wheel is not pulled back. A change of
-            // focus in a pass with a pointer press, hold or release is not looked up: egui's
-            // `read_response` drops the focus of a widget that such a press is not on, so a click
-            // elsewhere (Lookup in the rail) would lose the focus it just gave its search field.
+            // the part has scrolled away shows it. A later wheel is not pulled back. A focus that
+            // comes in a pass with the DM's press, hold or release in the part is not revealed:
+            // the click was on it. Review of #875 (P2): the press is judged by the one entry
+            // point (`reveal::cancel`) with the part's own view as its owner, so a press in
+            // another column (Lookup in the rail) does not hold it. The focused control's place
+            // is read from the pass's widgets, not with egui's `read_response`, which drops the
+            // focus of a widget that a click is not on (the rail's click would take the focus it
+            // just gave Lookup's search field).
             let focused = ui.ctx().memory(|memory| memory.focused());
             let seen = id.with("seen_focus");
-            let pointer = ui.input(|input| {
-                let pointer = &input.pointer;
-                pointer.any_down() || pointer.any_pressed() || pointer.any_released()
-            });
+            // The part's own view, left of its lane: egui keeps a vertical scroll area's clip as
+            // wide as its parent's, which would take a press beside the part for one in it.
+            let view = Rect::from_min_max(
+                inner_rect.min,
+                pos2(inner_rect.right() - lane, inner_rect.bottom()),
+            )
+            .intersect(ui.clip_rect());
+            let pressing = super::reveal::cancel::input(
+                ui,
+                super::reveal::cancel::Owner {
+                    key: id,
+                    view,
+                    area: None,
+                },
+            )
+            .pressing();
             if ui.ctx().data(|data| data.get_temp::<Option<Id>>(seen)) != Some(focused) {
                 ui.ctx().data_mut(|data| data.insert_temp(seen, focused));
                 if let Some(rect) = focused
-                    .filter(|_| !pointer)
+                    .filter(|_| !pressing)
                     .filter(|focused| *focused != focus)
-                    .and_then(|focused| ui.ctx().read_response(focused))
-                    .map(|response| reveal_rect(ui.ctx(), response.id, response.rect))
+                    .and_then(|focused| {
+                        ui.ctx()
+                            .viewport(|viewport| {
+                                viewport
+                                    .this_pass
+                                    .widgets
+                                    .get(focused)
+                                    .or_else(|| viewport.prev_pass.widgets.get(focused))
+                                    .map(|widget| widget.rect)
+                            })
+                            .map(|rect| reveal_rect(ui.ctx(), focused, rect))
+                    })
                     .filter(|rect| ui.min_rect().contains_rect(*rect))
                 {
                     ui.scroll_to_rect(rect, None);
@@ -8420,6 +8528,49 @@ mod tests {
                     && at.bottom() <= size.y + 0.5,
                 "{mode} at {size:?} the footer {at:?} of 21 results follows the save row {save:?} by `S`, and ends in the pane; in the pane it is taller than a third of it, by hand a third at most"
             );
+            // Review of #875 (P2), `m-p0-part-press`: a press held in another column does not
+            // hold the part's focus reveal (`reveal::cancel`, the part its owner). The first Undo
+            // takes the keyboard, and the part scrolls to it; then, with a press held below the
+            // outside field, the last Undo takes it and comes into the part's view.
+            harness.get_by_label("Undo it").focus();
+            harness.run_steps(3);
+            let hidden = text(&harness, "Undo extra 0");
+            let overflows =
+                !hidden.is_some_and(|undo| undo.is_positive() && at.contains_rect(undo));
+            // A part tall enough for all 21 results (the pane at 1920) has nothing to scroll to.
+            assert!(
+                overflows || (!by_hand && size.x > 1500.0),
+                "{mode} at {size:?} m-p0-part-press-setup: the last Undo {hidden:?} is out of the \
+                 part {at:?}"
+            );
+            let beside = pos2(size.x * 0.85, size.y * 0.6);
+            for (pressed, step) in [(true, 1), (false, 0)].into_iter().filter(|_| overflows) {
+                if pressed {
+                    harness.event(egui::Event::PointerMoved(beside));
+                }
+                harness.event(egui::Event::PointerButton {
+                    pos: beside,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.run_steps(step);
+                if pressed {
+                    harness.get_by_label("Undo extra 0").focus();
+                    harness.run_steps(3);
+                    let held = harness.ctx.input(|input| input.pointer.any_down());
+                    let shown = text(&harness, "Undo extra 0");
+                    assert!(
+                        held && focused(&harness) == last_undo
+                            && shown
+                                .is_some_and(|undo| undo.is_positive() && at.contains_rect(undo)),
+                        "{mode} at {size:?} m-p0-part-press: with a press held beside the pane \
+                         ({held}), the last Undo that takes the keyboard comes into the part \
+                         {at:?}: {shown:?}"
+                    );
+                }
+            }
+            harness.run_steps(2);
             extra.set(0);
             harness.run_steps(3);
             // 60 lines again, then the footer empties: a press where it was reaches the body
