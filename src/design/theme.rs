@@ -231,6 +231,8 @@ pub fn atlas_epoch(ctx: &egui::Context) -> u64 {
         Some(kept) => kept.epoch + 1,
         None => 0,
     };
+    #[cfg(any(test, feature = "test-support"))]
+    ATLAS_PROBES.with(|probes| probes.set(probes.get() + 1));
     // A job of its own (text and colour), so no other code holds its galley.
     let galley = ctx.fonts_mut(|fonts| {
         fonts.layout_job(egui::text::LayoutJob::simple_singleline(
@@ -250,6 +252,14 @@ pub fn atlas_epoch(ctx: &egui::Context) -> u64 {
         );
     });
     epoch
+}
+
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// How many times `atlas_epoch` laid out its probe: at most once in a pass, whatever asks,
+    /// so a host that keeps its layouts counts it as the pass's one fixed layout (review of PR
+    /// 892, P3).
+    pub static ATLAS_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 pub fn install(ctx: &egui::Context) {

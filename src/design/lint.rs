@@ -985,6 +985,198 @@ fn a_raw_scroll_read_is_counted() {
     assert_eq!(raw_scroll_reads(text), 3);
 }
 
+/// Review of #875 (P2): after a `.`, a field or method of egui's input or pointer state that reads
+/// the DM's input (its events, keys, presses, pointer place or scroll). Three names are split, so
+/// `raw-scroll-input` does not count them as reads of this file.
+const INPUT_READS: [&str; 39] = [
+    "events",
+    "filtered_events",
+    concat!("raw_", "scroll_delta"),
+    concat!("smooth_", "scroll_delta"),
+    "keys_down",
+    "key_pressed",
+    "key_down",
+    "key_released",
+    "consume_key",
+    "count_and_consume_key",
+    "consume_shortcut",
+    "num_presses",
+    "any_pressed",
+    "any_down",
+    "any_released",
+    "any_click",
+    "press_origin",
+    "press_start_time",
+    concat!("is_decidedly_", "dragging"),
+    "could_any_button_be_click",
+    "button_down",
+    "button_pressed",
+    "button_released",
+    "button_clicked",
+    "button_double_clicked",
+    "button_triple_clicked",
+    "primary_down",
+    "primary_pressed",
+    "primary_released",
+    "primary_clicked",
+    "secondary_down",
+    "secondary_pressed",
+    "secondary_released",
+    "secondary_clicked",
+    "middle_down",
+    "is_moving",
+    "hover_pos",
+    "latest_pos",
+    "interact_pos",
+];
+
+/// Review of #875 (P2): each read of the DM's input in a design file, outside the one cancel entry
+/// point (`mod cancel` in `src/design/reveal.rs`): a field or method of `INPUT_READS` after a
+/// `.`, and an event named by its path (`Event::MouseWheel`, `egui::Event::Key`). A reveal that
+/// reads input itself goes around the entry point, which holds or ends a reveal only on input to
+/// its own column. Read as tokens (`proc_macro2`): words in a comment or a string do not count, a
+/// macro's body (`matches!`) does, and an item under a `cfg` that names `test` does not ship.
+fn input_reads(key: &str, text: &str) -> usize {
+    let tokens = text
+        .parse::<proc_macro2::TokenStream>()
+        .unwrap_or_else(|error| panic!("{key} does not lex: {error}"));
+    input_reads_in(tokens, key == "src/design/reveal.rs")
+}
+
+fn input_reads_in(tokens: proc_macro2::TokenStream, entry: bool) -> usize {
+    use proc_macro2::{Delimiter, TokenTree};
+    let trees: Vec<TokenTree> = tokens.into_iter().collect();
+    let punct = |at: usize, mark: char| matches!(trees.get(at), Some(TokenTree::Punct(punct)) if punct.as_char() == mark);
+    let word = |at: usize, name: &str| matches!(trees.get(at), Some(TokenTree::Ident(word)) if word == name);
+    let mut count = 0;
+    let mut at = 0;
+    while at < trees.len() {
+        let skip = match &trees[at] {
+            // `#[cfg(test)]` (any `cfg` that names `test`) and its item: test code.
+            TokenTree::Punct(mark) if mark.as_char() == '#' => matches!(
+                trees.get(at + 1),
+                Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Bracket && {
+                    let attribute = group.stream().to_string().replace(' ', "");
+                    attribute.starts_with("cfg(") && attribute.contains("test")
+                }
+            ),
+            // The entry point's own module.
+            TokenTree::Ident(name) => entry && name == "mod" && word(at + 1, "cancel"),
+            _ => false,
+        };
+        if skip {
+            // To the item's end: its body, or the `;` or `,` that ends it.
+            at += 1;
+            while at < trees.len()
+                && !matches!(&trees[at], TokenTree::Group(group) if group.delimiter() == Delimiter::Brace)
+                && !punct(at, ';')
+                && !punct(at, ',')
+            {
+                at += 1;
+            }
+            at += 1;
+            continue;
+        }
+        match &trees[at] {
+            TokenTree::Group(group) => count += input_reads_in(group.stream(), entry),
+            TokenTree::Ident(name) => {
+                let name = name.to_string();
+                let field = at >= 1 && punct(at - 1, '.') && INPUT_READS.contains(&name.as_str());
+                let event =
+                    at >= 3 && punct(at - 1, ':') && punct(at - 2, ':') && word(at - 3, "Event");
+                count += usize::from(field || event);
+            }
+            _ => {}
+        }
+        at += 1;
+    }
+    count
+}
+
+/// The files of the modules a parent declares under `#[cfg(test)]` (`#[cfg(test)] mod lint;`),
+/// and the folder of each, whose modules are test code too.
+fn test_only_modules(files: &[(String, String)]) -> std::collections::BTreeSet<String> {
+    use proc_macro2::{Delimiter, TokenTree};
+    let mut found = std::collections::BTreeSet::new();
+    for (key, text) in files {
+        let Ok(tokens) = text.parse::<proc_macro2::TokenStream>() else {
+            continue;
+        };
+        let trees: Vec<TokenTree> = tokens.into_iter().collect();
+        // Where the file's own modules are.
+        let folder = match key.rsplit_once('/') {
+            Some((folder, "mod.rs" | "lib.rs")) => folder.to_owned(),
+            Some(_) => key.trim_end_matches(".rs").to_owned(),
+            None => continue,
+        };
+        for at in 0..trees.len() {
+            let test = matches!(&trees[at], TokenTree::Punct(mark) if mark.as_char() == '#')
+                && matches!(
+                    trees.get(at + 1),
+                    Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Bracket
+                        && group.stream().to_string().replace(' ', "") == "cfg(test)"
+                );
+            if !test {
+                continue;
+            }
+            // A visibility, then `mod name;`.
+            let mut next = at + 2;
+            if matches!(trees.get(next), Some(TokenTree::Ident(word)) if word == "pub") {
+                next += 1;
+                if matches!(trees.get(next), Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Parenthesis)
+                {
+                    next += 1;
+                }
+            }
+            if let (
+                Some(TokenTree::Ident(word)),
+                Some(TokenTree::Ident(name)),
+                Some(TokenTree::Punct(end)),
+            ) = (trees.get(next), trees.get(next + 1), trees.get(next + 2))
+                && word == "mod"
+                && end.as_char() == ';'
+            {
+                found.insert(format!("{folder}/{name}.rs"));
+                found.insert(format!("{folder}/{name}/"));
+            }
+        }
+    }
+    found
+}
+
+#[test]
+fn an_input_read_is_counted() {
+    let text = r#"
+        fn reader(ui: &Ui) -> bool {
+            // input.events in a comment, and "pointer.any_down()" in a string, do not count.
+            let wheel = ui.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::MouseWheel { .. })));
+            let pressed = ui.input(|i| i.pointer.any_pressed() || i.pointer.press_origin().is_some());
+            let events = 3; // a binding named `events` is not a read
+            let a = i.key_pressed(Key::Escape) && i.pointer.any_click();
+            wheel || pressed
+        }
+        #[cfg(test)]
+        mod tests {
+            fn t() { let _ = ui.input(|i| i.pointer.any_down()); }
+        }
+        #[cfg(any(test, feature = "test-support"))]
+        COUNTED.with(|c| c.set(i.events.len()));
+        mod cancel {
+            fn read() { let _ = ui.input(|i| i.events.clone()); }
+        }
+    "#;
+    // events, MouseWheel, any_pressed, press_origin, key_pressed, any_click; the `cancel`
+    // module counts outside its entry file.
+    assert_eq!(input_reads("src/design/pane.rs", text), 7);
+    assert_eq!(input_reads("src/design/reveal.rs", text), 6);
+    // A module declared under `#[cfg(test)]` is test code, and so is its folder.
+    let parent = "#[cfg(test)]\nmod lint;\n#[cfg(test)]\npub(crate) mod harness;\npub mod shown;\n";
+    let test_only = test_only_modules(&[("src/design/mod.rs".to_owned(), parent.to_owned())]);
+    assert!(test_only.contains("src/design/lint.rs") && test_only.contains("src/design/lint/"));
+    assert!(test_only.contains("src/design/harness.rs"));
+    assert!(!test_only.iter().any(|module| module.contains("shown")));
+}
+
 /// Counts the rules of every source file under `folder`, and keeps each file's text by its key
 /// in `files` (for the legacy host freeze).
 fn scan(
@@ -1086,6 +1278,22 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
             &mut files,
         );
     }
+    // Review of #875 (P2): in a design file, each read of the DM's input outside the one cancel
+    // entry point (`design::reveal::cancel`). Test code does not ship: the integration tests, a
+    // file of unit tests, and a module its parent declares under `#[cfg(test)]` (`mod lint;`).
+    let test_only = test_only_modules(&files);
+    for (key, text) in &files {
+        let tests = key.starts_with("src/design/tests/")
+            || key.ends_with("tests.rs")
+            || test_only
+                .iter()
+                .any(|module| key == module || (module.ends_with('/') && key.starts_with(module)));
+        if key.starts_with("src/design/") && !tests {
+            for _ in 0..input_reads(key, text) {
+                *counts.entry(format!("{key} input-read")).or_default() += 1;
+            }
+        }
+    }
     // A module under an allow of `deprecated` writes its own level: an allow (counted), or
     // `#![warn(deprecated)]`, so the compiler stops every alias, import and call in it.
     let crate_root_parents = legacy::crate_root_parents(&files)
@@ -1124,6 +1332,9 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                 }
                 "raw-scroll-input" => {
                     "Judge the DM's scroll, drag or keys for a pending request through the one cancel entry point (`design::reveal::cancel` in the design, `design::reveal::dm_scrolls` outside it), by the request's own column: a raw read goes around it, and input to another column would end the request (Sol 2-011, review of #852)"
+                }
+                "input-read" => {
+                    "Judge the DM's input for a reveal through the one entry point, `design::reveal::cancel`, with the reveal's own column as its owner (review of #875): a reveal that reads input itself would hold or end on input to another column. A part's own reader that moves no view and holds no reveal (a list's arrow keys, a column's resize) is a counted row in `lint_allowlist.txt`, with its reason, for review"
                 }
                 "fitting-escape" => {
                     "Fit the run's words through a design part (`design::TurnHeading`), not a raw cut"
