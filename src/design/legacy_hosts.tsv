@@ -102,7 +102,6 @@ row-register	src/trackers/view.rs	register_block	1	Trackers
 row-register	src/world/page.rs	question_row	1	World
 row-register	src/world/related.rs	page_row	1	World
 row-clip	src/design/components.rs	Action::paint	2	design	design implementation boundary
-row-clip	src/design/components.rs	Footer::show_by_hand	1	design	design implementation boundary
 row-clip	src/design/components.rs	comparison_missing_row	1	design	design implementation boundary
 row-clip	src/design/components.rs	draft_comparison_labeled	1	design	design implementation boundary
 row-clip	src/design/layout.rs	MenuPopup::show	1	design	design implementation boundary
