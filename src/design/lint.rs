@@ -1052,13 +1052,12 @@ fn input_reads_in(tokens: proc_macro2::TokenStream, entry: bool) -> usize {
     let mut at = 0;
     while at < trees.len() {
         let skip = match &trees[at] {
-            // `#[cfg(test)]` (any `cfg` that names `test`) and its item: test code.
+            // An item under a `cfg` that never holds in a shipping build (`#[cfg(test)]`): test
+            // code. Review of #916: `cfg(not(test))` ships, so its reads count.
             TokenTree::Punct(mark) if mark.as_char() == '#' => matches!(
                 trees.get(at + 1),
-                Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Bracket && {
-                    let attribute = group.stream().to_string().replace(' ', "");
-                    attribute.starts_with("cfg(") && attribute.contains("test")
-                }
+                Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Bracket
+                    && test_only_cfg(group)
             ),
             // The entry point's own module.
             TokenTree::Ident(name) => entry && name == "mod" && word(at + 1, "cancel"),
@@ -1081,16 +1080,72 @@ fn input_reads_in(tokens: proc_macro2::TokenStream, entry: bool) -> usize {
             TokenTree::Group(group) => count += input_reads_in(group.stream(), entry),
             TokenTree::Ident(name) => {
                 let name = name.to_string();
-                let field = at >= 1 && punct(at - 1, '.') && INPUT_READS.contains(&name.as_str());
-                let event =
-                    at >= 3 && punct(at - 1, ':') && punct(at - 2, ':') && word(at - 3, "Event");
-                count += usize::from(field || event);
+                let path = at >= 2 && punct(at - 1, ':') && punct(at - 2, ':');
+                // Review of #916: an input method called by its path
+                // (`egui::PointerState::any_down(&i.pointer)`) reads as much as a method call.
+                let field = (at >= 1 && punct(at - 1, '.') || path)
+                    && INPUT_READS.contains(&name.as_str());
+                let event = path && at >= 3 && word(at - 3, "Event");
+                // A type of egui's input named in code (a destructured `InputState`, a
+                // `PointerState` path): its fields are the input.
+                let state = matches!(name.as_str(), "InputState" | "PointerState");
+                count += usize::from(field || event || state);
             }
             _ => {}
         }
         at += 1;
     }
     count
+}
+
+/// Whether an attribute (`[cfg(…)]`'s bracket group) is a `cfg` that never holds in a shipping
+/// build: it requires test mode (`test`, or the `test-support` feature, which only tests enable).
+/// `cfg(not(test))`, `cfg(any(test, debug_assertions))` and other conditions can ship.
+fn test_only_cfg(attribute: &proc_macro2::Group) -> bool {
+    use proc_macro2::{Delimiter, TokenTree};
+    let trees: Vec<TokenTree> = attribute.stream().into_iter().collect();
+    matches!(
+        &trees[..],
+        [TokenTree::Ident(word), TokenTree::Group(predicate)]
+            if word == "cfg" && predicate.delimiter() == Delimiter::Parenthesis
+                && cfg_ships(&predicate.stream().into_iter().collect::<Vec<_>>()) == Some(false)
+    )
+}
+
+/// Whether a `cfg` predicate holds in a shipping build, where `test` and the `test-support`
+/// feature are off: `Some(false)` never, `Some(true)` always, `None` it depends on the build.
+fn cfg_ships(predicate: &[proc_macro2::TokenTree]) -> Option<bool> {
+    use proc_macro2::{Delimiter, TokenTree};
+    match predicate {
+        [TokenTree::Ident(word)] if word == "test" => Some(false),
+        [TokenTree::Ident(word), TokenTree::Punct(mark), TokenTree::Literal(value)]
+            if word == "feature" && mark.as_char() == '=' =>
+        {
+            (value.to_string() == "\"test-support\"").then_some(false)
+        }
+        [TokenTree::Ident(word), TokenTree::Group(group)]
+            if group.delimiter() == Delimiter::Parenthesis =>
+        {
+            let mut parts: Vec<Vec<TokenTree>> = vec![Vec::new()];
+            for tree in group.stream() {
+                match &tree {
+                    TokenTree::Punct(mark) if mark.as_char() == ',' => parts.push(Vec::new()),
+                    _ => parts.last_mut().expect("one part at least").push(tree),
+                }
+            }
+            parts.retain(|part| !part.is_empty());
+            let values: Vec<Option<bool>> = parts.iter().map(|part| cfg_ships(part)).collect();
+            match word.to_string().as_str() {
+                "not" if values.len() == 1 => values[0].map(|value| !value),
+                "all" if values.contains(&Some(false)) => Some(false),
+                "all" if values.iter().all(|value| *value == Some(true)) => Some(true),
+                "any" if values.contains(&Some(true)) => Some(true),
+                "any" if values.iter().all(|value| *value == Some(false)) => Some(false),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
 }
 
 /// The files of the modules a parent declares under `#[cfg(test)]` (`#[cfg(test)] mod lint;`),
@@ -1114,7 +1169,7 @@ fn test_only_modules(files: &[(String, String)]) -> std::collections::BTreeSet<S
                 && matches!(
                     trees.get(at + 1),
                     Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Bracket
-                        && group.stream().to_string().replace(' ', "") == "cfg(test)"
+                        && test_only_cfg(group)
                 );
             if !test {
                 continue;
@@ -1161,14 +1216,23 @@ fn an_input_read_is_counted() {
         }
         #[cfg(any(test, feature = "test-support"))]
         COUNTED.with(|c| c.set(i.events.len()));
+        #[cfg(all(test, feature = "wgpu"))]
+        COUNTED.with(|c| c.set(i.events.len()));
+        // Review of #916: these ship, and their reads count.
+        #[cfg(not(test))]
+        fn shipping(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }
+        #[cfg(any(test, debug_assertions))]
+        fn debug(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }
+        fn by_path(ui: &Ui) -> bool { ui.input(|i| egui::PointerState::any_down(&i.pointer)) }
         mod cancel {
             fn read() { let _ = ui.input(|i| i.events.clone()); }
         }
     "#;
-    // events, MouseWheel, any_pressed, press_origin, key_pressed, any_click; the `cancel`
-    // module counts outside its entry file.
-    assert_eq!(input_reads("src/design/pane.rs", text), 7);
-    assert_eq!(input_reads("src/design/reveal.rs", text), 6);
+    // events, MouseWheel, any_pressed, press_origin, key_pressed, any_click; then `not(test)`'s
+    // and `debug_assertions`' any_down, and by its path `PointerState` and `any_down`; the
+    // `cancel` module counts outside its entry file.
+    assert_eq!(input_reads("src/design/pane.rs", text), 11);
+    assert_eq!(input_reads("src/design/reveal.rs", text), 10);
     // A module declared under `#[cfg(test)]` is test code, and so is its folder.
     let parent = "#[cfg(test)]\nmod lint;\n#[cfg(test)]\npub(crate) mod harness;\npub mod shown;\n";
     let test_only = test_only_modules(&[("src/design/mod.rs".to_owned(), parent.to_owned())]);
