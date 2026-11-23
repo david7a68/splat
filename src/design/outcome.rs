@@ -2117,6 +2117,10 @@ struct Body {
     /// No other kept result of its Undo's verb stands in its footer (`undo_alone`): the Undo
     /// paints `UndoStep::alone` for its room, else `UndoStep::fit`.
     undo_alone: bool,
+    /// The place its owner gives it (`BodyMessage::show`: the next widget's id before its words'
+    /// scope), which keys its kept Undo words and choices (`body_kept`): one slot per place,
+    /// whatever its words. None: the place where it draws.
+    place: Option<egui::Id>,
 }
 
 /// Whether `undo` is the only kept Undo of its verb among a footer's kept Undos (`kept`): the
@@ -2209,6 +2213,7 @@ impl<A> Typed<A> {
                 words_hover: None,
                 help: Vec::new(),
                 undo_alone: false,
+                place: None,
             },
             undo: undo_id,
             choices: ids,
@@ -4666,9 +4671,10 @@ impl Body {
     /// What a body message outside a footer (`Reasons::Body`) keeps of `tag`, made by `make` once
     /// per change: of the body itself, the room `width`, the scale, the style (the theme in it),
     /// the fonts and the atlas epoch (the kept words' galleys hold places in the atlas). A quiet
-    /// frame measures and lays out nothing. The slot is the message's place (the next widget's
-    /// id in its Ui), so a message whose words change takes no new slot; a different body in it
-    /// makes the value again.
+    /// frame measures and lays out nothing. The slot is the message's place (its owner's, else the
+    /// next widget's id in its Ui), so a message whose words change takes no new slot; a different
+    /// body in it makes the value again. The slots live in one store swept each frame
+    /// (`BodyStore`), so a slot no message used in the last frame goes.
     fn body_kept<T: Clone + Send + std::marker::Sync + 'static>(
         &self,
         ui: &Ui,
@@ -4676,7 +4682,8 @@ impl Body {
         width: f32,
         make: impl FnOnce() -> T,
     ) -> T {
-        let slot = egui::Id::new((tag, ui.next_auto_id()));
+        let slot = egui::Id::new((tag, self.place.unwrap_or_else(|| ui.next_auto_id())));
+        let frame = ui.ctx().cumulative_frame_nr();
         let key = BodyKey {
             width: width.to_bits(),
             scale: ui.ctx().pixels_per_point().to_bits(),
@@ -4684,8 +4691,15 @@ impl Body {
             fonts: font_key(ui.ctx()),
             atlas: super::theme::atlas_epoch(ui.ctx()),
         };
-        let kept = ui.data(|data| data.get_temp::<std::sync::Arc<BodyKept<T>>>(slot));
-        if let Some(kept) = kept
+        let kept = ui.data_mut(|data| {
+            let store = data.get_temp_mut_or_default::<BodyStore>(body_store_id());
+            store.sweep(frame);
+            store.slots.get_mut(&slot).map(|(drawn, kept)| {
+                *drawn = frame;
+                kept.clone()
+            })
+        });
+        if let Some(kept) = kept.and_then(|kept| kept.downcast::<BodyKept<T>>().ok())
             && kept.key == key
             && kept.body == *self
         {
@@ -4697,9 +4711,52 @@ impl Body {
             key,
             value: value.clone(),
         });
-        ui.data_mut(|data| data.insert_temp(slot, kept));
+        ui.data_mut(|data| {
+            data.get_temp_mut_or_default::<BodyStore>(body_store_id())
+                .slots
+                .insert(slot, (frame, kept));
+        });
         value
     }
+}
+
+/// Every body message's kept values (`Body::body_kept`), by slot, with the frame that last used
+/// each. Swept once per frame: a slot that no message used in the last frame goes, so the store
+/// holds only the messages on screen, whatever their words and places do (review of PR 925).
+#[derive(Clone, Default)]
+struct BodyStore {
+    swept: u64,
+    slots: std::collections::HashMap<
+        egui::Id,
+        (
+            u64,
+            std::sync::Arc<dyn std::any::Any + Send + std::marker::Sync>,
+        ),
+    >,
+}
+
+impl BodyStore {
+    /// Drop each slot not used in this frame or the one before, once per frame.
+    fn sweep(&mut self, frame: u64) {
+        if self.swept != frame {
+            self.swept = frame;
+            self.slots.retain(|_, (drawn, _)| *drawn + 1 >= frame);
+        }
+    }
+}
+
+fn body_store_id() -> egui::Id {
+    egui::Id::new("design_body_kept")
+}
+
+/// How many kept values the body messages hold now (`BodyStore`), for a test.
+#[cfg(any(test, feature = "test-support"))]
+pub fn body_kept_entries(ctx: &egui::Context) -> usize {
+    ctx.data_mut(|data| {
+        data.get_temp_mut_or_default::<BodyStore>(body_store_id())
+            .slots
+            .len()
+    })
 }
 
 /// What decides a body message's kept Undo words and choices besides the body (`body_kept`).
@@ -5083,7 +5140,10 @@ impl<A> BodyMessage<A> {
         // that replaces another in the same place has new ids, so it never takes a press that
         // was meant for the old one's focused control; two equal messages side by side differ
         // by their place.
-        let scope = (ui.next_auto_id(), "body_message", typed.body.words.clone());
+        let place = ui.next_auto_id();
+        let mut typed = typed;
+        typed.body.place = Some(place);
+        let scope = (place, "body_message", typed.body.words.clone());
         let pressed = ui
             .push_id(scope, |ui| {
                 if self.compact {
@@ -6590,21 +6650,30 @@ mod tests {
         let mut h = Harness::builder()
             .with_size(egui::vec2(480.0, 320.0))
             .themed_ui_state(
-                |ui, name: &mut &'static str| {
+                // The result's object; the notice's count; whether the notice moves to a place of
+                // its own for each count.
+                |ui, (name, count, moving): &mut (&'static str, usize, bool)| {
                     let name = *name;
                     let _ = PlacedResult::new(
                         crate::sentence!("Removed “{}” from tonight.", name),
                         UndoStep::of(Verb::Remove, name).pressed_as(1),
                     )
                     .show(ui);
-                    let _ = BodyMessage::from(
-                        Notice::new(crate::sentence!("No session yet."))
-                            .choice(Choice::new(MessageChoice::Primary("New session"), 2))
-                            .choice(Choice::new(MessageChoice::Choice("Open the plan"), 3)),
-                    )
-                    .show(ui);
+                    let notice = |ui: &mut Ui| {
+                        let _ = BodyMessage::from(
+                            Notice::new(crate::sentence!("{} sessions wait.", *count))
+                                .choice(Choice::new(MessageChoice::Primary("New session"), 2))
+                                .choice(Choice::new(MessageChoice::Choice("Open the plan"), 3)),
+                        )
+                        .show(ui);
+                    };
+                    if *moving {
+                        ui.push_id(("moving", *count), notice);
+                    } else {
+                        notice(ui);
+                    }
                 },
-                "Kaya",
+                ("Kaya", 0, false),
             );
         h.run_steps(4);
         assert!(
@@ -6624,17 +6693,48 @@ mod tests {
         );
         // A change of the words at the same length: the body is laid again, and the painted
         // Undo words are the new ones (read from the paint, not from the accessible name).
-        let painted = |h: &Harness<'_, &'static str>, words: &str| {
+        let painted = |h: &Harness<'_, (&'static str, usize, bool)>, words: &str| {
             h.output().shapes.iter().any(|clipped| {
                 matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == words)
             })
         };
         assert!(painted(&h, "Undo remove Kaya"), "body-paint-reached");
-        *h.state_mut() = "Bram";
+        h.state_mut().0 = "Bram";
         h.run_steps(4);
         assert!(
             painted(&h, "Undo remove Bram") && !painted(&h, "Undo remove Kaya"),
             "body-same-length: the result paints its new Undo words"
+        );
+        // Review of PR 925 (P2): the kept values are bounded. Fifty different notices in one
+        // place take its one slot, each replacing the last: the store's count stays flat. Red: a
+        // slot keyed by the words' scope (`BodyMessage::show`'s), one more for each text.
+        let entries = |h: &Harness<'_, (&'static str, usize, bool)>| body_kept_entries(&h.ctx);
+        let before = entries(&h);
+        for count in 1..=50 {
+            h.state_mut().1 = count;
+            h.run_steps(1);
+        }
+        assert!(
+            before > 0 && painted(&h, "50 sessions wait."),
+            "body-store-reached: the fiftieth notice drew, {before} kept values"
+        );
+        assert_eq!(
+            entries(&h),
+            before,
+            "body-store-place: fifty notices in one place keep one slot"
+        );
+        // Fifty notices, each at a place of its own: a slot no message used in the last frame
+        // goes (`BodyStore::sweep`), so the store holds at most one more than before. Red: no
+        // sweep, one more for each place.
+        h.state_mut().2 = true;
+        for count in 51..=100 {
+            h.state_mut().1 = count;
+            h.run_steps(1);
+        }
+        assert!(
+            painted(&h, "100 sessions wait.") && entries(&h) <= before + 1,
+            "body-store-sweep: fifty places keep at most one more slot than before: {before} then {}",
+            entries(&h)
         );
     }
 
