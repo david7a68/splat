@@ -2086,13 +2086,15 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
 /// first change leaves the mark in the note (read again as the shell reads it); the check box
 /// that stays keeps its id and its focus. Red: a key by the change's place. Astra's P2 on PR 904:
 /// a line's action is keyed by its own identity too, so a rules reload that reorders the lines
-/// and the actions keeps the focused action's focus.
+/// and the actions keeps the focused action's focus; and a change is keyed by what it does on
+/// its line, so the DM's untick of one change stays with it when another change of the SAME line
+/// leaves the mark.
 #[test]
 fn a_due_check_keeps_its_focus_when_the_change_before_it_goes() {
     use crate::design::test_harness::Themed as _;
     use crate::timeline::Kind;
     use egui_kittest::{Harness, kittest::Queryable};
-    const TWO: &str = "> day_marks:\n>   wagon:\n>     name: Supply wagon\n>     at: 3\n>     say: The supply wagon arrives.\n>     changes:\n>     - {tracker: favor, add: 1}\n>     - {tracker: seals, for: Party, add: 1}\n";
+    const TWO: &str = "> day_marks:\n>   wagon:\n>     name: Supply wagon\n>     at: 3\n>     say: The supply wagon arrives.\n>     changes:\n>     - {tracker: favor, add: 1}\n>     - {tracker: seals, for: Party, add: 1}\n>     - {tracker: seals, for: Party, add: 2}\n";
     let mut race = race();
     let note = race.campaign.path.join("Tournament.md");
     let text = fs::read_to_string(&note).unwrap();
@@ -2219,6 +2221,49 @@ fn a_due_check_keeps_its_focus_when_the_change_before_it_goes() {
     assert!(
         h.get_by_label(ACTION).is_focused() && h.ctx.memory(|memory| memory.focused()) == focused,
         "action-key: the action keeps its id and its focus after the lines and actions move"
+    );
+    // Two changes of the same line (the Party's seals, +1 and +2): the DM unticks +1, then +1
+    // leaves the mark and the rules are read again. +2 stays ticked: it does not take +1's key.
+    use eframe::egui::accesskit::Toggled;
+    const PLUS_ONE: &str = "Seals (Party) +1";
+    const PLUS_TWO: &str = "Seals (Party) +2";
+    let ticked = |h: &Harness<'_, Trackers>, name: &str| {
+        use egui_kittest::kittest::NodeT as _;
+        h.get_by_label(name).accesskit_node().data().toggled()
+    };
+    assert_eq!(
+        (ticked(&h, PLUS_ONE), ticked(&h, PLUS_TWO)),
+        (Some(Toggled::True), Some(Toggled::True)),
+        "same-line-reached: both changes of the Party's line are ticked"
+    );
+    h.get_by_label(PLUS_ONE).click();
+    h.run_steps(2);
+    assert_eq!(
+        ticked(&h, PLUS_ONE),
+        Some(Toggled::False),
+        "same-line-reached: the DM unticked +1"
+    );
+    let text = fs::read_to_string(&note).unwrap();
+    let without = text.replacen(">     - {tracker: seals, for: Party, add: 1}\n", "", 1);
+    assert_ne!(without, text, "same-line-reached: +1 leaves the note");
+    fs::write(&note, without).unwrap();
+    race.index = Arc::new(ContentIndex::load(&[], Some(&race.campaign)).unwrap());
+    poll(
+        h.state_mut(),
+        Some(race.index.clone()),
+        Some(&race.campaign),
+        Some(TONIGHT),
+        &race.timeline,
+    );
+    h.run_steps(4);
+    assert!(
+        h.query_by_label(PLUS_ONE).is_none(),
+        "same-line-reached: +1 is gone"
+    );
+    assert_eq!(
+        ticked(&h, PLUS_TWO),
+        Some(Toggled::True),
+        "due-same-line-key: the change that stays keeps its own tick, not the one that left"
     );
 }
 

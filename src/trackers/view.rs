@@ -219,10 +219,11 @@ impl ViewState {
 type Tick = (NoticeRef, ChangeKey);
 
 /// A mark's change by its own identity, not its place in the mark (Astra's P2 on PR 897): the
-/// tracker it changes, its line, and which of the mark's changes to that same line it is. A change
-/// that leaves the mark before it moves no other change's key: its check box keeps its id (and
-/// its focus), and the DM's untick stays with its change.
-type ChangeKey = (String, Option<String>, usize);
+/// tracker it changes, its line, what it does there (its `add` and `set`), and which of the
+/// mark's changes that are the same in all of these it is (Astra's P2 on PR 904). A change that
+/// leaves the mark before it moves no other change's key, also on the same line: its check box
+/// keeps its id (and its focus), and the DM's untick stays with its change.
+type ChangeKey = (String, Option<String>, String, usize);
 
 /// Each change's key, in the mark's order (`ChangeKey`).
 fn change_keys(notice: &super::Notice, mark: Says<'_>) -> Vec<ChangeKey> {
@@ -230,11 +231,12 @@ fn change_keys(notice: &super::Notice, mark: Says<'_>) -> Vec<ChangeKey> {
     for change in mark.changes {
         let tracker = change.tracker.clone().unwrap_or_else(|| notice.key.clone());
         let instance = change.instance.clone();
+        let does = format!("{:?} {:?}", change.add, change.set);
         let nth = keys
             .iter()
-            .filter(|(t, i, _)| *t == tracker && *i == instance)
+            .filter(|(t, i, d, _)| *t == tracker && *i == instance && *d == does)
             .count();
-        keys.push((tracker, instance, nth));
+        keys.push((tracker, instance, does, nth));
     }
     keys
 }
