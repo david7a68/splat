@@ -1316,7 +1316,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounter_run/view.rs", "live_notice", &[Ban::Body]),
         ("src/encounter_run/notice.rs", "header_notice", &[Ban::Body]),
         ("src/encounter_run/view.rs", "toggle", &[Ban::Extras(1)]),
-        ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
         (
@@ -1337,7 +1336,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "use_checkbox",
             &[Ban::Extras(1)],
         ),
-        ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Body]),
         ("src/sessions/page.rs", "recording_row", &[Ban::Body]),
         (
@@ -1685,9 +1683,9 @@ pub(crate) const STAGED: &[Staged] = &[
         "Give the Undo the object its result names, `UndoStep::of(verb, object)`: a lone Undo shows it whenever it fits (M9). An Undo with no object is a named exception the lead rules on.",
         &[
             ("src/design/outcome.rs", 7),
-            ("src/encounters.rs", 4),
+            ("src/encounters.rs", 1),
             ("src/sessions/plan.rs", 1),
-            ("src/timeline/page.rs", 2),
+            ("src/timeline/page.rs", 1),
             ("src/timeline/test_support.rs", 2),
         ],
     ),

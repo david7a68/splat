@@ -1218,13 +1218,18 @@ impl<'a> Driver<'a> {
             .then_some(name)
     }
 
-    /// An added event's Undo (`Undo add`: M0529 waits for layout 11c), when it is on screen; never
-    /// a scene's `Undo add scene`.
+    /// An added event's Undo (`Undo add Long rest`, or `Undo add` with no event to name: M0529
+    /// waits for layout 11c), when it is on screen; never a scene's `Undo add scene`.
     pub fn add_undo(&self) -> Option<String> {
         self.nodes()
-            .iter()
-            .any(|node| node.name == "Undo add" && Self::is_control(node))
-            .then(|| "Undo add".to_owned())
+            .into_iter()
+            .find(|node| {
+                (node.name == "Undo add"
+                    || (node.name.starts_with("Undo add ")
+                        && !node.name.starts_with("Undo add scene")))
+                    && Self::is_control(node)
+            })
+            .map(|node| node.name)
     }
 
     pub fn has_containing(&self, name: &str) -> bool {

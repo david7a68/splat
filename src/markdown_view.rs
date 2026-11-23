@@ -273,6 +273,12 @@ struct Maps {
     headings: Vec<(String, usize)>,
     controls: Vec<Control>,
     offsets: Vec<f32>,
+    /// The whole document's height in the last draw (layout PR 9b-R2), with `offsets` the room
+    /// of every block, so one out of view is not laid out.
+    height: Option<f32>,
+    /// What else sets a block's height in the last draw: a wide table's room (the pane's right
+    /// edge and the clip's), which the key does not hold. When it changes, every block draws.
+    room: Option<(Option<f32>, f32)>,
 }
 
 /// One link control of a prepared document.
@@ -367,6 +373,19 @@ fn show_kept(ui: &mut egui::Ui, source: ReaderSource<'_>) {
             jump = None;
             kept_jump = Some((block, top));
         }
+        // The view, from the reader's top (layout PR 9b-R2): a block wholly outside it is not
+        // laid out; its room is kept. A new room for wide tables lays every block out again.
+        let top = ui.cursor().top();
+        let clip = ui.clip_rect();
+        let room = (
+            ui.ctx()
+                .data(|data| data.get_temp::<f32>(egui::Id::new(TABLE_ROOM))),
+            clip.right(),
+        );
+        if kept.maps.room.replace(room) != Some(room) {
+            kept.maps.height = None;
+        }
+        let view = (clip.top() - top, clip.bottom() - top);
         draw(
             ui,
             &mut kept.ops,
@@ -377,7 +396,7 @@ fn show_kept(ui: &mut egui::Ui, source: ReaderSource<'_>) {
                 at: jump,
                 kept: kept_jump,
             },
-            Some(&mut kept.maps.offsets),
+            Some((&mut kept.maps.offsets, &mut kept.maps.height, view)),
         );
     }
 }
@@ -410,6 +429,50 @@ pub fn kept_galleys(ctx: &egui::Context) -> Vec<Arc<egui::Galley>> {
         }
     }
     galleys
+}
+
+/// Each kept document's block tops from its last draw (layout PR 9b-R2's checks).
+#[cfg(test)]
+pub(crate) fn kept_offsets(ctx: &egui::Context) -> Vec<Vec<f32>> {
+    let readers = ctx.data_mut(|data| {
+        data.get_temp_mut_or_default::<KeptReaders>(egui::Id::new("markdown_kept_readers"))
+            .clone()
+    });
+    let readers = readers
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    readers
+        .values()
+        .filter_map(|(_, kept)| {
+            let kept = kept
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            kept.as_ref().map(|kept| kept.maps.offsets.clone())
+        })
+        .collect()
+}
+
+/// How many blocks the documents the readers keep have (layout PR 9b-R2's checks).
+#[cfg(test)]
+pub(crate) fn kept_blocks(ctx: &egui::Context) -> usize {
+    let readers = ctx.data_mut(|data| {
+        data.get_temp_mut_or_default::<KeptReaders>(egui::Id::new("markdown_kept_readers"))
+            .clone()
+    });
+    let readers = readers
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    readers
+        .values()
+        .map(|(_, kept)| {
+            kept.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_ref()
+                .map_or(0, |kept| kept.ops.len())
+        })
+        .sum()
 }
 
 /// The control map and the heading map of every document a reader keeps prepared (layout PR
@@ -460,6 +523,9 @@ struct Paragraph {
     task: Option<(bool, f32, Type)>,
     /// A plan row's leading icon, in its own column: its words, then their galley.
     lead: Option<Lead>,
+    /// Where its linked galley was drawn last, from the reader's top left (layout PR 9b-R2): a
+    /// paragraph out of view registers its links there without being laid out.
+    origin: Option<egui::Vec2>,
 }
 
 /// A leading icon's words until they are laid out, then their galley.
@@ -519,8 +585,9 @@ struct Jump {
     kept: Option<(usize, f32)>,
 }
 
-/// `jump` is where a typed jump lands as the blocks draw, or is corrected; `offsets`, a kept
-/// document's map of each block's top below the reader's top, written as the blocks draw.
+/// `jump` is where a typed jump lands as the blocks draw, or is corrected; `placed`, a kept
+/// document's placement: each block's top below the reader's top, written as the blocks draw,
+/// its height, and the view (layout PR 9b-R2).
 fn draw(
     ui: &mut egui::Ui,
     ops: &mut [Op],
@@ -528,21 +595,62 @@ fn draw(
     short_links: ShortLinks,
     row: bool,
     jump: Jump,
-    mut offsets: Option<&mut Vec<f32>>,
+    mut placed: Option<Placed<'_>>,
 ) {
     let reader = egui::Id::new(("markdown_reader", from));
     let mut quotes = Quotes::default();
     let top = ui.cursor().top();
-    if let Some(offsets) = offsets.as_mut() {
+    let origin = egui::pos2(ui.max_rect().left(), top);
+    // Layout PR 9b-R2: with every block's room kept from the last draw, a block wholly outside
+    // the view is not laid out. Not while the DM holds a selection: egui's label selection
+    // reaches only labels that draw, so a selection whose end is out of view stays whole.
+    let selecting = ui
+        .ctx()
+        .plugin::<egui::text_selection::LabelSelectionState>()
+        .lock()
+        .has_selection();
+    let skip = placed.as_ref().and_then(|(offsets, height, view)| {
+        (offsets.len() == ops.len() && !selecting)
+            .then_some((**height)?)
+            .map(|h| (h, *view))
+    });
+    if let Some((offsets, _, _)) = placed.as_mut() {
         offsets.resize(ops.len(), 0.0);
     }
-    for (block, op) in ops.iter_mut().enumerate() {
-        if let Some(offsets) = offsets.as_mut() {
+    // How far this draw's blocks moved from their kept tops (a block drawn again at another
+    // height moves the ones after it).
+    let mut moved = 0.0;
+    for block in 0..ops.len() {
+        if let Some((offsets, _, _)) = placed.as_mut() {
+            let kept = (skip.is_some() && block < offsets.len()).then(|| offsets[block]);
+            if let Some((height, (from, to))) = skip {
+                let kept_top = kept.unwrap_or_default() + moved;
+                let kept_bottom = offsets.get(block + 1).copied().unwrap_or(height) + moved;
+                let out = kept_bottom < from || kept_top > to;
+                if out && skippable(&ops[block]) {
+                    offsets[block] = kept_top;
+                    skipped(
+                        ui,
+                        &mut ops[block],
+                        (reader, block),
+                        origin + egui::vec2(0.0, moved),
+                        (top + kept_top, top + kept_bottom),
+                        &mut quotes,
+                    );
+                    continue;
+                }
+                // Drawn: from its kept top, which the blocks skipped before it left room for.
+                leave_room(ui, top + kept_top - ui.cursor().top());
+            }
             offsets[block] = ui.cursor().top() - top;
+            if let Some(kept) = kept {
+                moved = offsets[block] - kept;
+            }
         }
-        match op {
+        #[cfg(any(test, feature = "test-support"))]
+        BLOCKS_LAID.with(|laid| laid.set(laid.get() + 1));
+        match &mut ops[block] {
             Op::Gap(gap) => design::gap(ui, *gap),
-            Op::Rule => design::rule(ui),
             Op::Jump(_) => {
                 if jump.at == Some(block) {
                     design::reveal::jump(
@@ -567,37 +675,135 @@ fn draw(
                     );
                 }
             }
-            Op::Figures(figures, caption) => {
-                for figure in figures.iter() {
-                    crate::art::figure(ui, figure, caption);
-                }
-            }
-            Op::Paragraph(paragraph) => {
-                draw_paragraph(
-                    ui,
-                    paragraph,
-                    (reader, block),
-                    short_links,
-                    row,
-                    &mut quotes,
-                );
-            }
             Op::QuoteStart => quotes.tops.push(ui.cursor().top()),
-            Op::QuoteEnd => {
-                if let Some(top) = quotes.tops.pop() {
-                    let x = ui.max_rect().left()
-                        + QUOTE_INDENT * quotes.tops.len() as f32
-                        + QUOTE_BAR_WIDTH / 2.0;
-                    ui.painter().vline(
-                        x,
-                        top..=quotes.bottom.max(top),
-                        egui::Stroke::new(QUOTE_BAR_WIDTH, colors().rule),
-                    );
-                }
+            Op::QuoteEnd => quote_bar(ui, &mut quotes),
+            op => {
+                // A block with widgets. In a kept document its widgets' ids are its own
+                // (layout PR 9b-R2): a block skipped before it moves none of them, so a label the
+                // DM starts a selection in keeps its id when every block draws for the selection.
+                let own = placed
+                    .is_some()
+                    .then(|| ui.id().with(("markdown_block", block)));
+                in_block(ui, own, |ui| match op {
+                    Op::Rule => design::rule(ui),
+                    Op::Figures(figures, caption) => {
+                        for figure in figures.iter() {
+                            crate::art::figure(ui, figure, caption);
+                        }
+                    }
+                    Op::Paragraph(paragraph) => {
+                        draw_paragraph(
+                            ui,
+                            paragraph,
+                            (reader, block),
+                            origin,
+                            short_links,
+                            row,
+                            &mut quotes,
+                        );
+                    }
+                    Op::Table(table) => draw_table_block(ui, table),
+                    Op::Fields(rows) => show_fields(ui, rows),
+                    Op::Gap(_) | Op::Jump(_) | Op::QuoteStart | Op::QuoteEnd => {}
+                });
             }
-            Op::Table(table) => draw_table_block(ui, table),
-            Op::Fields(rows) => show_fields(ui, rows),
         }
+    }
+    if let Some((_, height, _)) = placed {
+        // The room of the blocks skipped after the last one drawn.
+        if let Some((kept, _)) = skip {
+            leave_room(ui, top + kept + moved - ui.cursor().top());
+        }
+        *height = Some(ui.cursor().top() - top);
+    }
+}
+
+/// Draw a block's widgets: under their own ids (`own`, global) or the reader's. Under its own
+/// ids the block draws in a child, and the reader goes on where the child's cursor stopped, as
+/// if the block drew in the reader: a block that ends in space adds no item space after it.
+fn in_block(ui: &mut egui::Ui, own: Option<egui::Id>, draw: impl FnOnce(&mut egui::Ui)) {
+    match own {
+        Some(id) => {
+            let mut child = ui.new_child(egui::UiBuilder::new().id_salt(id).global_scope(true));
+            draw(&mut child);
+            let used = child.min_rect();
+            let next = child.cursor().top();
+            drop(child);
+            let spacing = ui.spacing().item_spacing.y;
+            let _ = ui.advance_cursor_after_rect(egui::Rect::from_min_max(
+                used.min,
+                egui::pos2(used.max.x, (next - spacing).max(used.min.y)),
+            ));
+        }
+        None => draw(ui),
+    }
+}
+
+/// A kept document's placement as it draws: each block's top and the whole height from the last
+/// draw, and the view (its top and bottom from the reader's top).
+type Placed<'a> = (&'a mut Vec<f32>, &'a mut Option<f32>, (f32, f32));
+
+/// Room of `gap` where blocks were skipped: an empty rect and the spacing after it, as a block
+/// laid out there took. Its auto ids are the reader's own: [`show_document`] draws it in a scope,
+/// so the widgets after it keep theirs whatever it skips.
+fn leave_room(ui: &mut egui::Ui, gap: f32) {
+    if gap > 0.0 {
+        let spacing = ui.spacing().item_spacing.y;
+        let size = egui::vec2(0.0, (gap - spacing).max(0.0));
+        let _ = ui.allocate_exact_size(size, egui::Sense::hover());
+    }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// How many blocks the kept readers laid out (layout PR 9b-R2: a quiet frame lays out only
+    /// the blocks in view).
+    pub static BLOCKS_LAID: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Whether a block out of view can go without being laid out: every block but a table with a
+/// roll marker, whose control has no kept place yet (a named limit of layout PR 9b-R2).
+fn skippable(op: &Op) -> bool {
+    !matches!(op, Op::Table(table) if table.rolls.is_some())
+}
+
+/// A block out of view (layout PR 9b-R2), at its kept place `(top, bottom)`: nothing is laid
+/// out. A quote's start and end still say where its bar goes, and a paragraph's links are still
+/// controls, each at its kept first target (`origin`: the reader's top left as this draw places
+/// it), so Tab and a screen reader reach them wherever they are.
+fn skipped(
+    ui: &mut egui::Ui,
+    op: &mut Op,
+    links: (egui::Id, usize),
+    origin: egui::Pos2,
+    (top, bottom): (f32, f32),
+    quotes: &mut Quotes,
+) {
+    match op {
+        Op::QuoteStart => quotes.tops.push(top),
+        Op::QuoteEnd => quote_bar(ui, quotes),
+        Op::Paragraph(paragraph) => {
+            if !quotes.tops.is_empty() {
+                quotes.bottom = bottom;
+            }
+            if let (Some(Laid::Linked(laid)), Some(at)) = (&paragraph.laid, paragraph.origin) {
+                register_links(ui, laid, block_id(ui.ctx(), links), origin + at);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The bar of the innermost open quote, from its top to the last words drawn in it.
+fn quote_bar(ui: &egui::Ui, quotes: &mut Quotes) {
+    if let Some(top) = quotes.tops.pop() {
+        let x =
+            ui.max_rect().left() + QUOTE_INDENT * quotes.tops.len() as f32 + QUOTE_BAR_WIDTH / 2.0;
+        ui.painter().vline(
+            x,
+            top..=quotes.bottom.max(top),
+            egui::Stroke::new(QUOTE_BAR_WIDTH, colors().rule),
+        );
     }
 }
 
@@ -624,6 +830,7 @@ fn paragraph(ops: &mut Vec<Op>, job: &mut LayoutJob, target: &mut Targets) {
         links,
         task,
         lead,
+        origin: None,
     })));
 }
 
@@ -689,6 +896,7 @@ fn draw_paragraph(
     ui: &mut egui::Ui,
     paragraph: &mut Paragraph,
     links: (egui::Id, usize),
+    origin: egui::Pos2,
     short_links: ShortLinks,
     row: bool,
     quotes: &mut Quotes,
@@ -703,23 +911,33 @@ fn draw_paragraph(
             };
             ui.add(egui::Label::new(icon.clone()));
             paragraph.lead = Some(Lead::Laid(icon));
-            ui.vertical(|ui| match laid(ui, paragraph, short_links) {
-                Laid::Plain(galley) => {
-                    ui.add(egui::Label::new(galley.clone()));
-                }
-                Laid::Linked(laid) => {
-                    let id = block_id(ui.ctx(), links);
-                    draw_laid_links(ui, laid, id);
-                }
-            });
+            let at = ui
+                .vertical(|ui| match laid(ui, paragraph, short_links) {
+                    Laid::Plain(galley) => {
+                        ui.add(egui::Label::new(galley.clone()));
+                        None
+                    }
+                    Laid::Linked(laid) => {
+                        let id = block_id(ui.ctx(), links);
+                        let (_, at) = draw_laid_links(ui, laid, id);
+                        Some(at - origin)
+                    }
+                })
+                .inner;
+            paragraph.origin = at;
         });
         return;
     }
     let task = paragraph.task;
+    let mut at = None;
     let mut draw = |ui: &mut egui::Ui| {
         let rect = match laid(ui, paragraph, short_links) {
             Laid::Plain(galley) => ui.add(egui::Label::new(galley.clone())).rect,
-            Laid::Linked(laid) => draw_laid_links(ui, laid, block_id(ui.ctx(), links)),
+            Laid::Linked(laid) => {
+                let (rect, position) = draw_laid_links(ui, laid, block_id(ui.ctx(), links));
+                at = Some(position - origin);
+                rect
+            }
         };
         if let Some((done, indent, role)) = task {
             let icon_rect = egui::Rect::from_min_size(
@@ -746,6 +964,7 @@ fn draw_paragraph(
         let rect = design::quote(ui, quotes.tops.len(), draw).response.rect;
         quotes.bottom = rect.bottom();
     }
+    paragraph.origin = at;
     if !row {
         design::gap(ui, design::Gap::S);
     }
@@ -1921,7 +2140,11 @@ fn lay_out_links(
 /// A paragraph stays one paragraph. Each link in it is its own control: Tab reaches the
 /// links in reading order, Enter or Space follows the focused one, and the pointer presses
 /// only a link's own target. `links_id` is the paragraph's block in its reader.
-fn draw_laid_links(ui: &mut egui::Ui, laid: &LaidLinks, links_id: egui::Id) -> egui::Rect {
+fn draw_laid_links(
+    ui: &mut egui::Ui,
+    laid: &LaidLinks,
+    links_id: egui::Id,
+) -> (egui::Rect, egui::Pos2) {
     let LaidLinks {
         text,
         galley,
@@ -2055,29 +2278,67 @@ fn draw_laid_links(ui: &mut egui::Ui, laid: &LaidLinks, links_id: egui::Id) -> e
             }
         }
         // A click by key or pointer wins over the pointer resting on another row of the link.
-        let Some(pressed) = parts
+        if let Some(pressed) = parts
             .iter()
             .find(|part| part.clicked())
             .or_else(|| parts.iter().find(|part| part.hovered()))
-        else {
-            continue;
-        };
-        if let LinkTarget::Roll(link) = destination {
-            crate::rolls::interact(ui, pressed, link);
-            continue;
-        }
-        match press(ui, pressed, destination) {
-            Some(LinkTarget::Note(note)) => {
-                let from = reader_document(ui);
-                send_note_link(ui.ctx(), note.clone(), from);
-            }
-            Some(LinkTarget::Lookup(words)) => ui.ctx().data_mut(|data| {
-                data.insert_temp(egui::Id::new("markdown_clicked_lookup"), words.clone());
-            }),
-            _ => {}
+        {
+            follow(ui, pressed, destination);
         }
     }
-    response.rect
+    (response.rect, position)
+}
+
+/// A link's press or hover: a roll's own interaction, or its note or Lookup entry opened.
+fn follow(ui: &egui::Ui, pressed: &egui::Response, destination: &LinkTarget) {
+    if let LinkTarget::Roll(link) = destination {
+        crate::rolls::interact(ui, pressed, link);
+        return;
+    }
+    match press(ui, pressed, destination) {
+        Some(LinkTarget::Note(note)) => {
+            let from = reader_document(ui);
+            send_note_link(ui.ctx(), note.clone(), from);
+        }
+        Some(LinkTarget::Lookup(words)) => ui.ctx().data_mut(|data| {
+            data.insert_temp(egui::Id::new("markdown_clicked_lookup"), words.clone());
+        }),
+        _ => {}
+    }
+}
+
+/// The links of a paragraph out of view (layout PR 9b-R2), its galley at `at`: each link's first
+/// target only, with the id, the role and the name it has when drawn, so Tab and a screen reader
+/// reach it wherever it is, at the same cost whatever its words. Its focus ring and the rest of
+/// its parts come with its paragraph, which the next pass draws in view (`reveal_focus`).
+fn register_links(ui: &egui::Ui, laid: &LaidLinks, links_id: egui::Id, at: egui::Pos2) {
+    let at = at.to_vec2();
+    for (index, (range, destination)) in laid.links.iter().enumerate() {
+        let Some(first) = laid.targets[index].first() else {
+            continue;
+        };
+        let sense = if matches!(destination, LinkTarget::Missing) {
+            egui::Sense::CLICK
+        } else {
+            egui::Sense::click()
+        };
+        let role = if matches!(destination, LinkTarget::Missing) {
+            egui::WidgetType::Label
+        } else {
+            egui::WidgetType::Link
+        };
+        let response = ui.interact(
+            egui::emath::GuiRounding::round_ui(first.translate(at)),
+            links_id.with((index, laid.keys[index])).with(0_usize),
+            sense,
+        );
+        let words = &laid.galley.job.text[range.clone()];
+        response
+            .widget_info(|| egui::WidgetInfo::labeled(role, true, link_name(words, destination)));
+        if response.clicked() {
+            follow(ui, &response, destination);
+        }
+    }
 }
 
 /// A link whose words are narrower than `XL` gets `XL` of layout width. A link inside a line has
@@ -3499,54 +3760,93 @@ mod tests {
         // Layout PR 9b-R1b (review of PR 813, P2): a focused link whose destination changed
         // loses the focus and never acts. The document's next revision puts a linked paragraph
         // above the focused link, where the focused link's block was: Enter follows nothing.
+        // Layout PR 9b-R2: the same far below the view, where the link's block is not laid out
+        // (its link a control at its kept place): Enter first follows it, then nothing.
         use crate::design::test_harness::Themed;
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(480.0, 320.0))
-            .themed_ui_state(
-                |ui, (revision, text): &mut (u64, String)| {
-                    show_document(
-                        ui,
-                        ReaderSource {
-                            doc: DocumentId::Entry(uuid::Uuid::from_u128(7)),
-                            revision: *revision,
-                            text,
-                        },
-                    );
-                },
-                (1, "Ask [Wren](splat-note:Wren) about the bells.".to_owned()),
+        for far in [false, true] {
+            let above = if far {
+                "A line of the watch.\n\n".repeat(60)
+            } else {
+                String::new()
+            };
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(480.0, 320.0))
+                .themed_ui_state(
+                    |ui, (revision, text): &mut (u64, String)| {
+                        show_document(
+                            ui,
+                            ReaderSource {
+                                doc: DocumentId::Entry(uuid::Uuid::from_u128(7)),
+                                revision: *revision,
+                                text,
+                            },
+                        );
+                    },
+                    (
+                        1,
+                        format!("{above}Ask [Wren](splat-note:Wren) about the bells."),
+                    ),
+                );
+            harness.run_steps(3);
+            harness.key_press(egui::Key::Tab);
+            harness.run_ok();
+            assert_eq!(
+                focused(&harness).as_deref(),
+                Some("Wren (opens Wren)"),
+                "9b-R1b-stale-setup (far {far})"
             );
-        harness.run_steps(3);
-        harness.key_press(egui::Key::Tab);
-        harness.run_ok();
-        assert_eq!(
-            focused(&harness).as_deref(),
-            Some("Wren (opens Wren)"),
-            "9b-R1b-stale-setup"
-        );
-        *harness.state_mut() = (
-            2,
-            "See [Oskar](splat-note:Oskar) first.\n\nAsk [Wren](splat-note:Wren) about the bells."
-                .to_owned(),
-        );
-        harness.run_steps(2);
-        harness.key_press(egui::Key::Enter);
-        harness.step();
-        assert_eq!(
-            take_note_link(&harness.ctx),
-            None,
-            "9b-R1b-stale: Enter on a link whose destination changed under the focus follows nothing"
-        );
+            if far {
+                let laid = BLOCKS_LAID.with(std::cell::Cell::get);
+                harness.key_press(egui::Key::Enter);
+                harness.step();
+                let laid = BLOCKS_LAID.with(std::cell::Cell::get) - laid;
+                let followed = take_note_link(&harness.ctx);
+                assert!(
+                    followed.as_deref() == Some("Wren") && laid * 2 < kept_blocks(&harness.ctx),
+                    "9b-R2-stale-setup: Enter follows the focused link ({followed:?}) while its \
+                     block is not laid out ({laid} of {} blocks)",
+                    kept_blocks(&harness.ctx)
+                );
+            }
+            *harness.state_mut() = (
+                2,
+                format!(
+                    "{above}See [Oskar](splat-note:Oskar) first.\n\nAsk [Wren](splat-note:Wren) \
+                     about the bells."
+                ),
+            );
+            harness.run_steps(2);
+            harness.key_press(egui::Key::Enter);
+            harness.step();
+            assert_eq!(
+                take_note_link(&harness.ctx),
+                None,
+                "9b-R1b-stale (far {far}): Enter on a link whose destination changed under the \
+                 focus follows nothing"
+            );
+        }
     }
 
     /// Layout PR 9b-R1b: a kept document's maps are complete (every heading, every link control
     /// with its block and place), and a typed jump to a heading far below the view resolves from
     /// the heading map: from the heading's kept offset before any block draws, and, in the frame
     /// a new revision is prepared (no offsets yet), as the heading's block draws.
+    ///
+    /// Layout PR 9b-R2: only the blocks in view are laid out. A link out of view is still a
+    /// control (a screen reader names it, Tab reaches it) at the place it draws at. While the DM
+    /// holds a selection every block draws, and a selection started with blocks skipped above it
+    /// stays.
     #[test]
     fn a_typed_jump_resolves_from_the_heading_map() {
+        fn after_reader() -> egui::Id {
+            egui::Id::new("after_reader")
+        }
+        let next_id =
+            |ctx: &egui::Context| ctx.data(|data| data.get_temp::<egui::Id>(after_reader()));
         let text: &'static str = Box::leak(
             format!(
-                "{}## The ford\n\nAsk [Wren](splat-note:Wren) or [Oskar](splat-note:Oskar).\n\n{}",
+                "{}## The ford\n\nAsk [Wren](splat-note:Wren) or [Oskar](splat-note:Oskar).\n\n{}\
+                 Ask [Mara](splat-note:Mara) at the end.\n",
                 "A line of the watch.\n\n".repeat(40),
                 "A line after the ford.\n\n".repeat(20)
             )
@@ -3569,6 +3869,10 @@ mod tests {
                                     text,
                                 },
                             );
+                            // The next widget's auto id after the reader (layout PR 9b-R2).
+                            let next = ui.next_auto_id();
+                            ui.ctx()
+                                .data_mut(|data| data.insert_temp(after_reader(), next));
                         });
                     // A request lasts one draw, as World's reader makes it: a jump asked in the
                     // draw that prepares a document lands then, or never.
@@ -3582,21 +3886,49 @@ mod tests {
         assert!(
             maps.len() == 1
                 && maps[0].0.iter().any(|(words, _)| words == "The ford")
-                && controls.len() == 2
+                && controls.len() == 3
                 && controls[0].block == controls[1].block
                 && (controls[0].place, controls[1].place) == (0, 1)
                 && controls[0].destination == LinkTarget::Note("Wren".into())
                 && controls.len() == link_names(&harness).len(),
-            "9b-R1b-maps: the heading and both link controls, as drawn ({:?}): {maps:?}",
+            "9b-R1b-maps: the heading and every link control, as drawn ({:?}): {maps:?}",
             link_names(&harness)
+        );
+        // 9b-R2: a frame lays out the blocks in view only; the links far below are still
+        // controls (above), and the heading far below draws no label.
+        let laid = |harness: &mut egui_kittest::Harness<'_, u64>| {
+            let before = BLOCKS_LAID.with(std::cell::Cell::get);
+            harness.step();
+            BLOCKS_LAID.with(std::cell::Cell::get) - before
+        };
+        let blocks = kept_blocks(&harness.ctx);
+        let in_view = laid(&mut harness);
+        assert!(
+            in_view > 0 && in_view * 4 < blocks,
+            "9b-R2-view: {in_view} of {blocks} blocks laid out with one screen in view"
         );
         let heading = |harness: &egui_kittest::Harness<'_, u64>| {
             harness
-                .get_by_role_and_label(egui::accesskit::Role::Label, "The ford")
-                .rect()
-                .top()
+                .query_by_role_and_label(egui::accesskit::Role::Label, "The ford")
+                .map(|node| node.rect().top())
         };
-        let below = heading(&harness);
+        assert_eq!(
+            heading(&harness),
+            None,
+            "9b-R2-view: the heading far below the view is not laid out"
+        );
+        let next = next_id(&harness.ctx);
+        // 9b-R2: Tab reaches a link whose block is not laid out (after the column, its own
+        // stop).
+        for _ in 0..2 {
+            harness.key_press(egui::Key::Tab);
+            harness.run_ok();
+        }
+        assert_eq!(
+            focused(&harness).as_deref(),
+            Some("Wren (opens Wren)"),
+            "9b-R2-tab: Tab reaches the first link, far below the view"
+        );
         for (round, case) in [
             "from its kept offset",
             "as its block draws, in a new revision",
@@ -3618,21 +3950,212 @@ mod tests {
                 harness.run_steps(2);
                 let away = heading(&harness);
                 assert!(
-                    away > design::XL,
-                    "9b-R1b-jump-setup: the wheel took the heading away from the top ({away})"
+                    away.is_none_or(|away| away > design::XL),
+                    "9b-R1b-jump-setup: the wheel took the heading away from the top ({away:?})"
                 );
                 *harness.state_mut() = 2;
             }
+            assert_eq!(
+                heading(&harness),
+                None,
+                "9b-R1b-jump-setup ({case}): the heading is out of view"
+            );
             want_heading(&harness.ctx, Some("The ford".into()));
             // Two frames: the one that asks queues the jump, the column moves at its next pass.
             // A jump that waited a frame for its offset would not be there yet.
             harness.run_steps(2);
             let at = heading(&harness);
             assert!(
-                below > 320.0 && (0.0..=design::XL).contains(&at),
-                "9b-R1b-jump ({case}): the heading from {below} to the view's top, at {at}"
+                at.is_some_and(|at| (0.0..=design::XL).contains(&at)),
+                "9b-R1b-jump ({case}): the heading from below the view to its top, at {at:?}"
             );
+            if round == 0 {
+                // 9b-R2: the link Tab reached out of view is drawn now, under the heading, and
+                // keeps the focus: out of view it was a control with the id it draws with.
+                let wren = harness
+                    .query_by_role_and_label(egui::accesskit::Role::Link, "Wren (opens Wren)")
+                    .map(|node| node.rect());
+                assert!(
+                    focused(&harness).as_deref() == Some("Wren (opens Wren)")
+                        && wren.is_some_and(|wren| wren.bottom() < 320.0),
+                    "9b-R2-tab-kept: the focused link in view at {wren:?} keeps the focus ({:?})",
+                    focused(&harness)
+                );
+                if let Some(focus) = harness.ctx.memory(egui::Memory::focused) {
+                    harness
+                        .ctx
+                        .memory_mut(|memory| memory.surrender_focus(focus));
+                }
+            }
         }
+        // 9b-R2: the heading is at the top; the blocks above it and Mara's paragraph far below
+        // are not laid out. Mara's link is a control at its kept place.
+        let mara = |harness: &egui_kittest::Harness<'_, u64>| {
+            harness
+                .query_all_by_role_and_label(egui::accesskit::Role::Link, "Mara (opens Mara)")
+                .map(|node| node.rect())
+                .collect::<Vec<_>>()
+        };
+        let kept = mara(&harness);
+        assert!(
+            laid(&mut harness) * 4 < blocks && kept.len() == 1 && kept[0].top() > 320.0,
+            "9b-R2-skip: blocks above and below the view are skipped; Mara's link far below is \
+             one control ({kept:?})"
+        );
+        assert_eq!(
+            next_id(&harness.ctx),
+            next,
+            "9b-R2-ids: the widgets after the reader keep their ids whatever it skips"
+        );
+        // A selection from the first line after the ford, with every block above it skipped.
+        let line = harness
+            .query_all_by_role_and_label(egui::accesskit::Role::Label, "A line after the ford.")
+            .map(|node| node.rect())
+            .find(|rect| rect.top() > 0.0 && rect.bottom() < 320.0)
+            .expect("a line after the ford in view");
+        let press = |pos: egui::Pos2, pressed: bool| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let (from, to) = (
+            line.left_center() + egui::vec2(2.0, 0.0),
+            line.right_center() - egui::vec2(2.0, 0.0),
+        );
+        harness.hover_at(from);
+        harness.event(press(from, true));
+        harness.run_ok();
+        harness.event(egui::Event::PointerMoved(to));
+        harness.run_ok();
+        harness.event(press(to, false));
+        harness.run_ok();
+        let selecting = |harness: &egui_kittest::Harness<'_, u64>| {
+            harness
+                .ctx
+                .plugin::<egui::text_selection::LabelSelectionState>()
+                .lock()
+                .has_selection()
+        };
+        let all = laid(&mut harness);
+        harness.run_steps(3);
+        assert!(
+            selecting(&harness) && all == blocks,
+            "9b-R2-select: the selection stays ({}) and every block draws for it ({all} of \
+             {blocks})",
+            selecting(&harness)
+        );
+        // Drawn now: Mara's link is where it was kept.
+        assert_eq!(
+            mara(&harness),
+            kept,
+            "9b-R2-kept: a link out of view is a control at the place it draws at"
+        );
+        assert_eq!(
+            next_id(&harness.ctx),
+            next,
+            "9b-R2-ids: the widgets after the reader keep their ids with nothing skipped"
+        );
+        // 9b-R2: a new pane width reflows a wide table far below the view, while the prose keeps
+        // its measure (so the key stands). The table is not laid out, but every block's kept top
+        // is where a first layout at the new width puts it: a new room lays every block out.
+        let wide_text: &'static str = Box::leak(
+            format!(
+                "{}| Watch | Words |\n| --- | --- |\n{}\n## The gate\n\n{}",
+                "A line of the night.\n\n".repeat(30),
+                "| First | Ash road and cinder pass, the ferry hands and the pier at dusk, \
+                 the bells and the long walk home |\n"
+                    .repeat(12),
+                "A line after the gate.\n\n".repeat(10),
+            )
+            .into_boxed_str(),
+        );
+        let wide = |width: f32| {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(width, 320.0))
+                .themed_ui_state(
+                    move |ui, (): &mut ()| {
+                        design::layout::ScrollColumn::new("reader")
+                            .hosts_reveals()
+                            .show(ui, |ui| {
+                                with_wide_tables(ui, |ui| {
+                                    ui.scope(|ui| {
+                                        ui.set_max_width(360.0);
+                                        show_document(
+                                            ui,
+                                            ReaderSource {
+                                                doc: DocumentId::Entry(uuid::Uuid::from_u128(11)),
+                                                revision: 1,
+                                                text: wide_text,
+                                            },
+                                        );
+                                    });
+                                });
+                            });
+                    },
+                    (),
+                );
+            harness.run_steps(4);
+            harness
+        };
+        let mut resized = wide(1000.0);
+        let before = kept_offsets(&resized.ctx);
+        resized.set_size(egui::vec2(560.0, 320.0));
+        resized.run_steps(3);
+        let after = kept_offsets(&resized.ctx);
+        let first = kept_offsets(&wide(560.0).ctx);
+        let same = |a: &[Vec<f32>], b: &[Vec<f32>]| {
+            a.len() == b.len()
+                && a.iter().zip(b).all(|(a, b)| {
+                    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| (a - b).abs() < 0.5)
+                })
+        };
+        assert!(
+            !same(&before, &first) && same(&after, &first),
+            "9b-R2-room: after a resize that reflows a wide table out of view, the kept tops \
+             are a first layout's at the new width (the table moved them: {})",
+            !same(&before, &first)
+        );
+        // 9b-R2: a kept document draws each block in a child under its own ids, and lays out as
+        // the reader that keeps nothing: a table whose warning ends its block, a heading, a quote
+        // and a list, each painted text at the same place.
+        let mixed = "<!-- splat:rolls key=gap dice=1d4 -->\n\n\
+                     | d4 | Gap |\n| --- | --- |\n| 1 | One |\n| 3-4 | Later |\n\n\
+                     <!-- splat:rolls key=next dice=1d4 -->\n\n\
+                     | d4 | Next |\n| --- | --- |\n| 1-4 | All |\n\n## After the tables\n\n\
+                     Words after the tables.\n\n> A quoted line.\n\n- An item\n- Another\n";
+        let unkept = reader_at(mixed, 480.0, false);
+        let mut kept = {
+            use crate::design::test_harness::ThemedPage as _;
+            egui_kittest::Harness::builder()
+                .with_size(egui::vec2(480.0, 480.0))
+                .themed_ui(move |ui| {
+                    show_document(
+                        ui,
+                        ReaderSource {
+                            doc: DocumentId::Entry(uuid::Uuid::from_u128(12)),
+                            revision: 1,
+                            text: mixed,
+                        },
+                    );
+                })
+        };
+        kept.run_ok();
+        let texts = |harness: &egui_kittest::Harness<'_>| {
+            galleys_in(harness)
+                .into_iter()
+                .map(|(pos, galley)| (pos, galley.job.text.clone()))
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            texts(&unkept)
+                .iter()
+                .any(|(_, text)| text.contains("needs a row"))
+                && texts(&kept) == texts(&unkept),
+            "9b-R2-layout: the kept document's texts {:?} are the unkept reader's {:?}",
+            texts(&kept),
+            texts(&unkept)
+        );
         // PR 861 review (P2): a new pane width reflows a wide table above the heading while the
         // prose keeps its measure (so the key and the kept offsets stand). A jump in that very
         // frame still brings the heading to the view's top: corrected as its block draws.
@@ -3673,11 +4196,11 @@ mod tests {
                 (),
             );
         wide.run_steps(4);
+        // 9b-R2: a heading out of view is not laid out, so it has no label until it draws.
         let gate = |harness: &egui_kittest::Harness<'_, ()>| {
             harness
-                .get_by_role_and_label(egui::accesskit::Role::Label, "The gate")
-                .rect()
-                .top()
+                .query_by_role_and_label(egui::accesskit::Role::Label, "The gate")
+                .map(|node| node.rect().top())
         };
         let before = gate(&wide);
         wide.set_size(egui::vec2(560.0, 320.0));
@@ -3685,9 +4208,10 @@ mod tests {
         wide.run_steps(2);
         let at = gate(&wide);
         assert!(
-            before > 320.0 && (0.0..=design::XL).contains(&at),
+            before.is_none_or(|before| before > 320.0)
+                && at.is_some_and(|at| (0.0..=design::XL).contains(&at)),
             "9b-R1b-reflow: after a resize that reflows the table above it, the heading from \
-             {before} to the view's top, at {at}"
+             {before:?} (below the view) to the view's top, at {at:?}"
         );
     }
 
