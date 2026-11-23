@@ -714,14 +714,7 @@ enum Words<'a> {
     Draft(&'a super::text_draft::TextDraft),
 }
 
-impl<'a> Words<'a> {
-    fn as_str(self) -> &'a str {
-        match self {
-            Self::Plain(text) => text,
-            Self::Draft(draft) => draft.as_str(),
-        }
-    }
-
+impl Words<'_> {
     fn key(self) -> Option<super::text_draft::DraftKey> {
         match self {
             Self::Plain(_) => None,
@@ -829,7 +822,6 @@ struct TextGuard {
 impl TextGuard {
     fn before(ui: &Ui, id: Id, text: Words<'_>) -> Self {
         let focused_before = ui.memory(|memory| memory.has_focus(id));
-        composition::before_field(ui.ctx(), id, focused_before, text.as_str());
         let check = focused_before
             || ui.input(|input| {
                 input.pointer.any_pressed()
@@ -1002,30 +994,7 @@ pub fn write_under_history(
     // From the newest step back: the text after each step's edit, and the caret there.
     let mut newer = before;
     let mut caret = state.cursor.char_range().map(|range| range.primary.index);
-    // The caret and the selection move with the words they stand in, so they hold the same
-    // words after the write (an input method's open words are the selection: its next event
-    // changes them, not the words that came to stand at their old place).
-    if let Some(range) = state.cursor.char_range() {
-        let place = |cursor: egui::text::CCursor| egui::text::CCursor {
-            index: write.place(cursor.index),
-            ..cursor
-        };
-        let moved = egui::text::CCursorRange {
-            primary: place(range.primary),
-            secondary: place(range.secondary),
-            ..range
-        };
-        // egui keeps the place of an input method's words as a number of its own: it takes the
-        // moved selection as that place again before the field's next event (`composition`).
-        if (moved.primary.index, moved.secondary.index)
-            != (range.primary.index, range.secondary.index)
-        {
-            composition::moved(ctx, id);
-        }
-        state.cursor.set_char_range(Some(moved));
-    }
     if steps.is_empty() {
-        state.store(ctx, id);
         return;
     }
     let mut kept = Vec::new();
@@ -1053,6 +1022,14 @@ pub fn write_under_history(
         caret = Some(cursor.primary.index);
         newer = words;
     }
+    // The newest step that is the text as it now stands keeps the field's caret, which the write
+    // does not move: egui takes a step with another caret for another state, and the first
+    // Ctrl+Z would only move the caret.
+    if let (Some((cursor, words)), Some(range)) = (kept.first_mut(), state.cursor.char_range())
+        && words.chars().eq(after.iter().copied())
+    {
+        *cursor = range;
+    }
     // A step the write cannot reach, and every older one, is not kept (review of PR 825, P1
     // 825-b): Ctrl+Z to it would take the app's words out.
     let mut rebuilt = egui::util::undoer::Undoer::default();
@@ -1061,103 +1038,6 @@ pub fn write_under_history(
     }
     state.set_undoer(rebuilt);
     state.store(ctx, id);
-}
-
-/// An input method's words (a composition) in a field, and an app write that moves the field's
-/// caret (`write_under_history`; reviews of PR 910, P1 910-a).
-///
-/// **What egui does** (`egui` 0.33.3, `widgets/text_edit/builder.rs`; the two fields are private
-/// to egui: `TextEditState::ime_enabled` and `TextEditState::ime_cursor_range`, "the place"):
-///
-/// | Event to the focused field | Text and selection | The place | `ime_enabled` |
-/// | --- | --- | --- | --- |
-/// | `Ime(Enabled)` | none | := the selection now | := true |
-/// | `Ime(Preedit(words))` | the selection becomes `words`, selected | := the selection BEFORE the event | none |
-/// | `Ime(Commit(words))` | when `words` is not empty AND the selection starts at the place: the selection becomes `words`; else the words are DROPPED and the selection closes at its end | none | := false |
-/// | `Ime(Disabled)` | none | none | := false |
-/// | The focus comes or goes while `ime_enabled` | the selection closes at its end | none | := false |
-///
-/// (A `Preedit` or `Commit` of exactly one line end is ignored.) While `ime_enabled` is true,
-/// egui takes Backspace, the arrow keys and repeated keys out of the field's events.
-///
-/// **The fault.** The place is a number. An app write before the caret moves the selection with
-/// its words, and the place keeps the old number, so the next `Commit` finds the selection
-/// somewhere else and drops the DM's committed words. Today's write path left the selection at
-/// its old number too, and the next event changed the letters that came to stand there.
-///
-/// **The route** (ruling M25, no egui change; no copy of egui's private state): one of egui's
-/// own events sets the place to the selection now and changes nothing else: a `Preedit` of the
-/// words that are selected. The selection becomes the same words, selected; the place is the
-/// selection; `ime_enabled` is as it was. So after a write that moved the caret or the selection
-/// of the focused field, the field gets that one event before its next events. It is sent after
-/// every such write, whether a composition is open or not: nothing here follows egui's state.
-/// (`Enabled` sets the place too, but it also sets `ime_enabled`, which holds back Backspace and
-/// the arrows: it is not harmless in a field that is not composing.)
-///
-/// What the event costs: the field reports a change in that frame (its words are the same), and
-/// a selection made from its end to its start is selected from its start to its end.
-///
-/// A named limit: when exactly one line end is selected, egui ignores the event, and the place
-/// stays as it was.
-mod composition {
-    use egui::{Context, Event, Id, ImeEvent};
-
-    /// The fields whose caret or selection an app write moved, each until it draws with the
-    /// focus (newest first). A field moved without the focus waits here too: a `Commit` after the
-    /// focus comes back finds the place as stale. More than these few at once: the oldest is
-    /// dropped, and its place stays as it was.
-    #[derive(Clone, Copy, Default)]
-    struct Moved([Option<Id>; 4]);
-
-    fn id() -> Id {
-        Id::new("splat_text_composition_moved")
-    }
-
-    /// An app write moved the caret or the selection of `field`.
-    pub(super) fn moved(ctx: &Context, field: Id) {
-        ctx.data_mut(|data| {
-            let fields = &mut data.get_temp_mut_or_default::<Moved>(id()).0;
-            if !fields.contains(&Some(field)) {
-                fields.rotate_right(1);
-                fields[0] = Some(field);
-            }
-        });
-    }
-
-    /// Before the field `field` draws with the words `text`: with the focus, after a write that
-    /// moved it, egui takes its selection as the composition's place again.
-    pub(super) fn before_field(ctx: &Context, field: Id, focused: bool, text: &str) {
-        if !focused {
-            return;
-        }
-        let waits = ctx
-            .data(|data| data.get_temp::<Moved>(id()))
-            .is_some_and(|moved| moved.0.contains(&Some(field)));
-        if !waits {
-            return;
-        }
-        ctx.data_mut(|data| {
-            let fields = &mut data.get_temp_mut_or_default::<Moved>(id()).0;
-            for slot in fields.iter_mut().filter(|slot| **slot == Some(field)) {
-                *slot = None;
-            }
-        });
-        let Some(range) = egui::text_edit::TextEditState::load(ctx, field)
-            .and_then(|state| state.cursor.char_range())
-        else {
-            return;
-        };
-        let (from, to) = (
-            range.primary.index.min(range.secondary.index),
-            range.primary.index.max(range.secondary.index),
-        );
-        let selected: String = text.chars().skip(from).take(to - from).collect();
-        ctx.input_mut(|input| {
-            input
-                .events
-                .insert(0, Event::Ime(ImeEvent::Preedit(selected)));
-        });
-    }
 }
 
 /// One change of a text, in characters: the `old` characters at `at` became `new` characters.
