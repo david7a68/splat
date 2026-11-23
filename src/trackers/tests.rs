@@ -2033,22 +2033,27 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
     );
     // The footer's line (its words, `Undo: Take seal` and the `Add to Timeline` choice) is laid
     // out once per change of the footer's plan: from the page's entry through paint, an
-    // unchanged frame with that line measures no text (`design::TEXT_MEASURES`; the panel's
-    // own body measures none). Red: a footer that measures its choices every frame. (Laid words
-    // are counted by the design crate's footer and body tests: this panel's lines lay their own
-    // until they move onto `ActionLine`.)
+    // unchanged frame with that line measures no text and lays out no action's words
+    // (`design::TEXT_MEASURES`, `ACTION_WORDS_LAID`; the panel's own lines, on `ActionLine`, and
+    // its Due rows do neither). Red: a footer that measures its choices, or lays its Undo's or a
+    // choice's words, every frame.
     assert!(
         h.query_by_label("Add to Timeline").is_some()
             && h.query_by_label("Undo: Take seal").is_some(),
         "footer-reached: the footer line draws its Undo and its choice"
     );
-    let measures = || crate::design::components::TEXT_MEASURES.with(std::cell::Cell::get);
+    let measures = || {
+        (
+            crate::design::components::TEXT_MEASURES.with(std::cell::Cell::get),
+            crate::design::components::ACTION_WORDS_LAID.with(std::cell::Cell::get),
+        )
+    };
     let before = measures();
     h.run_steps(5);
     assert_eq!(
         measures(),
         before,
-        "footer-quiet: an unchanged frame with a footer line measures no text"
+        "footer-quiet: an unchanged frame with a footer line measures no text and lays no words"
     );
     // A change of the laid words at the same length: `Lose seal` after `Take seal` makes the
     // footer's Undo `Undo: Lose seal`. The footer is planned again, and the painted words are
