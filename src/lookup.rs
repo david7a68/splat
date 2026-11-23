@@ -2749,7 +2749,11 @@ impl Lookup {
                         // asks for that margin too and shows whole.
                         if response.gained_focus() || (follow && *selected) {
                             let margin = ui.visuals().clip_rect_margin;
-                            ui.scroll_to_rect(response.rect.expand2(egui::vec2(0.0, margin)), None);
+                            design::reveal::bring_into_view(
+                                ui,
+                                response.rect.expand2(egui::vec2(0.0, margin)),
+                                design::reveal::JumpTo::ListedRow,
+                            );
                         }
                         if response.clicked() {
                             chosen = Some(matches[row]);

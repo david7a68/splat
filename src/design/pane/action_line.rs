@@ -42,10 +42,17 @@ pub struct LineColumns {
 pub struct ActionLine<'a> {
     /// The line's stable key (a tracker and its instance).
     pub key: Id,
-    /// A list group's heading bound to this line (its title and count), or none.
-    pub heading: Option<(&'a str, usize)>,
+    /// A list group's heading bound to this line, or none.
+    pub heading: Option<LineHeading<'a>>,
     /// Body words over the line (a tracker's own name over its instances' lines), or none.
     pub title: Option<&'a str>,
+    /// Each part over the line, by its own measured height, after the title (an Arrivals
+    /// group's head line, and its words that take lines of their own), `LINE_GAP` apart.
+    pub over: &'a [f32],
+    /// The line's row height when the name cell is taller than a control (the caller's measured
+    /// words in it, an Arrivals group's summary); else 0. The value and the actions beside it
+    /// stand centred in the row.
+    pub row: f32,
     /// Where the name cell starts: an instance's line is set in under its tracker's name.
     pub indent: f32,
     /// The name's words as the caller fitted them to its cell (one line).
@@ -65,6 +72,37 @@ pub struct ActionLine<'a> {
     pub tail: f32,
 }
 
+/// A list group's heading bound to a line: its title and count, and whether it starts its
+/// column (then no space above it, as `design::heading`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LineHeading<'a> {
+    pub title: &'a str,
+    pub count: usize,
+    pub first: bool,
+}
+
+/// A list group's heading laid as `design::heading` draws it (SH9): its words at their place
+/// from the heading's top (after `Heading::above` unless it starts its column) and the
+/// heading's height (with `Heading::below`). The one heading of the measured recipes
+/// (`ActionLine`, `NoticeRow`).
+pub(in crate::design) fn lay_group_heading(
+    ui: &Ui,
+    (title, count): (&str, usize),
+    first: bool,
+) -> (LaidText, f32) {
+    let group = Heading::Group { title, count };
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(group_heading_text(ui, title, count)));
+    let above = if first { 0.0 } else { group.above() };
+    let height = above + galley.size().y + group.below();
+    (
+        LaidText {
+            at: pos2(0.0, above),
+            galley,
+        },
+        height,
+    )
+}
+
 /// One action of a line: its own key and its measured width.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LineAction {
@@ -73,7 +111,8 @@ pub struct LineAction {
 }
 
 /// The slots of a laid line, in order: the heading, the name, the value, then one per action
-/// (`FIRST_ACTION + at`), then one per part below (`ActionLine::below_slot`).
+/// (`FIRST_ACTION + at`), one per part below (`ActionLine::below_slot`), then one per part over
+/// the line (`ActionLine::over_slot`).
 pub mod slot {
     pub const HEADING: usize = 0;
     pub const NAME: usize = 1;
@@ -93,6 +132,16 @@ impl ActionLine<'_> {
         slot::FIRST_ACTION + self.actions.len() + at
     }
 
+    /// The slot of part `at` over the line.
+    pub fn over_slot(&self, at: usize) -> usize {
+        slot::FIRST_ACTION + self.actions.len() + self.below.len() + at
+    }
+
+    /// The line's row height: a control, or the name cell's taller words.
+    fn row_height(&self) -> f32 {
+        Density::Read.control().max(self.row)
+    }
+
     /// Where each action stands from the line's top `top`, in a row `width` wide, and the line's
     /// bottom. An action that would pass the row's edge starts the next row. An action wider than
     /// a whole row takes a row of its own, cut to the row's room: its slot ends at the row's edge,
@@ -100,20 +149,39 @@ impl ActionLine<'_> {
     /// action stays in the block.
     fn flow(&self, width: f32, top: f32) -> (Vec<Rect>, f32) {
         let control = Density::Read.control();
+        let row = self.row_height();
         if self.actions.is_empty() {
-            return (Vec::new(), top + control);
+            return (Vec::new(), top + row);
         }
         let (start, top) = if self.beside {
-            (self.columns.name + S + self.columns.value + S, top)
+            (
+                self.columns.name + S + self.columns.value + S,
+                top + (row - control) / 2.0,
+            )
         } else {
-            (self.indent, top + control + XS)
+            (self.indent, top + row + XS)
         };
         let widths: Vec<f32> = self.actions.iter().map(|action| action.width).collect();
-        wrap_actions(&widths, (start, width), top, XS)
+        let wrapped = wrap(
+            &widths,
+            WrapRoom {
+                start,
+                width,
+                top,
+                height: control,
+                row_gap: XS,
+            },
+        );
+        let bottom = if self.beside {
+            wrapped.bottom().max(top - (row - control) / 2.0 + row)
+        } else {
+            wrapped.bottom()
+        };
+        (wrapped.rects, bottom)
     }
 
     /// Each action's width in a row `width` wide, as the line lays it: its own, or a whole row's
-    /// room when it is wider (`wrap_actions`). A host that lays an action's words before paint
+    /// room when it is wider (`wrap`). A host that lays an action's words before paint
     /// (`Action::laid_words`) lays them in this width.
     pub fn action_widths(&self, width: f32) -> Vec<f32> {
         self.flow(width, 0.0)
@@ -134,19 +202,12 @@ impl ActionLine<'_> {
             vec![Rect::from_min_size(pos2(0.0, 0.0), vec2(0.0, 0.0)); slot::FIRST_ACTION];
         let mut slot_texts = vec![None; slot::FIRST_ACTION];
         let mut y = 0.0;
-        let mut head = None;
-        if let Some((title, count)) = self.heading {
-            let group = Heading::Group { title, count };
-            let galley =
-                ui.fonts_mut(|fonts| fonts.layout_job(group_heading_text(ui, title, count)));
-            let height = group.above() + galley.size().y + group.below();
-            texts.push(LaidText {
-                at: pos2(0.0, group.above()),
-                galley,
-            });
+        if let Some(heading) = self.heading {
+            let (text, height) =
+                lay_group_heading(ui, (heading.title, heading.count), heading.first);
+            texts.push(text);
             slots[slot::HEADING] = Rect::from_min_size(pos2(0.0, 0.0), vec2(width, height));
             y = height;
-            head = Some(height);
         }
         if let Some(title) = self.title {
             let galley = ui.fonts_mut(|fonts| {
@@ -159,13 +220,19 @@ impl ActionLine<'_> {
             });
             y += height + LINE_GAP;
         }
+        let mut over = Vec::with_capacity(self.over.len());
+        for &part in self.over {
+            over.push(Rect::from_min_size(pos2(0.0, y), vec2(width, part)));
+            y += part + LINE_GAP;
+        }
+        let row = self.row_height();
         // The name, in its cell from the indent, the caller's words centred in its height.
         let name = ui.fonts_mut(|fonts| {
             fonts.layout_no_wrap(self.name.to_owned(), Type::Body.font(ui), colors().text)
         });
         slots[slot::NAME] = Rect::from_min_size(
             pos2(self.indent, y),
-            vec2((self.columns.name - self.indent).max(0.0), control),
+            vec2((self.columns.name - self.indent).max(0.0), row),
         );
         slot_texts[slot::NAME] = Some(name);
         // The value, at its cell's right edge.
@@ -174,7 +241,7 @@ impl ActionLine<'_> {
         });
         let right = self.columns.name + S + self.columns.value;
         slots[slot::VALUE] = Rect::from_min_size(
-            pos2(right - value.size().x, y),
+            pos2(right - value.size().x, y + (row - control) / 2.0),
             vec2(value.size().x, control),
         );
         slot_texts[slot::VALUE] = Some(value);
@@ -182,12 +249,18 @@ impl ActionLine<'_> {
         slot_texts.extend(actions.iter().map(|_| None));
         slots.extend(actions);
         y = bottom;
+        // The head: everything over the line stays whole with it (SH9: a heading is bound to
+        // its first line; an Arrivals group's head line, its summary and its controls).
+        let head =
+            (self.heading.is_some() || self.title.is_some() || !self.over.is_empty()).then_some(y);
         for &part in self.below {
             y += LINE_GAP;
             slots.push(Rect::from_min_size(pos2(0.0, y), vec2(width, part)));
             slot_texts.push(None);
             y += part;
         }
+        slot_texts.extend(over.iter().map(|_| None));
+        slots.extend(over);
         // Each action's slot is keyed by its action, so its control keeps its id and its focus
         // when an action before it is hidden.
         let mut slot_keys = vec![None; slot::FIRST_ACTION];
@@ -199,34 +272,74 @@ impl ActionLine<'_> {
     }
 }
 
-/// The wrapping rule of a row of actions (`ActionLine`, and the Trackers page's Due rows, L7):
-/// each action as wide as `widths` says, `S` apart from `start`; an action that would pass
-/// `width` starts a new row unless it is a row's first; rows `row_gap` apart, a control tall
-/// each; an action wider than a whole row (`width - start`) takes a row of its own, cut to it.
-/// Returns each action's rect and the bottom of its last row (`top` with no actions).
-pub(in crate::design) fn wrap_actions(
-    widths: &[f32],
-    (start, width): (f32, f32),
-    top: f32,
-    row_gap: f32,
-) -> (Vec<Rect>, f32) {
-    let control = Density::Read.control();
+/// The room a row of items wraps in (`wrap`): where each row starts and ends, the first row's
+/// top, each row's height and the gap between rows.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WrapRoom {
+    pub start: f32,
+    pub width: f32,
+    pub top: f32,
+    pub height: f32,
+    pub row_gap: f32,
+}
+
+/// Items wrapped in their room (`wrap`): each item's rect and the bottom of the last row. Only
+/// `wrap` makes one, so every rect lies inside its room: a recipe places its items only from
+/// here (invariants note, class 8).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Wrapped {
+    rects: Vec<Rect>,
+    bottom: f32,
+}
+
+impl Wrapped {
+    /// Each item's rect, in order.
+    pub fn rects(&self) -> &[Rect] {
+        &self.rects
+    }
+
+    /// The bottom of the last row (the room's top with no items).
+    pub fn bottom(&self) -> f32 {
+        self.bottom
+    }
+}
+
+/// The one wrap of a row of items (W1): `ActionLine`'s actions and the Trackers page's Due
+/// rows (`NoticeRow`, L7) both place their items from it. Each item is as wide as `widths`
+/// says, `S` after the one before; an item that would pass the room's right edge starts a new
+/// row unless it is a row's first; an item wider than a whole row (`width - start`) takes a row
+/// of its own and the row's width (it is cut there by its own rule). Its result can never be
+/// wider than its room.
+pub fn wrap(widths: &[f32], room: WrapRoom) -> Wrapped {
     if widths.is_empty() {
-        return (Vec::new(), top);
+        return Wrapped {
+            rects: Vec::new(),
+            bottom: room.top,
+        };
     }
-    let room = (width - start).max(0.0);
-    let (mut x, mut y) = (start, top);
+    // A row starts at its start, or at its right edge when the start passes it: never outside.
+    let start = room.start.min(room.width);
+    let (mut x, mut y) = (start, room.top);
     let mut rects = Vec::with_capacity(widths.len());
-    for &action in widths {
-        if x > start + 0.5 && x + action > width + 0.5 {
+    for &item in widths {
+        let item = item.max(0.0);
+        // Exact, with no slack: an item that would end past the room's right edge starts the
+        // next row, unless it is the row's first (review of PR 895: 20 + S + 20 in 47.75 ended at
+        // 48).
+        if x > start && x + item > room.width {
             x = start;
-            y += control + row_gap;
+            y += room.height + room.row_gap;
         }
-        let shown = action.min(room);
-        rects.push(Rect::from_min_size(pos2(x, y), vec2(shown, control)));
-        x += shown + S;
+        // The room's right edge bounds every rect, so a row's first item wider than the row
+        // ends there; the rect is made from its edges, so no sum can pass it.
+        let right = (x + item).min(room.width);
+        rects.push(Rect::from_min_max(pos2(x, y), pos2(right, y + room.height)));
+        x = right + S;
     }
-    (rects, y + control)
+    Wrapped {
+        rects,
+        bottom: y + room.height,
+    }
 }
 
 /// For a caller's tests (the Trackers page's, L7): the narrowest row width at which `line`'s
@@ -270,7 +383,7 @@ pub fn painted_in_block(block: Rect, tail: f32, painted: &[Rect]) -> Result<(), 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::design::components::{ACTION_WORDS_LAID, Action};
+    use crate::design::components::{ACTION_WORDS_LAID, Action, LaidAction};
     use crate::design::memo::{Changed, Revised, Revision};
     use crate::design::outcome::{Messages, NoPress, PaneFrame};
     use crate::design::pane::{Block, BlockRegion, Body, RegionState, draw_laid};
@@ -300,8 +413,25 @@ mod tests {
         )
     }
 
+    /// Every word the last pass painted, as its painted galley holds it.
+    fn painted_words(harness: &Harness<'_, List>) -> Vec<String> {
+        fn walk(shape: &egui::Shape, words: &mut Vec<String>) {
+            match shape {
+                egui::Shape::Text(text) => words.push(text.galley.text().to_owned()),
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, words)),
+                _ => {}
+            }
+        }
+        let mut words = Vec::new();
+        for clipped in &harness.output().shapes {
+            walk(&clipped.shape, &mut words);
+        }
+        words
+    }
+
     /// One line of the test list: its words, its actions' words, the words of its parts below.
-    #[derive(Clone, PartialEq)]
+    /// Neither `Clone` nor `PartialEq`: the host keeps its layouts by their key, so a per-frame
+    /// copy or compare of its lines cannot come back (review of PR 892, P3).
     struct Line {
         heading: Option<(&'static str, usize)>,
         title: Option<&'static str>,
@@ -311,6 +441,10 @@ mod tests {
         actions: Vec<&'static str>,
         beside: bool,
         below: Vec<&'static str>,
+        /// Parts over the line (an Arrivals group's head line and status), each Small words.
+        over: Vec<&'static str>,
+        /// Small words that fill the name cell, wrapped in it (an Arrivals group's summary).
+        cell: Option<&'static str>,
     }
 
     /// What a pass drew of one line: the name's slot, each action's slot with the rect it drew
@@ -354,8 +488,10 @@ mod tests {
     struct Kept {
         inputs: LineInputs,
         laid: Vec<Laid>,
-        words: Vec<Vec<Arc<Galley>>>,
+        words: Vec<Vec<LaidAction>>,
         below: Vec<Vec<Arc<Galley>>>,
+        over: Vec<Vec<Arc<Galley>>>,
+        cells: Vec<Option<Arc<Galley>>>,
         counted: Vec<(f32, f32)>,
     }
 
@@ -393,6 +529,8 @@ mod tests {
             actions,
             beside,
             below: Vec::new(),
+            over: Vec::new(),
+            cell: None,
         };
         vec![
             Line {
@@ -419,11 +557,26 @@ mod tests {
                     false,
                 )
             },
+            // An Arrivals group: a heading inside the column, its head line and status over the
+            // line, a two-line summary in its name cell, and Add at the block's edge.
+            Line {
+                heading: Some(("For this encounter", 1)),
+                over: vec!["Old Guard · Fight after: Hard", "Added in round 2"],
+                cell: Some("Four members: two veterans, a priest and a scout"),
+                ..line("", "", vec!["Add 4"], true)
+            },
         ]
     }
 
+    /// The test's actions: "Light one" shows its keyboard hint and "Eat one" its icon, so the
+    /// quiet frame and the measures cover both (review of PR 892, P2).
     fn action(words: &str) -> Action<'_> {
-        Action::secondary(words).density(Density::Read)
+        let action = Action::secondary(words).density(Density::Read);
+        match words {
+            "Light one" => action.key("L"),
+            "Eat one" => action.icon(crate::design::icons::ADD),
+            _ => action,
+        }
     }
 
     fn actions(ui: &Ui, at: usize, line: &Line) -> Vec<LineAction> {
@@ -452,8 +605,18 @@ mod tests {
         })
     }
 
-    /// The height over the name line by the test's own count: the heading, the title.
-    fn over(ui: &Ui, line: &Line, width: f32) -> f32 {
+    /// A line's heading: the first line's starts the column.
+    fn heading_of(at: usize, line: &Line) -> Option<LineHeading<'static>> {
+        line.heading.map(|(title, count)| LineHeading {
+            title,
+            count,
+            first: at == 0,
+        })
+    }
+
+    /// The height over the name line by the test's own count: the heading (no space above the
+    /// one that starts the column), the title, the parts over the line.
+    fn over(ui: &Ui, (at, line): (usize, &Line), width: f32) -> f32 {
         measured();
         let mut height = 0.0;
         if let Some((title, count)) = line.heading {
@@ -462,7 +625,11 @@ mod tests {
                 .fonts_mut(|fonts| fonts.layout_job(group_heading_text(ui, title, count)))
                 .size()
                 .y;
-            height += group.above() + words + group.below();
+            let above = if at == 0 { 0.0 } else { group.above() };
+            height += above + words + group.below();
+        }
+        for words in &line.over {
+            height += part(ui, words, width).size().y + LINE_GAP;
         }
         if let Some(title) = line.title {
             height +=
@@ -488,16 +655,28 @@ mod tests {
         let mut rows = 0;
         let mut used = 0.0;
         for action in actions(ui, at, line) {
-            if rows == 0 || (used > 0.0 && start + used + action.width > width + 0.5) {
+            if rows == 0 || (used > 0.0 && start + used + action.width > width) {
                 rows += 1;
                 used = 0.0;
             }
             used += action.width + S;
         }
-        let line_rows = if line.beside { rows.max(1) } else { 1 + rows };
-        over(ui, line, width)
-            + line_rows as f32 * control
-            + (line_rows - 1) as f32 * XS
+        // The row: a control, or the cell's words when taller; the actions beside it stand
+        // centred in it, the actions under it after it.
+        let row = line.cell.map_or(control, |words| {
+            part(ui, words, columns.name - line.indent)
+                .size()
+                .y
+                .max(control)
+        });
+        let rows = rows as f32;
+        let line_height = if line.beside {
+            row.max((row - control) / 2.0 + rows * control + (rows - 1.0).max(0.0) * XS)
+        } else {
+            row + rows * (control + XS)
+        };
+        over(ui, (at, line), width)
+            + line_height
             + line
                 .below
                 .iter()
@@ -513,6 +692,8 @@ mod tests {
             laid: Vec::new(),
             words: Vec::new(),
             below: Vec::new(),
+            over: Vec::new(),
+            cells: Vec::new(),
             counted: Vec::new(),
         };
         for (at, line) in lines.iter().enumerate() {
@@ -523,10 +704,21 @@ mod tests {
                 .map(|words| part(ui, words, inputs.width))
                 .collect();
             let heights: Vec<f32> = below.iter().map(|galley| galley.size().y).collect();
+            let over_parts: Vec<Arc<Galley>> = line
+                .over
+                .iter()
+                .map(|words| part(ui, words, inputs.width))
+                .collect();
+            let over_heights: Vec<f32> = over_parts.iter().map(|galley| galley.size().y).collect();
+            let cell = line
+                .cell
+                .map(|words| part(ui, words, inputs.columns.name - line.indent));
             let recipe = ActionLine {
                 key: Id::new(("action_line_test", at)),
-                heading: line.heading,
+                heading: heading_of(at, line),
                 title: line.title,
+                over: &over_heights,
+                row: cell.as_ref().map_or(0.0, |cell| cell.size().y),
                 indent: line.indent,
                 name: line.name,
                 value: &line.value,
@@ -548,8 +740,10 @@ mod tests {
             );
             kept.laid.push(recipe.lay(ui, inputs.width));
             kept.below.push(below);
+            kept.over.push(over_parts);
+            kept.cells.push(cell);
             kept.counted.push((
-                over(ui, line, inputs.width),
+                over(ui, (at, line), inputs.width),
                 expected(ui, (at, line), inputs.columns, inputs.width) + inputs.tail,
             ));
         }
@@ -559,13 +753,22 @@ mod tests {
     /// Draw one laid line's parts in its slots from what was laid: its name and value, each
     /// action with its laid words (in its keyed slot), each part's laid words. Lays out no text.
     fn draw(ui: &mut crate::design::LaidUi<'_>, (at, line): (usize, &Line), kept: &Kept) -> Drawn {
-        let name = ui.part(slot::NAME, line.name, false).rect;
+        let name = match &kept.cells[at] {
+            Some(cell) => {
+                let cell = Arc::clone(cell);
+                ui.in_slot(slot::NAME, |ui| {
+                    ui.add(egui::Label::new(egui::WidgetText::Galley(cell)))
+                        .rect
+                })
+            }
+            None => ui.part(slot::NAME, line.name, false).rect,
+        };
         let value = ui.part(slot::VALUE, &line.value, false).rect;
         let mut lowest = name.bottom().max(value.bottom());
         let mut drew = Vec::new();
         for (index, words) in line.actions.iter().enumerate() {
             let at_slot = slot::FIRST_ACTION + index;
-            let laid = Arc::clone(&kept.words[at][index]);
+            let laid = kept.words[at][index].clone();
             let rect = ui.in_slot(at_slot, |ui| action(words).laid(laid).show(ui).rect);
             lowest = lowest.max(rect.bottom());
             drew.push((ui.slot(at_slot), rect));
@@ -574,6 +777,15 @@ mod tests {
             let at_slot = slot::FIRST_ACTION + line.actions.len() + index;
             let galley = Arc::clone(galley);
             let rect = ui.in_slot(at_slot, |ui| {
+                ui.add(egui::Label::new(egui::WidgetText::Galley(galley)))
+                    .rect
+            });
+            lowest = lowest.max(rect.bottom());
+        }
+        let over_first = slot::FIRST_ACTION + line.actions.len() + line.below.len();
+        for (index, galley) in kept.over[at].iter().enumerate() {
+            let galley = Arc::clone(galley);
+            let rect = ui.in_slot(over_first + index, |ui| {
                 ui.add(egui::Label::new(egui::WidgetText::Galley(galley)))
                     .rect
             });
@@ -691,6 +903,35 @@ mod tests {
                             size.y,
                             lowest + tail - top
                         );
+                        // The head runs to the line's bottom when anything stands over the
+                        // line (SH9); a tall row centres the actions beside it.
+                        let line = &list.lines[*at];
+                        let bottom = actions
+                            .iter()
+                            .map(|(slot, _)| slot.bottom())
+                            .fold(name.bottom(), f32::max)
+                            - top;
+                        let over_line =
+                            line.heading.is_some() || line.title.is_some() || !line.over.is_empty();
+                        let head = kept.laid[*at].head();
+                        assert!(
+                            if over_line {
+                                head.is_some_and(|head| (head - bottom).abs() < 0.5)
+                            } else {
+                                head.is_none()
+                            },
+                            "{case}: line {at}'s head {head:?} ends at its line ({bottom})"
+                        );
+                        if line.cell.is_some() && line.beside {
+                            assert!(
+                                name.height() > Density::Read.control() + 0.5
+                                    && actions.first().is_some_and(|(slot, _)| {
+                                        (slot.center().y - name.center().y).abs() < 0.5
+                                    }),
+                                "{case}: line {at}'s action stands centred in its tall row: \
+                                 {name:?} {actions:?}"
+                            );
+                        }
                         wrapped += usize::from(
                             actions
                                 .windows(2)
@@ -702,6 +943,243 @@ mod tests {
         }
         assert!(wrapped > 0, "some width wraps a line's actions");
     }
+    /// W1 (invariants note, class 8): for any widths and any room, every rect `wrap` gives lies
+    /// inside its room EXACTLY (no tolerance: no rect ends past `start + width`, ever), a row's
+    /// items do not overlap and stand `S` apart, and the bottom follows the rows. Widths and rooms
+    /// are not whole numbers and come at the app's scales, with each case also at a quarter and
+    /// one point either side of the width at which the items take one row, and the review's case
+    /// (20 and 20 in 47.75, which ended at 48). Red: an item that keeps its width past the room;
+    /// a fit test with half a point of slack.
+    #[test]
+    fn a_wrap_never_leaves_its_room() {
+        // A fixed sequence (xorshift), so every run checks the same cases.
+        let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % 10_000) as f32 / 10.0
+        };
+        let check = |widths: &[f32], room: WrapRoom| {
+            let wrapped = wrap(widths, room);
+            let start = room.start.min(room.width);
+            let rects = wrapped.rects();
+            assert_eq!(rects.len(), widths.len());
+            // Sums of floats only (the gap after an item, the rows' bottom) get this much; the
+            // room's edges get none.
+            const SUM: f32 = 1e-3;
+            for (at, rect) in rects.iter().enumerate() {
+                assert!(
+                    rect.left() >= start
+                        && rect.right() <= room.width
+                        && rect.top() >= room.top
+                        && rect.bottom() <= wrapped.bottom()
+                        && (rect.height() - room.height).abs() < SUM,
+                    "item {at} {rect:?} leaves its room {room:?} ({widths:?})"
+                );
+                if let Some(before) = at.checked_sub(1).map(|at| rects[at])
+                    && before.top() == rect.top()
+                {
+                    assert!(
+                        rect.left() >= before.right() + S - SUM,
+                        "items {} and {at} overlap in a row: {before:?} {rect:?}",
+                        at - 1
+                    );
+                }
+            }
+            let rows = rects
+                .windows(2)
+                .filter(|pair| pair[1].top() > pair[0].top())
+                .count()
+                + usize::from(!rects.is_empty());
+            let expected = if rows == 0 {
+                room.top
+            } else {
+                room.top + rows as f32 * room.height + (rows - 1) as f32 * room.row_gap
+            };
+            assert!(
+                (wrapped.bottom() - expected).abs() < SUM,
+                "the bottom {} follows {rows} rows ({room:?})",
+                wrapped.bottom()
+            );
+        };
+        let read = WrapRoom {
+            start: 0.0,
+            width: 47.75,
+            top: 0.0,
+            height: Density::Read.control(),
+            row_gap: XS,
+        };
+        check(&[20.0, 20.0], read);
+        assert!(
+            wrap(&[20.0, 20.0], read).rects()[1].top() > 0.0,
+            "20, S and 20 do not fit in 47.75: the second takes the next row"
+        );
+        check(
+            &[20.0, 20.0],
+            WrapRoom {
+                width: 48.0,
+                ..read
+            },
+        );
+        for case in 0..2_000 {
+            // The app's scales: a logical point at 1, 1.25, 1.5, 1.75 and 2 pixels.
+            let scale = [1.0, 1.25, 1.5, 1.75, 2.0][case % 5];
+            let width = (40.0 + next()) / scale;
+            let start = (next() % (width * 1.2)) / scale;
+            let widths: Vec<f32> = (0..1 + case % 7).map(|_| next() * 0.4 / scale).collect();
+            let room = WrapRoom {
+                start,
+                width,
+                top: 10.0 + next() / scale,
+                height: Density::Read.control(),
+                row_gap: XS,
+            };
+            check(&widths, room);
+            let one_row = start + widths.iter().sum::<f32>() + S * (widths.len() - 1) as f32;
+            for edge in [
+                one_row - 1.0,
+                one_row - 0.25,
+                one_row,
+                one_row + 0.25,
+                one_row + 1.0,
+            ] {
+                check(
+                    &widths,
+                    WrapRoom {
+                        width: edge,
+                        ..room
+                    },
+                );
+            }
+            check(&[], room);
+        }
+    }
+
+    /// W1: a real long item ("Score for Old Guard") in a room one point wider than it and one
+    /// point narrower: it keeps its width, then takes its row's width and cuts its own words;
+    /// at both, the action painted in its rect lies inside the room. Review of PR 895 (P2): the
+    /// same action with an icon and a keyboard hint, in slots from one point over its width down
+    /// to 0 (in steps that are not whole points): its rect and everything it paints that shows
+    /// lie inside the slot, exactly, and it gives up its hint, then its words, then its icon, in
+    /// that order. Red: an action at least a control wide whatever its slot.
+    #[test]
+    fn a_wrapped_long_action_paints_inside_its_room() {
+        let mut harness = Harness::builder()
+            .with_size(vec2(600.0, 300.0))
+            .themed_ui_state(
+                |ui, painted: &mut Vec<(WrapRoom, Rect, Rect)>| {
+                    painted.clear();
+                    let long = action("Score for Old Guard");
+                    let width = long.natural_width(ui);
+                    let origin = ui.max_rect().min;
+                    for (at, row) in [width + 1.0, width - 1.0].into_iter().enumerate() {
+                        let room = WrapRoom {
+                            start: origin.x,
+                            width: origin.x + row,
+                            top: origin.y + at as f32 * 60.0,
+                            height: Density::Read.control(),
+                            row_gap: XS,
+                        };
+                        let wrapped = wrap(&[width], room);
+                        let rect = wrapped.rects()[0];
+                        let drew = ui
+                            .new_child(egui::UiBuilder::new().max_rect(rect))
+                            .add_enabled_ui(true, |ui| action("Score for Old Guard").show(ui).rect)
+                            .inner;
+                        painted.push((room, rect, drew));
+                    }
+                },
+                Vec::new(),
+            );
+        harness.run_steps(2);
+        for (room, rect, drew) in harness.state() {
+            assert!(
+                drew.left() >= room.start - 0.5 && drew.right() <= room.width + 0.5,
+                "the action painted at {drew:?} (its rect {rect:?}) leaves its room {room:?}"
+            );
+        }
+        let state = harness.state();
+        assert!(
+            state[1].1.width() < state[0].1.width(),
+            "one point narrower, the item takes its row's width: {state:?}"
+        );
+        let full = || {
+            action("Score for Old Guard")
+                .icon(crate::design::icons::ADD)
+                .key("G")
+        };
+        // The slot's width in, the slot and the action's rect out.
+        let mut sweep = Harness::builder()
+            .with_size(vec2(600.0, 200.0))
+            .themed_ui_state(
+                |ui, (width, slot, drew): &mut (f32, Rect, Rect)| {
+                    *slot = Rect::from_min_size(
+                        ui.max_rect().min + vec2(20.0, 20.0),
+                        vec2(*width, 40.0),
+                    );
+                    *drew = ui
+                        .new_child(egui::UiBuilder::new().max_rect(*slot))
+                        .add_enabled_ui(true, |ui| full().show(ui).rect)
+                        .inner;
+                },
+                (0.0, Rect::NOTHING, Rect::NOTHING),
+            );
+        let natural = {
+            sweep.state_mut().0 = 600.0;
+            sweep.run_steps(2);
+            sweep.state().2.width()
+        };
+        let mut width = natural + 1.0;
+        let mut seen = Vec::new();
+        while width >= 0.0 {
+            sweep.state_mut().0 = width;
+            sweep.run_steps(2);
+            let (_, slot, drew) = *sweep.state();
+            assert!(
+                slot.contains_rect(drew),
+                "at {width}: the action's rect {drew:?} leaves its slot {slot:?}"
+            );
+            let (mut words, mut icon, mut key) = (false, false, false);
+            for clipped in &sweep.output().shapes {
+                let shown = clipped
+                    .shape
+                    .visual_bounding_rect()
+                    .intersect(clipped.clip_rect);
+                // The panel's own background is not the action's.
+                if !shown.is_positive() || shown.width() >= 599.0 {
+                    continue;
+                }
+                assert!(
+                    slot.contains_rect(shown),
+                    "at {width}: a part shows at {shown:?}, outside its slot {slot:?}"
+                );
+                if let egui::Shape::Text(text) = &clipped.shape {
+                    match text.galley.text() {
+                        "G" => key = true,
+                        glyph if glyph == crate::design::icons::ADD => icon = true,
+                        _ => words = true,
+                    }
+                }
+            }
+            assert!(
+                (!key || words) && (!words || icon),
+                "at {width}: the hint goes first, then the words, then the icon \
+                 (hint {key}, words {words}, icon {icon})"
+            );
+            seen.push((key, words, icon));
+            width -= 0.75;
+        }
+        for stage in [
+            (true, true, true),
+            (false, true, true),
+            (false, false, true),
+            (false, false, false),
+        ] {
+            assert!(seen.contains(&stage), "the sweep shows the stage {stage:?}");
+        }
+    }
+
     /// Review of PR 876 (P2): an action wider than a whole row of actions takes a row of its
     /// own, cut to the row's room, so every action stays in the block (width 340, columns 120 and
     /// 48, actions 40, 40 and 200: the third ended at 384). Red: the wrap that let it run on.
@@ -717,6 +1195,8 @@ mod tests {
                     key: Id::new("wide"),
                     heading: None,
                     title: None,
+                    over: &[],
+                    row: 0.0,
                     indent: 0.0,
                     name: "Torches",
                     value: "3",
@@ -756,30 +1236,78 @@ mod tests {
     }
 
     /// A quiet frame lays out and measures no text, from the host's entry through its paint:
-    /// no line by the recipe, no measure by the host, no word by an action (each paints its laid
-    /// words); the host compares its key, never its lines. A new value, a new action, a wider
-    /// name column, a new font atlas, another theme and another scale each lay the lines out
-    /// again, and the pass shows it. Red: actions that lay their own words; a key without the
-    /// atlas; a host that lays its lines every frame.
+    /// no line by the recipe, no measure by the host, no word, keyboard hint or icon by an action
+    /// (each paints what was laid); the host compares its key, never its lines. The theme's atlas
+    /// probe is its one layout, at most once a pass. A new value and a renamed action of the same
+    /// length paint their new words (as painted, not as named) in the same pass, and the next
+    /// quiet frame paints them again from what was laid. A new action, a wider name column, a new
+    /// font atlas, another theme and another scale each lay the lines out again, and the pass
+    /// shows it. Red: actions that lay their own words, hints or icons; a key without the atlas;
+    /// a host that lays its lines every frame; a host that keeps its laid lines after an edit.
     #[test]
     fn a_quiet_frame_lays_no_line_and_a_change_lays_it_again() {
+        use crate::design::theme::ATLAS_PROBES;
         let laid = || LINES_LAID.with(std::cell::Cell::get);
+        let probes = || ATLAS_PROBES.with(std::cell::Cell::get);
         let mut harness = harness(560.0, 1.0, (0.0, false));
-        let before = work();
-        harness.run_steps(3);
-        assert_eq!(
-            work(),
-            before,
-            "quiet frames lay out and measure no text (recipe, host, actions)"
+        let quiet = |harness: &mut Harness<'_, List>, what: &str| {
+            let (before, probed, pass) = (work(), probes(), harness.ctx.cumulative_pass_nr());
+            harness.run_steps(3);
+            let passes = (harness.ctx.cumulative_pass_nr() - pass) as usize;
+            assert_eq!(
+                work(),
+                before,
+                "{what}: quiet frames lay out and measure no text (recipe, host, actions)"
+            );
+            assert!(
+                probes() - probed <= passes,
+                "{what}: the atlas probe is laid at most once a pass ({} in {passes})",
+                probes() - probed
+            );
+        };
+        quiet(&mut harness, "at first");
+        let painted = painted_words(&harness);
+        assert!(
+            painted.iter().any(|words| words == "L")
+                && painted
+                    .iter()
+                    .any(|words| words == crate::design::icons::ADD),
+            "the hinted and the icon action paint their hint and icon: {painted:?}"
         );
         let before = laid();
         harness
             .state_mut()
             .edit(|lines| lines[0].value = "4".to_owned());
         harness.step();
+        let painted = painted_words(&harness);
         assert!(
-            laid() > before && harness.query_by_label("4").is_some(),
-            "a new value is laid out and shown in the same pass"
+            laid() > before
+                && painted.iter().any(|words| words == "4")
+                && !painted.iter().any(|words| words == "3"),
+            "a new value of the same length is laid out and painted in the same pass: {painted:?}"
+        );
+        quiet(&mut harness, "after a new value");
+        assert!(
+            painted_words(&harness).iter().any(|words| words == "4"),
+            "a quiet frame paints the new value from what was laid"
+        );
+        let before = laid();
+        harness
+            .state_mut()
+            .edit(|lines| lines[1].actions[0] = "Ask");
+        harness.step();
+        let painted = painted_words(&harness);
+        let count = |painted: &[String], word: &str| painted.iter().filter(|w| *w == word).count();
+        assert!(
+            laid() > before && count(&painted, "Ask") == 1 && count(&painted, "Use") == 1,
+            "a renamed action of the same length paints its new words in the same pass: \
+             {painted:?}"
+        );
+        quiet(&mut harness, "after a renamed action");
+        assert_eq!(
+            count(&painted_words(&harness), "Ask"),
+            1,
+            "a quiet frame paints the renamed action from what was laid"
         );
         let before = laid();
         harness
@@ -821,6 +1349,89 @@ mod tests {
         assert!(laid() > before, "another scale lays the lines out again");
     }
 
+    /// Review of PR 892 (P2): laid words hold no colour and no state. A laid primary that is
+    /// blocked paints its laid words (no layout of its own) in the colour and font that the same
+    /// action paints its own words in; one that is selected paints as a secondary, so its laid
+    /// words (laid in the primary's font) are not its words: it lays its own, in the secondary's
+    /// font and colour. Red: words laid in their kind's colour; laid words painted whatever their
+    /// font.
+    #[test]
+    fn a_laid_action_paints_in_its_state() {
+        // With a keyboard hint, so a hint laid again by paint fails this test too (review of
+        // PR 895, P3).
+        let save = || Action::primary("Save").density(Density::Read).key("S");
+        let mut harness = Harness::builder()
+            .with_size(vec2(400.0, 300.0))
+            .themed_ui_state(
+                |ui, own: &mut Vec<usize>| {
+                    own.clear();
+                    let laid = save().laid_words(ui, 200.0);
+                    let blocked = || save().blocked_if(true, "Name it first.");
+                    let selected = || save().selected(true);
+                    for action in [
+                        blocked(),
+                        blocked().laid(laid.clone()),
+                        selected(),
+                        selected().laid(laid.clone()),
+                    ] {
+                        let before = ACTION_WORDS_LAID.with(std::cell::Cell::get);
+                        action.show(ui);
+                        own.push(ACTION_WORDS_LAID.with(std::cell::Cell::get) - before);
+                    }
+                },
+                Vec::new(),
+            );
+        harness.run_steps(2);
+        fn walk(shape: &egui::Shape, texts: &mut Vec<egui::epaint::TextShape>) {
+            match shape {
+                egui::Shape::Text(text) if text.galley.text() == "Save" => texts.push(text.clone()),
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, texts)),
+                _ => {}
+            }
+        }
+        let mut texts = Vec::new();
+        for clipped in &harness.output().shapes {
+            walk(&clipped.shape, &mut texts);
+        }
+        // As the tessellator paints it: the first glyph's colour, or the paint's colour for a laid
+        // word without one, at the shape's opacity; and its font.
+        let seen = |text: &egui::epaint::TextShape| {
+            let glyph = text.galley.rows[0].row.visuals.mesh.vertices[0].color;
+            let color = if glyph == egui::Color32::PLACEHOLDER {
+                text.fallback_color
+            } else {
+                glyph
+            };
+            (
+                text.galley.job.sections[0].format.font_id.clone(),
+                text.override_text_color
+                    .unwrap_or(color)
+                    .gamma_multiply(text.opacity_factor),
+            )
+        };
+        assert_eq!(texts.len(), 4, "four actions paint their words");
+        assert_eq!(
+            seen(&texts[1]),
+            seen(&texts[0]),
+            "a blocked action paints its laid words as its own"
+        );
+        assert_eq!(
+            seen(&texts[3]),
+            seen(&texts[2]),
+            "a selected primary paints as a secondary"
+        );
+        assert_ne!(
+            seen(&texts[2]).0,
+            seen(&texts[0]).0,
+            "selected, it is a secondary"
+        );
+        assert_eq!(
+            harness.state(),
+            &vec![1, 0, 1, 1],
+            "the blocked action paints what was laid; the selected one lays its own words"
+        );
+    }
+
     /// What the threshold case drew: the tail, the one-row width, and at each width its block,
     /// every rect it painted, and each action's top.
     type Threshold = (f32, Option<f32>, Vec<(Rect, Vec<Rect>, Vec<f32>)>);
@@ -852,6 +1463,8 @@ mod tests {
                         key: Id::new("threshold"),
                         heading: None,
                         title: None,
+                        over: &[],
+                        row: 0.0,
                         indent: 0.0,
                         name: "Old Guard",
                         value: "2",

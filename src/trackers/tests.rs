@@ -2007,14 +2007,104 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
         h.query_by_label(done).is_some(),
         "the new Due row draws its Done"
     );
-    let after = laid();
+    let made = Trackers::test_due_parts_made;
+    let (after, parts) = (laid(), made());
     h.run_steps(5);
     assert!(
-        h.query_by_label(done).is_some() && laid() == after,
-        "an unchanged frame with Due rows lays none out: {} then {}",
-        after,
-        laid()
+        h.query_by_label(done).is_some() && laid() == after && made() == parts,
+        "an unchanged frame with Due rows lays none out and makes no parts, from the host's \
+         entry through paint: laid {after} then {}, parts {parts} then {}",
+        laid(),
+        made()
     );
+    // The footer's line (its words, `Undo: Take seal` and the `Add to Timeline` choice) is laid
+    // out once per change of the footer's plan: from the page's entry through paint, an
+    // unchanged frame with that line measures no text (`design::TEXT_MEASURES`; the panel's
+    // own body measures none). Red: a footer that measures its choices every frame. (Laid words
+    // are counted by the design crate's footer and body tests: this panel's lines lay their own
+    // until they move onto `ActionLine`.)
+    assert!(
+        h.query_by_label("Add to Timeline").is_some()
+            && h.query_by_label("Undo: Take seal").is_some(),
+        "footer-reached: the footer line draws its Undo and its choice"
+    );
+    let measures = || crate::design::components::TEXT_MEASURES.with(std::cell::Cell::get);
+    let before = measures();
+    h.run_steps(5);
+    assert_eq!(
+        measures(),
+        before,
+        "footer-quiet: an unchanged frame with a footer line measures no text"
+    );
+    // A change of the laid words at the same length: `Lose seal` after `Take seal` makes the
+    // footer's Undo `Undo: Lose seal`. The footer is planned again, and the painted words are
+    // the new ones (read from the paint, not from the accessible name).
+    let painted = |h: &Harness<'_, Trackers>, words: &str| {
+        h.output().shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, eframe::egui::Shape::Text(text) if text.galley.job.text == words)
+        })
+    };
+    assert!(painted(&h, "Undo: Take seal"), "footer-paint-reached");
+    h.state_mut()
+        .press("seals", Some("Party"), "Lose seal", None);
+    h.run_steps(4);
+    assert!(
+        painted(&h, "Undo: Lose seal") && !painted(&h, "Undo: Take seal"),
+        "footer-same-length: the footer paints its new Undo words"
+    );
+    // The Due row's checks below start where they did before this footer case: the Party's
+    // first seal taken, its row due.
+    h.state_mut()
+        .press("seals", Some("Party"), "Take seal", None);
+    h.run_steps(4);
+    assert!(
+        h.query_by_label(done).is_some(),
+        "the Party's first seal is due again"
+    );
+    // Astra's P2 on PR 885: a change of content at the same length. The mark's words change in
+    // the note ("First" to "Final"); the next press reads the note (and records nothing), and
+    // the row shows the new words.
+    let note = race.campaign.path.join("Tournament.md");
+    let text = fs::read_to_string(&note).unwrap();
+    assert!(text.contains("say: First seal."));
+    fs::write(&note, text.replace("say: First seal.", "say: Final seal.")).unwrap();
+    h.state_mut().press("favor", None, "Crowd loves it", None);
+    h.run_steps(4);
+    let painted = |h: &Harness<'_, Trackers>, words: &str| {
+        // A label's words are its accessible value.
+        h.query_all(
+            egui_kittest::kittest::By::new()
+                .predicate(|node| node.value().is_some_and(|value| value.contains(words))),
+        )
+        .count()
+    };
+    assert!(
+        painted(&h, "Party: Final seal.") > 0 && painted(&h, "Party: First seal.") == 0,
+        "a same-length change of a Due row's words shows the new words"
+    );
+    // A new font atlas, and the other theme, each lay the rows again (the galleys hold the
+    // atlas's places and their colours).
+    let before = laid();
+    let alpha = h.ctx.style().visuals.text_alpha_from_coverage;
+    h.ctx.all_styles_mut(|style| {
+        style.visuals.text_alpha_from_coverage = eframe::egui::epaint::AlphaFromCoverage::Linear;
+    });
+    h.step();
+    h.ctx
+        .all_styles_mut(|style| style.visuals.text_alpha_from_coverage = alpha);
+    h.run_steps(3);
+    assert!(laid() > before, "a new font atlas lays the Due rows again");
+    let before = laid();
+    let visuals = h.ctx.style().visuals.clone();
+    // Light colours with the same text alpha, so the atlas stays: only the theme changes.
+    let mut light = eframe::egui::Visuals::light();
+    light.text_alpha_from_coverage = visuals.text_alpha_from_coverage;
+    h.ctx.set_visuals(light);
+    h.run_steps(3);
+    assert!(laid() > before, "the other theme lays the Due rows again");
+    h.ctx.set_visuals(visuals);
+    h.run_steps(3);
+    let after = laid();
     // A change of the width is a new measure: the rows are laid again.
     h.set_size(eframe::egui::vec2(520.0, 640.0));
     h.run_steps(4);

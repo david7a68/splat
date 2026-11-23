@@ -224,7 +224,8 @@ pub fn run(d: &mut Driver<'_>) {
     // T5.7: the Ready to run rows. Lookup closed, then open.
     ready_rows_say_their_word(d, "T5.7-ready");
     // Review of PR 581 (#589, `m-p0-ledger-kept`): unchanged frames measure no list of the
-    // ledger but In progress.
+    // ledger. Review of #875: In progress neither, with the fixture's paused Bridge Ambush in it.
+    d.expect("Resume");
     d.settle();
     let measured = crate::encounters::ledger_measures();
     for _ in 0..3 {
@@ -237,6 +238,19 @@ pub fn run(d: &mut Driver<'_>) {
             "Unchanged frames measure the ledger's lists {} times",
             crate::encounters::ledger_measures() - measured
         ),
+    );
+    // Review of #875 (P2, `m-p0-ledger-runs`): a new read of the run list in the same minute (a
+    // refresh, a deleted save) measures both kept lists again: In progress, and Ready, Groups
+    // and History.
+    let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+    let measured = crate::encounters::ledger_measures();
+    d.app_mut().encounters.read_runs_again(&campaign);
+    d.settle();
+    let again = crate::encounters::ledger_measures() - measured;
+    d.observe(
+        "m-p0-ledger-runs",
+        again >= 2,
+        format!("Another read of the run list measures the ledger's lists {again} times"),
     );
     // iter-29 G118 (AB4, FB5; ruling R31), a cell witness on the PAINTED line at each size:
     // Nameless Visitor's only creature lacks its XP, so its row ends with `XP not known` and
