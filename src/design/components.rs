@@ -4783,8 +4783,12 @@ pub(super) fn undo_message_capped(
     action: &str,
     name: Option<&str>,
 ) -> bool {
-    undo_message_line(ui, tone, text, action, name, None, false).0
+    undo_message_line(ui, tone, text, (action, None), name, None, false).0
 }
+
+/// An Undo's visible words, with the words laid before paint and the action's width with them
+/// when the caller keeps them (a typed footer's plan): then the line lays out no Undo words.
+pub(super) type UndoWords<'a> = (&'a str, Option<(LaidAction, f32)>);
 
 /// `undo_message_capped`, with Undo blocked for `blocked`'s reason (only Undo greys, and the line
 /// keeps its layout, so blocking moves nothing on it; the caller paints the reason), and the y of
@@ -4793,7 +4797,7 @@ pub(super) fn undo_message_line(
     ui: &mut Ui,
     tone: Tone,
     text: &str,
-    action: &str,
+    action: UndoWords<'_>,
     name: Option<&str>,
     blocked: Option<&str>,
     tipped: bool,
@@ -4809,7 +4813,7 @@ fn undo_message_inside(
     ui: &mut Ui,
     tone: Tone,
     text: &str,
-    action: &str,
+    (action, kept): UndoWords<'_>,
     name: Option<&str>,
     blocked: Option<&str>,
     tipped: bool,
@@ -4831,7 +4835,13 @@ fn undo_message_inside(
         Some(name) => button.name(name),
         None => button,
     };
-    let button_width = button.natural_width(ui);
+    let (button, button_width) = match kept {
+        Some((words, width)) => (button.laid(words), width),
+        None => {
+            let width = button.natural_width(ui);
+            (button, width)
+        }
+    };
     let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
     // The words start `XS` after the icon whatever the caller's spacing; the gap follows them.
     // App round 2, X13: the line is measured as `message` draws it, with one gap before the

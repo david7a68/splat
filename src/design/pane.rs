@@ -138,7 +138,7 @@ mod plan_row;
 /// The scroll region of an owned list body over its plan (layout step 3b).
 mod region;
 pub use action_line::{
-    ActionLine, LineAction, LineColumns, WrapRoom, Wrapped, slot as line_slot, wrap,
+    ActionLine, LineAction, LineColumns, LineHeading, WrapRoom, Wrapped, slot as line_slot, wrap,
 };
 #[cfg(any(test, feature = "test-support"))]
 pub use action_line::{one_row_width, painted_in_block};
