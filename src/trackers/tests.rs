@@ -2015,6 +2015,41 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
         after,
         laid()
     );
+    // The footer's line (its words, `Undo: Take seal` and the `Add to Timeline` choice) is laid
+    // out once per change of the footer's plan: from the page's entry through paint, an
+    // unchanged frame with that line measures no text (`design::TEXT_MEASURES`; the panel's
+    // own body measures none). Red: a footer that measures its choices every frame. (Laid words
+    // are counted by the design crate's footer and body tests: this panel's lines lay their own
+    // until they move onto `ActionLine`.)
+    assert!(
+        h.query_by_label("Add to Timeline").is_some()
+            && h.query_by_label("Undo: Take seal").is_some(),
+        "footer-reached: the footer line draws its Undo and its choice"
+    );
+    let measures = || crate::design::components::TEXT_MEASURES.with(std::cell::Cell::get);
+    let before = measures();
+    h.run_steps(5);
+    assert_eq!(
+        measures(),
+        before,
+        "footer-quiet: an unchanged frame with a footer line measures no text"
+    );
+    // A change of the laid words at the same length: `Lose seal` after `Take seal` makes the
+    // footer's Undo `Undo: Lose seal`. The footer is planned again, and the painted words are
+    // the new ones (read from the paint, not from the accessible name).
+    let painted = |h: &Harness<'_, Trackers>, words: &str| {
+        h.output().shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, eframe::egui::Shape::Text(text) if text.galley.job.text == words)
+        })
+    };
+    assert!(painted(&h, "Undo: Take seal"), "footer-paint-reached");
+    h.state_mut()
+        .press("seals", Some("Party"), "Lose seal", None);
+    h.run_steps(4);
+    assert!(
+        painted(&h, "Undo: Lose seal") && !painted(&h, "Undo: Take seal"),
+        "footer-same-length: the footer paints its new Undo words"
+    );
     // A change of the width is a new measure: the rows are laid again.
     h.set_size(eframe::egui::vec2(520.0, 640.0));
     h.run_steps(4);
