@@ -1076,3 +1076,180 @@ fn typed_words_at_a_hidden_place_keep_no_uncertain_step() {
     let result = run("a", &[type_at(1, "a"), app(1, 0, "b"), Step::Undo]);
     assert_eq!(result, Ok("aba".to_owned()));
 }
+
+const FIELD_A: layout::FieldId =
+    crate::field_id!("typing_history_model_a").once(layout::Once::Example);
+const FIELD_B: layout::FieldId =
+    crate::field_id!("typing_history_model_b").once(layout::Once::Example);
+
+/// Two editors, one above the other.
+struct Two {
+    a: TextDraft,
+    b: TextDraft,
+    /// The focus goes to B in this frame, after A has drawn and before B draws.
+    to_b: bool,
+}
+
+fn two_editors() -> Harness<'static, Two> {
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(400.0, 300.0))
+        .with_step_dt(0.25)
+        .themed_ui_state(
+            |ui, two: &mut Two| {
+                let face = pane::Face::Font(egui::TextStyle::Body.resolve(ui.style()));
+                let height = pane::ViewHeight::AtMost(100.0);
+                let _ =
+                    pane::editor_view(ui, height, FIELD_A, &mut two.a, face.clone(), |edit| edit);
+                if std::mem::take(&mut two.to_b) {
+                    ui.memory_mut(|memory| memory.request_focus(FIELD_B.id()));
+                }
+                let height = pane::ViewHeight::AtMost(100.0);
+                let _ = pane::editor_view(ui, height, FIELD_B, &mut two.b, face, |edit| edit);
+            },
+            Two {
+                a: TextDraft::new("one two"),
+                b: TextDraft::new("six ten"),
+                to_b: false,
+            },
+        );
+    harness.step();
+    harness
+        .ctx
+        .memory_mut(|memory| memory.request_focus(FIELD_A.id()));
+    for _ in 0..6 {
+        harness.step();
+    }
+    harness
+}
+
+/// The selection of the field `id`: where it starts and its caret.
+fn selection(ctx: &egui::Context, id: egui::Id) -> Option<(usize, usize)> {
+    egui::TextEdit::load_state(ctx, id)
+        .and_then(|state| state.cursor.char_range())
+        .map(|range| (range.secondary.index, range.primary.index))
+}
+
+fn set_selection(ctx: &egui::Context, id: egui::Id, from: usize, to: usize) {
+    let mut state = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
+    state
+        .cursor
+        .set_char_range(Some(egui::text::CCursorRange::two(
+            egui::text::CCursor::new(from),
+            egui::text::CCursor::new(to),
+        )));
+    egui::TextEdit::store_state(ctx, id, state);
+}
+
+/// Who owns the next edit after an app write (Sol 2-026; review of PR 910, P1 910-b): the app
+/// writes into editor A; editor B has a selection; the focus goes to B before A's next frame, or
+/// in that frame after A has drawn. A's write changes only A; B keeps its words and its
+/// selection; the next typed letter is B's. (A fix that put an event for A into the frame's
+/// input erased B's selected words.)
+#[test]
+fn an_app_write_to_one_editor_leaves_the_other_editors_selection() {
+    for in_the_frame in [false, true] {
+        let mut harness = two_editors();
+        let ctx = harness.ctx.clone();
+        set_selection(&ctx, FIELD_A.id(), 3, 3);
+        set_selection(&ctx, FIELD_B.id(), 0, 3);
+        harness.step();
+        layout::write_under_history(
+            &ctx,
+            FIELD_A.id(),
+            &mut harness.state_mut().a,
+            "APP one two",
+        );
+        if in_the_frame {
+            harness.state_mut().to_b = true;
+        } else {
+            ctx.memory_mut(|memory| memory.request_focus(FIELD_B.id()));
+        }
+        harness.step();
+        let texts = |harness: &Harness<'_, Two>| {
+            (
+                harness.state().a.as_str().to_owned(),
+                harness.state().b.as_str().to_owned(),
+            )
+        };
+        assert_eq!(
+            texts(&harness),
+            ("APP one two".to_owned(), "six ten".to_owned()),
+            "in the frame: {in_the_frame}: the write changes A only"
+        );
+        assert_eq!(
+            selection(&ctx, FIELD_B.id()),
+            Some((0, 3)),
+            "in the frame: {in_the_frame}: B keeps its selection"
+        );
+        assert!(
+            ctx.memory(|memory| memory.has_focus(FIELD_B.id())),
+            "in the frame: {in_the_frame}: B has the focus"
+        );
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::Text("X".to_owned()));
+        harness.step();
+        assert_eq!(
+            texts(&harness),
+            ("APP one two".to_owned(), "X ten".to_owned()),
+            "in the frame: {in_the_frame}: the next typed letter is B's, over B's selection"
+        );
+    }
+}
+
+/// A selection the DM makes with the pointer in the frame right after an app write (Sol 2-026;
+/// review of PR 910, P1 910-b): `one two` with the caret after `one`; the app writes `APP ` at
+/// the start; in the next frame the DM presses Shift and clicks right of the text's end. The text
+/// is whole, and the selection runs from the caret to the end. (egui applies a pointer selection
+/// before a frame's events: an event put into that frame for the write deleted the new
+/// selection.)
+#[test]
+fn a_pointer_selection_right_after_an_app_write_deletes_nothing() {
+    let mut harness = page("one two");
+    select(&harness, 3, 3);
+    // The pointer comes to stand right of the text's end, on its line (egui knows what the
+    // pointer is over from the frame before).
+    let field = harness
+        .ctx
+        .read_response(FIELD.id())
+        .expect("the editor drew")
+        .interact_rect;
+    let right_of_the_end = egui::pos2(field.right() - 4.0, field.top() + 8.0);
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::PointerMoved(right_of_the_end));
+    harness.step();
+    let ctx = harness.ctx.clone();
+    layout::write_under_history(
+        &ctx,
+        FIELD.id(),
+        &mut harness.state_mut().draft,
+        "APP one two",
+    );
+    // No frame between the write and the click.
+    harness.input_mut().modifiers = egui::Modifiers::SHIFT;
+    harness.input_mut().events.push(egui::Event::PointerButton {
+        pos: right_of_the_end,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::SHIFT,
+    });
+    harness.step();
+    harness.input_mut().events.push(egui::Event::PointerButton {
+        pos: right_of_the_end,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::SHIFT,
+    });
+    harness.step();
+    harness.input_mut().modifiers = egui::Modifiers::NONE;
+    harness.step();
+    assert_eq!(shown(&harness), "APP one two", "the text is whole");
+    assert_eq!(
+        selection(&ctx, FIELD.id()),
+        Some((3, 11)),
+        "the selection runs from the caret to the text's end"
+    );
+}
