@@ -38,7 +38,7 @@ enum Source {
     Foreign,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 struct Atom {
     ch: char,
     put: Source,
@@ -206,8 +206,20 @@ enum Step {
     Reload {
         words: String,
     },
+    /// The DM moves the caret and changes no word: by a key, or to a place (as a click does).
+    Move(Caret),
     Undo,
     Redo,
+}
+
+/// A move of the caret.
+#[derive(Clone, Copy, Debug)]
+enum Caret {
+    Left,
+    Right,
+    Home,
+    End,
+    To(u16),
 }
 
 struct Page {
@@ -310,12 +322,9 @@ fn smallest_change(before: &str, after: &str) -> (usize, usize, String) {
 /// What an Undo's text is checked for.
 #[derive(Clone, Copy, PartialEq)]
 enum Order {
-    /// The reference's exact text: traces in which each of the DM's steps is one edit.
+    /// The reference's exact text.
     Exact,
-    /// The reference's characters, in any order: traces in which a step holds several edits.
-    /// The editor's steps are whole texts, so equal letters can then hide where the DM typed,
-    /// and a word the DM gets back can stand at another place among equal letters
-    /// (`write_under_history`'s named limit). No character may be lost or added.
+    /// The reference's characters, in any order (a fixed trace asks for no more).
     Characters,
 }
 
@@ -355,6 +364,10 @@ fn run_with(start: &str, steps: &[Step], order: Order, faults: &[Fault]) -> Resu
     let mut failures: Vec<String> = Vec::new();
     // The editor's text has the reference's characters in another order.
     let mut apart = false;
+    // The DM moved the caret since the last change of the words: egui takes a caret at another
+    // place for another state, so an Undo or a Redo may only move the caret (H2 is not checked
+    // until the words change again; H1 always is).
+    let mut caret_moved = false;
     let mut faults = faults.iter().copied();
     let ended = |failures: Vec<String>, text: String| {
         if failures.is_empty() {
@@ -382,7 +395,32 @@ fn run_with(start: &str, steps: &[Step], order: Order, faults: &[Fault]) -> Resu
                 now == model
             }
         };
+        if !matches!(step, Step::Move(_) | Step::Undo | Step::Redo) {
+            caret_moved = false;
+        }
         match step {
+            Step::Move(caret) => {
+                let pressed = match caret {
+                    Caret::Left => Some(egui::Key::ArrowLeft),
+                    Caret::Right => Some(egui::Key::ArrowRight),
+                    Caret::Home => Some(egui::Key::Home),
+                    Caret::End => Some(egui::Key::End),
+                    Caret::To(at) => {
+                        let at = usize::from(*at) % (chars + 1);
+                        select(&harness, at, at);
+                        harness.step();
+                        None
+                    }
+                };
+                if let Some(pressed) = pressed {
+                    key(&mut harness, pressed, egui::Modifiers::NONE);
+                }
+                caret_moved = true;
+                if !follows(&harness, &models, apart) {
+                    failures.push(failure("a caret move changed the words", &harness, &models));
+                    return ended(failures, shown(&harness));
+                }
+            }
             Step::Type {
                 at,
                 words,
@@ -453,10 +491,23 @@ fn run_with(start: &str, steps: &[Step], order: Order, faults: &[Fault]) -> Resu
                     &after,
                 );
                 harness.step();
-                for model in &mut models {
-                    model.foreign(head, old, &new);
-                    model.open = None;
+                // Each write takes its own order at a tie: the editor cannot tell, from whole
+                // texts, whether words the DM removed stood exactly at this write's place.
+                let mut forked: Vec<Reference> = Vec::new();
+                for model in &models {
+                    for after_gone in [false, true] {
+                        let mut model = model.clone();
+                        model.after_gone = after_gone;
+                        model.foreign(head, old, &new);
+                        model.open = None;
+                        if forked.len() < 64
+                            && !forked.iter().any(|other| other.atoms == model.atoms)
+                        {
+                            forked.push(model);
+                        }
+                    }
                 }
+                models = forked;
                 if !follows(&harness, &models, apart) {
                     failures.push(failure(
                         "the app's write gave another text",
@@ -560,7 +611,7 @@ fn run_with(start: &str, steps: &[Step], order: Order, faults: &[Fault]) -> Resu
                     // that differs, and Redo to the next one toward the newest (a key that does
                     // nothing does not pass). egui's steps are whole texts: a group that changed
                     // nothing in sum (a letter typed and deleted) is no step.
-                    if !model.crossed && !apart {
+                    if !model.crossed && !apart && !caret_moved {
                         let here = model.text(model.undone);
                         let mut older = model.undone + 1..=model.groups.len();
                         let mut newer = (0..model.undone).rev();
@@ -632,6 +683,14 @@ fn steps(one_edit: bool) -> impl Strategy<Value = Vec<Step>> {
         2 => (any::<u16>(), 0..3u8, words())
             .prop_map(|(at, len, words)| Step::App { at, len, words }),
         1 => words().prop_map(|words| Step::Reload { words }),
+        2 => prop_oneof![
+            Just(Caret::Left),
+            Just(Caret::Right),
+            Just(Caret::Home),
+            Just(Caret::End),
+            any::<u16>().prop_map(Caret::To),
+        ]
+        .prop_map(Step::Move),
         3 => Just(Step::Undo),
         1 => Just(Step::Redo),
     ];
@@ -670,8 +729,8 @@ fn the_reference_undoes_the_dms_groups_and_keeps_a_foreign_write() {
 
 #[test]
 fn undo_and_redo_show_only_texts_the_reference_allows() {
-    // One edit per step: the exact text. Several edits in a step: the characters (`Order`).
-    for (one_edit, order) in [(true, Order::Exact), (false, Order::Characters)] {
+    // One edit per step, and several edits in a step: the exact text in both.
+    for (one_edit, order) in [(true, Order::Exact), (false, Order::Exact)] {
         let result = runner(1000).run(&(words(), steps(one_edit)), |(start, steps)| {
             run_with(&start, &steps, order, &[])
                 .map(|_| ())
@@ -775,23 +834,55 @@ fn fixed_traces_keep_every_foreign_write() {
     );
 }
 
-/// Astra's trace (the note, section 3, v3): `aa`; the DM deletes the second `a`; the app changes
-/// the first `a` to `b`; Undo.
+/// Astra's trace (issue #900, F2): `aa`; the DM deletes the second `a`; the app changes the
+/// first `a` to `b`; Undo. And the same with the caret moved after the delete (review of PR 910,
+/// P1 910-c): by Left, by Home, and to a place.
+///
+/// The step `aa` cannot say which `a` the DM deleted, and no caret is evidence of it (the DM can
+/// move the caret after the delete). The app's write lies at the letters in question, so the
+/// step is not kept: Undo changes nothing. A step placed by the words after the change gave
+/// `ab`; one placed by the caret gave `ba` here and `ab` after Left.
 #[test]
 fn astras_trace() {
-    let delete = Step::Delete {
+    let delete = || Step::Delete {
         at: 1,
         len: 0,
         settle: true,
     };
-    let result = run("aa", &[delete, app(0, 1, "b"), Step::Undo]);
-    // Issue #900 (F2): the DM's `a` comes back where it was, after the app's `b`. A step placed
-    // by the words after the change took the change at its end, which gave `ab`.
-    assert_eq!(result, Ok("ba".to_owned()));
+    let at_once = || Step::Delete {
+        at: 1,
+        len: 0,
+        settle: false,
+    };
+    assert_eq!(
+        run("aa", &[delete(), app(0, 1, "b"), Step::Undo]),
+        Ok("b".to_owned())
+    );
+    for caret in [Caret::Left, Caret::Home, Caret::To(0), Caret::To(1)] {
+        for delete in [delete(), at_once()] {
+            let trace = [delete, Step::Move(caret), app(0, 1, "b"), Step::Undo];
+            assert_eq!(run("aa", &trace), Ok("b".to_owned()), "{trace:?}");
+        }
+    }
+    // The reference's own answer is `ba`: a record of each typed edit would give it.
     let mut model = Reference::set("aa", false);
     model.typed(1, 1, "");
     model.foreign(0, 1, "b");
     assert_eq!(model.text(1), "ba");
+    // With no equal letter at the delete, the step is certain, also after a caret move: `ac`;
+    // the DM deletes `c` and presses Home; the app changes `a` to `b`; Undo gives `bc`.
+    let delete = Step::Delete {
+        at: 1,
+        len: 0,
+        settle: false,
+    };
+    assert_eq!(
+        run(
+            "ac",
+            &[delete, Step::Move(Caret::Home), app(0, 1, "b"), Step::Undo]
+        ),
+        Ok("bc".to_owned())
+    );
 }
 
 /// Issue #900 (F3): `éa`; the DM types `é` after the first `é`, with no pause; the app changes
@@ -1252,4 +1343,24 @@ fn a_pointer_selection_right_after_an_app_write_deletes_nothing() {
         Some((3, 11)),
         "the selection runs from the caret to the text's end"
     );
+}
+
+/// A write beside typed words, among equal letters (review of PR 910, P1 910-c; found by the
+/// generated traces): `ab`; the DM types `bb` at the end and a space after `a`, with no pause;
+/// the app takes out the last `b`; Undo. The step `ab` and the text `a bbb` do not say which
+/// `b` is the older one, so the app's write has no certain place in the step: the step is not
+/// kept, and Undo changes nothing. Placed by the letters between the texts' common start and
+/// end alone (` bb` typed after `a`), the write took out the step's own `b`: `a` for `ab`.
+#[test]
+fn a_write_beside_typed_equal_letters_ends_the_history() {
+    let typed = |at: u16, words: &str| Step::Type {
+        at,
+        words: words.to_owned(),
+        settle: false,
+    };
+    let result = run(
+        "ab",
+        &[typed(2, "bb"), typed(1, " "), app(4, 1, ""), Step::Undo],
+    );
+    assert_eq!(result, Ok("a bb".to_owned()));
 }

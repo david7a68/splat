@@ -946,20 +946,16 @@ pub fn edit_in_place(
 /// app's words.
 ///
 /// The change is placed in a step **by the DM's own edits** between that step and now (issue
-/// #900), never by equal words: each step is a whole text with its caret, so the edit from one
-/// step to the next is known (`change_between`), and the write's place moves back over each
-/// edit (`Write::before`). A step is kept only when its text is certain and no reading of it
-/// can lose a letter. Where that fails (a write that takes words out among typed words whose
-/// place equal letters hide; a write over words the DM replaced; removed words whose place the
-/// caret does not name), that step and every older one go. That loses Undo steps, never text: Ctrl+Z never takes the app's words out and
-/// never takes out other words.
-///
-/// **A named limit of whole-text steps.** When one step holds SEVERAL edits and equal letters
-/// lie at the write's place, a word the DM gets back can stand at another place inside that
-/// run of equal letters. Every character is there. A step of one edit is exact. Only a record
-/// of each typed edit can remove this (the invariants note, section 3). The DM's Redo steps end at the write, as at any new edit. The guard's record moves as
-/// in [`edit_in_place`]. Not for a change the field's owner did not make (a reload of an
-/// outside edit): that history must end.
+/// #900), never by equal words and never by a caret: each step is a whole text, so the letters
+/// the DM changed between one step and the next are known as a zone (`change_between`,
+/// `Write::before`), and the write's place moves back over each zone. A step is kept only when
+/// the write's place in it is certain. Where it is not (the write lies in the zone: among
+/// letters equal to ones the DM typed or removed, over words the DM replaced, or over a part of
+/// the words the DM typed), that step and every older one go. That loses Undo steps, never
+/// text: Ctrl+Z never takes the app's words out, never puts a word back on the wrong side of
+/// them, and never takes out other words. The DM's Redo steps end at the write, as at any new
+/// edit. The guard's record moves as in [`edit_in_place`]. Not for a change the field's owner
+/// did not make (a reload of an outside edit): that history must end.
 pub fn write_under_history(
     ctx: &egui::Context,
     id: Id,
@@ -991,19 +987,16 @@ pub fn write_under_history(
         // The same words: no step changes.
         return;
     };
-    // From the newest step back: the text after each step's edit, and the caret there.
+    // From the newest step back: the text after each step's edit.
     let mut newer = before;
-    let mut caret = state.cursor.char_range().map(|range| range.primary.index);
     if steps.is_empty() {
         return;
     }
     let mut kept = Vec::new();
     for (cursor, words) in steps {
         let words: Vec<char> = words.chars().collect();
-        let Some(edit) = change_between(&words, &newer, caret) else {
-            break;
-        };
-        let Some(moved) = write.before(edit, &words, &after) else {
+        let edit = change_between(&words, &newer);
+        let Some(moved) = write.before(edit, &words, &newer) else {
             break;
         };
         write = moved;
@@ -1019,7 +1012,6 @@ pub fn write_under_history(
             },
             write.apply(&words, &after),
         ));
-        caret = Some(cursor.primary.index);
         newer = words;
     }
     // The newest step that is the text as it now stands keeps the field's caret, which the write
@@ -1041,8 +1033,8 @@ pub fn write_under_history(
 }
 
 /// One change of a text, in characters: the `old` characters at `at` became `new` characters.
-/// `slack`: typed words that equal letters around them hide can also stand up to that many
-/// places later.
+/// `slack`: typed or removed words that equal letters around them hide can also stand up to
+/// that many places later.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Change {
     at: usize,
@@ -1081,49 +1073,32 @@ fn change_span(from: &[char], to: &[char]) -> (usize, usize, usize, usize) {
 }
 
 /// The DM's edit from the step `from` to the text `to` after it. A step is a whole text, so
-/// equal characters can hide the edit's place:
-/// - **Removed words** (`aa` to `a`): `caret` names the place (the caret stands where removed
-///   words were). Whichever place is taken, the same letters stay, so no reading loses one.
-///   None when the caret names none of the places (the DM moved it since).
-/// - **Typed words** (`a` to `aa`): the caret does not prove the place, because a step can hold
-///   several edits. The edit keeps every place it can stand at (`Change::slack`), and a write
-///   is placed only when it is certain for all of them (`Write::before`): a wrong reading could
-///   take out an older equal word (issue #900).
-fn change_between(from: &[char], to: &[char], caret: Option<usize>) -> Option<Change> {
+/// equal characters can hide where words were typed (`a` to `aa`) or removed (`aa` to `a`).
+/// The edit then keeps every place it can stand at (`Change::slack`), and a write is placed only
+/// when it is certain for all of them (`Write::before`).
+///
+/// **No caret is evidence of where an edit was** (review of PR 910, P1 910-c): not the field's
+/// caret now, and not the caret egui stored with a step. The DM can move the caret after an
+/// edit and before the step is made (an arrow key, Home, a click), and a step can hold several
+/// edits. A caret taken as the place of removed words put a word the DM got back on the wrong
+/// side of the app's words (issue #900).
+fn change_between(from: &[char], to: &[char]) -> Change {
     let (first, last, old, new) = change_span(from, to);
-    let slack = 0;
     if old == 0 && new == 0 {
         // The same words: no edit (the step is the text as it stands).
-        return Some(Change {
+        return Change {
             at: 0,
             old,
             new,
-            slack,
-        });
+            slack: 0,
+        };
     }
-    if first == last {
-        return Some(Change {
-            at: first,
-            old,
-            new,
-            slack,
-        });
-    }
-    if new == 0 {
-        let at = caret.filter(|at| (first..=last).contains(at))?;
-        return Some(Change {
-            at,
-            old,
-            new,
-            slack,
-        });
-    }
-    Some(Change {
+    Change {
         at: first,
         old,
         new,
         slack: last - first,
-    })
+    }
 }
 
 /// The app's write as it stands in one text: the `old` characters at `at` become the write's
@@ -1138,9 +1113,6 @@ struct Write {
     new: usize,
 }
 
-/// How many places of typed words that equal letters hide a write is tried at (`Write::before`).
-const HIDDEN_PLACES: usize = 16;
-
 impl Write {
     /// The write from `before` to `after`. None for no change.
     fn between(before: &[char], after: &[char]) -> Option<Self> {
@@ -1153,65 +1125,75 @@ impl Write {
         })
     }
 
-    /// This write in the text `step` before the DM's `edit` (it stands in the text after the
-    /// edit). None when no place for it there is certain. `after` is the written text.
-    fn before(self, edit: Change, step: &[char], after: &[char]) -> Option<Self> {
+    /// This write in the text `step` before the DM's `edit` (it stands in `newer`, the text
+    /// after the edit). None when its place there is not certain.
+    ///
+    /// **What is certain.** A step is a whole text. The edit from `step` to `newer` is known
+    /// only as the letters between the two texts' common start and common end (with every place
+    /// equal letters let it stand at: `Change::slack`). A step can hold several edits, so the
+    /// DM's own letters can also be among the letters next to those, wherever a letter there is
+    /// one the DM put in or took out: `a` to `a bbb` is `bb` typed at the end and a space typed
+    /// before the older `b`, and the texts alone do not say which `b` is the older one. So the
+    /// edit's ZONE is those letters and, on each side, every next letter that the DM put in or
+    /// took out somewhere in the edit, up to the first letter that is none of them. Outside the
+    /// zone every letter is an older letter at a known place.
+    ///
+    /// - A write wholly outside the zone (it may touch its end) has one place in `step`.
+    /// - A write in the zone has one only when the DM typed words and took none out, the zone is
+    ///   exactly those words, and the write lies whole in them or holds them whole: it takes
+    ///   them with it, and what is left of it stands where they were typed.
+    /// - Any other write in the zone has no certain place: over words the DM replaced; over a
+    ///   part of the typed words (a renamed link in them, with a summary above, is one change
+    ///   from the first changed letter to the last: placed, it would leave the other part as a
+    ///   broken piece); among equal letters (issue #900: a write placed there by the words
+    ///   after it, or by a caret, took out an older equal word, or left a word that came back
+    ///   on the wrong side of the app's words).
+    fn before(self, edit: Change, step: &[char], newer: &[char]) -> Option<Self> {
+        if edit.old == 0 && edit.new == 0 {
+            return Some(self);
+        }
         let (start, end) = (self.at, self.at + self.old);
-        // The write as it stands when the DM's typed words are at `from` (to `to`).
-        let around = |from: usize, to: usize| -> Option<Self> {
-            if to <= start {
-                // The edit lies before the write (words the DM removed at the write's own place
-                // too): the write moves with the words after the edit.
-                let at = self.at - edit.new + edit.old;
-                return Some(Self { at, ..self });
-            }
-            if from >= end {
-                return Some(self);
-            }
-            // The edit and the write overlap. Only typed words (nothing replaced) that lie whole
-            // in the write, or hold the whole write, are certain: the write takes them with it,
-            // and what is left of it stands where they were typed. A write over a part of the
-            // typed words (a renamed link in them, with a summary above: one change from the
-            // first changed letter to the last) would leave the other part as a broken piece.
-            let whole = (from >= start && to <= end) || (start >= from && end <= to);
-            if edit.old > 0 || !whole {
-                return None;
-            }
-            let at = start.min(from);
-            let rest = end.saturating_sub(to);
-            Some(Self {
-                at,
-                old: from - at + rest,
-                ..self
-            })
-        };
-        if edit.slack == 0 {
-            return around(edit.at, edit.at + edit.new);
+        // The edit's letters in `newer`, and the letters the DM put in or took out.
+        let (from, to) = (edit.at, edit.at + edit.slack + edit.new);
+        let mut touched: Vec<char> = newer[from..to]
+            .iter()
+            .chain(&step[edit.at..edit.at + edit.slack + edit.old])
+            .copied()
+            .collect();
+        touched.sort_unstable();
+        touched.dedup();
+        let touches = |letter: &char| touched.binary_search(letter).is_ok();
+        let zone_from = from
+            - newer[..from]
+                .iter()
+                .rev()
+                .take_while(|letter| touches(letter))
+                .count();
+        let zone_to = to
+            + newer[to..]
+                .iter()
+                .take_while(|letter| touches(letter))
+                .count();
+        if end <= zone_from {
+            return Some(self);
         }
-        // Typed words that equal letters hide: they can stand at each of these places.
-        let places = edit.at..=edit.at + edit.slack;
-        if self.old > 0 {
-            // A write that takes words out: a wrong place for the typed words could make it
-            // take out an older equal word (issue #900). Certain only clear of every place.
-            let clear = *places.end() + edit.new <= start || edit.at >= end;
-            return clear.then(|| around(edit.at, edit.at + edit.new)).flatten();
+        if start >= zone_to {
+            // The write moves with the words after the edit.
+            let at = self.at + step.len() - newer.len();
+            return Some(Self { at, ..self });
         }
-        // A write that only adds words loses no letter at any place. It is certain when every
-        // place of the typed words gives the same text.
-        if edit.slack > HIDDEN_PLACES {
+        let only_typed = edit.old == 0 && edit.slack == 0 && (zone_from, zone_to) == (from, to);
+        let whole = (from >= start && to <= end) || (start >= from && end <= to);
+        if !only_typed || !whole {
             return None;
         }
-        let mut found: Option<(Self, String)> = None;
-        for from in places {
-            let write = around(from, from + edit.new)?;
-            let text = write.apply(step, after);
-            match &found {
-                Some((_, first)) if *first != text => return None,
-                Some(_) => {}
-                None => found = Some((write, text)),
-            }
-        }
-        found.map(|(write, _)| write)
+        let at = start.min(from);
+        let rest = end.saturating_sub(to);
+        Some(Self {
+            at,
+            old: from - at + rest,
+            ..self
+        })
     }
 
     /// `step` with this write: its new words, taken from the written text `after`.
