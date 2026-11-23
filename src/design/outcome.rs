@@ -4666,8 +4666,9 @@ impl Body {
     /// What a body message outside a footer (`Reasons::Body`) keeps of `tag`, made by `make` once
     /// per change: of the body itself, the room `width`, the scale, the style (the theme in it),
     /// the fonts and the atlas epoch (the kept words' galleys hold places in the atlas). A quiet
-    /// frame measures and lays out nothing. The slot is the Ui's and the words'; a different body
-    /// in it makes the value again.
+    /// frame measures and lays out nothing. The slot is the message's place (the next widget's
+    /// id in its Ui), so a message whose words change takes no new slot; a different body in it
+    /// makes the value again.
     fn body_kept<T: Clone + Send + std::marker::Sync + 'static>(
         &self,
         ui: &Ui,
@@ -4675,7 +4676,7 @@ impl Body {
         width: f32,
         make: impl FnOnce() -> T,
     ) -> T {
-        let slot = egui::Id::new((tag, ui.id(), self.words.as_str()));
+        let slot = egui::Id::new((tag, ui.next_auto_id()));
         let key = BodyKey {
             width: width.to_bits(),
             scale: ui.ctx().pixels_per_point().to_bits(),
