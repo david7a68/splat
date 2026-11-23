@@ -30,7 +30,7 @@
 //! Each part after the first stands the column's gap (`LINE_GAP`) below the one before.
 use egui::{Id, Rect, Ui, pos2, vec2};
 
-use super::action_line::wrap_actions;
+use super::action_line::{WrapRoom, wrap};
 use super::laid::{Laid, LaidText};
 use crate::design::components::group_heading_text;
 use crate::design::extras::Heading;
@@ -200,7 +200,7 @@ impl NoticeRow<'_> {
             y += height;
         }
         // The rolls: each action, then its reason, wrapping at the row's edge by the one rule of
-        // a list's actions (`action_line::wrap_actions`), rows the column's gap apart. A roll
+        // a list's actions (`pane::wrap`), rows the column's gap apart. A roll
         // whose action and reason do not fit the row together takes a row of its own: its action
         // cut to the row, its reason on the lines under it; the next rolls start under those.
         if !self.rolls.is_empty() {
@@ -238,8 +238,18 @@ impl NoticeRow<'_> {
                     }
                     placed = true;
                     let widths: Vec<f32> = (at..end).map(item).collect();
-                    let (rects, bottom) = wrap_actions(&widths, (0.0, width), y, LINE_GAP);
-                    for (rect, roll) in rects.iter().zip(at..end) {
+                    let wrapped = wrap(
+                        &widths,
+                        WrapRoom {
+                            start: 0.0,
+                            width,
+                            top: y,
+                            height: control,
+                            row_gap: LINE_GAP,
+                        },
+                    );
+                    let bottom = wrapped.bottom();
+                    for (rect, roll) in wrapped.rects().iter().zip(at..end) {
                         let action = self.rolls[roll].width;
                         slots.push(Rect::from_min_size(rect.min, vec2(action, control)));
                         if let Some(galley) = reasons[roll].clone() {
