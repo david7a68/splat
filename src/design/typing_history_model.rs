@@ -867,6 +867,12 @@ fn an_app_write_at_a_composition_loses_no_word() {
             end: "APP oneか two",
         },
         Row {
+            name: "an empty Preedit, the write, then the Commit (910-a, second review)",
+            before: vec![Enabled, preedit("k"), preedit("")],
+            after: vec![(commit(), "APP oneか two")],
+            end: "APP oneか two",
+        },
+        Row {
             name: "a direct Commit, with no Enabled before the composition",
             before: vec![preedit("k")],
             after: vec![(commit(), "APP oneか two")],
@@ -1029,4 +1035,236 @@ fn a_write_over_a_part_of_the_typed_words_ends_the_history() {
 fn typed_words_at_a_hidden_place_keep_no_uncertain_step() {
     let result = run("a", &[type_at(1, "a"), app(1, 0, "b"), Step::Undo]);
     assert_eq!(result, Ok("aba".to_owned()));
+}
+
+/// One event of an input method, or the field's loss of the focus, as the generated composition
+/// traces send them.
+#[derive(Clone, Debug, PartialEq)]
+enum Composes {
+    Enabled,
+    Preedit(&'static str),
+    Commit(&'static str),
+    Disabled,
+    /// The focus goes (one frame) and comes back.
+    Blur,
+}
+
+/// egui's composition, as its code defines it (`widgets/text_edit/builder.rs`, egui 0.33.3; the
+/// table in `layout::composition`), with the app's write at the text's start: the reference
+/// that the real field is run against.
+#[derive(Clone, Debug)]
+struct Composition {
+    text: Vec<char>,
+    /// The selection: where it starts for egui (`secondary`) and its caret (`primary`).
+    from: usize,
+    caret: usize,
+    /// egui's private place and flag.
+    place: usize,
+    enabled: bool,
+    /// An app write moved the selection, and the field has not drawn with the focus since.
+    moved: bool,
+}
+
+impl Composition {
+    fn span(&self) -> (usize, usize) {
+        (self.from.min(self.caret), self.from.max(self.caret))
+    }
+
+    /// The selection becomes `words`; gives the span of the new words.
+    fn put(&mut self, words: &str) -> (usize, usize) {
+        let (start, end) = self.span();
+        let words: Vec<char> = words.chars().collect();
+        let to = start + words.len();
+        self.text.splice(start..end, words);
+        (start, to)
+    }
+
+    /// The field draws with the focus: after a write that moved it, the place is the selection
+    /// again (`layout::composition`: a `Preedit` of the selected words).
+    fn draws(&mut self) {
+        if std::mem::take(&mut self.moved) {
+            let (start, end) = self.span();
+            self.place = self.from;
+            (self.from, self.caret) = (start, end);
+        }
+    }
+
+    fn event(&mut self, event: &Composes) {
+        match event {
+            Composes::Enabled => {
+                self.enabled = true;
+                self.place = self.from;
+            }
+            Composes::Preedit(words) => {
+                let before = self.from;
+                (self.from, self.caret) = self.put(words);
+                self.place = before;
+            }
+            Composes::Commit(words) => {
+                self.enabled = false;
+                if !words.is_empty() && self.from == self.place {
+                    let (_, to) = self.put(words);
+                    (self.from, self.caret) = (to, to);
+                } else {
+                    self.from = self.caret;
+                }
+            }
+            Composes::Disabled => self.enabled = false,
+            Composes::Blur => {
+                self.moved = false;
+                if std::mem::take(&mut self.enabled) {
+                    self.from = self.caret;
+                }
+            }
+        }
+    }
+
+    /// The app writes `APP ` at the start. A caret at the start stays before the app's words.
+    fn write(&mut self) {
+        self.text.splice(0..0, "APP ".chars());
+        let place = |at: usize| if at == 0 { 0 } else { at + 4 };
+        let moved = (place(self.from), place(self.caret));
+        self.moved |= moved != (self.from, self.caret);
+        (self.from, self.caret) = moved;
+    }
+}
+
+/// The real field through `frames` of composition events from `one two` with the caret after
+/// `one`, with the app's write before frame `write_at` (`None`: no write), and the reference
+/// beside it. `Err` names the first frame after which the field's text is not the reference's.
+/// `in_frame`: the write lands in the frame of the events after it; else one frame before them.
+fn composes(
+    frames: &[Vec<Composes>],
+    write_at: Option<usize>,
+    in_frame: bool,
+) -> Result<(String, Composition), String> {
+    let mut harness = page("one two");
+    select(&harness, 3, 3);
+    let mut model = Composition {
+        text: "one two".chars().collect(),
+        from: 3,
+        caret: 3,
+        place: 0,
+        enabled: false,
+        moved: false,
+    };
+    let check = |harness: &Harness<'_, Page>, model: &Composition, at: &str| {
+        let (real, wanted) = (shown(harness), model.text.iter().collect::<String>());
+        if real == wanted {
+            Ok(())
+        } else {
+            Err(format!(
+                "{at}: the field shows {real:?}, the reference {wanted:?} ({frames:?}, write before frame {write_at:?}, in its frame: {in_frame})"
+            ))
+        }
+    };
+    for (index, frame) in frames
+        .iter()
+        .chain(std::iter::once(&Vec::new()))
+        .enumerate()
+    {
+        if write_at == Some(index) {
+            let after = format!("APP {}", shown(&harness));
+            let ctx = harness.ctx.clone();
+            layout::write_under_history(&ctx, FIELD.id(), &mut harness.state_mut().draft, &after);
+            model.write();
+            if !in_frame {
+                harness.step();
+                model.draws();
+                check(
+                    &harness,
+                    &model,
+                    &format!("after the write before frame {index}"),
+                )?;
+            }
+        }
+        if frame.is_empty() {
+            harness.step();
+            model.draws();
+        } else if frame == &[Composes::Blur] {
+            harness
+                .ctx
+                .memory_mut(|memory| memory.surrender_focus(FIELD.id()));
+            harness.step();
+            model.event(&Composes::Blur);
+            harness
+                .ctx
+                .memory_mut(|memory| memory.request_focus(FIELD.id()));
+            harness.step();
+            model.draws();
+        } else {
+            for event in frame {
+                let event = match event {
+                    Composes::Enabled => egui::ImeEvent::Enabled,
+                    Composes::Preedit(words) => egui::ImeEvent::Preedit((*words).to_owned()),
+                    Composes::Commit(words) => egui::ImeEvent::Commit((*words).to_owned()),
+                    Composes::Disabled => egui::ImeEvent::Disabled,
+                    Composes::Blur => unreachable!("a loss of the focus is a frame of its own"),
+                };
+                harness.input_mut().events.push(egui::Event::Ime(event));
+            }
+            harness.step();
+            model.draws();
+            frame.iter().for_each(|event| model.event(event));
+        }
+        check(&harness, &model, &format!("after frame {index}"))?;
+    }
+    Ok((shown(&harness), model))
+}
+
+fn composition_frames() -> impl Strategy<Value = Vec<Vec<Composes>>> {
+    let event = prop_oneof![
+        2 => Just(Composes::Enabled),
+        3 => Just(Composes::Preedit("k")),
+        2 => Just(Composes::Preedit("ka")),
+        3 => Just(Composes::Preedit("")),
+        4 => Just(Composes::Commit("か")),
+        1 => Just(Composes::Commit("")),
+        2 => Just(Composes::Disabled),
+    ];
+    let frame = prop_oneof![
+        5 => prop::collection::vec(event, 1..3),
+        1 => Just(vec![Composes::Blur]),
+    ];
+    prop::collection::vec(frame, 1..6)
+}
+
+/// Generated orders of composition events (`Enabled`, a `Preedit` with words and an empty one,
+/// `Commit`, `Disabled`, a loss of the focus), one or two events in a frame, with the app's
+/// write before every frame and after the last (review of PR 910, P1 910-a):
+/// - the real field shows the reference's text after every frame (the reference is egui's own
+///   rules, so this also proves them on the traces with no write);
+/// - **the write changes nothing the DM composed:** with the write, the text is `APP ` and the
+///   text with no write, or it holds MORE committed words (a `Commit` that egui drops with no
+///   write because its place was stale, and takes after one). It never holds fewer;
+/// - Ctrl+Z and Ctrl+Y keep the app's write and the older words.
+#[test]
+fn an_app_write_at_any_place_in_a_composition_changes_nothing_the_dm_composed() {
+    let result = runner(400).run(&composition_frames(), |frames| {
+        let (plain, _) = composes(&frames, None, false).map_err(TestCaseError::fail)?;
+        let committed = |text: &str| text.matches('か').count();
+        for write_at in 0..=frames.len() {
+            for in_frame in [false, true] {
+                let (text, model) =
+                    composes(&frames, Some(write_at), in_frame).map_err(TestCaseError::fail)?;
+                let kept = text == format!("APP {plain}");
+                if !kept && committed(&text) <= committed(&plain) {
+                    return Err(TestCaseError::fail(format!(
+                        "the write changed what the DM composed: {text:?} with it, {plain:?} \
+                         with none ({frames:?}, write before frame {write_at}, in its frame: \
+                         {in_frame}; reference {model:?})"
+                    )));
+                }
+                if !text.starts_with("APP ") {
+                    return Err(TestCaseError::fail(format!(
+                        "the app's words went: {text:?}"
+                    )));
+                }
+            }
+        }
+        Ok(())
+    });
+    if let Err(failed) = result {
+        panic!("{failed}");
+    }
 }
