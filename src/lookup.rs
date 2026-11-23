@@ -2743,11 +2743,11 @@ impl Lookup {
                         ui.ctx().accesskit_node_builder(response.id, |node| {
                             node.set_role_description("Lookup result");
                         });
-                        // egui does not scroll to a row that Tab focuses, and arrow keys move
-                        // the highlight from the search field. The list follows both.
-                        // egui's scroll target counts the clip margin as visible, so the row
-                        // asks for that margin too and shows whole.
-                        if response.gained_focus() || (follow && *selected) {
+                        // Arrow keys move the highlight from the search field, so the list follows
+                        // it; Tab to a row is the pane's focus arbiter's. egui's scroll target
+                        // counts the clip margin as visible, so the row asks for that margin too
+                        // and shows whole.
+                        if follow && *selected {
                             let margin = ui.visuals().clip_rect_margin;
                             design::reveal::bring_into_view(
                                 ui,
