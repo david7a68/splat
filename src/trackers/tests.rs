@@ -2133,7 +2133,9 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
 /// Astra's P2 on PR 897: a Due row's check box is keyed by its change's own identity, in the
 /// real host. The wagon's mark proposes two changes; the second check box has the keyboard; the
 /// first change leaves the mark in the note (read again as the shell reads it); the check box
-/// that stays keeps its id and its focus. Red: a key by the change's place.
+/// that stays keeps its id and its focus. Red: a key by the change's place. Astra's P2 on PR 904:
+/// a line's action is keyed by its own identity too, so a rules reload that reorders the lines
+/// and the actions keeps the focused action's focus.
 #[test]
 fn a_due_check_keeps_its_focus_when_the_change_before_it_goes() {
     use crate::design::test_harness::Themed as _;
@@ -2211,6 +2213,61 @@ fn a_due_check_keeps_its_focus_when_the_change_before_it_goes() {
         h.ctx.memory(|memory| memory.focused()),
         focused,
         "due-check-key: the check box that stays keeps its id and its focus"
+    );
+    // A line's action has the keyboard; the rules are read again with the seals' lines and
+    // actions reordered: Keyring's line comes first, and `Lose seal` comes before `Take seal`.
+    const ACTION: &str = "Take seal: Keyring";
+    h.get_by_label(ACTION).focus();
+    h.run_steps(2);
+    let focused = h.ctx.memory(|memory| memory.focused());
+    assert!(
+        focused.is_some() && h.get_by_label(ACTION).is_focused(),
+        "the action has the keyboard"
+    );
+    let text = fs::read_to_string(&note).unwrap();
+    let reordered = text
+        .replacen(
+            ">     name: Seals\n>     per:\n>     - Party\n>     - Old Guard\n>     - Keyring\n",
+            ">     name: Seals\n>     per:\n>     - Keyring\n>     - Party\n>     - Old Guard\n",
+            1,
+        )
+        .replacen(
+            ">     - label: Take seal\n>       add: 1\n>     - label: Lose seal\n>       add: -1\n",
+            ">     - label: Lose seal\n>       add: -1\n>     - label: Take seal\n>       add: 1\n",
+            1,
+        );
+    assert!(
+        reordered != text
+            && reordered.find("- Keyring\n>     - Party") < reordered.find("- label: Take seal"),
+        "action-key-reached: the note's seals are reordered"
+    );
+    fs::write(&note, reordered).unwrap();
+    race.index = Arc::new(ContentIndex::load(&[], Some(&race.campaign)).unwrap());
+    poll(
+        h.state_mut(),
+        Some(race.index.clone()),
+        Some(&race.campaign),
+        Some(TONIGHT),
+        &race.timeline,
+    );
+    h.run_steps(4);
+    let seals: Vec<String> = h
+        .state()
+        .rules
+        .trackers
+        .iter()
+        .filter(|tracker| tracker.key == "seals")
+        .filter_map(|tracker| tracker.def.as_ref().ok())
+        .flat_map(|def| def.quick.iter().map(|quick| quick.label.clone()))
+        .collect();
+    assert_eq!(
+        seals,
+        ["Lose seal", "Take seal"],
+        "action-key-reached: the reload reordered the actions"
+    );
+    assert!(
+        h.get_by_label(ACTION).is_focused() && h.ctx.memory(|memory| memory.focused()) == focused,
+        "action-key: the action keeps its id and its focus after the lines and actions move"
     );
 }
 
