@@ -955,10 +955,13 @@ fn lay_tracker(
             None => state.value(rules, key, instance).to_string(),
         };
         let fitted = fit_name(ui, view, columns.revision, &name, columns.name - indent);
+        // Each action by its own identity (Astra's P2 on PR 904): the tracker, the line's instance
+        // and the action's label, with how many actions of the same label come before it. A rules
+        // reload that reorders the lines or the actions moves no focus to another control.
         let actions: Vec<design::LineAction> = named
             .iter()
             .map(|(at, _)| design::LineAction {
-                key: egui::Id::new(("trackers_action", key, line, *at)),
+                key: action_key(key, instance, &def.quick, *at),
                 width: quick_action(&def.quick[*at].label).natural_width(ui),
             })
             .collect();
@@ -967,7 +970,7 @@ fn lay_tracker(
             .map(|fault| design::outcome::row_fault_height(ui, fault, width))
             .collect();
         let laid = design::ActionLine {
-            key: egui::Id::new(("trackers_line", key, line)),
+            key: egui::Id::new(("trackers_line", key, instance)),
             heading: heading
                 .filter(|_| line == 0)
                 .map(|first| design::LineHeading {
@@ -1015,6 +1018,23 @@ fn lay_tracker(
         ));
     }
     lines
+}
+
+/// A line's action by its own identity, not its place: the tracker, the line's instance, the
+/// action's label, and how many of the tracker's actions with that label come before it (two
+/// actions can share a label).
+fn action_key(
+    key: &str,
+    instance: Option<&str>,
+    quick: &[splat_campaign::trackers::Quick],
+    at: usize,
+) -> egui::Id {
+    let label = &quick[at].label;
+    let nth = quick[..at]
+        .iter()
+        .filter(|action| action.label == *label)
+        .count();
+    egui::Id::new(("trackers_action", key, instance, label, nth))
 }
 
 /// A tracker's lines (`lay_tracker`), laid out once per key of the panel (its revision, measure,
