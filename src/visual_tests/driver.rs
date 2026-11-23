@@ -1218,17 +1218,15 @@ impl<'a> Driver<'a> {
             .then_some(name)
     }
 
-    /// An added event's Undo (`Undo add Long rest`, or `Undo add` with no event to name: M0529
-    /// waits for layout 11c), when it is on screen; never a scene's `Undo add scene`.
-    pub fn add_undo(&self) -> Option<String> {
+    /// The Undo of the event `event` just added (`Undo add Long rest`: M0529 waits for layout
+    /// 11c), when it is on screen: its own label, never another `Undo add …` the footer can show
+    /// before it (a plan line's `Undo add plan line …`, a scene's `Undo add scene`; review of
+    /// PR 901).
+    pub fn add_undo(&self, event: &str) -> Option<String> {
+        let label = format!("Undo add {event}");
         self.nodes()
             .into_iter()
-            .find(|node| {
-                (node.name == "Undo add"
-                    || (node.name.starts_with("Undo add ")
-                        && !node.name.starts_with("Undo add scene")))
-                    && Self::is_control(node)
-            })
+            .find(|node| node.name == label && Self::is_control(node))
             .map(|node| node.name)
     }
 

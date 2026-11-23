@@ -11782,7 +11782,7 @@ pub mod column_resize {
                     .filter(|node| node.in_view() && node.name.starts_with("Undo"))
                     .count()
                     == 1
-                    && d.add_undo().is_some(),
+                    && d.add_undo("Major event").is_some(),
                 "The plan add has one named Undo at each window size",
             );
         });
@@ -15485,7 +15485,10 @@ pub mod session_notes {
             d.has_containing("Short rest added to Session 1."),
             "An event added here says so, in words",
         );
-        d.click(&d.add_undo().expect("an event\u{2019}s Undo add"));
+        d.click(
+            &d.add_undo("Short rest")
+                .expect("an event\u{2019}s Undo add"),
+        );
         d.observe(
             "T11.2",
             !d.has("Short rest") && d.has_containing("Removed"),
@@ -28408,10 +28411,10 @@ pub mod session_plan {
         d.click("Add Long rest");
         d.observe(
             "S4",
-            d.add_undo().is_some() && !d.has("Undo everyone to full"),
+            d.add_undo("Long rest").is_some() && !d.has("Undo everyone to full"),
             "The long rest has one Undo",
         );
-        d.click(&d.add_undo().expect("an event\u{2019}s Undo add"));
+        d.click(&d.add_undo("Long rest").expect("an event\u{2019}s Undo add"));
         d.observe(
             "S4",
             !d.has("Everyone at full"),
@@ -28681,7 +28684,10 @@ pub mod session_plan {
         d.click(NAV_TIMELINE);
         d.click("Add Long rest");
         d.expect("Long rest added. Everyone starts the next fight at full.");
-        let undo_add = undo_shape(d, &d.add_undo().expect("an event\u{2019}s Undo add"));
+        let undo_add = undo_shape(
+            d,
+            &d.add_undo("Long rest").expect("an event\u{2019}s Undo add"),
+        );
         d.observe(
             "iter-17-B-AT1-pair",
             saved_hp_undo.is_some() && undo_add == saved_hp_undo,
@@ -28689,7 +28695,7 @@ pub mod session_plan {
                 "The saved-HP Undo {saved_hp_undo:?} has the same shape as Undo add {undo_add:?}"
             ),
         );
-        d.click(&d.add_undo().expect("an event\u{2019}s Undo add"));
+        d.click(&d.add_undo("Long rest").expect("an event\u{2019}s Undo add"));
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.click("Add Long rest");
         d.expect("Everyone at full");

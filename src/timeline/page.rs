@@ -327,6 +327,25 @@ impl RestRulingAction {
 pub struct JustAdded {
     file: super::TimelineFile,
     id: String,
+    /// The event's name when it was added: the result's words and its Undo name it, so a
+    /// rename while the result shows changes neither (review of PR 901).
+    label: Option<String>,
+}
+
+impl JustAdded {
+    /// The result of the event `id` just added to `book`, with the name it has now.
+    fn of(book: &Book, id: String) -> Self {
+        let label = book
+            .events
+            .iter()
+            .position(|event| event.id == id)
+            .map(|at| book.events[at].label(day_numbers(&book.events)[at]));
+        Self {
+            file: book.file(),
+            id,
+            label,
+        }
+    }
 }
 
 impl design::results::Kept for JustAdded {
@@ -1265,7 +1284,8 @@ impl TimelinePage {
             .refresh(&self.added, &file, inputs, |shown| {
                 let id = &shown.value().id;
                 let at = book.events.iter().position(|event| event.id == *id);
-                let label = at.map(|at| book.events[at].label(day_numbers(&book.events)[at]));
+                // The name it had when it was added, kept with the result.
+                let label = shown.value().label.clone();
                 let restores = at
                     .map(|at| &book.events[at])
                     .filter(|event| event.kind == Kind::LongRest && event.restores)
@@ -2017,13 +2037,7 @@ impl TimelinePage {
             ) {
                 self.reveal(&id, book);
                 self.focus_title = true;
-                self.added.record_timed(
-                    JustAdded {
-                        file: book.file(),
-                        id,
-                    },
-                    ui.ctx(),
-                );
+                self.added.record_timed(JustAdded::of(book, id), ui.ctx());
             }
             if let Some(words) = self.dated.clone() {
                 self.play_current |= dated_notice(ui, &words);
@@ -2054,13 +2068,7 @@ impl TimelinePage {
                     let id = book.add(Kind::Day, current);
                     self.reveal(&id, book);
                     self.focus_title = true;
-                    self.added.record_timed(
-                        JustAdded {
-                            file: book.file(),
-                            id,
-                        },
-                        ui.ctx(),
-                    );
+                    self.added.record_timed(JustAdded::of(book, id), ui.ctx());
                 }
                 return;
             }
@@ -2826,6 +2834,27 @@ mod tests {
             other.save();
         };
         let a2 = add(&mut harness, 200.0);
+        // Review of PR 901: a rename while the result shows changes neither its words nor its
+        // Undo: the result keeps the name the event had when it was added.
+        let at = harness
+            .state()
+            .1
+            .events
+            .iter()
+            .position(|event| event.id == a2)
+            .unwrap();
+        harness.state_mut().1.events[at].title = "Renamed stop".into();
+        harness.state_mut().1.touch();
+        harness.step();
+        assert!(
+            harness.query_by_label("Undo add Major event").is_some()
+                && harness.query_by_label("Undo add Renamed stop").is_none()
+                && harness
+                    .query_all_by_label_contains("Major event added.")
+                    .next()
+                    .is_some(),
+            "the result keeps the added event's name"
+        );
         harness.state_mut().1.save();
         edit_on_disk(&|_| true, Some("Toll bridge"));
         assert!(harness.state_mut().1.read_if_changed());
