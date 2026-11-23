@@ -143,7 +143,7 @@ pub use action_line::{one_row_width, painted_in_block};
 pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
 use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
-pub use laid::{Laid, LaidUi, draw_laid};
+pub use laid::{Laid, LaidPart, LaidUi, draw_laid};
 #[cfg(any(test, feature = "test-support"))]
 pub use notice_row::notices_laid;
 pub use notice_row::{NoticeRoll, NoticeRow, check_height, slot as notice_slot};
