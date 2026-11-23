@@ -125,6 +125,7 @@ use super::{layout::ScrollColumn, tokens::S};
 /// Composite columns and their edges, resolved before the pane paints (layout step 7).
 /// A line of a list whose rows vary in height, as a recipe (layout 11c, issue #683).
 mod action_line;
+mod check_line;
 mod columns;
 /// A block laid out before paint by a design recipe (layout 11c).
 mod laid;
@@ -141,6 +142,7 @@ pub use action_line::{
 };
 #[cfg(any(test, feature = "test-support"))]
 pub use action_line::{one_row_width, painted_in_block};
+pub use check_line::{CheckInputs, CheckLine, slot as check_slot};
 #[cfg(any(test, feature = "test-support"))]
 pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
@@ -148,7 +150,7 @@ use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
 pub use laid::{Laid, LaidUi, draw_laid};
 #[cfg(any(test, feature = "test-support"))]
 pub use notice_row::notices_laid;
-pub use notice_row::{NoticeRoll, NoticeRow, check_height, slot as notice_slot};
+pub use notice_row::{NoticeCheck, NoticeRoll, NoticeRow, check_height, slot as notice_slot};
 pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Measured, Row};
 pub use plan_row::{PlanColumns, PlanRow, SummaryPart, rule as plan_rule, slot as plan_slot};
 pub use region::{BlockRegion, Navigation, RegionState};
