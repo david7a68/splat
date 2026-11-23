@@ -7495,10 +7495,7 @@ mod tests {
                 })
         };
         let footer_rect = |harness: &egui_kittest::Harness<'_>| {
-            harness
-                .ctx
-                .read_response(Id::new("test_footer").with("focus"))
-                .map(|response| response.rect)
+            super::super::pane::footer_rect(&harness.ctx, Id::new("test_footer"))
         };
         for size in [
             vec2(960.0, 640.0),
@@ -7555,7 +7552,10 @@ mod tests {
             // Tab: from the start, to the footer, then the arrow keys scroll it.
             let mut keyboard = harness(size, 20);
             assert!(!shown(&keyboard), "20 messages overflow at {size:?}");
-            let focus = Id::new("test_footer").with("focus");
+            let focus = super::super::pane::pane_record(&keyboard.ctx, Id::new("test_footer"))
+                .expect("the footer's pane is drawn")
+                .id()
+                .with("focus");
             // Each Undo is a stop before the footer itself.
             for _ in 0..48 {
                 if keyboard.ctx.memory(|memory| memory.has_focus(focus)) {
