@@ -11,8 +11,10 @@
 //!   with no box: the DM reads why, nothing invites a press.
 //! - **The tail**: the gap a region's column leaves after an item, inside the block.
 //!
-//! The layout's inputs are the words, `blocked`, the width and the fonts (their generation, the
-//! scale, the theme): a host keeps a line's `Laid` until one of them changes.
+//! The layout's inputs (`CheckLine::inputs`, note C0-parts v2's key contract) are the words,
+//! `blocked`, the tail, the width, the font generation, the scale, the font atlas's epoch and the
+//! theme: a host keeps a line's `Laid` until one of them changes, and lays it again in the pass
+//! the change comes in, before it gives the block to the plan.
 use egui::{Id, Rect, Response, Ui, pos2, vec2};
 
 use super::laid::{Laid, LaidText, LaidUi};
@@ -44,7 +46,25 @@ thread_local! {
     pub static CHECK_LINES_LAID: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// Every input of a laid check line at a width (`CheckLine::inputs`): a host's key.
+pub type CheckInputs = (String, bool, u32, u32, u64, u32, u64, bool);
+
 impl CheckLine<'_> {
+    /// Every input of the line's layout in a row `width` wide: a host keeps its `Laid` while
+    /// these are equal.
+    pub fn inputs(&self, ui: &Ui, width: f32) -> CheckInputs {
+        (
+            self.words.to_owned(),
+            self.blocked,
+            self.tail.to_bits(),
+            width.to_bits(),
+            crate::design::theme::font_generation(ui.ctx()),
+            ui.ctx().pixels_per_point().to_bits(),
+            crate::design::theme::atlas_epoch(ui.ctx()),
+            ui.visuals().dark_mode,
+        )
+    }
+
     /// The line laid out in a row `width` wide.
     pub fn lay(&self, ui: &Ui, width: f32) -> Laid {
         #[cfg(any(test, feature = "test-support"))]
@@ -187,5 +207,77 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A host that keeps its line by `CheckLine::inputs` lays nothing on quiet frames; a
+    /// same-length edit of the words, another width, a new font atlas, another theme and another
+    /// scale each lay it again, in the pass the change comes in, and the new words show then.
+    #[test]
+    fn a_quiet_frame_lays_no_line_and_each_input_lays_it_again() {
+        type Kept = Option<(CheckInputs, Laid)>;
+        let words = std::rc::Rc::new(std::cell::RefCell::new("Move Ash Wraith".to_owned()));
+        let width = std::rc::Rc::new(std::cell::Cell::new(400.0_f32));
+        let kept = std::rc::Rc::new(std::cell::RefCell::new(None::<(CheckInputs, Laid)>));
+        let (words_in, width_in, kept_in) = (words.clone(), width.clone(), kept.clone());
+        let mut harness = Harness::builder()
+            .with_size(vec2(700.0, 300.0))
+            .themed_ui(move |ui| {
+                let words = words_in.borrow().clone();
+                let line = CheckLine {
+                    key: Id::new("move"),
+                    words: &words,
+                    blocked: false,
+                    tail: 0.0,
+                };
+                let width = width_in.get();
+                let inputs = line.inputs(ui, width);
+                let mut kept: std::cell::RefMut<'_, Kept> = kept_in.borrow_mut();
+                if kept.as_ref().is_none_or(|(was, _)| *was != inputs) {
+                    *kept = Some((inputs, line.lay(ui, width)));
+                }
+                let (_, laid) = kept.as_ref().unwrap();
+                draw_laid(ui, laid, |ui| {
+                    let mut state = false;
+                    let _ = line.show(ui, &mut state);
+                });
+            });
+        let laid = || CHECK_LINES_LAID.with(std::cell::Cell::get);
+        harness.run_steps(2);
+        let before = laid();
+        harness.run_steps(3);
+        assert_eq!(laid(), before, "quiet frames lay no line out");
+        // "Move Ash Wraith" and "Move Ash Shadow": 15 characters each.
+        *words.borrow_mut() = "Move Ash Shadow".to_owned();
+        harness.step();
+        assert!(
+            laid() > before && harness.query_by_label("Move Ash Shadow").is_some(),
+            "a same-length edit is laid out and shown in the same pass"
+        );
+        let before = laid();
+        width.set(300.0);
+        harness.step();
+        assert!(laid() > before, "another width lays the line out again");
+        let before = laid();
+        let alpha = harness.ctx.style().visuals.text_alpha_from_coverage;
+        harness.ctx.all_styles_mut(|style| {
+            style.visuals.text_alpha_from_coverage = egui::epaint::AlphaFromCoverage::Linear;
+        });
+        harness.step();
+        harness
+            .ctx
+            .all_styles_mut(|style| style.visuals.text_alpha_from_coverage = alpha);
+        harness.step();
+        assert!(laid() > before, "a new font atlas lays the line out again");
+        let before = laid();
+        harness.ctx.set_visuals(egui::Visuals::light());
+        harness.step();
+        assert!(laid() > before, "another theme lays the line out again");
+        let before = laid();
+        harness.ctx.set_pixels_per_point(1.5);
+        harness.step();
+        assert!(laid() > before, "another scale lays the line out again");
+        let before = laid();
+        harness.run_steps(3);
+        assert_eq!(laid(), before, "quiet frames after them lay nothing");
     }
 }

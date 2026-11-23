@@ -140,7 +140,7 @@ mod region;
 pub use action_line::{ActionLine, LineAction, LineColumns, slot as line_slot};
 #[cfg(any(test, feature = "test-support"))]
 pub use action_line::{one_row_width, painted_in_block};
-pub use check_line::{CheckLine, slot as check_slot};
+pub use check_line::{CheckInputs, CheckLine, slot as check_slot};
 #[cfg(any(test, feature = "test-support"))]
 pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
