@@ -629,10 +629,9 @@ mod tests {
             ((60.0, 80.0), None),
             ((210.0, 228.0), None),
             ((80.0, 100.0), None),
-            ((90.0, 101.5), None),
+            ((90.0, 100.8), None),
         ] {
             let cut = mark_in_view(mark.0, mark.1, view, width);
-            assert_eq!(cut, shown, "mark {mark:?}");
             if let Some((from, to)) = cut {
                 let painted = egui::Shape::line_segment(
                     [egui::pos2(50.0, from), egui::pos2(50.0, to)],
@@ -645,6 +644,7 @@ mod tests {
                     painted.y_range()
                 );
             }
+            assert_eq!(cut, shown, "mark {mark:?}");
         }
     }
 
