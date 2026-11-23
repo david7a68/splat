@@ -17,7 +17,7 @@
 //! the change comes in, before it gives the block to the plan.
 use egui::{Id, Rect, Response, Ui, pos2, vec2};
 
-use super::laid::{Laid, LaidText, LaidUi};
+use super::laid::{Laid, LaidUi};
 use super::notice_row::check_height;
 use crate::design::tokens::{Type, colors};
 
@@ -101,17 +101,17 @@ impl CheckLine<'_> {
                     width,
                 )
             });
-            let height = galley.size().y;
+            // Its words are the line's slot text: `show` draws them as a label named by them
+            // (review of PR 917, P3), not as unnamed paint.
+            let size = galley.size();
             return Laid::new(
                 self.key,
-                vec2(width, height + self.tail),
+                vec2(width, size.y + self.tail),
                 None,
-                vec![LaidText {
-                    at: pos2(0.0, 0.0),
-                    galley,
-                }],
-                vec![Rect::from_min_size(pos2(0.0, 0.0), vec2(0.0, 0.0))],
-            );
+                Vec::new(),
+                vec![Rect::from_min_size(pos2(0.0, 0.0), size)],
+            )
+            .with_slot_texts(vec![Some(galley)]);
         }
         let height = check_height(ui, self.words, width);
         Laid::new(
@@ -127,6 +127,7 @@ impl CheckLine<'_> {
     /// on any row of its words toggles `checked`. A blocked line draws only its laid words.
     pub fn show(&self, ui: &mut LaidUi<'_>, checked: &mut bool) -> Option<Response> {
         if self.blocked {
+            let _ = ui.part(slot::LINE, self.words, false);
             return None;
         }
         let words = self.words;
@@ -210,6 +211,23 @@ mod tests {
                 assert!(
                     boxes == [LONG],
                     "{case}: one check box, named by its words; the blocked line has none: {boxes:?}"
+                );
+                // Review of PR 917, P3: the blocked line's words are there, named by them.
+                let blocked_words =
+                    "Ember Cultist (creature): remove. Not available: it is in use.";
+                let named = harness
+                    .root()
+                    .children_recursive()
+                    .filter(|node| node.accesskit_node().role() != egui::accesskit::Role::TextRun)
+                    .any(|node| {
+                        node.accesskit_node()
+                            .label()
+                            .or_else(|| node.accesskit_node().value())
+                            == Some(blocked_words.to_owned())
+                    });
+                assert!(
+                    named,
+                    "{case}: the blocked line's words show, named by them"
                 );
                 if width < 400.0 {
                     assert!(
