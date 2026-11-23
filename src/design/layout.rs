@@ -822,6 +822,7 @@ struct TextGuard {
 impl TextGuard {
     fn before(ui: &Ui, id: Id, text: Words<'_>) -> Self {
         let focused_before = ui.memory(|memory| memory.has_focus(id));
+        composition::before_field(ui.ctx(), id, focused_before);
         let check = focused_before
             || ui.input(|input| {
                 input.pointer.any_pressed()
@@ -1008,6 +1009,10 @@ pub fn write_under_history(
             ..range
         }));
     }
+    // The same for an input method's open words (`composition`): egui commits them only at the
+    // place it noted when they opened, so that place is noted again before the field's next
+    // event.
+    composition::moved(ctx, id);
     if steps.is_empty() {
         state.store(ctx, id);
         return;
@@ -1045,6 +1050,91 @@ pub fn write_under_history(
     }
     state.set_undoer(rebuilt);
     state.store(ctx, id);
+}
+
+/// An input method's open words (a composition) in a field, and an app write under them
+/// (`write_under_history`; review of PR 910, P1 910-a).
+///
+/// egui keeps where a composition opened in a place of its own (`TextEditState`'s
+/// `ime_cursor_range`, not public). At `Commit` it puts the committed words in only when the
+/// selection starts at that place; else it drops them. An app write before the composition moves
+/// the selection with the words (so the open words stay the selection), and egui's own place
+/// stays at the old number: a direct `Commit` then lost the DM's committed words.
+///
+/// The public route (ruling M25, no egui change): egui notes the place again at its own
+/// `Ime(Enabled)` event. After a write that moved a field whose composition is open, the field
+/// gets that one event before its next events, so the next `Preedit` or `Commit` acts on the
+/// open words where they now stand. Only then: `Enabled` also makes egui hold back keys an
+/// input method takes, which a field with no composition must not have.
+///
+/// Whether a composition is open is egui's own too, so the field's guard follows the same
+/// events egui does: open after a `Preedit` with words; closed by an empty `Preedit`, a
+/// `Commit`, `Disabled`, or the field's loss of the focus.
+mod composition {
+    use egui::{Context, Event, Id, ImeEvent};
+
+    /// The field whose composition is open, and the field that an app write moved under it.
+    #[derive(Clone, Copy, Default)]
+    struct Open {
+        field: Option<Id>,
+        moved: Option<Id>,
+    }
+
+    fn id() -> Id {
+        Id::new("splat_text_composition")
+    }
+
+    /// Before the field `field` draws: its place is noted again when a write moved it, and
+    /// whether its composition is open after this frame's events.
+    pub(super) fn before_field(ctx: &Context, field: Id, focused: bool) {
+        let mut open = ctx
+            .data(|data| data.get_temp::<Open>(id()))
+            .unwrap_or_default();
+        let before = (open.field, open.moved);
+        if !focused {
+            // A field without the focus has no composition (egui ends it there too).
+            if open.field == Some(field) {
+                open = Open::default();
+            }
+        } else {
+            if open.moved.take() == Some(field) && open.field == Some(field) {
+                ctx.input_mut(|input| input.events.insert(0, Event::Ime(ImeEvent::Enabled)));
+            }
+            ctx.input(|input| {
+                for event in &input.events {
+                    match event {
+                        Event::Ime(ImeEvent::Preedit(words)) if words != "\n" && words != "\r" => {
+                            open.field = (!words.is_empty()).then_some(field);
+                        }
+                        Event::Ime(ImeEvent::Commit(_) | ImeEvent::Disabled) => open.field = None,
+                        _ => {}
+                    }
+                }
+            });
+        }
+        if before != (open.field, open.moved) {
+            ctx.data_mut(|data| data.insert_temp(id(), open));
+        }
+    }
+
+    /// An app write moved the words of `field`: when its composition is open, its place is noted
+    /// again before its next events (`before_field`).
+    pub(super) fn moved(ctx: &Context, field: Id) {
+        let open = ctx
+            .data(|data| data.get_temp::<Open>(id()))
+            .unwrap_or_default();
+        if open.field == Some(field) {
+            ctx.data_mut(|data| {
+                data.insert_temp(
+                    id(),
+                    Open {
+                        moved: Some(field),
+                        ..open
+                    },
+                );
+            });
+        }
+    }
 }
 
 /// One change of a text, in characters: the `old` characters at `at` became `new` characters.

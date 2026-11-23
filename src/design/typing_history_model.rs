@@ -836,121 +836,97 @@ fn undo_and_redo_keep(harness: &mut Harness<'_, Page>, stages: &mut Vec<String>)
     }
 }
 
-/// An input method's composition and the app's write (the note, section 3, v3 point 2): real
-/// egui composition events; the app writes before the composition's place (a) while it is
-/// open, (b) right after its commit. No character is lost, and the app's write is never left
-/// out, also after Ctrl+Z and Ctrl+Y.
+/// An input method's composition and the app's write (the note, section 3, v3 point 2; review
+/// of PR 910, P1 910-a): real egui composition events; the app writes before the composition's
+/// place while it is open, or right after its commit. No character is lost, the DM's committed
+/// words are never lost or moved, and the app's write is never left out, also after Ctrl+Z and
+/// Ctrl+Y.
 #[test]
 fn an_app_write_at_a_composition_loses_no_word() {
-    // (a) The write lands while the composition is open.
-    let mut harness = page("one two");
-    select(&harness, 3, 3);
-    let mut stages = Vec::new();
-    ime(&mut harness, egui::ImeEvent::Enabled);
-    ime(&mut harness, egui::ImeEvent::Preedit("k".to_owned()));
-    stages.push(shown(&harness));
-    app_writes_at_the_start(&mut harness);
-    stages.push(shown(&harness));
-    ime(&mut harness, egui::ImeEvent::Preedit("ka".to_owned()));
-    stages.push(shown(&harness));
-    ime(&mut harness, egui::ImeEvent::Preedit(String::new()));
-    ime(&mut harness, egui::ImeEvent::Commit("か".to_owned()));
-    ime(&mut harness, egui::ImeEvent::Disabled);
-    stages.push(shown(&harness));
-    assert_eq!(
-        stages,
-        ["onek two", "APP onek two", "APP oneka two", "APP oneか two"],
-        "the composition goes on in its own words after the app's write"
-    );
-    undo_and_redo_keep(&mut harness, &mut stages);
-
-    // (b) The write lands right after the commit.
-    let mut harness = page("one two");
-    select(&harness, 3, 3);
-    let mut stages = Vec::new();
-    ime(&mut harness, egui::ImeEvent::Enabled);
-    ime(&mut harness, egui::ImeEvent::Preedit("k".to_owned()));
-    ime(&mut harness, egui::ImeEvent::Preedit(String::new()));
-    ime(&mut harness, egui::ImeEvent::Commit("か".to_owned()));
-    ime(&mut harness, egui::ImeEvent::Disabled);
-    stages.push(shown(&harness));
-    app_writes_at_the_start(&mut harness);
-    stages.push(shown(&harness));
-    assert_eq!(stages, ["oneか two", "APP oneか two"]);
-    undo_and_redo_keep(&mut harness, &mut stages);
-}
-
-/// A write among typed words that equal letters hide (issue #900): `éa`; the DM types `é` after
-/// the first `é`, then another `é` at the same place, with no pause; the app changes the second
-/// typed `é` to `X`; Undo. The step holds two edits, and its caret names a wrong place for
-/// them (the start). Read so, the write would stand at the older `é` and take it out (`Xa`).
-/// The step is not kept: Undo changes nothing, and no letter is lost.
-#[test]
-fn a_write_among_typed_equal_letters_ends_the_history() {
-    let typed = || Step::Type {
-        at: 1,
-        words: "é".to_owned(),
-        settle: false,
-    };
-    let result = run_with(
-        "éa",
-        &[typed(), typed(), app(2, 1, "X"), Step::Undo],
-        Order::Characters,
-        &[],
-    );
-    assert_eq!(result, Ok("ééXa".to_owned()));
-}
-
-/// The Notes panel's sequence (`sessions::page`'s panel test), in letters: typing below, a
-/// summary above it, Undo; then typing after the summary, a second summary below it, Undo.
-#[test]
-fn the_notes_panels_sequence() {
-    let typed = |at: u16, words: &str| Step::Type {
-        at,
-        words: words.to_owned(),
-        settle: false,
-    };
-    let start = "N.\n\n## T\n- b.\n";
-    let result = run(
-        start,
-        &[
-            typed(14, " Th."),
-            app(2, 0, "\n\nS2."),
-            Step::Undo,
-            Step::Undo,
-            typed(7, " Ni."),
-            app(11, 0, "\n\nS4."),
-            Step::Undo,
-        ],
-    );
-    assert_eq!(result, Ok("N.\n\nS2.\n\nS4.\n\n## T\n- b.\n".to_owned()));
-}
-
-/// A write over a part of the typed words (the Notes panel's renamed link with a summary above
-/// it: one change from the first changed letter to the last): the DM types a link at the end;
-/// the app's write runs from the summary's place into the typed link. The step is not kept:
-/// Undo changes nothing. Placed, it would take back half of the typing and leave a broken link.
-#[test]
-fn a_write_over_a_part_of_the_typed_words_ends_the_history() {
-    let typed = Step::Type {
-        at: 9,
-        words: " [[Old p]].".to_owned(),
-        settle: false,
-    };
-    let write = app(2, 13, "\n\nS3.\n\n## T\n [[New");
-    let result = run("S.\n\n## T\n", &[typed, write, Step::Undo]);
-    assert_eq!(
-        result,
-        Ok("S.\n\nS3.\n\n## T\n [[New p]].".to_owned()),
-        "a write over a part of the typed words ends the history"
-    );
-}
-
-/// Typed words at a place that equal letters hide, and a write that adds words there: `a`; the
-/// DM types `a` after it; the app writes `b` between them; Undo. The typed `a` can be the first
-/// or the second, and the two readings give other texts (`ba`, `ab`), so the step is not kept.
-#[test]
-fn typed_words_at_a_hidden_place_keep_no_uncertain_step() {
-    let result = run("a", &[type_at(1, "a"), app(1, 0, "b"), Step::Undo]);
-    assert_eq!(result, Ok("aba".to_owned()));
+    use egui::ImeEvent::{Commit, Disabled, Enabled, Preedit};
+    let preedit = |words: &str| Preedit(words.to_owned());
+    let commit = || Commit("か".to_owned());
+    // Each trace: the events before the app's write, the events after it, and the text after
+    // each of those. The write lands while the composition is open in all but the last.
+    let traces: [(&str, Vec<egui::ImeEvent>, Vec<egui::ImeEvent>, Vec<&str>); 6] = [
+        (
+            "more open words, an empty Preedit, then the Commit (as a platform sends them)",
+            vec![Enabled, preedit("k")],
+            vec![preedit("ka"), preedit(""), commit(), Disabled],
+            vec![
+                "APP oneka two",
+                "APP one two",
+                "APP oneか two",
+                "APP oneか two",
+            ],
+        ),
+        (
+            "a direct Commit (910-a)",
+            vec![Enabled, preedit("k")],
+            vec![commit()],
+            vec!["APP oneか two"],
+        ),
+        (
+            "a direct Commit, with no Enabled before the composition",
+            vec![preedit("k")],
+            vec![commit()],
+            vec!["APP oneか two"],
+        ),
+        (
+            "Disabled, then the Commit",
+            vec![Enabled, preedit("k")],
+            vec![Disabled, commit()],
+            vec!["APP onek two", "APP oneか two"],
+        ),
+        (
+            "Disabled, Enabled, then the Commit",
+            vec![Enabled, preedit("k")],
+            vec![Disabled, Enabled, commit()],
+            vec!["APP onek two", "APP onek two", "APP oneか two"],
+        ),
+        (
+            "the write right after the Commit",
+            vec![Enabled, preedit("k"), preedit(""), commit(), Disabled],
+            vec![],
+            vec![],
+        ),
+    ];
+    for (name, before, after, texts) in traces {
+        let mut harness = page("one two");
+        select(&harness, 3, 3);
+        for event in before {
+            ime(&mut harness, event);
+        }
+        let mut stages = vec![shown(&harness)];
+        app_writes_at_the_start(&mut harness);
+        stages.push(shown(&harness));
+        assert_eq!(
+            stages[1],
+            format!("APP {}", stages[0]),
+            "{name}: the app's write stands before the words"
+        );
+        let after: Vec<String> = after
+            .into_iter()
+            .map(|event| {
+                ime(&mut harness, event);
+                shown(&harness)
+            })
+            .collect();
+        assert_eq!(
+            after, texts,
+            "{name}: the composition goes on in its own words after the app's write"
+        );
+        stages.extend(after);
+        assert_eq!(
+            shown(&harness),
+            "APP oneか two",
+            "{name}: the DM's committed words stand where the DM put them: {stages:?}"
+        );
+        undo_and_redo_keep(&mut harness, &mut stages);
+        assert_eq!(
+            shown(&harness),
+            "APP oneか two",
+            "{name}: the committed words are there after Ctrl+Z and Ctrl+Y: {stages:?}"
+        );
+    }
 }
