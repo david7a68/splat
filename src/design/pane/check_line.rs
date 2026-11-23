@@ -108,7 +108,13 @@ impl CheckLine<'_> {
         }
         let words = self.words;
         Some(ui.in_slot(slot::LINE, |ui| {
-            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+            let style = ui.style_mut();
+            style.wrap_mode = Some(egui::TextWrapMode::Wrap);
+            // The check box draws its words in the font `check_height` measured (Body): a
+            // font or text style override from the host would draw past the measured block, so
+            // the slot has none (review of PR 917, P2).
+            style.override_font_id = None;
+            style.override_text_style = None;
             ui.checkbox(checked, words)
         }))
     }
