@@ -226,7 +226,19 @@ pub fn class_level(entry: &Entry) -> Option<String> {
 
 pub struct ReadingSection<'a> {
     pub title: String,
-    pub body: &'a str,
+    /// Borrowed from the body it was split from, or owned where the shared entry view keeps
+    /// its sections between frames (layout PR 9b-R1c).
+    pub body: std::borrow::Cow<'a, str>,
+}
+
+impl ReadingSection<'_> {
+    /// The section with its own copy of its words, to keep.
+    pub fn into_owned(self) -> ReadingSection<'static> {
+        ReadingSection {
+            title: self.title,
+            body: std::borrow::Cow::Owned(self.body.into_owned()),
+        }
+    }
 }
 
 /// The embedded SRD preserves printed column wraps for provenance. Reflow only
@@ -684,14 +696,14 @@ pub fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSection<'a>
     if !intro.trim().is_empty() {
         sections.push(ReadingSection {
             title: "Overview".into(),
-            body: intro,
+            body: intro.into(),
         });
     }
     for (index, (title, range)) in headings.iter().enumerate() {
         let next = headings.get(index + 1).map_or(body.len(), |h| h.1.start);
         sections.push(ReadingSection {
             title: title.clone(),
-            body: &body[range.end..next],
+            body: body[range.end..next].into(),
         });
     }
     sections.retain(visible_reading_section);
@@ -701,7 +713,7 @@ pub fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSection<'a>
 /// A heading is useful only when the reader can show something below it.
 pub(super) fn visible_reading_section(section: &ReadingSection<'_>) -> bool {
     section.title != "Splat data"
-        && Parser::new_ext(section.body, pulldown_cmark::Options::ENABLE_TABLES).any(|event| {
+        && Parser::new_ext(&section.body, pulldown_cmark::Options::ENABLE_TABLES).any(|event| {
             match event {
                 Event::Text(text) | Event::Code(text) => !text.trim().is_empty(),
                 Event::Start(Tag::Image { .. }) | Event::Rule => true,
@@ -739,6 +751,7 @@ mod reading_tests {
                         false,
                         true,
                         false,
+                        crate::library::view::Docs::for_test(),
                     );
                 });
             });
@@ -805,7 +818,7 @@ mod reading_tests {
         {
             let sections = reading_sections(&entry.body, &entry.name);
             let source = sections.iter().find(|s| s.title == "Source text").unwrap();
-            let prose = overview_markdown(source.body);
+            let prose = overview_markdown(&source.body);
             let first_y = |reader: bool| {
                 let ctx = eframe::egui::Context::default();
                 crate::design::theme::install(&ctx);
@@ -820,6 +833,7 @@ mod reading_tests {
                                 false,
                                 true,
                                 false,
+                                crate::library::view::Docs::for_test(),
                             );
                         } else {
                             design::gap(ui, design::Gap::L);

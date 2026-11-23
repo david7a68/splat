@@ -199,7 +199,7 @@ fn rules_text(spell: &Entry) -> String {
         .any(|start| line.starts_with(start))
             || line.contains(" Cantrip (")
     };
-    presentation::overview_markdown(section.body)
+    presentation::overview_markdown(&section.body)
         .split("\n\n")
         .filter(|paragraph| !paragraph.trim().is_empty() && !paragraph.lines().all(facts))
         .collect::<Vec<_>>()

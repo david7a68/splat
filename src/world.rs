@@ -2146,8 +2146,9 @@ struct GroupFault {
     /// Every other value not read, as the reader words it, with a long value cut, then whole.
     /// They sit with the Part of reason.
     notices: Vec<(String, String)>,
-    /// The entry for the shared reader, without its flags. None when it has none.
-    entry: Option<Entry>,
+    /// The entry for the shared reader, without its flags. None when it has none. Its revision
+    /// is in the shared view's (`view::Origin::revision`): a new copy read from disk shows at once.
+    entry: design::memo::Revised<Option<Entry>>,
 }
 
 /// The kind of the Part of flag, which World shows with its Change action.
@@ -3572,10 +3573,11 @@ impl Reader {
                 go = go.or(self.make_entry_control(ui, item, campaign));
             }
         } else {
-            let entry = self
+            let fault = self
                 .group_fault
                 .as_ref()
-                .filter(|fault| fault.id == item.entry.id)
+                .filter(|fault| fault.id == item.entry.id && fault.entry.is_some());
+            let entry = fault
                 .and_then(|fault| fault.entry.as_ref())
                 .unwrap_or(&item.entry);
             let followed = view::show_with_related(
@@ -3587,6 +3589,13 @@ impl Reader {
                     path: &item.entry.path,
                     owner: &item.owner,
                     builtin: item.is_builtin(),
+                    // The index's load holds the entry, its body and its name; a fault's copy of
+                    // the entry has its own revision.
+                    revision: egui::Id::new((
+                        index.generation(),
+                        fault.map(|fault| fault.entry.revision()),
+                    ))
+                    .value(),
                 },
                 index,
                 empty_value_block,
@@ -3747,7 +3756,7 @@ impl Reader {
             generation,
             unread,
             notices,
-            entry,
+            entry: design::memo::Revised::new(entry),
         });
     }
 
@@ -3789,7 +3798,9 @@ impl Reader {
                     if let Some(fault) = &mut self.group_fault
                         && fault.id == item.entry.id
                     {
-                        (fault.notices, fault.entry) = GroupFault::flags(&entry, Some(&unread));
+                        let (notices, entry) = GroupFault::flags(&entry, Some(&unread));
+                        fault.notices = notices;
+                        fault.entry = design::memo::Revised::new(entry);
                         fault.unread = Some(unread);
                     }
                     return Some(Go::Reload(item.entry.id));
@@ -5980,7 +5991,7 @@ mod tests {
                             whole: "Line 9: Part of was not read.".into(),
                         }),
                         notices: Vec::new(),
-                        entry: None,
+                        entry: Default::default(),
                     }),
                     ..Default::default()
                 };

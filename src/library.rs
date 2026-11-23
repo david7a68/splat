@@ -5412,6 +5412,8 @@ impl Library {
                             path: &note.path,
                             owner: &note.owner.label(),
                             builtin: note.owner == Owner::Builtin,
+                            // The draft's parse holds the entry, its body and its name.
+                            revision: egui::Id::new(parsed_draft.revision()).value(),
                         },
                         self.loaded.as_ref().unwrap(),
                         // The Library draws no value block above the entry.
@@ -7666,7 +7668,7 @@ mod tests {
                 .into_iter()
                 .find(|section| section.title == "Source text")
                 .unwrap();
-            let readable = presentation::overview_markdown(overview.body);
+            let readable = presentation::overview_markdown(&overview.body);
             if path.ends_with("command.md") {
                 for option in ["Approach.", "Drop.", "Flee.", "Grovel.", "Halt."] {
                     assert!(readable.contains(&format!("\n\n{option}")), "{readable}");
@@ -7814,7 +7816,8 @@ mod tests {
                     library.draft.push_str("\nUnsaved note.\n");
                 }
                 let ctx = egui::Context::default();
-                let mut frame = |events| {
+                // The Library is lent to each frame, so the test can change its draft between.
+                let frame = |library: &mut Library, events: Vec<egui::Event>| {
                     ctx.run(
                         egui::RawInput {
                             screen_rect: Some(egui::Rect::from_min_size(
@@ -7831,16 +7834,23 @@ mod tests {
                         },
                     )
                 };
-                frame(vec![]);
-                let output = frame(vec![]);
+                frame(&mut library, vec![]);
+                let output = frame(&mut library, vec![]);
                 // The stat block's spells were resolved once, with the notes' other caches:
-                // another unchanged frame looks none up.
+                // another unchanged frame looks none up. Layout PR 9b-R1c: nor does the shared
+                // view read the entry again.
                 let looked = SPELL_LOOKUPS.with(std::cell::Cell::get);
-                frame(vec![]);
+                let read = crate::library::view::ENTRY_PREPARES.with(std::cell::Cell::get);
+                frame(&mut library, vec![]);
                 assert_eq!(
                     SPELL_LOOKUPS.with(std::cell::Cell::get),
                     looked,
                     "an unchanged frame looks no spell up"
+                );
+                assert_eq!(
+                    crate::library::view::ENTRY_PREPARES.with(std::cell::Cell::get),
+                    read,
+                    "9b-R1c: an unchanged frame reads the entry again in no view"
                 );
                 let texts: Vec<_> = output
                     .shapes
@@ -7898,17 +7908,20 @@ mod tests {
                 } else {
                     egui::PointerButton::Primary
                 };
-                frame(vec![egui::Event::PointerMoved(position)]);
+                frame(&mut library, vec![egui::Event::PointerMoved(position)]);
                 for pressed in [true, false] {
-                    frame(vec![egui::Event::PointerButton {
-                        pos: position,
-                        button,
-                        pressed,
-                        modifiers: egui::Modifiers::NONE,
-                    }]);
+                    frame(
+                        &mut library,
+                        vec![egui::Event::PointerButton {
+                            pos: position,
+                            button,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        }],
+                    );
                 }
                 if read_by_menu {
-                    let output = frame(vec![]);
+                    let output = frame(&mut library, vec![]);
                     let read = output
                         .shapes
                         .iter()
@@ -7921,14 +7934,17 @@ mod tests {
                             _ => None,
                         })
                         .expect("the menu reads Guiding Bolt");
-                    frame(vec![egui::Event::PointerMoved(read)]);
+                    frame(&mut library, vec![egui::Event::PointerMoved(read)]);
                     for pressed in [true, false] {
-                        frame(vec![egui::Event::PointerButton {
-                            pos: read,
-                            button: egui::PointerButton::Primary,
-                            pressed,
-                            modifiers: egui::Modifiers::NONE,
-                        }]);
+                        frame(
+                            &mut library,
+                            vec![egui::Event::PointerButton {
+                                pos: read,
+                                button: egui::PointerButton::Primary,
+                                pressed,
+                                modifiers: egui::Modifiers::NONE,
+                            }],
+                        );
                     }
                 }
                 if dirty {
@@ -7949,6 +7965,75 @@ mod tests {
                     assert!(library.matches.is_none());
                     assert!(!library.source);
                     assert!(library.draft.contains(title));
+                    // Layout PR 9b-R1c (lead brief Sol 2-017): the followed link is a production
+                    // event that changes what the reader shows. The next frame shows the spell's
+                    // own words, and the frame after it reuses them: no reading of the entry, the
+                    // same words. (A spell's source text is still made and parsed on each frame,
+                    // in the section reader: layout PR 9b-R1c-2b.)
+                    let words = |output: &egui::FullOutput| {
+                        output
+                            .shapes
+                            .iter()
+                            .filter_map(|shape| match &shape.shape {
+                                egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                                _ => None,
+                            })
+                            .collect::<Vec<_>>()
+                    };
+                    let spell = &library.loaded.as_ref().unwrap().notes[place];
+                    let prose = spell
+                        .entry
+                        .as_ref()
+                        .unwrap()
+                        .body
+                        .lines()
+                        .map(str::trim)
+                        // Its description: the longest paragraph, not a heading, a list, a table
+                        // or a line of facts.
+                        .filter(|line| {
+                            !line.starts_with(['#', '|', '-', '*', '>']) && !line.ends_with('\\')
+                        })
+                        .max_by_key(|line| line.len())
+                        .expect("the spell has a line of prose")
+                        .to_owned();
+                    let opened = words(&frame(&mut library, vec![]));
+                    let counted = crate::library::view::ENTRY_PREPARES.with(std::cell::Cell::get);
+                    let again = words(&frame(&mut library, vec![]));
+                    let shows = |words: &[String]| {
+                        let start: String = prose.chars().take(24).collect();
+                        words.iter().any(|text| text.contains(&start))
+                    };
+                    assert!(
+                        shows(&opened) && !opened.iter().any(|text| text == "Legendary Actions"),
+                        "9b-R1c-opened: the followed spell's words show ({prose:?}), not the \
+                         dragon's: {opened:?}"
+                    );
+                    assert!(
+                        again == opened
+                            && crate::library::view::ENTRY_PREPARES.with(std::cell::Cell::get)
+                                == counted,
+                        "9b-R1c-opened-reuse: the next frame reads the entry again in no view"
+                    );
+                    // The draft changed as an edit leaves it (`TextDraft::replace`), the same
+                    // entry: the Library's revision is the draft's parse, so the next frame shows
+                    // the new words, and the frame after it reuses them.
+                    let text = library.draft.to_string();
+                    let start: String = prose.chars().take(24).collect();
+                    let upper = start.to_uppercase();
+                    let _ = library.draft.replace(text.replacen(&start, &upper, 1));
+                    let edited = words(&frame(&mut library, vec![]));
+                    let counted = crate::library::view::ENTRY_PREPARES.with(std::cell::Cell::get);
+                    let again = words(&frame(&mut library, vec![]));
+                    assert!(
+                        edited.iter().any(|text| text.contains(&upper))
+                            && !shows(&edited)
+                            && again == edited
+                            && crate::library::view::ENTRY_PREPARES.with(std::cell::Cell::get)
+                                == counted,
+                        "9b-R1c-draft: the edited draft's words show ({upper:?}), then the next \
+                         frame reuses them: {edited:?}"
+                    );
+                    let _ = library.draft.replace(&text);
                 }
             }
         }
