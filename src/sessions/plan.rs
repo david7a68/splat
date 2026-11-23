@@ -10242,6 +10242,25 @@ mod tests {
         );
         harness.state_mut().1.add(Kind::Day, Some(note.id));
         harness.run_steps(2);
+        // The removal's result is a body message (outside a footer), on the same draw path as
+        // a footer's line: its Undo's words and width are fitted once per change of the body
+        // (`Body::body_kept`). From the page's entry through paint, an unchanged frame with it
+        // measures no text. (Laid words are not counted here: the page's own Add actions lay
+        // theirs every frame.) Red: a body message that fits its Undo every frame.
+        assert!(
+            harness
+                .query_by_label("Undo remove Captain Varra")
+                .is_some(),
+            "body-reached: the result draws its Undo"
+        );
+        let measures = || design::TEXT_MEASURES.with(std::cell::Cell::get);
+        let before = measures();
+        harness.run_steps(5);
+        assert_eq!(
+            measures(),
+            before,
+            "body-quiet: an unchanged frame with a body message's Undo measures no text"
+        );
         // M-N1.1: the Undo names the scene (`UndoStep::of`), as every place showing it does.
         harness.get_by_label("Undo remove Captain Varra").click();
         harness.run_steps(2);

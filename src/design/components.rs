@@ -1631,6 +1631,24 @@ pub fn signed_stepper(
     )
 }
 
+/// A modifier that changes a value (a group member's `Add` change): as [`signed_stepper`], but
+/// its − and + and its arrow keys step over 0, which changes nothing, from +1 to −1 and back
+/// (issue #586). A typed 0 stays 0, for the caller to keep or drop.
+pub fn change_stepper(
+    ui: &mut Ui,
+    name: &str,
+    value: &mut i64,
+    range: std::ops::RangeInclusive<i64>,
+) -> bool {
+    stepper_as(
+        ui,
+        name,
+        value,
+        (range, Density::Read, None, None),
+        Shown::Change,
+    )
+}
+
 /// A stepper whose value is a count that can reach the thousands (a group's member count): it
 /// shows `1,000` with its digits grouped, as every count in the app reads (`count`), and reads
 /// back what the DM types with or without the commas (`1,000`, `1000`). The same − and + and
@@ -1657,6 +1675,8 @@ enum Shown {
     Plain,
     /// `+3`, `−1`: a modifier.
     Signed,
+    /// `+3`, `−1`: a change, whose steps skip 0 (`change_stepper`).
+    Change,
     /// `1,000`: a count with its digits grouped.
     Grouped,
 }
@@ -1733,6 +1753,8 @@ fn stepper_as(
     };
     let before = *value;
     let (low, high) = ((*range.start()).min(before), (*range.end()).max(before));
+    // A change's steps go over 0 (`change_stepper`).
+    let over_zero = matches!(shown, Shown::Change);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = XS / 2.0;
         // A button at its limit is disabled. When its caller says why, the button says so on
@@ -1758,6 +1780,9 @@ fn stepper_as(
         );
         if down.clicked() {
             *value -= 1;
+            if over_zero && *value == 0 {
+                *value -= 1;
+            }
         }
         let field = ui
             .scope(|ui| {
@@ -1788,13 +1813,16 @@ fn stepper_as(
                     });
                     if step != 0 {
                         *value = (*value + step).clamp(low, high);
+                        if over_zero && *value == 0 {
+                            *value = (*value + step.signum()).clamp(low, high);
+                        }
                         ui.data_mut(|data| data.remove::<String>(id));
                     }
                 }
                 let mut field = egui::DragValue::new(value).range(low..=high).speed(0.1);
                 match shown {
                     Shown::Plain => {}
-                    Shown::Signed => {
+                    Shown::Signed | Shown::Change => {
                         field = field
                             .custom_formatter(|value, _| signed(value as i64))
                             .custom_parser(parse_signed_value);
@@ -1818,6 +1846,9 @@ fn stepper_as(
         );
         if up.clicked() {
             *value += 1;
+            if over_zero && *value == 0 {
+                *value += 1;
+            }
         }
     });
     *value = (*value).clamp(low, high);
@@ -4752,8 +4783,12 @@ pub(super) fn undo_message_capped(
     action: &str,
     name: Option<&str>,
 ) -> bool {
-    undo_message_line(ui, tone, text, action, name, None, false).0
+    undo_message_line(ui, tone, text, (action, None), name, None, false).0
 }
+
+/// An Undo's visible words, with the words laid before paint and the action's width with them
+/// when the caller keeps them (a typed footer's plan): then the line lays out no Undo words.
+pub(super) type UndoWords<'a> = (&'a str, Option<(LaidAction, f32)>);
 
 /// `undo_message_capped`, with Undo blocked for `blocked`'s reason (only Undo greys, and the line
 /// keeps its layout, so blocking moves nothing on it; the caller paints the reason), and the y of
@@ -4762,7 +4797,7 @@ pub(super) fn undo_message_line(
     ui: &mut Ui,
     tone: Tone,
     text: &str,
-    action: &str,
+    action: UndoWords<'_>,
     name: Option<&str>,
     blocked: Option<&str>,
     tipped: bool,
@@ -4778,7 +4813,7 @@ fn undo_message_inside(
     ui: &mut Ui,
     tone: Tone,
     text: &str,
-    action: &str,
+    (action, kept): UndoWords<'_>,
     name: Option<&str>,
     blocked: Option<&str>,
     tipped: bool,
@@ -4800,7 +4835,13 @@ fn undo_message_inside(
         Some(name) => button.name(name),
         None => button,
     };
-    let button_width = button.natural_width(ui);
+    let (button, button_width) = match kept {
+        Some((words, width)) => (button.laid(words), width),
+        None => {
+            let width = button.natural_width(ui);
+            (button, width)
+        }
+    };
     let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
     // The words start `XS` after the icon whatever the caller's spacing; the gap follows them.
     // App round 2, X13: the line is measured as `message` draws it, with one gap before the
