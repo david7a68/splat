@@ -42,6 +42,13 @@ fn source_style(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
         .desired_width(f32::INFINITY)
 }
 
+/// The part of the error line's mark (`from` to `to`, screen y) that lies in the editor's view:
+/// none when it lies outside it.
+fn mark_in_view(from: f32, to: f32, view: egui::Rangef) -> Option<(f32, f32)> {
+    let (from, to) = (from.max(view.min), to.min(view.max));
+    (from < to).then_some((from, to))
+}
+
 /// The source editor itself: the note's text in the editor's face, named for its file, with the
 /// error line marked. One closed editor viewport in both places (layout PR 9): its fixed frame
 /// keeps all four edges in view, and the text and its lane scroll inside it. In a pane's editor
@@ -92,13 +99,13 @@ fn source_editor(
             .pos_from_cursor(egui::text::CCursor::new(position));
         let y = output.galley_pos.y + row.top();
         // The mark is in the frame's left margin, and only where the text is in view.
-        let shown = egui::Rect::from_x_y_ranges(output.frame.x_range(), output.view.y_range());
-        let painter = ui.painter().with_clip_rect(shown);
-        painter.vline(
-            output.frame.left() + design::XS,
-            y..=y + row.height(),
-            egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
-        );
+        if let Some((from, to)) = mark_in_view(y, y + row.height(), output.view.y_range()) {
+            ui.painter().vline(
+                output.frame.left() + design::XS,
+                from..=to,
+                egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
+            );
+        }
     }
     (active, output.frame, output.response.id)
 }
@@ -599,6 +606,23 @@ impl Repair {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The error line's mark shows only where the text is in view, as the clip it replaced cut it:
+    /// whole when inside, cut at the view's edge, nothing when outside (view 100 to 200).
+    #[test]
+    fn the_error_mark_is_cut_at_the_editors_view() {
+        let view = egui::Rangef::new(100.0, 200.0);
+        for (mark, shown) in [
+            ((120.0, 138.0), Some((120.0, 138.0))),
+            ((90.0, 108.0), Some((100.0, 108.0))),
+            ((192.0, 210.0), Some((192.0, 200.0))),
+            ((60.0, 80.0), None),
+            ((210.0, 228.0), None),
+            ((80.0, 100.0), None),
+        ] {
+            assert_eq!(mark_in_view(mark.0, mark.1, view), shown, "mark {mark:?}");
+        }
+    }
 
     fn campaign(root: &std::path::Path) -> Campaign {
         Campaign {

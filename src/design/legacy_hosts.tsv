@@ -117,7 +117,6 @@ row-clip	src/markdown_view.rs	table_part	3	Reader
 row-clip	src/party.rs	member_row	1	Party
 row-clip	src/party_bar.rs	show	1	Party
 row-clip	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
-row-clip	src/world/repair.rs	source_editor	1	World
 row-clip	src/design/pane/columns.rs	PaneEdges::show_children	1	design	design implementation boundary: a resizable child clips to the composite's view (egui's side panel sets its own clip)
 scroll-area	src/design/components.rs	dialog_width	1	design	design implementation boundary
 scroll-area	src/design/components.rs	draft_comparison_labeled	1	design	design implementation boundary
@@ -135,7 +134,6 @@ scroll-request	src/design/reveal.rs	settle_queued	1	design	no egui target writes
 scroll-request	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run	named follow-selection exception (PR 403)
 scroll-request	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-request	src/encounters/groups.rs	of_encounter	1	Encounters
-scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
 scroll-request	src/sessions/plan.rs	Reveal::show	1	Sessions
 scroll-request	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions

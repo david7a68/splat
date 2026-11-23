@@ -3125,10 +3125,6 @@ pub fn folder_field(
 
 /// `Choose for this campaign` and its help, which `help` gives for the box's state after this
 /// frame's click.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub fn use_checkbox(
     ui: &mut egui::Ui,
     not_used: &mut bool,
@@ -3141,7 +3137,7 @@ pub fn use_checkbox(
     design::help(ui, help(enabled));
     // Round 27 FB9, FD8: `L` after the help, as after a field, so the help stays with its
     // checkbox and does not read as help for the next field.
-    ui.add_space(design::L - ui.spacing().item_spacing.y);
+    design::gap_to_next(ui, design::Gap::L);
 }
 
 pub const PACKAGE_FOLDER: design::FieldId =
