@@ -1208,6 +1208,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "one_fault_has_one_tone_in_every_place",
             &[Ban::Body],
         ),
+        // Note C0-parts Part B v2: a laid body fault is compared with the fault drawn by hand.
+        (
+            "src/design/outcome.rs",
+            "a_laid_fault_is_the_fault_drawn_by_hand",
+            &[Ban::Body],
+        ),
         // Layout 11c scope C: the proof that a row fault's measure is its painted height.
         (
             "src/design/outcome.rs",
