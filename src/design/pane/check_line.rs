@@ -46,23 +46,46 @@ thread_local! {
     pub static CHECK_LINES_LAID: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// Every input of a laid check line at a width (`CheckLine::inputs`): a host's key.
-pub type CheckInputs = (String, bool, u32, u32, u64, u32, u64, bool);
+/// Every input of a laid check line at a width (`CheckLine::inputs`): a host's key. Typed, so a
+/// host cannot mix two inputs up (review of PR 917, P2).
+#[derive(Clone, Debug, PartialEq)]
+pub struct CheckInputs {
+    /// The line's owner: its stable key, which is also its block's id.
+    pub owner: Id,
+    pub words: String,
+    pub blocked: bool,
+    /// The tail, the width, the scale and the spacing that `check_height` reads (the icon, the
+    /// gap after it and the interact height), as bits.
+    pub tail: u32,
+    pub width: u32,
+    pub scale: u32,
+    pub spacing: (u32, u32, u32),
+    pub font_generation: u64,
+    pub atlas_epoch: u64,
+    pub dark_mode: bool,
+}
 
 impl CheckLine<'_> {
     /// Every input of the line's layout in a row `width` wide: a host keeps its `Laid` while
     /// these are equal.
     pub fn inputs(&self, ui: &Ui, width: f32) -> CheckInputs {
-        (
-            self.words.to_owned(),
-            self.blocked,
-            self.tail.to_bits(),
-            width.to_bits(),
-            crate::design::theme::font_generation(ui.ctx()),
-            ui.ctx().pixels_per_point().to_bits(),
-            crate::design::theme::atlas_epoch(ui.ctx()),
-            ui.visuals().dark_mode,
-        )
+        let spacing = ui.spacing();
+        CheckInputs {
+            owner: self.key,
+            words: self.words.to_owned(),
+            blocked: self.blocked,
+            tail: self.tail.to_bits(),
+            width: width.to_bits(),
+            scale: ui.ctx().pixels_per_point().to_bits(),
+            spacing: (
+                spacing.icon_width.to_bits(),
+                spacing.icon_spacing.to_bits(),
+                spacing.interact_size.y.to_bits(),
+            ),
+            font_generation: crate::design::theme::font_generation(ui.ctx()),
+            atlas_epoch: crate::design::theme::atlas_epoch(ui.ctx()),
+            dark_mode: ui.visuals().dark_mode,
+        }
     }
 
     /// The line laid out in a row `width` wide.
@@ -223,6 +246,8 @@ mod tests {
         type Kept = Option<(CheckInputs, Laid)>;
         let words = std::rc::Rc::new(std::cell::RefCell::new("Move Ash Wraith".to_owned()));
         let width = std::rc::Rc::new(std::cell::Cell::new(400.0_f32));
+        let owner = std::rc::Rc::new(std::cell::Cell::new(1_u32));
+        let owner_in = owner.clone();
         let kept = std::rc::Rc::new(std::cell::RefCell::new(None::<(CheckInputs, Laid)>));
         let (words_in, width_in, kept_in) = (words.clone(), width.clone(), kept.clone());
         let mut harness = Harness::builder()
@@ -230,7 +255,7 @@ mod tests {
             .themed_ui(move |ui| {
                 let words = words_in.borrow().clone();
                 let line = CheckLine {
-                    key: Id::new("move"),
+                    key: Id::new(("move", owner_in.get())),
                     words: &words,
                     blocked: false,
                     tail: 0.0,
@@ -282,6 +307,17 @@ mod tests {
         harness.ctx.set_pixels_per_point(1.5);
         harness.step();
         assert!(laid() > before, "another scale lays the line out again");
+        // Review of PR 917, P2: another owner with the same words, and another spacing.
+        let before = laid();
+        owner.set(2);
+        harness.step();
+        assert!(laid() > before, "another owner lays the line out again");
+        let before = laid();
+        harness
+            .ctx
+            .all_styles_mut(|style| style.spacing.icon_spacing += 2.0);
+        harness.step();
+        assert!(laid() > before, "another spacing lays the line out again");
         let before = laid();
         harness.run_steps(3);
         assert_eq!(laid(), before, "quiet frames after them lay nothing");
