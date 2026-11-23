@@ -244,6 +244,12 @@ pub struct LaidUi<'u> {
 }
 
 impl LaidUi<'_> {
+    /// The block's own `Ui` (its id, its context, its painter): for a recipe's own draw, which
+    /// registers or describes what it drew in its slots.
+    pub(in crate::design) fn ui(&self) -> &Ui {
+        self.ui
+    }
+
     /// How many control slots the layout has.
     pub fn slots(&self) -> usize {
         self.laid.slots.len()

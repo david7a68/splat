@@ -5365,8 +5365,21 @@ impl<A> BodyFault<A> {
         self.draw_repairs(ui).0
     }
 
-    /// `draw`, with each repair's control, in order (to give one the keyboard back).
+    /// `draw`, with each repair's control, in order (to give one the keyboard back): the fault
+    /// laid out before paint in the room left (`lay`) and drawn from that layout (`show_laid`),
+    /// whole, as a row of its column.
     fn draw_repairs(self, ui: &mut Ui) -> (Option<A>, Vec<Response>) {
+        let key = ui.id().with(("body_fault", self.words.as_str()));
+        let laid = self.lay(ui, key, ui.available_width(), &[]);
+        let mut drawn = (None, Vec::new());
+        super::pane::draw_laid(ui, &laid, |laid| drawn = self.show_laid(laid));
+        drawn
+    }
+
+    /// The fault as it was drawn by hand before layout 11c: the reference its laid geometry is
+    /// compared with (note C0-parts Part B v2).
+    #[cfg(test)]
+    fn draw_by_hand(self, ui: &mut Ui) -> (Option<A>, Vec<Response>) {
         let mut controls = Vec::new();
         let Self {
             tone,
@@ -5426,6 +5439,298 @@ impl<A> BodyFault<A> {
             })
             .response;
         register(ui, response.rect, MessagePlace::Page, tone);
+        let pressed = match pressed {
+            Some(Pressed::Choice(at)) => repairs.into_iter().nth(at).map(|repair| repair.id),
+            Some(Pressed::Undo) | None => None,
+        };
+        (pressed, controls)
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// A body fault laid out before paint (layout 11c, note C0-parts Part B v2)
+
+/// The fixed slots of a laid [`BodyFault`]; then, in order, one per help line, three per repair
+/// (its action, its lock's reason, its help line: an empty slot where it has none), and one per
+/// part under the repairs that the host draws or that `LaidUi::part` draws (`LaidPart::Part`,
+/// `LaidPart::Job`).
+pub mod fault_slot {
+    /// The fault's words (their laid galley; `LaidUi::part` draws them).
+    pub const WORDS: usize = 0;
+    /// The tone's bar, from the fault's top to its words' bottom.
+    pub const BAR: usize = 1;
+    /// The whole fault: the gate's message rect.
+    pub const WHOLE: usize = 2;
+    /// The first help line's slot.
+    pub const FIRST_HELP: usize = 3;
+}
+
+/// Every input of a laid [`BodyFault`] at a width, hashed: a host keeps the fault's `Laid` while
+/// it is equal (note C0-parts v2's key contract).
+pub type FaultInputs = u64;
+
+/// A laid choice: its slot's room, its height.
+fn choice_size(ui: &Ui, words: &ChoiceWords, room: f32) -> f32 {
+    match words.fit_choice(ui, ChoiceKind::Safe, room) {
+        Fitted::Whole(_) | Fitted::Cut(..) => Density::Read.control(),
+        Fitted::Wraps(words) => {
+            let mut job = egui::text::LayoutJob::simple(
+                words.replace(['\n', '\r'], " "),
+                Type::Strong.font(ui),
+                egui::Color32::PLACEHOLDER,
+                (room - 2.0 * M).max(1.0),
+            );
+            job.wrap.break_anywhere = false;
+            let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+            Density::Read.control().max(galley.size().y + 2.0 * XS)
+        }
+    }
+}
+
+/// Small, muted words wrapped in `room`, as `help` and `blocked_reason` lay them.
+fn small_words(ui: &Ui, text: &str, room: f32) -> std::sync::Arc<egui::Galley> {
+    ui.fonts_mut(|fonts| {
+        fonts.layout(
+            text.to_owned(),
+            Type::Small.font(ui),
+            colors().muted,
+            room.max(1.0),
+        )
+    })
+}
+
+impl<A> BodyFault<A> {
+    /// Every input of the fault laid `width` wide with `under` under its repairs: its tone, its
+    /// words and their whole form, its help, each repair's words, lock and help, the parts under
+    /// it, the width, the font generation, the scale, the font atlas's epoch and the theme.
+    pub fn inputs(&self, ui: &Ui, width: f32, under: &[super::pane::LaidPart<'_>]) -> FaultInputs {
+        use std::hash::{Hash, Hasher};
+        let mut state = std::collections::hash_map::DefaultHasher::new();
+        (self.tone as u8).hash(&mut state);
+        self.words.as_str().hash(&mut state);
+        self.whole.hash(&mut state);
+        for help in &self.help {
+            help.as_str().hash(&mut state);
+        }
+        for repair in &self.repairs {
+            repair.words.label().hash(&mut state);
+            repair.help.as_ref().map(Sentence::as_str).hash(&mut state);
+            repair
+                .lock
+                .as_ref()
+                .map(|(reason, locked)| (reason.as_str(), *locked))
+                .hash(&mut state);
+        }
+        for part in under {
+            match part {
+                super::pane::LaidPart::Words {
+                    text,
+                    role,
+                    color,
+                    max_rows,
+                } => (0_u8, text, role.size().to_bits(), color, max_rows).hash(&mut state),
+                super::pane::LaidPart::Part { height, width } => {
+                    (1_u8, height.to_bits(), width.to_bits()).hash(&mut state);
+                }
+                super::pane::LaidPart::Job {
+                    job,
+                    max_rows,
+                    link,
+                } => (2_u8, job, max_rows, link).hash(&mut state),
+            }
+        }
+        width.to_bits().hash(&mut state);
+        super::theme::font_generation(ui.ctx()).hash(&mut state);
+        ui.ctx().pixels_per_point().to_bits().hash(&mut state);
+        super::theme::atlas_epoch(ui.ctx()).hash(&mut state);
+        ui.visuals().dark_mode.hash(&mut state);
+        state.finish()
+    }
+
+    /// The slot of the part `at` under the repairs that is drawn in a slot (`LaidPart::Part` or
+    /// `LaidPart::Job`, counted among those only).
+    pub fn under_slot(&self, at: usize) -> usize {
+        fault_slot::FIRST_HELP + self.help.len() + 3 * self.repairs.len() + at
+    }
+
+    /// The fault laid out before paint in a place `width` wide, capped at `LIST_MEASURE`, with
+    /// `under` stacked under its repairs at their column, the column's gap before it. The
+    /// geometry is the fault's own (`show` draws from it): the tone's bar, `S + 1`, the icon,
+    /// `XS`, the words wrapped in the rest; each help line, repair, lock reason and repair help on
+    /// its line from the words' column, the column's gap apart; a repair's help `XS` under its
+    /// action and the next repair `L` under that help.
+    pub fn lay(
+        &self,
+        ui: &Ui,
+        key: egui::Id,
+        width: f32,
+        under: &[super::pane::LaidPart<'_>],
+    ) -> super::pane::Laid {
+        use super::pane::laid::LaidText;
+        let width = width.min(LIST_MEASURE);
+        let (icon, color) = self.tone.parts();
+        let gap = super::theme::LINE_GAP;
+        let icon_galley =
+            ui.fonts_mut(|fonts| fonts.layout_no_wrap(icon.to_owned(), Type::Body.font(ui), color));
+        // The words start after the bar's lead, the icon and `XS`; a choice's row starts at the
+        // same column (`message_choice_row`).
+        let left = S + 1.0 + icon_galley.size().x + XS;
+        let column = S + 1.0 + number_width(ui, icon, &Type::Body.font(ui)) + XS;
+        let words = super::components::wrapped_galley(
+            ui,
+            Type::Body
+                .rich(ui, self.words.as_str())
+                .color(colors().text),
+            (width - left).max(1.0),
+        );
+        let mut texts = vec![LaidText {
+            at: egui::pos2(S + 1.0, 0.0),
+            galley: icon_galley.clone(),
+        }];
+        let message = icon_galley.size().y.max(words.size().y);
+        let mut slots = vec![
+            Rect::from_min_size(egui::pos2(left, 0.0), words.size()),
+            Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(3.0, words.size().y)),
+            Rect::NOTHING,
+        ];
+        let mut slot_texts = vec![Some(words), None, None];
+        let room = (width - column).max(0.0);
+        let mut y = message;
+        for help in &self.help {
+            y += gap;
+            let galley = small_words(ui, help.as_str(), room.min(READER_MEASURE));
+            slots.push(Rect::from_min_size(egui::pos2(column, y), galley.size()));
+            y += galley.size().y;
+            slot_texts.push(Some(galley));
+        }
+        let mut help_bottom = None;
+        for repair in &self.repairs {
+            y = match help_bottom.take() {
+                Some(bottom) => (y + gap).max(bottom + L),
+                None => y + gap,
+            };
+            let height = choice_size(ui, &repair.words, room);
+            slots.push(Rect::from_min_size(
+                egui::pos2(column, y),
+                egui::vec2(room, height),
+            ));
+            slot_texts.push(None);
+            y += height;
+            match &repair.lock {
+                Some((reason, _)) => {
+                    y += gap;
+                    let galley = small_words(ui, reason.as_str(), room);
+                    slots.push(Rect::from_min_size(egui::pos2(column, y), galley.size()));
+                    y += galley.size().y;
+                    slot_texts.push(Some(galley));
+                }
+                None => {
+                    slots.push(Rect::NOTHING);
+                    slot_texts.push(None);
+                }
+            }
+            match &repair.help {
+                Some(help) => {
+                    y += XS;
+                    let galley = small_words(ui, help.as_str(), room.min(READER_MEASURE));
+                    slots.push(Rect::from_min_size(egui::pos2(column, y), galley.size()));
+                    y += galley.size().y;
+                    help_bottom = Some(y);
+                    slot_texts.push(Some(galley));
+                }
+                None => {
+                    slots.push(Rect::NOTHING);
+                    slot_texts.push(None);
+                }
+            }
+        }
+        if !under.is_empty() {
+            y += gap;
+            let stack = super::pane::laid::lay_parts(ui, under, (column, y, room));
+            texts.extend(stack.texts);
+            slots.extend(stack.parts);
+            slot_texts.extend(stack.part_texts);
+            y += stack.height;
+        }
+        slots[fault_slot::WHOLE] = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, y));
+        // Slots with no part have no place: an empty rect at the block's start.
+        for slot in &mut slots {
+            if !slot.is_positive() {
+                *slot = Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::ZERO);
+            }
+        }
+        super::pane::Laid::new(key, egui::vec2(width, y), None, texts, slots)
+            .with_slot_texts(slot_texts)
+    }
+
+    /// Draw the laid fault's parts in their slots: its words (named by them, with the whole
+    /// sentence on hover), the tone's bar, each help line, each repair's action (the first press
+    /// is the caller's id), its lock's reason while it holds and its help line. Returns the
+    /// pressed repair's id and each repair's control, in order.
+    pub fn show_laid(self, ui: &mut super::pane::LaidUi<'_>) -> (Option<A>, Vec<Response>) {
+        let Self {
+            tone,
+            words,
+            repairs,
+            whole,
+            help,
+        } = self;
+        let text = words.as_str();
+        let message = ui.part(fault_slot::WORDS, text, false);
+        if let Some(whole) = whole.filter(|whole| whole != text) {
+            message
+                .ctx
+                .accesskit_node_builder(message.id, |node| node.set_description(whole.clone()));
+            let _ = message.on_hover_text(whole);
+        }
+        let bar = ui.slot(fault_slot::BAR);
+        ui.in_slot(fault_slot::BAR, |ui| {
+            ui.painter().rect_filled(bar, 0.0, tone.parts().1);
+        });
+        for (at, help) in help.iter().enumerate() {
+            let _ = ui.part(fault_slot::FIRST_HELP + at, help.as_str(), false);
+        }
+        let first_repair = fault_slot::FIRST_HELP + help.len();
+        let mut pressed = None;
+        let mut controls = Vec::new();
+        for (at, repair) in repairs.iter().enumerate() {
+            let slot = first_repair + 3 * at;
+            let lock = holding(&repair.lock);
+            let room = ui.slot(slot).width();
+            let action = ui.in_slot(slot, |ui| {
+                data_choice(ui, &repair.words, ChoiceKind::Safe, room, lock)
+            });
+            activated(
+                ui.ui(),
+                &mut pressed,
+                action.clicked(),
+                text,
+                Pressed::Choice(at),
+            );
+            if let Some((reason, locked)) = &repair.lock
+                && *locked
+            {
+                let _ = ui.part(slot + 1, reason.as_str(), false);
+            }
+            if let Some(help) = &repair.help {
+                let line = ui.part(slot + 2, help.as_str(), false);
+                let description = match lock {
+                    Some(reason) => format!("{reason} {}", help.as_str()),
+                    None => help.as_str().to_owned(),
+                };
+                ui.ui()
+                    .ctx()
+                    .accesskit_node_builder(action.id, |node| node.set_description(description));
+                super::components::reveal_with(ui.ui(), action.id, action.rect.union(line.rect));
+            }
+            controls.push(action);
+        }
+        register(
+            ui.ui(),
+            ui.slot(fault_slot::WHOLE),
+            MessagePlace::Page,
+            tone,
+        );
         let pressed = match pressed {
             Some(Pressed::Choice(at)) => repairs.into_iter().nth(at).map(|repair| repair.id),
             Some(Pressed::Undo) | None => None,
@@ -9249,5 +9554,151 @@ mod tests {
             "one message removed",
             1,
         );
+    }
+
+    /// Note C0-parts Part B v2: a laid fault is the fault as it was drawn by hand, at every shape,
+    /// width and scale. The reference is the hand-drawn fault (`draw_by_hand`, the code before
+    /// layout 11c) in a harness of the same width: each accessible part (the words, each repair,
+    /// each help line, a lock's reason while it holds), the painted icon and the fault's height
+    /// match within half a point.
+    #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test draws a fault by hand as the reference of its laid form"
+    )]
+    fn a_laid_fault_is_the_fault_drawn_by_hand() {
+        use crate::design::test_harness::ThemedPage as _;
+        use egui_kittest::kittest::NodeT;
+        const WORDS: &str = "Campaign.md line 23 names a rule this campaign does not have, so \
+                             Splat uses the D&D default until you choose another one.";
+        const LONG_REPAIR: &str = "Choose a rule for Combat initiative in Rules and runs, where every rule of this campaign is listed";
+        type Shape = fn() -> BodyFault<u8>;
+        let shapes: [(&str, Shape); 4] = [
+            ("words", || {
+                BodyFault::new(&Said(Severity::NeedsFixing, WORDS))
+            }),
+            ("help and repairs", || {
+                BodyFault::new(&Said(Severity::NeedsFixing, WORDS))
+                    .help(crate::sentence!(
+                        "Splat reads it again when the file changes."
+                    ))
+                    .repair(
+                        Repair::new("Choose in Rules and runs", 1)
+                            .help(crate::sentence!("Opens the campaign’s rules.")),
+                    )
+                    .repair(
+                        Repair::new("Edit Campaign.md", 2)
+                            .blocked(crate::sentence!("Save or discard campaign changes first.")),
+                    )
+            }),
+            ("wrapped repair", || {
+                BodyFault::new(&Said(Severity::CannotRead, WORDS))
+                    .repair(Repair::new(LONG_REPAIR, 1))
+            }),
+            ("open lock", || {
+                BodyFault::new(&Said(Severity::NeedsFixing, WORDS)).repair(
+                    Repair::new("Repair Ember Cultist", 1)
+                        .locked_when(false, crate::sentence!("Save the draft first.")),
+                )
+            }),
+        ];
+        type Drawn = (Rect, Vec<(String, Rect)>, Vec<Rect>);
+        let draw = |shape: Shape, width: f32, scale: f32, by_hand: bool| -> Drawn {
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(width + 40.0, 700.0))
+                .with_pixels_per_point(scale)
+                .themed_ui(move |ui| {
+                    ui.set_max_width(width);
+                    let fault = shape();
+                    let rect = ui
+                        .scope(|ui| {
+                            if by_hand {
+                                let _ = fault.draw_by_hand(ui);
+                            } else {
+                                let _ = fault.show(ui);
+                            }
+                        })
+                        .response
+                        .rect;
+                    ui.data_mut(|data| data.insert_temp(egui::Id::new("fault_rect"), rect));
+                });
+            harness.run_steps(2);
+            let rect = harness
+                .ctx
+                .data(|data| data.get_temp::<Rect>(egui::Id::new("fault_rect")))
+                .expect("the fault drew");
+            let nodes = harness
+                .root()
+                .children_recursive()
+                .filter_map(|node| {
+                    let label = node.accesskit_node().label()?;
+                    let bounds = node.accesskit_node().raw_bounds()?;
+                    Some((
+                        label,
+                        Rect::from_min_max(
+                            egui::pos2(bounds.x0 as f32, bounds.y0 as f32),
+                            egui::pos2(bounds.x1 as f32, bounds.y1 as f32),
+                        ) / scale,
+                    ))
+                })
+                // The icon is compared by its paint (below): by hand it is a label.
+                .filter(|(label, _)| {
+                    !label.is_empty() && ![icons::WARN, icons::ERROR].contains(&label.as_str())
+                })
+                .collect();
+            let icons = harness
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text)
+                        if [icons::WARN, icons::ERROR].contains(&text.galley.job.text.as_str()) =>
+                    {
+                        Some(Rect::from_min_size(text.pos, text.galley.size()))
+                    }
+                    _ => None,
+                })
+                .collect();
+            (rect, nodes, icons)
+        };
+        for (name, shape) in shapes {
+            for scale in [1.0, 1.5] {
+                for width in [300.0, 460.0, 700.0] {
+                    let case = format!("{name} at {width} px, scale {scale}");
+                    let (hand_rect, hand_nodes, hand_icons) = draw(shape, width, scale, true);
+                    let (laid_rect, laid_nodes, laid_icons) = draw(shape, width, scale, false);
+                    let near = |a: Rect, b: Rect| {
+                        (a.min - b.min).length() <= 0.5 && (a.max - b.max).length() <= 0.5
+                    };
+                    assert!(
+                        (hand_rect.height() - laid_rect.height()).abs() <= 0.5,
+                        "{case}: the laid fault is {} tall, by hand {}",
+                        laid_rect.height(),
+                        hand_rect.height()
+                    );
+                    let mut compared = 0;
+                    for (label, hand) in &hand_nodes {
+                        let laid = laid_nodes
+                            .iter()
+                            .find(|(other, _)| other == label)
+                            .map(|(_, rect)| *rect);
+                        assert!(
+                            laid.is_some_and(|laid| near(laid, *hand)),
+                            "{case}: {label:?} is at {laid:?} laid, at {hand:?} by hand"
+                        );
+                        compared += 1;
+                    }
+                    assert!(compared >= 1, "{case}: some parts are compared");
+                    assert!(
+                        hand_icons.len() == laid_icons.len()
+                            && hand_icons
+                                .iter()
+                                .zip(&laid_icons)
+                                .all(|(a, b)| near(*a, *b)),
+                        "{case}: the icon is at {laid_icons:?} laid, at {hand_icons:?} by hand"
+                    );
+                }
+            }
+        }
     }
 }

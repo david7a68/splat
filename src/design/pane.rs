@@ -127,7 +127,7 @@ use super::{layout::ScrollColumn, tokens::S};
 mod action_line;
 mod columns;
 /// A block laid out before paint by a design recipe (layout 11c).
-mod laid;
+pub(in crate::design) mod laid;
 /// A notice's row in a list (layout 11c scope C): the Trackers panel's Due rows.
 mod notice_row;
 /// The whole-block plan of a body and its index (layout step 3a; step 3b draws from it).

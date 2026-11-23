@@ -3492,7 +3492,30 @@ fn wrapped_words(ui: &Ui, words: egui::RichText) -> std::sync::Arc<egui::Galley>
     job.wrap.max_width = ui.available_width();
     job.halign = ui.layout().horizontal_placement();
     job.justify = ui.layout().horizontal_justify();
-    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    trim_wrapped(ui.fonts_mut(|fonts| fonts.layout_job(job)))
+}
+
+/// `wrapped_words` laid before paint in a room `width` wide, as a message's row lays them (left
+/// aligned, top aligned, not justified): a laid fault's words (layout 11c).
+pub(super) fn wrapped_galley(
+    ui: &Ui,
+    words: egui::RichText,
+    width: f32,
+) -> std::sync::Arc<egui::Galley> {
+    let mut job = std::sync::Arc::unwrap_or_clone(egui::WidgetText::from(words).into_layout_job(
+        ui.style(),
+        egui::FontSelection::Default,
+        egui::Align::Min,
+    ));
+    job.wrap.max_width = width;
+    job.halign = egui::Align::Min;
+    job.justify = false;
+    trim_wrapped(ui.fonts_mut(|fonts| fonts.layout_job(job)))
+}
+
+/// A wrapped galley whose rect ends at its last painted word: a wrapped row keeps the space it
+/// broke at, which would widen the rect past the wrap width.
+fn trim_wrapped(galley: std::sync::Arc<egui::Galley>) -> std::sync::Arc<egui::Galley> {
     let right = galley
         .rows
         .iter()
