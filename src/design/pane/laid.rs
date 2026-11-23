@@ -245,7 +245,10 @@ impl LaidUi<'_> {
 
     /// `add` in a `Ui` that is slot `at`'s rect, with no item spacing.
     pub fn in_slot<R>(&mut self, at: usize, add: impl FnOnce(&mut Ui) -> R) -> R {
-        let rect = self.slot(at);
+        // Its edges inward to egui's 1/32-point grid: egui rounds what a control allocates to
+        // that grid, so a control at a slot's start that is off it would round outside the slot
+        // (review of PR 895).
+        let rect = inside_grid(self.slot(at));
         // A keyed slot's `Ui` is its key's own within its block, whatever slots come before it;
         // another follows its place.
         let builder = match self.laid.slot_keys.get(at).copied().flatten() {
@@ -258,6 +261,19 @@ impl LaidUi<'_> {
         child.spacing_mut().item_spacing = Vec2::ZERO;
         add(&mut child)
     }
+}
+
+/// `rect` with its edges moved inward to egui's 1/32-point grid (`GUI_ROUNDING`), never
+/// inside out.
+pub(in crate::design) fn inside_grid(rect: Rect) -> Rect {
+    let step = egui::emath::GUI_ROUNDING;
+    let ceil = |at: f32| (at / step).ceil() * step;
+    let floor = |at: f32| (at / step).floor() * step;
+    let min = egui::pos2(ceil(rect.min.x), ceil(rect.min.y));
+    Rect::from_min_max(
+        min,
+        egui::pos2(floor(rect.max.x).max(min.x), floor(rect.max.y).max(min.y)),
+    )
 }
 
 /// Draw `laid` in `ui` (the block's own `Ui`, whose rect the plan placed) when its layout is the

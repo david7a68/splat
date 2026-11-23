@@ -1343,7 +1343,18 @@ impl<'a> Action<'a> {
         // The room its `Ui` gives it bounds it (review of PR 895, P2): its square and its least
         // width never take it past that room. A `line_start` action may also hang its padding and
         // icon into the gutter, as below.
-        let given = ui.available_width().max(0.0)
+        // Inward to egui's 1/32-point grid, which rounds what it allocates: its end stays in
+        // the room after that rounding (review of PR 895).
+        // In a wrapping row, the whole row: an action that does not fit what is left of a line
+        // goes to the next line, as egui places it.
+        let room = if ui.layout().main_wrap() {
+            ui.max_rect()
+        } else {
+            ui.available_rect_before_wrap()
+        };
+        let step = egui::emath::GUI_ROUNDING;
+        let given = ((room.right() / step).floor() * step - (room.left() / step).ceil() * step)
+            .max(0.0)
             + if self.kind == Kind::Quiet && self.line_start {
                 padding + icon_width
             } else {
@@ -1356,9 +1367,11 @@ impl<'a> Action<'a> {
         // In a narrower room it gives up its parts in turn (its words were already cut to the
         // room when they were laid): first its keyboard hint, then its words (its icon alone),
         // then its icon. A part shows only where it fits, so nothing paints outside its rect.
+        // The words may take the right padding when the room is a hair short of their width
+        // (egui's grid takes up to 1/16 point), never more than the rect.
         let inner = width - 2.0 * padding;
         let show_key = galley.size().x + icon_width + key_width <= inner;
-        let show_words = galley.size().x + icon_width <= inner;
+        let show_words = padding + icon_width + galley.size().x <= width;
         let show_icon = icon_width <= width;
         // The padding before the icon and the words: less only for a `line_start` hang that
         // the clip leaves short (below).
