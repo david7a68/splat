@@ -1935,11 +1935,20 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
         "the actions stand beside the values: first actions at {before:?}, Cistern or Sands at {race_value:?}"
     );
     let measured = h.state().test_measured();
+    let lines = Trackers::test_trackers_laid();
     h.run_steps(5);
     assert_eq!(
         h.state().test_measured(),
         measured,
         "an unchanged frame measures no column"
+    );
+    // Layout 11c scope C: the lines are laid out before paint (`design::ActionLine`) and kept
+    // with their parts: an unchanged frame lays out no tracker, from the host's entry through
+    // paint.
+    assert_eq!(
+        Trackers::test_trackers_laid(),
+        lines,
+        "an unchanged frame lays out no tracker line"
     );
     // 0 / 120 becomes 10 / 120, and Crowd Favor 0 becomes 1: measured again, no move.
     h.state_mut().press("race_clock", None, "Enter room", None);
@@ -1951,6 +1960,11 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
     assert!(
         changed > measured,
         "a change of the values measures the columns again"
+    );
+    // Crowd Favor 0 becomes 1, a value of the same length: its tracker is laid out again.
+    assert!(
+        Trackers::test_trackers_laid() > lines,
+        "a change of a value lays the lines out again"
     );
     h.run_steps(5);
     assert_eq!(
@@ -2019,22 +2033,27 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
     );
     // The footer's line (its words, `Undo: Take seal` and the `Add to Timeline` choice) is laid
     // out once per change of the footer's plan: from the page's entry through paint, an
-    // unchanged frame with that line measures no text (`design::TEXT_MEASURES`; the panel's
-    // own body measures none). Red: a footer that measures its choices every frame. (Laid words
-    // are counted by the design crate's footer and body tests: this panel's lines lay their own
-    // until they move onto `ActionLine`.)
+    // unchanged frame with that line measures no text and lays out no action's words
+    // (`design::TEXT_MEASURES`, `ACTION_WORDS_LAID`; the panel's own lines, on `ActionLine`, and
+    // its Due rows do neither). Red: a footer that measures its choices, or lays its Undo's or a
+    // choice's words, every frame.
     assert!(
         h.query_by_label("Add to Timeline").is_some()
             && h.query_by_label("Undo: Take seal").is_some(),
         "footer-reached: the footer line draws its Undo and its choice"
     );
-    let measures = || crate::design::components::TEXT_MEASURES.with(std::cell::Cell::get);
+    let measures = || {
+        (
+            crate::design::components::TEXT_MEASURES.with(std::cell::Cell::get),
+            crate::design::components::ACTION_WORDS_LAID.with(std::cell::Cell::get),
+        )
+    };
     let before = measures();
     h.run_steps(5);
     assert_eq!(
         measures(),
         before,
-        "footer-quiet: an unchanged frame with a footer line measures no text"
+        "footer-quiet: an unchanged frame with a footer line measures no text and lays no words"
     );
     // A change of the laid words at the same length: `Lose seal` after `Take seal` makes the
     // footer's Undo `Undo: Lose seal`. The footer is planned again, and the painted words are
@@ -2109,6 +2128,168 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
     h.set_size(eframe::egui::vec2(520.0, 640.0));
     h.run_steps(4);
     assert!(laid() > after, "a new width lays the Due rows again");
+}
+
+/// Astra's P2 on PR 897: a Due row's check box is keyed by its change's own identity, in the
+/// real host. The wagon's mark proposes two changes; the second check box has the keyboard; the
+/// first change leaves the mark in the note (read again as the shell reads it); the check box
+/// that stays keeps its id and its focus. Red: a key by the change's place.
+#[test]
+fn a_due_check_keeps_its_focus_when_the_change_before_it_goes() {
+    use crate::design::test_harness::Themed as _;
+    use crate::timeline::Kind;
+    use egui_kittest::{Harness, kittest::Queryable};
+    const TWO: &str = "> day_marks:\n>   wagon:\n>     name: Supply wagon\n>     at: 3\n>     say: The supply wagon arrives.\n>     changes:\n>     - {tracker: favor, add: 1}\n>     - {tracker: seals, for: Party, add: 1}\n";
+    let mut race = race();
+    let note = race.campaign.path.join("Tournament.md");
+    let text = fs::read_to_string(&note).unwrap();
+    fs::write(
+        &note,
+        text.replacen("> trackers:\n", &format!("{TWO}> trackers:\n"), 1),
+    )
+    .unwrap();
+    race.index = Arc::new(ContentIndex::load(&[], Some(&race.campaign)).unwrap());
+    poll(
+        &mut race.trackers,
+        Some(race.index.clone()),
+        Some(&race.campaign),
+        Some(TONIGHT),
+        &race.timeline,
+    );
+    add_event(&mut race, Kind::Day, "");
+    add_event(&mut race, Kind::Travel, "2 days");
+    assert_eq!(race.trackers.due(), 1, "the wagon is due");
+    let t = std::mem::take(&mut race.trackers);
+    let mut h = Harness::builder()
+        .with_size(eframe::egui::vec2(640.0, 900.0))
+        .themed_ui_state(|ui, t: &mut Trackers| view::show(ui, t, false), t);
+    h.run_steps(4);
+    // Astra's P2 on PR 897: the whole host, from its entry through paint, on unchanged frames
+    // with a Due row and the lines (and no footer line: the wagon came due with no act): no
+    // action lays its own words (each paints the words laid with its parts) and no text is
+    // measured.
+    let words = || crate::design::components::ACTION_WORDS_LAID.with(std::cell::Cell::get);
+    let measures = || crate::design::components::TEXT_MEASURES.with(std::cell::Cell::get);
+    let before = (words(), measures());
+    h.run_steps(5);
+    assert!(
+        h.query_by_label("Seals (Party) +1").is_some() && h.query_by_label("Enter room").is_some(),
+        "quiet-host-reached: the Due row and the lines drew"
+    );
+    assert_eq!(
+        (words(), measures()),
+        before,
+        "quiet-host: an unchanged frame with a Due row and the lines lays no action's words and \
+         measures no text"
+    );
+    const SECOND: &str = "Seals (Party) +1";
+    h.get_by_label(SECOND).focus();
+    h.run_steps(2);
+    let focused = h.ctx.memory(|memory| memory.focused());
+    assert!(focused.is_some(), "the second check box has the keyboard");
+    // The first change leaves the mark, and the rules are read again.
+    let text = fs::read_to_string(&note).unwrap();
+    fs::write(
+        &note,
+        text.replacen(">     - {tracker: favor, add: 1}\n", "", 1),
+    )
+    .unwrap();
+    race.index = Arc::new(ContentIndex::load(&[], Some(&race.campaign)).unwrap());
+    poll(
+        h.state_mut(),
+        Some(race.index.clone()),
+        Some(&race.campaign),
+        Some(TONIGHT),
+        &race.timeline,
+    );
+    h.run_steps(4);
+    assert!(
+        h.query_by_label("Crowd Favor +1").is_none() && h.query_by_label(SECOND).is_some(),
+        "the first change is gone and the second stays"
+    );
+    assert_eq!(
+        h.ctx.memory(|memory| memory.focused()),
+        focused,
+        "due-check-key: the check box that stays keeps its id and its focus"
+    );
+}
+
+/// Layout 11c scope C (N1's threshold cases, on the real lines): the race clock's line, with its
+/// six actions, one point wider and one point narrower than the panel width where its actions
+/// take one row fewer. At both, everything the line painted (its name and each action) lies in
+/// its measured block, and the lowest painted bottom with the line's nonzero tail (`XS`, the
+/// tracker's last line) ends it. The reference: the painted controls' rects, read from what
+/// was drawn.
+#[test]
+fn a_tracker_line_paints_in_its_block_at_its_wrap_threshold() {
+    use crate::design::test_harness::Themed as _;
+    use egui_kittest::{Harness, kittest::Queryable};
+    const NAME: &str = "Elapsed race time";
+    const ACTIONS: [&str; 6] = [
+        "Enter room",
+        "Cistern or Sands",
+        "Reach Kitchens seal",
+        "Alcove rest",
+        "Fight minute",
+        "Collect soul",
+    ];
+    let at = |width: f32| {
+        let mut race = race();
+        let t = std::mem::take(&mut race.trackers);
+        let mut h = Harness::builder()
+            .with_size(eframe::egui::vec2(width, 1400.0))
+            .themed_ui_state(|ui, t: &mut Trackers| view::show(ui, t, false), t);
+        h.run_steps(4);
+        let actions: Vec<eframe::egui::Rect> = ACTIONS
+            .iter()
+            .map(|name| h.get_by_label(name).rect())
+            .collect();
+        let name = h.get_by_label(NAME).rect();
+        let rows = h
+            .ctx
+            .data(|data| {
+                data.get_temp::<(u64, Vec<eframe::egui::Rect>)>(eframe::egui::Id::new(
+                    crate::design::components::ROW_RECTS,
+                ))
+            })
+            .map(|(_, rows)| rows)
+            .unwrap_or_default();
+        // The line's own block: the smallest registered row that holds its first action (with
+        // the `Pinned` heading laid over it: the race clock is the first pinned tracker).
+        let block = rows
+            .into_iter()
+            .filter(|row| row.contains(actions[0].center()))
+            .min_by(|a, b| a.height().total_cmp(&b.height()));
+        let mut tops: Vec<f32> = actions.iter().map(|rect| rect.top()).collect();
+        tops.dedup_by(|a, b| (*a - *b).abs() < 0.5);
+        (tops.len(), block, name, actions)
+    };
+    // The narrowest width whose actions take as few rows as the widest panel's.
+    let fewest = at(1200.0).0;
+    let (mut narrow, mut wide) = (300.0_f32, 1200.0_f32);
+    while wide - narrow > 1.0 {
+        let middle = ((narrow + wide) / 2.0).floor();
+        if at(middle).0 > fewest {
+            narrow = middle;
+        } else {
+            wide = middle;
+        }
+    }
+    let (above, below) = (at(wide), at(narrow));
+    assert!(
+        below.0 > above.0,
+        "line-threshold-reached: {narrow} px wraps to {} rows, {wide} px holds {}",
+        below.0,
+        above.0
+    );
+    for (width, (_, block, name, actions)) in [(wide, above), (narrow, below)] {
+        let block = block.unwrap_or_else(|| panic!("line-threshold: {width} px: the line's block"));
+        let painted: Vec<eframe::egui::Rect> = actions.into_iter().chain([name]).collect();
+        if let Err(why) = crate::design::pane::painted_in_block(block, crate::design::XS, &painted)
+        {
+            panic!("line-threshold: {width} px: {why}");
+        }
+    }
 }
 
 #[test]
