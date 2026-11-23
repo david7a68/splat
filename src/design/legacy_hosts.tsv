@@ -133,7 +133,6 @@ scroll-request	src/design/pane.rs	EditorRegion::editor	1	design	design implement
 scroll-request	src/design/pane.rs	reveal_focus	1	design	design implementation boundary
 scroll-request	src/design/reveal.rs	settle_queued	1	design	no egui target writes a column after a region request (layout 11c A1b; raised)
 scroll-request	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run	named follow-selection exception (PR 403)
-scroll-request	src/encounter_run/view.rs	Run::group_row	1	Run
 scroll-request	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-request	src/encounters/groups.rs	of_encounter	1	Encounters
 scroll-request	src/lookup.rs	Lookup::panel	1	Lookup

@@ -3950,23 +3950,49 @@ pub(super) fn scroll_part<R>(
             }
             let out = add(ui);
             // A control inside that gains keyboard focus scrolls into view, once: Tab to an Undo
-            // the part has scrolled away shows it. A later wheel is not pulled back. A change of
-            // focus in a pass with a pointer press, hold or release is not looked up: egui's
-            // `read_response` drops the focus of a widget that such a press is not on, so a click
-            // elsewhere (Lookup in the rail) would lose the focus it just gave its search field.
+            // the part has scrolled away shows it. A later wheel is not pulled back. A focus that
+            // comes in a pass with the DM's press, hold or release in the part is not revealed:
+            // the click was on it. Review of #875 (P2): the press is judged by the one entry
+            // point (`reveal::cancel`) with the part's own view as its owner, so a press in
+            // another column (Lookup in the rail) does not hold it. The focused control's place
+            // is read from the pass's widgets, not with egui's `read_response`, which drops the
+            // focus of a widget that a click is not on (the rail's click would take the focus it
+            // just gave Lookup's search field).
             let focused = ui.ctx().memory(|memory| memory.focused());
             let seen = id.with("seen_focus");
-            let pointer = ui.input(|input| {
-                let pointer = &input.pointer;
-                pointer.any_down() || pointer.any_pressed() || pointer.any_released()
-            });
+            // The part's own view, left of its lane: egui keeps a vertical scroll area's clip as
+            // wide as its parent's, which would take a press beside the part for one in it.
+            let view = Rect::from_min_max(
+                inner_rect.min,
+                pos2(inner_rect.right() - lane, inner_rect.bottom()),
+            )
+            .intersect(ui.clip_rect());
+            let pressing = super::reveal::cancel::input(
+                ui,
+                super::reveal::cancel::Owner {
+                    key: id,
+                    view,
+                    area: None,
+                },
+            )
+            .pressing();
             if ui.ctx().data(|data| data.get_temp::<Option<Id>>(seen)) != Some(focused) {
                 ui.ctx().data_mut(|data| data.insert_temp(seen, focused));
                 if let Some(rect) = focused
-                    .filter(|_| !pointer)
+                    .filter(|_| !pressing)
                     .filter(|focused| *focused != focus)
-                    .and_then(|focused| ui.ctx().read_response(focused))
-                    .map(|response| reveal_rect(ui.ctx(), response.id, response.rect))
+                    .and_then(|focused| {
+                        ui.ctx()
+                            .viewport(|viewport| {
+                                viewport
+                                    .this_pass
+                                    .widgets
+                                    .get(focused)
+                                    .or_else(|| viewport.prev_pass.widgets.get(focused))
+                                    .map(|widget| widget.rect)
+                            })
+                            .map(|rect| reveal_rect(ui.ctx(), focused, rect))
+                    })
                     .filter(|rect| ui.min_rect().contains_rect(*rect))
                 {
                     ui.scroll_to_rect(rect, None);
@@ -8492,6 +8518,49 @@ mod tests {
                     && at.bottom() <= size.y + 0.5,
                 "{mode} at {size:?} the footer {at:?} of 21 results follows the save row {save:?} by `S`, and ends in the pane; in the pane it is taller than a third of it, by hand a third at most"
             );
+            // Review of #875 (P2), `m-p0-part-press`: a press held in another column does not
+            // hold the part's focus reveal (`reveal::cancel`, the part its owner). The first Undo
+            // takes the keyboard, and the part scrolls to it; then, with a press held below the
+            // outside field, the last Undo takes it and comes into the part's view.
+            harness.get_by_label("Undo it").focus();
+            harness.run_steps(3);
+            let hidden = text(&harness, "Undo extra 0");
+            let overflows =
+                !hidden.is_some_and(|undo| undo.is_positive() && at.contains_rect(undo));
+            // A part tall enough for all 21 results (the pane at 1920) has nothing to scroll to.
+            assert!(
+                overflows || (!by_hand && size.x > 1500.0),
+                "{mode} at {size:?} m-p0-part-press-setup: the last Undo {hidden:?} is out of the \
+                 part {at:?}"
+            );
+            let beside = pos2(size.x * 0.85, size.y * 0.6);
+            for (pressed, step) in [(true, 1), (false, 0)].into_iter().filter(|_| overflows) {
+                if pressed {
+                    harness.event(egui::Event::PointerMoved(beside));
+                }
+                harness.event(egui::Event::PointerButton {
+                    pos: beside,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.run_steps(step);
+                if pressed {
+                    harness.get_by_label("Undo extra 0").focus();
+                    harness.run_steps(3);
+                    let held = harness.ctx.input(|input| input.pointer.any_down());
+                    let shown = text(&harness, "Undo extra 0");
+                    assert!(
+                        held && focused(&harness) == last_undo
+                            && shown
+                                .is_some_and(|undo| undo.is_positive() && at.contains_rect(undo)),
+                        "{mode} at {size:?} m-p0-part-press: with a press held beside the pane \
+                         ({held}), the last Undo that takes the keyboard comes into the part \
+                         {at:?}: {shown:?}"
+                    );
+                }
+            }
+            harness.run_steps(2);
             extra.set(0);
             harness.run_steps(3);
             // 60 lines again, then the footer empties: a press where it was reaches the body

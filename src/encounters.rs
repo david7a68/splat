@@ -3227,6 +3227,9 @@ struct SearchRanked {
     key: SearchKey,
     /// The roster's creatures this ranking read (`OnRoster::names` checks them on a repaint).
     on_roster: Vec<Uuid>,
+    /// This ranking, as a revision: a new one for each new ranking (new words, a filter, another
+    /// read of the list or a change of the roster). The results' columns are kept by it.
+    revision: crate::design::memo::Revision,
     found: Arc<Vec<usize>>,
     as_typed: usize,
     unavailable: bool,
@@ -3283,6 +3286,7 @@ impl SearchRanked {
         Self {
             key,
             on_roster,
+            revision: crate::design::memo::Revised::new(()).revision(),
             found: Arc::new(found),
             as_typed,
             unavailable,
@@ -3290,8 +3294,8 @@ impl SearchRanked {
     }
 }
 
-/// How many times the ledger measured Ready, Groups and History on this thread (review of PR
-/// 581, #589): a test that an unchanged frame measures none.
+/// How many times the ledger measured its lists on this thread (review of PR 581, #589): In
+/// progress, and Ready, Groups and History together. A test that an unchanged frame measures none.
 #[cfg(any(test, feature = "test-support"))]
 pub fn ledger_measures() -> usize {
     list::LEDGER_MEASURED.with(std::cell::Cell::get)
@@ -4217,6 +4221,11 @@ pub use splat_session_records::encounters::PlanFight;
 pub struct Story<'a> {
     pub events: &'a [crate::timeline::Event],
     pub sessions: &'a [crate::timeline::SessionLink],
+    /// What the two say, as their sources' revisions: the Timeline's events
+    /// (`Timeline::revision`) and the Sessions folder's listing (`Sessions::notes_revision`).
+    /// The ledger keeps In progress by it (review of #875, #589). `None`: a story with no
+    /// sources (a test's fixed lists), so what reads it is worked out on each frame.
+    pub revision: Option<(crate::design::memo::Revision, u64)>,
 }
 /// What the DM asked for from a row of the list. One press in a frame, so one of these.
 enum ListAction {
@@ -8431,16 +8440,21 @@ impl Encounters {
         // FH3, SH2: the results keep the scroll bar's lane whether or not the bar shows.
         let lane = scroll_lane(ui);
         // Review of PR 555 (#565): kept for this search's view by what the results are (the
-        // ranking's own key: the list's revision, the query, the filter, the roster) and by what
-        // they were measured in (the lane, the font, the theme, the scale: `memo::Measure`), so
-        // changed results with the same query and count are measured again.
+        // ranking itself, by its revision: a new ranking for new words, a filter, another read
+        // of the list, or a change of the roster; review of #875: with no words, a party member
+        // taken off the roster comes back into the results) and by what they were measured in
+        // (the lane, the font, the theme, the scale: `memo::Measure`), so changed results with
+        // the same query and count are measured again.
         let columns_id = response.id.with("creature_search_columns");
         let key = (
-            ranked.key.clone(),
+            ranked.revision,
             design::memo::Measure::of(ui, lane, &Type::Body.font(ui)),
         );
         let columns = match ui.ctx().data(|data| {
-            data.get_temp::<((SearchKey, design::memo::Measure), design::Columns)>(columns_id)
+            data.get_temp::<(
+                (design::memo::Revision, design::memo::Measure),
+                design::Columns,
+            )>(columns_id)
         }) {
             Some((kept, columns)) if kept == key => columns,
             _ => {
@@ -10046,6 +10060,31 @@ mod tests {
             columns() > measured,
             "m-p0-columns-key: another read with the same words and count measures its columns again"
         );
+        // Review of #875 (P2, `m-p0-columns-roster`): the columns are kept by the ranking itself.
+        // With no words, a party member on the roster is not offered; taken off the roster, it
+        // comes back with the same words, filter and list, and the columns are measured again.
+        const MEMBER: &str = "Marisol of the Long Western Road";
+        let member = creature(dir.path(), MEMBER, true);
+        harness.state_mut().0 = Snapshot::load(&active, &[]).unwrap();
+        harness.state_mut().1 = String::new();
+        harness.state_mut().2 = vec![member];
+        harness.run_steps(2);
+        // The party comes first in the list's order, so an offered member is the first row,
+        // before the first creature of the built-in list.
+        assert!(
+            harness.query_by_label("Aboleth").is_some() && harness.query_by_label(MEMBER).is_none(),
+            "m-p0-columns-roster setup: with no words the results show, and the party member on \
+             the roster is not offered"
+        );
+        let measured = columns();
+        harness.state_mut().2 = Vec::new();
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label(MEMBER).is_some() && columns() > measured,
+            "m-p0-columns-roster: the party member taken off the roster is offered again, and the \
+             columns are measured again ({} more times)",
+            columns() - measured
+        );
     }
 
     #[test]
@@ -11605,6 +11644,7 @@ mod tests {
                             &Story {
                                 events: &[],
                                 sessions: &[],
+                                revision: None,
                             },
                         );
                     });
@@ -13081,6 +13121,7 @@ mod tests {
                             &Story {
                                 events: &[],
                                 sessions: &[],
+                                revision: None,
                             },
                         );
                     });
@@ -13124,6 +13165,7 @@ mod tests {
                             &Story {
                                 events: &[],
                                 sessions: &[],
+                                revision: None,
                             },
                         );
                     });
@@ -13730,6 +13772,7 @@ mod tests {
                             &Story {
                                 events: &[],
                                 sessions: &[],
+                                revision: None,
                             },
                         );
                     });

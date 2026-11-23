@@ -1289,9 +1289,10 @@ fn widget_count(ui: &Ui) -> usize {
 /// help, a reason comes, the content above it moves it): it then scrolls only when the field is
 /// not whole in view. The DM's own wheel moves neither the room nor the field's place in the
 /// content, so it is never pulled back. Only a control that the body added (`widgets`, on the
-/// pane's layer) is scrolled to. Nothing moves while the pointer presses, holds or releases; a
-/// focus that came with a press and whose block is cut waits for the release, and the block then
-/// comes whole into view (a click on a cut field, a drop-down's chosen row). An editor viewport's
+/// pane's layer) is scrolled to. Nothing moves while the pointer presses, holds or releases in the
+/// body's column (`reveal::cancel`; a press in another column does not hold it); a focus that
+/// came with a press and whose block is cut waits for the release, and the block then comes whole
+/// into view (a click on a cut field, a drop-down's chosen row). An editor viewport's
 /// block is its fixed frame (`components::reveal_as`), not its text.
 fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect, visible: Rect) {
     let seen = id.with("seen_focus");
@@ -1336,11 +1337,27 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
     let before = ui
         .ctx()
         .data(|data| data.get_temp::<(Option<Id>, Rect, Option<[i32; 2]>)>(seen));
-    let pointer = ui.input(|input| {
-        let pointer = &input.pointer;
-        pointer.any_down() || pointer.any_pressed() || pointer.any_released()
-    });
-    // Nothing moves while the pointer presses, holds or releases. A focused block that is not
+    // Review of #875 (P2): only the DM's pointer in this body's column holds the reveal, judged
+    // by the one entry point (`reveal::cancel`) with the column as its owner. A press, hold or
+    // release in another column (a rail button that gives a control here the focus) moves
+    // nothing there, so it does not hold this one.
+    let input = super::reveal::cancel::input(
+        ui,
+        super::reveal::column_view(ui).map_or(
+            super::reveal::cancel::Owner {
+                key: id,
+                view: ui.clip_rect().intersect(ui.max_rect()),
+                area: None,
+            },
+            |(key, view)| super::reveal::cancel::Owner {
+                key,
+                view,
+                area: None,
+            },
+        ),
+    );
+    let pointer = input.pressing();
+    // Nothing moves while the pointer presses, holds or releases in the column. A focused block that is not
     // whole and fits the view waits, unseen, for the pointer's release, and then comes whole
     // above the footer (I9, layout PR 10b): a click on a field whose caption or control is cut,
     // and a drop-down's chosen row that gives the focus back to its control. A block taller
@@ -1352,10 +1369,7 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
     // already had the focus (layout PR 10c), whose caption the DM's wheel took out of view.
     // The waiting reveal forgets the seen state, so the release reveals the block even with the
     // same focus, room and place; a drag of the scroll bar elsewhere is not a click on it.
-    let on_it = own.is_some_and(|own| {
-        ui.input(|input| input.pointer.latest_pos())
-            .is_some_and(|at| own.contains(at))
-    });
+    let on_it = own.zip(input.at).is_some_and(|(own, at)| own.contains(at));
     if pointer && cut && (on_it || before != Some(key)) {
         ui.ctx()
             .data_mut(|data| data.remove::<(Option<Id>, Rect, Option<[i32; 2]>)>(seen));
@@ -3190,6 +3204,78 @@ mod hold_tests {
             "i9-again: a second click on the focused field brings its caption {caption:?} into \
              the view {viewport:?}"
         );
+
+        // Review of #875 (P2), `m-p0-focus-press`: only the DM's pointer in the body's column
+        // holds the focus reveal (`reveal::cancel`, the column its owner). With a press held in
+        // the column, the far control that takes the keyboard waits for the release; with a
+        // press held on the footer's words, outside the column, it comes whole into view while
+        // the press is held.
+        let far_whole = |h: &Harness<'_, State>| {
+            let record = pane_records(&h.ctx).into_iter().next().unwrap();
+            let (viewport, footer) = (record.viewport().unwrap(), record.footer().unwrap());
+            let (caption, control) = (
+                h.get_by_label("Far caption").rect(),
+                h.get_by_label("Far control").rect(),
+            );
+            caption.top() >= viewport.top() - 0.5 && control.bottom() <= footer.top() + 0.5
+        };
+        let press = |h: &mut Harness<'_, State>, pos: egui::Pos2, pressed: bool| {
+            h.event(egui::Event::PointerMoved(pos));
+            h.event(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            h.run_steps(1);
+        };
+        let away = |h: &mut Harness<'_, State>| {
+            h.get_by_label("Next control").focus();
+            h.run_steps(4);
+            assert!(
+                !far_whole(h),
+                "m-p0-focus-press-setup: the far control is out of view"
+            );
+        };
+        let record = pane_records(&h.ctx).into_iter().next().unwrap();
+        let (viewport, footer) = (record.viewport().unwrap(), record.footer().unwrap());
+        let outside = footer.center();
+        assert!(
+            !viewport
+                .expand2(egui::vec2(crate::design::layout::lane_width(), 0.0))
+                .contains(outside),
+            "m-p0-focus-press-setup: the footer's words {outside:?} are outside the column \
+             {viewport:?}"
+        );
+        away(&mut h);
+        // Beside the control that has the keyboard, on no control.
+        let inside = egui::pos2(
+            viewport.right() - 20.0,
+            h.get_by_label("Next control").rect().center().y,
+        );
+        press(&mut h, inside, true);
+        h.get_by_label("Far control").focus();
+        h.run_steps(3);
+        let waited = !far_whole(&h);
+        press(&mut h, inside, false);
+        h.run_steps(4);
+        assert!(
+            waited && far_whole(&h),
+            "m-p0-focus-press: a press held in the column holds the reveal ({waited}), and the \
+             release brings the far control whole into view"
+        );
+        away(&mut h);
+        press(&mut h, outside, true);
+        h.get_by_label("Far control").focus();
+        h.run_steps(3);
+        let held = h.ctx.input(|input| input.pointer.any_down());
+        assert!(
+            held && far_whole(&h),
+            "m-p0-focus-press: with a press held outside the column ({held}), the far control \
+             comes whole into view"
+        );
+        press(&mut h, outside, false);
+        h.run_steps(2);
 
         // Layout step 11b (Astra's review of PR 736, P1): an act's room and the footer's growth
         // belong to its one field while it has the keyboard. The growth is counted here apart
