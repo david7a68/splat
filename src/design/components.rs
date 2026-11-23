@@ -1514,6 +1514,24 @@ pub fn signed_stepper(
     )
 }
 
+/// A modifier that changes a value (a group member's `Add` change): as [`signed_stepper`], but
+/// its − and + and its arrow keys step over 0, which changes nothing, from +1 to −1 and back
+/// (issue #586). A typed 0 stays 0, for the caller to keep or drop.
+pub fn change_stepper(
+    ui: &mut Ui,
+    name: &str,
+    value: &mut i64,
+    range: std::ops::RangeInclusive<i64>,
+) -> bool {
+    stepper_as(
+        ui,
+        name,
+        value,
+        (range, Density::Read, None, None),
+        Shown::Change,
+    )
+}
+
 /// A stepper whose value is a count that can reach the thousands (a group's member count): it
 /// shows `1,000` with its digits grouped, as every count in the app reads (`count`), and reads
 /// back what the DM types with or without the commas (`1,000`, `1000`). The same − and + and
@@ -1540,6 +1558,8 @@ enum Shown {
     Plain,
     /// `+3`, `−1`: a modifier.
     Signed,
+    /// `+3`, `−1`: a change, whose steps skip 0 (`change_stepper`).
+    Change,
     /// `1,000`: a count with its digits grouped.
     Grouped,
 }
@@ -1616,6 +1636,8 @@ fn stepper_as(
     };
     let before = *value;
     let (low, high) = ((*range.start()).min(before), (*range.end()).max(before));
+    // A change's steps go over 0 (`change_stepper`).
+    let over_zero = matches!(shown, Shown::Change);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = XS / 2.0;
         // A button at its limit is disabled. When its caller says why, the button says so on
@@ -1641,6 +1663,9 @@ fn stepper_as(
         );
         if down.clicked() {
             *value -= 1;
+            if over_zero && *value == 0 {
+                *value -= 1;
+            }
         }
         let field = ui
             .scope(|ui| {
@@ -1671,13 +1696,16 @@ fn stepper_as(
                     });
                     if step != 0 {
                         *value = (*value + step).clamp(low, high);
+                        if over_zero && *value == 0 {
+                            *value = (*value + step.signum()).clamp(low, high);
+                        }
                         ui.data_mut(|data| data.remove::<String>(id));
                     }
                 }
                 let mut field = egui::DragValue::new(value).range(low..=high).speed(0.1);
                 match shown {
                     Shown::Plain => {}
-                    Shown::Signed => {
+                    Shown::Signed | Shown::Change => {
                         field = field
                             .custom_formatter(|value, _| signed(value as i64))
                             .custom_parser(parse_signed_value);
@@ -1701,6 +1729,9 @@ fn stepper_as(
         );
         if up.clicked() {
             *value += 1;
+            if over_zero && *value == 0 {
+                *value += 1;
+            }
         }
     });
     *value = (*value).clamp(low, high);

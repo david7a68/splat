@@ -2225,12 +2225,9 @@ fn change_row(
             }
             Some(Change::Add(number)) => {
                 let mut amount = *number;
-                design::signed_stepper(ui, &format!("{label}: amount"), &mut amount, add);
-                // Zero changes nothing, so the choice for that is Same: a step from ±1 goes on
-                // to ∓1 (issue #586), and a typed 0 keeps the amount.
-                if amount == 0 && number.abs() == 1 {
-                    amount = -*number;
-                }
+                // Zero changes nothing, so the choice for that is Same: the stepper's steps go
+                // over 0 (issue #586), and a typed 0 keeps the amount.
+                design::change_stepper(ui, &format!("{label}: amount"), &mut amount, add);
                 if amount != 0 {
                     *number = amount;
                 }
@@ -5218,7 +5215,6 @@ mod tests {
             ("Increase AC: amount", 1),
             ("Decrease AC: amount", -1),
             ("Increase AC: amount", 1),
-            ("Increase AC: amount", 2),
         ] {
             harness.get_by_label(press).click();
             harness.run_steps(2);
@@ -5228,6 +5224,9 @@ mod tests {
                 "{press} gives {after}"
             );
         }
+        harness.get_by_label("Increase AC: amount").click();
+        harness.run_steps(2);
+        assert_eq!(ac(&harness), Some(Change::Add(2)), "Increase gives 2");
         // Lane E1 (ruling M20): the unread Changes cell is a typed fault at its row, in the
         // error tone (R41), not an untyped small message.
         assert!(
