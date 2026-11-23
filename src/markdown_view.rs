@@ -4221,7 +4221,7 @@ mod tests {
             let night = harness
                 .query_all_by_role_and_label(egui::accesskit::Role::Label, "A line of the night.")
                 .map(|node| node.rect().top())
-                .last()
+                .next_back()
                 .unwrap_or_default();
             harness
                 .query_all_by_role_and_label(egui::accesskit::Role::Link, "Rook (opens Rook)")
