@@ -10054,8 +10054,11 @@ mod tests {
             undone
         };
         let _ = saved(&mut harness);
-        // (a) The app's own whole-note write (a reading's summary through `add_to_note`) keeps
-        // the panel's Undo: Ctrl+Z there takes back what the DM typed and leaves the app's words.
+        // (a) The app's own whole-note write (a reading's summary through `add_to_note`) ends the
+        // panel's typing history (ruling M32, issue #900): Ctrl+Z there changes nothing, so it
+        // takes out neither the app's words nor the DM's typing. (PR 825 kept the DM's steps
+        // under the write; whole-text steps cannot be kept safely, and Undo across an app write
+        // comes back with a record of each typed edit.)
         let ctx = harness.ctx.clone();
         harness
             .get_by_label("Note text")
@@ -10075,14 +10078,14 @@ mod tests {
         let undone = undo(&mut harness, " Typed in play.");
         let (words, file) = (panel(&harness), saved(&mut harness));
         assert!(
-            !words.contains(" Typed in play.")
+            words.contains(" Typed in play.")
                 && words.contains("A summary.")
-                && !file.contains(" Typed in play.")
+                && file.contains(" Typed in play.")
                 && file.contains("A summary.")
                 && body(&harness).contains("- [[Old mill]]"),
-            "n0-panel-undo: after the app's summary and plan line, Ctrl+Z in the panel takes back \
-             the typing and keeps the app's words: panel {words:?}, saved {file:?}, note {:?} \
-             ({undone:?})",
+            "n0-panel-undo: after the app's summary and plan line, Ctrl+Z in the panel changes \
+             nothing: the app's words and the typing stay: panel {words:?}, saved {file:?}, note \
+             {:?} ({undone:?})",
             body(&harness)
         );
         // Review of PR 825 (P1 825-b; Sol 2-012): the app's write is placed in each older Undo
@@ -10122,10 +10125,8 @@ mod tests {
             }
             undone
         };
-        // Typed in the thread, then a summary at the end of What happened, above the typing. The
-        // write is placed in the step before the typing by the DM's own edit (issue #900): Ctrl+Z
-        // takes back the typing and keeps the summary. (A step placed by the words after the
-        // change had no place for it, and the history ended there.)
+        // Typed in the thread, then a summary at the end of What happened, above the typing: the
+        // history ends at the write, so Ctrl+Z changes nothing.
         let end = panel(&harness).chars().count();
         type_at(&mut harness, end, " Thread typed.");
         assert!(harness.state_mut().0.add_to_note(&ctx, "A summary 2."));
@@ -10140,14 +10141,14 @@ mod tests {
         let (words, file) = (panel(&harness), saved(&mut harness));
         assert!(
             words.contains("A summary 2.")
-                && !words.contains(" Thread typed.")
+                && words.contains(" Thread typed.")
                 && file.contains("A summary 2.")
-                && !file.contains(" Thread typed."),
-            "n0-panel-above-typing: Ctrl+Z takes back the typing below a summary and keeps the \
-             summary: panel {words:?}, saved {file:?} ({undone:?})"
+                && file.contains(" Thread typed."),
+            "n0-panel-above-typing: the summary ended the panel's Undo, so Ctrl+Z changes \
+             nothing: panel {words:?}, saved {file:?} ({undone:?})"
         );
-        // Typed at the end of What happened, then a summary below the typing. Ctrl+Z takes back
-        // only the typing; neither summary goes.
+        // Typed at the end of What happened, then a summary below the typing: the same. Neither
+        // summary goes, and the typing stays.
         let at = panel(&harness)
             .find("\n\n## Open threads")
             .map(|at| panel(&harness)[..at].chars().count())
@@ -10163,14 +10164,14 @@ mod tests {
         let undone = presses(&mut harness);
         let (words, file) = (panel(&harness), saved(&mut harness));
         assert!(
-            !words.contains(" Night typed.")
+            words.contains(" Night typed.")
                 && words.contains("A summary 2.")
                 && words.contains("A summary 4.")
-                && !file.contains(" Night typed.")
+                && file.contains(" Night typed.")
                 && file.contains("A summary 2.")
                 && file.contains("A summary 4."),
-            "n0-panel-below-typing: Ctrl+Z takes back only the typing above a summary, and the \
-             earlier summary stays: panel {words:?}, saved {file:?} ({undone:?})"
+            "n0-panel-below-typing: the summary ended the panel's Undo, so Ctrl+Z changes \
+             nothing: panel {words:?}, saved {file:?} ({undone:?})"
         );
         // The reviewer's sequence: a renamed link and a summary before Notes draws again.
         let end = panel(&harness).chars().count();

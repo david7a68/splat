@@ -294,31 +294,6 @@ fn shown(harness: &Harness<'_, Page>) -> String {
     harness.state().draft.as_str().to_owned()
 }
 
-/// The app's write from `before` to `after` as the reference takes it: the app gives the new
-/// words and no range (a named limit of `write_under_history`), so its write is the smallest
-/// change between the two texts, at the last place it can stand. `(at, removed, new words)`, in
-/// characters. The reference's own code: it calls nothing of the editor's.
-fn smallest_change(before: &str, after: &str) -> (usize, usize, String) {
-    let (old, new): (Vec<char>, Vec<char>) = (before.chars().collect(), after.chars().collect());
-    let head = old
-        .iter()
-        .zip(&new)
-        .take_while(|(one, other)| one == other)
-        .count();
-    let tail = old
-        .iter()
-        .rev()
-        .zip(new.iter().rev())
-        .take_while(|(one, other)| one == other)
-        .count()
-        .min(old.len().min(new.len()) - head);
-    (
-        head,
-        old.len() - head - tail,
-        new[head..new.len() - tail].iter().collect(),
-    )
-}
-
 /// What an Undo's text is checked for.
 #[derive(Clone, Copy, PartialEq)]
 enum Order {
@@ -479,10 +454,6 @@ fn run_with(start: &str, steps: &[Step], order: Order, faults: &[Fault]) -> Resu
                     .chain(words.chars())
                     .chain(before.chars().skip(at + len))
                     .collect();
-                let (head, old, new) = smallest_change(&before, &after);
-                if apart && old > 0 {
-                    return ended(failures, before);
-                }
                 let ctx = harness.ctx.clone();
                 layout::write_under_history(
                     &ctx,
@@ -491,23 +462,12 @@ fn run_with(start: &str, steps: &[Step], order: Order, faults: &[Fault]) -> Resu
                     &after,
                 );
                 harness.step();
-                // Each write takes its own order at a tie: the editor cannot tell, from whole
-                // texts, whether words the DM removed stood exactly at this write's place.
-                let mut forked: Vec<Reference> = Vec::new();
-                for model in &models {
-                    for after_gone in [false, true] {
-                        let mut model = model.clone();
-                        model.after_gone = after_gone;
-                        model.foreign(head, old, &new);
-                        model.open = None;
-                        if forked.len() < 64
-                            && !forked.iter().any(|other| other.atoms == model.atoms)
-                        {
-                            forked.push(model);
-                        }
-                    }
+                // The typing history ends at an app write (ruling M32): the reference starts
+                // again from the written text, as at a reload. The same words change nothing.
+                if after != before {
+                    models = Reference::both(&after);
+                    apart = false;
                 }
-                models = forked;
                 if !follows(&harness, &models, apart) {
                     failures.push(failure(
                         "the app's write gave another text",
@@ -794,36 +754,27 @@ fn app(at: u16, len: u8, words: &str) -> Step {
 /// Fixed traces: each historical fault's shape, by name (the random traces need not meet them).
 #[test]
 fn fixed_traces_keep_every_foreign_write() {
-    // The app adds words after the DM's typing: Undo takes the typing back and keeps them.
+    // The history ends at an app write (ruling M32): Undo after it changes nothing, and the
+    // app's words and the DM's typing both stay.
+    // The app adds words after the DM's typing.
     assert_eq!(
         run("one", &[type_at(0, "X"), app(4, 0, " summary"), Step::Undo]),
-        Ok("one summary".to_owned())
+        Ok("Xone summary".to_owned())
     );
-    // PR 825-b: the app changes words before the DM's typing. Undo takes the typing back and
-    // keeps the app's words (a step placed by the words after the change could not take this
-    // one, and the history ended there: `APP1`).
+    // PR 825-b's shape: the app changes words before the DM's typing.
     assert_eq!(
         run("x", &[type_at(1, "1"), app(0, 1, "APP"), Step::Undo]),
-        Ok("APP".to_owned())
+        Ok("APP1".to_owned())
     );
-    // An expected outcome, not a fault (egui's steps are whole texts): the DM deletes `a` with
-    // no pause, the app writes `a`, the DM types `a`. The kept step took the app's write and is
-    // `aa`, the same words as the text now, so Undo has nothing to go to. The same holds with no
-    // app write: a letter deleted and typed again with no pause. No word is lost.
-    let delete = Step::Delete {
-        at: 0,
-        len: 0,
-        settle: false,
-    };
-    let typed = Step::Type {
-        at: 0,
-        words: "a".to_owned(),
-        settle: false,
-    };
-    assert_eq!(
-        run("a", &[delete, app(0, 0, "a"), typed, Step::Undo]),
-        Ok("aa".to_owned())
-    );
+    // Undo after the write takes back only what the DM types after it.
+    let trace = [
+        type_at(1, "1"),
+        app(0, 1, "APP"),
+        type_at(4, "2"),
+        Step::Undo,
+        Step::Undo,
+    ];
+    assert_eq!(run("x", &trace), Ok("APP1".to_owned()));
     // PR 825-a: a reload ends the history: Undo never brings back the words before it.
     let reload = Step::Reload {
         words: "OUT".to_owned(),
@@ -893,8 +844,8 @@ fn astras_trace() {
     model.typed(1, 1, "");
     model.foreign(0, 1, "b");
     assert_eq!(model.text(1), "ba");
-    // With no equal letter at the delete, the step is certain, also after a caret move: `ac`;
-    // the DM deletes `c` and presses Home; the app changes `a` to `b`; Undo gives `bc`.
+    // With no equal letter at the delete the texts would prove the place (`ac`; delete `c`;
+    // Home; the app changes `a` to `b`), but no step is kept under a write at all: `b`.
     let delete = Step::Delete {
         at: 1,
         len: 0,
@@ -905,7 +856,7 @@ fn astras_trace() {
             "ac",
             &[delete, Step::Move(Caret::Home), app(0, 1, "b"), Step::Undo]
         ),
-        Ok("bc".to_owned())
+        Ok("b".to_owned())
     );
 }
 
@@ -940,14 +891,11 @@ fn ime(harness: &mut Harness<'_, Page>, event: egui::ImeEvent) {
 ///
 /// One setup: `one two`, the caret after `one`, a composition open with `k`, then the app
 /// writes `APP ` at the start. One row per way the composition ends; each row's texts after the
-/// write and after every event are those of main's write path, recorded by running this table
-/// on it (`MAIN_COMPOSITION`, which also holds main's two texts after Ctrl+Z and Ctrl+Y).
+/// write, after every event, after Ctrl+Z and after Ctrl+Y are those of main's write path,
+/// recorded by running this table on it (`MAIN_COMPOSITION`).
 ///
-/// **Ctrl+Z differs from main, by this change's own purpose** (`UNDO_HERE`): main ends the
-/// typing history at this write (its step has no place for the write), and egui then takes the
-/// text after the write as its first step. Here the step before the open words is kept with
-/// the app's write in it, so Ctrl+Z goes to it and takes back the DM's open and committed
-/// words together, as egui's Undo does when no write came between. Ctrl+Y gives main's text.
+/// Ctrl+Z and Ctrl+Y give main's texts too: main ends the typing history at this write in every
+/// row (its step has no place for the write), as this write path does at every write.
 #[test]
 fn an_app_write_at_a_composition_acts_as_on_main() {
     use egui::ImeEvent::{Commit, Disabled, Enabled, Preedit};
@@ -1013,7 +961,7 @@ fn an_app_write_at_a_composition_acts_as_on_main() {
         ),
     ];
     let mut differ = Vec::new();
-    for (row, (name, before, after, on_main)) in rows.into_iter().enumerate() {
+    for (name, before, after, on_main) in rows {
         let mut harness = page("one two");
         select(&harness, 3, 3);
         for event in before {
@@ -1028,20 +976,12 @@ fn an_app_write_at_a_composition_acts_as_on_main() {
             ime(&mut harness, event);
             texts.push(shown(&harness));
         }
-        let composed = &on_main[..on_main.len() - 2];
-        if texts != composed {
-            differ.push(format!("{name}: {texts:?}, on main {composed:?}"));
-        }
-        let mut undone = Vec::new();
         for pressed in [egui::Key::Z, egui::Key::Y] {
             key(&mut harness, pressed, egui::Modifiers::COMMAND);
-            undone.push(shown(&harness));
+            texts.push(shown(&harness));
         }
-        if undone != UNDO_HERE[row] {
-            differ.push(format!(
-                "{name}: Ctrl+Z and Ctrl+Y give {undone:?}, recorded here {:?}",
-                UNDO_HERE[row]
-            ));
+        if texts != on_main {
+            differ.push(format!("{name}: {texts:?}, on main {on_main:?}"));
         }
     }
     assert!(
@@ -1050,19 +990,6 @@ fn an_app_write_at_a_composition_acts_as_on_main() {
         differ.join("\n")
     );
 }
-
-/// The texts after Ctrl+Z and after Ctrl+Y in each row of
-/// `an_app_write_at_a_composition_acts_as_on_main`, with this change.
-const UNDO_HERE: [[&str; 2]; 8] = [
-    ["APP one two", "APPかonek two"],
-    ["APP one two", "APPか one two"],
-    ["APP one two", "APPかonek two"],
-    ["APP one two", "APPかonek two"],
-    ["APP one two", "APP onek two"],
-    ["APP one two", "APPかonek two"],
-    ["APP one two", "APPかonek two"],
-    ["APP one two", "APP oneか two"],
-];
 
 /// Main's texts for `an_app_write_at_a_composition_acts_as_on_main`, row by row.
 const MAIN_COMPOSITION: [&[&str]; 8] = [
@@ -1160,7 +1087,11 @@ fn the_notes_panels_sequence() {
             Step::Undo,
         ],
     );
-    assert_eq!(result, Ok("N.\n\nS2.\n\nS4.\n\n## T\n- b.\n".to_owned()));
+    // Each summary ends the history: the typing before it stays at Ctrl+Z.
+    assert_eq!(
+        result,
+        Ok("N.\n\nS2. Ni.\n\nS4.\n\n## T\n- b.\n Th.".to_owned())
+    );
 }
 
 /// A write over a part of the typed words (the Notes panel's renamed link with a summary above
@@ -1387,4 +1318,27 @@ fn a_write_beside_typed_equal_letters_ends_the_history() {
         &[typed(2, "bb"), typed(1, " "), app(4, 1, ""), Step::Undo],
     );
     assert_eq!(result, Ok("a bb".to_owned()));
+}
+
+/// A letter deleted and typed again in one step (review of PR 910, P1 910-d): `ab`; the DM
+/// deletes `a` and types `ac` at the start, with no pause; the app changes the new `a` to `x`;
+/// Undo. The texts `ab` and `acb` are equal at `a`, so no rule on whole texts can know that the
+/// `a` is a new one: a step kept there lost the older `a` (`xb`). The history ends at the
+/// write: Undo changes nothing. (A record of each typed edit would give `xab` or `axb`.)
+#[test]
+fn a_letter_typed_again_loses_nothing() {
+    let delete = Step::Delete {
+        at: 0,
+        len: 0,
+        settle: false,
+    };
+    let typed = Step::Type {
+        at: 0,
+        words: "ac".to_owned(),
+        settle: false,
+    };
+    assert_eq!(
+        run("ab", &[delete, typed, app(0, 1, "x"), Step::Undo]),
+        Ok("xcb".to_owned())
+    );
 }
