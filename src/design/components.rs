@@ -4757,7 +4757,7 @@ pub(super) fn undo_message_capped(
 
 /// An Undo's visible words, with the words laid before paint and the action's width with them
 /// when the caller keeps them (a typed footer's plan): then the line lays out no Undo words.
-pub(super) type UndoWords<'a> = (&'a str, Option<(Arc<egui::Galley>, f32)>);
+pub(super) type UndoWords<'a> = (&'a str, Option<(LaidAction, f32)>);
 
 /// `undo_message_capped`, with Undo blocked for `blocked`'s reason (only Undo greys, and the line
 /// keeps its layout, so blocking moves nothing on it; the caller paints the reason), and the y of

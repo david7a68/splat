@@ -4537,7 +4537,7 @@ impl Body {
         let laid = planned.and_then(|planned| planned.laid.clone());
         fn laid_words<'a>(
             action: Action<'a>,
-            words: Option<std::sync::Arc<egui::Galley>>,
+            words: Option<super::components::LaidAction>,
         ) -> Action<'a> {
             match words {
                 Some(words) => action.laid(words),
@@ -4727,7 +4727,7 @@ pub(in crate::design) struct UndoForm {
     width: f32,
     /// The visible form's words, laid before paint (`Action::laid`): a pass that keeps the form
     /// lays out no Undo words.
-    laid: std::sync::Arc<egui::Galley>,
+    laid: super::components::LaidAction,
 }
 
 /// One choice of a footer line as its plan keeps it: its whole width (with the `L` before a red
@@ -4737,7 +4737,7 @@ pub(in crate::design) struct UndoForm {
 pub(in crate::design) struct ChoiceLaid {
     width: f32,
     action: f32,
-    laid: Option<std::sync::Arc<egui::Galley>>,
+    laid: Option<super::components::LaidAction>,
 }
 
 /// The room for an Undo's words on a line of its own under a message of `tone`: the line
@@ -6449,7 +6449,7 @@ mod tests {
     #[test]
     #[allow(
         clippy::disallowed_methods,
-        reason = "the test of the body place `PlacedResult::show` itself"
+        reason = "the test of the body places `PlacedResult::show` and `BodyMessage::show` themselves"
     )]
     fn a_placed_result_shows_its_undo_whole_where_it_fits() {
         use crate::design::test_harness::Themed as _;
@@ -6583,6 +6583,58 @@ mod tests {
             full.state().0,
             Some(9),
             "m-p0-result-line: the Undo's id comes back"
+        );
+        // The typed message's draw path outside a footer (`Reasons::Body`): a body message keeps
+        // its Undo's words and its choices' widths and words by the body and what lays them out
+        // (`Body::body_kept`), as a footer's plan does. This host draws only body messages.
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(480.0, 320.0))
+            .themed_ui_state(
+                |ui, name: &mut &'static str| {
+                    let name = *name;
+                    let _ = PlacedResult::new(
+                        crate::sentence!("Removed “{}” from tonight.", name),
+                        UndoStep::of(Verb::Remove, name).pressed_as(1),
+                    )
+                    .show(ui);
+                    let _ = BodyMessage::from(
+                        Notice::new(crate::sentence!("No session yet."))
+                            .choice(Choice::new(MessageChoice::Primary("New session"), 2))
+                            .choice(Choice::new(MessageChoice::Choice("Open the plan"), 3)),
+                    )
+                    .show(ui);
+                },
+                "Kaya",
+            );
+        h.run_steps(4);
+        assert!(
+            h.query_by_label("Undo remove Kaya").is_some()
+                && h.query_by_label("New session").is_some()
+                && h.query_by_label("Open the plan").is_some(),
+            "body-reached: the result draws its Undo and the notice its choices"
+        );
+        // The whole host, from its entry through paint: a quiet frame measures no text and lays
+        // out no action's words. Red: an Undo fitted, or a choice measured or laid, every frame.
+        let host = host_work();
+        h.run_steps(5);
+        assert_eq!(
+            host_work(),
+            host,
+            "body-quiet: an unchanged frame with body messages measures no text and lays no words"
+        );
+        // A change of the words at the same length: the body is laid again, and the painted
+        // Undo words are the new ones (read from the paint, not from the accessible name).
+        let painted = |h: &Harness<'_, &'static str>, words: &str| {
+            h.output().shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == words)
+            })
+        };
+        assert!(painted(&h, "Undo remove Kaya"), "body-paint-reached");
+        *h.state_mut() = "Bram";
+        h.run_steps(4);
+        assert!(
+            painted(&h, "Undo remove Bram") && !painted(&h, "Undo remove Kaya"),
+            "body-same-length: the result paints its new Undo words"
         );
     }
 
@@ -7012,67 +7064,6 @@ mod tests {
     /// data. A press comes back once, as the caller's id; a locked repair paints its reason and
     /// gives nothing back; a long object is cut inside the fault's width at 320 px while the
     /// accessible name keeps the whole words; each help line sits under its repair.
-    /// The typed message's draw path outside a footer (`Reasons::Body`): a body message keeps
-    /// its Undo's words and its choices' widths and words by the body and what lays them out
-    /// (`Body::body_kept`), as a footer's plan does. The host draws only body messages.
-    #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the test of the body places `PlacedResult::show` and `BodyMessage::show` themselves"
-    )]
-    fn a_body_message_lays_its_undo_and_choices_once_per_change() {
-        use crate::design::test_harness::Themed as _;
-        let mut h = Harness::builder()
-            .with_size(egui::vec2(480.0, 320.0))
-            .themed_ui_state(
-                |ui, name: &mut &'static str| {
-                    let name = *name;
-                    let _ = PlacedResult::new(
-                        crate::sentence!("Removed “{}” from tonight.", name),
-                        UndoStep::of(Verb::Remove, name).pressed_as(1),
-                    )
-                    .show(ui);
-                    let _ = BodyMessage::from(
-                        Notice::new(crate::sentence!("No session yet."))
-                            .choice(Choice::new(MessageChoice::Primary("New session"), 2))
-                            .choice(Choice::new(MessageChoice::Choice("Open the plan"), 3)),
-                    )
-                    .show(ui);
-                },
-                "Kaya",
-            );
-        h.run_steps(4);
-        assert!(
-            h.query_by_label("Undo remove Kaya").is_some()
-                && h.query_by_label("New session").is_some()
-                && h.query_by_label("Open the plan").is_some(),
-            "body-reached: the result draws its Undo and the notice its choices"
-        );
-        // The whole host, from its entry through paint: a quiet frame measures no text and lays
-        // out no action's words. Red: an Undo fitted, or a choice measured or laid, every frame.
-        let host = host_work();
-        h.run_steps(5);
-        assert_eq!(
-            host_work(),
-            host,
-            "body-quiet: an unchanged frame with body messages measures no text and lays no words"
-        );
-        // A change of the words at the same length: the body is laid again, and the painted
-        // Undo words are the new ones (read from the paint, not from the accessible name).
-        let painted = |h: &Harness<'_, &'static str>, words: &str| {
-            h.output().shapes.iter().any(|clipped| {
-                matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == words)
-            })
-        };
-        assert!(painted(&h, "Undo remove Kaya"), "body-paint-reached");
-        *h.state_mut() = "Bram";
-        h.run_steps(4);
-        assert!(
-            painted(&h, "Undo remove Bram") && !painted(&h, "Undo remove Kaya"),
-            "body-same-length: the result paints its new Undo words"
-        );
-    }
-
     /// N0 (ruling M21): a message holds at most one primary choice.
     #[test]
     #[should_panic(expected = "a message has at most one primary choice")]
