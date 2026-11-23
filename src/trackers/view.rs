@@ -219,10 +219,11 @@ impl ViewState {
 type Tick = (NoticeRef, ChangeKey);
 
 /// A mark's change by its own identity, not its place in the mark (Astra's P2 on PR 897): the
-/// tracker it changes, its line, and which of the mark's changes to that same line it is. A change
-/// that leaves the mark before it moves no other change's key: its check box keeps its id (and
-/// its focus), and the DM's untick stays with its change.
-type ChangeKey = (String, Option<String>, usize);
+/// tracker it changes, its line, what it does there (its `add` and `set`), and which of the
+/// mark's changes that are the same in all of these it is (Astra's P2 on PR 904). A change that
+/// leaves the mark before it moves no other change's key, also on the same line: its check box
+/// keeps its id (and its focus), and the DM's untick stays with its change.
+type ChangeKey = (String, Option<String>, String, usize);
 
 /// Each change's key, in the mark's order (`ChangeKey`).
 fn change_keys(notice: &super::Notice, mark: Says<'_>) -> Vec<ChangeKey> {
@@ -230,11 +231,12 @@ fn change_keys(notice: &super::Notice, mark: Says<'_>) -> Vec<ChangeKey> {
     for change in mark.changes {
         let tracker = change.tracker.clone().unwrap_or_else(|| notice.key.clone());
         let instance = change.instance.clone();
+        let does = format!("{:?} {:?}", change.add, change.set);
         let nth = keys
             .iter()
-            .filter(|(t, i, _)| *t == tracker && *i == instance)
+            .filter(|(t, i, d, _)| *t == tracker && *i == instance && *d == does)
             .count();
-        keys.push((tracker, instance, nth));
+        keys.push((tracker, instance, does, nth));
     }
     keys
 }
@@ -914,7 +916,10 @@ fn lay_tracker(
     let instances = def.instances();
     let count = instances.len();
     let mut lines = Vec::with_capacity(count);
-    for (line, instance) in instances.into_iter().enumerate() {
+    for (line, &instance) in instances.iter().enumerate() {
+        // The line by its own identity: its instance, and how many lines before it have the same
+        // one (`per` can name a line twice).
+        let twin = instances[..line].iter().filter(|&&i| i == instance).count();
         // The first line of a repeated name keeps its fields; a later one leaves them out.
         let repeated_line = match repeat {
             Some(super::Repeat::Line { word, .. }) if instance == Some(word.as_str()) => {
@@ -955,10 +960,13 @@ fn lay_tracker(
             None => state.value(rules, key, instance).to_string(),
         };
         let fitted = fit_name(ui, view, columns.revision, &name, columns.name - indent);
+        // Each action by its own identity (Astra's P2 on PR 904): the tracker, the line's instance
+        // and the action's label, with how many actions of the same label come before it. A rules
+        // reload that reorders the lines or the actions moves no focus to another control.
         let actions: Vec<design::LineAction> = named
             .iter()
             .map(|(at, _)| design::LineAction {
-                key: egui::Id::new(("trackers_action", key, line, *at)),
+                key: action_key(key, (instance, twin), &def.quick, *at),
                 width: quick_action(&def.quick[*at].label).natural_width(ui),
             })
             .collect();
@@ -967,7 +975,7 @@ fn lay_tracker(
             .map(|fault| design::outcome::row_fault_height(ui, fault, width))
             .collect();
         let laid = design::ActionLine {
-            key: egui::Id::new(("trackers_line", key, line)),
+            key: egui::Id::new(("trackers_line", key, instance, twin)),
             heading: heading
                 .filter(|_| line == 0)
                 .map(|first| design::LineHeading {
@@ -1015,6 +1023,23 @@ fn lay_tracker(
         ));
     }
     lines
+}
+
+/// A line's action by its own identity, not its place: the tracker, the line's instance (with how
+/// many lines before it have the same one), the action's label, and how many of the tracker's
+/// actions with that label come before it (two actions can share a label).
+fn action_key(
+    key: &str,
+    instance: (Option<&str>, usize),
+    quick: &[splat_campaign::trackers::Quick],
+    at: usize,
+) -> egui::Id {
+    let label = &quick[at].label;
+    let nth = quick[..at]
+        .iter()
+        .filter(|action| action.label == *label)
+        .count();
+    egui::Id::new(("trackers_action", key, instance, label, nth))
 }
 
 /// A tracker's lines (`lay_tracker`), laid out once per key of the panel (its revision, measure,
