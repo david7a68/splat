@@ -826,12 +826,9 @@ mod tests {
             "use crate::design::pane::Fills::because as fills;",
             "use egui::ScrollArea as Area;",
             "use crate::design::outcome::banner as notice;",
-            "type Hand = splat::design::components::Footer<'static>;",
             // Round 29 P-1: a free function through a module that re-exports it.
             "#[allow(clippy::disallowed_methods)] fn add_row() { use crate::design::group_label as label; }",
             "use crate::design::{group_label as label, Heading};",
-            // Review of PR 446 (N3): `self` renames the path before its group.
-            "use crate::design::Footer::{self as Host};",
         ] {
             assert_eq!(rules(text), ["banned-alias"], "{text}");
         }

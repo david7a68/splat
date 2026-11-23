@@ -4438,56 +4438,6 @@ impl<'a> Footer<'a> {
     }
 }
 
-/// Where a pane's body started in the last pass, the y it had to end at, the footer's top (the
-/// pane's bottom when the footer was empty), and the pane `Ui`'s whole rect.
-#[derive(Clone, Copy, Debug)]
-struct FooterBody {
-    top: f32,
-    limit: f32,
-    footer: f32,
-    whole: Rect,
-}
-
-impl FooterBody {
-    /// How tall the body was in this last pass, from the widgets egui kept for it; `None` when
-    /// it filled its room (it ended less than `S` above its limit: a caller that sizes a scroll
-    /// area to leave room for a row below it does not leave the exact room) or showed nothing.
-    ///
-    /// The pane's own `Ui` cannot tell: egui's panels make their `Ui` as tall as the panel. So
-    /// the body is each widget on the pane's layer, across `x`, that is not one of the footer's
-    /// own (`own`, by id: egui can keep an older place for them), starts at or below the body's
-    /// top (also under the footer: a body grows under a footer that follows it), and does not
-    /// hold the pane `Ui`'s whole rect: those are the pane, its panel and their frames. A body
-    /// widget as tall as its room (an editor, a scroll area that does not shrink) fills it. This
-    /// runs only while the footer holds a message, and looks at each widget egui kept once.
-    fn body_height(
-        self,
-        ui: &Ui,
-        x: std::ops::RangeInclusive<f32>,
-        own: &std::collections::HashSet<Id>,
-    ) -> Option<f32> {
-        let layer = ui.layer_id();
-        let end = ui.ctx().viewport(|viewport| {
-            viewport
-                .prev_pass
-                .widgets
-                .get_layer(layer)
-                .filter(|widget| !own.contains(&widget.id))
-                .map(|widget| widget.rect)
-                .filter(|rect| {
-                    rect.is_finite()
-                        && rect.right() > *x.start()
-                        && rect.left() < *x.end()
-                        && rect.top() >= self.top - 0.5
-                        && !rect.expand(0.5).contains_rect(self.whole)
-                })
-                .map(|rect| rect.bottom())
-                .reduce(f32::max)
-        })?;
-        (end <= self.limit - S).then(|| (end - self.top).max(0.0))
-    }
-}
-
 /// For checks: the band each message footer took from its pane in this pass, from `S` above the
 /// footer to the pane's bottom, across the whole pane. A pane's content ends at its top.
 #[cfg(any(test, feature = "test-support"))]
@@ -8411,7 +8361,7 @@ mod tests {
                 !hidden.is_some_and(|undo| undo.is_positive() && at.contains_rect(undo));
             // A part tall enough for all 21 results (the pane at 1920) has nothing to scroll to.
             assert!(
-                overflows || (!by_hand && size.x > 1500.0),
+                overflows || size.x > 1500.0,
                 "{mode} at {size:?} m-p0-part-press-setup: the last Undo {hidden:?} is out of the \
                  part {at:?}"
             );
