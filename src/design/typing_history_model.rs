@@ -854,16 +854,40 @@ fn astras_trace() {
         len: 0,
         settle: false,
     };
-    assert_eq!(
+    // The repeated letter, with the caret unmoved, moved left, moved right or to the end, and
+    // set to a place (Sol 2-027): Undo gives back only an edit that the texts prove (`ba`), or
+    // the step is dropped and the words stay (`b`). Never `ab`.
+    let mut rows = vec![(
+        "the caret unmoved".to_owned(),
         run("aa", &[delete(), app(0, 1, "b"), Step::Undo]),
-        Ok("b".to_owned())
-    );
-    for caret in [Caret::Left, Caret::Home, Caret::To(0), Caret::To(1)] {
+    )];
+    for caret in [
+        Caret::Left,
+        Caret::Home,
+        Caret::Right,
+        Caret::End,
+        Caret::To(0),
+        Caret::To(1),
+    ] {
         for delete in [delete(), at_once()] {
             let trace = [delete, Step::Move(caret), app(0, 1, "b"), Step::Undo];
-            assert_eq!(run("aa", &trace), Ok("b".to_owned()), "{trace:?}");
+            rows.push((format!("{trace:?}"), run("aa", &trace)));
         }
     }
+    let wrong: Vec<_> = rows
+        .iter()
+        .filter(|(_, text)| !matches!(text.as_deref(), Ok("ba" | "b")))
+        .collect();
+    assert!(
+        wrong.is_empty(),
+        "Undo gives back a proved edit (`ba`) or keeps the words (`b`), never another text: \
+         {wrong:#?}"
+    );
+    // Here the texts prove no place, so every row keeps the words.
+    assert!(
+        rows.iter().all(|(_, text)| text.as_deref() == Ok("b")),
+        "the step `aa` cannot say which `a` was deleted: every row keeps the words: {rows:#?}"
+    );
     // The reference's own answer is `ba`: a record of each typed edit would give it.
     let mut model = Reference::set("aa", false);
     model.typed(1, 1, "");
