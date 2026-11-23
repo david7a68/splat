@@ -16,16 +16,121 @@
 //!   block's rect, to one physical pixel.
 use std::sync::Arc;
 
-use egui::{Galley, Id, Rect, Response, Ui, UiBuilder, Vec2, Widget};
+use egui::{Galley, Id, Rect, Response, Ui, UiBuilder, Vec2, Widget, pos2, vec2};
 
 use super::plan::{Block, Measured};
 use crate::design::memo::Revision;
+use crate::design::tokens::{Type, XL};
 
 /// A text part of a laid block: its galley (with its colours) and where it starts in the block.
 #[derive(Clone, Debug)]
 pub(in crate::design) struct LaidText {
     pub at: egui::Pos2,
     pub galley: Arc<Galley>,
+}
+
+/// One part of a stack of laid parts under a line (note C0-parts v2): a Session plan row's
+/// summary under its title (`PlanRow`, where it is named `SummaryPart`). Owner: N1.
+#[derive(Clone, Copy)]
+pub enum LaidPart<'a> {
+    /// Words that wrap in the stack's width, in at most `max_rows` rows.
+    Words {
+        text: &'a str,
+        role: Type,
+        color: egui::Color32,
+        max_rows: usize,
+    },
+    /// A part the host draws itself (`LaidUi::in_slot`), measured by that part: its height, and
+    /// the width its facts take.
+    Part { height: f32, width: f32 },
+    /// Words of several colours laid out in the stack's width, in at most `max_rows` rows, and
+    /// drawn in their slot by `LaidUi::part` (with a hover, a name, or as a link: its press
+    /// target at least `XL` each way).
+    Job {
+        job: &'a egui::text::LayoutJob,
+        max_rows: usize,
+        link: bool,
+    },
+}
+
+/// A laid stack of parts: its galleys and its parts' slots, from its top.
+pub(in crate::design) struct PartStack {
+    pub texts: Vec<LaidText>,
+    pub parts: Vec<Rect>,
+    /// Each part's laid words (a `Job`), in the parts' order.
+    pub part_texts: Vec<Option<std::sync::Arc<egui::Galley>>>,
+    pub height: f32,
+    /// The widest line, from the summary's left.
+    pub width: f32,
+}
+
+/// `parts`, stacked with no gap between them, laid out at `left` and `top` in `room` points.
+pub(in crate::design) fn lay_parts(
+    ui: &Ui,
+    parts: &[LaidPart<'_>],
+    (left, top, room): (f32, f32, f32),
+) -> PartStack {
+    let mut summary = PartStack {
+        texts: Vec::new(),
+        parts: Vec::new(),
+        part_texts: Vec::new(),
+        height: 0.0,
+        width: 0.0,
+    };
+    for part in parts {
+        let y = top + summary.height;
+        match *part {
+            LaidPart::Words {
+                text,
+                role,
+                color,
+                max_rows,
+            } => {
+                let mut job = egui::text::LayoutJob::single_section(
+                    text.to_owned(),
+                    egui::TextFormat::simple(role.font(ui), color),
+                );
+                job.wrap.max_width = room;
+                job.wrap.max_rows = max_rows;
+                job.wrap.break_anywhere = false;
+                let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+                summary.width = summary.width.max(galley.size().x);
+                summary.height += galley.size().y;
+                summary.texts.push(LaidText {
+                    at: pos2(left, y),
+                    galley,
+                });
+            }
+            LaidPart::Part { height, width } => {
+                summary.width = summary.width.max(width);
+                summary.height += height;
+                summary
+                    .parts
+                    .push(Rect::from_min_size(pos2(left, y), vec2(room, height)));
+                summary.part_texts.push(None);
+            }
+            LaidPart::Job {
+                job,
+                max_rows,
+                link,
+            } => {
+                let mut job = job.clone();
+                job.wrap.max_width = room;
+                job.wrap.max_rows = max_rows;
+                let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+                let size = if link {
+                    galley.size().max(vec2(XL, XL))
+                } else {
+                    galley.size()
+                };
+                summary.width = summary.width.max(size.x);
+                summary.height += size.y;
+                summary.parts.push(Rect::from_min_size(pos2(left, y), size));
+                summary.part_texts.push(Some(galley));
+            }
+        }
+    }
+    summary
 }
 
 /// A block laid out by a recipe: its size, its head (its semantic boundary from its top, ruling

@@ -22,32 +22,12 @@
 //! column; a change of either lays every row out again (each row's layout revision changes).
 use egui::{Id, Pos2, Rect, Ui, pos2, vec2};
 
-use super::laid::{Laid, LaidText};
+/// `PlanRow`'s name for the parts of its summary: the shared stack of laid parts (`LaidPart`,
+/// note C0-parts v2; owner N1).
+pub use super::laid::LaidPart as SummaryPart;
+use super::laid::{Laid, LaidText, lay_parts};
 use crate::design::theme::LINE_GAP;
 use crate::design::tokens::{Density, L, S, Type, XL, colors};
-
-/// One part of a closed row's summary, under its title.
-#[derive(Clone, Copy)]
-pub enum SummaryPart<'a> {
-    /// Words that wrap in the summary's width, in at most `max_rows` rows.
-    Words {
-        text: &'a str,
-        role: Type,
-        color: egui::Color32,
-        max_rows: usize,
-    },
-    /// A part the row draws itself (`LaidUi::in_slot`), measured by that part: its height, and
-    /// the width its facts take.
-    Part { height: f32, width: f32 },
-    /// Words of several colours laid out in the summary's width, in at most `max_rows` rows, and
-    /// drawn in their slot by `LaidUi::part` (with a hover, a name, or as a link: its press
-    /// target at least `XL` each way).
-    Job {
-        job: &'a egui::text::LayoutJob,
-        max_rows: usize,
-        link: bool,
-    },
-}
 
 /// A closed Session plan row (layout 11c A2b).
 #[derive(Clone, Copy)]
@@ -108,17 +88,6 @@ pub mod slot {
 /// The lead slot's width: every row's leading slot (a caret, an icon, a scene's box).
 pub fn lead_width() -> f32 {
     Type::Body.size()
-}
-
-/// What a laid summary is made of: its galleys and its parts' slots, from its top.
-struct Summary {
-    texts: Vec<LaidText>,
-    parts: Vec<Rect>,
-    /// Each part's laid words (a `Job`), in the parts' order.
-    part_texts: Vec<Option<std::sync::Arc<egui::Galley>>>,
-    height: f32,
-    /// The widest line, from the summary's left.
-    width: f32,
 }
 
 impl PlanRow<'_> {
@@ -185,71 +154,6 @@ impl PlanRow<'_> {
         )
     }
 
-    /// The summary laid out at `left` and `top`, in `room` points.
-    fn summary(&self, ui: &Ui, (left, top, room): (f32, f32, f32)) -> Summary {
-        let mut summary = Summary {
-            texts: Vec::new(),
-            parts: Vec::new(),
-            part_texts: Vec::new(),
-            height: 0.0,
-            width: 0.0,
-        };
-        for part in self.summary {
-            let y = top + summary.height;
-            match *part {
-                SummaryPart::Words {
-                    text,
-                    role,
-                    color,
-                    max_rows,
-                } => {
-                    let mut job = egui::text::LayoutJob::single_section(
-                        text.to_owned(),
-                        egui::TextFormat::simple(role.font(ui), color),
-                    );
-                    job.wrap.max_width = room;
-                    job.wrap.max_rows = max_rows;
-                    job.wrap.break_anywhere = false;
-                    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
-                    summary.width = summary.width.max(galley.size().x);
-                    summary.height += galley.size().y;
-                    summary.texts.push(LaidText {
-                        at: pos2(left, y),
-                        galley,
-                    });
-                }
-                SummaryPart::Part { height, width } => {
-                    summary.width = summary.width.max(width);
-                    summary.height += height;
-                    summary
-                        .parts
-                        .push(Rect::from_min_size(pos2(left, y), vec2(room, height)));
-                    summary.part_texts.push(None);
-                }
-                SummaryPart::Job {
-                    job,
-                    max_rows,
-                    link,
-                } => {
-                    let mut job = job.clone();
-                    job.wrap.max_width = room;
-                    job.wrap.max_rows = max_rows;
-                    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
-                    let size = if link {
-                        galley.size().max(vec2(XL, XL))
-                    } else {
-                        galley.size()
-                    };
-                    summary.width = summary.width.max(size.x);
-                    summary.height += size.y;
-                    summary.parts.push(Rect::from_min_size(pos2(left, y), size));
-                    summary.part_texts.push(Some(galley));
-                }
-            }
-        }
-        summary
-    }
-
     /// The row's facts (its title and every summary line, from its words' column) and its
     /// action recipe, at `width`: what the shared column is made of.
     pub fn facts(&self, ui: &Ui, width: f32) -> (f32, f32) {
@@ -258,9 +162,7 @@ impl PlanRow<'_> {
         // The title's press target, at least 24 px wide (review of PR 840): a short title's
         // target is its facts, so no action stands on it.
         let title = Self::target_width(self.title(ui, width).size().x);
-        let summary = self
-            .summary(ui, (0.0, 0.0, Self::summary_width(width)))
-            .width;
+        let summary = lay_parts(ui, self.summary, (0.0, 0.0, Self::summary_width(width))).width;
         (title.max(summary), self.actions)
     }
 
@@ -287,7 +189,11 @@ impl PlanRow<'_> {
         let actions =
             Rect::from_min_size(pos2(action_x, 0.0), vec2(self.actions, self.actions_height));
         let summary_top = title_height.max(actions.bottom());
-        let summary = self.summary(ui, (x0, summary_top, Self::summary_width(width)));
+        let summary = lay_parts(
+            ui,
+            self.summary,
+            (x0, summary_top, Self::summary_width(width)),
+        );
         let row = (summary_top + summary.height).max(actions.bottom());
         // After the row, the plan column's line gap (`LINE_GAP`, egui's item gap there); then,
         // for a closed row, `S` and the hairline, as `plan_rule` draws them after an opened row's
