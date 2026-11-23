@@ -212,9 +212,9 @@ enum Step {
 
 struct Page {
     draft: TextDraft,
-    /// The editor gives up the focus after it draws in this frame (a test's loss of the focus:
-    /// egui sees a loss only when the focus goes during a frame).
-    blur: bool,
+    /// The editor gives up the focus in this frame: `Some(true)` before it draws, `Some(false)`
+    /// after it draws (a test's loss of the focus).
+    blur: Option<bool>,
 }
 
 fn page(text: &str) -> Harness<'static, Page> {
@@ -223,6 +223,10 @@ fn page(text: &str) -> Harness<'static, Page> {
         .with_step_dt(0.25)
         .themed_ui_state(
             |ui, page: &mut Page| {
+                if page.blur == Some(true) {
+                    page.blur = None;
+                    ui.memory_mut(|memory| memory.surrender_focus(FIELD.id()));
+                }
                 let face = pane::Face::Font(egui::TextStyle::Body.resolve(ui.style()));
                 let _ = pane::editor_view(
                     ui,
@@ -232,13 +236,13 @@ fn page(text: &str) -> Harness<'static, Page> {
                     face,
                     |edit| edit,
                 );
-                if std::mem::take(&mut page.blur) {
+                if page.blur.take() == Some(false) {
                     ui.memory_mut(|memory| memory.surrender_focus(FIELD.id()));
                 }
             },
             Page {
                 draft: TextDraft::new(text),
-                blur: false,
+                blur: None,
             },
         );
     harness.step();
@@ -1052,8 +1056,13 @@ enum Composes {
     Preedit(&'static str),
     Commit(&'static str),
     Disabled,
-    /// The focus goes during a frame, is gone for one frame, and comes back.
+    /// The focus goes during a frame BEFORE the field draws, and comes back. The field's
+    /// response says "lost the focus" in that frame, and egui ends its composing flag there.
     Blur,
+    /// The focus goes during a frame AFTER the field has drawn, and comes back. The field never
+    /// sees the loss (egui's `lost_focus` is true only in the frame the focus went), so egui
+    /// changes nothing: found by running the real field.
+    BlurLate,
 }
 
 /// egui's composition, as its code defines it (`widgets/text_edit/builder.rs`, egui 0.33.3; the
@@ -1122,6 +1131,7 @@ impl Composition {
                     self.from = self.caret;
                 }
             }
+            Composes::BlurLate => {}
         }
     }
 
@@ -1187,14 +1197,17 @@ fn composes(
         if frame.is_empty() {
             harness.step();
             model.draws();
-        } else if frame == &[Composes::Blur] {
-            // The field draws with the focus and gives it up; the next frame is the loss; then
-            // the focus comes back.
-            harness.state_mut().blur = true;
+        } else if let [blur @ (Composes::Blur | Composes::BlurLate)] = frame.as_slice() {
+            // The focus goes in this frame (before or after the field draws), is gone for one
+            // frame, and comes back.
+            let before = *blur == Composes::Blur;
+            harness.state_mut().blur = Some(before);
             harness.step();
-            model.draws();
+            if !before {
+                model.draws();
+            }
+            model.event(blur);
             harness.step();
-            model.event(&Composes::Blur);
             harness
                 .ctx
                 .memory_mut(|memory| memory.request_focus(FIELD.id()));
@@ -1207,7 +1220,9 @@ fn composes(
                     Composes::Preedit(words) => egui::ImeEvent::Preedit((*words).to_owned()),
                     Composes::Commit(words) => egui::ImeEvent::Commit((*words).to_owned()),
                     Composes::Disabled => egui::ImeEvent::Disabled,
-                    Composes::Blur => unreachable!("a loss of the focus is a frame of its own"),
+                    Composes::Blur | Composes::BlurLate => {
+                        unreachable!("a loss of the focus is a frame of its own")
+                    }
                 };
                 harness.input_mut().events.push(egui::Event::Ime(event));
             }
@@ -1233,12 +1248,14 @@ fn composition_frames() -> impl Strategy<Value = Vec<Vec<Composes>>> {
     let frame = prop_oneof![
         5 => prop::collection::vec(event, 1..3),
         1 => Just(vec![Composes::Blur]),
+        1 => Just(vec![Composes::BlurLate]),
     ];
     prop::collection::vec(frame, 1..6)
 }
 
 /// Generated orders of composition events (`Enabled`, a `Preedit` with words and an empty one,
-/// `Commit`, `Disabled`, a loss of the focus), one or two events in a frame, with the app's
+/// `Commit`, `Disabled`, a loss of the focus before and after the field draws), one or two
+/// events in a frame, with the app's
 /// write before every frame and after the last (review of PR 910, P1 910-a):
 /// - the real field shows the reference's text after every frame (the reference is egui's own
 ///   rules, so this also proves them on the traces with no write);
