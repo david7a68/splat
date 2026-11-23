@@ -5587,7 +5587,10 @@ impl<A> BodyFault<A> {
             at: egui::pos2(S + 1.0, 0.0),
             galley: icon_galley.clone(),
         }];
-        let message = icon_galley.size().y.max(words.size().y);
+        // Each line is a row of the column: at least an interact height, its words at its top
+        // (egui's horizontal row), so a short line still holds that height.
+        let row = ui.spacing().interact_size.y;
+        let message = icon_galley.size().y.max(words.size().y).max(row);
         let mut slots = vec![
             Rect::from_min_size(egui::pos2(left, 0.0), words.size()),
             Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(3.0, words.size().y)),
@@ -5599,8 +5602,13 @@ impl<A> BodyFault<A> {
         for help in &self.help {
             y += gap;
             let galley = small_words(ui, help.as_str(), room.min(READER_MEASURE));
-            slots.push(Rect::from_min_size(egui::pos2(column, y), galley.size()));
-            y += galley.size().y;
+            // A choice row (`message_choice_row`) centres its words in its height.
+            let lift = ((row - galley.size().y) / 2.0).max(0.0);
+            slots.push(Rect::from_min_size(
+                egui::pos2(column, y + lift),
+                galley.size(),
+            ));
+            y += galley.size().y.max(row);
             slot_texts.push(Some(galley));
         }
         let mut help_bottom = None;
@@ -5615,13 +5623,17 @@ impl<A> BodyFault<A> {
                 egui::vec2(room, height),
             ));
             slot_texts.push(None);
-            y += height;
+            y += height.max(row);
             match &repair.lock {
                 Some((reason, _)) => {
                     y += gap;
                     let galley = small_words(ui, reason.as_str(), room);
-                    slots.push(Rect::from_min_size(egui::pos2(column, y), galley.size()));
-                    y += galley.size().y;
+                    let lift = ((row - galley.size().y) / 2.0).max(0.0);
+                    slots.push(Rect::from_min_size(
+                        egui::pos2(column, y + lift),
+                        galley.size(),
+                    ));
+                    y += galley.size().y.max(row);
                     slot_texts.push(Some(galley));
                 }
                 None => {
@@ -5634,8 +5646,10 @@ impl<A> BodyFault<A> {
                     y += XS;
                     let galley = small_words(ui, help.as_str(), room.min(READER_MEASURE));
                     slots.push(Rect::from_min_size(egui::pos2(column, y), galley.size()));
-                    y += galley.size().y;
-                    help_bottom = Some(y);
+                    // The next repair stands `L` under the help's words; the fault ends with
+                    // the help's row.
+                    help_bottom = Some(y + galley.size().y);
+                    y += galley.size().y.max(row);
                     slot_texts.push(Some(galley));
                 }
                 None => {
@@ -9560,7 +9574,7 @@ mod tests {
     /// width and scale. The reference is the hand-drawn fault (`draw_by_hand`, the code before
     /// layout 11c) in a harness of the same width: each accessible part (the words, each repair,
     /// each help line, a lock's reason while it holds), the painted icon and the fault's height
-    /// match within half a point.
+    /// match within one physical pixel.
     #[test]
     #[allow(
         clippy::disallowed_methods,
@@ -9627,11 +9641,26 @@ mod tests {
                 .ctx
                 .data(|data| data.get_temp::<Rect>(egui::Id::new("fault_rect")))
                 .expect("the fault drew");
+            // Only painted parts: by hand, an open lock's reason was an invisible label that
+            // still had a node; the laid fault gives a reason that does not hold no node.
+            let painted: Vec<String> = harness
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                    _ => None,
+                })
+                .collect();
             let nodes = harness
                 .root()
                 .children_recursive()
+                .filter(|node| node.accesskit_node().role() != egui::accesskit::Role::TextRun)
                 .filter_map(|node| {
-                    let label = node.accesskit_node().label()?;
+                    let label = node
+                        .accesskit_node()
+                        .label()
+                        .or_else(|| node.accesskit_node().value())?;
                     let bounds = node.accesskit_node().raw_bounds()?;
                     Some((
                         label,
@@ -9643,7 +9672,9 @@ mod tests {
                 })
                 // The icon is compared by its paint (below): by hand it is a label.
                 .filter(|(label, _)| {
-                    !label.is_empty() && ![icons::WARN, icons::ERROR].contains(&label.as_str())
+                    !label.is_empty()
+                        && ![icons::WARN, icons::ERROR].contains(&label.as_str())
+                        && painted.contains(label)
                 })
                 .collect();
             let icons = harness
@@ -9667,11 +9698,14 @@ mod tests {
                     let case = format!("{name} at {width} px, scale {scale}");
                     let (hand_rect, hand_nodes, hand_icons) = draw(shape, width, scale, true);
                     let (laid_rect, laid_nodes, laid_icons) = draw(shape, width, scale, false);
+                    // One physical pixel: egui rounds each row to the pixel grid, the recipe does
+                    // not (as `laid::render`'s own check allows).
+                    let pixel = 1.0 / scale + 0.01;
                     let near = |a: Rect, b: Rect| {
-                        (a.min - b.min).length() <= 0.5 && (a.max - b.max).length() <= 0.5
+                        (a.min - b.min).length() <= pixel && (a.max - b.max).length() <= pixel
                     };
                     assert!(
-                        (hand_rect.height() - laid_rect.height()).abs() <= 0.5,
+                        (hand_rect.height() - laid_rect.height()).abs() <= pixel,
                         "{case}: the laid fault is {} tall, by hand {}",
                         laid_rect.height(),
                         hand_rect.height()
