@@ -322,4 +322,38 @@ mod tests {
         harness.run_steps(3);
         assert_eq!(laid(), before, "quiet frames after them lay nothing");
     }
+
+    /// Review of PR 917, P2: a host's text style override (Heading here) does not reach the
+    /// check box: the box egui draws is exactly the laid line, in the font it was measured in.
+    #[test]
+    fn a_host_font_override_does_not_reach_the_check_box() {
+        let drawn = std::rc::Rc::new(std::cell::Cell::new((Rect::NOTHING, 0.0_f32)));
+        let drawn_in = drawn.clone();
+        let mut harness = Harness::builder()
+            .with_size(vec2(400.0, 300.0))
+            .themed_ui(move |ui| {
+                ui.style_mut().override_text_style = Some(egui::TextStyle::Heading);
+                let line = CheckLine {
+                    key: Id::new("override"),
+                    words: LONG,
+                    blocked: false,
+                    tail: 0.0,
+                };
+                let laid = line.lay(ui, 340.0);
+                let mut rect = Rect::NOTHING;
+                draw_laid(ui, &laid, |ui| {
+                    let mut state = false;
+                    if let Some(response) = line.show(ui, &mut state) {
+                        rect = response.rect;
+                    }
+                });
+                drawn_in.set((rect, laid.height()));
+            });
+        harness.run_steps(2);
+        let (rect, height) = drawn.get();
+        assert!(
+            (rect.height() - height).abs() <= 0.5,
+            "under a Heading override the check box ({rect:?}) is the laid line ({height} tall)"
+        );
+    }
 }
