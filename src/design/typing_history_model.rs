@@ -212,6 +212,9 @@ enum Step {
 
 struct Page {
     draft: TextDraft,
+    /// The editor gives up the focus after it draws in this frame (a test's loss of the focus:
+    /// egui sees a loss only when the focus goes during a frame).
+    blur: bool,
 }
 
 fn page(text: &str) -> Harness<'static, Page> {
@@ -229,9 +232,13 @@ fn page(text: &str) -> Harness<'static, Page> {
                     face,
                     |edit| edit,
                 );
+                if std::mem::take(&mut page.blur) {
+                    ui.memory_mut(|memory| memory.surrender_focus(FIELD.id()));
+                }
             },
             Page {
                 draft: TextDraft::new(text),
+                blur: false,
             },
         );
     harness.step();
@@ -1045,7 +1052,7 @@ enum Composes {
     Preedit(&'static str),
     Commit(&'static str),
     Disabled,
-    /// The focus goes (one frame) and comes back.
+    /// The focus goes during a frame, is gone for one frame, and comes back.
     Blur,
 }
 
@@ -1181,9 +1188,11 @@ fn composes(
             harness.step();
             model.draws();
         } else if frame == &[Composes::Blur] {
-            harness
-                .ctx
-                .memory_mut(|memory| memory.surrender_focus(FIELD.id()));
+            // The field draws with the focus and gives it up; the next frame is the loss; then
+            // the focus comes back.
+            harness.state_mut().blur = true;
+            harness.step();
+            model.draws();
             harness.step();
             model.event(&Composes::Blur);
             harness
