@@ -45,13 +45,11 @@ src/encounter_run/notice.rs heading-owner 1
 src/encounter_run/notice.rs fact-owner 1
 src/world/lines.rs fact-owner 1
 # Issue #810: a theme installed on a test harness after it drew (`late-theme`). Build the harness
-# with `design::test_harness` instead. Shrink only: each move lowers its file's count. src/trackers/view.rs
+# with `design::test_harness` instead. At its floor: only the two on-purpose rows below stay. src/trackers/view.rs
 # keeps 1: its name test installs the theme again on purpose, to prove a new font generation fits again.
 # src/content_ui/tests/quiet_reader.rs keeps 1 (layout PR 9b-R1a): its eviction case installs the theme
 # again on purpose between frames, to prove the Reader prepares again for a new font generation.
 src/content_ui/tests/quiet_reader.rs late-theme 1
-src/design/pane.rs late-theme 12
-src/design/reveal.rs late-theme 1
 src/trackers/view.rs late-theme 1
 # Sol 2-011, review of #852 (`raw-scroll-input`): a raw read of the DM's scroll or drag. The one cancel entry point
 # (`design::reveal::cancel::read`) holds src/design/reveal.rs's three; every pending request judges input through it.

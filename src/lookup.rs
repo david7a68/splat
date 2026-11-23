@@ -2938,28 +2938,37 @@ impl Lookup {
         // result never moves the kind line, `Add to fight` or the text (round 26 FJ3). The
         // reader is the pane's scroll column, one for each entry.
         let frame = PaneFrame::new(ui);
-        let mut messages = Messages::new(
+        let messages = Messages::new(
             &frame,
             ("lookup_reader", current.entry.id),
             ui.available_width(),
         );
-        reader.footer(&frame, &mut messages, current, &index, campaign);
-        trackers.history_footer(current.entry.id, &frame, &mut messages);
         // The results list above sets its own row spacing. The reader keeps the app's, so an
         // entry reads the same whether a search or a link opened it. The pane is always the
         // editor form (P2), so an edit form's text gives way and Save stays in view from the
-        // first frame the form shows.
-        let paned = messages.pane_editor(ui, |ui, region| {
-            ui.spacing_mut().item_spacing.y = ui.ctx().style().spacing.item_spacing.y;
-            reader.read_in_pane(
-                ui,
-                current,
-                &index,
-                campaign,
-                Some(&mut *trackers),
-                Some(region),
-            )
-        });
+        // first frame the form shows. Issue #761: the footer's lines come after the body, from
+        // the stores as the body's acts left them, so an act's result and its Undo show in the
+        // act's own frame.
+        let paned = messages.pane_editor_then(
+            ui,
+            |ui, region| {
+                ui.spacing_mut().item_spacing.y = ui.ctx().style().spacing.item_spacing.y;
+                let nav = reader.read_in_pane(
+                    ui,
+                    current,
+                    &index,
+                    campaign,
+                    Some(&mut *trackers),
+                    Some(region),
+                );
+                (nav, &mut *reader, &mut *trackers)
+            },
+            |(nav, reader, trackers), messages| {
+                reader.footer(&frame, messages, current, &index, campaign);
+                trackers.history_footer(current.entry.id, &frame, messages);
+                nav
+            },
+        );
         nav = nav.take().or(paned.body);
         match paned.pressed {
             Some(press) if press.id == world::FooterAct::Trackers => {

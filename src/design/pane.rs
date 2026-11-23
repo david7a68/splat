@@ -2376,6 +2376,18 @@ impl Footer<'_> {
         )
     }
 
+    /// `pane_editor` whose messages also come after the body, from `then` (`pane_then`): a body
+    /// with one editor whose acts start or end the footer's lines (Lookup's reader, issue #761),
+    /// so the frame of an act shows the message it brought.
+    pub fn pane_editor_then<R, T>(
+        self,
+        ui: &mut Ui,
+        add: impl for<'r> FnOnce(&mut Ui, EditorRegion<'r>) -> R,
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> T {
+        self.place(ui, Body::Content, ContentScroll::default(), true, add, then)
+    }
+
     /// `pane_then` with `Body::Content`, whose scroll column behaves as `scroll` says.
     pub fn pane_content_then<R, T>(
         self,
@@ -3023,10 +3035,10 @@ mod hold_tests {
     }
 
     fn harness(state: State) -> Harness<'static, State> {
+        use crate::design::test_harness::Themed as _;
         let mut h = Harness::builder()
             .with_size(egui::vec2(400.0, 300.0))
-            .build_ui_state(list, state);
-        crate::design::theme::install(&h.ctx);
+            .themed_ui_state(list, state);
         h.run_steps(4);
         h
     }
@@ -3534,6 +3546,8 @@ mod hold_tests {
 #[cfg(test)]
 mod row_cut_tests {
     use super::*;
+    // Issue #810: the tests below build their harness with `design::test_harness`.
+    use crate::design::test_harness::Themed as _;
     use crate::design::{
         components::{ROW_RECTS, two_line_row},
         outcome::{Messages, NoPress, Outcome, PaneFrame},
@@ -3550,6 +3564,8 @@ mod row_cut_tests {
     #[test]
     fn a_footer_never_cuts_through_a_registered_row() {
         use crate::design::layout::ScrollColumn;
+        use crate::design::test_harness::Themed as _;
+        use crate::design::test_harness::ThemedPage as _;
         let (mut hidden_by_the_cut, mut hidden_when_asked) = (0, 0);
         let (mut columns_apart, mut plain_fills_cut) = (0, 0);
         for fills in [false, true] {
@@ -3559,7 +3575,7 @@ mod row_cut_tests {
                 for height in (300..=360).step_by(7) {
                     let mut harness = egui_kittest::Harness::builder()
                         .with_size(vec2(600.0, height as f32))
-                        .build_ui(move |ui| {
+                        .themed_ui(move |ui| {
                             let frame = PaneFrame::new(ui);
                             let mut messages = Messages::<NoPress>::new(
                                 &frame,
@@ -3609,7 +3625,6 @@ mod row_cut_tests {
                                     messages.pane(ui, Body::Content, |ui| rows(ui, "Row", 44.0));
                             }
                         });
-                    crate::design::theme::install(&harness.ctx);
                     harness.run_steps(4);
                     let output = harness.output();
                     let rows = harness
@@ -4129,7 +4144,7 @@ mod row_cut_tests {
         }
         let mut list = egui_kittest::Harness::builder()
             .with_size(egui::vec2(400.0, 420.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, list: &mut List| {
                     let (room, selected) = (list.room, list.selected);
                     let List { state, rows, .. } = list;
@@ -4155,7 +4170,6 @@ mod row_cut_tests {
                     selected: None,
                 },
             );
-        crate::design::theme::install(&list.ctx);
         list.ctx
             .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
         list.run_steps(3);
@@ -4473,7 +4487,6 @@ mod row_cut_tests {
         // Review of PR 555 (#565, `m-p0-in-place-visible`): in a `Body::Content` pane a region
         // of blocks that no recipe measured draws in place, and a frame examines the blocks in
         // view and about `log n` more, not all 600.
-        use crate::design::test_harness::Themed as _;
         type Placed = (RegionState, crate::design::memo::Revised<Vec<Block>>);
         let mut placed = egui_kittest::Harness::builder()
             .with_size(egui::vec2(400.0, 420.0))
@@ -4526,6 +4539,7 @@ mod row_cut_tests {
     #[test]
     fn a_new_edge_brings_the_focused_row_whole_into_view() {
         use crate::design::layout::ScrollColumn;
+        use crate::design::test_harness::Themed as _;
         #[derive(Default)]
         struct State {
             message: bool,
@@ -4538,7 +4552,7 @@ mod row_cut_tests {
         for (fills, banner) in [(false, false), (false, true), (true, false), (true, true)] {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(600.0, 420.0))
-                .build_state(
+                .themed_state(
                     |ctx, state: &mut State| {
                         if state.banner {
                             note_bottom_banner(ctx);
@@ -4614,7 +4628,6 @@ mod row_cut_tests {
                     },
                     State::default(),
                 );
-            crate::design::theme::install(&harness.ctx);
             harness.run_steps(3);
             // The last row whole in view with no edge: focus it.
             let clip = harness.state().clip;
@@ -4725,7 +4738,7 @@ mod row_cut_tests {
         // 1 and 3: a 16 px page margin at the pane's left.
         let mut margin = egui_kittest::Harness::builder()
             .with_size(vec2(700.0, 300.0))
-            .build_ui_state(
+            .themed_ui_state(
                 move |ui, state: &mut State| {
                     let room = ui.available_rect_before_wrap();
                     let inner = room.with_min_x(room.left() + crate::design::tokens::L);
@@ -4733,7 +4746,6 @@ mod row_cut_tests {
                 },
                 State::default(),
             );
-        crate::design::theme::install(&margin.ctx);
         margin.run_steps(3);
         let before = margin.state().label;
         margin.state_mut().action = true;
@@ -4871,7 +4883,7 @@ mod row_cut_tests {
         // column is gone and the pane keeps its text edge: its clip is the plain reach at once.
         let mut stale = egui_kittest::Harness::builder()
             .with_size(vec2(700.0, 300.0))
-            .build_ui_state(
+            .themed_ui_state(
                 move |ui, state: &mut State| {
                     let column = state.action;
                     state.parent = ui.clip_rect();
@@ -4895,7 +4907,6 @@ mod row_cut_tests {
                     ..State::default()
                 },
             );
-        crate::design::theme::install(&stale.ctx);
         stale.run_steps(3);
         let with_band = stale.state().clip.left();
         stale.state_mut().action = false;
@@ -4919,7 +4930,7 @@ mod row_cut_tests {
         let two_columns = |right_first: bool, lanes_first: bool| {
             let mut columns = egui_kittest::Harness::builder()
                 .with_size(vec2(700.0, 300.0))
-                .build_ui_state(
+                .themed_ui_state(
                     move |ui, seen: &mut (Rect, Rect, Rect, Rect, Rect)| {
                         let frame = PaneFrame::new(ui);
                         let messages = Messages::<NoPress>::new(&frame, "gutter_fills", 680.0);
@@ -4991,7 +5002,6 @@ mod row_cut_tests {
                         Rect::NOTHING,
                     ),
                 );
-            crate::design::theme::install(&columns.ctx);
             columns.run_steps(4);
             (*columns.state(), late_bands(&columns.ctx).len())
         };
@@ -5024,7 +5034,7 @@ mod row_cut_tests {
         // clip never widens the parent's.
         let mut cut = egui_kittest::Harness::builder()
             .with_size(vec2(700.0, 300.0))
-            .build_ui_state(
+            .themed_ui_state(
                 move |ui, state: &mut State| {
                     let room = ui.available_rect_before_wrap();
                     ui.scope_builder(
@@ -5043,7 +5053,6 @@ mod row_cut_tests {
                     ..State::default()
                 },
             );
-        crate::design::theme::install(&cut.ctx);
         cut.run_steps(3);
         let state = cut.state();
         assert!(
@@ -5079,7 +5088,7 @@ mod row_cut_tests {
         let first_pixel_frame = |menu: bool| {
             let mut press = egui_kittest::Harness::builder()
                 .with_size(vec2(700.0, 400.0))
-                .build_ui_state(
+                .themed_ui_state(
                     move |ui, state: &mut (Rect, Rect, usize)| {
                         let choice = |ui: &mut Ui, state: &mut (Rect, Rect, usize)| {
                             let shown = Action::quiet("Roll")
@@ -5109,7 +5118,6 @@ mod row_cut_tests {
                     },
                     (Rect::NOTHING, Rect::NOTHING, 0),
                 );
-            crate::design::theme::install(&press.ctx);
             press.run_steps(4);
             let (choice, clip, _) = *press.state();
             let first = pos2(clip.left() + 0.5, choice.center().y);
@@ -5157,7 +5165,7 @@ mod row_cut_tests {
         // goes to the lane (the list scrolls), never to the icon action that hangs toward it.
         let mut lane = egui_kittest::Harness::builder()
             .with_size(vec2(700.0, 300.0))
-            .build_ui_state(
+            .themed_ui_state(
                 move |ui, seen: &mut (Rect, Rect, f32, usize)| {
                     let frame = PaneFrame::new(ui);
                     let messages = Messages::<NoPress>::new(&frame, "gutter_lane", 680.0);
@@ -5206,7 +5214,6 @@ mod row_cut_tests {
                 },
                 (Rect::NOTHING, Rect::NOTHING, 0.0, 0),
             );
-        crate::design::theme::install(&lane.ctx);
         lane.run_steps(4);
         let (list, rect, _, _) = *lane.state();
         let on_lane = pos2(list.right() - 3.0, rect.center().y);
@@ -5250,7 +5257,7 @@ mod row_cut_tests {
         // 2: flush against a splitter.
         let mut flush = egui_kittest::Harness::builder()
             .with_size(vec2(700.0, 300.0))
-            .build_ui_state(
+            .themed_ui_state(
                 move |ui, state: &mut State| {
                     crate::design::Column::left("navigation", 200.0, 150.0..=300.0)
                         .show_inside(ui, |ui| ui.label("Left"));
@@ -5266,7 +5273,6 @@ mod row_cut_tests {
                     ..State::default()
                 },
             );
-        crate::design::theme::install(&flush.ctx);
         flush.run_steps(3);
         let splitter = flush
             .query_all(
@@ -5399,10 +5405,11 @@ mod editor_region_tests {
         steps: usize,
         dt: f32,
     ) -> egui_kittest::Harness<'static, State> {
+        use crate::design::test_harness::Themed as _;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(600.0, height))
             .with_step_dt(dt)
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, state: &mut State| {
                     let want = state.lines;
                     // `lines` 0: the test owns the text (a document, the differential script).
@@ -5507,7 +5514,6 @@ mod editor_region_tests {
                 },
                 state,
             );
-        crate::design::theme::install(&harness.ctx);
         harness.run_steps(steps);
         harness
     }
