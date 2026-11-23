@@ -1089,8 +1089,8 @@ fn input_reads_in(tokens: proc_macro2::TokenStream, entry: bool, sites: &mut Vec
                 let path = at >= 2 && punct(at - 1, ':') && punct(at - 2, ':');
                 // Review of #916: an input method called by its path
                 // (`egui::PointerState::any_down(&i.pointer)`) reads as much as a method call.
-                let field = (at >= 1 && punct(at - 1, '.') || path)
-                    && INPUT_READS.contains(&name.as_str());
+                let field =
+                    (at >= 1 && punct(at - 1, '.') || path) && INPUT_READS.contains(&name.as_str());
                 let event = path && at >= 3 && word(at - 3, "Event");
                 // A type of egui's input named in code (a destructured `InputState`, a
                 // `PointerState` path): its fields are the input.
@@ -1125,9 +1125,11 @@ fn cfg_ships(predicate: &[proc_macro2::TokenTree]) -> Option<bool> {
     use proc_macro2::{Delimiter, TokenTree};
     match predicate {
         [TokenTree::Ident(word)] if word == "test" => Some(false),
-        [TokenTree::Ident(word), TokenTree::Punct(mark), TokenTree::Literal(value)]
-            if word == "feature" && mark.as_char() == '=' =>
-        {
+        [
+            TokenTree::Ident(word),
+            TokenTree::Punct(mark),
+            TokenTree::Literal(value),
+        ] if word == "feature" && mark.as_char() == '=' => {
             (value.to_string() == "\"test-support\"").then_some(false)
         }
         [TokenTree::Ident(word), TokenTree::Group(group)]
@@ -1211,15 +1213,24 @@ fn test_only_modules(files: &[(String, String)]) -> std::collections::BTreeSet<S
 /// and each spelling of the same read (a method, an associated function by its path, a field,
 /// an event by its path, a destructured type). A later ban of input reads extends this table.
 const INPUT_READ_FIXTURE: &[(&str, &[&str])] = &[
-    ("fn method(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }", &["any_down"]),
+    (
+        "fn method(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }",
+        &["any_down"],
+    ),
     (
         "fn by_path(ui: &Ui) -> bool { ui.input(|i| egui::PointerState::any_down(&i.pointer)) }",
         &["PointerState", "any_down"],
     ),
-    ("fn field(ui: &Ui) -> usize { ui.input(|i| i.events.len()) }", &["events"]),
+    (
+        "fn field(ui: &Ui) -> usize { ui.input(|i| i.events.len()) }",
+        &["events"],
+    ),
     // Split, so `raw-scroll-input` does not count this file's words.
     (
-        concat!("fn scroll(ui: &Ui) -> f32 { ui.input(|i| i.raw_", "scroll_delta.y) }"),
+        concat!(
+            "fn scroll(ui: &Ui) -> f32 { ui.input(|i| i.raw_",
+            "scroll_delta.y) }"
+        ),
         &[concat!("raw_", "scroll_delta")],
     ),
     (
@@ -1230,20 +1241,41 @@ const INPUT_READ_FIXTURE: &[(&str, &[&str])] = &[
         "fn wheel(e: &egui::Event) -> bool { matches!(e, egui::Event::MouseWheel { .. }) }",
         &["MouseWheel"],
     ),
-    ("fn keys(ui: &Ui) -> bool { ui.input_mut(|i| i.consume_key(NONE, Key::Tab)) }", &["consume_key"]),
+    (
+        "fn keys(ui: &Ui) -> bool { ui.input_mut(|i| i.consume_key(NONE, Key::Tab)) }",
+        &["consume_key"],
+    ),
     ("// i.pointer.any_down() in a comment", &[]),
-    ("fn words() -> &'static str { \"i.pointer.any_down()\" }", &[]),
+    (
+        "fn words() -> &'static str { \"i.pointer.any_down()\" }",
+        &[],
+    ),
     ("fn binding() -> usize { let events = 3; events }", &[]),
     ("#[cfg(test)]", &[]),
-    ("fn test_only(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }", &[]),
+    (
+        "fn test_only(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }",
+        &[],
+    ),
     ("#[cfg(any(test, feature = \"test-support\"))]", &[]),
-    ("fn support(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }", &[]),
+    (
+        "fn support(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }",
+        &[],
+    ),
     ("#[cfg(all(test, feature = \"wgpu\"))]", &[]),
-    ("fn harness(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }", &[]),
+    (
+        "fn harness(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }",
+        &[],
+    ),
     ("#[cfg(not(test))]", &[]),
-    ("fn live(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }", &["any_down"]),
+    (
+        "fn live(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }",
+        &["any_down"],
+    ),
     ("#[cfg(any(test, debug_assertions))]", &[]),
-    ("fn debug(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }", &["any_down"]),
+    (
+        "fn debug(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) }",
+        &["any_down"],
+    ),
     (
         "mod cancel { fn read(ui: &Ui) -> bool { ui.input(|i| i.pointer.any_down()) } }",
         &["any_down"],
@@ -1266,8 +1298,14 @@ fn an_input_read_is_counted() {
             .flat_map(|(at, (_, names))| names.iter().map(move |name| (at + 1, (*name).to_owned())))
             .collect()
     };
-    assert_eq!(input_read_sites("src/design/pane.rs", &text), expected(false));
-    assert_eq!(input_read_sites("src/design/reveal.rs", &text), expected(true));
+    assert_eq!(
+        input_read_sites("src/design/pane.rs", &text),
+        expected(false)
+    );
+    assert_eq!(
+        input_read_sites("src/design/reveal.rs", &text),
+        expected(true)
+    );
     // A module declared under `#[cfg(test)]` is test code, and so is its folder.
     let parent = "#[cfg(test)]\nmod lint;\n#[cfg(test)]\npub(crate) mod harness;\npub mod shown;\n";
     let test_only = test_only_modules(&[("src/design/mod.rs".to_owned(), parent.to_owned())]);

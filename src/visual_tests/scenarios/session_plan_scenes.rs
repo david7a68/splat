@@ -1120,10 +1120,9 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     // the act's own frame.
     let entry_at_act = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(STATUS_ENTRY))
         && frames.iter().all(|(_, cut, _)| !cut);
-    let undo_at_act = frames
-        .first()
-        .is_some_and(|(_, _, undo)| *undo == Some(true))
-        && frames.iter().all(|(_, _, undo)| undo.unwrap_or(true))
+    // Review of #932 (P3): whole in every frame, so an Undo that goes in a later frame fails.
+    let undo_at_act = !frames.is_empty()
+        && frames.iter().all(|(_, _, undo)| *undo == Some(true))
         && d.nodes()
             .into_iter()
             .any(|node| node.name == "Undo change to Status" && node.fully_in_view());
@@ -1208,6 +1207,34 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         fs::read_to_string(&path).unwrap() == away && d.has(&format!("Edit {VARRA_BLACK}")),
         "Undo change to Status in Lookup takes back the value and its Log line",
     );
+    // Review of #932 (P3, `m-p0-lookup-undo-sizes`): the act's own frame at 1200 and 1920 too.
+    // At each, Enter in one input frame changes the status, and the result's Undo is whole in
+    // every frame from the act's own; then Undo takes the change back.
+    for size in [DEFAULT, LARGE] {
+        d.set_base(size);
+        d.click("Change Status");
+        d.type_text("missing");
+        let undo = d.each_frame_after([enter(true), enter(false)], 6, |d| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == "Undo change to Status")
+                .map(|node| node.fully_in_view())
+        });
+        d.expect("Undo change to Status");
+        d.observe(
+            "m-p0-lookup-undo-sizes",
+            !undo.is_empty() && undo.iter().all(|undo| *undo == Some(true)),
+            format!(
+                "At {size:?}, the result's Undo is whole in every frame from the act's own: {undo:?}"
+            ),
+        );
+        d.click("Undo change to Status");
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            away,
+            "fixture: Undo takes the change back at {size:?}"
+        );
+    }
     fs::write(&path, &before).unwrap();
     d.app_mut().lookup.refresh();
     d.settle();
