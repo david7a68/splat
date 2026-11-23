@@ -1226,7 +1226,9 @@ impl<'a> Driver<'a> {
         let label = format!("Undo add {event}");
         self.nodes()
             .into_iter()
-            .find(|node| node.name == label && Self::is_control(node))
+            // The Session plan's add result still says a bare `Undo add` (its one staged
+            // `UndoStep::verb`), never a plan line's words.
+            .find(|node| (node.name == label || node.name == "Undo add") && Self::is_control(node))
             .map(|node| node.name)
     }
 
