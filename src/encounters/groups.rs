@@ -4581,7 +4581,9 @@ impl Encounters {
         if self.message.is_some() {
             state = state.just_saved();
         }
-        let head = design::EditorHead::new(design::EditorKind::Group { in_plan: false }, &*self);
+        // Drawn in a session's plan, Back goes to the plan (`group_in_plan_view`).
+        let in_plan = self.group_in_plan;
+        let head = design::EditorHead::new(design::EditorKind::Group { in_plan }, &*self);
         let (word, back_name) = head.back_words();
         let status = state.status();
         let elsewhere = refusal.as_ref().and_then(|refusal| match refusal.place() {

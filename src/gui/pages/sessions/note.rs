@@ -151,7 +151,10 @@ pub(super) fn editor(
         }
     }
     let focused = handle.focused(window, cx);
-    root.app.sessions.gv_note_has_focus(in_panel, focused);
+    let elsewhere = window.focused(cx).is_some_and(|other| other != root.focus);
+    root.app
+        .sessions
+        .gv_note_has_focus(in_panel, focused, elsewhere);
     let id = ElementId::Name(SharedString::from(format!(
         "session-note-{}-{in_panel}",
         session.map_or_else(String::new, |id| id.to_string())

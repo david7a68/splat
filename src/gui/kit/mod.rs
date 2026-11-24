@@ -13,6 +13,7 @@
 pub mod button;
 pub mod checkbox;
 pub mod comparison;
+pub mod creature_filter;
 pub mod dialog;
 pub mod empty;
 pub mod fact;
@@ -40,6 +41,7 @@ pub mod virtual_list;
 
 pub use button::{Button, IconButton};
 pub use checkbox::{Checkbox, Switch};
+pub use creature_filter::FilterBar;
 pub use dialog::Dialog;
 pub use empty::empty_state;
 pub use field::{EditorHandle, TextEditor, TextField, field, help};

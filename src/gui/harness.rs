@@ -191,6 +191,39 @@ impl Shell {
         self.settle();
     }
 
+    /// Turn the mouse wheel over the target `name` by `dy` (negative moves the content up, to
+    /// show what is below), then settle: a test reaches a row a scrolled layer hides.
+    pub(crate) fn scroll(&mut self, name: &str, dy: Pixels) {
+        let position = self
+            .bounds(name)
+            .unwrap_or_else(|| panic!("No target named {name:?}"))
+            .center();
+        // A wheel scrolls what the mouse is over: move it there first.
+        let inputs = [
+            PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                position,
+                pressed_button: None,
+                modifiers: Modifiers::default(),
+            }),
+            PlatformInput::Scroll(gpui::ScrollEvent {
+                position,
+                delta: gpui::ScrollDelta::Pixels(gpui::point(px(0.0), dy)),
+                modifiers: Modifiers::default(),
+                touch_phase: gpui::TouchPhase::Moved,
+                source: gpui::ScrollSource::default(),
+            }),
+        ];
+        for input in inputs {
+            self.cx
+                .update_window(self.window, |_, window, cx| {
+                    window.dispatch_event(input, cx);
+                })
+                .expect("the window");
+            self.cx.run_until_parked();
+        }
+        self.settle();
+    }
+
     /// Press keys, as GPUI writes them: `"ctrl-k"`, `"escape"`, `"tab shift-tab"`.
     pub(crate) fn press(&mut self, keystrokes: &str) {
         for text in keystrokes.split_whitespace() {

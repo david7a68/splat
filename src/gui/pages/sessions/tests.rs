@@ -450,3 +450,147 @@ fn slash_menu_in_the_note() {
         );
     }
 }
+
+/// The first target whose name starts with `prefix`.
+fn first_target(shell: &mut Shell, prefix: &str) -> String {
+    shell.settle();
+    crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with(prefix))
+        .unwrap_or_else(|| panic!("no target starts with {prefix:?}"))
+}
+
+/// Copies of the campaign's `Bridge Ambush` named `Fight 1` to `Fight {count}`, each with its
+/// own id, read again at once: the Fight menu then lists more than `FIGHT_SEARCH_FROM`.
+fn more_fights(shell: &mut Shell, count: usize) {
+    shell.update(|root, _, _| {
+        let active = root.app.campaigns.active_campaign().unwrap().clone();
+        let folder = active.path.join("Encounters");
+        let words = std::fs::read_to_string(folder.join("Bridge Ambush.md")).unwrap();
+        for at in 1..=count {
+            let name = format!("Fight {at}");
+            let copy: String = words
+                .lines()
+                .map(|line| {
+                    if line.starts_with("splat_id:") {
+                        format!("splat_id: {}", uuid::Uuid::new_v4())
+                    } else {
+                        line.replace("Bridge Ambush", &name)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            std::fs::write(folder.join(format!("{name}.md")), copy).unwrap();
+        }
+        let modules = root.app.campaigns.modules().to_vec();
+        root.app.encounters.refresh_now(&active, &modules);
+    });
+    shell.settle();
+}
+
+/// The plan's Fight menu (egui `plan_menu`): a search shows only once the campaign has more
+/// than `FIGHT_SEARCH_FROM` fights, takes the keyboard as the menu opens, and lists the fights
+/// that hold its words; a chosen fight joins the plan and the search empties.
+#[test]
+fn plan_fight_picker_search() {
+    let mut shell = Shell::new("session-plan", Seed::Campaign);
+    shell.click("Session");
+    new_session(&mut shell, TITLE);
+    wait_for_fights(&mut shell);
+    shell.click("id:plan-add-fight-button");
+    assert!(shell.bounds("Plan Bridge Ambush").is_some());
+    assert!(
+        shell.bounds("Find a fight").is_none(),
+        "two fights need no search"
+    );
+    shell.press("escape");
+    more_fights(&mut shell, 9);
+    shell.click("id:plan-add-fight-button");
+    assert!(
+        shell.bounds("Find a fight").is_some(),
+        "eleven fights get a search"
+    );
+    shell.type_text("fight 7");
+    assert!(shell.bounds("Plan Fight 7").is_some());
+    assert!(shell.bounds("Plan Fight 1").is_none());
+    assert!(shell.bounds("Plan Bridge Ambush").is_none());
+    shell.capture("session-plan__02-plan-fight-picker-search__1200x800");
+    shell.click("Plan Fight 7");
+    assert!(
+        note_words(&mut shell).contains("Fight 7"),
+        "the chosen fight joins the plan"
+    );
+    shell.click("id:plan-add-fight-button");
+    assert!(
+        shell.bounds("Plan Bridge Ambush").is_some(),
+        "the search emptied"
+    );
+}
+
+/// A group assembled in the plan (egui `session-plan-groups`): New group opens the group editor
+/// in the plan's place, on the Session page, with its back line to the plan; Discard has its
+/// Undo in the plan's footer; Ctrl+S saves it and links it in the plan.
+#[test]
+fn plan_group_assembly() {
+    let mut shell = Shell::new("session-plan-groups", Seed::Groups);
+    shell.click("Session");
+    new_session(&mut shell, "The Crossing");
+    wait_for_fights(&mut shell);
+    shell.click("id:plan-add-group-button");
+    shell.click("New group");
+    assert!(shell.read(|root| root.app.encounters.group_open_in_plan()));
+    assert_eq!(shell.read(|root| root.app.page), crate::Page::Sessions);
+    assert!(shell.bounds("Back to the plan").is_some());
+    shell.type_text("Ash Pack");
+    shell.capture("session-plan-groups__01-plan-group-empty__1200x800");
+
+    // Discard closes it; the plan's footer has its Undo, which opens it again.
+    shell.click("Discard");
+    assert!(!shell.read(|root| root.app.encounters.group_open_in_plan()));
+    assert!(
+        shell.bounds("Back to the plan").is_none(),
+        "the plan is back"
+    );
+    shell.click("Undo discard of Ash Pack");
+    assert!(shell.read(|root| root.app.encounters.group_open_in_plan()));
+
+    // The group editor takes its columns from the window's width (`encounters::group::render`):
+    // with the session list hidden, the plan has that width and Add creatures has its room.
+    shell.click("id:session-list-toggle");
+    shell.click("Find a creature");
+    shell.type_text("wolf");
+    let add = first_target(&mut shell, "id:add:");
+    shell.click(&add);
+    assert_eq!(
+        shell.read(|root| root.app.encounters.group_members().map(|m| m.len())),
+        Some(1)
+    );
+    shell.capture("session-plan-groups__02-plan-group-assembled__1200x800");
+    shell.press("ctrl-s");
+    assert!(
+        !shell.read(|root| root.app.encounters.group_open_in_plan()),
+        "Ctrl+S saves the group and closes it"
+    );
+    assert!(
+        note_words(&mut shell).contains("Ash Pack"),
+        "the saved group joins the plan"
+    );
+    shell.capture("session-plan-groups__03-plan-group-saved__1200x800");
+
+    // Back waits while a new group is unsaved; once the saved group opens again unchanged,
+    // Back returns to the plan.
+    let group = first_target(&mut shell, "id:plan-add-group-button");
+    shell.click(&group);
+    shell.click("New group");
+    shell.click("id:group-back");
+    assert!(
+        shell.read(|root| root.app.encounters.group_open_in_plan()),
+        "an unsaved group holds Back"
+    );
+    shell.click("Discard");
+    shell.click("Edit group Ash Pack");
+    assert!(shell.read(|root| root.app.encounters.group_open_in_plan()));
+    shell.click("id:group-back");
+    assert!(!shell.read(|root| root.app.encounters.group_open_in_plan()));
+    assert_eq!(shell.read(|root| root.app.page), crate::Page::Sessions);
+}
