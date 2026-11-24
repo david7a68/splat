@@ -1003,7 +1003,19 @@ fn run_large_roster() {
         }
     });
     assert_eq!(count(&mut shell), 300);
+    shell.settle();
+    // A frame in which nothing the rows show changed fits no row again; a change does.
+    let made = || super::roster::PLANS_MADE.with(std::cell::Cell::get);
+    let before = made();
     let many = shell.frame_cost(10);
+    assert_eq!(made(), before, "still frames reuse the roster's plan");
+    let first = with_run(&mut shell, |run| run.state.order[0]);
+    on_run(&mut shell, |run| {
+        run.run_command(Command::Condition(first, "Prone".into()))
+    });
+    shell.settle();
+    assert!(made() > before, "a change fits the rows again");
+    on_run(&mut shell, Run::undo);
     eprintln!(
         "run-large-roster frame cost: 20 rows {twenty:?} ({twenty_built} built), 300 rows {many:?} ({} built)",
         built()

@@ -78,7 +78,8 @@ pub(super) fn render(
     let current = run.current();
     let next_up = run.next_up();
     let order = run.state.order.clone();
-    let plan = roster::plan(
+    let plan = roster::plan_cached(
+        &mut root.pages.run.plan_cache,
         run,
         &order,
         f32::from(roster_width - theme::SCROLL_BAR_WIDTH),

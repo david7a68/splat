@@ -49,6 +49,8 @@ pub struct State {
     roster_scroll: gpui::ScrollHandle,
     /// The ended view's final state and loot, so only the rows in view are built.
     final_scroll: gpui::ScrollHandle,
+    /// The live roster's last plan, kept while nothing it reads changes.
+    plan_cache: roster::PlanCache,
     /// The window height the roster was last laid out for: a new one scrolls to the selection.
     roster_room: Option<Pixels>,
     /// The height the live roster's box had when it was last laid out (its rows and the

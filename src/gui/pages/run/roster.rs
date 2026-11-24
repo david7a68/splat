@@ -181,6 +181,7 @@ pub(super) struct RowPlan {
 
 /// The whole roster's fit for one frame: its scale, columns, each row's layout (in order), and
 /// whether it is longer than its room.
+#[derive(Clone)]
 pub(super) struct Plan {
     pub(super) scale: RunScale,
     columns: RowColumns,
@@ -215,6 +216,73 @@ pub(super) enum Spare {
     ToRows,
     /// The ended view's final state: rows keep their scale's height, and the loot follows.
     Keep,
+}
+
+/// The last plan and the hash of what it was fitted from (`plan_key`): a frame whose rows,
+/// room and width did not change takes it, and no row's words are measured again.
+#[derive(Default)]
+pub(super) struct PlanCache(Option<(u64, Plan)>);
+
+#[cfg(test)]
+thread_local! {
+    /// How many plans were fitted (a test of the cache).
+    pub(super) static PLANS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// `plan`, or the cached one when nothing it reads changed.
+pub(super) fn plan_cached(
+    cache: &mut PlanCache,
+    run: &Run,
+    order: &[usize],
+    width: f32,
+    room: f32,
+    spare: Spare,
+    window: &Window,
+) -> Plan {
+    let key = plan_key(run, order, width, room, spare);
+    if let Some((kept, plan)) = &cache.0
+        && *kept == key
+    {
+        return plan.clone();
+    }
+    #[cfg(test)]
+    PLANS_MADE.with(|made| made.set(made.get() + 1));
+    let plan = plan(run, order, width, room, spare, window);
+    cache.0 = Some((key, plan.clone()));
+    plan
+}
+
+/// Every fact a plan is fitted from, hashed: the room, the order and the turn, and each row's
+/// words and marks as `parts`, `fit_line` and `row_plan` read them.
+fn plan_key(run: &Run, order: &[usize], width: f32, room: f32, spare: Spare) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    width.to_bits().hash(&mut hash);
+    room.to_bits().hash(&mut hash);
+    (spare == Spare::ToRows).hash(&mut hash);
+    order.hash(&mut hash);
+    run.current().hash(&mut hash);
+    for (index, p) in run.state.participants.iter().enumerate() {
+        p.name.hash(&mut hash);
+        p.side.hash(&mut hash);
+        p.present.hash(&mut hash);
+        p.initiative.is_some().hash(&mut hash);
+        p.concentration.hash(&mut hash);
+        (p.hp, p.max_hp).hash(&mut hash);
+        p.conditions.hash(&mut hash);
+        p.npc_identity().hash(&mut hash);
+        p.definition.name.hash(&mut hash);
+        p.loot_ready().hash(&mut hash);
+        p.changes
+            .as_ref()
+            .filter(|_| p.stat_changes())
+            .map(|changes| changes.overrides.table_bonuses(&changes.base))
+            .hash(&mut hash);
+        run.row_sync_word(index).hash(&mut hash);
+        run.row_badge(index).hash(&mut hash);
+        run.conc_save_dc(index).hash(&mut hash);
+    }
+    hash.finish()
 }
 
 /// The run's list of rows in `width` (inside the scroll column's lane) and `room`: its scale, then each row
