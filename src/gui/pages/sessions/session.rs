@@ -430,7 +430,8 @@ fn last_time(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Option<AnyEle
         }))
     });
     // The link keeps its words; the preview gives way, cut at the line's end.
-    let preview = (!last.preview.is_empty() || carry.is_none()).then(|| {
+    // With nothing written last time there is no preview, so no dash (egui: the link alone).
+    let preview = (!last.preview.is_empty()).then(|| {
         kit::text::one_line(Type::Small, c.muted, format!("— {}", last.preview))
             .max_w(READER_MEASURE)
             .flex_1()

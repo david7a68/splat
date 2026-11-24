@@ -82,6 +82,27 @@ pub(crate) fn read_content_again(shell: &mut Shell) {
     shell.settle();
 }
 
+/// The evening's session, as the egui scenario made it: `The Race`, with the Shrine of Cinders
+/// planned for tonight, its note saved, on the Session page's plan.
+fn the_race_session(shell: &mut Shell) {
+    shell.click("Session");
+    shell.click("New session");
+    shell.type_text("The Race");
+    shell.click("Create session");
+    shell.update(|root, _, cx| {
+        let words = root.app.sessions.gv_note_words(false).unwrap_or_default();
+        let words = words.replace(
+            "## Plan for tonight\n",
+            "## Plan for tonight\n\n- [[Shrine of Cinders]]\n",
+        );
+        root.app.sessions.gv_note_edited(false, &words);
+        root.app.sessions.flush();
+        cx.notify();
+    });
+    shell.update(|root, _, _| root.app.encounters.wait_for_load());
+    shell.settle();
+}
+
 fn value(shell: &mut Shell, key: &str, instance: Option<&str>) -> i64 {
     shell.read(|root| {
         root.app
@@ -102,7 +123,7 @@ fn no_note_in_play_routes_to_the_rules() {
         shell.bounds(crate::trackers::view::RULES_ROUTE).is_some(),
         "the empty state shows its route"
     );
-    shell.capture("trackers__00-no-house-rules__1200x800");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "trackers__00-no-house-rules__1200x800");
     shell.click(crate::trackers::view::RULES_ROUTE);
     shell.settle();
     assert_eq!(shell.read(|root| root.app.page), crate::Page::Campaign);
@@ -116,14 +137,14 @@ fn no_note_in_play_routes_to_the_rules() {
 fn quick_actions_notices_and_amounts() {
     let mut shell = Shell::new("trackers-race", Seed::Campaign);
     race_in_play(&mut shell);
-    shell.click("Session");
+    the_race_session(&mut shell);
     shell.press("ctrl-t");
     shell.settle();
     assert!(
         shell.bounds("Enter room").is_some(),
         "the pinned trackers show"
     );
-    shell.capture("trackers__02-trackers-beside-the-plan__1200x800");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "trackers__02-trackers-beside-the-plan__1200x800");
 
     // A quick action and its Undo.
     shell.click("Enter room");
@@ -158,7 +179,7 @@ fn quick_actions_notices_and_amounts() {
     });
     assert_eq!(shell.read(|root| root.app.trackers.due()), 1);
     assert!(shell.bounds("Done: First seal for Party").is_some() || shell.bounds("Done").is_some());
-    shell.capture("trackers__03-trackers-a-notice__1200x800");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "trackers__03-trackers-a-notice__1200x800");
     shell.click("Done");
     shell.settle();
     assert_eq!(shell.read(|root| root.app.trackers.due()), 0);
@@ -192,12 +213,15 @@ fn quick_actions_notices_and_amounts() {
     );
     // The note's reader in Lookup has each tracker's folded history under the note, drawn by
     // the shared World reader.
+    // As the DM looks it up: its name typed in Lookup's search, and the found note opened.
     shell.update(|root, _, cx| {
         root.app.lookup.back_from_trackers();
-        assert!(root.app.lookup.open_name("Tournament"), "the note opens");
         cx.notify();
     });
-    shell.settle();
+    shell.click(crate::lookup::SEARCH_NAME);
+    shell.type_text("Tournament");
+    // The search shows its best match, the note; Enter closes the result list.
+    shell.press("enter");
     let history = crate::gui::kit::probe::names()
         .into_iter()
         .find(|name| name.starts_with("Seals history"))
@@ -208,7 +232,7 @@ fn quick_actions_notices_and_amounts() {
             )
         });
     shell.click(&history);
-    shell.capture("trackers__07-tracker-history-in-the-reader__1200x800");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "trackers__07-tracker-history-in-the-reader__1200x800");
 }
 
 /// The panel at the smallest window, with the race in play.
@@ -216,10 +240,10 @@ fn quick_actions_notices_and_amounts() {
 fn trackers_at_the_smallest_window() {
     let mut shell = Shell::with_size("trackers-small", Seed::Campaign, size(px(960.0), px(640.0)));
     race_in_play(&mut shell);
-    shell.click("Session");
+    the_race_session(&mut shell);
     shell.press("ctrl-t");
     shell.settle();
     shell.click("Take seal: Party");
     shell.settle();
-    shell.capture("trackers__03-trackers-a-notice__960x640");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "trackers__03-trackers-a-notice__960x640");
 }

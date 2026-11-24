@@ -24,7 +24,7 @@ fn first_day(shell: &mut Shell) {
             shell.bounds("Start with day 1").is_some(),
             "the empty state"
         );
-        shell.capture("session-notes__15-timeline-empty__1200x800");
+        crate::gui::pages::sessions::tests::capture(shell, "session-notes__15-timeline-empty__1200x800");
         shell.click("Start with day 1");
     } else {
         shell.click("Add Day");
@@ -72,7 +72,7 @@ fn add_name_rule_remove_and_save() {
         })
     };
     assert_eq!(title(&mut shell).as_deref(), Some("Rest at the mill"));
-    shell.capture("session-notes__18-timeline-event__1200x800");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__18-timeline-event__1200x800");
 
     // The ruling and its Undo.
     let restores = |shell: &mut Shell| {
@@ -89,7 +89,7 @@ fn add_name_rule_remove_and_save() {
     shell.click("Mark not at full");
     shell.settle();
     assert!(!restores(&mut shell));
-    shell.capture("session-plan__33-timeline-rest-ruling-off__1200x800");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "session-plan__33-timeline-rest-ruling-off__1200x800");
     shell.click("Undo change to ruling");
     shell.settle();
     assert!(restores(&mut shell), "Undo puts the ruling back");
@@ -101,7 +101,7 @@ fn add_name_rule_remove_and_save() {
     shell.settle();
     assert!(title(&mut shell).is_none(), "the event is gone");
     assert_eq!(selected(&mut shell), None);
-    shell.capture("session-notes__22-timeline-removed__1200x800");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__22-timeline-removed__1200x800");
     shell.click("Undo remove Rest at the mill");
     shell.settle();
     assert_eq!(title(&mut shell).as_deref(), Some("Rest at the mill"));
@@ -112,7 +112,7 @@ fn add_name_rule_remove_and_save() {
     let shown =
         shell.update(|root, _, _| root.app.timeline_page.header_context(&root.app.timeline));
     assert!(shown.contains(" of "), "{shown}");
-    shell.capture("session-notes__21-timeline-filtered__1200x800");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__21-timeline-filtered__1200x800");
     shell.click("All");
     shell.settle();
 
@@ -161,7 +161,7 @@ fn an_open_event_at_the_smallest_window() {
     first_day(&mut shell);
     shell.click("Add Long rest");
     shell.settle();
-    shell.capture("session-notes__18-timeline-event__960x640");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__18-timeline-event__960x640");
 }
 
 /// F9: a journey's encounter checks on Timeline: `Roll for encounters` from its menu, a table,
@@ -226,7 +226,7 @@ fn a_journeys_checks() {
     shell.settle();
     assert_eq!(event(&mut shell).checks.len(), 1, "one check rolled");
     assert!(shell.bounds("Undo roll 1 travel check").is_some());
-    shell.capture("travel-checks__07-travel-checks-timeline__1200x800");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "travel-checks__07-travel-checks-timeline__1200x800");
     let label = event(&mut shell).checks[0].label.clone();
     shell.click(&format!("id:timeline-checks-{journey}-clear-{label}"));
     shell.settle();
@@ -260,7 +260,7 @@ fn the_add_strip_shares_more_when_short() {
     }
     assert!(shell.bounds("Add Day").is_none(), "Day goes to More");
     shell.click("More Add actions");
-    shell.capture("timeline-add-strip__01-more-add-actions__960x640");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "timeline-add-strip__01-more-add-actions__960x640");
     let before = events(&mut shell).len();
     shell.click("Day");
     let now = events(&mut shell);
@@ -328,7 +328,7 @@ fn a_rolled_checks_result_comes_into_view() {
         clear.top() >= px(0.0) && clear.bottom() <= window.height,
         "the result is in view: {clear:?} in {window:?}"
     );
-    shell.capture("timeline-checks-reveal__01-result-in-view__1200x520");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "timeline-checks-reveal__01-result-in-view__1200x520");
 }
 
 /// Review of #817: in a window so short that the title line would leave the form no room, the
@@ -360,7 +360,7 @@ fn the_title_line_scrolls_with_the_form_when_room_is_short() {
             "at {height}: the Title moved from {before:?} to {after:?}"
         );
         if scrolls {
-            shell.capture("timeline-short__01-title-line-scrolls__1200x270");
+            crate::gui::pages::sessions::tests::capture(&mut shell, "timeline-short__01-title-line-scrolls__1200x270");
         }
     }
 }
@@ -395,7 +395,7 @@ fn an_uncounted_length_says_why_on_hover() {
         );
     });
     shell.wait(std::time::Duration::from_secs(1));
-    shell.capture("timeline-uncounted__01-row-hover__1200x800");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "timeline-uncounted__01-row-hover__1200x800");
 }
 
 /// M0556: a long Timeline opens at its last event, whole in view, with its first out of view.

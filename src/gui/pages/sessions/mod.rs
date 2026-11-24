@@ -16,7 +16,7 @@ mod session;
 mod slash;
 mod templates;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use crate::Splat;
 use crate::gui::{SplatRoot, icons, kit, theme};

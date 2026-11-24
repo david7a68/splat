@@ -259,12 +259,14 @@ pub(crate) fn render_view(
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let back = root.app.lookup.trackers_hold_something().then(|| {
-        kit::IconButton::new("trackers-back", icons::HISTORY_BACK, "Back").on_click(cx.listener(
-            |root, _, _, cx| {
+        // Never an icon alone (egui: a quiet `Back` with its icon).
+        kit::Button::quiet("trackers-back", "Back")
+            .icon(icons::HISTORY_BACK)
+            .density(Density::Read)
+            .on_click(cx.listener(|root, _, _, cx| {
                 root.app.lookup.back_from_trackers();
                 cx.notify();
-            },
-        ))
+            }))
     });
     let title = div()
         .flex()

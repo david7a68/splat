@@ -19,6 +19,18 @@ fn wait_for_fights(shell: &mut Shell) {
     );
 }
 
+/// A capture as the egui driver took it (`finish_capture_saves`): the note, the template and the
+/// Timeline are saved first, since test builds save only when told to, so the header says what
+/// the DM sees once the save timer has run, never a held "Saving…".
+pub(crate) fn capture(shell: &mut Shell, name: &str) {
+    shell.update(|root, _, cx| {
+        root.app.sessions.flush();
+        root.app.timeline.save();
+        cx.notify();
+    });
+    shell.capture(name);
+}
+
 /// A session made through the form.
 fn new_session(shell: &mut Shell, title: &str) {
     shell.click("New session");
@@ -52,19 +64,21 @@ fn selected_label(shell: &mut Shell) -> Option<String> {
 fn session_notes_main_states() {
     let mut shell = Shell::new("session-notes", Seed::Campaign);
     shell.click("Session");
-    shell.capture("session-notes__01-sessions-empty__1200x800");
+    // The campaign's paused run shows in the rail once its encounters are read.
+    wait_for_fights(&mut shell);
+    capture(&mut shell, "session-notes__01-sessions-empty__1200x800");
     shell.click("New session");
-    shell.capture("session-notes__02-session-form__1200x800");
+    capture(&mut shell, "session-notes__02-session-form__1200x800");
     shell.type_text(TITLE);
     shell.click("Create session");
     assert_eq!(
         selected_label(&mut shell).as_deref(),
         Some("Session 1: Ash on the Road")
     );
-    shell.capture("session-notes__04-session-write__1200x800");
+    capture(&mut shell, "session-notes__04-session-write__1200x800");
     // Read with nothing written says so, with Write.
     shell.click("Read");
-    shell.capture("session-notes__05-empty-note-read__1200x800");
+    capture(&mut shell, "session-notes__05-empty-note-read__1200x800");
     assert!(
         shell.bounds("Write").is_some(),
         "an empty Read view offers Write"
@@ -75,31 +89,48 @@ fn session_notes_main_states() {
         &mut shell,
         &format!("{words}The road was covered in ash, and the wolves followed us.\n"),
     );
-    shell.capture("session-notes__06-session-written__1200x800");
+    capture(&mut shell, "session-notes__06-session-written__1200x800");
     shell.click("Read");
-    shell.capture("session-notes__07-session-read__1200x800");
+    capture(&mut shell, "session-notes__07-session-read__1200x800");
     shell.click("Write");
     // The plan's Add strip: the fight picker and the rarer kinds.
     shell.click("id:plan-add-fight-button");
-    shell.capture("session-notes__09-session-plan-fight-picker__1200x800");
+    capture(&mut shell, "session-notes__09-session-plan-fight-picker__1200x800");
     shell.press("escape");
     shell.click("id:plan-add-more-button");
-    shell.capture("session-notes__10-plan-more-add-actions__1200x800");
+    capture(&mut shell, "session-notes__10-plan-more-add-actions__1200x800");
     shell.press("escape");
     shell.click("Long rest");
-    shell.capture("session-notes__11-session-event-added__1200x800");
+    capture(&mut shell, "session-notes__11-session-event-added__1200x800");
     // Templates: the built-in one, a customized copy, a new one, and a deleted one.
     shell.click("Templates");
-    shell.capture("session-notes__29-templates-built-in__1200x800");
+    capture(&mut shell, "session-notes__29-templates-built-in__1200x800");
     shell.click("Customize");
-    shell.capture("session-notes__30-templates-own__1200x800");
+    capture(&mut shell, "session-notes__30-templates-own__1200x800");
+    // The DM's copy is edited, and the edit is saved with it.
+    shell.click("Template text");
+    shell.press("ctrl-end");
+    shell.type_text("Edited in the template.\n");
     shell.click("New template");
     shell.type_text("Downtime");
-    shell.capture("session-notes__31-templates-new__1200x800");
+    capture(&mut shell, "session-notes__31-templates-new__1200x800");
     shell.click("Create template");
     shell.click("id:template-more-button");
     shell.click("Delete");
-    shell.capture("session-notes__32-templates-deleted__1200x800");
+    capture(&mut shell, "session-notes__32-templates-deleted__1200x800");
+    let own = shell.read(|root| {
+        root.app
+            .sessions
+            .gv_templates()
+            .iter()
+            .find(|template| template.name == "Standard session")
+            .and_then(|template| template.path.clone())
+    });
+    let text = std::fs::read_to_string(own.expect("the DM's own Standard session")).unwrap();
+    assert!(
+        text.contains("Edited in the template."),
+        "the template edit is saved: {text:?}"
+    );
 }
 
 #[test]
@@ -111,9 +142,9 @@ fn session_notes_small_window() {
     );
     shell.click("Session");
     new_session(&mut shell, TITLE);
-    shell.capture("session-notes__04-session-write__960x640");
+    capture(&mut shell, "session-notes__04-session-write__960x640");
     shell.click("Note");
-    shell.capture("session-notes__04-session-write-note-tab__960x640");
+    capture(&mut shell, "session-notes__04-session-write-note-tab__960x640");
     // In the tab layout, the `/` menu's Search field is the note's own: the Note tab stays, with
     // its menu and field.
     shell.click("Note text");
@@ -136,12 +167,23 @@ fn session_notes_conflict_and_gone() {
     shell.click("Session");
     new_session(&mut shell, TITLE);
     let words = note_words(&mut shell);
+    // As egui's scenario: the note as last saved, the DM's line, a line written in Obsidian,
+    // then a save.
+    shell.update(|root, _, _| root.app.sessions.flush());
     set_note(
         &mut shell,
-        &format!("{words}My words during the conflict.\n"),
+        &format!("{words}\nMy words during the conflict.\n"),
     );
-    shell.update(|root, _, _| root.app.sessions.simulate_conflict());
-    shell.capture("session-notes__24-note-conflict__1200x800");
+    shell.update(|root, _, cx| {
+        root.app.sessions.simulate_disk_change();
+        root.app.sessions.flush();
+        cx.notify();
+    });
+    assert_eq!(
+        shell.read(|root| root.app.sessions.gv_draft_state().cloned()),
+        Some(crate::sessions::DraftState::Conflict)
+    );
+    capture(&mut shell, "session-notes__24-note-conflict__1200x800");
     assert!(shell.bounds("Overwrite with my draft").is_some());
     shell.click("Overwrite with my draft");
     let state = shell.read(|root| root.app.sessions.gv_draft_state().cloned());
@@ -153,12 +195,12 @@ fn plain_evening_states() {
     let mut shell = Shell::new("plain-evening", Seed::Plain);
     shell.click("Session");
     wait_for_fights(&mut shell);
-    shell.capture("plain-evening__01-session-tonight__1200x800");
+    capture(&mut shell, "plain-evening__01-session-tonight__1200x800");
     shell.click("Road to the ford");
-    shell.capture("plain-evening__02-session-tonight: Travel row open__1200x800");
+    capture(&mut shell, "plain-evening__02-session-tonight: Travel row open__1200x800");
     shell.click("Road to the ford");
     shell.click("Shrine of Cinders");
-    shell.capture("plain-evening__03-session-tonight: planned fight open__1200x800");
+    capture(&mut shell, "plain-evening__03-session-tonight: planned fight open__1200x800");
     // Gap 4: the opened played fight shows how it ended: each player's
     // final HP, `Log · Whole run · Timeline`, and the Log under them while it is open.
     use crate::fixtures::{PLAIN_LAST, PLAIN_PLAYED};
@@ -190,15 +232,19 @@ fn plain_evening_states() {
             .any(|name| name.starts_with("Brannoch Vale: 58/62 HP")),
         "its players' final HP show, each with its whole line: {names:?}"
     );
-    shell.capture("plain-evening__04-session-last: played fight open__1200x800");
+    capture(&mut shell, "plain-evening__04-session-last: played fight open__1200x800");
     shell.click("Log");
     assert!(
         shell.read(|root| root.app.sessions.gv_fight_log_open()),
         "Log opens the log"
     );
-    shell.capture("plain-evening__04-session-last: played fight log__1200x800");
-    shell.click("New session");
-    shell.capture("plain-evening__16-session-new__1200x800");
+    capture(&mut shell, "plain-evening__04-session-last: played fight log__1200x800");
+    new_session(&mut shell, "The Shrine");
+    assert!(
+        selected_label(&mut shell).is_some_and(|label| label.ends_with("The Shrine")),
+        "the new session is made and selected"
+    );
+    capture(&mut shell, "plain-evening__16-session-new__1200x800");
 }
 
 /// Scenes in the plan: task lines are rows in the note's order;
@@ -231,7 +277,7 @@ fn plan_scenes_and_their_fold() {
             })
         };
         assert_eq!(folded(&mut shell), None, "{name}: the scenes fit the plan");
-        shell.capture(&format!(
+        capture(&mut shell, &format!(
             "session-plan-scenes__01-scenes-in-the-plan__{name}"
         ));
         if name == "1200x800" {
@@ -254,7 +300,7 @@ fn plan_scenes_and_their_fold() {
                 .count()
         };
         assert_eq!(scene_rows(), 0, "{name}: folded scenes draw no rows");
-        shell.capture(&format!("session-plan-scenes__08-scenes-folded__{name}"));
+        capture(&mut shell, &format!("session-plan-scenes__08-scenes-folded__{name}"));
         // `3 scenes` opens them in place, and closes them again.
         shell.click("3 scenes");
         assert_eq!(folded(&mut shell), Some((3, false)));
@@ -293,7 +339,7 @@ fn plan_add_reveals_its_row() {
         row.top() >= px(0.0) && row.bottom() <= undo.top(),
         "the added row is in view above the footer: {row:?}, footer at {undo:?}"
     );
-    shell.capture("session-plan-reveal__01-added-row-in-view__960x640");
+    capture(&mut shell, "session-plan-reveal__01-added-row-in-view__960x640");
 }
 
 #[test]
@@ -301,26 +347,52 @@ fn plain_evening_small_window() {
     let mut shell = Shell::with_size("plain-evening", Seed::Plain, size(px(SMALL.0), px(SMALL.1)));
     shell.click("Session");
     wait_for_fights(&mut shell);
-    shell.capture("plain-evening__01-session-tonight__960x640");
+    capture(&mut shell, "plain-evening__01-session-tonight__960x640");
 }
 
 #[test]
 fn session_recording_states() {
     let mut shell = Shell::new("session-recording", Seed::Campaign);
     shell.click("Session");
+    // The campaign's paused run shows in the rail once its encounters are read.
+    wait_for_fights(&mut shell);
     new_session(&mut shell, "The Bridge");
     shell.update(|root, _, _| root.app.processing.simulate_input("table.mic"));
     shell.click("Record");
-    shell.capture("session-recording__01-record-consent__1200x800");
+    capture(&mut shell, "session-recording__01-record-consent__1200x800");
     shell.click("Start recording");
-    shell.capture("session-recording__02-recording-starting__1200x800");
+    capture(&mut shell, "session-recording__02-recording-starting__1200x800");
     shell.update(|root, _, _| root.app.sessions.simulate_recorder_health(Health::Hearing));
-    shell.capture("session-recording__03-recording-hearing__1200x800");
+    capture(&mut shell, "session-recording__03-recording-hearing__1200x800");
     shell.click("id:session-tabs-Recordings 1");
     shell.update(|root, _, _| root.app.sessions.simulate_recorder_health(Health::Hearing));
-    shell.capture("session-recording__04-recording-listed__1200x800");
+    capture(&mut shell, "session-recording__04-recording-listed__1200x800");
     shell.click("Stop recording");
-    shell.capture("session-recording__16-recording-ready__1200x800");
+    // As in egui's scenario, both keys are saved by this step, so Process is ready.
+    shell.update(|root, _, cx| {
+        root.app.processing.simulate_keys();
+        cx.notify();
+    });
+    assert!(
+        crate::gui::kit::probe::names()
+            .iter()
+            .any(|name| name.starts_with("Process")),
+        "the recording offers Process"
+    );
+    capture(&mut shell, "session-recording__16-recording-ready__1200x800");
+    // The recording is processed, with a warning, before the DM deletes it.
+    shell.update(|root, _, cx| {
+        root.app
+            .sessions
+            .simulate_job(crate::processing::Progress::Asking {
+                pass: crate::processing::Pass::Review,
+                seconds: 9,
+            });
+        root.app.sessions.simulate_job_end_warned(
+            "The check returned nothing, so the clean transcript was not checked.",
+        );
+        cx.notify();
+    });
     let path = shell.update(|root, _, _| {
         let app = &mut root.app;
         app.sessions
@@ -333,7 +405,7 @@ fn session_recording_states() {
         path.expect("a recording")
     ));
     shell.click("Delete…");
-    shell.capture("session-recording__35-recording-delete__1200x800");
+    capture(&mut shell, "session-recording__35-recording-delete__1200x800");
     assert!(shell.read(|root| root.app.sessions.gv_confirm_delete().is_some()));
     shell.click("Keep the recording");
     assert!(shell.read(|root| root.app.sessions.gv_confirm_delete().is_none()));
@@ -355,7 +427,7 @@ fn session_carry_over_offered() {
     );
     shell.update(|root, _, _| root.app.sessions.flush());
     new_session(&mut shell, "The Crossing");
-    shell.capture("session-carry-over__01-carry-over-offered__1200x800");
+    capture(&mut shell, "session-carry-over__01-carry-over-offered__1200x800");
     assert!(
         shell.bounds("Carry over").is_some(),
         "a prepared session offers Carry over"
@@ -366,14 +438,52 @@ fn session_carry_over_offered() {
 fn recording_banner_priority() {
     let mut shell = Shell::new("recording-banner-priority", Seed::Campaign);
     shell.click("Session");
-    new_session(&mut shell, "The Bridge");
-    shell.update(|root, _, _| {
+    // The campaign's paused run shows in the rail once its encounters are read.
+    wait_for_fights(&mut shell);
+    // As egui's scenario: the first session's processing fails while the DM is there...
+    new_session(&mut shell, "Failed processing");
+    shell.update(|root, _, cx| {
+        root.app.processing.simulate_keys();
+        root.app.processing.simulate_input("table.mic");
+        cx.notify();
+    });
+    let record = |shell: &mut Shell| {
+        shell.click("Record");
+        // The consent is asked once an evening.
+        if shell.bounds("Start recording").is_some() {
+            shell.click("Start recording");
+        }
+        shell.click("Stop recording");
+        let tab = first_target(shell, "id:session-tabs-Recordings");
+        shell.click(&tab);
+    };
+    record(&mut shell);
+    shell.update(|root, _, cx| {
         root.app
             .sessions
-            .simulate_alert("Processing failed: the speech service did not answer.");
+            .simulate_job(crate::processing::Progress::Asking {
+                pass: crate::processing::Pass::Review,
+                seconds: 42,
+            });
+        root.app.sessions.simulate_job_end(Err(
+            "The transcript and summary service is busy. Wait, then select Continue processing."
+                .to_owned(),
+        ));
+        cx.notify();
     });
-    shell.click("Timeline");
-    shell.capture("recording-banner-priority__01-failed-elsewhere-with-unprocessed-row__1200x800");
+    // ...then the DM records another session and leaves it unprocessed.
+    new_session(&mut shell, "Unprocessed recording");
+    record(&mut shell);
+    assert!(
+        shell.bounds("Continue processing").is_some(),
+        "the failed session's banner offers Continue processing"
+    );
+    assert_eq!(
+        shell.read(|root| root.app.sessions.gv_recording_count()),
+        1,
+        "the open session has its unprocessed recording"
+    );
+    capture(&mut shell, "recording-banner-priority__01-failed-elsewhere-with-unprocessed-row__1200x800");
 }
 
 // Interaction tests: the main flows, driven through presses and keys.
@@ -575,7 +685,7 @@ fn notes_panel_beside_another_page() {
         slice.starts_with("## What happened"),
         "the panel holds the note from What happened: {slice:?}"
     );
-    shell.capture("session-notes__38-notes-panel__1200x800");
+    capture(&mut shell, "session-notes__38-notes-panel__1200x800");
     // A stray click leaves the keyboard on nothing: what the DM types still goes in the note.
     shell.update(|root, window, cx| window.focus(&root.focus, cx));
     shell.type_text("Stray words");
@@ -627,7 +737,7 @@ fn slash_menu_in_the_note() {
         (search.left() - slash.left()).abs() < px(24.0),
         "the menu starts at the /: {search:?} at {slash:?}"
     );
-    shell.capture("session-notes__53-slash-menu__1200x800");
+    capture(&mut shell, "session-notes__53-slash-menu__1200x800");
     // Keys pressed while another control has the keyboard are not the menu's: Down and Enter
     // choose nothing.
     shell.update(|root, window, cx| window.focus(&root.focus, cx));
@@ -830,7 +940,7 @@ fn travel_checks_in_the_plan() {
     shell.click(&format!("id:plan-checks-{journey}-roll-0"));
     assert_eq!(event(&mut shell).checks.len(), 1, "one check rolled");
     assert!(shell.bounds("Undo roll 1 travel check").is_some());
-    shell.capture("travel-checks__01-travel-checks-rolled__1200x800");
+    capture(&mut shell, "travel-checks__01-travel-checks-rolled__1200x800");
     shell.click("Undo roll 1 travel check");
     assert!(
         event(&mut shell).checks.is_empty(),
@@ -850,7 +960,7 @@ fn travel_checks_in_the_plan() {
         note_words(&mut shell).contains("[[Shrine of Cinders]]"),
         "the plan line is in the note"
     );
-    shell.capture("travel-checks-plan__04-plan-answer-in-session-plan__1200x800");
+    capture(&mut shell, "travel-checks-plan__04-plan-answer-in-session-plan__1200x800");
 }
 
 /// The first target whose name starts with `prefix`.
@@ -916,7 +1026,7 @@ fn plan_fight_picker_search() {
     assert!(shell.bounds("Plan Fight 7").is_some());
     assert!(shell.bounds("Plan Fight 1").is_none());
     assert!(shell.bounds("Plan Bridge Ambush").is_none());
-    shell.capture("session-plan__02-plan-fight-picker-search__1200x800");
+    capture(&mut shell, "session-plan__02-plan-fight-picker-search__1200x800");
     shell.click("Plan Fight 7");
     assert!(
         note_words(&mut shell).contains("Fight 7"),
@@ -944,7 +1054,7 @@ fn plan_group_assembly() {
     assert_eq!(shell.read(|root| root.app.page), crate::Page::Sessions);
     assert!(shell.bounds("Back to the plan").is_some());
     shell.type_text("Ash Pack");
-    shell.capture("session-plan-groups__01-plan-group-empty__1200x800");
+    capture(&mut shell, "session-plan-groups__01-plan-group-empty__1200x800");
 
     // Discard closes it; the plan's footer has its Undo, which opens it again.
     shell.click("Discard");
@@ -967,7 +1077,7 @@ fn plan_group_assembly() {
         shell.read(|root| root.app.encounters.group_members().map(|m| m.len())),
         Some(1)
     );
-    shell.capture("session-plan-groups__02-plan-group-assembled__1200x800");
+    capture(&mut shell, "session-plan-groups__02-plan-group-assembled__1200x800");
     shell.press("ctrl-s");
     assert!(
         !shell.read(|root| root.app.encounters.group_open_in_plan()),
@@ -977,7 +1087,7 @@ fn plan_group_assembly() {
         note_words(&mut shell).contains("Ash Pack"),
         "the saved group joins the plan"
     );
-    shell.capture("session-plan-groups__03-plan-group-saved__1200x800");
+    capture(&mut shell, "session-plan-groups__03-plan-group-saved__1200x800");
 
     // Back waits while a new group is unsaved; once the saved group opens again unchanged,
     // Back returns to the plan.

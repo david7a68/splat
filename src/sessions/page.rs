@@ -4580,6 +4580,50 @@ impl Sessions {
         });
     }
 
+    /// A job that stays in progress, for a capture of that state.
+    pub fn simulate_job(&mut self, progress: processing::Progress) {
+        self.end_notice();
+        self.processed_session = None;
+        self.processed_recording = None;
+        self.job_done = false;
+        self.job_warned = false;
+        let session = self.selected.expect("an open session");
+        let path = self.recordings[0].path.clone();
+        if let processing::Progress::Transcribing { part, of } = &progress {
+            fs::write(
+                processing::transcript_path(&path),
+                format!(
+                    "---\ntranscript_parts_done: {part}\ntranscript_parts: {of}\n---\n\nThe party held the bridge.\n"
+                ),
+            )
+            .expect("a partial raw transcript before cancellation");
+            self.refresh_recordings();
+        }
+        if matches!(progress, processing::Progress::Asking { .. }) {
+            fs::write(
+                processing::transcript_path(&path),
+                "---\ntranscript_parts_done: 1\ntranscript_parts: 1\n---\n\nThe party held the bridge.\n",
+            )
+            .expect("a complete raw transcript before the LLM pass");
+            self.refresh_recordings();
+        }
+        self.job = Some((Job::held(path, progress), session));
+    }
+
+    /// A job that ends with a warning, stored as a real one is.
+    pub fn simulate_job_end_warned(&mut self, words: &str) {
+        let (job, session) = self.job.as_ref().expect("a job");
+        let session = *session;
+        fs::write(processing::warning_path(&job.recording), words).expect("the warning");
+        self.finish_job(Ok(Some(words.to_owned())), session);
+    }
+
+    /// The held job ends with this result, as the background job would.
+    pub fn simulate_job_end(&mut self, result: Result<Option<String>, String>) {
+        let session = self.job.as_ref().expect("a job").1;
+        self.finish_job(result, session);
+    }
+
     /// The open note's file changes outside Splat while the DM has unsaved words.
     pub fn simulate_conflict(&mut self) {
         self.simulate_disk_change();
