@@ -96,11 +96,24 @@ impl Hold {
         }
     }
 
+    /// With no hold, the blank room is only what the view's place still needs: the part of the
+    /// scroll past the content (egui `hold_place` worked it out again each draw). A view the DM
+    /// scrolled back up loses the room it no longer shows.
+    fn fit_room(&self, scroll: &ScrollHandle) {
+        let room = self.room.get();
+        if room <= px(0.0) || self.held.borrow().is_some() {
+            return;
+        }
+        let past = -scroll.offset().y - (scroll.max_offset().y - room);
+        self.room.set(past.clamp(px(0.0), room));
+    }
+
     /// `action` was laid out at `top`: when it is the held one and it moved, the view scrolls
-    /// by as much, adding blank room after the content where it is too short to scroll.
+    /// by as much, adding blank room after the content where it is too short to scroll. One
+    /// correction ends the hold, so a later scroll of the DM's stays theirs.
     fn seen(&self, action: &str, top: Pixels, scroll: &ScrollHandle, window: &mut Window) {
         self.tops.borrow_mut().insert(action.to_owned(), top);
-        let held = self.held.borrow();
+        let mut held = self.held.borrow_mut();
         let Some(hold) = held.as_ref().filter(|hold| hold.action == action) else {
             return;
         };
@@ -108,6 +121,7 @@ impl Hold {
         if moved.abs() < px(0.5) {
             return;
         }
+        *held = None;
         let offset = scroll.offset();
         let wanted = (offset.y - moved).min(px(0.0));
         let short = -wanted - scroll.max_offset().y;
@@ -353,6 +367,10 @@ pub(crate) fn render_body(
             root.pages.trackers.hold.room.set(px(0.0));
         }
         root.pages.trackers.hold.frame();
+        root.pages
+            .trackers
+            .hold
+            .fit_room(&root.pages.trackers.scroll);
         body(root, window, cx)
     };
     let scroll = root.pages.trackers.scroll.clone();
@@ -479,8 +497,8 @@ fn body(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) 
             },
             banner.is_none(),
         ));
-        for (at, row) in laid.due.iter().enumerate() {
-            column = column.child(due_row(trackers, row, at, cx));
+        for row in &laid.due {
+            column = column.child(due_row(trackers, row, cx));
         }
     }
     let asking = trackers.asking().map(|(key, instance, label, typed)| {
@@ -591,12 +609,17 @@ pub(crate) fn section_heading(
 fn due_row(
     trackers: &Trackers,
     row: &DueRow,
-    at: usize,
     cx: &mut Context<SplatRoot>,
 ) -> impl IntoElement {
     let c = colors();
     let parts = &row.parts;
-    let id = |part: &str| ElementId::Name(format!("trackers-due-{at}-{part}").into());
+    // By the notice, not the row's place: a control keeps its id (and its focus) when a row
+    // above it goes.
+    let notice = match &row.notice.id {
+        crate::trackers::ledger::NoticeRef::Value { change, at } => format!("{change}-{at}"),
+        crate::trackers::ledger::NoticeRef::Day { mark, day } => format!("{mark}-day-{day}"),
+    };
+    let id = |part: &str| ElementId::Name(format!("trackers-due-{notice}-{part}").into());
     let finish = {
         let (done_notice, ticks) = (row.notice.clone(), parts.ticks.clone());
         let done = kit::Button::quiet(id("done"), parts.finish.clone())
@@ -792,7 +815,14 @@ fn tracker_lines(
                         root.app.trackers.set_typed(words);
                         cx.notify();
                     }))
-                    .on_enter(act(cx, move |root| root.app.trackers.end_asking(true, at)))
+                    // Enter is the press: the action keeps its place as a click's does.
+                    .on_enter(act(cx, {
+                        let held = held_name.clone();
+                        move |root| {
+                            root.pages.trackers.hold.press(&held);
+                            root.app.trackers.end_asking(true, at)
+                        }
+                    }))
                     .on_escape(act(cx, move |root| root.app.trackers.end_asking(false, at)))
                     .on_blur(act(cx, move |root| root.app.trackers.end_asking(false, at)))
                     .into_any_element();

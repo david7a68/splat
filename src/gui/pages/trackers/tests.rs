@@ -4,6 +4,7 @@
 use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
 use gpui::{px, size};
+use crate::gui::pages::sessions::tests::capture;
 use std::fs;
 
 const EXAMPLE: &str = include_str!("../../../../docs/design/world-examples/heralds-tournament.md");
@@ -130,7 +131,7 @@ fn no_note_in_play_routes_to_the_rules() {
         shell.bounds(crate::trackers::view::RULES_ROUTE).is_some(),
         "the empty state shows its route"
     );
-    crate::gui::pages::sessions::tests::capture(&mut shell, "trackers__00-no-house-rules__1200x800");
+    capture(&mut shell, "trackers__00-no-house-rules__1200x800");
     shell.click(crate::trackers::view::RULES_ROUTE);
     shell.settle();
     assert_eq!(shell.read(|root| root.app.page), crate::Page::Campaign);
@@ -151,7 +152,7 @@ fn quick_actions_notices_and_amounts() {
         shell.bounds("Enter room").is_some(),
         "the pinned trackers show"
     );
-    crate::gui::pages::sessions::tests::capture(&mut shell, "trackers__02-trackers-beside-the-plan__1200x800");
+    capture(&mut shell, "trackers__02-trackers-beside-the-plan__1200x800");
 
     // A quick action and its Undo.
     shell.click("Enter room");
@@ -186,22 +187,48 @@ fn quick_actions_notices_and_amounts() {
     });
     assert_eq!(shell.read(|root| root.app.trackers.due()), 1);
     assert!(shell.bounds("Done: First seal for Party").is_some() || shell.bounds("Done").is_some());
-    crate::gui::pages::sessions::tests::capture(&mut shell, "trackers__03-trackers-a-notice__1200x800");
+    capture(&mut shell, "trackers__03-trackers-a-notice__1200x800");
+    // A Due row's controls are named by its notice, not its place in the list.
+    let names = crate::gui::kit::probe::names();
+    assert!(
+        names
+            .iter()
+            .any(|name| name.starts_with("id:trackers-due-") && name.ends_with("-done"))
+            && !names.iter().any(|name| name.starts_with("id:trackers-due-0-")),
+        "Due ids come from the notice: {names:?}"
+    );
     shell.click("Done");
     shell.settle();
     assert_eq!(shell.read(|root| root.app.trackers.due()), 0);
+    // Back at the top, the blank room the hold added is gone.
+    assert_eq!(
+        shell.read(|root| root.pages.trackers.hold.room.get()),
+        px(0.0),
+        "no blank room the view no longer needs"
+    );
 
-    // An action that asks: its field, a typed amount and Enter.
+    // An action that asks: its field, a typed amount and Enter. Enter is the press: a Due row
+    // it raises comes above, and the action keeps its place.
+    let before = shell.bounds("Fight minute").expect("the action");
     shell.click("Fight minute");
     shell.settle();
     assert!(
         shell.read(|root| root.app.trackers.takes_escape()),
         "the field asks"
     );
-    shell.type_text("3");
+    shell.type_text("40");
     shell.press("enter");
     shell.settle();
-    assert_eq!(value(&mut shell, "race_clock", None), 3);
+    assert_eq!(value(&mut shell, "race_clock", None), 40);
+    assert!(
+        shell.read(|root| root.app.trackers.due()) > 0,
+        "the amount raised a Due row"
+    );
+    let after = shell.bounds("Fight minute").expect("the action");
+    assert!(
+        (after.top() - before.top()).abs() < px(1.0),
+        "Enter keeps the action's place: {before:?} then {after:?}"
+    );
     // Escape ends a typed amount, not Lookup.
     shell.click("Fight minute");
     shell.settle();
@@ -215,7 +242,7 @@ fn quick_actions_notices_and_amounts() {
     );
     assert_eq!(
         value(&mut shell, "race_clock", None),
-        3,
+        40,
         "Escape presses nothing"
     );
     // The note's reader in Lookup has each tracker's folded history under the note, drawn by
@@ -239,7 +266,7 @@ fn quick_actions_notices_and_amounts() {
             )
         });
     shell.click(&history);
-    crate::gui::pages::sessions::tests::capture(&mut shell, "trackers__07-tracker-history-in-the-reader__1200x800");
+    capture(&mut shell, "trackers__07-tracker-history-in-the-reader__1200x800");
 }
 
 /// The panel at the smallest window, with the race in play.
@@ -252,5 +279,5 @@ fn trackers_at_the_smallest_window() {
     show_plan(&mut shell);
     shell.click("Take seal: Party");
     shell.settle();
-    crate::gui::pages::sessions::tests::capture(&mut shell, "trackers__03-trackers-a-notice__960x640");
+    capture(&mut shell, "trackers__03-trackers-a-notice__960x640");
 }
