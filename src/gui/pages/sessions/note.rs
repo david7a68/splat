@@ -199,6 +199,7 @@ pub(super) fn place_caret(
 
 pub(super) fn init(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) {
     root.pages.sessions.note.slash_keys = Some(super::slash::init(window, cx));
+    super::form::init(cx);
 }
 
 /// The note frame's width: the reader's measure and the frame's edges.
@@ -228,6 +229,9 @@ pub(super) fn editor(
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let session = root.app.sessions.gv_selected();
+    // In the panel, a change made by the note's own writes keeps the DM's Undo history; a
+    // reload or a discard ends it. Asked before the words, which mark the panel's hold.
+    let own_write = in_panel && root.app.sessions.gv_note_own_write();
     let Some(words) = root.app.sessions.gv_note_words(in_panel) else {
         return kit::Message::new(kit::Tone::Error, "This note could not be opened.")
             .into_any_element();
@@ -289,6 +293,7 @@ pub(super) fn editor(
         .text_type(Type::Prose)
         .markdown_source()
         .fill()
+        .own_write(own_write)
         .on_change(cx.listener(move |root, words: &str, window, cx| {
             let before = root
                 .app

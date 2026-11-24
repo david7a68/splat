@@ -1,7 +1,8 @@
 //! A segmented choice (`design::segmented`): words with an accent underline under the chosen one,
 //! no pill. Each segment is as wide as its words in their widest state (`Strong`), and its words
 //! start `S` from its left edge, so nothing moves when the choice changes. Use it for a page's
-//! tabs (Settings, Campaign) and for a small exclusive choice (Touchpad speed).
+//! tabs (Settings, Campaign) and for a small exclusive choice (Touchpad speed); `small` for sub-tabs
+//! in a narrow pane. The chosen segment shows no hover fill.
 use super::{button::element_name, target};
 use crate::gui::theme::{
     Density, FOCUS_WIDTH, RADIUS_CONTROL, S, Type, TypeExt, UNDERLINE_WIDTH, colors,
@@ -21,6 +22,7 @@ pub struct Segmented {
     id: ElementId,
     options: Vec<SharedString>,
     chosen: usize,
+    small: bool,
     on_select: Option<OnSelect>,
 }
 
@@ -34,8 +36,16 @@ impl Segmented {
             id: id.into(),
             options: options.into_iter().map(Into::into).collect(),
             chosen,
+            small: false,
             on_select: None,
         }
+    }
+
+    /// `Small` words, for sub-tabs in a narrow pane (a sheet's pages beside the run), so they
+    /// keep one line where `Body` words would wrap.
+    pub fn small(mut self) -> Self {
+        self.small = true;
+        self
     }
 
     /// Called with the index of a segment the DM chose that was not already chosen. Its
@@ -56,8 +66,13 @@ impl RenderOnce for Segmented {
             let id = ElementId::NamedChild(std::sync::Arc::new(self.id.clone()), words.clone());
             // The widest state's words keep the room (`Strong`), drawn invisibly under the shown
             // words, so a segment is as wide chosen or not.
+            let (plain, strong) = if self.small {
+                (Type::Small, Type::Small)
+            } else {
+                (Type::Body, Type::Strong)
+            };
             let room = div()
-                .ty(Type::Strong)
+                .ty(strong)
                 .text_color(gpui::transparent_black())
                 .h(px(0.0))
                 .overflow_hidden()
@@ -71,8 +86,11 @@ impl RenderOnce for Segmented {
                 .h(Density::Read.control())
                 .px(S)
                 .rounded(RADIUS_CONTROL)
-                .cursor_pointer()
-                .hover(|s| s.bg(c.hover))
+                // The chosen segment is no target, so it shows no hover fill: under the pointer
+                // that chose it, it keeps the underline alone.
+                .when(!chosen, |segment| {
+                    segment.cursor_pointer().hover(|s| s.bg(c.hover))
+                })
                 .focusable()
                 .tab_stop(true)
                 .role(gpui::Role::Tab)
@@ -81,7 +99,7 @@ impl RenderOnce for Segmented {
                 .aria_selected(chosen)
                 .child(
                     div()
-                        .ty(if chosen { Type::Strong } else { Type::Body })
+                        .ty(if chosen { strong } else { plain })
                         .text_color(if chosen { c.text } else { c.muted })
                         .whitespace_nowrap()
                         .child(words.clone()),

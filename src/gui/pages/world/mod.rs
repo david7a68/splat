@@ -228,7 +228,10 @@ fn header(
             "world-fixing",
             kit::Status::new(icons::WARN, fixing, c.result.warning),
         );
-        for &at in index.note_faults().listed() {
+        // The rows are built only while the menu is open: a closed menu costs nothing however
+        // many notes need fixing.
+        let open = kit::menu::is_open(&gpui::ElementId::from("world-fixing"), cx);
+        for &at in index.note_faults().listed().iter().filter(|_| open) {
             let id = index.items[at].entry.id;
             menu = menu.item(
                 kit::MenuItem::new(index.items[at].entry.name.clone())

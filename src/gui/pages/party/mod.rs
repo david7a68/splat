@@ -28,6 +28,8 @@ pub struct State {
     pub(crate) checked: Option<sheet::Checked>,
     /// What the party bar holds through a fight (`party_bar::Hold`).
     pub(crate) bar_hold: Option<splat_party::party_bar::Hold>,
+    /// The party bar's `N more`, a keyboard stop.
+    pub(crate) more_focus: Option<gpui::FocusHandle>,
 }
 
 /// Once, when the root is built.
@@ -210,8 +212,9 @@ fn body(
         return div().into_any_element();
     }
     let tonight = splat_party_page::tonight_words(&root.app.party).map(kit::help);
-    // The list takes about half the page beside its portraits.
-    let room = window.viewport_size().width - crate::gui::theme::RAIL_WIDTH;
+    // The list takes about half the page beside its portraits: the page's own width, which
+    // the side panel and the rail's drag change.
+    let room = root.page_width(window);
     let list_width = (room * 0.46 + px(54.0)).clamp(px(384.0), px(624.0));
     let list = list::list(root, list_width, cx);
     let sheet = sheet::view(root, connected, window, cx);

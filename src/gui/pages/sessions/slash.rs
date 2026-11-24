@@ -134,15 +134,7 @@ fn keys(
         return false;
     };
     let in_panel = open.in_panel;
-    // The menu's keys are the note's or the menu's own: a key pressed in another control, or
-    // while the note is not drawn, goes on as usual (egui: only while the editor had focus).
-    let in_menu = note::menu_has_keyboard(root, window, cx);
-    let in_note = note::has_keyboard(root, in_panel, window, cx);
-    let has_keys = match open.stage {
-        Stage::Menu { .. } | Stage::Npc { .. } => in_note || in_menu,
-        Stage::Search { .. } => in_menu,
-    };
-    if !has_keys || keystroke.modifiers.modified() {
+    if !has_keys(root, window, cx) || keystroke.modifiers.modified() {
         return false;
     }
     let key = keystroke.key.as_str();
@@ -197,6 +189,30 @@ fn keys(
     cx.stop_propagation();
     cx.notify();
     true
+}
+
+/// Whether the open menu has the keys now. Its keys are the note's or the menu's own: a key
+/// pressed in another control, or while the note is not drawn, goes on as usual (egui: only
+/// while the editor had focus).
+pub(super) fn has_keys(root: &SplatRoot, window: &Window, cx: &gpui::App) -> bool {
+    let session = root.app.sessions.gv_selected();
+    let Some(open) = root
+        .pages
+        .sessions
+        .note
+        .slash
+        .as_ref()
+        .filter(|open| open.session == session)
+    else {
+        return false;
+    };
+    let in_menu = note::menu_has_keyboard(root, window, cx);
+    match open.stage {
+        Stage::Menu { .. } | Stage::Npc { .. } => {
+            in_menu || note::has_keyboard(root, open.in_panel, window, cx)
+        }
+        Stage::Search { .. } => in_menu,
+    }
 }
 
 /// The highlight after Up or Down.

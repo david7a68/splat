@@ -407,6 +407,13 @@ fn notes_view(
         .into_any_element()
 }
 
+/// Whether the note's `/` menu has the keys now (`slash::has_keys`): its own key interceptor
+/// takes Escape (`slash::init`), so the root's Escape steps aside (`SplatRoot::watch_keys`). A
+/// menu left open while the keyboard is elsewhere takes no key, so the root's Escape goes on.
+pub(crate) fn takes_escape(root: &SplatRoot, window: &Window, cx: &gpui::App) -> bool {
+    slash::has_keys(root, window, cx)
+}
+
 /// Ctrl+S on the Session page (`pages::save_key`): the shown template's draft; a group open in
 /// the plan while the note does not have the keyboard (`Encounters::group_open_in_plan`); else
 /// the note, which saves at once.

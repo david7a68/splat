@@ -1255,6 +1255,15 @@ impl Sessions {
             .map(|slice| slice.tail.as_str().to_owned())
     }
 
+    /// Whether the note's change since the Notes panel last held it was only its own writes (an
+    /// act, an insert, the DM's typing on the page): the panel's editor keeps its Undo history.
+    /// Ask before `gv_note_words`, which marks the panel's hold.
+    pub fn gv_note_own_write(&self) -> bool {
+        self.draft
+            .as_ref()
+            .is_some_and(super::Draft::own_since_followed)
+    }
+
     /// The DM's edit in the note's editor: its whole words after it.
     pub fn gv_note_edited(&mut self, in_panel: bool, words: &str) {
         let Some(draft) = &mut self.draft else {

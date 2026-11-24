@@ -84,6 +84,32 @@ pub struct PlainLine<A> {
     ticket: Option<crate::design::ResultOrder>,
 }
 
+impl<A> PlainLine<A> {
+    /// A kept line's ticket order: the same result has the same one wherever the footer puts
+    /// it, so its controls can be keyed by it (`kit::messages::lines`).
+    pub fn ticket_order(&self) -> Option<crate::design::ResultOrder> {
+        self.ticket
+    }
+
+    /// A line with only words, kept under the order `ticket` when given (a test of how a footer
+    /// keys its lines).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn for_test(words: &str, ticket: Option<u64>) -> Self {
+        Self {
+            tone: Tone::Success,
+            words: words.to_owned(),
+            hover: None,
+            help: Vec::new(),
+            undo: None,
+            choices: Vec::new(),
+            file: None,
+            undo_id: None,
+            choice_ids: Vec::new(),
+            ticket: ticket.map(crate::design::ResultOrder::numbered),
+        }
+    }
+}
+
 impl<A: Clone> PlainLine<A> {
     /// The press of its Undo, unless it waits.
     pub fn press_undo(&self) -> Option<Press<A>> {

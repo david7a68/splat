@@ -1510,6 +1510,13 @@ impl Draft {
         self.own_since = Some((now, now));
     }
 
+    /// Every change since the Notes panel last held the body was the note's own write (or there
+    /// was none): the panel's typing history stays under them.
+    pub fn own_since_followed(&self) -> bool {
+        self.own_since
+            .is_some_and(|(_, head)| head == self.body.key())
+    }
+
     /// The note's own write changed the body from revision `before` (an act, the page's insert,
     /// a renamed link, the DM's typing on the page). It goes on the row only when the row ends
     /// at `before`: a change made another way between them broke it.

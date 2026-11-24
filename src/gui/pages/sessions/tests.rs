@@ -695,6 +695,17 @@ fn notes_panel_beside_another_page() {
         slice.contains("Stray words"),
         "words typed on nothing go in the note: {slice:?}"
     );
+    // The note's own write (here the page's words) keeps the panel's typing history: Ctrl+Z
+    // still takes something back.
+    let words = note_words(&mut shell);
+    set_note(&mut shell, &format!("{words}Page words.\n"));
+    let before =
+        shell.update(|root, _, _| root.app.sessions.gv_note_words(true).unwrap_or_default());
+    assert!(before.contains("Page words."));
+    shell.press("ctrl-z");
+    let after =
+        shell.update(|root, _, _| root.app.sessions.gv_note_words(true).unwrap_or_default());
+    assert_ne!(after, before, "the panel's Undo history stays under the own write");
     shell.click("Close notes");
     assert!(!shell.read(|root| root.app.sessions.notes_open));
 }

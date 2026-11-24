@@ -692,13 +692,8 @@ impl Splat {
         }
         // An edit form in one reader holds back the other's Log field for that entry, and the
         // one save row on screen says so (ruling Q-t).
-        let pass = ctx.pass();
-        self.lookup
-            .reader
-            .share_with(&mut self.world_page.reader, pass);
-        self.world_page
-            .reader
-            .share_with(&mut self.lookup.reader, pass);
+        self.lookup.reader.share_with(&mut self.world_page.reader);
+        self.world_page.reader.share_with(&mut self.lookup.reader);
         let mut start_fight = None;
         // A reader's `Add to fight` (round 27 FJ5), with the reader that asked, for its reason.
         let mut add_to_fight = None;
@@ -1047,6 +1042,13 @@ impl Splat {
         if !open {
             self.copy_dialog = None;
         }
+    }
+
+    /// A frame starts to draw, after its frame logic: the readers' edit forms on screen are the
+    /// ones this frame draws (`world::Reader::begin_draw`).
+    pub fn begin_draw(&mut self) {
+        self.world_page.reader.begin_draw();
+        self.lookup.reader.begin_draw();
     }
 
     fn route(&mut self, ctx: &StateContext) {
