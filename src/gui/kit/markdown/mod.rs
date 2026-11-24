@@ -76,6 +76,7 @@ pub struct Markdown {
     document: Option<uuid::Uuid>,
     on_link: Option<OnLink>,
     on_target: Option<OnTarget>,
+    on_note: Option<OnLink>,
     jump: Option<ScrollHandle>,
 }
 
@@ -99,6 +100,7 @@ impl Markdown {
             document: None,
             on_link: None,
             on_target: None,
+            on_note: None,
             jump: None,
         }
     }
@@ -161,6 +163,15 @@ impl Markdown {
     /// routing of those links; a dice link still asks for its roll.
     pub fn on_link(mut self, handler: impl Fn(&str, &mut Window, &mut App) + 'static) -> Self {
         self.on_link = Some(Rc::new(handler));
+        self
+    }
+
+    /// A press on a note link, with the note it names (the words between `[[` and `]]`, as
+    /// `markdown_view::take_note_link` gives them). Every other link keeps the reader's own
+    /// routing: a web link opens the browser, a bold name goes to Lookup, a dice link asks for
+    /// its roll. For a reader that follows its own note links (World's, the Library's).
+    pub fn on_note(mut self, handler: impl Fn(&str, &mut Window, &mut App) + 'static) -> Self {
+        self.on_note = Some(Rc::new(handler));
         self
     }
 
@@ -252,7 +263,19 @@ impl RenderOnce for Markdown {
             mode,
             document: self.document,
             on_link: self.on_link.clone(),
-            on_target: self.on_target.clone(),
+            on_target: self.on_target.clone().or_else(|| {
+                let on_note = self.on_note.clone()?;
+                let document = self.document;
+                Some(Rc::new(move |target: &LinkTarget, window: &mut Window, cx: &mut App| {
+                    if let LinkTarget::Note(note) = target {
+                        on_note(note, window, cx);
+                        window.refresh();
+                    } else {
+                        let ctx = host(cx);
+                        follow(target, document, (None, None, ctx.as_ref()), window, cx);
+                    }
+                }) as OnTarget)
+            }),
             ctx: ctx.clone(),
             kept: kept.clone(),
             reader: egui::Id::new(("gpui_reader", format!("{:?}", self.id))),

@@ -45,6 +45,9 @@ use std::sync::Arc;
 /// A followed link's place in the reader's links.
 pub type OnOpen = Rc<dyn Fn(usize, &mut Window, &mut App)>;
 
+/// A pressed note link in the entry's words, with the note it names.
+pub type OnNote = Rc<dyn Fn(&str, &mut Window, &mut App)>;
+
 /// Where an entry comes from, owned (egui `view::Origin`).
 #[derive(Clone, Debug, Default)]
 pub struct Source {
@@ -105,6 +108,7 @@ pub struct EntryView {
     values: Option<RunValues>,
     related: Option<AnyElement>,
     on_open: Option<OnOpen>,
+    on_note: Option<OnNote>,
     jump: Option<ScrollHandle>,
     wide: bool,
 }
@@ -132,6 +136,7 @@ impl EntryView {
             values: None,
             related: None,
             on_open: None,
+            on_note: None,
             jump: None,
             wide: false,
         }
@@ -170,10 +175,24 @@ impl EntryView {
         self
     }
 
+    /// A pressed note link in the entry's words goes to `handler` (egui: the reader's caller
+    /// takes `markdown_view::take_note_link`), not to Lookup. Web links, bold names and dice keep
+    /// the reader's routing.
+    pub fn on_note(mut self, handler: impl Fn(&str, &mut Window, &mut App) + 'static) -> Self {
+        self.on_note = Some(Rc::new(handler));
+        self
+    }
+
     /// The scroll column the entry is in: a typed jump to a section heading scrolls it there.
     pub fn jump_in(mut self, handle: &ScrollHandle) -> Self {
         self.jump = Some(handle.clone());
         self
+    }
+
+    /// The entry drawn now with links the caller borrows (the Library's own notes, which it does
+    /// not share), in place of the links given to `new`.
+    pub fn render_with(self, links: &dyn Links, window: &mut Window, cx: &mut App) -> AnyElement {
+        self.build(links, window, cx).into_any_element()
     }
 }
 
@@ -190,6 +209,7 @@ pub(super) struct Out<'w> {
     pub ctx: Option<egui::Context>,
     pub document: Option<uuid::Uuid>,
     pub on_open: Option<OnOpen>,
+    pub on_note: Option<OnNote>,
     pub jump: Option<ScrollHandle>,
     /// Tables may pass the measure: every other part keeps it itself.
     pub wide: bool,
@@ -257,15 +277,23 @@ impl Out<'_> {
         if let Some(handle) = &self.jump {
             markdown = markdown.jump_in(handle);
         }
-        markdown.into_any_element()
+        self.notes_to_caller(markdown).into_any_element()
     }
 
     /// The Reader's Markdown as compact field rows.
     pub fn compact_markdown(&self, id: ElementId, text: &str) -> AnyElement {
-        kit::Markdown::new(id, text.to_owned())
+        let markdown = kit::Markdown::new(id, text.to_owned())
             .fields()
-            .document(self.document)
-            .into_any_element()
+            .document(self.document);
+        self.notes_to_caller(markdown).into_any_element()
+    }
+
+    /// The caller's note links, when it takes them.
+    fn notes_to_caller(&self, markdown: kit::Markdown) -> kit::Markdown {
+        match self.on_note.clone() {
+            Some(on_note) => markdown.on_note(move |note, window, cx| on_note(note, window, cx)),
+            None => markdown,
+        }
     }
 
     /// A link that opens the entry at `target` in the links.
@@ -311,6 +339,13 @@ pub(super) struct SpellLinks<'a> {
 
 impl RenderOnce for EntryView {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let links = self.links.clone();
+        self.build(&*links, window, cx)
+    }
+}
+
+impl EntryView {
+    fn build(self, links: &dyn Links, window: &mut Window, cx: &mut App) -> gpui::Div {
         let ctx = host(cx);
         if let Some(ctx) = &ctx {
             crate::rolls::set_entry(ctx, &self.name);
@@ -322,6 +357,7 @@ impl RenderOnce for EntryView {
             ctx,
             document: entry.map(|entry| entry.id),
             on_open: self.on_open.clone(),
+            on_note: self.on_note.clone(),
             jump: self.jump.clone(),
             wide: self.wide,
             items: Vec::new(),
@@ -369,7 +405,6 @@ impl RenderOnce for EntryView {
             .collect();
         let styled =
             entry.filter(|entry| reading.is_none() && creature::supports(entry, &sections));
-        let links = self.links.clone();
         content(
             &mut out,
             entry,
@@ -377,7 +412,7 @@ impl RenderOnce for EntryView {
             &sections,
             styled,
             self.source.builtin,
-            &*links,
+            links,
             self.values.as_ref(),
             lead_gap,
         );

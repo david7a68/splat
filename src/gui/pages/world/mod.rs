@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 mod footer;
 mod list;
-mod panes;
-mod reader;
+pub(crate) mod panes;
+pub(crate) mod reader;
 #[cfg(test)]
 mod tests;
 
@@ -32,6 +32,8 @@ const LIST_RANGE: std::ops::Range<f32> = 190.0..480.0;
 pub struct State {
     /// The notes list's rows and their virtual list, rebuilt only when what they show changes.
     list: list::ListCache,
+    /// The reader's scroll and its heading jump.
+    pub(crate) jump: reader::Jump,
 }
 
 /// Once, when the root is built.

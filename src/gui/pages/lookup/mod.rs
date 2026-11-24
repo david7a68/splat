@@ -14,6 +14,8 @@ pub struct State {
     /// The panel was open in the last frame: when it closes, its field's keyboard goes back to
     /// the root.
     was_open: bool,
+    /// The reader's scroll and its heading jump.
+    pub(crate) jump: crate::gui::pages::world::reader::Jump,
 }
 
 /// Once, when the root is built.

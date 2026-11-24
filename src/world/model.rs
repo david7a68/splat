@@ -411,6 +411,16 @@ impl Reader {
         }
     }
 
+    /// The entry the reader reads for `item`: the file's own parse when a value of it could
+    /// not be read (its other values still show), else the index's (egui `draw`).
+    pub fn read_entry<'a>(&'a self, item: &'a Item) -> &'a Entry {
+        self.group_fault
+            .as_ref()
+            .filter(|fault| fault.id == item.entry.id)
+            .and_then(|fault| fault.entry.as_ref())
+            .unwrap_or(&item.entry)
+    }
+
     /// Whether the entry has prose, parsed once per entry and load of the index.
     pub fn has_prose(&mut self, item: &Item, index: &ContentIndex) -> bool {
         match self.prose {

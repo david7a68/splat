@@ -10,8 +10,8 @@
 //! Keep targets clear of a splitter: a pane's content has `M` padding at its sides.
 use crate::gui::theme::{HAIRLINE_WIDTH, M, S, colors};
 use gpui::{
-    AnyElement, App, ElementId, IntoElement, ParentElement, Pixels, RenderOnce, SharedString,
-    Styled, Window, div, prelude::*,
+    AnyElement, App, ElementId, IntoElement, ParentElement, Pixels, RenderOnce, ScrollHandle,
+    SharedString, Styled, Window, div, prelude::*,
 };
 use gpui_component::{ResizableState, h_resizable, resizable_panel};
 use std::ops::Range;
@@ -25,6 +25,7 @@ pub struct Pane {
     footer: Vec<AnyElement>,
     scrolls: bool,
     padded: bool,
+    handle: Option<ScrollHandle>,
 }
 
 impl Pane {
@@ -36,7 +37,15 @@ impl Pane {
             footer: Vec::new(),
             scrolls: true,
             padded: true,
+            handle: None,
         }
+    }
+
+    /// The body scrolls by a handle the page keeps: a reader's typed jump to a heading
+    /// (`kit::Markdown::jump_in`) moves it.
+    pub fn scroll(mut self, handle: &ScrollHandle) -> Self {
+        self.handle = Some(handle.clone());
+        self
     }
 
     /// What stays above the scroll (a title line, a search field).
@@ -73,15 +82,17 @@ impl ParentElement for Pane {
 impl RenderOnce for Pane {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         let body = div().flex().flex_col().w_full().children(self.body);
+        let body_id = ElementId::NamedChild(
+            std::sync::Arc::new(self.id.clone()),
+            SharedString::new_static("body"),
+        );
         let body: AnyElement = if self.scrolls {
-            super::scroll::scroll_column(
-                ElementId::NamedChild(
-                    std::sync::Arc::new(self.id.clone()),
-                    SharedString::new_static("body"),
-                ),
-                body,
-            )
-            .into_any_element()
+            match &self.handle {
+                Some(handle) => {
+                    super::scroll::scroll_column_with(body_id, handle, body).into_any_element()
+                }
+                None => super::scroll::scroll_column(body_id, body).into_any_element(),
+            }
         } else {
             body.size_full().into_any_element()
         };
