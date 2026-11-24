@@ -145,7 +145,9 @@ keep the names and signatures (`R` below is `crate::gui::SplatRoot`):
 
 Extra hooks the shell already calls: `run::render_strip` (above other pages while a run is open),
 `party::render_bar` (`Option`, on the Session page; it already sets `sessions.party_hidden`),
-`sessions::render_banner` (`Option`, above every page), `sessions::render_notes_panel` and
+`sessions::render_banner` (`Option`, at the window's bottom under the page, as egui's bottom
+panel), `sessions::render_folder_block` (the Session folder block, for the Campaign page's Link
+and folder tab to call), `sessions::render_notes_panel` and
 `lookup::render_panel` (the side panel, `PANEL_MIN_WIDTH` wide; Lookup calls
 `trackers::render_view` while `lookup.on_trackers()`), `library::render_copy_dialog` (while
 `app.copy_dialog` is open), `settings::render_account`, `render_recording`,
@@ -180,7 +182,8 @@ Icons: `gui::icons::*` has the design system's names (`icons::RUN`, `icons::WARN
 | Button | `Button::{primary, secondary, quiet, destructive}(id, label)` then `.icon(glyph)`, `.key("Ctrl+S")`, `.hint(words)`, `.blocked(Option<reason>)`, `.density(Density)`, `.selected(bool)`, `.plain()`, `.line_start()`, `.full_width()`, `.name(words)`, `.on_click(f)` | One primary per view; `line_start` for a quiet action that starts a line |
 | Icon button | `IconButton::new(id, glyph, name).hint(words).toggled(bool).on_click(f)` | `⋯`, `×`, a view toggle; never an action that needs words |
 | Text field | `TextField::new(id, value).placeholder(..).name(..).masked().disabled(bool).width(px).on_change(\|&str, window, cx\|).on_enter(f).on_escape(f).on_blur(f)`, `.focus(bool)` / `.focus_selected(bool)` | One line; two-way sync with your `String` (give the value each frame, take edits in `on_change`). `focus(true)` takes the keyboard with the caret after the words (a field that opens for typing); `focus_selected(true)` takes it with all the words selected (a rename a press opened). Give either for one frame. `on_escape` stops the press there: the window's Escape does not also run |
-| Editor | `TextEditor::new(id, value).placeholder(..).rows(n).mono().fill().on_change(f)` | Several lines that wrap |
+| Editor | `TextEditor::new(id, value).placeholder(..).rows(n).mono().text_type(Type).fill().focus(bool).handle(&EditorHandle).on_change(f)` | Several lines that wrap; `text_type(Type::Prose)` for a note |
+| Editor handle | `EditorHandle::new(placeholder, window, cx)`, `.caret(cx)`, `.set_caret(byte, cx)`, `.show_words(words, window, cx)`, `.focus(window, cx)`, `.focused(window, cx)` | An editor state the page keeps (in its `State`, by what it edits) to read and place the caret and to write at it |
 | Field block | `field(caption, Option<help>, Option<error>, control) -> Div`, `help(words)` | Caption, control, help, error, then `L` |
 | Rows | `Row::new(id, name).height(px).grows().selected(bool).on_click(f).child(..)`, `two_line_row(id, title, detail, selected)` | List rows with hover, selection and focus; `grows` makes `height` a minimum, for words that wrap |
 | Tabs | `Segmented::new(id, options, chosen).on_select(\|&usize, window, cx\|)` | Page tabs and small exclusive choices |
@@ -272,6 +275,13 @@ then the closed end sections. Its parts are public for pages that draw pieces of
 `entry::parts::{title, subtitle, heavy_rule, identity, section_heading, detail, stat_detail,
 detail_row, facts, help, source_prose, item}` and `entry::tiles::tile_row` (action tiles from
 `rolls::plain::roll_tiles`).
+
+### Keys that an editor would take
+
+Key bindings dispatch before `on_key_down` listeners, so a menu over a text editor (the note's
+`/` menu) cannot take Up, Down, Enter or Escape from a `capture_key_down`. Use
+`cx.intercept_keystrokes` (kept as a `Subscription` in the page's state) and
+`cx.stop_propagation()` (`pages/sessions/slash.rs`).
 
 ### Screenshots and interaction tests
 

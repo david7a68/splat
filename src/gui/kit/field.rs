@@ -302,6 +302,61 @@ pub struct TextEditor {
     mono: bool,
     fill: bool,
     on_change: Option<OnChange>,
+    focus: bool,
+    handle: Option<EditorHandle>,
+    ty: Option<Type>,
+}
+
+/// A text editor's state that the caller keeps (`TextEditor::handle`), so the caller can read and
+/// place the caret and insert words: a note the program writes into at the caret. Keep one per
+/// thing it edits, and drop it when that thing goes away.
+#[derive(Clone)]
+pub struct EditorHandle(Entity<FieldState<TextareaState>>, Entity<TextareaState>);
+
+impl EditorHandle {
+    pub fn new(placeholder: impl Into<SharedString>, window: &mut Window, cx: &mut App) -> Self {
+        let placeholder = placeholder.into();
+        let input = cx.new(|cx| TextareaState::new(window, cx).placeholder(placeholder));
+        let state = cx.new(|cx| FieldState::<TextareaState>::create(input.clone(), window, cx));
+        Self(state, input)
+    }
+
+    /// The caret, as a byte offset into the words. It can be read from the change handler.
+    pub fn caret(&self, cx: &App) -> usize {
+        self.1.read(cx).cursor()
+    }
+
+    /// Put the caret at byte offset `at` (clipped to a character boundary).
+    pub fn set_caret(&self, at: usize, cx: &mut App) {
+        self.1
+            .update(cx, |input, cx| input.set_selected_range(at..at, cx));
+    }
+
+    /// Whether it has the keyboard.
+    pub fn focused(&self, window: &Window, cx: &App) -> bool {
+        self.1.read(cx).focus_handle(cx).is_focused(window)
+    }
+
+    /// Give it the keyboard.
+    pub fn focus(&self, window: &mut Window, cx: &mut App) {
+        let handle = self.1.read(cx).focus_handle(cx);
+        window.focus(&handle, cx);
+    }
+
+    /// The words it shows now.
+    pub fn words(&self, cx: &App) -> SharedString {
+        self.1.read(cx).value()
+    }
+
+    /// Show `words` now (the program changed them), before the editor draws again, so a caret
+    /// placed next lands in the new words.
+    pub fn show_words(&self, words: impl Into<SharedString>, window: &mut Window, cx: &mut App) {
+        let words = words.into();
+        self.0.update(cx, |state, cx| {
+            let on_change = state.on_change.clone();
+            state.follow(&words, on_change, window, cx);
+        });
+    }
 }
 
 impl TextEditor {
@@ -315,7 +370,28 @@ impl TextEditor {
             mono: false,
             fill: false,
             on_change: None,
+            focus: false,
+            handle: None,
+            ty: None,
         }
+    }
+
+    /// Use the caller's state (`EditorHandle`) in place of one kept under the id.
+    pub fn handle(mut self, handle: &EditorHandle) -> Self {
+        self.handle = Some(handle.clone());
+        self
+    }
+
+    /// The words' type (default `Body`, or `Mono` with `mono`): `Prose` for a note's prose.
+    pub fn text_type(mut self, ty: Type) -> Self {
+        self.ty = Some(ty);
+        self
+    }
+
+    /// Take the keyboard in this frame. Give it once, not every frame.
+    pub fn focus(mut self, focus: bool) -> Self {
+        self.focus = focus;
+        self
     }
 
     pub fn placeholder(mut self, placeholder: impl Into<SharedString>) -> Self {
@@ -355,20 +431,29 @@ impl TextEditor {
 impl RenderOnce for TextEditor {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let (placeholder, rows) = (self.placeholder.clone(), self.rows);
-        let state = window.use_keyed_state(self.id.clone(), cx, |window, cx| {
-            let input = cx.new(|cx| {
-                TextareaState::new(window, cx)
-                    .placeholder(placeholder)
-                    .rows(rows)
-            });
-            FieldState::<TextareaState>::create(input, window, cx)
-        });
+        let state = match &self.handle {
+            Some(handle) => handle.0.clone(),
+            None => window.use_keyed_state(self.id.clone(), cx, |window, cx| {
+                let input = cx.new(|cx| {
+                    TextareaState::new(window, cx)
+                        .placeholder(placeholder)
+                        .rows(rows)
+                });
+                FieldState::<TextareaState>::create(input, window, cx)
+            }),
+        };
         let value = self.value.clone();
         let on_change = self.on_change.clone();
         state.update(cx, |state, cx| state.follow(&value, on_change, window, cx));
         let input = state.read(cx).input.clone();
+        if self.focus {
+            let handle = input.read(cx).focus_handle(cx);
+            window.focus(&handle, cx);
+        }
         let focused = input.read(cx).focus_handle(cx).is_focused(window);
-        let ty = if self.mono { Type::Mono } else { Type::Body };
+        let ty = self
+            .ty
+            .unwrap_or(if self.mono { Type::Mono } else { Type::Body });
         let name = self
             .name
             .clone()
@@ -378,12 +463,20 @@ impl RenderOnce for TextEditor {
             .text_color(colors().text)
             .items_start()
             .w_full()
-            .child(
-                Textarea::new(&input)
+            .child({
+                let area = Textarea::new(&input)
                     .appearance(false)
                     .aria_label(name.clone())
-                    .h_full(),
-            );
+                    .h_full();
+                // gpui-component sets its own small size; a chosen type replaces it.
+                match self.ty {
+                    Some(ty) => area
+                        .text_size(ty.size())
+                        .line_height(ty.line())
+                        .font_family(ty.family()),
+                    None => area,
+                }
+            });
         if self.fill {
             frame = frame.h_full();
         }

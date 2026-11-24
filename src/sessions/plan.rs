@@ -113,7 +113,7 @@ impl MessageFault for PlanFault {
 /// What the DM chose in the plan's message footer. It is done after the footer is drawn, so
 /// the footer's messages borrow nothing that the plan's rows change.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum FooterAct {
+pub enum FooterAct {
     GoToGroup,
     UndoGroupDiscard,
     UndoGroupRemove,
@@ -155,7 +155,7 @@ const PLAN_KINDS: [Kind; 5] = [
 ];
 
 /// Source-ID matches take priority. Legacy names must identify one planned encounter.
-fn planned_saved_run<'a>(
+pub(super) fn planned_saved_run<'a>(
     fight: &'a PlanFight,
     fights: &[PlanFight],
     runs: &'a [crate::encounter_run::SavedRunInfo],
@@ -788,7 +788,7 @@ struct RowActs {
 }
 
 /// A played event's unfinished saved run, unless it is the open run.
-fn planned_event_run<'a>(
+pub(super) fn planned_event_run<'a>(
     event: &crate::timeline::Event,
     plan: &Plan<'a>,
     running: bool,
@@ -1723,19 +1723,19 @@ fn removal_replaced_by(book: &Book, deleted_run: Option<Uuid>) -> Option<u64> {
 type Slot = (usize, usize);
 
 /// A scene of the plan: a task line that links no fight and no group.
-struct Scene {
-    task: TaskLine,
+pub(super) struct Scene {
+    pub(super) task: TaskLine,
     /// The one entry that its words link, when they link exactly one.
-    entry: Option<SceneEntry>,
+    pub(super) entry: Option<SceneEntry>,
     /// Its words link a name and no entry has it (X14): it says `Not found`.
-    not_found: bool,
+    pub(super) not_found: bool,
     /// Its entry had a second line when it was last found, so `Not found` takes that line; else
     /// it ends the words' own line, so the row keeps its height (review round 1).
-    second_line: bool,
+    pub(super) second_line: bool,
     /// Whether `Add to Log` fits on the row, for the last few rooms it was measured in. The
     /// words and the done mark are this model's, so only the room can change it
     /// (`Scene::log_keeps_rows`).
-    fit: std::sync::Mutex<Vec<(f32, f32, bool)>>,
+    pub(super) fit: std::sync::Mutex<Vec<(f32, f32, bool)>>,
     /// Its words' lines as last measured, by the room, the font generation and the scale: a
     /// quiet frame measures none (layout 11c A2c).
     words: Box<std::sync::Mutex<Option<(SceneRoom, SceneLines)>>>,
@@ -1824,13 +1824,13 @@ pub fn scene_fit_counts() -> (usize, usize) {
     FIT_COUNTS.with(std::cell::Cell::get)
 }
 
-struct SceneEntry {
+pub(super) struct SceneEntry {
     /// Its kind, status and place, for a World entry.
-    detail: Option<String>,
+    pub(super) detail: Option<String>,
     /// The fight that its `Start fight` starts, for an NPC or a creature.
-    start: Option<crate::world::StartFight>,
+    pub(super) start: Option<crate::world::StartFight>,
     /// The entry's ID, when it is a campaign World entry whose Log takes a line (F6).
-    log: Option<(Uuid, String)>,
+    pub(super) log: Option<(Uuid, String)>,
 }
 
 /// A World entry's kind, status and place, as a scene's second line and a suggestion say it.
@@ -1911,7 +1911,7 @@ fn links_no_entry(index: &ContentIndex, words: &str) -> bool {
 
 /// A scene's words that are outside its links, as `Add to Log` starts its field with them:
 /// `[[Captain Varra]]: the ropes` gives `the ropes`.
-fn words_outside_links(words: &str) -> String {
+pub(super) fn words_outside_links(words: &str) -> String {
     let mut out = String::new();
     let mut rest = words;
     while let Some(start) = rest.find("[[") {
@@ -1947,7 +1947,7 @@ pub(super) struct PlanModel {
 
 impl PlanModel {
     /// The scene on model line `line` (a line a projection listed as a scene).
-    fn scene(&self, line: usize) -> &Scene {
+    pub(super) fn scene(&self, line: usize) -> &Scene {
         match &self.lines[line] {
             ModelLine::Scene(scene) => scene,
             ModelLine::Fights(_) => unreachable!("a projection lists only scene lines as scenes"),
@@ -2089,24 +2089,24 @@ impl ProjectionCache {
 /// links, the heading's count, the Timeline's days, which events the note links, and each planned
 /// fight's removal facts. A quiet frame reads it and copies nothing.
 pub(super) struct PlanProjection {
-    model: Arc<PlanModel>,
+    pub(super) model: Arc<PlanModel>,
     /// The planned fights still to come, by their place in `Plan::fights`.
-    planned: Vec<usize>,
+    pub(super) planned: Vec<usize>,
     /// Each scene's line among the model's lines, at each place (before each planned fight and
     /// after the last).
-    scenes: Vec<Vec<usize>>,
+    pub(super) scenes: Vec<Vec<usize>>,
     /// The place a row stands at before each model line, and after the last.
-    line_place: Vec<(usize, usize)>,
-    scene_count: usize,
+    pub(super) line_place: Vec<(usize, usize)>,
+    pub(super) scene_count: usize,
     /// The groups the note links that are not fights, by their place in `Plan::groups`.
-    planned_groups: Vec<usize>,
+    pub(super) planned_groups: Vec<usize>,
     /// The Timeline's events in this session.
-    events_here: usize,
+    pub(super) events_here: usize,
     /// The ids of the events the note links (`^id`).
-    linked: std::collections::HashSet<String>,
-    days: Vec<u32>,
+    pub(super) linked: std::collections::HashSet<String>,
+    pub(super) days: Vec<u32>,
     /// Each planned fight's name, and whether its saved run ended.
-    planned_results: Vec<(String, bool)>,
+    pub(super) planned_results: Vec<(String, bool)>,
 }
 
 impl PlanProjection {
@@ -2208,7 +2208,7 @@ impl PlanProjection {
 /// Where a scene act's words show: under the scene's row, under the Scene field, or in the
 /// plan's message footer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Place {
+pub enum Place {
     Row(Slot),
     Field,
     Footer,
@@ -2217,20 +2217,20 @@ pub(super) enum Place {
 /// Where each scene result shows in this frame, decided once before anything is drawn
 /// (`Sessions::shown_at`).
 #[derive(Clone, Copy, Default)]
-struct Shown {
-    added: Option<Place>,
-    removed: Option<Place>,
-    fault: Option<Place>,
+pub(super) struct Shown {
+    pub(super) added: Option<Place>,
+    pub(super) removed: Option<Place>,
+    pub(super) fault: Option<Place>,
 }
 
 /// What a scene act could not do, while the note's words are the words it met.
 #[derive(Debug)]
 pub(super) struct Fault {
     pub(super) what: SceneFault,
-    met: String,
-    place: Place,
+    pub(super) met: String,
+    pub(super) place: Place,
     /// The act waits in the draft: its words end when the note is saved.
-    waits: bool,
+    pub(super) waits: bool,
 }
 
 /// The played fight's Log as laid out for one width: its newest entries first (the run's summary
@@ -2423,25 +2423,25 @@ impl Fold {
 #[derive(Default)]
 pub(super) struct Scenes {
     /// The Scene field, while it is open.
-    field: Option<design::AddField>,
+    pub(super) field: Option<design::AddField>,
     /// `Scene added to tonight.`
     pub(super) added: Option<NoteUndo>,
     /// The words of the scene in `added`, which a refused Undo of it names.
-    added_words: String,
+    pub(super) added_words: String,
     /// A scene taken out of tonight: its line's place among the plan's lines, its words, and
     /// its Undo. The place is the line that now follows it, which stays while the note is as the
     /// act left it, also when a fight before it is played.
-    removed: Option<(usize, String, NoteUndo)>,
+    pub(super) removed: Option<(usize, String, NoteUndo)>,
     pub(super) fault: Option<Fault>,
     fold: Fold,
     /// The Scene field had focus on the last frame.
-    typing: bool,
+    pub(super) typing: bool,
 }
 
 impl Scenes {
     /// An Undo ends for good at another change of the note's words or in another note, also
     /// when the words come back to what the act left.
-    fn end_what_changed(&mut self, draft: Option<&crate::sessions::Draft>) {
+    pub(super) fn end_what_changed(&mut self, draft: Option<&crate::sessions::Draft>) {
         if self.fault.as_ref().is_some_and(|fault| {
             draft.is_none_or(|draft| {
                 !draft.body.same_words(&fault.met) || (fault.waits && !draft.unsaved())
@@ -2481,7 +2481,7 @@ impl Scenes {
 
 /// A scene act that the plan takes after it draws.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum SceneAct {
+pub enum SceneAct {
     Add(String),
     Tick(Slot, TaskLine),
     /// The row's place, and its line's place among the plan's lines.
@@ -3367,7 +3367,7 @@ enum RewardsAt {
 
 /// What the DM pressed for a played fight: `Add rewards`, or `Undo rewards`, by its event.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum RewardsAct {
+pub enum RewardsAct {
     Add(String, Uuid),
     Undo(String),
 }
@@ -3466,7 +3466,7 @@ impl design::results::Kept for RewardsMark {
 impl Rewards {
     /// Read the selected note again when its draft changed; a result whose block no longer
     /// stands as the act left it ends.
-    fn see(&mut self, draft: Option<&crate::sessions::Draft>, session: Option<Uuid>, book: &Book) {
+    pub(super) fn see(&mut self, draft: Option<&crate::sessions::Draft>, session: Option<Uuid>, book: &Book) {
         let (Some(draft), Some(note)) = (draft, session) else {
             self.seen = None;
             return;
@@ -3501,7 +3501,7 @@ impl Rewards {
         });
     }
 
-    fn listed(&self, event: &str) -> bool {
+    pub(super) fn listed(&self, event: &str) -> bool {
         self.seen
             .as_ref()
             .is_some_and(|seen| seen.listed.contains(event))
@@ -4715,7 +4715,7 @@ impl Sessions {
 
     /// Carry out an act on a journey's checks. `Plan` writes the session note; the others write
     /// `Timeline.md`.
-    fn travel_act(
+    pub(super) fn travel_act(
         &mut self,
         book: &mut Book,
         session: Option<Uuid>,
@@ -4870,6 +4870,300 @@ impl Sessions {
         self.plan_lines
             .retain(|id| seen.iter().any(|(planned, _)| planned == id));
         self.plan_lines_seen.set(seen);
+    }
+
+    /// An event the plan's Add strip just added: its title is its kind's word, and its result
+    /// (`kept::PlanAdded`) keeps one step of Undo (both UIs).
+    pub(super) fn record_plan_add(&mut self, id: &str, book: &mut Book, ctx: &egui::Context) {
+        let session = self.selected;
+        if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
+            event.title = event.kind.word().to_owned();
+        }
+        let days = timeline::day_numbers(&book.events);
+        let index = book.events.iter().position(|event| event.id == *id);
+        let added = kept::PlanAdded {
+            owner: self.of_session(session),
+            id: id.to_owned(),
+            label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
+            to: self.session_name(session),
+            count: book.events.len(),
+        };
+        self.added.record_timed(added, ctx);
+        self.open_event = None;
+    }
+
+    /// A press in the plan's footer. Returns the scene's and the rewards' acts (with the
+    /// press's ticket), which the caller does after the rows (both UIs).
+    pub(super) fn plan_footer_press(
+        &mut self,
+        press: design::outcome::Press<super::SessionAct>,
+        book: &mut Book,
+        plan: &Plan<'_>,
+    ) -> (
+        Option<SceneAct>,
+        Option<(RewardsAct, Option<design::results::Ticket>)>,
+    ) {
+        let session = self.selected;
+        let mut scene_act = None;
+        let mut rewards = None;
+        match press.id {
+            super::SessionAct::Plan(act) => match act {
+                FooterAct::GoToGroup => self.select(self.group_session),
+                FooterAct::UndoGroupDiscard => self.wants_group_undo = press.ticket,
+                FooterAct::UndoGroupRemove => self.undo_plan_mark(press.ticket, |this| {
+                    this.undo_group_remove(session);
+                    this.removed_group.is_none()
+                }),
+                FooterAct::UndoDeletedRun => self.undo_plan_mark(press.ticket, |this| {
+                    this.undo_deleted_run();
+                    this.deleted_run.is_none()
+                }),
+                FooterAct::UndoAdd => {
+                    if let Some(ticket) = press.ticket
+                        && let Ok((added, ())) = self.added.undo_by(ticket, |_| Ok::<(), ()>(()))
+                    {
+                        book.undo_add(&added.id);
+                    }
+                }
+                FooterAct::UndoRemove => {
+                    if let Some(ticket) = press.ticket {
+                        book.undo_remove(ticket);
+                        self.removed_event_in_plan = false;
+                        self.plan_notice_state = None;
+                    }
+                }
+                FooterAct::UndoRuling => {
+                    if let Some(ticket) = press.ticket {
+                        book.undo_restores(ticket);
+                        self.end_plan_add();
+                    }
+                }
+                // A scene's footer Undo reaches only the result its line showed; the act
+                // then takes the scene's data, whatever its save does.
+                FooterAct::Scene(act @ (SceneAct::UndoAdd | SceneAct::UndoRemove(_))) => {
+                    let mut reached = false;
+                    self.undo_plan_mark(press.ticket, |_| {
+                        reached = true;
+                        true
+                    });
+                    if reached {
+                        scene_act = Some(act);
+                    }
+                }
+                FooterAct::Scene(act) => scene_act = Some(act),
+                FooterAct::Rewards(act) => rewards = Some((act, press.ticket)),
+                FooterAct::UndoPlanLine => {
+                    if let Some(ticket) = press.ticket {
+                        self.undo_plan_line(ticket);
+                    }
+                }
+                FooterAct::File(act) => file_act(book, act, press.ticket),
+            },
+            _ => self.session_press(press, book, plan),
+        }
+        (scene_act, rewards)
+    }
+
+    /// `Remove from tonight` of the planned fight at `position`: its link leaves the note, with
+    /// the removal's Undo (both UIs).
+    pub(super) fn remove_planned_fight(
+        &mut self,
+        (position, name): (usize, String),
+        book: &Book,
+        plan: &Plan<'_>,
+        planned: &[usize],
+    ) {
+        let session = self.selected;
+        // A draft is open only for a selected session, so the act has its session.
+        if let Some(draft) = &mut self.draft
+            && let Some(note) = session
+        {
+            let occurrence = book
+                .events
+                .iter()
+                .filter(|event| {
+                    event.is_in(session)
+                        && event.run.is_some()
+                        && event.title.eq_ignore_ascii_case(&name)
+                })
+                .count()
+                + planned[..position]
+                    .iter()
+                    .filter(|&&at| plan.fights[at].name.eq_ignore_ascii_case(&name))
+                    .count();
+            // A fight that is not in the words changes nothing, and says nothing, as before.
+            if let Ok(undo) = draft.apply(note, Apply::WithTyping, |words| {
+                let after = unlink_planned_fight(words, &name, occurrence);
+                (after != words).then_some(after)
+            }) {
+                self.plan_notice_state = Some((undo.after().to_owned(), book.events.clone()));
+                self.removed_fight = Some((session, position, name, undo));
+            }
+        }
+    }
+
+    /// `Remove from tonight` of a planned group: its link leaves the note (both UIs).
+    pub(super) fn remove_planned_group(
+        &mut self,
+        (position, name, height): (usize, String, f32),
+        book: &Book,
+    ) {
+        let session = self.selected;
+        if let Some(draft) = &mut self.draft {
+            let before = draft.body.as_str().to_owned();
+            let key = draft.body.key();
+            draft.body.edit(|body| unlink_group(body, &name));
+            draft.own_write(key);
+            draft.edited();
+            Self::mark_plan(
+                &mut self.plan_marks,
+                self.folder.as_deref(),
+                PlanKind::GroupRemoved,
+            );
+            self.removed_group = Some((
+                session,
+                position,
+                before,
+                draft.body.as_str().to_owned(),
+                height,
+                name,
+            ));
+            self.plan_notice_state = Some((draft.body.as_str().to_owned(), book.events.clone()));
+        }
+    }
+
+    /// The rewards' act, as the rows or the footer gave it (both UIs).
+    pub(super) fn do_rewards_act(
+        &mut self,
+        (act, ticket): (RewardsAct, Option<design::results::Ticket>),
+        book: &mut Book,
+        plan: &Plan<'_>,
+    ) {
+        let session = self.selected;
+        match (act, ticket) {
+            (RewardsAct::Undo(event), Some(ticket)) => {
+                self.undo_rewards(ticket, event, book, session, plan);
+            }
+            (RewardsAct::Undo(_), None) => {}
+            (act, _) => self.rewards_act(act, book, session, plan),
+        }
+    }
+
+    /// A planned event's `Remove` (both UIs).
+    pub(super) fn remove_plan_event(&mut self, id: &str, book: &mut Book) {
+        book.remove(id);
+        self.removed_event_in_plan = true;
+        self.plan_notice_state = Some((
+            self.draft
+                .as_ref()
+                .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
+            book.events.clone(),
+        ));
+        self.open_event = None;
+    }
+
+    /// A saved run's `Delete the saved run` (both UIs).
+    pub(super) fn delete_plan_run(
+        &mut self,
+        saved: &crate::encounter_run::SavedRunInfo,
+        book: &Book,
+    ) {
+        match crate::encounter_run::DeletedRun::delete(saved) {
+            Ok(deleted) => {
+                self.plan_notice_state = Some((
+                    self.draft
+                        .as_ref()
+                        .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
+                    book.events.clone(),
+                ));
+                self.record_deleted_run(book, deleted, saved.id);
+            }
+            Err(error) => self.rename_problem = Some(error),
+        }
+    }
+
+    /// An event row's title: open it in place, or close it (both UIs).
+    pub(super) fn toggle_plan_event(&mut self, id: String) {
+        self.fight = None;
+        self.show_fight_log = false;
+        self.reveal_event = true;
+        self.open_event = (self.open_event.as_ref() != Some(&id)).then_some(id);
+    }
+
+    /// The plan pane's message footer: on the session page the page's own messages too
+    /// (`session_messages`), then the plan's results, reasons and notices (both UIs).
+    #[allow(clippy::type_complexity)]
+    pub(super) fn plan_footer_messages<'f>(
+        &mut self,
+        frame: &'f PaneFrame,
+        book: &mut Book,
+        plan: &Plan<'_>,
+        page: Option<(
+            &crate::processing::settings::ProcessingSettings,
+            &crate::sessions::Note,
+        )>,
+        (shown, planned_results): (Shown, &[(String, bool)]),
+        width: f32,
+    ) -> Messages<'f, super::SessionAct> {
+        // Round 26 FL1, round 28: the plan's results, reasons and notices sit in its pane's
+        // message footer, which the part places `S` below the rows (pinned only when the rows
+        // fill the pane), so a result never moves a row or the Add strip. On the session page
+        // the page's own messages share this footer: one footer for what the DM sees.
+        let session = self.selected;
+        let here = self.group_session == session;
+        self.end_plan_marks();
+        let mut messages = match page {
+            Some((settings, note)) => {
+                self.session_messages(frame, settings, book, plan, note, width)
+            }
+            None => Messages::new(frame, ("session_plan_footer", session), width),
+        };
+        if plan.group_open && self.not_being_played().is_none() {
+            let label = self
+                .notes
+                .iter()
+                .find(|note| Some(note.id) == self.group_session)
+                .map_or_else(
+                    || "another session".to_owned(),
+                    |note| format!("“{}”", note.label()),
+                );
+            messages.outcome(
+                Notice::new(crate::sentence!(
+                    "A group is being assembled in the plan of {}.",
+                    label
+                ))
+                .choice(Choice::new(
+                    MessageChoice::Choice("Go to it"),
+                    pressed(FooterAct::GoToGroup),
+                )),
+            );
+        }
+        // M0244: the Encounters store's own line of the discard, with its order and ticket.
+        if here && let Some(line) = (plan.group_discard)(frame) {
+            messages.kept(line.map(|()| pressed(FooterAct::UndoGroupDiscard)));
+        }
+        if let Some(problem) = &self.rename_problem {
+            messages.outcome(Outcome::Refused(as_sentence(problem)));
+        }
+        file_messages(frame, &mut messages, book, |act| {
+            pressed(FooterAct::File(act))
+        });
+        self.plan_messages(frame, &mut messages, book, session, plan, planned_results);
+        self.scene_messages(frame, &mut messages, shown);
+        self.removed_group_message(frame, &mut messages, session);
+        // Round 27 FN1, FK3, SK2: rewards results and their fault are the footer's, by fight.
+        self.rewards.see(self.draft.as_ref(), session, book);
+        if let (Some(note), Some(draft)) = (session, self.draft.as_ref()) {
+            self.rewards
+                .in_footer(frame, &mut messages, note, draft.revision());
+        }
+        // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
+        // journey's session, while the note is as the act left it; a refused Undo's answer,
+        // until its own events end it. The same stored line as Timeline's footer.
+        for line in self.plan_line_kept(frame, Some(session), pressed(FooterAct::UndoPlanLine)) {
+            messages.kept(line);
+        }
+        messages
     }
 
     /// The session as a list, top to bottom: what happened, then what is still to come. It
@@ -5039,84 +5333,16 @@ impl Sessions {
         // says when one with the same name stays.
         let planned_results = &projection.planned_results;
         // Round 26 FL1, round 28: the plan's results, reasons and notices sit in its pane's
-        // message footer, which the part places `S` below the rows (pinned only when the rows
-        // fill the pane), so a result never moves a row or the Add strip. On the session page
-        // the page's own messages share this footer: one footer for what the DM sees.
-        self.end_plan_marks();
+        // message footer (`plan_footer_messages`).
         let frame = PaneFrame::new(ui);
-        let mut messages = match page {
-            Some((settings, note)) => {
-                self.session_messages(&frame, settings, book, plan, note, ui.available_width())
-            }
-            None => Messages::new(
-                &frame,
-                ("session_plan_footer", session),
-                ui.available_width(),
-            ),
-        };
-        if plan.group_open && self.not_being_played().is_none() {
-            let label = self
-                .notes
-                .iter()
-                .find(|note| Some(note.id) == self.group_session)
-                .map_or_else(
-                    || "another session".to_owned(),
-                    |note| format!("“{}”", note.label()),
-                );
-            messages.outcome(
-                Notice::new(crate::sentence!(
-                    "A group is being assembled in the plan of {}.",
-                    label
-                ))
-                .choice(Choice::new(
-                    MessageChoice::Choice("Go to it"),
-                    pressed(FooterAct::GoToGroup),
-                )),
-            );
-        }
-        // M0244: the Encounters store's own line of the discard, with its order and ticket.
-        if here && let Some(line) = (plan.group_discard)(&frame) {
-            messages.kept(line.map(|()| pressed(FooterAct::UndoGroupDiscard)));
-        }
-        if let Some(problem) = &self.rename_problem {
-            messages.outcome(Outcome::Refused(as_sentence(problem)));
-        }
-        file_messages(&frame, &mut messages, book, |act| {
-            pressed(FooterAct::File(act))
-        });
-        self.plan_messages(&frame, &mut messages, book, session, plan, planned_results);
-        self.scene_messages(&frame, &mut messages, shown);
-        self.removed_group_message(&frame, &mut messages, session);
-        // Round 27 FN1, FK3, SK2: rewards results and their fault are the footer's, by fight.
-        self.rewards.see(self.draft.as_ref(), session, book);
-        if let (Some(note), Some(draft)) = (session, self.draft.as_ref()) {
-            self.rewards
-                .in_footer(&frame, &mut messages, note, draft.revision());
-        }
-        // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
-        // journey's session, while the note is as the act left it; a refused Undo's answer,
-        // until its own events end it. The same stored line as Timeline's footer.
-        for line in self.plan_line_kept(&frame, Some(session), pressed(FooterAct::UndoPlanLine)) {
-            messages.kept(line);
-        }
+        let width = ui.available_width();
+        let messages =
+            self.plan_footer_messages(&frame, book, plan, page, (shown, planned_results), width);
         // The fold measures the room the rows have with an empty footer: the pane's whole room
         // (below), so that a result coming or going never folds or unfolds the scenes.
         if let Some(id) = &added {
-            if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
-                event.title = event.kind.word().to_owned();
-            }
-            let days = timeline::day_numbers(&book.events);
-            let index = book.events.iter().position(|event| event.id == *id);
             self.row_reveal = Some((id.clone(), 0, ui.ctx().cumulative_pass_nr()));
-            let added = kept::PlanAdded {
-                owner: self.of_session(session),
-                id: id.clone(),
-                label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
-                to: self.session_name(session),
-                count: book.events.len(),
-            };
-            self.added.record_timed(added, ui.ctx());
-            self.open_event = None;
+            self.record_plan_add(id, book, ui.ctx());
         }
         // An Add in this frame changed the Timeline after the projection read it: its days are
         // worked out again for this frame only.
@@ -5469,64 +5695,13 @@ impl Sessions {
         } = acts;
         let pane = Some(room);
         if let Some(press) = paned.pressed {
-            match press.id {
-                super::SessionAct::Plan(act) => match act {
-                    FooterAct::GoToGroup => self.select(self.group_session),
-                    FooterAct::UndoGroupDiscard => self.wants_group_undo = press.ticket,
-                    FooterAct::UndoGroupRemove => self.undo_plan_mark(press.ticket, |this| {
-                        this.undo_group_remove(session);
-                        this.removed_group.is_none()
-                    }),
-                    FooterAct::UndoDeletedRun => self.undo_plan_mark(press.ticket, |this| {
-                        this.undo_deleted_run();
-                        this.deleted_run.is_none()
-                    }),
-                    FooterAct::UndoAdd => {
-                        if let Some(ticket) = press.ticket
-                            && let Ok((added, ())) =
-                                self.added.undo_by(ticket, |_| Ok::<(), ()>(()))
-                        {
-                            book.undo_add(&added.id);
-                        }
-                    }
-                    FooterAct::UndoRemove => {
-                        if let Some(ticket) = press.ticket {
-                            book.undo_remove(ticket);
-                            self.removed_event_in_plan = false;
-                            self.plan_notice_state = None;
-                        }
-                    }
-                    FooterAct::UndoRuling => {
-                        if let Some(ticket) = press.ticket {
-                            book.undo_restores(ticket);
-                            self.end_plan_add();
-                        }
-                    }
-                    // A scene's footer Undo reaches only the result its line showed; the act
-                    // then takes the scene's data, whatever its save does.
-                    FooterAct::Scene(act @ (SceneAct::UndoAdd | SceneAct::UndoRemove(_))) => {
-                        let mut reached = false;
-                        self.undo_plan_mark(press.ticket, |_| {
-                            reached = true;
-                            true
-                        });
-                        if reached {
-                            scene_act = Some(act);
-                        }
-                    }
-                    FooterAct::Scene(act) => scene_act = Some(act),
-                    FooterAct::Rewards(act) => {
-                        rewards_act = Some(act);
-                        rewards_ticket = press.ticket;
-                    }
-                    FooterAct::UndoPlanLine => {
-                        if let Some(ticket) = press.ticket {
-                            self.undo_plan_line(ticket);
-                        }
-                    }
-                    FooterAct::File(act) => file_act(book, act, press.ticket),
-                },
-                _ => self.session_press(press, book, plan),
+            let (scene, rewards) = self.plan_footer_press(press, book, plan);
+            if scene.is_some() {
+                scene_act = scene;
+            }
+            if let Some((act, ticket)) = rewards {
+                rewards_act = Some(act);
+                rewards_ticket = ticket;
             }
         }
         if reveal_cancelled {
@@ -5556,62 +5731,14 @@ impl Sessions {
         if let Some(act) = scene_act {
             self.scene_act(act, session);
         }
-        match (rewards_act, rewards_ticket) {
-            (Some(RewardsAct::Undo(event)), Some(ticket)) => {
-                self.undo_rewards(ticket, event, book, session, plan);
-            }
-            (Some(RewardsAct::Undo(_)), None) | (None, _) => {}
-            (Some(act), _) => self.rewards_act(act, book, session, plan),
+        if let Some(act) = rewards_act {
+            self.do_rewards_act((act, rewards_ticket), book, plan);
         }
-        // A draft is open only for a selected session, so the act has its session.
-        if let Some((position, name)) = remove_fight
-            && let Some(draft) = &mut self.draft
-            && let Some(note) = session
-        {
-            let occurrence = book
-                .events
-                .iter()
-                .filter(|event| {
-                    event.is_in(session)
-                        && event.run.is_some()
-                        && event.title.eq_ignore_ascii_case(&name)
-                })
-                .count()
-                + projection.planned[..position]
-                    .iter()
-                    .filter(|&&at| plan.fights[at].name.eq_ignore_ascii_case(&name))
-                    .count();
-            // A fight that is not in the words changes nothing, and says nothing, as before.
-            if let Ok(undo) = draft.apply(note, Apply::WithTyping, |words| {
-                let after = unlink_planned_fight(words, &name, occurrence);
-                (after != words).then_some(after)
-            }) {
-                self.plan_notice_state = Some((undo.after().to_owned(), book.events.clone()));
-                self.removed_fight = Some((session, position, name, undo));
-            }
+        if let Some(remove) = remove_fight {
+            self.remove_planned_fight(remove, book, plan, &projection.planned);
         }
-        if let Some((position, name, height)) = remove_group
-            && let Some(draft) = &mut self.draft
-        {
-            let before = draft.body.as_str().to_owned();
-            let key = draft.body.key();
-            draft.body.edit(|body| unlink_group(body, &name));
-            draft.own_write(key);
-            draft.edited();
-            Self::mark_plan(
-                &mut self.plan_marks,
-                self.folder.as_deref(),
-                PlanKind::GroupRemoved,
-            );
-            self.removed_group = Some((
-                session,
-                position,
-                before,
-                draft.body.as_str().to_owned(),
-                height,
-                name,
-            ));
-            self.plan_notice_state = Some((draft.body.as_str().to_owned(), book.events.clone()));
+        if let Some(remove) = remove_group {
+            self.remove_planned_group(remove, book);
         }
         if changed {
             book.touch();
@@ -5630,35 +5757,13 @@ impl Sessions {
             self.end_plan_add();
         }
         if let Some(saved) = delete_run {
-            match crate::encounter_run::DeletedRun::delete(&saved) {
-                Ok(deleted) => {
-                    self.plan_notice_state = Some((
-                        self.draft
-                            .as_ref()
-                            .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
-                        book.events.clone(),
-                    ));
-                    self.record_deleted_run(book, deleted, saved.id);
-                }
-                Err(error) => self.rename_problem = Some(error),
-            }
+            self.delete_plan_run(&saved, book);
         }
         if let Some(id) = toggle {
-            self.fight = None;
-            self.show_fight_log = false;
-            self.reveal_event = true;
-            self.open_event = (self.open_event.as_ref() != Some(&id)).then_some(id);
+            self.toggle_plan_event(id);
         }
         if let Some(id) = remove {
-            book.remove(&id);
-            self.removed_event_in_plan = true;
-            self.plan_notice_state = Some((
-                self.draft
-                    .as_ref()
-                    .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
-                book.events.clone(),
-            ));
-            self.open_event = None;
+            self.remove_plan_event(&id, book);
         }
         if let (Some(link), Some(session)) = (insert, session)
             && self.add_to_note(ui.ctx(), &link)
@@ -5706,7 +5811,7 @@ impl Sessions {
     /// that place is drawn (the open Scene field, or a row's place among the shown scenes), else
     /// in the plan's footer. Words never go to a place that is not drawn. `rows` are the scenes
     /// at each place, or `None` while they fold.
-    fn shown_at(&self, place: Place, rows: Option<&[Vec<usize>]>) -> Place {
+    pub(super) fn shown_at(&self, place: Place, rows: Option<&[Vec<usize>]>) -> Place {
         let drawn = match place {
             Place::Field => self.scenes.field.is_some(),
             Place::Row((position, at)) => {
@@ -6743,7 +6848,7 @@ impl Sessions {
     /// One scene act, through the note's one act path: it follows the disk, changes the one line
     /// that the row was drawn from and saves at once. What it could not do shows where the DM
     /// acted. An act whose save failed keeps its Undo: the fragment waits in the draft.
-    fn scene_act(&mut self, act: SceneAct, session: Option<Uuid>) {
+    pub(super) fn scene_act(&mut self, act: SceneAct, session: Option<Uuid>) {
         if let SceneAct::StartFight(fight) = act {
             self.wants_start_fight = Some(fight);
             return;
@@ -6909,7 +7014,7 @@ impl Sessions {
     }
 
     /// The plan's results end at the next edit of the note or the timeline events.
-    fn end_plan_results_after_edits(&mut self, book: &Book) {
+    pub(super) fn end_plan_results_after_edits(&mut self, book: &Book) {
         if let Some((body, events)) = &self.plan_notice_state
             && (self
                 .draft

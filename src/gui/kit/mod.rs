@@ -38,7 +38,7 @@ pub use button::{Button, IconButton};
 pub use checkbox::{Checkbox, Switch};
 pub use dialog::Dialog;
 pub use empty::empty_state;
-pub use field::{TextEditor, TextField, field, help};
+pub use field::{EditorHandle, TextEditor, TextField, field, help};
 pub use link::{Link, link};
 pub use list::{Row, two_line_row};
 pub use markdown::{Markdown, markdown};
