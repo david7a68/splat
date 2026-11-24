@@ -7461,7 +7461,6 @@ impl Sessions {
     }
 }
 
-
 /// A player's whole line in a played fight's block: name, HP, temporary HP, absence and
 /// conditions (the cell's hover).
 fn fight_row_detail(row: &crate::encounter_run::FightRow) -> String {

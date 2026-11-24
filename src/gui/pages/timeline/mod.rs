@@ -557,9 +557,8 @@ fn add_strip(
         .is_some()
         .then_some("The timeline file must be repaired first.");
     let label = div().ty(Type::Label).text_color(colors().text).child("Add");
-    let room = page_width
-        - crate::gui::pages::trackers::measure::width(window, Type::Label, "ADD")
-        - XS;
+    let room =
+        page_width - crate::gui::pages::trackers::measure::width(window, Type::Label, "ADD") - XS;
     let fits = strip_fits(window, room);
     let shown = |kind: &Kind| fits || matches!(kind, Kind::Encounter | Kind::LongRest);
     let mut strip = div()
@@ -584,7 +583,11 @@ fn add_strip(
             }))
         }));
     if !fits {
-        let rest: Vec<Kind> = ADD_KINDS.iter().copied().filter(|kind| !shown(kind)).collect();
+        let rest: Vec<Kind> = ADD_KINDS
+            .iter()
+            .copied()
+            .filter(|kind| !shown(kind))
+            .collect();
         let hint = rest
             .iter()
             .map(|kind| kind.word())

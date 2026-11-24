@@ -523,14 +523,14 @@ fn body(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) 
         if open {
             for tracker in more {
                 column = column.child(tracker_lines(
-                laid,
-                tracker,
-                &asking,
-                focus,
-                (&state.hold, &state.scroll),
-                window,
-                cx,
-            ));
+                    laid,
+                    tracker,
+                    &asking,
+                    focus,
+                    (&state.hold, &state.scroll),
+                    window,
+                    cx,
+                ));
             }
         }
     }
@@ -825,7 +825,9 @@ fn tracker_lines(
                 .child(button)
                 .child(
                     gpui::canvas(
-                        move |bounds, window, _| hold.seen(&held_name, bounds.top(), &scroll, window),
+                        move |bounds, window, _| {
+                            hold.seen(&held_name, bounds.top(), &scroll, window)
+                        },
                         |_, _, _, _| {},
                     )
                     .absolute()

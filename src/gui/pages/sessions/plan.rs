@@ -36,6 +36,9 @@ struct Probes {
     then: Probe,
 }
 
+/// Where an open row's details write their height: the probes and the row's place.
+type DetailsProbe<'a> = (&'a Rc<RefCell<Probes>>, usize);
+
 /// One frame's measures: the pane's height, the heading and Add strip's height above the rows,
 /// the rows' width, each row's height and kind, and each open row's details.
 #[derive(Clone, Default, PartialEq)]
@@ -491,7 +494,7 @@ fn row_frame(
     title: AnyElement,
     second: Option<AnyElement>,
     actions: Vec<AnyElement>,
-    details: Option<(AnyElement, (&Rc<RefCell<Probes>>, usize))>,
+    details: Option<(AnyElement, DetailsProbe<'_>)>,
 ) -> AnyElement {
     let c = colors();
     // The title's line holds the lead, the title and the actions; the second line and the
@@ -792,22 +795,25 @@ fn travel_block(
         .map(|index| index.loot_sources().tables.clone())
         .unwrap_or_default();
     let (typed, commit, blur) = (view.id.clone(), view.id.clone(), view.id.clone());
-    let length = kit::TextField::new(id(format!("plan-travel-length-{}", view.id)), view.length.clone())
-        .name("How long")
-        .focus(view.focus_length)
-        .on_change(cx.listener(move |root, words: &str, _, cx| {
-            let book = &mut root.app.timeline;
-            if let Some(event) = book.events.iter().find(|e| e.id == typed).cloned() {
-                book.length.type_words(&event, words);
-            }
-            cx.notify();
-        }))
-        .on_enter(crate::gui::pages::trackers::act(cx, move |root| {
-            crate::timeline::checks::commit_length(&mut root.app.timeline, &commit);
-        }))
-        .on_blur(crate::gui::pages::trackers::act(cx, move |root| {
-            crate::timeline::checks::commit_length(&mut root.app.timeline, &blur);
-        }));
+    let length = kit::TextField::new(
+        id(format!("plan-travel-length-{}", view.id)),
+        view.length.clone(),
+    )
+    .name("How long")
+    .focus(view.focus_length)
+    .on_change(cx.listener(move |root, words: &str, _, cx| {
+        let book = &mut root.app.timeline;
+        if let Some(event) = book.events.iter().find(|e| e.id == typed).cloned() {
+            book.length.type_words(&event, words);
+        }
+        cx.notify();
+    }))
+    .on_enter(crate::gui::pages::trackers::act(cx, move |root| {
+        crate::timeline::checks::commit_length(&mut root.app.timeline, &commit);
+    }))
+    .on_blur(crate::gui::pages::trackers::act(cx, move |root| {
+        crate::timeline::checks::commit_length(&mut root.app.timeline, &blur);
+    }));
     let block = render_in(
         root,
         Host::Plan,
@@ -822,7 +828,12 @@ fn travel_block(
         .flex()
         .flex_col()
         .pt(XS)
-        .child(kit::field("How long", view.help.map(Into::into), None, length))
+        .child(kit::field(
+            "How long",
+            view.help.map(Into::into),
+            None,
+            length,
+        ))
         .child(block)
         .into_any_element();
     Some((view.id, element))
@@ -942,7 +953,10 @@ fn fight_block(
                 vec![line],
                 |_: &kit::messages::Pressed<()>, _: &mut Window, _: &mut gpui::App| {},
             );
-            return Some((event, div().flex().flex_col().children(lines).into_any_element()));
+            return Some((
+                event,
+                div().flex().flex_col().children(lines).into_any_element(),
+            ));
         }
         FightBlockView::Ended { cells, path, log } => (cells, path, log),
     };
@@ -952,7 +966,10 @@ fn fight_block(
         let known = |n: Option<i64>| n.map_or_else(|| "?".to_owned(), |n| n.to_string());
         (
             cell.first.clone(),
-            format!(" {}", crate::design::fraction(known(cell.hp), known(cell.max))),
+            format!(
+                " {}",
+                crate::design::fraction(known(cell.hp), known(cell.max))
+            ),
             (cell.temp > 0).then(|| format!(" {}", crate::design::temp_hp_text(cell.temp))),
         )
     };
@@ -1036,7 +1053,8 @@ fn fight_block(
             block = block.child(if shown == whole {
                 line.into_any_element()
             } else {
-                line.tooltip(kit::tooltip::tip(whole.into())).into_any_element()
+                line.tooltip(kit::tooltip::tip(whole.into()))
+                    .into_any_element()
             });
         }
         if let Some(notice) = notice {

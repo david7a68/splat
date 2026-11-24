@@ -222,8 +222,8 @@ pub(crate) fn render(
     // Its height and the column's are the last frame's.
     let room = root.pages.timeline.detail_room.clone();
     let (header_height, column_height) = room.get();
-    let scrolls = column_height > px(0.0)
-        && column_height - header_height < Density::Read.control();
+    let scrolls =
+        column_height > px(0.0) && column_height - header_height < Density::Read.control();
     let header = {
         let room = room.clone();
         div().relative().child(header).child(
@@ -258,24 +258,22 @@ pub(crate) fn render(
     .left_0()
     .size_full();
     let column = div().relative().flex().flex_col().size_full();
-    let column = if scrolls {
-        column.child(kit::scroll::scroll_column_with(
-            part(id, "form"),
-            &root.pages.timeline.form,
-            div().child(header).child(div().pr(M).pt(M).child(form)),
-        ))
-    } else {
-        column.child(header).child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .child(kit::scroll::scroll_column_with(
+    let column =
+        if scrolls {
+            column.child(kit::scroll::scroll_column_with(
+                part(id, "form"),
+                &root.pages.timeline.form,
+                div().child(header).child(div().pr(M).pt(M).child(form)),
+            ))
+        } else {
+            column.child(header).child(div().flex_1().min_h_0().child(
+                kit::scroll::scroll_column_with(
                     part(id, "form"),
                     &root.pages.timeline.form,
                     div().pr(M).pt(M).child(form),
-                )),
-        )
-    };
+                ),
+            ))
+        };
     column.child(column_probe).into_any_element()
 }
 

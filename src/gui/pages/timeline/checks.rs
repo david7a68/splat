@@ -118,6 +118,12 @@ pub(crate) fn render(
     )
 }
 
+/// The tables a journey can roll on, and what a result's names are to the journey's plan.
+pub(crate) type Sources<'a> = (
+    &'a [crate::roll_table::Table],
+    &'a dyn Fn(&str) -> Option<bool>,
+);
+
 /// The block of the journey `id` in `host`: at `index` in the book, with its length as the DM
 /// typed it and its start on the clock, the tables it can roll on and what a result's names
 /// are to the journey's plan.
@@ -128,7 +134,7 @@ pub(crate) fn render_in(
     id: &str,
     index: usize,
     (length, start): (&str, Option<u64>),
-    (tables, planned): (&[crate::roll_table::Table], &dyn Fn(&str) -> Option<bool>),
+    (tables, planned): Sources<'_>,
     window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
@@ -287,13 +293,16 @@ pub(crate) fn render_in(
         let (owner, waiting) = (id.to_owned(), block.waiting.clone());
         column = column.child(
             div().pt(XS).child(
-                kit::Button::secondary(part(host, id, "roll-all"), format!("Roll all {}", waiting.len()))
-                    .icon(icons::DICE)
-                    .density(Density::Read)
-                    .blocked(block.blocked)
-                    .on_click(cx.listener(move |root, _, _, cx| {
-                        act(root, host, &owner, Act::Roll(waiting.clone()), cx);
-                    })),
+                kit::Button::secondary(
+                    part(host, id, "roll-all"),
+                    format!("Roll all {}", waiting.len()),
+                )
+                .icon(icons::DICE)
+                .density(Density::Read)
+                .blocked(block.blocked)
+                .on_click(cx.listener(move |root, _, _, cx| {
+                    act(root, host, &owner, Act::Roll(waiting.clone()), cx);
+                })),
             ),
         );
     }

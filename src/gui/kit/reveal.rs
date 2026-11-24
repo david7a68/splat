@@ -93,14 +93,32 @@ mod tests {
     fn a_reveal_scrolls_least_or_to_the_top() {
         let view = at(100.0, 200.0);
         // In view: no scroll.
-        assert_eq!(offset_for(at(150.0, 20.0), view, px(0.0), px(500.0), Align::Least), px(0.0));
+        assert_eq!(
+            offset_for(at(150.0, 20.0), view, px(0.0), px(500.0), Align::Least),
+            px(0.0)
+        );
         // Below: down by what is hidden.
-        assert_eq!(offset_for(at(290.0, 20.0), view, px(0.0), px(500.0), Align::Least), px(-10.0));
+        assert_eq!(
+            offset_for(at(290.0, 20.0), view, px(0.0), px(500.0), Align::Least),
+            px(-10.0)
+        );
         // Above: up by what is hidden, never past the top.
-        assert_eq!(offset_for(at(90.0, 20.0), view, px(-40.0), px(500.0), Align::Least), px(-30.0));
-        assert_eq!(offset_for(at(0.0, 20.0), view, px(-40.0), px(500.0), Align::Least), px(0.0));
+        assert_eq!(
+            offset_for(at(90.0, 20.0), view, px(-40.0), px(500.0), Align::Least),
+            px(-30.0)
+        );
+        assert_eq!(
+            offset_for(at(0.0, 20.0), view, px(-40.0), px(500.0), Align::Least),
+            px(0.0)
+        );
         // Top: its top at the column's top, as far as the column scrolls.
-        assert_eq!(offset_for(at(250.0, 20.0), view, px(0.0), px(500.0), Align::Top), px(-150.0));
-        assert_eq!(offset_for(at(250.0, 20.0), view, px(0.0), px(60.0), Align::Top), px(-60.0));
+        assert_eq!(
+            offset_for(at(250.0, 20.0), view, px(0.0), px(500.0), Align::Top),
+            px(-150.0)
+        );
+        assert_eq!(
+            offset_for(at(250.0, 20.0), view, px(0.0), px(60.0), Align::Top),
+            px(-60.0)
+        );
     }
 }

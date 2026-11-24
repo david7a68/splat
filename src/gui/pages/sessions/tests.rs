@@ -171,7 +171,9 @@ fn plain_evening_states() {
     }
     let names = crate::gui::kit::probe::names();
     assert!(
-        names.iter().any(|name| name.starts_with("Brannoch Vale: 58/62 HP")),
+        names
+            .iter()
+            .any(|name| name.starts_with("Brannoch Vale: 58/62 HP")),
         "its players' final HP show, each with its whole line: {names:?}"
     );
     shell.capture("plain-evening__04-session-last: played fight open__1200x800");
@@ -215,7 +217,9 @@ fn plan_scenes_and_their_fold() {
             })
         };
         assert_eq!(folded(&mut shell), None, "{name}: the scenes fit the plan");
-        shell.capture(&format!("session-plan-scenes__01-scenes-in-the-plan__{name}"));
+        shell.capture(&format!(
+            "session-plan-scenes__01-scenes-in-the-plan__{name}"
+        ));
         if name == "1200x800" {
             continue;
         }
@@ -278,7 +282,6 @@ fn plan_add_reveals_its_row() {
     );
     shell.capture("session-plan-reveal__01-added-row-in-view__960x640");
 }
-
 
 #[test]
 fn plain_evening_small_window() {
@@ -674,19 +677,29 @@ fn travel_checks_in_the_plan() {
     shell.type_text(" days");
     shell.press("enter");
     assert_eq!(event(&mut shell).duration, "2 days");
-    assert!(shell.bounds("Enter a roll for Day 2").is_some(), "a line for each day");
+    assert!(
+        shell.bounds("Enter a roll for Day 2").is_some(),
+        "a line for each day"
+    );
     // A roll, its result with Undo, and the Undo.
     shell.click(&format!("id:plan-checks-{journey}-roll-0"));
     assert_eq!(event(&mut shell).checks.len(), 1, "one check rolled");
     assert!(shell.bounds("Undo roll 1 travel check").is_some());
     shell.capture("travel-checks__01-travel-checks-rolled__1200x800");
     shell.click("Undo roll 1 travel check");
-    assert!(event(&mut shell).checks.is_empty(), "Undo takes the roll back");
+    assert!(
+        event(&mut shell).checks.is_empty(),
+        "Undo takes the roll back"
+    );
     // A player's roll, typed: the toll gang, which the plan can take.
     shell.click("Enter a roll for Day 2");
     shell.type_text("19");
     shell.press("enter");
-    assert_eq!(event(&mut shell).checks.len(), 1, "the typed roll is a result");
+    assert_eq!(
+        event(&mut shell).checks.len(),
+        1,
+        "the typed roll is a result"
+    );
     shell.click("Plan “Shrine of Cinders”");
     assert!(
         note_words(&mut shell).contains("[[Shrine of Cinders]]"),

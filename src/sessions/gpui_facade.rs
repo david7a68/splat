@@ -1862,7 +1862,11 @@ impl Sessions {
     }
 
     /// The open played fight's block (`fight_block`): `None` when the open row is no ended fight.
-    pub fn gv_fight_block(&mut self, book: &Book, plan: &Plan<'_>) -> Option<(String, FightBlockView)> {
+    pub fn gv_fight_block(
+        &mut self,
+        book: &Book,
+        plan: &Plan<'_>,
+    ) -> Option<(String, FightBlockView)> {
         let open = self.open_event.clone()?;
         let event = book.events.iter().find(|event| event.id == open)?;
         let run = event.run?;

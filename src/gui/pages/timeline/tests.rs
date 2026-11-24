@@ -216,11 +216,17 @@ fn the_add_strip_shares_more_when_short() {
     wide.click("Timeline");
     assert!(wide.bounds("Add Day").is_some(), "every kind fits at 1200");
     assert!(wide.bounds("More Add actions").is_none());
-    let mut shell =
-        Shell::with_size("timeline-add-strip", Seed::Campaign, size(px(960.0), px(640.0)));
+    let mut shell = Shell::with_size(
+        "timeline-add-strip",
+        Seed::Campaign,
+        size(px(960.0), px(640.0)),
+    );
     shell.click("Timeline");
     shell.press("ctrl-k");
-    assert!(shell.read(|root| root.app.lookup.open), "Lookup beside the page");
+    assert!(
+        shell.read(|root| root.app.lookup.open),
+        "Lookup beside the page"
+    );
     for kept in ["Add Fight", "Add Long rest"] {
         assert!(shell.bounds(kept).is_some(), "{kept} stays on the line");
     }
@@ -237,8 +243,11 @@ fn the_add_strip_shares_more_when_short() {
 /// Round 29 G142: after a roll, the check's result and its offers scroll least into view.
 #[test]
 fn a_rolled_checks_result_comes_into_view() {
-    let mut shell =
-        Shell::with_size("timeline-checks-reveal", Seed::Campaign, size(px(1200.0), px(520.0)));
+    let mut shell = Shell::with_size(
+        "timeline-checks-reveal",
+        Seed::Campaign,
+        size(px(1200.0), px(520.0)),
+    );
     shell.update(|root, _, _| {
         let campaign = root.app.campaigns.active_campaign().unwrap();
         fs::write(campaign.path.join("Road.md"), ROAD).unwrap();
@@ -299,8 +308,11 @@ fn a_rolled_checks_result_comes_into_view() {
 #[test]
 fn the_title_line_scrolls_with_the_form_when_room_is_short() {
     for (height, scrolls) in [(800.0, false), (270.0, true)] {
-        let mut shell =
-            Shell::with_size("timeline-short", Seed::Campaign, size(px(1200.0), px(height)));
+        let mut shell = Shell::with_size(
+            "timeline-short",
+            Seed::Campaign,
+            size(px(1200.0), px(height)),
+        );
         shell.click("Timeline");
         first_day(&mut shell);
         shell.click("Add Long rest");

@@ -198,8 +198,18 @@ impl RenderOnce for DraftComparison {
             .flex_row()
             .gap(S)
             .pr(SCROLL_BAR_WIDTH)
-            .child(div().flex_1().min_w_0().child(label(self.headings[0].clone(), 0)))
-            .child(div().flex_1().min_w_0().child(label(self.headings[1].clone(), 0)));
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(label(self.headings[0].clone(), 0)),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(label(self.headings[1].clone(), 0)),
+            );
         let ty = if self.source { Type::Mono } else { Type::Prose };
         let rows = aligned.clone();
         // egui's room after the rows: prose keeps three lines of the texts in view at the end;
@@ -295,13 +305,20 @@ mod tests {
         let groups = [1, 4, 9];
         assert_eq!(next_change(&groups, Some(1)), Some(4));
         assert_eq!(next_change(&groups, Some(4)), Some(9));
-        assert_eq!(next_change(&groups, Some(9)), Some(1), "after the last, the first");
+        assert_eq!(
+            next_change(&groups, Some(9)),
+            Some(1),
+            "after the last, the first"
+        );
         assert_eq!(next_change(&[], None), None);
     }
 
     #[test]
     fn the_summary_names_the_heading_above_the_change() {
-        let aligned = aligned(["# Rook\nold\n## Tonight\nsame\nmine", "# Rook\nnew\n## Tonight\nsame\ntheirs"]);
+        let aligned = aligned([
+            "# Rook\nold\n## Tonight\nsame\nmine",
+            "# Rook\nnew\n## Tonight\nsame\ntheirs",
+        ]);
         assert_eq!(aligned.groups, vec![1, 4]);
         assert_eq!(
             summary(&aligned, Some(1)),
@@ -311,6 +328,9 @@ mod tests {
             summary(&aligned, Some(4)),
             "2 lines differ · Under the heading “Tonight”"
         );
-        assert_eq!(summary(&crate::design::aligned(["a", "a"]), None), "No lines differ");
+        assert_eq!(
+            summary(&crate::design::aligned(["a", "a"]), None),
+            "No lines differ"
+        );
     }
 }

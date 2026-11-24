@@ -13,9 +13,9 @@
 //! `splat:` mark that egui folds to `⋯` while the caret is off its line stays in full, faint, as
 //! all markup is: a folded run would change what the caret steps over.
 use crate::gui::theme::{Type, colors};
-use splat_content_ui::markdown_source::{Role, source_looks};
 use gpui::{HighlightStyle, StrikethroughStyle, px};
 use gpui_component::input::TextDecoration;
+use splat_content_ui::markdown_source::{Role, source_looks};
 
 /// A source's decorations and the byte where each section heading ends.
 pub(crate) struct SourceStyle {
@@ -85,7 +85,11 @@ mod tests {
         let c = colors();
         let text = "# Rook\n\n## Tonight\n\nThe **bold** and *slanted* words, `code`, ~~gone~~ and [[Hobb]].\n";
         let style = style(text);
-        assert_eq!(look_at(&style, text, "## ").color, Some(c.faint), "markup is faint");
+        assert_eq!(
+            look_at(&style, text, "## ").color,
+            Some(c.faint),
+            "markup is faint"
+        );
         assert_eq!(
             look_at(&style, text, "bold").font_weight,
             Some(Type::ProseStrong.weight()),
@@ -96,9 +100,16 @@ mod tests {
             look_at(&style, text, "slanted").font_style,
             Some(Type::ProseItalic.style())
         );
-        assert_eq!(look_at(&style, text, "code").background_color, Some(c.hover));
+        assert_eq!(
+            look_at(&style, text, "code").background_color,
+            Some(c.hover)
+        );
         assert!(look_at(&style, text, "gone").strikethrough.is_some());
-        assert_eq!(look_at(&style, text, "Hobb").color, Some(c.accent), "a link's words");
+        assert_eq!(
+            look_at(&style, text, "Hobb").color,
+            Some(c.accent),
+            "a link's words"
+        );
         assert_eq!(look_at(&style, text, " words,"), HighlightStyle::default());
         // One rule, under `## Tonight` (a title has none, as in the Reader).
         assert_eq!(style.rules, vec![text.find("\n\nThe").unwrap()]);
