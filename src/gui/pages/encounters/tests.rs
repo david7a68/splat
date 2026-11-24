@@ -257,8 +257,19 @@ fn the_roster_menu_ctrl_s_and_discard_with_undo() {
     shell.click(&undo);
     let again = shell.read(|root| root.app.encounters.roster_names().unwrap_or_default());
     assert_eq!(again[0], names[1], "Undo discard brings back the draft");
-    // Ctrl+S saves it.
+    // Ctrl+S waits while a menu is open over the editor: nothing saves beneath it.
     assert!(shell.read(|root| root.app.encounters.encounter_dirty()));
+    let menu = first_target(&mut shell, "id:roster-menu:");
+    shell.click(&menu);
+    assert!(shell.update(|_, _, cx| crate::gui::kit::menu::any_open(cx)));
+    shell.press("ctrl-s");
+    assert!(
+        shell.read(|root| root.app.encounters.encounter_dirty()),
+        "Ctrl+S under an open menu saves nothing"
+    );
+    shell.press("escape");
+    assert!(!shell.update(|_, _, cx| crate::gui::kit::menu::any_open(cx)));
+    // Ctrl+S saves it.
     shell.press("ctrl-s");
     assert!(
         !shell.read(|root| root.app.encounters.encounter_dirty()),
