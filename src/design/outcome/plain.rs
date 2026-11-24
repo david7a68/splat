@@ -91,10 +91,10 @@ impl<A> PlainLine<A> {
         self.ticket
     }
 
-    /// A line with only words, kept under `ticket` when given (a test of how a footer keys its
-    /// lines).
+    /// A line with only words, kept under the order `ticket` when given (a test of how a footer
+    /// keys its lines).
     #[cfg(any(test, feature = "test-support"))]
-    pub fn for_test(words: &str, ticket: Option<crate::design::ResultOrder>) -> Self {
+    pub fn for_test(words: &str, ticket: Option<u64>) -> Self {
         Self {
             tone: Tone::Success,
             words: words.to_owned(),
@@ -105,7 +105,7 @@ impl<A> PlainLine<A> {
             file: None,
             undo_id: None,
             choice_ids: Vec::new(),
-            ticket,
+            ticket: ticket.map(crate::design::ResultOrder::numbered),
         }
     }
 }

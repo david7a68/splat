@@ -4,9 +4,9 @@
 //! Its look: a raised layer `XXL` from the window's top, `FORM_WIDTH` wide at most, a dim backdrop
 //! that takes every press, the title in `Section` type, the body, then one action line: the
 //! destructive action at the left, then at least `L`, then the safe action and the commit at the
-//! right, commit last. When it opens, the keyboard goes to its first action at the right, the
-//! safe one, so Enter keeps the DM's work (egui's `Keep editing`); with no such action the frame
-//! takes it. Tab and Shift+Tab stay inside it (gpui-component's focus trap, which the window
+//! right, commit last. When it opens, the keyboard goes to its first action at the right that is
+//! not the primary commit, the safe one, so Enter keeps the DM's work (egui's `Keep editing`);
+//! with no such action the frame takes it. Tab and Shift+Tab stay inside it (gpui-component's focus trap, which the window
 //! root's Tab honours); Escape is the safe action (`on_escape`). Draw it as the last child of the page or the root while it is open; it covers
 //! the window wherever it is drawn.
 use crate::gui::theme::{
@@ -122,12 +122,14 @@ impl RenderOnce for Dialog {
         });
         let focus = keyboard.read(cx).focus.clone();
         let safe = keyboard.read(cx).safe.clone();
+        // The safe action: the first at the right that is not the commit.
+        let safe_at = self.actions.iter().position(|action| !action.is_primary());
         let actions: Vec<super::Button> = self
             .actions
             .into_iter()
             .enumerate()
             .map(|(at, action)| {
-                if at == 0 {
+                if Some(at) == safe_at {
                     action.focus_handle(&safe)
                 } else {
                     action
@@ -136,7 +138,7 @@ impl RenderOnce for Dialog {
             .collect();
         if !keyboard.read(cx).taken {
             keyboard.update(cx, |keyboard, _| keyboard.taken = true);
-            let first = if actions.is_empty() { &focus } else { &safe };
+            let first = if safe_at.is_some() { &safe } else { &focus };
             window.focus(first, cx);
         }
         let viewport = window.viewport_size();

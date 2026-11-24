@@ -573,20 +573,25 @@ fn frame_cost_report() {
 }
 
 /// A menu whose trigger is no longer drawn (its row went in a reload, its form closed) closes:
-/// no invisible menu keeps the global keys refused.
+/// no invisible menu keeps the global keys refused. A drop-down asked to take the keyboard has
+/// it: Enter opens its list.
 #[test]
 fn a_menu_closes_when_its_trigger_goes() {
-    use super::kit::{Button, MenuButton, MenuItem};
+    use super::kit::{Button, Dropdown, MenuButton, MenuItem};
     use gpui::{IntoElement, ParentElement};
     use std::cell::Cell;
     use std::rc::Rc;
     let mut shell = Shell::new("gpui-menu-gone", Seed::Campaign);
     let shown = Rc::new(Cell::new(true));
-    let draws = shown.clone();
+    let focus = Rc::new(Cell::new(false));
+    let (draws, focuses) = (shown.clone(), focus.clone());
     shell.update(move |root, _, cx| {
-        let draws = draws.clone();
+        let (draws, focuses) = (draws.clone(), focuses.clone());
         root.pages.reader.preview = Some(Rc::new(move |_, _, _| {
-            let mut page = gpui::div();
+            let mut page = gpui::div().child(
+                Dropdown::new("focus-kind", "Kind", ["Creature", "Spell"], None)
+                    .focus(focuses.take()),
+            );
             if draws.get() {
                 page = page.child(
                     MenuButton::new("gone-menu", Button::secondary("gone-more", "More"))
@@ -607,6 +612,14 @@ fn a_menu_closes_when_its_trigger_goes() {
     );
     shell.press("ctrl-k");
     assert!(shell.read(|root| root.app.lookup.open), "Ctrl+K works");
+    shell.press("escape");
+    focus.set(true);
+    shell.update(|_, _, cx| cx.notify());
+    shell.press("enter");
+    assert!(
+        shell.bounds("Spell").is_some(),
+        "the focused drop-down opened on Enter"
+    );
 }
 
 /// A text editor's own edit (a command's result, words put in at the caret) keeps the DM's Undo
@@ -771,9 +784,27 @@ fn dialogs() {
             .is_some_and(|dialog| dialog.plan().is_some())
     });
     shell.capture("dialogs__01-copy-dialog__1200x800");
+    let destination = |shell: &mut Shell| {
+        shell.read(|root| {
+            root.app
+                .copy_dialog
+                .as_ref()
+                .and_then(|dialog| dialog.destination())
+        })
+    };
+    let first = destination(&mut shell);
+    // The drop-down's menu opens over the dialog (drawn above it), and its rows take the press.
     shell.click("Destination");
     shell.capture("dialogs__02-copy-destination-menu__1200x800");
-    shell.click("Campaign · The Emberfall Marches");
+    shell.click("id:copy-destination-choice-2");
+    assert_ne!(
+        destination(&mut shell),
+        first,
+        "a row of the menu took the press"
+    );
+    shell.click("Destination");
+    shell.click("id:copy-destination-choice-1");
+    assert_eq!(destination(&mut shell), first);
     shell.click("Copy name");
     shell.press("ctrl-a");
     shell.type_text("Watch Aboleth");

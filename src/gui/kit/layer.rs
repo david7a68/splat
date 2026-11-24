@@ -115,7 +115,8 @@ pub fn attach(
                 child: None,
                 shown: false,
             })
-            .with_priority(1),
+            // Above a dialog (`kit::Dialog`, 2), so a drop-down in a dialog opens over it.
+            .with_priority(3),
         )
 }
 

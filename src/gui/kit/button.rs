@@ -179,6 +179,11 @@ impl Button {
         self
     }
 
+    /// Whether it is the view's one primary action (a dialog gives the keyboard to a safe one).
+    pub(super) fn is_primary(&self) -> bool {
+        self.kind == Kind::Primary
+    }
+
     fn font(&self) -> Type {
         if self.kind == Kind::Primary {
             Type::Heading

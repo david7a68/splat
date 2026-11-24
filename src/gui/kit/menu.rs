@@ -422,6 +422,7 @@ pub struct Dropdown {
     groups: Vec<usize>,
     locks: Vec<(usize, SharedString)>,
     locked_look: bool,
+    focus: bool,
     on_select: Option<super::OnIndex>,
 }
 
@@ -445,6 +446,7 @@ impl Dropdown {
             groups: Vec::new(),
             locks: Vec::new(),
             locked_look: false,
+            focus: false,
             on_select: None,
         }
     }
@@ -489,6 +491,13 @@ impl Dropdown {
         self
     }
 
+    /// Take the keyboard in this frame (a form that opens on this choice). Give `true` for one
+    /// frame; the caller keeps the request.
+    pub fn focus(mut self, focus: bool) -> Self {
+        self.focus = focus;
+        self
+    }
+
     pub fn density(mut self, density: Density) -> Self {
         self.density = density;
         self
@@ -508,10 +517,27 @@ impl Dropdown {
 }
 
 impl RenderOnce for Dropdown {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let c = colors();
         let open = is_open(&self.id, cx);
         let enabled = self.blocked.is_none();
+        // The trigger's keyboard focus, kept under the drop-down's id so the caller can give it
+        // the keyboard (`focus`).
+        let keyboard = window
+            .use_keyed_state(
+                ElementId::NamedChild(
+                    std::sync::Arc::new(self.id.clone()),
+                    SharedString::new_static("focus"),
+                ),
+                cx,
+                |_, cx| cx.focus_handle(),
+            )
+            .read(cx)
+            .clone()
+            .tab_stop(enabled);
+        if self.focus && enabled {
+            window.focus(&keyboard, cx);
+        }
         let shown = self
             .chosen
             .and_then(|index| self.options.get(index).cloned());
@@ -535,8 +561,7 @@ impl RenderOnce for Dropdown {
             .rounded(RADIUS_CONTROL)
             .border(HAIRLINE_WIDTH)
             .border_color(c.field_border)
-            .focusable()
-            .tab_stop(enabled)
+            .track_focus(&keyboard)
             .role(gpui::Role::ComboBox)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(self.name.clone())

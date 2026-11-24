@@ -322,18 +322,21 @@ impl RenderOnce for TextField {
             .name
             .clone()
             .unwrap_or_else(|| self.placeholder.clone());
-        let mut element = Input::new(&input)
-            .appearance(false)
-            .aria_label(name.clone())
-            .disabled(self.disabled);
-        if self.masked {
-            element = element.mask_toggle();
-        }
-        let enter = self.on_enter.clone();
         let (ty, height) = match self.text_type {
             Some(ty) if ty != Type::Body => (ty, Density::Scan.control()),
             _ => (Type::Body, Density::Read.control()),
         };
+        // gpui-component sets a smaller size of its own; the field's words and placeholder are
+        // the field's type, as egui's were.
+        let mut element = Input::new(&input)
+            .appearance(false)
+            .aria_label(name.clone())
+            .disabled(self.disabled)
+            .text_size(ty.size());
+        if self.masked {
+            element = element.mask_toggle();
+        }
+        let enter = self.on_enter.clone();
         let mut frame = frame(focused, height)
             .ty(ty)
             .text_color(colors().text)

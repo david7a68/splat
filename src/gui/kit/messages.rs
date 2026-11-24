@@ -78,16 +78,14 @@ fn line_id<A>(id: &ElementId, at: usize, line: &PlainLine<A>) -> ElementId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::design::ResultOrder;
 
     /// A kept result's controls keep their id when the footer puts a newer result before it, so
     /// the keyboard on its Undo never lands on another result's Undo.
     #[test]
     fn a_kept_line_keeps_its_id_when_the_footer_order_changes() {
         let footer = ElementId::Name("footer".into());
-        let (older, newer) = (ResultOrder::issue(), ResultOrder::issue());
-        let ash = PlainLine::<()>::for_test("Removed Ash.", Some(older));
-        let rook = PlainLine::<()>::for_test("Added Rook.", Some(newer));
+        let ash = PlainLine::<()>::for_test("Removed Ash.", Some(1));
+        let rook = PlainLine::<()>::for_test("Added Rook.", Some(2));
         assert_eq!(line_id(&footer, 0, &ash), line_id(&footer, 1, &ash));
         assert_ne!(line_id(&footer, 0, &ash), line_id(&footer, 0, &rook));
         let notice = PlainLine::<()>::for_test("A notice.", None);
