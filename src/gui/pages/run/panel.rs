@@ -1313,7 +1313,7 @@ fn sync_settings(
                     "Sync combat stats with D&D Beyond",
                     enabled,
                 )
-                .blocked(Some("Connect to sync")),
+                .blocked(Some("Connect to sync.")),
             )
             .child(
                 kit::Link::new("run-sync-connect", "Connect to sync")

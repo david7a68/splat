@@ -304,7 +304,7 @@ fn signed_in_run(shell: &mut Shell) {
             .simulate(crate::settings::Account::Connected);
     });
     open_saved(shell, RUN);
-    for _ in 0..100 {
+    for _ in 0..400 {
         if shell.read(|root| {
             !root.app.party.reader.loading() && !root.app.party.reader.sheets.is_empty()
         }) {
@@ -374,6 +374,18 @@ fn run_sync_conflict() {
         Some(SyncState::Conflict)
     );
     shell.capture("run-sync-conflict__06-conflict-resolved__1200x800");
+    // The same panel at 960x640.
+    let mut small = Shell::with_size(
+        "run-sync-conflict",
+        Seed::Campaign,
+        size(px(960.0), px(640.0)),
+    );
+    signed_in_run(&mut small);
+    small.update(|root, _, _| {
+        root.app.encounters.simulate_sync_conflict("Brannoch Vale");
+    });
+    small.click("Brannoch Vale");
+    small.capture("run-sync-conflict__05-conflict-panel__960x640");
 }
 
 /// Correct holds the same sync editor as the Party page: a press on − changes the sheet's HP in

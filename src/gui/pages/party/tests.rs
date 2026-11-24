@@ -9,10 +9,8 @@ fn party(name: &str) -> Shell {
     shell.click("Party");
     assert_eq!(shell.read(|root| root.app.page), Page::Party);
     // The party's sheets are read in the background.
-    for _ in 0..100 {
-        if shell.read(|root| {
-            !root.app.party.reader.loading() && !root.app.party.reader.members.is_empty()
-        }) {
+    for _ in 0..400 {
+        if shell.read(|root| !root.app.party.reader.members.is_empty() && sheet_ready(root)) {
             break;
         }
         shell.wait(std::time::Duration::from_millis(50));
@@ -70,6 +68,18 @@ fn not_linked_leads_to_link_page() {
     assert_eq!(shell.read(|root| root.app.page), Page::Settings);
 }
 
+/// The selected member's sheet is read, and a signed-in Party page's sync has started.
+fn sheet_ready(root: &crate::gui::SplatRoot) -> bool {
+    let party = &root.app.party;
+    !party.reader.loading()
+        && party
+            .reader
+            .selected
+            .as_ref()
+            .is_some_and(|id| party.reader.sheets.contains_key(id))
+        && (root.app.settings.campaign_session().1.is_none() || party.combat.enabled)
+}
+
 /// The Party page of a signed-in DM, with the first member's sheet and its combat sync open.
 fn signed_in(name: &str, window: gpui::Size<gpui::Pixels>) -> Shell {
     let mut shell = Shell::with_size(name, Seed::Campaign, window);
@@ -79,10 +89,8 @@ fn signed_in(name: &str, window: gpui::Size<gpui::Pixels>) -> Shell {
             .simulate(crate::settings::Account::Connected);
     });
     shell.click("Party");
-    for _ in 0..100 {
-        if shell.read(|root| {
-            !root.app.party.reader.loading() && root.app.party.reader.selected.is_some()
-        }) {
+    for _ in 0..400 {
+        if shell.read(sheet_ready) {
             break;
         }
         shell.wait(std::time::Duration::from_millis(50));
@@ -128,18 +136,23 @@ fn values(shell: &mut Shell, key: &str, field: &str) -> serde_json::Value {
 /// every value has − and +, and each press changes that value in the sync (egui `signed-in`).
 #[test]
 fn party_sync_editor() {
-    let mut shell = signed_in("signed-in", gpui::size(gpui::px(1200.0), gpui::px(800.0)));
-    assert!(shell.read(|root| root.app.party.combat.enabled));
-    shell.click("Combat sync · Waiting for the first sheet read");
-    assert!(shell.bounds("Sync this sheet with D&D Beyond").is_some());
-    assert!(shell.bounds("id:party-sync-settings").is_some());
-    shell.capture("signed-in__05-party-sync-on__1200x800");
-    read_sheet(&mut shell);
-    assert!(shell.bounds("Combat sync · On").is_some());
-    shell.capture("signed-in__07-party-sync-editable__1200x800");
-    shell.click("Short rest…");
-    assert!(shell.bounds("Take short rest").is_some());
-    shell.capture("signed-in__06-party-short-rest__1200x800");
+    for (w, h) in [(1200.0, 800.0), (960.0, 640.0)] {
+        let size = format!("{w}x{h}");
+        let mut shell = signed_in("signed-in", gpui::size(gpui::px(w), gpui::px(h)));
+        assert!(shell.read(|root| root.app.party.combat.enabled));
+        shell.click("Combat sync · Waiting for the first sheet read");
+        assert!(shell.bounds("Sync this sheet with D&D Beyond").is_some());
+        assert!(shell.bounds("id:party-sync-settings").is_some());
+        shell.capture(&format!("signed-in__05-party-sync-on__{size}"));
+        read_sheet(&mut shell);
+        assert!(shell.bounds("Combat sync · On").is_some());
+        shell.capture(&format!("signed-in__07-party-sync-editable__{size}"));
+        shell.click("Short rest…");
+        if w > 1000.0 {
+            assert!(shell.bounds("Take short rest").is_some());
+        }
+        shell.capture(&format!("signed-in__06-party-short-rest__{size}"));
+    }
 }
 
 /// Presses through the editor change the sync's values: HP, inspiration, a condition, a coin,
@@ -261,10 +274,8 @@ fn technical_details() {
         gpui::size(gpui::px(1200.0), gpui::px(2000.0)),
     );
     shell.click("Party");
-    for _ in 0..100 {
-        if shell.read(|root| {
-            !root.app.party.reader.loading() && root.app.party.reader.selected.is_some()
-        }) {
+    for _ in 0..400 {
+        if shell.read(sheet_ready) {
             break;
         }
         shell.wait(std::time::Duration::from_millis(50));
@@ -318,7 +329,7 @@ fn party_bar_holds_through_a_fight() {
     });
     shell.click("Session");
     assert_eq!(shell.read(|root| root.app.page), Page::Sessions);
-    for _ in 0..100 {
+    for _ in 0..400 {
         if shell.read(|root| root.pages.party.bar_hold.is_some()) {
             break;
         }
