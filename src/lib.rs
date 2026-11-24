@@ -41,6 +41,7 @@ use splat_content_ui::copy_dialog;
 use splat_sessions_ui::credentials;
 #[path = "design/app.rs"]
 mod design;
+mod gui;
 // The layout parts are public only so that their `compile_fail` doc tests can name them.
 #[doc(hidden)]
 pub use design::extras;
@@ -114,25 +115,54 @@ use design::{Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
 pub use splat_design::{choice, create_reasons, field_id, key, lead, sentence, word};
 
-pub fn run() -> eframe::Result {
+/// Start Splat: a command when there are arguments, else the app's window. The GPUI app is the
+/// default; `SPLAT_EGUI=1` opens the egui app instead, so the two can be compared until the port's
+/// cleanup removes egui (`docs/gpui-port.md`).
+pub fn run() {
+    let Some(_instance) = start_process() else {
+        return;
+    };
+    if std::env::var_os("SPLAT_EGUI").is_some_and(|value| value == "1") {
+        if let Err(error) = open_egui_window() {
+            eprintln!("Splat could not open its window: {error}");
+            std::process::exit(1);
+        }
+    } else {
+        gui::run();
+    }
+}
+
+/// The egui app, as `run` opened it before the GPUI port.
+pub fn run_egui() -> eframe::Result {
+    let Some(_instance) = start_process() else {
+        return Ok(());
+    };
+    open_egui_window()
+}
+
+/// Run a command and exit when there are arguments; otherwise take this computer's instance lock.
+/// `None` when another Splat holds it (the DM was told).
+fn start_process() -> Option<Option<ui_state::InstanceLock>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if !args.is_empty() {
         std::process::exit(commands::run(&args, &mut std::io::stdout().lock()));
     }
-    let _instance = if let Some(dirs) = directories::ProjectDirs::from("", "", "splat") {
-        match ui_state::InstanceLock::acquire(&dirs.config_dir().join("instance.lock")) {
-            Ok(lock) => Some(lock),
-            Err(error) => {
-                rfd::MessageDialog::new()
-                    .set_title("Splat is already open")
-                    .set_description(error)
-                    .show();
-                return Ok(());
-            }
-        }
-    } else {
-        None
+    let Some(dirs) = directories::ProjectDirs::from("", "", "splat") else {
+        return Some(None);
     };
+    match ui_state::InstanceLock::acquire(&dirs.config_dir().join("instance.lock")) {
+        Ok(lock) => Some(Some(lock)),
+        Err(error) => {
+            rfd::MessageDialog::new()
+                .set_title("Splat is already open")
+                .set_description(error)
+                .show();
+            None
+        }
+    }
+}
+
+fn open_egui_window() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
@@ -363,9 +393,16 @@ impl Splat {
     /// Open where the DM left off: the open run, then the last page. The first time,
     /// Encounters if a campaign is active, otherwise the Library, which needs none.
     fn start(&mut self, ctx: &egui::Context) {
+        let saved = self.restore();
+        design::restore_column_widths(ctx, saved.column_widths);
+    }
+
+    /// Restore what this computer remembers (`ui_state`): the page, the session played, the
+    /// open run, the touchpad speed. Both UIs call it once before their first frame; the egui
+    /// app also restores its column widths from the returned state.
+    fn restore(&mut self) -> ui_state::UiState {
         self.started = true;
         let saved = self.ui_store.load();
-        design::restore_column_widths(ctx, saved.column_widths);
         self.touchpad_speed = saved.touchpad_speed;
         self.sessions.restored_session = saved.playing;
         self.sessions.party_bar = saved.party_bar;
@@ -387,6 +424,7 @@ impl Splat {
             self.encounters
                 .restore_run(&open.path, active, &open.synced);
         }
+        saved
     }
 
     fn remember(&mut self, ctx: &egui::Context) {
@@ -394,9 +432,18 @@ impl Splat {
         if ctx.input(|i| i.pointer.any_down()) {
             return;
         }
+        let state = self.ui_state_now(design::column_widths(ctx));
+        self.ui_store.save(&state);
+    }
+
+    /// What this computer remembers now, with the UI's column widths.
+    fn ui_state_now(
+        &self,
+        column_widths: std::collections::BTreeMap<String, f32>,
+    ) -> ui_state::UiState {
         let active = self.campaigns.active_campaign();
-        let state = ui_state::UiState {
-            column_widths: design::column_widths(ctx),
+        ui_state::UiState {
+            column_widths,
             touchpad_speed: self.touchpad_speed,
             party_bar: self.sessions.party_bar,
             session_list_hidden: self.sessions.list_hidden,
@@ -421,8 +468,7 @@ impl Splat {
                     synced: run.synced_keys(),
                 })
             }),
-        };
-        self.ui_store.save(&state);
+        }
     }
 
     /// F9, W5-D1: a fight that enters the Timeline now, from a plan line that a journey's check
@@ -2858,73 +2904,13 @@ impl Splat {
     }
 }
 
-use art::modal_open;
-
+/// The app's frame logic that draws nothing, shared by the egui and GPUI apps (`gui::SplatRoot`
+/// calls these in the same order as `update`).
 impl Splat {
-    /// `modal_open` for this app's own dialogs.
-    fn modal_open(&self, ctx: &egui::Context) -> bool {
-        modal_open(ctx, self.copy_dialog.is_some() || self.confirm_close)
-    }
-}
-
-impl eframe::App for Splat {
-    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        // eframe calls this before the first `update`, where `start` restores the rest.
-        if !self.started {
-            self.touchpad_speed = self.ui_store.load().touchpad_speed;
-        }
-        self.touchpad_speed.apply(&mut raw_input.events);
-        history::set_aside(ctx, &mut raw_input.events);
-    }
-
-    fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
-        crate::frame_clock::tick(ctx);
-        if !self.started {
-            self.start(ctx);
-        }
-        self.campaign_content.tick(ctx, &self.campaigns);
-        if ctx.input(|i| i.viewport().close_requested()) {
-            // An edit in its pause before saving is saved now, not reported as a loss.
-            self.sessions.flush();
-            timeline::checks::settle_length(&mut self.timeline, None);
-            self.timeline.run_open = self.encounters.has_run();
-            self.timeline.save();
-            if (self.library.dirty()
-                || self.world_page.dirty()
-                || self.world_page.has_generated()
-                || self.lookup.generated_name().is_some()
-                || self.any_unsaved_edits()
-                || self.campaign_content.dirty()
-                || self.encounters.unsaved()
-                || self.encounters.pending_sync()
-                || self.party.unconfirmed()
-                || self.sessions.recording()
-                || self.sessions.processing()
-                || self.sessions.busy_with_edit()
-                || self.timeline.not_saved())
-                && !self.discard_on_close
-            {
-                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                self.confirm_close = true;
-            }
-        }
-        if let Some(page) =
-            ctx.data_mut(|data| data.remove_temp::<Page>(egui::Id::new("resume_draft_focus")))
-        {
-            match page {
-                Page::Library => self.library.refocus_draft(),
-                Page::Sessions => self.sessions.return_focus_to_note(),
-                Page::Encounters => self.encounters.refocus_draft(),
-                _ => {}
-            }
-        }
-        if self.confirm_close {
-            self.close_prompt(ctx);
-        }
-        if !self.confirm_close {
-            ctx.data_mut(|data| data.remove::<bool>(egui::Id::new("app_close_default_focused")));
-        }
-        self.apply_focus_step(ctx);
+    /// Poll background work (sign-in, D&D Beyond, art, Lookup's index, encounters, processing,
+    /// sessions, trackers) and follow the open run into the Timeline. Returns the account's
+    /// session epoch and session.
+    fn poll_background(&mut self, ctx: &egui::Context) -> (u64, Option<auth::Session>) {
         self.settings.poll(ctx);
         let (epoch, session) = self.settings.campaign_session();
         self.dndbeyond.begin_frame();
@@ -3024,6 +3010,124 @@ impl eframe::App for Splat {
                 .find(|e| e.run == Some(fact.id))?;
             Some((fact.name.clone(), event.session?))
         });
+        (epoch, session)
+    }
+
+    /// Party sync and the run's D&D Beyond sync, for the account's session.
+    fn sync_party(&mut self, ctx: &egui::Context, epoch: u64, session: Option<auth::Session>) {
+        let active = self.campaigns.active_campaign();
+        self.party.sync(
+            ctx,
+            epoch,
+            active.as_ref().and_then(|c| {
+                c.dndbeyond_campaign_id
+                    .clone()
+                    .map(|remote| (c.id, remote, c.path.clone()))
+            }),
+            session.clone(),
+            self.page == Page::Party,
+        );
+        if std::mem::take(&mut self.party.new_copies)
+            && let Some(campaign) = &active
+        {
+            self.encounters
+                .refresh_content(ctx, &self.campaigns, &campaign.path);
+        }
+        self.encounters
+            .tick_sync(ctx, session, epoch, active.as_ref());
+    }
+
+    /// What follows a change of page: a length typed on the page left is settled, notices end,
+    /// and the keyboard goes back to the open note.
+    fn follow_page_change(&mut self) {
+        // Coming back to a page beside the open note, the keyboard goes back to the note.
+        if self.page != self.shown_page {
+            // A length typed on the page the DM left is the journey's now, as at focus loss.
+            timeline::checks::settle_length(&mut self.timeline, None);
+            self.campaign_content.clear_notice();
+            self.encounters.clear_notice();
+            self.sessions.clear_notice();
+            self.world_page.reader.clear_notice();
+            let from_sessions = self.shown_page == Page::Sessions;
+            self.shown_page = self.page;
+            if from_sessions {
+                // The note can have changed there, so an old caret could land inside a line.
+                self.sessions.fresh_focus_in_panel();
+            } else if self.page != Page::Sessions {
+                self.sessions.return_focus_to_note();
+            }
+        }
+    }
+}
+
+use art::modal_open;
+
+impl Splat {
+    /// `modal_open` for this app's own dialogs.
+    fn modal_open(&self, ctx: &egui::Context) -> bool {
+        modal_open(ctx, self.copy_dialog.is_some() || self.confirm_close)
+    }
+}
+
+impl eframe::App for Splat {
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        // eframe calls this before the first `update`, where `start` restores the rest.
+        if !self.started {
+            self.touchpad_speed = self.ui_store.load().touchpad_speed;
+        }
+        self.touchpad_speed.apply(&mut raw_input.events);
+        history::set_aside(ctx, &mut raw_input.events);
+    }
+
+    fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+        crate::frame_clock::tick(ctx);
+        if !self.started {
+            self.start(ctx);
+        }
+        self.campaign_content.tick(ctx, &self.campaigns);
+        if ctx.input(|i| i.viewport().close_requested()) {
+            // An edit in its pause before saving is saved now, not reported as a loss.
+            self.sessions.flush();
+            timeline::checks::settle_length(&mut self.timeline, None);
+            self.timeline.run_open = self.encounters.has_run();
+            self.timeline.save();
+            if (self.library.dirty()
+                || self.world_page.dirty()
+                || self.world_page.has_generated()
+                || self.lookup.generated_name().is_some()
+                || self.any_unsaved_edits()
+                || self.campaign_content.dirty()
+                || self.encounters.unsaved()
+                || self.encounters.pending_sync()
+                || self.party.unconfirmed()
+                || self.sessions.recording()
+                || self.sessions.processing()
+                || self.sessions.busy_with_edit()
+                || self.timeline.not_saved())
+                && !self.discard_on_close
+            {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.confirm_close = true;
+            }
+        }
+        if let Some(page) =
+            ctx.data_mut(|data| data.remove_temp::<Page>(egui::Id::new("resume_draft_focus")))
+        {
+            match page {
+                Page::Library => self.library.refocus_draft(),
+                Page::Sessions => self.sessions.return_focus_to_note(),
+                Page::Encounters => self.encounters.refocus_draft(),
+                _ => {}
+            }
+        }
+        if self.confirm_close {
+            self.close_prompt(ctx);
+        }
+        if !self.confirm_close {
+            ctx.data_mut(|data| data.remove::<bool>(egui::Id::new("app_close_default_focused")));
+        }
+        self.apply_focus_step(ctx);
+        let (epoch, session) = self.poll_background(ctx);
         let modal = self.modal_open(ctx);
         // Every page's Ctrl+S asks this one test (`design::save_row::save_key`, issues #513, #514).
         design::save_row::set_modal(ctx, modal);
@@ -3086,26 +3190,7 @@ impl eframe::App for Splat {
             Connection::Offline
         };
         self.rail(ctx, connection);
-        let active = self.campaigns.active_campaign();
-        self.party.sync(
-            ctx,
-            epoch,
-            active.as_ref().and_then(|c| {
-                c.dndbeyond_campaign_id
-                    .clone()
-                    .map(|remote| (c.id, remote, c.path.clone()))
-            }),
-            session.clone(),
-            self.page == Page::Party,
-        );
-        if std::mem::take(&mut self.party.new_copies)
-            && let Some(campaign) = &active
-        {
-            self.encounters
-                .refresh_content(ctx, &self.campaigns, &campaign.path);
-        }
-        self.encounters
-            .tick_sync(ctx, session, epoch, active.as_ref());
+        self.sync_party(ctx, epoch, session);
         self.sessions.on_page = self.page == Page::Sessions;
         // The app's one test of an open modal (`art::modal_open`): Ctrl+S waits for it.
         self.sessions.modal = modal;
@@ -3183,23 +3268,7 @@ impl eframe::App for Splat {
                 self.copy_dialog = None;
             }
         }
-        // Coming back to a page beside the open note, the keyboard goes back to the note.
-        if self.page != self.shown_page {
-            // A length typed on the page the DM left is the journey's now, as at focus loss.
-            timeline::checks::settle_length(&mut self.timeline, None);
-            self.campaign_content.clear_notice();
-            self.encounters.clear_notice();
-            self.sessions.clear_notice();
-            self.world_page.reader.clear_notice();
-            let from_sessions = self.shown_page == Page::Sessions;
-            self.shown_page = self.page;
-            if from_sessions {
-                // The note can have changed there, so an old caret could land inside a line.
-                self.sessions.fresh_focus_in_panel();
-            } else if self.page != Page::Sessions {
-                self.sessions.return_focus_to_note();
-            }
-        }
+        self.follow_page_change();
         // A roll menu the keys opened gives the focus back when it closes, however it closed.
         rolls::end_menu_frame(ctx);
         self.skip_unnamed_focus(ctx);

@@ -1,3 +1,3 @@
-fn main() -> eframe::Result {
-    splat::run()
+fn main() {
+    splat::run();
 }

@@ -49,6 +49,9 @@ pub static FONTS: [(&str, &[u8]); 10] = [
     ),
 ];
 
+/// Phosphor Regular icons (MIT, `assets/fonts/Phosphor-MIT.txt`), for the GPUI UI's `gui::icons`.
+pub static PHOSPHOR: &[u8] = include_bytes!("../../../assets/fonts/Phosphor-Regular.ttf");
+
 /// Built-in reports without layout whitespace.
 pub static COVERAGE: &str = include_str!(concat!(env!("OUT_DIR"), "/coverage.json"));
 pub static CONTRACTS: &str = include_str!(concat!(env!("OUT_DIR"), "/contracts.json"));

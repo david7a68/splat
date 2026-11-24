@@ -884,6 +884,37 @@ impl Campaigns {
         add
     }
 
+    /// The campaign switcher's words for a UI that draws it itself (the GPUI rail): the active
+    /// campaign's name, else `No campaign` or `Select campaign`.
+    pub fn switcher_label(&self) -> &str {
+        let current = self.data.active_campaign_id;
+        self.data
+            .campaigns
+            .iter()
+            .find(|p| Some(p.id) == current)
+            .map(|p| p.name.as_str())
+            .unwrap_or(if self.data.campaigns.is_empty() {
+                "No campaign"
+            } else {
+                "Select campaign"
+            })
+    }
+
+    /// Why the switcher cannot change now: `blocked` (an open run, a draft), or settings that
+    /// could not be read.
+    pub fn switcher_lock<'a>(&self, blocked: Option<&'a str>) -> Option<&'a str> {
+        if self.writable {
+            blocked
+        } else {
+            Some("Reload valid campaign settings in Settings first.")
+        }
+    }
+
+    /// Make `id` the active campaign (`None`: no campaign), as the switcher does.
+    pub fn choose(&mut self, id: Option<Uuid>) {
+        self.select(id);
+    }
+
     fn select(&mut self, id: Option<Uuid>) {
         // Another campaign: the open import form's reveal was for the one before, and a
         // discarded details draft was the other campaign's.

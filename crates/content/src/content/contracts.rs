@@ -238,8 +238,28 @@ pub fn specification(entry: &Entry) -> Result<Json, String> {
 }
 
 pub fn fingerprint(value: &Json) -> Result<String, String> {
-    let bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
+    let bytes = serde_json::to_vec(&sorted(value)).map_err(|e| e.to_string())?;
     Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+
+/// `value` with every object's keys in sorted order. serde_json's map sorts its keys unless a
+/// crate in the build turns on its `preserve_order` feature (GPUI does), so the fingerprint sorts
+/// them itself and hashes the same bytes either way.
+fn sorted(value: &Json) -> Json {
+    match value {
+        Json::Object(map) => {
+            let mut entries: Vec<_> = map.iter().collect();
+            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+            Json::Object(
+                entries
+                    .into_iter()
+                    .map(|(key, value)| (key.clone(), sorted(value)))
+                    .collect(),
+            )
+        }
+        Json::Array(items) => Json::Array(items.iter().map(sorted).collect()),
+        other => other.clone(),
+    }
 }
 
 #[cfg(test)]
