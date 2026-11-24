@@ -199,7 +199,9 @@ Icons: `gui::icons::*` has the design system's names (`icons::RUN`, `icons::WARN
 | Scroll | `scroll_column(id, content)`, `scroll::scroll_column_with(id, &ScrollHandle, content)`, `scroll::sideways(id, content)` | A column that keeps its bar's lane |
 | Virtual list | `uniform_column(id, &UniformListScrollHandle, count, cx.processor(\|root, range, window, cx\| Vec<row>))`, `measured_column(id, &ListState, \|at, window, cx\| AnyElement)` (`kit::virtual_list`) | A long list that builds only the rows in view, in a column that keeps its bar's lane. `uniform_column` when every row has one height (Library entries, Timeline events); `measured_column` when rows have their own heights (World's headings and notes; `splice` the `ListState` when the rows change). Keep the handle or state in your page's GPUI state |
 | Panes | `Pane::new(id).header(..).footer(Message).fixed().flush().child(..)`, `Columns::new(id).column(width, min..max, pane).rest(pane)` | Task columns with splitters; messages in the footer |
-| Markdown | `markdown(id, source)` / `Markdown::new(..).compact().full_width().on_link(\|&str, window, cx\|)` | Reader prose (basic; the Reader agent extends it) |
+| Markdown | `markdown(id, source)` / `Markdown::new(id, source)` then `.document(uuid)`, `.compact()`, `.fields()`, `.skills()`, `.row_words(muted)`, `.full_width()`, `.wide_tables()`, `.jump_in(&ScrollHandle)`, `.on_link(\|&str, window, cx\|)`, `.on_target(\|&LinkTarget, window, cx\|)` | Every Markdown document; see Reader parts |
+| Fact | `fact::fact_line(label, values)`, `fact::words`, `fact::tile_label`, `fact::roll_tile(label, link)` | `Label: a · b` on its own line; no line ends at a dot |
+| Value block | `ValueBlock::new(HeadingRow::new(title).note(HeadingNote::..).action(Button), first).field(..).save_row(..).messages(vec![Message])` or `.end()` | One settings value: heading row, field, save row, its messages |
 | Nav | `NavItem`, `NavToggle` | The rail only |
 | Tooltip | `.with_tooltip(words)` on an element with an id (`WithTooltip`) | Hints and blocked reasons |
 | Link | `Link::new(id, words)` or `link(id, words)`, then `.small()`, `.wrap()`, `.hint(words)`, `.name(words)`, `.on_click(f)` | A move to another place (a note, a file, a page), never an act that changes data. Accent words, underlined, the focus colour on hover; at least `XL` wide and 24 px high. One line by default; `.wrap()` for words of unknown length (a note's name, a path) |
@@ -215,6 +217,61 @@ test sets `root.gallery = Some(Gallery::default())` to show it in place of the p
 Menus, drop-downs and popovers keep which one is open in a GPUI global (`kit::menu`): no open flag
 in your state. `kit::menu::any_open(cx)`, `open_popup(id, window, cx)` and `close_open_popup`
 exist for keys.
+
+### Reader parts
+
+The Reader area (`kit/markdown/`, `pages/reader/`) gives every page the egui reader's Markdown
+and entry views. Their state stays where egui keeps it: pressed links, rolls and roll tables go
+through the app's egui context (`kit::markdown::Host`, installed by `pages::reader::init`), and
+the frame logic routes them as it routes egui's (`Splat::route`, `poll_background`). So a page
+calls the same state methods after a reader as its egui code did (`markdown_view::take_lookup_link`,
+`rolls::take_ask`, …) and needs no handler for them.
+
+**Markdown** (`kit::Markdown`): headings, paragraphs, emphasis, code, block quotes, rules, lists
+with each mark in its own column and nested levels (#949), task boxes, tables, roll tables (`<!--
+splat:rolls … -->`: **Roll** and a typed roll under the table, the rolled row marked), inventory
+and `Field`/`Value` tables, figures (local art in place), and links: a note link (`[[Name]]`,
+resolved in the link index) goes to Lookup, a bold name that resolves to one entry goes to
+Lookup, a missing link shows its warning and goes nowhere, a web link opens the browser, a dice
+link asks for its roll (Shift advantage, Ctrl disadvantage). Short links get `XL` of width. Long
+words break between graphemes. Parsed blocks and table columns are kept under the element id and
+made again only when the words, mode, document, link index, art or width change.
+
+| Call | Egui | Use |
+| --- | --- | --- |
+| `Markdown::new(id, source)` | `show_reader`, `show_document` | Reader prose at `READER_MEASURE`; `ProseCompact` below `READER_MEASURE - 60` |
+| `.document(entry.id)` | `reader_document` | The note shown: its links resolve from it, a followed note link says where it came from |
+| `.compact()` | (narrow `prose_type`) | `ProseCompact` at any width |
+| `.fields()` | `show_compact` | `Stat` field rows; `Field`/`Value` tables become label/value rows |
+| `.skills()` | `show_skills` | A stat block's Skills row: each bonus's target covers its skill's name |
+| `.row_words(muted)` | `show_row_words` | A plan row's words: `Body` on `XL` lines, no space after |
+| `.full_width()` / `.wide_tables()` | `with_wide_tables` | Fill the parent / tables take the parent while prose keeps the measure |
+| `.jump_in(&handle)` | `want_heading` | The scroll column a typed jump (`markdown_view::want_heading(ctx, Some(h))`) scrolls |
+| `.on_link(f)` / `.on_target(f)` | `take_note_link` | Replace the reader's routing (a note's `splat-note:…`, a URL, a bold name / any `LinkTarget`) |
+
+**Entry view** (`pages::reader::entry`): the one reader of a content entry (egui `library::view`),
+for the Library, Lookup, the run's side panel and campaign entries.
+
+```rust
+use crate::gui::pages::reader::entry::{self, EntryView, Source};
+// Links: what related, feature and spell links open (`entry::index_links(index)` or `Rc::new(NoLinks)`).
+EntryView::new(id, &name, Some(&entry), entry.body.clone(), Source::from(&origin), links)
+    .empty_value_block(false)            // egui `show_with_related`'s flag
+    .run(RunValues { .. })               // egui `show_run`: live vitals, printed values under them
+    .related(element)                    // egui `show_with_related`'s closure
+    .on_open(|index: usize, window, cx| …)   // a followed related/feature/spell link (egui's `Option<usize>`)
+    .jump_in(&scroll);                   // typed jumps to section headings
+entry::title_with_art(title, subtitle, Some(&entry), cx)  // name, subtitle and picture
+```
+
+It draws line warnings, a reading's summary, a creature's stat block (identity, vitals, the
+ability table whose modifiers and saves roll, detail rows, rules prose with actions as tiles and
+Spellcasting lists as spell tiles), or the common layout (item summary, spell or encounter facts,
+source facts and prose, sections under headings), class traits and features, related entries,
+then the closed end sections. Its parts are public for pages that draw pieces of an entry:
+`entry::parts::{title, subtitle, heavy_rule, identity, section_heading, detail, stat_detail,
+detail_row, facts, help, source_prose, item}` and `entry::tiles::tile_row` (action tiles from
+`rolls::plain::roll_tiles`).
 
 ### Screenshots and interaction tests
 
@@ -282,4 +339,10 @@ fn library_browse() {
 - Dialogs ask for the keyboard when they open but do not keep Tab inside them; Escape reaches them
   through the root (`kit::dialog::escape_open_dialog`) wherever the keyboard is.
 - A kit menu may reach past its pane's edge (egui keeps it inside the pane, one lane clear).
-- `kit::markdown` is basic: no dice links, note links, wide-table rules or history.
+- Reader (wave 2): reader text cannot be selected or copied, and links cannot be reached with Tab
+  (GPUI's `InteractiveText` has neither); a dice link or tile has no right-click mode menu (Shift
+  and Ctrl still pick advantage and disadvantage); a wide table's header does not stay at the
+  top while its rows scroll; images do not open full size; a lone action tile keeps 208 px
+  instead of the row's width; Markdown source (`markdown_source`: reader faces, folded
+  `splat:` marks, section rules where a note is typed) is not ported, as the kit's
+  `TextEditor` has one font size.

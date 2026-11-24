@@ -284,6 +284,8 @@ impl SplatRoot {
             }
             app.apply_tracker_act();
             app.add_tracker_act_to_timeline();
+            // A pressed dice number: the run rolls it, or it is a preview (egui's `update`).
+            app.route_rolls(ctx);
             app.route(ctx);
             app.follow_page_change();
         });
@@ -397,6 +399,10 @@ impl SplatRoot {
         #[cfg(test)]
         if self.gallery.is_some() {
             return gallery::render(self, window, cx);
+        }
+        #[cfg(test)]
+        if let Some(preview) = pages::reader::render_preview(self, window, cx) {
+            return preview;
         }
         let needs_campaign = matches!(
             self.app.page,

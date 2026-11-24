@@ -12,7 +12,7 @@ use splat::content::{
     dice_text::{self, D20, RollLink},
 };
 
-const ABILITIES: [&str; 6] = [
+pub const ABILITIES: [&str; 6] = [
     "strength",
     "dexterity",
     "constitution",
@@ -20,7 +20,7 @@ const ABILITIES: [&str; 6] = [
     "wisdom",
     "charisma",
 ];
-const DETAILS: [(&str, &str); 10] = [
+pub const DETAILS: [(&str, &str); 10] = [
     ("movement_text", "Speed"),
     ("skills_text", "Skills"),
     ("resistances_text", "Resistances"),
@@ -33,10 +33,10 @@ const DETAILS: [(&str, &str); 10] = [
     ("habitat_text", "Habitat"),
 ];
 
-fn field<'a>(entry: &'a Entry, key: &str) -> Option<&'a str> {
+pub fn field<'a>(entry: &'a Entry, key: &str) -> Option<&'a str> {
     entry.fields.get("splat_creature")?.get(key)?.as_str()
 }
-fn stat(entry: &Entry, key: &str) -> Option<i64> {
+pub fn stat(entry: &Entry, key: &str) -> Option<i64> {
     entry
         .fields
         .get("splat_stats")?
@@ -141,15 +141,15 @@ pub fn use_vital(text: &str, entry: &Entry, key: &str, value: i64) -> Result<Str
     splat::content::formats::patch_model(text, &[("splat_stats", Some(stats))])
 }
 
-fn value(entry: &Entry, key: &str) -> String {
+pub fn value(entry: &Entry, key: &str) -> String {
     stat(entry, key).map_or_else(|| "—".into(), |v| v.to_string())
 }
 
-fn size(entry: &Entry) -> Option<&str> {
+pub fn size(entry: &Entry) -> Option<&str> {
     field(entry, "size_options_text").or_else(|| field(entry, "size"))
 }
 
-pub(super) fn supports(entry: &Entry, sections: &[presentation::ReadingSection<'_>]) -> bool {
+pub fn supports(entry: &Entry, sections: &[presentation::ReadingSection<'_>]) -> bool {
     has_stats(entry)
         && sections
             .iter()
@@ -162,7 +162,7 @@ pub fn has_stats(entry: &Entry) -> bool {
 }
 
 /// Remove only source rows represented by the styled values. Unknown prose stays.
-fn rules_prose(entry: &Entry, source: &str) -> String {
+pub fn rules_prose(entry: &Entry, source: &str) -> String {
     let identity = size(entry)
         .zip(field(entry, "type"))
         .map(|(size, kind)| format!("{size} {kind}").to_lowercase());
@@ -228,7 +228,7 @@ fn rules_prose(entry: &Entry, source: &str) -> String {
 }
 
 /// Keep authored prose around data blocks, without their generated headings.
-fn authored_prose(body: &str) -> String {
+pub fn authored_prose(body: &str) -> String {
     let mut depth = 0usize;
     let mut data = false;
     let mut output = String::new();
@@ -447,11 +447,11 @@ fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str, saves: bool) {
 }
 
 /// The widths of an attribute row's cells: label, score, modifier, then the save.
-const ABILITY_CELLS: [f32; 3] = [30.0, 24.0, 26.0];
-const SAVE_CELL: f32 = 56.0;
+pub const ABILITY_CELLS: [f32; 3] = [30.0, 24.0, 26.0];
+pub const SAVE_CELL: f32 = 56.0;
 
 /// One half of the attribute table, physical or mental, with or without its Save column.
-fn ability_half_width(saves: bool) -> f32 {
+pub fn ability_half_width(saves: bool) -> f32 {
     let cells: f32 = ABILITY_CELLS.iter().sum::<f32>() + 2.0 * design::XS;
     if saves {
         cells + design::XS + SAVE_CELL
@@ -461,7 +461,7 @@ fn ability_half_width(saves: bool) -> f32 {
 }
 
 /// An attribute row is as tall as a pointer target, as its numbers roll.
-const ABILITY_ROW: f32 = 24.0;
+pub const ABILITY_ROW: f32 = 24.0;
 
 fn cell(ui: &mut egui::Ui, width: f32, text: &str, role: Type, color: egui::Color32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, ABILITY_ROW), egui::Sense::hover());
@@ -508,14 +508,13 @@ fn link_cell(ui: &mut egui::Ui, width: f32, text: &str, link: &RollLink) {
     crate::rolls::interact(ui, &response, link);
 }
 
-/// The Skills row, with each bonus a dice link.
-fn skills_detail(ui: &mut egui::Ui, text: &str) {
+/// The Skills row's Markdown, each bonus a dice link; `None` when no skill is read from `text`.
+pub fn skills_markdown(text: &str) -> Option<String> {
     let mut markdown = String::new();
     let mut at = 0;
     let skills = dice_text::skills(text);
     if skills.is_empty() {
-        reader_style::stat_detail(ui, "Skills", text, colors().text);
-        return;
+        return None;
     }
     for (range, name, bonus) in skills {
         // A skill and its bonus wrap as one unit: the blanks inside `Sleight of Hand +5` do not
@@ -528,13 +527,22 @@ fn skills_detail(ui: &mut egui::Ui, text: &str) {
         at = range.end;
     }
     markdown.push_str(&text[at..]);
+    Some(markdown)
+}
+
+/// The Skills row, with each bonus a dice link.
+fn skills_detail(ui: &mut egui::Ui, text: &str) {
+    let Some(markdown) = skills_markdown(text) else {
+        reader_style::stat_detail(ui, "Skills", text, colors().text);
+        return;
+    };
     reader_style::linked_detail(ui, "Skills", |ui| {
         crate::markdown_view::show_skills(ui, &markdown);
     });
 }
 
 /// Armor class, hit points and initiative, under capital labels. Only what the entry has.
-fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
+pub fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
     let hp = field(entry, "hit_points_text")
         .filter(|text| {
             text.split_whitespace()
@@ -675,7 +683,7 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
     );
 }
 
-fn unbroken_dice(text: &str) -> String {
+pub fn unbroken_dice(text: &str) -> String {
     let mut in_dice = false;
     text.chars()
         .map(|c| {
@@ -690,7 +698,7 @@ fn unbroken_dice(text: &str) -> String {
         .collect()
 }
 
-fn detail(entry: &Entry, key: &str) -> Option<String> {
+pub fn detail(entry: &Entry, key: &str) -> Option<String> {
     if key == "cr_text" {
         return presentation::challenge_text(entry).map(str::to_owned);
     }
@@ -722,7 +730,7 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
     (!movement.is_empty()).then(|| movement.join(", "))
 }
 
-fn stat_identity(entry: &Entry) -> String {
+pub fn stat_identity(entry: &Entry) -> String {
     let kind = field(entry, "type_options_text")
         .or_else(|| field(entry, "type"))
         .map(|kind| {

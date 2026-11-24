@@ -22,11 +22,16 @@ pub enum Mode {
 impl Mode {
     /// Shift for advantage, Ctrl for disadvantage, on a d20.
     fn from_keys(ui: &egui::Ui, link: &RollLink) -> Self {
-        let d20 = matches!(link, RollLink::D20 { .. });
         let keys = ui.input(|i| i.modifiers);
-        if d20 && keys.shift {
+        Self::from_held(link, keys.shift, keys.command)
+    }
+
+    /// The same, from the keys a toolkit says are held.
+    fn from_held(link: &RollLink, shift: bool, command: bool) -> Self {
+        let d20 = matches!(link, RollLink::D20 { .. });
+        if d20 && shift {
             Self::Advantage
-        } else if d20 && keys.command {
+        } else if d20 && command {
             Self::Disadvantage
         } else {
             Self::Normal
@@ -93,6 +98,19 @@ pub fn set_inspired(ctx: &egui::Context, inspired: bool) {
 /// The entry whose numbers are drawn next, to name its rolls.
 pub fn set_entry(ctx: &egui::Context, name: &str) {
     ctx.data_mut(|data| data.insert_temp(entry_id(), name.to_owned()));
+}
+
+/// A press on a rollable number in a view that is not egui (the GPUI reader), with the keys
+/// held: Shift rolls a d20 with advantage, Ctrl with disadvantage, as a click here does. The ask
+/// waits in `ctx` for whoever owns the dice ([`take_ask`]).
+pub fn ask_pressed(ctx: &egui::Context, link: &RollLink, shift: bool, command: bool) {
+    ask(
+        ctx,
+        link.clone(),
+        None,
+        Mode::from_held(link, shift, command),
+        false,
+    );
 }
 
 /// Ask for `link`, from the roller and entry set for what is drawn now.
@@ -418,7 +436,7 @@ fn mode_menu(
 }
 
 /// What a press on this number does, in words, for hover.
-pub(crate) fn hint(link: &RollLink) -> String {
+pub fn hint(link: &RollLink) -> String {
     let keys = " Shift: advantage. Ctrl: disadvantage. Right-click or Shift+F10 for more.";
     match link {
         RollLink::D20 {
@@ -2679,5 +2697,171 @@ mod tests {
         .unwrap();
         assert_eq!(rolled.natural_words(), None);
         assert_eq!(rolled.headline(), "22 Dexterity save");
+    }
+}
+
+/// Action tiles for a view that is not egui (the GPUI reader): the words and state `tile_row`
+/// paints, without painting them. Presses go back through [`ask_pressed_at`].
+pub mod plain {
+    use super::*;
+
+    /// An entry's actions in printed order, each with its paragraph's place in `text`.
+    pub fn actions_of(text: &str) -> Arc<Vec<(usize, Chip)>> {
+        actions(text)
+    }
+
+    /// A chip's place in an entry's whole list of actions: the number that arms it.
+    pub fn place_of(all: &[(usize, Chip)], chip: &Chip) -> Option<usize> {
+        place_in(all, chip)
+    }
+
+    /// The words of one tile and its state.
+    #[derive(Clone, Debug)]
+    pub struct TileView {
+        /// Its icon (an attack, a save, an area, a spell, or the armed mark).
+        pub icon: &'static str,
+        pub name: String,
+        /// `Ctrl+1`, in a run.
+        pub keys: Option<String>,
+        /// Its numbers (with a run's changes) or an open tile's facts.
+        pub detail: String,
+        pub facts: Option<String>,
+        /// Armed in the run: its frame and fill are the accent's.
+        pub armed: bool,
+        /// The hover lines: its rules text, then what a press does.
+        pub tip: Vec<String>,
+        /// Its accessible name.
+        pub label: String,
+    }
+
+    /// The width of a tile, when two fit on a line.
+    pub const TILE_WIDTH: f32 = super::TILE_WIDTH;
+
+    /// How `count` tiles share lines `line` wide: each line's number of tiles and their width.
+    pub fn tile_widths(line: f32, count: usize) -> Vec<(usize, f32)> {
+        tile_lines(line, count)
+    }
+
+    /// The tiles of an entry's actions: each with its place in the whole list (its number).
+    /// `entry` names the rolls, as `tile_row` sets it.
+    pub fn roll_tiles(
+        ctx: &egui::Context,
+        entry: &str,
+        chips: &[(Option<usize>, Chip)],
+    ) -> Vec<TileView> {
+        set_entry(ctx, entry);
+        let in_run = roller(ctx).is_some();
+        let armed = ctx
+            .data(|data| data.get_temp::<ArmedView>(armed_id()))
+            .filter(|_| in_run);
+        let changes = if in_run { roller_changes(ctx) } else { (0, 0) };
+        chips
+            .iter()
+            .map(|(place, chip)| {
+                let shown = with_changes(&chip.link, changes);
+                let number = place
+                    .filter(|place| in_run && *place < 9)
+                    .map(|place| place + 1);
+                let lit = armed.as_ref().is_some_and(|view| view.marks(chip));
+                let keys = number.map_or_else(String::new, |n| format!(" Ctrl+{n}."));
+                let facts = tile_facts(chip);
+                let mut tip = vec![chip.text.clone()];
+                if shown != chip.link {
+                    tip.push(format!("Printed {}", tile_detail(&chip.link)));
+                }
+                tip.push(format!("{}{keys}", hint(&shown)));
+                TileView {
+                    icon: if lit {
+                        design::icons::ARMED
+                    } else {
+                        icon(&chip.link)
+                    },
+                    name: link_label(&chip.link).to_owned(),
+                    keys: number.map(|n| format!("Ctrl+{n}")),
+                    detail: keep_together(&tile_detail(&shown)),
+                    label: format!(
+                        "{} · {}.{}{keys}",
+                        link_label(&chip.link),
+                        tile_detail(&shown),
+                        facts
+                            .as_ref()
+                            .map_or_else(String::new, |facts| format!(" {facts}."))
+                    ),
+                    facts,
+                    armed: lit,
+                    tip,
+                }
+            })
+            .collect()
+    }
+
+    /// A tile that opens an entry (a spell with no attack or save): its icon, name and facts.
+    pub fn open_tile(name: &str, facts: &str, text: &str) -> TileView {
+        let mut tip = Vec::new();
+        if !text.is_empty() {
+            tip.push(text.to_owned());
+        }
+        tip.push(format!("Click to read {name}."));
+        TileView {
+            icon: design::icons::SPELL,
+            name: name.to_owned(),
+            keys: None,
+            detail: facts.to_owned(),
+            facts: None,
+            armed: false,
+            tip,
+            label: if facts.is_empty() {
+                format!("{name}. Opens its description.")
+            } else {
+                format!("{name} · {facts}. Opens its description.")
+            },
+        }
+    }
+
+    /// A press on a tile or a dice link, with the keys held and the spell it casts, if any.
+    pub fn ask_pressed_at(
+        ctx: &egui::Context,
+        link: &RollLink,
+        occurrence: Option<SpellOccurrence>,
+        shift: bool,
+        command: bool,
+    ) {
+        ask(
+            ctx,
+            link.clone(),
+            occurrence,
+            Mode::from_held(link, shift, command),
+            false,
+        );
+    }
+
+    /// Under an entry's tiles in a run: the armed action's status and what can follow it, when
+    /// one of these tiles is armed.
+    pub fn armed_under(ctx: &egui::Context, chips: &[&Chip]) -> Option<ArmedView> {
+        roller(ctx)?;
+        ctx.data(|data| data.get_temp::<ArmedView>(armed_id()))
+            .filter(|view| chips.iter().any(|chip| view.marks(chip)))
+    }
+
+    /// A press on one of the armed action's follow-up buttons.
+    pub fn send_armed_action(ctx: &egui::Context, action: ArmedAction) {
+        ctx.data_mut(|data| data.insert_temp(armed_action_id(), action));
+    }
+
+    /// Outside a run, the last preview's result under the tiles that rolled it: its totals,
+    /// each part's words, joined by a muted dot.
+    pub fn preview_words(ctx: &egui::Context, entry: &str, links: &[&RollLink]) -> Option<Vec<String>> {
+        if roller(ctx).is_some() {
+            return None;
+        }
+        let outcome = preview_outcome(ctx, entry).filter(|o| links.contains(&&o.link))?;
+        let mut parts = Vec::new();
+        for rolled in [&outcome.first, &outcome.damage].into_iter().flatten() {
+            parts.push(rolled.headline());
+            if let Some(words) = rolled.natural_words() {
+                parts.push(words.to_owned());
+            }
+        }
+        Some(parts)
     }
 }
