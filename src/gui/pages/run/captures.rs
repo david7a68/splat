@@ -1234,3 +1234,158 @@ fn run_roster_conflict() {
     assert_eq!(count(&mut shell), 20);
     shell.capture("run-roster-conflict__05-after-full-round__1200x800");
 }
+
+// ---------------------------------------------------------------------------------------------
+// run-resume, run-no-groups, run-folder-defect, roll-table-author
+
+/// The Encounters page with its campaign read: each read in flight is waited for on its own
+/// result, never a clock.
+fn encounters_ready(shell: &mut Shell) {
+    shell.update(|root, _, cx| root.show_page(Page::Encounters, cx));
+    for _ in 0..10 {
+        if !shell.read(|root| root.app.encounters.busy()) {
+            break;
+        }
+        shell.update(|root, _, _| root.app.encounters.wait_for_load());
+    }
+    assert!(
+        shell.read(|root| root.app.encounters.loaded() && !root.app.encounters.busy()),
+        "the campaign's encounters are read"
+    );
+}
+
+/// Scenario `run-resume`: from a cold start, Resume on Encounters opens the paused run at the
+/// turn it stopped on, with that participant selected.
+#[test]
+fn run_resume() {
+    const INTERRUPTED: &str = "Cinder Wolf 2";
+    let mut shell = Shell::new("run-resume", Seed::Campaign);
+    encounters_ready(&mut shell);
+    shell.click("Resume");
+    assert_eq!(shell.read(|root| root.app.page), Page::Run);
+    assert_eq!(current_name(&mut shell).as_deref(), Some(INTERRUPTED));
+    assert_eq!(selected(&mut shell), INTERRUPTED);
+    shell.capture("run-resume__02-resumed__1200x800");
+}
+
+/// Scenario `run-no-groups`: Arrivals in a campaign with no groups says how to make one.
+#[test]
+fn run_no_groups() {
+    let mut shell = Shell::new("run-no-groups", Seed::Campaign);
+    open_saved(&mut shell, RUN);
+    on_run(&mut shell, Run::show_arrivals);
+    assert!(
+        has_target(&mut shell, "New group"),
+        "Arrivals says how to make a group: {:?}",
+        kit::probe::names()
+    );
+    shell.capture("run-no-groups__01-no-groups__1200x800");
+}
+
+/// Scenario `run-folder-defect`: the campaign's run folder edited in Rules and runs warns that
+/// the runs stay in the old folder, with the choice to move them.
+#[test]
+fn run_folder_defect() {
+    let mut shell = Shell::new("run-folder-defect", Seed::Campaign);
+    shell.update(|root, _, cx| root.show_page(Page::Campaign, cx));
+    shell.click("Rules and runs");
+    for _ in 0..200 {
+        if shell.read(|root| root.app.encounters.run_form().is_some()) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+    }
+    let id = shell.read(|root| root.app.campaigns.active_campaign().expect("a campaign").id);
+    shell.click(&format!("id:run_folder-{id}"));
+    shell.press("ctrl-a");
+    shell.type_text("Elsewhere");
+    assert_eq!(
+        shell.read(|root| root.app.encounters.run_form().expect("the form").folder),
+        "Elsewhere"
+    );
+    // The runs the old folder keeps are read after the edit: wait on the choices they bring.
+    for _ in 0..200 {
+        if has_target(&mut shell, "Move runs and save") {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+    }
+    assert!(
+        has_target(&mut shell, "Move runs and save"),
+        "the folder move offers its choices: {:?}",
+        kit::probe::names()
+    );
+    shell.capture("run-folder-defect__01-run-folder-edited__1200x800");
+}
+
+/// Scenario `roll-table-author`: a note's roll tables as the World reader shows them: an
+/// interval it cannot read, a typed roll on a valid table, a gap and an overlap, and the same
+/// note in Lookup.
+#[test]
+fn roll_table_author() {
+    let body = format!(
+        "# Table Workshop\n\n<!-- splat:rolls key=valid dice=1d6 per=fortnight -->\n\n| d6 | Result |\n|---|---|\n| 1 | Rain |\n| 2-5 | Fog |\n| 6 | Sun |\n\n<!-- splat:rolls key=gap dice=1d4 -->\n\n| d4 | Gap |\n|---|---|\n| 1 | One |\n| 3-4 | Later |\n\n<!-- splat:rolls key=overlap dice=1d4 -->\n\n| d4 | Overlap |\n|---|---|\n| 1-3 | First |\n| 3-4 | Second |\n\n{}<!-- splat:rolls key=words dice=1d6 -->\n\n| d6 | Words |\n|---|---|\n| 1 | One |\n| 2 to 5 | Fog |\n| 6 | Six |\n",
+        "\nThe next table checks a range written as words.\n".repeat(8)
+    );
+    let mut shell = Shell::new("roll-table-author", Seed::World);
+    let folder = shell.read(|root| {
+        root.app
+            .campaigns
+            .active_campaign()
+            .expect("a campaign")
+            .path
+    });
+    std::fs::write(folder.join("Table Workshop.md"), body).expect("write the note");
+    shell.update(|root, _, _| root.app.lookup.refresh());
+    let mut note = None;
+    for _ in 0..600 {
+        note = shell.read(|root| {
+            root.app.lookup.index().and_then(|index| {
+                index
+                    .items
+                    .iter()
+                    .find(|item| item.entry.name == "Table Workshop")
+                    .map(|item| item.entry.id)
+            })
+        });
+        if note.is_some() {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+    }
+    assert!(note.is_some(), "the note is read");
+    shell.update(|root, _, cx| root.show_page(Page::World, cx));
+    click_starting(&mut shell, "Table Workshop · ");
+    assert!(
+        has_target(&mut shell, "Roll 1d6"),
+        "the valid table rolls: {:?}",
+        kit::probe::names()
+    );
+    shell.capture("roll-table-author__01-authored-table-validation__1200x800");
+
+    shell.click("Typed roll for Valid");
+    shell.type_text("4");
+    shell.press("enter");
+    assert!(
+        has_target(&mut shell, kit::markdown::ROLL_RESULT),
+        "a typed roll shows its row"
+    );
+    shell.capture("roll-table-author__02-authored-table-typed-roll__1200x800");
+
+    let at = shell.bounds("Roll 1d6").expect("the Roll button").center();
+    shell.scroll(
+        at,
+        gpui::ScrollDelta::Pixels(point(px(0.0), px(-600.0))),
+        gpui::Modifiers::default(),
+    );
+    shell.capture("roll-table-author__03-authored-table-gap-and-overlap__1200x800");
+
+    open_lookup(&mut shell);
+    shell.type_text("Table Workshop");
+    shell.press("enter");
+    assert!(
+        has_target(&mut shell, "Roll 1d6"),
+        "Lookup's table rolls too"
+    );
+    shell.capture("roll-table-author__04-authored-table-in-lookup__1200x800");
+}

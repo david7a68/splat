@@ -175,6 +175,16 @@ impl Encounters {
         let draft_open = self.draft_dirty();
         let frame = design::outcome::PaneFrame::new();
         let mut messages = design::outcome::Messages::new();
+        // The run files the folder change leaves, for the folder the fields hold now: the
+        // footer's warning says them and offers its two choices (egui's `run_settings`).
+        let form_left = self.snapshot.as_ref().map(|snapshot| {
+            (
+                snapshot.options.folder.clone(),
+                snapshot
+                    .options
+                    .runs_left_in(&snapshot.saved_options, active),
+            )
+        });
         self.run_settings_footer(
             ctx,
             &frame,
@@ -182,7 +192,7 @@ impl Encounters {
             active,
             campaigns.modules(),
             None,
-            None,
+            form_left,
             run_open,
             draft_open,
         );
