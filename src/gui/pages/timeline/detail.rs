@@ -217,12 +217,55 @@ pub(crate) fn render(
         ))
         .child(kit::rule());
     let form = form(root, id, index, focus_length, window, cx);
-    div()
-        .flex()
-        .flex_col()
-        .size_full()
-        .child(header)
-        .child(
+    // Review of #817 (P3): the title line stays above the form only while it leaves the form at
+    // least one control row; below that it scrolls with the form, so the form always has room.
+    // Its height and the column's are the last frame's.
+    let room = root.pages.timeline.detail_room.clone();
+    let (header_height, column_height) = room.get();
+    let scrolls = column_height > px(0.0)
+        && column_height - header_height < Density::Read.control();
+    let header = {
+        let room = room.clone();
+        div().relative().child(header).child(
+            gpui::canvas(
+                move |bounds, window, _| {
+                    let (old, column) = room.get();
+                    if old != bounds.size.height {
+                        room.set((bounds.size.height, column));
+                        window.refresh();
+                    }
+                },
+                |_, _, _, _| {},
+            )
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full(),
+        )
+    };
+    let column_probe = gpui::canvas(
+        move |bounds, window, _| {
+            let (header, old) = room.get();
+            if old != bounds.size.height {
+                room.set((header, bounds.size.height));
+                window.refresh();
+            }
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full();
+    let column = div().relative().flex().flex_col().size_full();
+    let column = if scrolls {
+        column.child(kit::scroll::scroll_column_with(
+            part(id, "form"),
+            &root.pages.timeline.form,
+            div().child(header).child(div().pr(M).pt(M).child(form)),
+        ))
+    } else {
+        column.child(header).child(
             div()
                 .flex_1()
                 .min_h_0()
@@ -232,7 +275,8 @@ pub(crate) fn render(
                     div().pr(M).pt(M).child(form),
                 )),
         )
-        .into_any_element()
+    };
+    column.child(column_probe).into_any_element()
 }
 
 /// The form under the title line, which scrolls.

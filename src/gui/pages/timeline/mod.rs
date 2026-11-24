@@ -52,6 +52,9 @@ pub struct State {
     pub(crate) form_top: bool,
     /// The form's `Link text` section is open.
     pub(crate) link_open: bool,
+    /// The open event's column and its title line, as the last frame laid them out: their
+    /// heights, for whether the title line scrolls with the form (`detail::render`).
+    pub(crate) detail_room: std::rc::Rc<std::cell::Cell<(Pixels, Pixels)>>,
     /// The page's keyboard focus, so Ctrl+S reaches it while no field has the keyboard.
     focus: Option<gpui::FocusHandle>,
 }
@@ -195,7 +198,7 @@ pub(crate) fn render(
                 .into_any_element();
         }
     }
-    page = page.child(add_strip(root, cx));
+    page = page.child(add_strip(root, page_width, window, cx));
     if let Some(words) = root.app.timeline_page.dated.clone() {
         let notice = Notice::warning(timeline::page::as_sentence(&words))
             .choice(Choice::new(MessageChoice::Choice("Play this one"), ()));
@@ -513,23 +516,60 @@ fn comparison(root: &SplatRoot) -> AnyElement {
     }
 }
 
-/// `Add` and one quiet button for each kind; blocked while the file must be repaired.
-fn add_strip(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> impl IntoElement {
+/// Add an event of `kind` to the session new events go to, and open it.
+fn add_kind(root: &mut SplatRoot, kind: Kind) {
+    let current = root.app.sessions.current();
+    let book = &mut root.app.timeline;
+    let id = if kind == Kind::LongRest {
+        book.add_long_rest(current)
+    } else {
+        book.add(kind, current)
+    };
+    let SplatRoot { app, bridge, .. } = root;
+    app.timeline_page
+        .record_added(id, &app.timeline, bridge.ctx());
+}
+
+/// Whether every kind of the Add strip fits on its line in `room` (`hanging_add_strip`'s fit):
+/// the buttons' natural widths and the gaps between them.
+fn strip_fits(window: &Window, room: Pixels) -> bool {
+    use crate::gui::pages::trackers::measure;
+    let buttons: Pixels = ADD_KINDS
+        .iter()
+        .map(|kind| measure::button_width(window, kind.word(), true))
+        .fold(px(0.0), |a, b| a + b);
+    buttons + XS * (ADD_KINDS.len() - 1) as f32 <= room
+}
+
+/// `Add` and one quiet button for each kind; blocked while the file must be repaired. Fight and
+/// Long rest stay on the line; when the line has no room for every kind, the rarer kinds share
+/// `More Add actions` (egui `quick_add_with`, `hanging_add_strip`).
+fn add_strip(
+    root: &SplatRoot,
+    page_width: Pixels,
+    window: &Window,
+    cx: &mut Context<SplatRoot>,
+) -> impl IntoElement {
     let blocked = root
         .app
         .timeline
         .unreadable
         .is_some()
         .then_some("The timeline file must be repaired first.");
-    div()
+    let label = div().ty(Type::Label).text_color(colors().text).child("Add");
+    let room = page_width
+        - crate::gui::pages::trackers::measure::width(window, Type::Label, "ADD")
+        - XS;
+    let fits = strip_fits(window, room);
+    let shown = |kind: &Kind| fits || matches!(kind, Kind::Encounter | Kind::LongRest);
+    let mut strip = div()
         .flex()
         .flex_row()
-        .flex_wrap()
         .items_center()
-        .gap(S)
+        .gap(XS)
         .pb(S)
-        .child(div().ty(Type::Label).text_color(colors().text).child("Add"))
-        .children(ADD_KINDS.iter().map(|&kind| {
+        .child(label)
+        .children(ADD_KINDS.iter().filter(|kind| shown(kind)).map(|&kind| {
             kit::Button::quiet(
                 SharedString::from(format!("timeline-add-{}", kind.word())),
                 kind.word(),
@@ -539,19 +579,39 @@ fn add_strip(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> impl IntoElement 
             .density(Density::Read)
             .blocked(blocked)
             .on_click(cx.listener(move |root, _, _, cx| {
-                let current = root.app.sessions.current();
-                let book = &mut root.app.timeline;
-                let id = if kind == Kind::LongRest {
-                    book.add_long_rest(current)
-                } else {
-                    book.add(kind, current)
-                };
-                let SplatRoot { app, bridge, .. } = root;
-                app.timeline_page
-                    .record_added(id, &app.timeline, bridge.ctx());
+                add_kind(root, kind);
                 cx.notify();
             }))
-        }))
+        }));
+    if !fits {
+        let rest: Vec<Kind> = ADD_KINDS.iter().copied().filter(|kind| !shown(kind)).collect();
+        let hint = rest
+            .iter()
+            .map(|kind| kind.word())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut more = kit::MenuButton::new(
+            "timeline-add-more",
+            kit::Button::quiet("timeline-add-more-button", "")
+                .icon(icons::EXPAND)
+                .name("More Add actions")
+                .hint(hint)
+                .density(Density::Read),
+        );
+        for kind in rest {
+            more = more.item(
+                kit::MenuItem::new(kind.word())
+                    .icon(kind_icon(kind))
+                    .blocked(blocked)
+                    .on_click(cx.listener(move |root, _, _, cx| {
+                        add_kind(root, kind);
+                        cx.notify();
+                    })),
+            );
+        }
+        strip = strip.child(more);
+    }
+    strip
 }
 
 /// The filters: the kinds, the search, the session shown, and where new events go. At a width

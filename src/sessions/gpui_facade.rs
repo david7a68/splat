@@ -1481,6 +1481,11 @@ pub struct EventDetails {
     pub place: String,
     /// A played fight's lines, as the Timeline says them.
     pub fight: Option<String>,
+    /// A played fight's run: its block (`gv_fight_block`) shows how it ended. `None` while it
+    /// runs (then `fight` says so).
+    pub run: Option<Uuid>,
+    /// The fight runs now: its final HP show when it ends.
+    pub running: bool,
     /// A long rest's ruling can be set here.
     pub rest: Option<bool>,
     /// A journey: its encounter checks come first, under its row (`travel_block`).
@@ -1507,6 +1512,9 @@ pub struct FightRow {
     pub id: Uuid,
     /// The roster's words, then the difficulty's parts (`true`: the word, shown strong).
     pub roster: String,
+    /// The roster with the party's size first (`5 party · …`), when the party has members: the
+    /// line keeps it while the row has room for it (`prepare_plan_line`).
+    pub roster_with_party: Option<String>,
     pub difficulty: Vec<(String, bool)>,
     pub running: bool,
     pub saved: Option<crate::encounter_run::SavedRunInfo>,
@@ -1558,6 +1566,32 @@ pub struct PlanView {
     /// The first primary action is free (no run open, no recording step).
     pub primary_free: bool,
     pub open_run: bool,
+    /// The heading's `N scenes`, when the scenes fold or the DM opened them: the count, and
+    /// whether they are folded now (`fold_line`).
+    pub fold: Option<(usize, bool)>,
+    /// The scenes fold now: their rows are left out.
+    pub folded: bool,
+    /// A one-time reveal after an add or an act: the row after this one (or this one, when it
+    /// is the last) scrolls into view (`Reveal`).
+    pub reveal: Option<String>,
+    /// The event row just opened: it comes to the plan's top (`reveal_event`).
+    pub reveal_open: Option<String>,
+}
+
+pub use super::plan::{FightCell, log_notice, log_room};
+
+/// How an open played fight ended (`Sessions::fight_block`): its players' final HP in the
+/// party's order, `Log`, `Whole run` and `Timeline`, and the Log's rows while it is open; or
+/// why it cannot show.
+pub enum FightBlockView {
+    Fault(plain::PlainLine<()>),
+    Ended {
+        cells: Vec<super::plan::FightCell>,
+        /// The run's file, for `Whole run`.
+        path: Option<PathBuf>,
+        /// The Log's entries, newest first, while it is open.
+        log: Option<Vec<String>>,
+    },
 }
 
 /// What the DM did in the plan.
@@ -1602,6 +1636,12 @@ pub enum PlanAct {
     RollForEncounters(String),
     /// An act in an open journey's checks block (`travel_act`).
     Travel(String, crate::timeline::checks::Act),
+    /// `N scenes` on the heading, pressed while the scenes were folded (`true`) or open.
+    SceneFold(bool),
+    /// A played fight's `Log`: its rows show or hide.
+    FightLog,
+    /// A played fight's `Whole run`: its saved run opens.
+    WholeRun(PathBuf),
     /// `Undo` of the journey's last checks result (`travel.done.undo`).
     TravelUndo(String),
 }
@@ -1620,6 +1660,9 @@ impl Sessions {
         self.follow_plan_line();
         self.rewards.see(self.draft.as_ref(), session, book);
         let projection = self.plan_projection(book, session, plan, index);
+        let (folded, fold_line) = self.scene_fold(projection.scene_count);
+        let reveal = self.row_reveal.take().map(|(id, _, _)| id);
+        let mut reveal_open = None;
         let days = &projection.days;
         let mut rows = Vec::new();
         for (at, event) in book.events.iter().enumerate() {
@@ -1655,6 +1698,9 @@ impl Sessions {
             let restores =
                 (event.kind == crate::timeline::Kind::LongRest && saved.is_none() && !running)
                     .then(|| crate::timeline::page::long_rest_status(event.restores));
+            if open && std::mem::take(&mut self.reveal_event) {
+                reveal_open = Some(event.id.clone());
+            }
             let details = open.then(|| EventDetails {
                 title: event.title.clone(),
                 notes: event.notes.clone(),
@@ -1662,6 +1708,8 @@ impl Sessions {
                 fight: event
                     .run
                     .map(|_| crate::timeline::played_fight_summary(event, running)),
+                run: event.run.filter(|_| !running),
+                running,
                 rest: (event.kind == crate::timeline::Kind::LongRest).then_some(event.restores),
                 journey: event.run.is_none() && crate::timeline::checks::shown(event),
             });
@@ -1686,6 +1734,9 @@ impl Sessions {
             }));
         }
         let scene_rows = |rows: &mut Vec<PlanRow>, place: usize| {
+            if folded {
+                return;
+            }
             for (index, &line) in projection.scenes[place].iter().enumerate() {
                 let scene = projection.model.scene(line);
                 let entry = scene.entry.as_ref();
@@ -1722,6 +1773,7 @@ impl Sessions {
                     facts: fight.summary.facts.clone(),
                 }
                 .text(),
+                roster_with_party: (fight.summary.party > 0).then(|| fight.summary.text()),
                 difficulty: fight.difficulty.parts().unwrap_or_default(),
                 running,
                 saved,
@@ -1785,7 +1837,49 @@ impl Sessions {
             scene_field: self.scenes.field.as_ref().map(|field| field.words.clone()),
             primary_free: plan.open_run.is_none() && !self.confirm_record,
             open_run: plan.open_run.is_some(),
+            fold: fold_line.then_some((projection.scene_count, folded)),
+            folded,
+            reveal,
+            reveal_open,
         }
+    }
+
+    /// A played fight's Log is open.
+    pub fn gv_fight_log_open(&self) -> bool {
+        self.show_fight_log
+    }
+
+    /// What the GPUI plan measured in its last frame, for the scenes' fold (`note_fold_measure`).
+    /// Returns whether the fold changes, so the plan draws again at once.
+    pub fn gv_fold_measure(
+        &mut self,
+        folded: bool,
+        viewport: f32,
+        rows: (f32, f32, f32),
+        next: Option<(f32, f32, f32)>,
+    ) -> bool {
+        self.note_fold_measure(folded, viewport, rows, next)
+    }
+
+    /// The open played fight's block (`fight_block`): `None` when the open row is no ended fight.
+    pub fn gv_fight_block(&mut self, book: &Book, plan: &Plan<'_>) -> Option<(String, FightBlockView)> {
+        let open = self.open_event.clone()?;
+        let event = book.events.iter().find(|event| event.id == open)?;
+        let run = event.run?;
+        if plan.open_run == Some(run) {
+            return None;
+        }
+        let path = self.keep_fight(run, plan);
+        let (_, _, result, _) = self.fight.as_ref()?;
+        let view = match result {
+            Err(fault) => FightBlockView::Fault(super::plan::fight_fault_line(fault)),
+            Ok(summary) => FightBlockView::Ended {
+                cells: super::plan::fight_cells(summary, plan.party),
+                path,
+                log: self.show_fight_log.then(|| summary.log.clone()),
+            },
+        };
+        Some((open, view))
     }
 
     /// The plan pane's footer (`plan_footer_messages`): with the page's own messages when the
@@ -1805,7 +1899,8 @@ impl Sessions {
             .removed
             .as_ref()
             .and_then(|(line, ..)| projection.line_place.get(*line).copied());
-        let rows = Some(projection.scenes.as_slice());
+        let (folded, _) = self.scene_fold(projection.scene_count);
+        let rows = (!folded).then_some(projection.scenes.as_slice());
         let shown = super::plan::Shown {
             added: self
                 .scenes
@@ -1961,6 +2056,8 @@ impl Sessions {
                 } else {
                     book.add(kind, session)
                 };
+                // The row after the new one comes into view (`plan_pane`'s reveal).
+                self.row_reveal = Some((id.clone(), 0, ctx.cumulative_pass_nr()));
                 self.record_plan_add(&id, book, ctx);
             }
             PlanAct::OpenScene => {
@@ -2093,6 +2190,9 @@ impl Sessions {
                 self.travel_act(book, session, &id, act, plan);
             }
             PlanAct::TravelUndo(id) => self.travel.done.undo(&id, book),
+            PlanAct::SceneFold(folded) => self.press_scene_fold(folded),
+            PlanAct::FightLog => self.show_fight_log = !self.show_fight_log,
+            PlanAct::WholeRun(path) => self.wants_saved_run = Some(path),
             PlanAct::RollForEncounters(id) => {
                 self.row_reveal = Some((id.clone(), 0, ctx.cumulative_pass_nr()));
                 self.travel_act(

@@ -145,9 +145,140 @@ fn plain_evening_states() {
     shell.click("Road to the ford");
     shell.click("Shrine of Cinders");
     shell.capture("plain-evening__03-session-tonight: planned fight open__1200x800");
+    // Gap 4: the opened played fight shows how it ended (egui `fight_block`): each player's
+    // final HP, `Log · Whole run · Timeline`, and the Log under them while it is open.
+    use crate::visual_tests::fixture::{PLAIN_LAST, PLAIN_PLAYED};
+    let last = shell
+        .read(|root| {
+            root.app
+                .sessions
+                .gv_notes()
+                .iter()
+                .find(|note| note.label().contains(PLAIN_LAST))
+                .map(|note| note.id)
+        })
+        .expect("the last session");
+    shell.update(|root, _, cx| {
+        root.app.sessions.gv_choose(last);
+        cx.notify();
+    });
+    shell.click(PLAIN_PLAYED);
+    for words in ["Log", "Whole run", "Timeline", "Where"] {
+        assert!(
+            shell.bounds(words).is_some(),
+            "the played fight's block shows {words}"
+        );
+    }
+    let names = crate::gui::kit::probe::names();
+    assert!(
+        names.iter().any(|name| name.starts_with("Brannoch Vale: 58/62 HP")),
+        "its players' final HP show, each with its whole line: {names:?}"
+    );
+    shell.capture("plain-evening__04-session-last: played fight open__1200x800");
+    shell.click("Log");
+    assert!(
+        shell.read(|root| root.app.sessions.gv_fight_log_open()),
+        "Log opens the log"
+    );
+    shell.capture("plain-evening__04-session-last: played fight log__1200x800");
     shell.click("New session");
     shell.capture("plain-evening__16-session-new__1200x800");
 }
+
+/// Scenes in the plan (egui `session-plan-scenes`): task lines are rows in the note's order;
+/// where the closed rows with the scenes do not fit the plan, the scenes fold under `N scenes`
+/// on the heading's line, which opens them in place and closes them again.
+#[test]
+fn plan_scenes_and_their_fold() {
+    let scenes = "## Plan for tonight\n\n- [[Bridge Ambush]]\n- [ ] [[Hobb the Miller]]\n- [x] The miller is the informer\n- [ ] Pay the toll\n- [[Shrine of Cinders]]\n";
+    for (size, name) in [((1200.0, 800.0), "1200x800"), (SMALL, "960x640")] {
+        let mut shell = Shell::with_size(
+            "session-plan-scenes",
+            Seed::Campaign,
+            gpui::size(px(size.0), px(size.1)),
+        );
+        wait_for_fights(&mut shell);
+        shell.click("Session");
+        new_session(&mut shell, "The Crossing");
+        let words = note_words(&mut shell);
+        set_note(&mut shell, &words.replace("## Plan for tonight\n", scenes));
+        if shell.bounds("id:session-tabs-Plan").is_some() {
+            shell.click("id:session-tabs-Plan");
+        }
+        let folded = |shell: &mut Shell| {
+            shell.update(|root, _, _| {
+                let index = root.app.lookup.index();
+                super::with_plan(&mut root.app, |sessions, _, book, plan| {
+                    sessions.gv_plan(book, plan, index.as_deref()).fold
+                })
+                .flatten()
+            })
+        };
+        assert_eq!(folded(&mut shell), None, "{name}: the scenes fit the plan");
+        shell.capture(&format!("session-plan-scenes__01-scenes-in-the-plan__{name}"));
+        if name == "1200x800" {
+            continue;
+        }
+        // More rows than the plan holds with its scenes: they fold, the next fight in view.
+        for _ in 0..4 {
+            shell.click("id:plan-add-more-button");
+            shell.click("Day");
+        }
+        assert_eq!(
+            folded(&mut shell),
+            Some((3, true)),
+            "{name}: the scenes give way to the rows"
+        );
+        let scene_rows = || {
+            crate::gui::kit::probe::names()
+                .iter()
+                .filter(|name| name.starts_with("id:plan-scene-box-"))
+                .count()
+        };
+        assert_eq!(scene_rows(), 0, "{name}: folded scenes draw no rows");
+        shell.capture(&format!("session-plan-scenes__08-scenes-folded__{name}"));
+        // `3 scenes` opens them in place, and closes them again.
+        shell.click("3 scenes");
+        assert_eq!(folded(&mut shell), Some((3, false)));
+        assert_eq!(scene_rows(), 3, "the scenes show");
+        shell.click("3 scenes");
+        assert_eq!(folded(&mut shell), Some((3, true)));
+    }
+}
+
+/// After an add, the row after the new one scrolls into view above the plan's footer (egui
+/// `Reveal`), so its action needs no extra gesture.
+#[test]
+fn plan_add_reveals_its_row() {
+    let mut shell = Shell::with_size(
+        "session-plan-reveal",
+        Seed::Campaign,
+        size(px(SMALL.0), px(SMALL.1)),
+    );
+    shell.click("Session");
+    new_session(&mut shell, TITLE);
+    shell.click("id:session-tabs-Plan");
+    // A long plan: many days, made as the Timeline makes them, with no reveal of their own.
+    shell.update(|root, _, cx| {
+        let session = root.app.sessions.gv_selected();
+        for _ in 0..12 {
+            root.app.timeline.add(crate::timeline::Kind::Day, session);
+        }
+        cx.notify();
+    });
+    shell.click("Long rest");
+    let added = timeline_events(&mut shell).last().unwrap().id.clone();
+    let row = shell
+        .bounds(&format!("id:plan-event-{added}"))
+        .expect("the new row is drawn");
+    let undo = shell.bounds("Undo add").expect("the footer's Undo");
+    assert!(
+        row.top() >= px(0.0) && row.bottom() <= undo.top(),
+        "the added row is in view above the footer: {row:?}, footer at {undo:?}"
+    );
+    shell.capture("session-plan-reveal__01-added-row-in-view__960x640");
+}
+
 
 #[test]
 fn plain_evening_small_window() {

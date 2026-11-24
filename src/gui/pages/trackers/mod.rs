@@ -24,7 +24,9 @@ use gpui::{
     AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, Pixels,
     ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
-use std::collections::HashSet;
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 /// This area's GPUI-only state, kept in `root.pages.trackers`.
 #[derive(Default)]
@@ -40,12 +42,81 @@ pub struct State {
     more_open: bool,
     /// The view's scroll, which opens at its top when Trackers comes into view.
     scroll: ScrollHandle,
+    /// The quick action pressed last, held under a still pointer while a Due row comes or goes
+    /// above it (egui `ContentScroll::holds_presses`).
+    hold: Rc<Hold>,
     /// The open sections of tracker histories in a reader, by note and member key.
     #[allow(
         dead_code,
         reason = "World’s reader draws the histories (`history::render`)"
     )]
     pub(crate) history_open: HashSet<(uuid::Uuid, String)>,
+}
+
+/// What the hold keeps between frames: each quick action's top in the last frame, the pressed
+/// action and its top at the press (with the frames it still holds), and the blank room after
+/// the content that lets a short view scroll to keep the action where it was.
+#[derive(Default)]
+struct Hold {
+    tops: RefCell<HashMap<String, Pixels>>,
+    held: RefCell<Option<Held>>,
+    room: Cell<Pixels>,
+}
+
+struct Held {
+    action: String,
+    top: Pixels,
+    /// Frames left in which a change is still the press's own (egui `CHANGE_FRAMES`).
+    frames: u8,
+}
+
+/// How many frames after its press a change may come and still be the press's own: the shell
+/// applies an act after the view drew.
+const CHANGE_FRAMES: u8 = 4;
+
+impl Hold {
+    /// The DM pressed `action`: hold it where the last frame drew it.
+    fn press(&self, action: &str) {
+        let top = self.tops.borrow().get(action).copied();
+        *self.held.borrow_mut() = top.map(|top| Held {
+            action: action.to_owned(),
+            top,
+            frames: CHANGE_FRAMES,
+        });
+    }
+
+    /// A frame begins: an old hold ends.
+    fn frame(&self) {
+        let mut held = self.held.borrow_mut();
+        if let Some(hold) = held.as_mut() {
+            hold.frames = hold.frames.saturating_sub(1);
+            if hold.frames == 0 {
+                *held = None;
+            }
+        }
+    }
+
+    /// `action` was laid out at `top`: when it is the held one and it moved, the view scrolls
+    /// by as much, adding blank room after the content where it is too short to scroll.
+    fn seen(&self, action: &str, top: Pixels, scroll: &ScrollHandle, window: &mut Window) {
+        self.tops.borrow_mut().insert(action.to_owned(), top);
+        let held = self.held.borrow();
+        let Some(hold) = held.as_ref().filter(|hold| hold.action == action) else {
+            return;
+        };
+        let moved = top - hold.top;
+        if moved.abs() < px(0.5) {
+            return;
+        }
+        let offset = scroll.offset();
+        let wanted = (offset.y - moved).min(px(0.0));
+        let short = -wanted - scroll.max_offset().y;
+        if short > px(0.0) {
+            self.room.set(self.room.get() + short);
+        }
+        scroll.set_offset(gpui::point(offset.x, wanted));
+        window.refresh();
+    }
 }
 
 /// One Due row as laid: its notice as drawn, its words and its rolls' table keys.
@@ -275,10 +346,13 @@ pub(crate) fn render_body(
                 .trackers
                 .scroll
                 .set_offset(gpui::point(px(0.0), px(0.0)));
+            root.pages.trackers.hold.room.set(px(0.0));
         }
+        root.pages.trackers.hold.frame();
         body(root, window, cx)
     };
     let scroll = root.pages.trackers.scroll.clone();
+    let room = root.pages.trackers.hold.room.get();
     div()
         .flex()
         .flex_col()
@@ -290,7 +364,7 @@ pub(crate) fn render_body(
                 .child(kit::scroll::scroll_column_with(
                     "trackers-scroll",
                     &scroll,
-                    div().px(M).pb(S).child(body),
+                    div().px(M).pb(S).child(body).child(kit::gap(room)),
                 )),
         )
         .when(!footer.is_empty(), |pane| {
@@ -422,7 +496,15 @@ fn body(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) 
             laid.due.is_empty() && banner.is_none(),
         ));
         for tracker in pinned {
-            column = column.child(tracker_lines(laid, tracker, &asking, focus, window, cx));
+            column = column.child(tracker_lines(
+                laid,
+                tracker,
+                &asking,
+                focus,
+                (&state.hold, &state.scroll),
+                window,
+                cx,
+            ));
         }
     }
     let more: Vec<&TrackerView> = laid.trackers.iter().filter(|t| !t.pin).collect();
@@ -440,7 +522,15 @@ fn body(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) 
         ));
         if open {
             for tracker in more {
-                column = column.child(tracker_lines(laid, tracker, &asking, focus, window, cx));
+                column = column.child(tracker_lines(
+                laid,
+                tracker,
+                &asking,
+                focus,
+                (&state.hold, &state.scroll),
+                window,
+                cx,
+            ));
             }
         }
     }
@@ -626,10 +716,12 @@ fn tracker_lines(
     tracker: &TrackerView,
     asking: &Option<(String, Option<String>, String, String)>,
     focus: bool,
+    held: (&Rc<Hold>, &ScrollHandle),
     window: &Window,
     cx: &mut Context<SplatRoot>,
 ) -> impl IntoElement {
     let c = colors();
+    let (hold, scroll) = held;
     let indent = if tracker.title.is_some() { L } else { px(0.0) };
     let mut block = div().flex().flex_col().pb(XS);
     if let Some(title) = &tracker.title {
@@ -679,6 +771,10 @@ fn tracker_lines(
                 )
                 .into(),
             );
+            let held_name = match &id {
+                ElementId::Name(name) => name.to_string(),
+                _ => String::new(),
+            };
             if here {
                 let typed = asking.as_ref().map_or(String::new(), |(.., t)| t.clone());
                 let at = *at;
@@ -697,10 +793,12 @@ fn tracker_lines(
                     .into_any_element();
             }
             let (key, instance, at) = (key.clone(), words.instance.clone(), *at);
-            kit::Button::secondary(id, label)
+            let pressed = held_name.clone();
+            let button = kit::Button::secondary(id, label)
                 .name(named.clone())
                 .density(Density::Read)
                 .on_click(cx.listener(move |root, _, _, cx| {
+                    root.pages.trackers.hold.press(&pressed);
                     let trackers = &mut root.app.trackers;
                     let Some(quick) = trackers.rules.def(&key).and_then(|d| d.quick.get(at)) else {
                         return;
@@ -719,7 +817,22 @@ fn tracker_lines(
                         });
                     }
                     cx.notify();
-                }))
+                }));
+            // Where the action is in each frame, for the hold.
+            let (hold, scroll) = (hold.clone(), scroll.clone());
+            div()
+                .relative()
+                .child(button)
+                .child(
+                    gpui::canvas(
+                        move |bounds, window, _| hold.seen(&held_name, bounds.top(), &scroll, window),
+                        |_, _, _, _| {},
+                    )
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full(),
+                )
                 .into_any_element()
         });
         let actions: Vec<AnyElement> = actions.collect();

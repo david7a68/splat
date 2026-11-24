@@ -45,6 +45,8 @@ pub struct State {
     pub(super) note: note::State,
     /// The New template form just opened: its name field takes the keyboard once.
     pub(super) focus_template_name: bool,
+    /// The plan's scroll and what its last frame measured.
+    pub(super) plan: plan::State,
 }
 
 /// Once, when the root is built.

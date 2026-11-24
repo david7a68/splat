@@ -137,10 +137,25 @@ fn quick_actions_notices_and_amounts() {
     shell.settle();
     assert_eq!(value(&mut shell, "race_clock", None), 0);
 
-    // A seal raises its notice; Done ends it.
+    // A seal raises its notice; Done ends it. The Due row comes above the action, and the
+    // action stays under the still pointer (egui `ContentScroll::holds_presses`).
+    let before = shell.bounds("Take seal: Party").expect("the action");
     shell.click("Take seal: Party");
     shell.settle();
     assert_eq!(value(&mut shell, "seals", Some("Party")), 1);
+    let after = shell.bounds("Take seal: Party").expect("the action");
+    assert!(
+        (after.top() - before.top()).abs() < px(1.0),
+        "the action stays under the pointer: {before:?} then {after:?}"
+    );
+    // The Due row came above the held action: back to the view's top to reach its Done.
+    shell.update(|root, _, cx| {
+        root.pages
+            .trackers
+            .scroll
+            .set_offset(gpui::point(px(0.0), px(0.0)));
+        cx.notify();
+    });
     assert_eq!(shell.read(|root| root.app.trackers.due()), 1);
     assert!(shell.bounds("Done: First seal for Party").is_some() || shell.bounds("Done").is_some());
     shell.capture("trackers__03-trackers-a-notice__1200x800");

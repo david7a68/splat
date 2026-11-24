@@ -8,8 +8,9 @@ use crate::gui::{SplatRoot, icons, kit};
 use crate::timeline::page::{RowTint, RowWords, long_rest_status, short_session};
 use crate::timeline::{Kind, kind_icon};
 use gpui::{
-    AnyElement, Context, ElementId, Hsla, IntoElement, ParentElement, ScrollStrategy, SharedString,
-    Styled, StyledText, TextRun, Window, div, prelude::*, px,
+    AnyElement, Context, ElementId, Hsla, InteractiveElement, IntoElement, ParentElement,
+    ScrollStrategy, SharedString, StatefulInteractiveElement, Styled, StyledText, TextRun, Window,
+    div, prelude::*, px,
 };
 
 /// A row's height (egui's `ROW`), and the gap under it.
@@ -258,9 +259,20 @@ fn row_element(
     }))
     .child(icon)
     .child(text);
-    div()
-        .h(ROW + ROW_GAP)
-        .pb(ROW_GAP)
-        .child(row)
-        .into_any_element()
+    let row = div().h(ROW + ROW_GAP).pb(ROW_GAP).child(row);
+    // A length the clock cannot count says why on hover, and how to write one (egui `row`).
+    if words.warning {
+        row.id(ElementId::Name(format!("timeline-row-hover-{id}").into()))
+            .tooltip(kit::tooltip::tip(
+                format!(
+                    "{}. {}",
+                    crate::timeline::TIME_NOT_COUNTED,
+                    crate::timeline::TIME_REPAIR
+                )
+                .into(),
+            ))
+            .into_any_element()
+    } else {
+        row.into_any_element()
+    }
 }

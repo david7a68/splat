@@ -29,6 +29,7 @@ pub mod outcome;
 pub mod panes;
 pub mod portrait;
 pub mod quiet_section;
+pub mod reveal;
 pub mod scroll;
 pub mod section;
 pub mod status;

@@ -134,6 +134,17 @@ pub(crate) fn render_in(
 ) -> AnyElement {
     let c = colors();
     state(root, host).follow(id);
+    // Round 29 G142: the check just rolled on the Timeline scrolls least into view with its
+    // result and offers, once (`reveal_checks`); another journey's reveal waits for its own.
+    let reveal = match host {
+        Host::Timeline => {
+            let page = &mut root.app.timeline_page;
+            page.reveal_checks
+                .take_if(|(journey, _)| journey == id)
+                .map(|(_, at)| at)
+        }
+        Host::Plan => None,
+    };
     let event: Event = root.app.timeline.events[index].clone();
     let tables = tables.to_vec();
     let view = View {
@@ -236,7 +247,7 @@ pub(crate) fn render_in(
         .problem()
         .map(|(at, words)| (at, words.to_owned()));
     for (label, check, at) in &block.rows {
-        column = column.child(check_line(
+        let line = check_line(
             root,
             host,
             id,
@@ -247,7 +258,11 @@ pub(crate) fn render_in(
             block.blocked,
             label_width,
             cx,
-        ));
+        )
+        .into_any_element();
+        let align = (reveal == Some(*at)).then_some(kit::reveal::Align::Least);
+        let form = root.pages.timeline.form.clone();
+        column = column.child(kit::reveal::revealed(line, &form, align));
         if check.is_none()
             && let Some((Some(place), words)) = &problem
             && place == at
