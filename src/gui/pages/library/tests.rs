@@ -446,12 +446,12 @@ fn library_counts_group_thousands() {
             .list_view(&app.campaigns, None, false, 900.0)
             .and_then(|list| list.heading)
     });
-    let (_, count) = heading.expect("the search results heading");
+    let (title, count) = heading.expect("the search results heading");
     assert!(count >= 1000, "the search matches over a thousand entries: {count}");
     let grouped = crate::design::count(count, "", "");
     assert!(grouped.contains(','), "{grouped}");
     assert!(
-        shell.bounds(&grouped).is_some(),
+        shell.bounds(&format!("{title} {grouped}")).is_some(),
         "the heading's count {grouped} is shown grouped"
     );
     shell.capture("library-browse__03-search-results-count__1200x800");

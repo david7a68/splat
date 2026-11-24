@@ -29,6 +29,8 @@ pub fn icon(glyph: &'static str, ty: Type, color: Hsla) -> Div {
 /// in muted (`CAMPAIGNS 3`).
 pub fn label(words: impl Into<SharedString>, count: usize) -> Div {
     let c = colors();
+    let words: SharedString = words.into();
+    let title = words.clone();
     let row =
         div()
             .flex()
@@ -39,9 +41,10 @@ pub fn label(words: impl Into<SharedString>, count: usize) -> Div {
     if count == 0 {
         row
     } else {
-        // Named by its words, so a test finds the count as the DM reads it.
-        let words = crate::design::count(count, "", "");
-        row.child(super::target(text(Type::Label, c.muted, words.clone()), words))
+        // Named by the heading and its count, so a test finds the count as the DM reads it.
+        let counted = crate::design::count(count, "", "");
+        let name = format!("{title} {counted}");
+        row.child(super::target(text(Type::Label, c.muted, counted), name))
     }
 }
 
