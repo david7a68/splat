@@ -7,6 +7,7 @@
 //! page shares the list's logic with it. The footer of each pane draws the same typed lines as
 //! egui's (`design::outcome::port`), and a press goes back to `Library::press_footer`.
 mod copy;
+mod dndbeyond;
 mod footer;
 mod forms;
 mod header;
@@ -234,7 +235,9 @@ fn body(
     let Some(list) = list else {
         return div().into_any_element();
     };
-    let reader = reader::pane(root, index, width, window, cx);
+    // The reader's room: what the columns before it leave.
+    let reader_width = rest - if list.list_hidden { 0.0 } else { list_width } - f32::from(theme::L);
+    let reader = reader::pane(root, index, reader_width, window, cx);
     let sections = (!compact).then(|| list::sections_column(root, &list, cx));
     let entries =
         (!list.list_hidden).then(|| list::entries_column(root, &list, index, compact, window, cx));
@@ -288,4 +291,17 @@ pub(crate) fn render_copy_dialog(
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     copy::render(root, window, cx)
+}
+
+/// The open campaign's D&D Beyond link (`DndBeyond::show`), for the Campaign page's Link and
+/// folder tab. `blocked` is that pane's lock (a run). Its errors and result belong in that pane's
+/// footer (`DndBeyond::footer_messages`).
+#[allow(dead_code, reason = "the Campaigns page area’s Link and folder tab calls it")]
+pub(crate) fn render_dndbeyond_link(
+    root: &mut SplatRoot,
+    blocked: Option<&str>,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    dndbeyond::render_link(root, blocked, window, cx)
 }

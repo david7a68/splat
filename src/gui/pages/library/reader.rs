@@ -22,7 +22,7 @@ const EDITOR_MAX_WIDTH: f32 = crate::library::EDITOR_MAX_WIDTH;
 pub(super) fn pane(
     root: &mut SplatRoot,
     index: &Option<Arc<ContentIndex>>,
-    _width: f32,
+    width: f32,
     window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
@@ -51,7 +51,7 @@ pub(super) fn pane(
         return empty_reader(root, cx);
     };
     let footer = footer::render(root, lines, cx);
-    entry(root, view, footer, index, window, cx)
+    entry(root, view, width, footer, index, window, cx)
 }
 
 /// No entry open: the empty reader, with the page's results in its footer.
@@ -213,7 +213,7 @@ fn file_line(view: &ReaderView) -> AnyElement {
 }
 
 /// The save row: the draft's word, Discard and the reason at the left, Save at the right.
-fn save_row(view: &ReaderView, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
+fn save_row(view: &ReaderView, width: f32, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
     let row = view.save_row.as_ref()?;
     let c = colors();
     let (icon, word, color) = &row.word;
@@ -253,8 +253,17 @@ fn save_row(view: &ReaderView, cx: &mut Context<SplatRoot>) -> Option<AnyElement
             })
             .children(
                 row.reason
-                    .clone()
-                    .map(|reason| kit::text(Type::Small, c.muted, reason)),
+                    .as_ref()
+                    .map(|(long, short)| {
+                        // The long form when it fits whole beside the row's parts, else the
+                        // short one (`save_row_with`, measured there; estimated here from the
+                        // `Small` type's average letter).
+                        let room = width.min(EDITOR_MAX_WIDTH) - 300.0;
+                        let fits = long.chars().count() as f32 * 6.2 <= room;
+                        if fits { long.clone() } else { short.clone() }
+                    })
+                    .or(row.lock.clone())
+                    .map(|reason| kit::text(Type::Small, c.muted, reason).truncate()),
             )
             .child(div().flex_1())
             .child(save)
@@ -317,6 +326,7 @@ fn technical_details(words: String) -> impl IntoElement {
 fn entry(
     root: &mut SplatRoot,
     view: ReaderView,
+    width: f32,
     footer: Vec<AnyElement>,
     index: &Option<Arc<ContentIndex>>,
     window: &mut Window,
@@ -330,7 +340,7 @@ fn entry(
         .flex_none()
         .child(toolbar(&view, cx))
         .child(file_line(&view));
-    if let Some(row) = save_row(&view, cx) {
+    if let Some(row) = save_row(&view, width, cx) {
         head = head.child(row);
     }
     let body: AnyElement = if let Some(disk) = &view.disk {

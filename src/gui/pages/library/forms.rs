@@ -470,8 +470,9 @@ pub(super) fn package_form(
                             ElementId::Name(format!("library-package-menu-{id}").into()),
                             kit::Button::quiet(
                                 ElementId::Name(format!("library-package-more-{id}").into()),
-                                "⋯",
+                                "",
                             )
+                            .icon(crate::gui::icons::EXPAND)
                             .name(format!("More actions for {name}")),
                         )
                         .item(

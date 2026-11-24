@@ -318,7 +318,10 @@ pub struct FileLine {
 pub struct SaveRowView {
     pub word: (String, String, egui::Color32),
     pub discard: bool,
-    pub reason: Option<String>,
+    /// Why other acts wait for this draft: its long and short form (the long one when it fits).
+    pub reason: Option<(String, String)>,
+    /// The campaign-switch reason after Discard.
+    pub lock: Option<String>,
     pub save_blocked: Option<String>,
     pub primary: bool,
 }
@@ -1655,13 +1658,8 @@ impl Library {
             SaveRowView {
                 word: (status.icon.to_owned(), status.word.to_owned(), status.color),
                 discard: draft_state.discard_shown(),
-                reason: if held && cites {
-                    Some(long.to_owned())
-                } else {
-                    None
-                }
-                .or(draft_state.lock_reason().map(str::to_owned))
-                .or_else(|| (held && cites).then(|| short.to_owned())),
+                reason: (held && cites).then(|| (long.to_owned(), short.to_owned())),
+                lock: draft_state.lock_reason().map(str::to_owned),
                 save_blocked: draft_state.save_blocked().map(str::to_owned),
                 primary: draft_state.save_weight() == design::save_row::SaveWeight::Primary,
             }

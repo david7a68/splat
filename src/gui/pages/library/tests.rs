@@ -156,3 +156,172 @@ fn library_author_small() {
     shell.click("Edit Markdown");
     shell.capture("library-author__02-edit-markdown__960x640");
 }
+
+/// The fixture package's folder.
+fn package_folder(shell: &mut Shell) -> std::path::PathBuf {
+    shell.read(|root| {
+        root.app
+            .campaigns
+            .modules()
+            .iter()
+            .find(|module| module.name == "Ashen Marches")
+            .map(|module| module.path.clone())
+            .expect("the package")
+    })
+}
+
+/// Reload from disk, from the Packages menu.
+fn reload(shell: &mut Shell) {
+    shell.click("Packages");
+    shell.click("Reload from disk");
+    loaded(shell);
+}
+
+#[test]
+fn library_scope() {
+    let mut shell = Shell::new("library-scope", Seed::Campaign);
+    library(&mut shell);
+    shell.click("id:library-scope");
+    shell.capture("library-scope__01-scope-menu__1200x800");
+    shell.click("Everything");
+    assert_eq!(
+        shell.read(|root| root.app.library.scope()),
+        crate::library::Scope::All
+    );
+    shell.capture("library-scope__02-scope-everything__1200x800");
+    scope(&mut shell, "Ashen Marches");
+    shell.click("About Ashen Marches");
+    assert_eq!(
+        shell.read(|root| root.app.library.open_name().map(str::to_owned)),
+        Some("Ashen Marches".to_owned()),
+        "About opens the package’s manifest"
+    );
+    shell.capture("library-scope__04-package-about-title__1200x800");
+    // A section row ends About and lists its entries.
+    shell.click("Creatures");
+    assert_eq!(
+        shell.read(|root| root.app.library.section()),
+        crate::library::model::Section::Creatures
+    );
+    // As in egui, the section's first entry opens in About's place.
+    assert_ne!(
+        shell.read(|root| root.app.library.open_name().map(str::to_owned)),
+        Some("Ashen Marches".to_owned())
+    );
+}
+
+#[test]
+fn library_file_fault() {
+    let mut shell = Shell::new("library-file-fault", Seed::Campaign);
+    let path = package_folder(&mut shell).join("Creatures/Cinder Wolf.md");
+    let text = std::fs::read(&path).unwrap();
+    let mut not_text = text.clone();
+    let at = text.windows(4).position(|w| w == b"Bite").unwrap();
+    not_text[at] = 0xff;
+    std::fs::write(&path, &not_text).unwrap();
+    library(&mut shell);
+    scope(&mut shell, "Ashen Marches");
+    let row = crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with("Creatures/Cinder Wolf.md · "))
+        .expect("the unreadable file's row, named by its path");
+    shell.click(&row);
+    // The reader names the fault, with Try again; Edit Markdown waits.
+    assert!(shell.bounds("Try again").is_some(), "the fault offers Try again");
+    shell.click("Edit Markdown");
+    assert!(
+        !shell.read(|root| root.app.library.source_open()),
+        "a file that cannot be read has no Markdown to edit"
+    );
+    shell.capture("library-file-fault__01-package-file-not-text__1200x800");
+    // The file reads again outside Splat; Try again reads it.
+    std::fs::write(&path, &text).unwrap();
+    shell.click("Try again");
+    loaded(&mut shell);
+    assert!(shell.bounds("Try again").is_none(), "the entry reads again");
+    assert_eq!(
+        shell.read(|root| root.app.library.open_name().map(str::to_owned)),
+        Some("Cinder Wolf".to_owned())
+    );
+}
+
+#[test]
+fn package_manifest_broken() {
+    let mut shell = Shell::new("package-manifest-broken", Seed::Campaign);
+    let manifest = package_folder(&mut shell).join("Module.md");
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    std::fs::write(&manifest, text.replace("splat_kind: package", "splat_kind: [package")).unwrap();
+    library(&mut shell);
+    scope(&mut shell, "Ashen Marches");
+    // The header counts the file; its entries stay.
+    assert!(shell.bounds("1 file needs fixing").is_some());
+    shell.capture("package-manifest-broken__01-manifest-invalid-library-keeps-entries__1200x800");
+    shell.click("1 file needs fixing");
+    shell.capture("package-manifest-broken__01b-issues-menu__1200x800");
+    shell.press("escape");
+    // Fixed outside Splat: Reload from disk reads it, and the count goes.
+    std::fs::write(&manifest, text).unwrap();
+    reload(&mut shell);
+    assert!(shell.bounds("1 file needs fixing").is_none(), "the fault ends with the reload");
+}
+
+#[test]
+fn library_to_encounter_copy() {
+    let mut shell = Shell::new("library-to-encounter", Seed::Campaign);
+    library(&mut shell);
+    scope(&mut shell, "Ashen Marches");
+    shell.click("Ash Wraith · Creature · CR 1");
+    shell.click("Copy to…");
+    assert!(shell.read(|root| root.app.copy_dialog.is_some()), "Copy to… opens the dialog");
+    // The catalogue loads on a thread.
+    for _ in 0..100 {
+        if shell.read(|root| root.app.copy_dialog.as_ref().is_some_and(|d| d.plan().is_some())) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    shell.capture("library-to-encounter__02-library-entry__1200x800");
+    shell.click("Create copy");
+    assert!(
+        shell.read(|root| root
+            .app
+            .copy_dialog
+            .as_ref()
+            .is_some_and(|dialog| dialog.completed().is_some())),
+        "Create copy writes the copy"
+    );
+    shell.capture("library-to-encounter__03-copied__1200x800");
+    shell.click("Close");
+    assert!(shell.read(|root| root.app.copy_dialog.is_none()));
+}
+
+#[test]
+fn remove_package_in_use() {
+    let mut shell = Shell::new("remove-package-in-use", Seed::Campaign);
+    let more = shell.read(|root| {
+        format!(
+            "id:library-package-more-{}",
+            root.app.campaigns.modules()[0].id
+        )
+    });
+    library(&mut shell);
+    shell.click("Packages");
+    shell.click("Manage packages…");
+    shell.click(&more);
+    shell.click("Unregister…");
+    assert!(shell.read(|root| root.app.library.unregister_open()));
+    shell.capture("remove-package-in-use__01-package-in-use-warning__1200x800");
+    // Escape keeps the package.
+    shell.press("escape");
+    assert!(!shell.read(|root| root.app.library.unregister_open()));
+    shell.click(&more);
+    shell.click("Unregister…");
+    shell.click("id:library-unregister-confirm");
+    loaded(&mut shell);
+    assert!(shell.read(|root| root.app.campaigns.modules().is_empty()));
+    shell.capture("remove-package-in-use__02-package-unregistered-with-undo__1200x800");
+    shell.click("Undo unregister Ashen Marches");
+    loaded(&mut shell);
+    assert_eq!(shell.read(|root| root.app.campaigns.modules().len()), 1, "Undo registers it again");
+}
