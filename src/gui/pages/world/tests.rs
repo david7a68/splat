@@ -1170,11 +1170,19 @@ fn world_note_moved() {
             .bounds("Always use Locations/Watch House.md")
             .is_some()
     );
-    let (fits, places) = chooser_in_column(&mut shell);
-    assert!(
-        fits,
-        "in Lookup too, each action stands in the Change column, clear of its file: {places}"
-    );
+    // Lookup's panel is narrower: each action stays in the panel, clear of its file.
+    let edge = shell.bounds("Close Lookup").expect("Close Lookup").right();
+    for path in ["Locations/Watch House.md", "Other/Watch House.md"] {
+        let link = shell.bounds(path).expect("the file link");
+        let action = shell
+            .bounds(&format!("Always use {path}"))
+            .expect("its action");
+        let clear = action.left() > link.right() || action.top() >= link.bottom();
+        assert!(
+            clear && action.right() <= edge,
+            "in Lookup, {path}'s action is clear of it and in the panel: {link:?} {action:?} edge {edge:?}"
+        );
+    }
     shell.capture("world-note-moved__04-duplicate-place-chooser-in-lookup__1200x800");
     shell.update(|root, _, _| root.app.lookup.close());
     // Obsidian moves the place and the NPC; the other copy goes.

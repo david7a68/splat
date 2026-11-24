@@ -896,8 +896,8 @@ fn value_row(
         })
 }
 
-/// The place link's chooser: each file it matches, with `Always use this one`. The files wrap
-/// in the value column, and each action stands in the Change column.
+/// The place link's chooser: each file it matches, with `Always use this one` in the Change
+/// column while the pane has room, else under the file.
 fn place_chooser(
     host: Host,
     item: &Item,
@@ -924,9 +924,14 @@ fn place_chooser(
             div()
                 .flex()
                 .flex_row()
+                .flex_wrap()
                 .items_center()
                 .child(
-                    div().w(width).flex_none().child(
+                    // The file fills the value column, so its action starts in the Change
+                    // column. Where the row has no room for both (Lookup's panel), the action
+                    // takes the next line rather than run over the file: a link does not wrap
+                    // inside a row (kit `Link::wrap`).
+                    div().flex_none().min_w(width).child(
                         kit::Link::new(("world-place-file", at), path.clone())
                             .wrap()
                             .on_click(on_item(cx, host, id, go(to))),
