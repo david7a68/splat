@@ -75,7 +75,7 @@ pub(super) fn view(
         .party
         .reader
         .local_scope()
-        .and_then(|scope| splat_party::party_sync::portrait_path(scope, &record));
+        .and_then(|scope| splat_party::party_sync::portrait_path(scope, record));
     let url = format!("https://www.dndbeyond.com/characters/{selected}");
     column = column
         .child(
@@ -106,7 +106,7 @@ pub(super) fn view(
                 .child(kit::text(
                     Type::Small,
                     c.muted,
-                    splat_party_page::class_line(&record),
+                    splat_party_page::class_line(record),
                 ))
                 .child(
                     Link::new("party-sheet-ddb", "D&D Beyond ↗")
@@ -129,7 +129,7 @@ pub(super) fn view(
             })),
         )
         .child(kit::rule());
-    if page > 0 && sheet_entries(&record, page).len() > 8 {
+    if page > 0 && sheet_entries(record, page).len() > 8 {
         column = column.child(
             div().pt(XS).w(px(240.0)).child(
                 TextField::new("party_page_filter", root.pages.party.search.clone())
@@ -154,7 +154,7 @@ pub(super) fn view(
             temporary_hp,
             death_saves: record.initial.death_saves.clone(),
             death_saves_shown: false,
-            conditions: splat_party::party::sheet_labels(&record),
+            conditions: splat_party::party::sheet_labels(record),
         });
     let reader = Reader {
         key: "party",
