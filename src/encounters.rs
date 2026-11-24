@@ -399,7 +399,7 @@ impl Default for Setup {
 }
 /// A table row that the parser excluded. Keep its identity beside the repair.
 #[derive(Clone, Debug)]
-pub(crate) struct RosterFault {
+pub struct RosterFault {
     pub name: String,
     pub line: usize,
     pub problem: String,
@@ -6130,9 +6130,22 @@ impl Encounters {
         }
     }
     /// The Run page. Returns true when the run has just closed.
+    /// Its `run_reads` come first (`Splat::run_page_begin`).
     pub fn show_run(&mut self, ui: &mut egui::Ui, active: &Campaign) -> bool {
         let Some(run) = &mut self.run else {
             return false;
+        };
+        if !run.show(ui) {
+            return false;
+        }
+        self.close_shown_run(active);
+        true
+    }
+    /// What the run reads from this page before the Run page draws (egui and GPUI): the
+    /// campaign's creature names, groups, scale and creatures, and tonight's planned groups.
+    pub fn run_reads(&mut self) {
+        let Some(run) = &mut self.run else {
+            return;
         };
         if let Some(snapshot) = &self.snapshot {
             run.set_roster_names(snapshot.revision, &snapshot.known_creature_names);
@@ -6140,9 +6153,13 @@ impl Encounters {
             run.creatures = Some(snapshot.run_creatures.clone());
         }
         run.planned.clone_from(&self.planned_groups);
-        if !run.show(ui) {
-            return false;
-        }
+    }
+    /// The DM closed the run on the Run page (egui and GPUI): it goes, and the list reads its
+    /// runs again.
+    pub fn close_shown_run(&mut self, active: &Campaign) {
+        let Some(run) = &self.run else {
+            return;
+        };
         // A setup nobody touched holds nothing. It would only be a line to remove later.
         if run.untouched_setup()
             && let Some(path) = run.path()
@@ -6151,7 +6168,6 @@ impl Encounters {
         }
         self.run = None;
         self.read_runs_again(active);
-        true
     }
     /// AB1: a folder that held this campaign's runs and is now gone is a read failure, not an
     /// empty list, also after a reload. The page remembers that the folder held runs until the

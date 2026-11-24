@@ -34,7 +34,7 @@ pub struct RunCreature {
 
 /// The form in the run's Arrivals panel. Never saved.
 #[derive(Default)]
-pub(super) struct AdHoc {
+pub struct AdHoc {
     pub(super) query: String,
     pub(super) picked: Option<Arc<RunCreature>>,
     pub(super) count: String,
@@ -49,7 +49,7 @@ pub(super) struct AdHoc {
 }
 
 /// What the form says now, when it can be added.
-pub(super) struct Checked {
+pub struct Checked {
     /// None for a creature made up here.
     entry: Option<Arc<Entry>>,
     name: String,
@@ -208,7 +208,7 @@ impl AdHoc {
 }
 
 /// What the words typed find: the whole name first, then names that start with them.
-pub(super) fn matches_for<'a>(
+pub(crate) fn matches_for<'a>(
     known: &'a [Arc<RunCreature>],
     typed: &str,
 ) -> Vec<&'a Arc<RunCreature>> {
@@ -270,7 +270,7 @@ fn short_field(
 
 impl Run {
     /// An ended fight shows its summary, with no panel to add from.
-    pub(crate) fn takes_arrivals(&self) -> bool {
+    pub fn takes_arrivals(&self) -> bool {
         !matches!(self.state.phase, Phase::Ended { .. })
     }
 
@@ -350,13 +350,13 @@ impl Run {
 
     /// The name in the made-up form, while Arrivals shows it.
     #[cfg(test)]
-    pub(crate) fn made_up_name(&self) -> Option<&str> {
+    pub fn made_up_name(&self) -> Option<&str> {
         (self.panel == super::Panel::Groups && self.ad_hoc.focus_hp)
             .then_some(self.ad_hoc.query.as_str())
     }
 
     /// The sides this run already has, so that a new creature joins one and not a misspelling.
-    fn sides_to_join(&self) -> Vec<String> {
+    pub fn sides_to_join(&self) -> Vec<String> {
         let mut sides = vec![DEFAULT_SIDE.to_owned()];
         for participant in &self.state.participants {
             if !sides.contains(&participant.side) {
@@ -371,7 +371,7 @@ impl Run {
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    pub(super) fn add_creature_form(&mut self, ui: &mut egui::Ui, block: Option<f32>) {
+    pub fn add_creature_form(&mut self, ui: &mut egui::Ui, block: Option<f32>) {
         let c = colors();
         let known = self.creatures.clone().unwrap_or_default();
         if let Some(picked) = self.ad_hoc.picked.clone() {

@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 
 /// An armed action: whose, which, and how its d20 rolls.
 #[derive(Clone, Debug)]
-pub(super) struct Armed {
+pub struct Armed {
     pub actor: usize,
     pub link: RollLink,
     occurrence: Option<SpellOccurrence>,
@@ -34,7 +34,7 @@ pub(super) struct Armed {
 /// Undo of the step arms the save again with its results. Its owner is the state before the
 /// step: it ends when Undo takes it back, or when the step leaves Undo.
 #[derive(Clone, Debug)]
-pub(super) struct Cast {
+pub struct Cast {
     armed: Armed,
     saves: std::collections::BTreeMap<usize, i64>,
     selected: usize,
@@ -50,7 +50,7 @@ pub(super) struct Cast {
 /// A target that waits for the DM to say which damage condition holds, as in `if the goat
 /// moved 20+ feet straight toward the target`. Each choice is its words and its damage.
 #[derive(Clone, Debug)]
-pub(super) struct Asking {
+pub struct Asking {
     pub row: usize,
     pub mode: Mode,
     pub inspired: bool,
@@ -64,7 +64,7 @@ type Question = (String, Vec<(String, Vec<DamagePart>)>);
 
 /// The last roll the run made for a player, of which their inspiration can reroll one die.
 #[derive(Clone, Debug)]
-pub(super) struct Reroll {
+pub struct Reroll {
     pub actor: usize,
     /// The row that shows the result: the target, or the actor for a check.
     pub shown: usize,
@@ -75,7 +75,7 @@ pub(super) struct Reroll {
 
 /// What a row's right-click menu chose.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum RowChoice {
+pub enum RowChoice {
     /// Roll the armed action against the row, or the row's save, this way.
     Roll(Mode, bool),
     /// The damage of this choice, for the asking row.
@@ -124,7 +124,7 @@ const REROLL_CHOICES: usize = 8;
 
 /// The height of the action bar above the dock while Lookup or Notes hide the panel: its
 /// buttons, then an `XS` gap, so the bar sits apart from the dock.
-pub(super) const STRIP_HEIGHT: f32 = rolls::BAR_BUTTONS + crate::design::XS;
+pub(crate) const STRIP_HEIGHT: f32 = rolls::BAR_BUTTONS + crate::design::XS;
 
 /// Why nothing rolls once the encounter has ended.
 const ENDED: &str = "This encounter has ended. Undo the ending to continue.";
@@ -176,7 +176,7 @@ fn mode_words(mode: Mode) -> Option<&'static str> {
 }
 
 /// The damage `command` gives each row: one amount, or each target's own.
-pub(super) fn damage_shares(command: &Command) -> Vec<(usize, i64)> {
+pub(crate) fn damage_shares(command: &Command) -> Vec<(usize, i64)> {
     match command {
         Command::Damage(row, amount) => vec![(*row, *amount)],
         Command::Several(commands) => commands.iter().flat_map(damage_shares).collect(),
@@ -186,7 +186,7 @@ pub(super) fn damage_shares(command: &Command) -> Vec<(usize, i64)> {
 
 /// The chance that d20 + `bonus` meets `armor`, as a whole percent. A natural 1 always
 /// misses and a natural 20 always hits; advantage rolls twice and keeps the higher.
-pub(super) fn hit_chance(bonus: i64, armor: i64, mode: Mode) -> i64 {
+pub(crate) fn hit_chance(bonus: i64, armor: i64, mode: Mode) -> i64 {
     let faces = (21 - (armor - bonus)).clamp(1, 19) as f64;
     let one = faces / 20.0;
     let chance = match mode {
@@ -227,12 +227,12 @@ impl Run {
     }
 
     /// The row, if it is still in the run.
-    fn existing(&self, row: Option<usize>) -> Option<usize> {
+    pub fn existing(&self, row: Option<usize>) -> Option<usize> {
         row.filter(|row| *row < self.state.participants.len())
     }
 
     /// Arm an action. Its rows' results from before go.
-    fn arm(
+    pub fn arm(
         &mut self,
         actor: usize,
         link: RollLink,
@@ -265,7 +265,7 @@ impl Run {
     }
 
     /// A check, a save, a skill or dice: rolled now, shown on the actor's row.
-    fn roll_alone(
+    pub fn roll_alone(
         &mut self,
         actor: usize,
         link: &RollLink,
@@ -289,7 +289,7 @@ impl Run {
     }
 
     /// True when this row's character has inspiration they can expend now.
-    pub(super) fn has_inspiration(&self, row: usize) -> bool {
+    pub fn has_inspiration(&self, row: usize) -> bool {
         if self.inspiration.is_none()
             || !self.player(row)
             || self
@@ -310,7 +310,7 @@ impl Run {
 
     /// What a read of a character's sheet says about their inspiration. A sheet that shows
     /// none has caught up with what the run spent.
-    pub(super) fn note_sheet_inspiration(&mut self, row: usize, has: bool) {
+    pub fn note_sheet_inspiration(&mut self, row: usize, has: bool) {
         self.sheet_inspiration.insert(row, has);
         if !has
             && self
@@ -324,7 +324,7 @@ impl Run {
     /// Send what the run spent to each synced sheet that can take it now. The run remembers
     /// a spend, and saves it with the run, until D&D Beyond confirms that the sheet shows
     /// none: a value that waits to be sent, or cannot be sent, is not a confirmation.
-    pub(super) fn settle_spent_inspiration(&mut self) {
+    pub fn settle_spent_inspiration(&mut self) {
         if self.spent_inspiration.is_empty() {
             return;
         }
@@ -354,13 +354,13 @@ impl Run {
 
     /// True when this row's character can expend inspiration for advantage before a roll:
     /// only by a rule that says so, and only if they have it.
-    fn can_buy_advantage(&self, row: usize) -> bool {
+    pub fn can_buy_advantage(&self, row: usize) -> bool {
         self.inspiration == Some(Inspiration::Advantage) && self.has_inspiration(row)
     }
 
     /// The character expends inspiration. The run remembers it until their sheet shows none:
     /// a synced sheet is sent it now, or when its sync next can take it.
-    fn spend_inspiration(&mut self, row: usize) {
+    pub fn spend_inspiration(&mut self, row: usize) {
         self.spent_inspiration
             .insert(self.state.participants[row].key.clone());
         self.dirty = true;
@@ -368,7 +368,7 @@ impl Run {
     }
 
     /// Keep a roll made for a player for a reroll, by a rule that rerolls after the roll.
-    fn keep_for_reroll(
+    pub fn keep_for_reroll(
         &mut self,
         actor: usize,
         shown: usize,
@@ -386,7 +386,7 @@ impl Run {
     }
 
     /// Reroll one die of the kept roll with inspiration. The new die stands.
-    fn reroll_with_inspiration(&mut self, die: rolls::Die) -> Result<(), String> {
+    pub fn reroll_with_inspiration(&mut self, die: rolls::Die) -> Result<(), String> {
         let Some(kept) = self.reroll.take() else {
             return Ok(());
         };
@@ -423,7 +423,7 @@ impl Run {
 
     /// True while a kept roll is still about what the dock shows. A save's damage is one roll
     /// for its targets: it stands only while that save is armed against the same rows.
-    fn reroll_stands(&self, kept: &Reroll) -> bool {
+    pub fn reroll_stands(&self, kept: &Reroll) -> bool {
         let Some((save, targets)) = &kept.save else {
             return true;
         };
@@ -434,14 +434,14 @@ impl Run {
     }
 
     /// The save's targets, in row order.
-    fn sorted_save_targets(&self) -> Vec<usize> {
+    pub fn sorted_save_targets(&self) -> Vec<usize> {
         let mut rows = self.save_targets();
         rows.sort_unstable();
         rows
     }
 
     /// A run's change to the actor's attack and damage, from its encounter or group.
-    fn changes(&self, actor: usize) -> (i64, i64) {
+    pub fn changes(&self, actor: usize) -> (i64, i64) {
         self.state.participants[actor]
             .changes
             .as_ref()
@@ -455,7 +455,7 @@ impl Run {
 
     /// Roll on the run's dice, and write the Log lines in every Undo step too, so Undo keeps
     /// them and the dice never repeat.
-    pub(super) fn record<T>(
+    pub fn record<T>(
         &mut self,
         roll: impl FnOnce(&mut Random) -> Result<T, String>,
         lines: impl Fn(&T) -> Vec<String>,
@@ -477,7 +477,7 @@ impl Run {
     }
 
     /// The panel's participant: the armed actor while an action is armed.
-    pub(super) fn panel_row(&self) -> usize {
+    pub fn panel_row(&self) -> usize {
         self.armed
             .as_ref()
             .map(|armed| armed.actor)
@@ -486,14 +486,14 @@ impl Run {
     }
 
     /// True for a party member, whose player rolls their own dice.
-    fn player(&self, row: usize) -> bool {
+    pub fn player(&self, row: usize) -> bool {
         let p = &self.state.participants[row];
         p.side == "party" || p.definition.fields.contains_key("splat_external")
     }
 
     /// A click on a row while an action is armed: the row becomes its target.
     /// Returns false when nothing is armed, so the click selects as usual.
-    pub(super) fn target(&mut self, row: usize, mode: Option<Mode>) -> bool {
+    pub fn target(&mut self, row: usize, mode: Option<Mode>) -> bool {
         let Some(armed) = self.armed.clone() else {
             return false;
         };
@@ -523,7 +523,7 @@ impl Run {
     }
 
     /// What a row's right-click menu chose.
-    pub(super) fn row_choice(&mut self, row: usize, choice: RowChoice) {
+    pub fn row_choice(&mut self, row: usize, choice: RowChoice) {
         let result = match choice {
             RowChoice::Cancel => {
                 self.asking = None;
@@ -564,7 +564,7 @@ impl Run {
 
     /// The right-click menu of a run row, and the question that waits on it. Shows nothing
     /// when the row has nothing to offer.
-    pub(super) fn row_menu(&self, response: &egui::Response, row: usize) -> Option<RowChoice> {
+    pub fn row_menu(&self, response: &egui::Response, row: usize) -> Option<RowChoice> {
         // Before any early return: a row whose last choice went away still owns its menu.
         rolls::keep_menu_owner(response);
         let mut chosen = None;
@@ -614,7 +614,7 @@ impl Run {
     }
 
     /// What a row's right-click menu offers now: each section is a heading and its choices.
-    fn row_menu_sections(&self, row: usize) -> Vec<(String, Vec<(String, RowChoice)>)> {
+    pub fn row_menu_sections(&self, row: usize) -> Vec<(String, Vec<(String, RowChoice)>)> {
         let mut sections: Vec<(String, Vec<(String, RowChoice)>)> = Vec::new();
         if let Some(armed) = self.armed.as_ref().filter(|armed| armed.actor != row) {
             let name = &self.state.participants[row].name;
@@ -671,7 +671,7 @@ impl Run {
 
     /// Whether a damage condition holds, when the run can tell: the roll's mode, or whether
     /// the target or the actor is Bloodied. `None` when only the DM knows.
-    fn condition_holds(&self, when: &When, mode: Mode, actor: usize, row: usize) -> Option<bool> {
+    pub fn condition_holds(&self, when: &When, mode: Mode, actor: usize, row: usize) -> Option<bool> {
         if let Some(holds) = rolls::condition_by_mode(when, mode) {
             return Some(holds);
         }
@@ -704,7 +704,7 @@ impl Run {
 
     /// Whether a condition holds for every one of `rows`. `None` when the run cannot tell for
     /// one of them, or when they differ: one roll of damage cannot be both.
-    fn condition_holds_for(
+    pub fn condition_holds_for(
         &self,
         when: &When,
         mode: Mode,
@@ -720,7 +720,7 @@ impl Run {
 
     /// The question a target waits on: one choice without the unknown conditions, then one
     /// with each. `None` when the run can tell every condition, with the damage to roll.
-    fn damage_for(
+    pub fn damage_for(
         &self,
         link: &RollLink,
         mode: Mode,
@@ -779,7 +779,7 @@ impl Run {
     }
 
     /// Roll the asking target with the chosen damage.
-    fn answer(&mut self, asking: Asking, index: usize) -> Result<(), String> {
+    pub fn answer(&mut self, asking: Asking, index: usize) -> Result<(), String> {
         let Some(armed) = self.armed.clone() else {
             return Ok(());
         };
@@ -794,7 +794,7 @@ impl Run {
     }
 
     /// Make `row` the dock's only target, keeping the panel on the actor.
-    fn aim(&mut self, row: usize) {
+    pub fn aim(&mut self, row: usize) {
         self.selected = row;
         self.also.clear();
         self.halved.clear();
@@ -804,7 +804,7 @@ impl Run {
 
     /// Roll an attack, or damage alone, against `row`. Its damage goes into Amount for it.
     /// A damage condition the run cannot tell waits for the DM's choice first.
-    fn attack(
+    pub fn attack(
         &mut self,
         actor: usize,
         row: usize,
@@ -829,7 +829,7 @@ impl Run {
     }
 
     /// Roll an attack whose damage is settled against `row`.
-    fn roll_attack(
+    pub fn roll_attack(
         &mut self,
         actor: usize,
         row: usize,
@@ -856,7 +856,7 @@ impl Run {
     }
 
     /// An attack's result on its target's row, and its damage in Amount.
-    fn show_attack(&mut self, row: usize, outcome: &Outcome) {
+    pub fn show_attack(&mut self, row: usize, outcome: &Outcome) {
         self.aim(row);
         let armor = self.state.participants[row].armor_class;
         let mut words = Vec::new();
@@ -881,7 +881,7 @@ impl Run {
 
     /// A click on a row while a save is armed: a new row becomes a target and rolls its
     /// save, and a target stops being one. The last target stays, as the dock needs one.
-    fn toggle_save_target(&mut self, row: usize, ability: &str, mode: Mode) {
+    pub fn toggle_save_target(&mut self, row: usize, ability: &str, mode: Mode) {
         if !self.save_targets().contains(&row) {
             self.add_save_target(row);
             self.roll_save(row, ability, mode);
@@ -903,7 +903,7 @@ impl Run {
     }
 
     /// Make `row` one of a save's targets. The targets before it stay.
-    fn add_save_target(&mut self, row: usize) {
+    pub fn add_save_target(&mut self, row: usize) {
         if self.save_targets().contains(&row) {
             return;
         }
@@ -919,7 +919,7 @@ impl Run {
     /// After a save's targets changed. A roll kept for a reroll was for the targets before,
     /// and ends for good. Damage that a condition settled for those targets is rolled again
     /// for these; other damage stays, and Amount is made again from it.
-    fn save_targets_changed(&mut self) {
+    pub fn save_targets_changed(&mut self) {
         if self.reroll.as_ref().is_some_and(|kept| kept.save.is_some()) {
             self.reroll = None;
         }
@@ -946,7 +946,7 @@ impl Run {
     /// A selection made outside the armed save's targeting, such as by the arrow keys. The
     /// rolled damage and a roll kept for a reroll were for the targets before it, and coming
     /// back to those targets does not bring them back.
-    pub(super) fn selection_left_save(&mut self) {
+    pub fn selection_left_save(&mut self) {
         if self.reroll.as_ref().is_some_and(|kept| kept.save.is_some()) {
             self.reroll = None;
         }
@@ -957,7 +957,7 @@ impl Run {
 
     /// Roll a creature target's save, in place of one it rolled before. A player rolls their
     /// own.
-    fn roll_save(&mut self, row: usize, ability: &str, mode: Mode) {
+    pub fn roll_save(&mut self, row: usize, ability: &str, mode: Mode) {
         if self.player(row) {
             return;
         }
@@ -982,7 +982,7 @@ impl Run {
     }
 
     /// What the line under the armed tile offers: the action's state, and its next steps.
-    fn armed_view(&self) -> Option<ArmedView> {
+    pub fn armed_view(&self) -> Option<ArmedView> {
         let armed = self.armed.as_ref()?;
         let (status, mut actions) = match &armed.link {
             RollLink::SaveDc { half, damage, .. } => {
@@ -1026,7 +1026,7 @@ impl Run {
     }
 
     /// The rows a save targets: the dock's targets, without the caster.
-    fn save_targets(&self) -> Vec<usize> {
+    pub fn save_targets(&self) -> Vec<usize> {
         let actor = self.armed.as_ref().map(|armed| armed.actor);
         self.targets()
             .into_iter()
@@ -1036,7 +1036,7 @@ impl Run {
 
     /// Publish the armed action for the tiles drawn next, and whether the panel's character
     /// can expend inspiration for advantage.
-    pub(super) fn armed_tiles_begin(&self, ctx: &egui::Context) {
+    pub fn armed_tiles_begin(&self, ctx: &egui::Context) {
         rolls::set_armed(ctx, self.armed_view());
         rolls::set_inspired(ctx, self.can_buy_advantage(self.panel_row()));
         // The roller's tiles show the numbers Splat rolls, with the run's changes in them.
@@ -1046,7 +1046,7 @@ impl Run {
     }
 
     /// Handle what was pressed under the armed tile.
-    pub(super) fn armed_tiles_end(&mut self, ctx: &egui::Context) {
+    pub fn armed_tiles_end(&mut self, ctx: &egui::Context) {
         rolls::set_inspired(ctx, false);
         if let Some(action) = rolls::take_armed_action(ctx) {
             self.armed_action(action);
@@ -1054,7 +1054,7 @@ impl Run {
     }
 
     /// What was pressed under the armed tile.
-    fn armed_action(&mut self, action: ArmedAction) {
+    pub fn armed_action(&mut self, action: ArmedAction) {
         let Some(armed) = self.armed.clone() else {
             return;
         };
@@ -1082,7 +1082,7 @@ impl Run {
     /// A save's damage, rolled once for every target, into Amount. Halves follow the marks.
     /// A damage condition is settled first: by the targets, when the run can tell and they
     /// agree, or else by a question under the first target's row.
-    fn save_damage(&mut self, armed: &Armed) -> Result<(), String> {
+    pub fn save_damage(&mut self, armed: &Armed) -> Result<(), String> {
         let targets = self.save_targets();
         match self.damage_for(&armed.link, Mode::Normal, armed.actor, &targets) {
             Ok(parts) => self.roll_save_damage(armed, &parts),
@@ -1100,7 +1100,7 @@ impl Run {
     }
 
     /// Roll a save's settled damage once, into Amount.
-    fn roll_save_damage(&mut self, armed: &Armed, parts: &[DamagePart]) -> Result<(), String> {
+    pub fn roll_save_damage(&mut self, armed: &Armed, parts: &[DamagePart]) -> Result<(), String> {
         let RollLink::SaveDc { label, .. } = &armed.link else {
             return Ok(());
         };
@@ -1140,7 +1140,7 @@ impl Run {
     /// The armed save's rolled damage: kept on the armed action until it is applied, and in
     /// Amount. Each target's row then says what Enter gives it, from Amount; an older result
     /// on these rows no longer stands.
-    fn show_save_damage(&mut self, outcome: &Outcome) {
+    pub fn show_save_damage(&mut self, outcome: &Outcome) {
         let Some(rolled) = &outcome.damage else {
             return;
         };
@@ -1159,7 +1159,7 @@ impl Run {
     /// Put the armed save's rolled damage in Amount again, for the targets and the saves as
     /// they are now. Enter applies Amount as it is to one target and by the half marks to
     /// several, so a change of targets, of a save or of a mark must not leave an older amount.
-    fn refresh_save_damage(&mut self) {
+    pub fn refresh_save_damage(&mut self) {
         let Some((RollLink::SaveDc { dc, half, .. }, Some(total))) = self
             .armed
             .as_ref()
@@ -1185,7 +1185,7 @@ impl Run {
     /// What a save's damage does to one target: its save, then the damage `command` gives
     /// it, as `Saved · 1 damage (half)` or `Failed · 3 damage`. `None` for a row the save
     /// does not target, or before its damage is rolled.
-    fn save_result(&self, row: usize, command: &Command) -> Option<String> {
+    pub fn save_result(&self, row: usize, command: &Command) -> Option<String> {
         let armed = self.armed.as_ref()?;
         let (RollLink::SaveDc { dc, half, .. }, Some(total)) = (&armed.link, armed.damage) else {
             return None;
@@ -1221,7 +1221,7 @@ impl Run {
     /// Each save target's result, from the damage step about to apply, so its row keeps
     /// what it was given after Amount and the targets clear. `apply` keeps them with the
     /// step's state, and spends the save's damage. Nothing for another step.
-    pub(super) fn save_results(&self, command: &Command) -> Vec<(usize, String)> {
+    pub fn save_results(&self, command: &Command) -> Vec<(usize, String)> {
         damage_shares(command)
             .into_iter()
             .filter_map(|(row, _)| Some((row, self.save_result(row, command)?)))
@@ -1230,7 +1230,7 @@ impl Run {
 
     /// The save as it stands, when `results` are its damage step's results. `None` for any
     /// other step.
-    pub(super) fn finished_cast(&self, results: &[(usize, String)]) -> Option<Cast> {
+    pub fn finished_cast(&self, results: &[(usize, String)]) -> Option<Cast> {
         if results.is_empty() {
             return None;
         }
@@ -1253,7 +1253,7 @@ impl Run {
     /// A save's damage is applied, so the save is finished. Its tile disarms, each row shows
     /// its AC again beside its result, and the panel and the dock go back to the caster, as
     /// before the save was armed.
-    pub(super) fn end_cast(&mut self) {
+    pub fn end_cast(&mut self) {
         let Some(armed) = self.armed.take() else {
             return;
         };
@@ -1267,7 +1267,7 @@ impl Run {
     /// Undo of a save's damage step: the save is armed again as it stood, with its saves, its
     /// targets, its damage in Amount, and each target's result from it. What a later action
     /// left on the rows, and a roll it kept for a reroll, go.
-    pub(super) fn resume_cast(&mut self, cast: Cast) {
+    pub fn resume_cast(&mut self, cast: Cast) {
         let rows = self.state.participants.len();
         if cast.armed.actor >= rows || cast.selected >= rows {
             return;
@@ -1287,7 +1287,7 @@ impl Run {
 
     /// Mark the save targets at or above the DC to take half, and no target under it. A
     /// target with no rolled save, such as a player, keeps the mark the DM gave it.
-    fn half_made(&mut self, armed: &Armed) {
+    pub fn half_made(&mut self, armed: &Armed) {
         let RollLink::SaveDc { dc, .. } = armed.link else {
             return;
         };
@@ -1307,7 +1307,7 @@ impl Run {
 
     /// What a row shows while an action is armed or after it: the chance to hit, or the
     /// result against it.
-    pub(super) fn row_badge(&self, row: usize) -> Option<String> {
+    pub fn row_badge(&self, row: usize) -> Option<String> {
         // A save's rolled damage that waits for Enter comes first for its targets: the row
         // says what Enter gives it now, from Amount, not a result applied before.
         if self
@@ -1350,7 +1350,7 @@ impl Run {
     }
 
     /// A save result in place of AC on a row, such as `DEX` and 19.
-    pub(super) fn save_on_row(&self, row: usize) -> Option<(String, i64)> {
+    pub fn save_on_row(&self, row: usize) -> Option<(String, i64)> {
         let total = *self.saves.get(&row)?;
         let Some(RollLink::SaveDc { ability, .. }) = self.armed.as_ref().map(|armed| &armed.link)
         else {
@@ -1364,7 +1364,7 @@ impl Run {
 
     /// The actions of a row: from its linked sheet, or else from its stat block's text, then
     /// the spells its Spellcasting lists that roll.
-    pub(super) fn chips(&self, row: usize) -> Vec<Chip> {
+    pub fn chips(&self, row: usize) -> Vec<Chip> {
         if let Some(record) = self.sheet.as_ref().filter(|_| self.sheet_for == Some(row)) {
             return crate::party::sheet_chips(record);
         }
@@ -1377,12 +1377,12 @@ impl Run {
     }
 
     /// The room above the dock for the action bar: only while the panel is hidden.
-    pub(super) fn strip_height(&self) -> f32 {
+    pub fn strip_height(&self) -> f32 {
         if self.hide_panel { STRIP_HEIGHT } else { 0.0 }
     }
 
     /// The panel's action tiles, as one line above the dock while the panel is hidden.
-    pub(super) fn compact_actions(&mut self, ui: &mut egui::Ui) {
+    pub fn compact_actions(&mut self, ui: &mut egui::Ui) {
         let row = self.panel_row();
         let chips = self.chips(row);
         rolls::set_roller(ui.ctx(), Some(row));
@@ -1418,7 +1418,7 @@ impl Run {
     }
 
     /// Ctrl+1 to Ctrl+9 arm the panel's participant's actions, in tile order.
-    pub(super) fn arm_by_number(&mut self, number: usize) {
+    pub fn arm_by_number(&mut self, number: usize) {
         let row = self.panel_row();
         if let Some(chip) = self.chips(row).into_iter().nth(number.saturating_sub(1)) {
             self.arm(row, chip.link, chip.spell_occurrence, Mode::Normal, false);
@@ -1426,7 +1426,7 @@ impl Run {
     }
 
     /// Escape stops an armed action first.
-    pub(super) fn disarm_on_escape(&mut self, ui: &egui::Ui) -> bool {
+    pub fn disarm_on_escape(&mut self, ui: &egui::Ui) -> bool {
         // A question waiting on a target closes first.
         if self.asking.is_some()
             && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
@@ -1444,7 +1444,7 @@ impl Run {
     }
 
     /// Next turn ends the armed action and its rows' results.
-    pub(super) fn end_turn_rolls(&mut self) {
+    pub fn end_turn_rolls(&mut self) {
         self.armed = None;
         self.asking = None;
         self.reroll = None;
@@ -1453,7 +1453,7 @@ impl Run {
     }
 
     /// Undo can take away rows. An action whose actor is gone ends.
-    pub(super) fn forget_removed_rollers(&mut self) {
+    pub fn forget_removed_rollers(&mut self) {
         let rows = self.state.participants.len();
         if self.armed.as_ref().is_some_and(|armed| armed.actor >= rows) {
             self.armed = None;

@@ -2414,60 +2414,75 @@ impl Splat {
                     self.page = Page::Encounters;
                     return;
                 };
-                if !self.encounters.has_run() {
+                if !self.run_page_begin(ui.available_width(), ui.ctx().content_rect().width()) {
                     self.page = Page::Encounters;
                     return;
                 }
-                let party = &self.party;
-                let copy = self.encounters.run_copy_label();
-                if let Some(run) = self.encounters.run_mut() {
-                    run.copy_label = copy;
-                    run.account_status = Some(self.settings.connection_status());
-                    run.recording_notice = self.sessions.run_notice();
-                    let panel = self.lookup.open || self.sessions.notes_open;
-                    // Beside a panel, a letter is the next word typed, never a command. A click
-                    // on Next turn moves the caret, so stray typing must not change the run.
-                    run.lookup_open = panel;
-                    run.notes_open = self.sessions.notes_open;
-                    // A wide window has room for both, so the stat block stays.
-                    // The roster comes first. The stat block stays only with room for both.
-                    let stat_block = design::side_panel_width(ui.ctx().content_rect().width());
-                    run.hide_panel =
-                        panel && ui.available_width() - stat_block < design::RUN_COMPACT.max_width;
-                    run.content = self.lookup.index();
-                    let sheet = run.wanted_sheet().and_then(|id| party.sheet(&id));
-                    run.set_sheet(sheet);
-                }
-                if self.encounters.show_run(ui, &campaign) {
-                    self.page = self.run_origin;
-                    self.sessions.forget_fight();
-                }
-                if let Some(words) = self
-                    .encounters
-                    .run_mut()
-                    .and_then(|run| run.for_note.take())
-                {
-                    self.sessions.words_for_note(words);
-                }
-                if self
-                    .encounters
-                    .run_mut()
-                    .is_some_and(|run| std::mem::take(&mut run.return_focus))
-                {
-                    self.sessions.after_a_step_back_to_note(self.notes_gave_way);
-                }
-                if let Some(run) = self.encounters.run_mut()
-                    && std::mem::take(&mut run.close_lookup)
-                {
-                    // What the DM asked for is in the side panel. Notes give way only when
-                    // they hide it, and their words stay in the draft.
-                    if run.hide_panel {
-                        self.sessions.notes_open = false;
-                        self.notes_gave_way = false;
-                    }
-                    self.lookup.close();
-                }
+                let closed = self.encounters.show_run(ui, &campaign);
+                self.run_page_end(closed);
             }
+        }
+    }
+
+    /// Before the Run page draws (egui and GPUI): the app's facts that the run shows. `room` is
+    /// the page's width and `window` the window's content width. False when there is no run.
+    pub(crate) fn run_page_begin(&mut self, room: f32, window: f32) -> bool {
+        if !self.encounters.has_run() {
+            return false;
+        }
+        self.encounters.run_reads();
+        let party = &self.party;
+        let copy = self.encounters.run_copy_label();
+        if let Some(run) = self.encounters.run_mut() {
+            run.copy_label = copy;
+            run.account_status = Some(self.settings.connection_status());
+            run.recording_notice = self.sessions.run_notice();
+            let panel = self.lookup.open || self.sessions.notes_open;
+            // Beside a panel, a letter is the next word typed, never a command. A click
+            // on Next turn moves the caret, so stray typing must not change the run.
+            run.lookup_open = panel;
+            run.notes_open = self.sessions.notes_open;
+            // A wide window has room for both, so the stat block stays.
+            // The roster comes first. The stat block stays only with room for both.
+            let stat_block = design::side_panel_width(window);
+            run.hide_panel = panel && room - stat_block < design::RUN_COMPACT.max_width;
+            run.content = self.lookup.index();
+            let sheet = run.wanted_sheet().and_then(|id| party.sheet(&id));
+            run.set_sheet(sheet);
+        }
+        true
+    }
+
+    /// After the Run page drew (egui and GPUI): `closed` when the DM closed the run.
+    pub(crate) fn run_page_end(&mut self, closed: bool) {
+        if closed {
+            self.page = self.run_origin;
+            self.sessions.forget_fight();
+        }
+        if let Some(words) = self
+            .encounters
+            .run_mut()
+            .and_then(|run| run.for_note.take())
+        {
+            self.sessions.words_for_note(words);
+        }
+        if self
+            .encounters
+            .run_mut()
+            .is_some_and(|run| std::mem::take(&mut run.return_focus))
+        {
+            self.sessions.after_a_step_back_to_note(self.notes_gave_way);
+        }
+        if let Some(run) = self.encounters.run_mut()
+            && std::mem::take(&mut run.close_lookup)
+        {
+            // What the DM asked for is in the side panel. Notes give way only when
+            // they hide it, and their words stay in the draft.
+            if run.hide_panel {
+                self.sessions.notes_open = false;
+                self.notes_gave_way = false;
+            }
+            self.lookup.close();
         }
     }
 

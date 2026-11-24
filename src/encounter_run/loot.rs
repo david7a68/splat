@@ -8,16 +8,16 @@ use crate::design::{self, Action, Density, Type, colors, icons};
 use crate::roll_table::TableRoll;
 use eframe::egui;
 use splat::content::loot::Loot;
-pub(super) use splat_session_records::rewards::{Holder, place};
+pub(crate) use splat_session_records::rewards::{Holder, place};
 #[cfg(test)]
-pub(super) use splat_session_records::rewards::{Rewards, rewards};
+pub(crate) use splat_session_records::rewards::{Rewards, rewards};
 use splat_session_records::rewards::{and_list, holders, note_lines, plain_roll};
 
 use splat_campaign::encounter_run::Found;
 
 /// One loot line to roll, with the table it rolls on.
 #[derive(Clone, Debug)]
-pub(crate) struct LootRoll {
+pub struct LootRoll {
     /// The line's place: see `place`.
     pub place: String,
     pub owner: String,
@@ -26,7 +26,7 @@ pub(crate) struct LootRoll {
 }
 
 /// Make each roll on the run's dice, keep what it found, and give the log a line for each.
-pub(super) fn roll(state: &mut State, rolls: Vec<LootRoll>) -> Result<Vec<String>, String> {
+pub(crate) fn roll(state: &mut State, rolls: Vec<LootRoll>) -> Result<Vec<String>, String> {
     let mut lines = Vec::new();
     for loot in rolls {
         if state.loot.contains_key(&loot.place) {
@@ -51,7 +51,7 @@ pub(super) fn roll(state: &mut State, rolls: Vec<LootRoll>) -> Result<Vec<String
 }
 
 /// The Undo words for these rolls. Short, because the ended view's header holds them.
-pub(super) fn describe(rolls: &[LootRoll]) -> String {
+pub(crate) fn describe(rolls: &[LootRoll]) -> String {
     match rolls {
         [one] => step_words(one.times, Some(&one.roll.key)),
         all => step_words(all.iter().map(|roll| roll.times).sum(), None),
@@ -111,12 +111,12 @@ fn loot_line(ui: &mut egui::Ui, mark: &str, line: &str, source: Option<&str>) {
 
 impl Run {
     /// Everyone with loot: the encounter first, then participants in turn order.
-    pub(super) fn holders(&self) -> Vec<Holder> {
+    pub fn holders(&self) -> Vec<Holder> {
         holders(&self.name, self.prep().0, &self.state)
     }
 
     /// The roll lines of these holders with no result yet, as `(holder, line)`.
-    pub(super) fn unrolled<'a>(
+    pub fn unrolled<'a>(
         &self,
         holders: impl IntoIterator<Item = &'a Holder>,
     ) -> Vec<(&'a Holder, usize)> {
@@ -145,7 +145,7 @@ impl Run {
     }
 
     /// The rolls for these lines, on the campaign's tables. None if one cannot roll.
-    pub(super) fn loot_rolls(&self, picks: &[(Holder, usize)]) -> Result<Vec<LootRoll>, String> {
+    pub fn loot_rolls(&self, picks: &[(Holder, usize)]) -> Result<Vec<LootRoll>, String> {
         picks
             .iter()
             .filter_map(|(holder, at)| match Loot::parse(&holder.lines[*at]) {
@@ -170,7 +170,7 @@ impl Run {
     }
 
     /// Roll these lines as one step.
-    pub(super) fn roll_loot(&mut self, picks: &[(Holder, usize)]) {
+    pub fn roll_loot(&mut self, picks: &[(Holder, usize)]) {
         match self.loot_rolls(picks) {
             Ok(rolls) if !rolls.is_empty() => self.run_command(Command::Loot(rolls)),
             Ok(_) => {}
@@ -180,7 +180,7 @@ impl Run {
 
     /// One holder's loot: words as the note has them, then each roll, with its button until it
     /// has a result, and then the result in its place. Returns the line the DM asked to roll.
-    pub(super) fn loot_list(&self, ui: &mut egui::Ui, holder: &Holder) -> Option<usize> {
+    pub fn loot_list(&self, ui: &mut egui::Ui, holder: &Holder) -> Option<usize> {
         let c = colors();
         let mut request = None;
         let sources = self.content.as_ref().map(|index| index.loot_sources());
@@ -270,7 +270,7 @@ impl Run {
     }
 
     /// The card's loot. One quiet line while the creature stands, and all of it at 0 HP.
-    pub(super) fn card_loot(&mut self, ui: &mut egui::Ui, index: usize) {
+    pub fn card_loot(&mut self, ui: &mut egui::Ui, index: usize) {
         let p = &self.state.participants[index];
         let lines = p.loot_lines();
         if lines.is_empty() {
@@ -308,7 +308,7 @@ impl Run {
 
     /// The ended view's loot: the encounter's and each downed creature's, with what is left to
     /// roll, Roll all and Copy loot. Loot on creatures still standing waits behind one line.
-    pub(super) fn loot_section(&mut self, ui: &mut egui::Ui) {
+    pub fn loot_section(&mut self, ui: &mut egui::Ui) {
         let holders = self.holders();
         if holders.is_empty() {
             return;
@@ -399,7 +399,7 @@ impl Run {
     }
 
     /// These holders' loot as a Markdown list, with each roll's result, for a session note.
-    pub(super) fn loot_markdown(&self, holders: &[Holder]) -> String {
+    pub fn loot_markdown(&self, holders: &[Holder]) -> String {
         let mut out = String::new();
         for holder in holders {
             out.push_str(&format!("**{}**\n", holder.name));
