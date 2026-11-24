@@ -503,6 +503,14 @@ pub(crate) fn prepare(markdown: &str, inputs: &Inputs<'_>) -> Vec<Block> {
                 code = true;
             }
             Event::End(TagEnd::CodeBlock) => {
+                // The block's last line break would draw an empty line under it.
+                while words.text.ends_with('\n') {
+                    words.text.pop();
+                    if let Some((range, _)) = words.looks.last_mut() {
+                        range.end = range.end.min(words.text.len());
+                    }
+                    words.looks.retain(|(range, _)| !range.is_empty());
+                }
                 paragraph(&mut blocks, &mut words, &mut target, Type::Mono.size());
                 code = false;
             }

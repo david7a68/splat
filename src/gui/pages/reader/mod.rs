@@ -1,6 +1,8 @@
 //! The Reader: entries and notes shown as reference (egui: `src/markdown_view.rs`,
 //! `src/markdown_source.rs`, `src/content_ui/`). Its Markdown view is `kit::markdown`; the
 //! readers that pages show (Library, World, Lookup) build on what this area adds.
+pub mod entry;
+
 use crate::gui::SplatRoot;
 use gpui::{Context, Window};
 

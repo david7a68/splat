@@ -14,6 +14,9 @@ use gpui::{
 /// The space between columns.
 pub(crate) const TABLE_GAP: Pixels = M;
 
+/// The hint over a table that scrolls sideways.
+pub(crate) const MORE_COLUMNS: &str = "More columns: scroll sideways or use Shift+wheel.";
+
 /// A table laid out for a width.
 pub(crate) struct Laid {
     pub widths: Vec<Pixels>,
@@ -237,10 +240,9 @@ pub(crate) fn draw(id: ElementId, table: &Table, laid: &Laid, matched: Option<us
         .flex()
         .flex_col()
         .w_full()
-        .child(super::super::text(
-            Type::Small,
-            c.muted,
-            "More columns: scroll sideways or use Shift+wheel.",
+        .child(super::super::target(
+            super::super::text(Type::Small, c.muted, MORE_COLUMNS),
+            MORE_COLUMNS,
         ))
         .child(
             div()

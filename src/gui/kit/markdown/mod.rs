@@ -303,7 +303,10 @@ impl RenderOnce for Markdown {
                     )
                 }
                 Block::Paragraph(paragraph) => {
-                    let row = matches!(mode, Mode::Row { .. });
+                    // A plan row's words, and field rows' last line, end with no space: the row
+                    // around them owns the space after them (egui's `show_skills` in its row).
+                    let row = matches!(mode, Mode::Row { .. })
+                        || (mode == Mode::Dense && at + 1 == blocks.len());
                     Some(
                         div()
                             .flex()
@@ -700,13 +703,17 @@ impl Draw {
                 Some(super::tooltip::tip(words.into())(window, cx))
             }
         };
-        block
-            .child(
+        // The harness finds a linked paragraph by its words.
+        let name = words.text.clone();
+        super::target(
+            block.child(
                 InteractiveText::new(self.child_id(format!("words-{at}")), text)
                     .on_click(ranges, follow)
                     .tooltip(tips),
-            )
-            .into_any_element()
+            ),
+            name,
+        )
+        .into_any_element()
     }
 
     /// A table's columns and rows, kept for the width they were laid out at.
@@ -870,12 +877,20 @@ impl Draw {
                     .h(Type::Body.line())
                     .w_full()
                     .overflow_hidden()
-                    .children(result.map(|result| super::text::one_line(Type::Body, c.text, result))),
+                    .children(result.map(|result| {
+                        super::target(
+                            super::text::one_line(Type::Body, c.text, result),
+                            ROLL_RESULT,
+                        )
+                    })),
             )
             .children(marker.per.warning().map(|words| warning(&words)))
             .into_any_element()
     }
 }
+
+/// The harness's name for a roll table's result line.
+pub(crate) const ROLL_RESULT: &str = "Roll result";
 
 /// A warning under a table, in its parser's words.
 fn warning(words: &str) -> AnyElement {
