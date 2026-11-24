@@ -33,6 +33,8 @@ pub struct FieldState<S: 'static> {
     pub input: Entity<S>,
     last: SharedString,
     on_change: Option<OnChange>,
+    /// The caller's handler of focus leaving the field (`TextField::on_blur`).
+    on_blur: Option<super::OnAct>,
     _changes: Subscription,
 }
 
@@ -44,6 +46,12 @@ macro_rules! field_state {
                     &input,
                     window,
                     |this: &mut Self, input, event: &InputEvent, window, cx| {
+                        if matches!(event, InputEvent::Blur) {
+                            if let Some(on_blur) = this.on_blur.clone() {
+                                on_blur(window, cx);
+                            }
+                            return;
+                        }
                         if !matches!(event, InputEvent::Change) {
                             return;
                         }
@@ -61,6 +69,7 @@ macro_rules! field_state {
                     input,
                     last: SharedString::default(),
                     on_change: None,
+                    on_blur: None,
                     _changes: changes,
                 }
             }
@@ -106,6 +115,9 @@ pub struct TextField {
     width: Option<gpui::Pixels>,
     on_change: Option<OnChange>,
     on_enter: Option<super::OnAct>,
+    on_escape: Option<super::OnAct>,
+    on_blur: Option<super::OnAct>,
+    focus: bool,
 }
 
 impl TextField {
@@ -120,6 +132,9 @@ impl TextField {
             width: None,
             on_change: None,
             on_enter: None,
+            on_escape: None,
+            on_blur: None,
+            focus: false,
         }
     }
 
@@ -164,6 +179,24 @@ impl TextField {
         self.on_enter = Some(Rc::new(handler));
         self
     }
+
+    /// Escape in the field (an amount that ends unused). Escape still reaches the window's keys.
+    pub fn on_escape(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_escape = Some(Rc::new(handler));
+        self
+    }
+
+    /// Focus left the field (a length that the event takes when the DM moves on).
+    pub fn on_blur(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_blur = Some(Rc::new(handler));
+        self
+    }
+
+    /// Take the keyboard in this frame (a field that opens for typing). Give `true` once.
+    pub fn focus(mut self, focus: bool) -> Self {
+        self.focus = focus;
+        self
+    }
 }
 
 impl RenderOnce for TextField {
@@ -179,9 +212,16 @@ impl RenderOnce for TextField {
         });
         let value = self.value.clone();
         let on_change = self.on_change.clone();
-        state.update(cx, |state, cx| state.follow(&value, on_change, window, cx));
+        let on_blur = self.on_blur.clone();
+        state.update(cx, |state, cx| {
+            state.on_blur = on_blur;
+            state.follow(&value, on_change, window, cx)
+        });
         let input = state.read(cx).input.clone();
         input.update(cx, |input, cx| input.set_disabled(self.disabled, cx));
+        if self.focus {
+            input.update(cx, |input, cx| input.focus(window, cx));
+        }
         let focused = input.read(cx).focus_handle(cx).is_focused(window);
         let name = self
             .name
@@ -195,6 +235,7 @@ impl RenderOnce for TextField {
             element = element.mask_toggle();
         }
         let enter = self.on_enter.clone();
+        let escape = self.on_escape.clone();
         let mut frame = frame(focused, Density::Read.control())
             .ty(Type::Body)
             .text_color(colors().text)
@@ -203,10 +244,15 @@ impl RenderOnce for TextField {
             Some(width) => frame.w(width),
             None => frame.w_full(),
         };
-        if let Some(enter) = enter {
+        if enter.is_some() || escape.is_some() {
             frame = frame.on_key_down(move |event, window, cx| {
-                if event.keystroke.key == "enter" && !event.keystroke.modifiers.modified() {
-                    enter(window, cx);
+                if event.keystroke.modifiers.modified() {
+                    return;
+                }
+                match (event.keystroke.key.as_str(), &enter, &escape) {
+                    ("enter", Some(enter), _) => enter(window, cx),
+                    ("escape", _, Some(escape)) => escape(window, cx),
+                    _ => {}
                 }
             });
         }

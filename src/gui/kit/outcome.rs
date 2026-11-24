@@ -45,6 +45,7 @@ pub struct Message {
     tone: Tone,
     words: SharedString,
     small: bool,
+    details: Vec<AnyElement>,
     actions: Vec<AnyElement>,
     destructive: Option<AnyElement>,
 }
@@ -55,6 +56,7 @@ impl Message {
             tone,
             words: words.into(),
             small: false,
+            details: Vec::new(),
             actions: Vec::new(),
             destructive: None,
         }
@@ -63,6 +65,12 @@ impl Message {
     /// `Small` words (a row's own fault).
     pub fn small(mut self) -> Self {
         self.small = true;
+        self
+    }
+
+    /// A line under the words, before the actions (a help line, the file a message is about).
+    pub fn detail(mut self, detail: impl IntoElement) -> Self {
+        self.details.push(detail.into_any_element());
         self
     }
 
@@ -91,6 +99,7 @@ impl RenderOnce for Message {
             .min_w_0()
             .gap(XS)
             .child(div().ty(ty).text_color(colors().text).child(self.words))
+            .children(self.details)
             .when_actions(self.actions, self.destructive);
         div()
             .flex()

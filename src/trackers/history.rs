@@ -214,7 +214,7 @@ pub fn problems(rules: &Rules, state: &State) -> Vec<(Option<Uuid>, String)> {
 /// Is this note in play? It defines a member, or it is in play and its file cannot be used: then
 /// its reader keeps its problem and the words of a click that wrote nothing. A note turned off
 /// is neither.
-fn in_play(rules: &Rules, note: Uuid) -> bool {
+pub fn in_play(rules: &Rules, note: Uuid) -> bool {
     rules.trackers.iter().any(|t| t.note == note)
         || rules.day_marks.iter().any(|m| m.note == note)
         || rules.problems.iter().any(|(owner, _)| *owner == Some(note))
@@ -434,6 +434,13 @@ impl Trackers {
     }
 }
 
+impl Trackers {
+    /// A member's history, by its key: its rows in the ledger's order (none while it has none).
+    pub fn history_rows(&self, key: &str) -> &[Row] {
+        self.history.get(key).map_or(&[][..], Vec::as_slice)
+    }
+}
+
 impl Removed {
     /// What its Undo names, and the name a refused Undo gives the entry.
     pub fn name(&self) -> String {
@@ -619,7 +626,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat_content::co
 }
 
 /// `Start 0`, or each name's start value.
-fn start_words(def: &super::Definition) -> String {
+pub fn start_words(def: &super::Definition) -> String {
     match &def.start {
         super::Start::Value(value) => format!("Start {value}"),
         super::Start::Per(_) => {

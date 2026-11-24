@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 /// A journey with more checks than this lists none: it is too long to roll here.
 const MOST_CHECKS: usize = 31;
 /// The most `Plan “…”` offers under one result.
-const MOST_OFFERS: usize = 3;
+pub const MOST_OFFERS: usize = 3;
 
 /// The "How long" field of an open event. Both of its forms (with checks to follow and without)
 /// use this id, so the focus and the cursor stay when the event gains or loses its checks.
@@ -250,7 +250,7 @@ pub fn first_table(events: &[Event], id: &str, tables: &[Table]) -> String {
 }
 
 /// The chosen table, when the campaign still has it.
-fn chosen<'a>(event: &Event, tables: &'a [Table]) -> Option<&'a Table> {
+pub fn chosen<'a>(event: &Event, tables: &'a [Table]) -> Option<&'a Table> {
     let key = event
         .checks_table
         .as_deref()
@@ -479,7 +479,7 @@ pub struct State {
 
 impl State {
     /// Keep what was typed for this journey only.
-    fn follow(&mut self, id: &str) {
+    pub fn follow(&mut self, id: &str) {
         if self.event != id {
             *self = Self {
                 event: id.to_owned(),
@@ -501,102 +501,55 @@ impl State {
     pub fn clear_problem(&mut self) {
         self.problem = None;
     }
-}
 
-/// The block's field: the label `Encounter checks` above a line of the table menu and the dice
-/// with the interval.
-pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Act> {
-    state.follow(&view.event.id);
-    let c = colors();
-    let table = chosen(view.event, view.tables);
-    let mut act = None;
-    design::field(ui, "Encounter checks", None, None, |ui| {
-        ui.horizontal_wrapped(|ui| table_line(ui, view, table, &mut act))
-    });
-    if let Some(fault) = table.and_then(Table::fault) {
-        design::status(
-            ui,
-            Status {
-                icon: icons::WARN,
-                word: "Cannot roll",
-                color: c.document.external,
-            },
-        )
-        .on_hover_text(fault);
-    } else if let Some(warning) = table.and_then(|table| table.per.warning()) {
-        check_fault(ui, &CheckFault::Table(&warning));
+    /// The roll typed for the line at `at`, so far.
+    pub fn typed(&self, at: u64) -> &str {
+        self.typed.get(&at).map_or("", String::as_str)
     }
-    act
-}
 
-/// The table menu, then `· 1d20 each day`. Dice words that move to a line of their own start
-/// with the words, not with `·`.
-fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &mut Option<Act>) {
-    let c = colors();
-    ui.spacing_mut().item_spacing.x = design::S;
-    let word = match (table, view.event.checks_table.as_deref()) {
-        (Some(table), _) => table.name(),
-        (None, Some(key)) if !key.is_empty() => "Table not found",
-        _ => "Choose a table",
-    };
-    // The menu starts the field's line: its word at the label's text edge (`line_start`).
-    let button = design::menu_button_at_line_start(ui, word, false);
-    design::menu_popup(ui, &button).show(|ui| {
-        let mut names: Vec<&Table> = view.tables.iter().collect();
-        names.sort_by(|a, b| a.name().cmp(b.name()).then(a.key.cmp(&b.key)));
-        for option in names {
-            let selected = table.is_some_and(|table| table.key == option.key);
-            if design::choice_wrapped(ui, selected, option.name(), None).clicked() {
-                *act = Some(Act::Choose(Some(option.key.clone())));
-                ui.close();
+    /// The DM typed in the line at `at`.
+    pub fn set_typed(&mut self, at: u64, words: &str) {
+        words.clone_into(self.typed.entry(at).or_default());
+    }
+
+    /// Enter in the line at `at`: its typed roll, when it is a whole number; else its line says
+    /// why. The field empties either way.
+    pub fn enter(&mut self, at: u64) -> Option<Act> {
+        let typed = self.typed.entry(at).or_default();
+        let act = match design::parse_signed(typed) {
+            Some(value) => Some(Act::Enter(at, value)),
+            None if typed.trim().is_empty() => None,
+            None => {
+                self.problem = Some((Some(at), "Type a whole number.".into()));
+                None
             }
-        }
-        // The token rule between the tables and `No checks`; the item gaps keep `S` around it.
-        design::rule(ui);
-        let results = !view.event.checks.is_empty();
-        let no_checks = Action::quiet("No checks")
-            .blocked_if(results, "Clear the results first.")
-            .show(ui);
-        if no_checks.clicked() {
-            *act = Some(Act::Choose(None));
-            ui.close();
-        }
-        if results {
-            // A note under its choice, at its words (M-P0.26).
-            design::choice_note(ui, false, Some("Clear the results first."));
-        }
-    });
-    let Some(table) = table else {
-        return;
-    };
-    let words = format!("{} {}", table.dice, table.per.words());
-    let after = format!("· {words}");
-    let fits = design::number_width(ui, &after, &Type::Small.font(ui))
-        <= ui.available_size_before_wrap().x;
-    if !fits {
-        ui.end_row();
+        };
+        typed.clear();
+        act
     }
-    ui.add(
-        egui::Label::new(
-            Type::Small
-                .rich(ui, if fits { after } else { words })
-                .color(c.muted),
-        )
-        .wrap_mode(egui::TextWrapMode::Extend),
-    );
+
+    /// The fault of the last act: on the line at its offset, or (`None`) on the block.
+    pub fn problem(&self) -> Option<(Option<u64>, &str)> {
+        self.problem
+            .as_ref()
+            .map(|(at, words)| (*at, words.as_str()))
+    }
 }
 
-/// The span of the journey on the clock, for the line under **How long**.
-pub fn span(start: Option<u64>, length: &str) -> Option<String> {
-    let start = start?;
-    let end = start + minutes(length).filter(|minutes| *minutes > 0)?;
-    Some(format!("{} to {}", clock_words(start), clock_words(end)))
+/// A journey's checks block as rows, before any drawing: each line (its name, its result or
+/// none, its offset), the results that are no longer on a line (with their names), why a roll is
+/// blocked, how many checks a journey too long to roll has, and the lines that wait for a roll.
+pub struct Block<'a> {
+    pub table: Option<&'a Table>,
+    pub rows: Vec<(String, Option<&'a Check>, u64)>,
+    pub outside: Vec<(String, &'a Check)>,
+    pub blocked: Option<&'static str>,
+    pub too_many: Option<usize>,
+    pub waiting: Vec<u64>,
 }
 
-/// One line for each check, then `Roll all`, then results that are no longer on a line.
-pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Act> {
-    state.follow(&view.event.id);
-    let c = colors();
+/// The block's rows (`Block`), worked out from the journey as the DM sees it.
+pub fn block<'a>(view: &View<'a>) -> Block<'a> {
     let table = chosen(view.event, view.tables);
     let per = table.map_or(Per::Day, |table| table.per.clone());
     let every = per.hours();
@@ -647,7 +600,7 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
             (named(at), Some(check), at)
         }));
     }
-    let outside: Vec<(String, &Check)> = view
+    let outside = view
         .event
         .checks
         .iter()
@@ -659,6 +612,148 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
             (label, check)
         })
         .collect();
+    let waiting = rows
+        .iter()
+        .filter(|(_, check, _)| check.is_none())
+        .map(|(_, _, at)| *at)
+        .collect();
+    Block {
+        table,
+        rows,
+        outside,
+        blocked,
+        too_many: schedule.err(),
+        waiting,
+    }
+}
+
+/// The table menu's word: the chosen table's name, `Table not found`, or `Choose a table`; and
+/// the dice words after it (`1d20 each day`) once a table is chosen.
+pub fn table_words(view: &View<'_>) -> (String, Option<String>) {
+    let table = chosen(view.event, view.tables);
+    let word = match (table, view.event.checks_table.as_deref()) {
+        (Some(table), _) => table.name().to_owned(),
+        (None, Some(key)) if !key.is_empty() => "Table not found".to_owned(),
+        _ => "Choose a table".to_owned(),
+    };
+    (
+        word,
+        table.map(|table| format!("{} {}", table.dice, table.per.words())),
+    )
+}
+
+/// The names a result links that the plan can take (an encounter or a group), at most
+/// `MOST_OFFERS`, each with whether the plan has a row still to come for it.
+pub fn offers(check: &Check, view: &View<'_>) -> Vec<(String, bool)> {
+    let mut names = crate::sessions::linked_names(&check.words);
+    names.retain(|name| (view.planned)(name).is_some());
+    names
+        .into_iter()
+        .take(MOST_OFFERS)
+        .map(|name| {
+            let planned = (view.planned)(&name) == Some(true);
+            (name, planned)
+        })
+        .collect()
+}
+
+/// The block's field: the label `Encounter checks` above a line of the table menu and the dice
+/// with the interval.
+pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Act> {
+    state.follow(&view.event.id);
+    let c = colors();
+    let table = chosen(view.event, view.tables);
+    let mut act = None;
+    design::field(ui, "Encounter checks", None, None, |ui| {
+        ui.horizontal_wrapped(|ui| table_line(ui, view, table, &mut act))
+    });
+    if let Some(fault) = table.and_then(Table::fault) {
+        design::status(
+            ui,
+            Status {
+                icon: icons::WARN,
+                word: "Cannot roll",
+                color: c.document.external,
+            },
+        )
+        .on_hover_text(fault);
+    } else if let Some(warning) = table.and_then(|table| table.per.warning()) {
+        check_fault(ui, &CheckFault::Table(&warning));
+    }
+    act
+}
+
+/// The table menu, then `· 1d20 each day`. Dice words that move to a line of their own start
+/// with the words, not with `·`.
+fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &mut Option<Act>) {
+    let c = colors();
+    ui.spacing_mut().item_spacing.x = design::S;
+    let (word, dice) = table_words(view);
+    // The menu starts the field's line: its word at the label's text edge (`line_start`).
+    let button = design::menu_button_at_line_start(ui, &word, false);
+    design::menu_popup(ui, &button).show(|ui| {
+        let mut names: Vec<&Table> = view.tables.iter().collect();
+        names.sort_by(|a, b| a.name().cmp(b.name()).then(a.key.cmp(&b.key)));
+        for option in names {
+            let selected = table.is_some_and(|table| table.key == option.key);
+            if design::choice_wrapped(ui, selected, option.name(), None).clicked() {
+                *act = Some(Act::Choose(Some(option.key.clone())));
+                ui.close();
+            }
+        }
+        // The token rule between the tables and `No checks`; the item gaps keep `S` around it.
+        design::rule(ui);
+        let results = !view.event.checks.is_empty();
+        let no_checks = Action::quiet("No checks")
+            .blocked_if(results, "Clear the results first.")
+            .show(ui);
+        if no_checks.clicked() {
+            *act = Some(Act::Choose(None));
+            ui.close();
+        }
+        if results {
+            // A note under its choice, at its words (M-P0.26).
+            design::choice_note(ui, false, Some("Clear the results first."));
+        }
+    });
+    let (Some(_), Some(words)) = (table, dice) else {
+        return;
+    };
+    let after = format!("· {words}");
+    let fits = design::number_width(ui, &after, &Type::Small.font(ui))
+        <= ui.available_size_before_wrap().x;
+    if !fits {
+        ui.end_row();
+    }
+    ui.add(
+        egui::Label::new(
+            Type::Small
+                .rich(ui, if fits { after } else { words })
+                .color(c.muted),
+        )
+        .wrap_mode(egui::TextWrapMode::Extend),
+    );
+}
+
+/// The span of the journey on the clock, for the line under **How long**.
+pub fn span(start: Option<u64>, length: &str) -> Option<String> {
+    let start = start?;
+    let end = start + minutes(length).filter(|minutes| *minutes > 0)?;
+    Some(format!("{} to {}", clock_words(start), clock_words(end)))
+}
+
+/// One line for each check, then `Roll all`, then results that are no longer on a line.
+pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Act> {
+    state.follow(&view.event.id);
+    let c = colors();
+    let Block {
+        table,
+        rows,
+        outside,
+        blocked,
+        too_many,
+        waiting,
+    } = block(view);
     let font = Type::Small.font(ui);
     let column = rows
         .iter()
@@ -712,14 +807,7 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
                         })
                         .inner;
                     if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                        match design::parse_signed(typed) {
-                            Some(value) => act = Some(Act::Enter(at, value)),
-                            None if typed.trim().is_empty() => {}
-                            None => {
-                                state.problem = Some((Some(at), "Type a whole number.".into()));
-                            }
-                        }
-                        typed.clear();
+                        act = state.enter(at).or(act.take());
                     }
                 }
             }
@@ -745,7 +833,7 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
     if table.is_none() {
         design::blocked_reason(ui, blocked);
     }
-    if let Err(count) = schedule {
+    if let Some(count) = too_many {
         check_notice(
             ui,
             crate::sentence!(
@@ -754,11 +842,6 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
             ),
         );
     }
-    let waiting: Vec<u64> = rows
-        .iter()
-        .filter(|(_, check, _)| check.is_none())
-        .map(|(_, _, at)| *at)
-        .collect();
     if waiting.len() > 1 {
         design::gap(ui, design::Gap::XS);
         if Action::secondary(&format!("Roll all {}", waiting.len()))
@@ -791,7 +874,6 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
 /// A result: its number and words, `Clear` at the line's end, and an offer for each encounter
 /// or group that it links.
 fn result(ui: &mut egui::Ui, label: &str, check: &Check, view: &View<'_>) -> Option<Act> {
-    let planned = view.planned;
     let c = colors();
     let mut act = None;
     let clear_name = format!("Clear the check for {label}");
@@ -824,16 +906,14 @@ fn result(ui: &mut egui::Ui, label: &str, check: &Check, view: &View<'_>) -> Opt
                         )
                         .wrap(),
                     );
-                    let mut names = crate::sessions::linked_names(&check.words);
-                    names.retain(|name| planned(name).is_some());
                     // Each name keeps one place, one control high: its offer, then `In the plan`. The
                     // offer's result and its Undo are in the plan's message footer (round 27 FE7).
-                    for name in names.into_iter().take(MOST_OFFERS) {
+                    for (name, in_plan) in offers(check, view) {
                         let size = egui::vec2(ui.available_width(), Density::Read.control());
                         let top = egui::Layout::top_down(egui::Align::Min);
                         ui.allocate_ui_with_layout(size, top, |ui| {
                             ui.set_min_size(size);
-                            if planned(&name) == Some(true) {
+                            if in_plan {
                                 let line =
                                     egui::vec2(ui.available_width(), Density::Read.control());
                                 let left = egui::Layout::left_to_right(egui::Align::Center);
@@ -912,6 +992,34 @@ impl LengthDraft {
             Taken::Length
         }
     }
+}
+
+impl LengthDraft {
+    /// Words typed in **How long** of `event` while it has focus: the draft holds them, with the
+    /// length the event had when the typing began (for a field drawn by another UI).
+    pub fn type_words(&mut self, event: &Event, words: &str) {
+        let base = match &self.0 {
+            Some((id, _, base)) if *id == event.id => base.clone(),
+            _ => event.duration.clone(),
+        };
+        self.0 = Some((event.id.clone(), words.to_owned(), base));
+    }
+}
+
+/// Enter in **How long** of the journey `id`, or focus gone elsewhere: the event takes the typed
+/// length, as the egui field does when it loses focus.
+pub fn commit_length(book: &mut Book, id: &str) {
+    if book.length.0.as_ref().is_none_or(|(held, _, _)| held != id) {
+        return;
+    }
+    let taken = match book.events.iter_mut().find(|event| event.id == id) {
+        Some(event) => book.length.take(event),
+        None => {
+            book.length.0 = None;
+            Taken::Nothing
+        }
+    };
+    note_taken(book, taken);
 }
 
 /// Note what a length's field did: a new length is an edit; one typed over a newer length

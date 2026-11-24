@@ -326,7 +326,7 @@ impl crate::design::results::Kept for NewestAct {
 /// `match` (`Fault::severity`), and its words in one place, so every view that draws it (the
 /// Trackers view, a house rule note's reader, the footer) gives it one tone and one wording.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum TrackerFault {
+pub enum TrackerFault {
     /// `Trackers.md` cannot be read: the system's words.
     LedgerUnreadable(String),
     /// `Campaign.md` or a house rule note in play cannot be read: the reader's words.

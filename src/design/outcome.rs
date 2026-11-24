@@ -31,6 +31,9 @@ use super::{extras::space, icons, tokens::*};
 use egui::{self, Rect, Response, Ui};
 use std::borrow::Cow;
 
+/// The footer's messages as plain data, for the GPUI port (`docs/gpui-port.md`).
+pub mod plain;
+
 // ------------------------------------------------------------------------------------------------
 // Sentence
 

@@ -2089,6 +2089,33 @@ impl Lookup {
         self.open = false;
     }
 
+    /// Trackers' title line offers Back: an entry or a found note waits under Trackers (for a
+    /// view drawn by another UI, the GPUI port).
+    pub fn trackers_hold_something(&self) -> bool {
+        self.holds_something()
+    }
+
+    /// Back from Trackers to what Lookup held.
+    pub fn back_from_trackers(&mut self) {
+        self.leave_trackers();
+    }
+
+    /// Words typed in the search field over Trackers: a new search, which leaves Trackers for
+    /// its results (`search_over_trackers`).
+    pub fn search_from_trackers(&mut self, typed: &str) {
+        if typed.is_empty() {
+            return;
+        }
+        typed.clone_into(&mut self.query);
+        self.leave_trackers();
+        self.results_open = true;
+    }
+
+    /// Trackers just came into view: it shows from its top, once.
+    pub fn take_trackers_from_top(&mut self) -> bool {
+        std::mem::take(&mut self.trackers_from_top)
+    }
+
     /// The name of the NPC this panel rolled and has not saved.
     pub fn generated_name(&self) -> Option<&str> {
         self.generated.as_ref().map(|npc| npc.name.as_str())
