@@ -4,19 +4,19 @@ use crate::gui::harness::Shell;
 use crate::recording::Health;
 use crate::visual_tests::fixture::Seed;
 use gpui::{px, size};
-use std::time::Duration;
 
 const TITLE: &str = "Ash on the Road";
 const SMALL: (f32, f32) = (960.0, 640.0);
 
-/// Wait for the campaign's encounters to load (a background read), so the plan has its fights.
+/// Wait for the campaign's encounters to load (a background read), so the plan has its fights:
+/// on the read's own result, never a clock.
 fn wait_for_fights(shell: &mut Shell) {
-    for _ in 0..100 {
-        if shell.update(|root, _, _| !root.app.encounters.plan_kept().fights.is_empty()) {
-            return;
-        }
-        shell.wait(Duration::from_millis(50));
-    }
+    shell.update(|root, _, _| root.app.encounters.wait_for_load());
+    shell.settle();
+    assert!(
+        shell.update(|root, _, _| !root.app.encounters.plan_kept().fights.is_empty()),
+        "the campaign's fights are read"
+    );
 }
 
 /// A session made through the form.
@@ -425,6 +425,26 @@ fn slash_menu_in_the_note() {
         "the / menu lists Generate NPC"
     );
     assert!(shell.bounds("Search").is_some(), "the / menu lists Search");
+    // The menu opens at the `/`: under it, from its left edge (egui `popup_at`).
+    let slash = shell
+        .update(|root, _, cx| {
+            let words = root.app.sessions.gv_note_words(false).unwrap_or_default();
+            super::note::bounds_at(root, false, words.rfind('/').unwrap(), cx)
+        })
+        .expect("the / was drawn");
+    let search = [shell.bounds("Search"), shell.bounds("Generate NPC")]
+        .into_iter()
+        .flatten()
+        .min_by(|a, b| f32::from(a.top()).total_cmp(&f32::from(b.top())))
+        .expect("the first row");
+    assert!(
+        search.top() >= slash.bottom() && search.top() - slash.bottom() < px(40.0),
+        "the menu opens under the /: {search:?} under {slash:?}"
+    );
+    assert!(
+        (search.left() - slash.left()).abs() < px(24.0),
+        "the menu starts at the /: {search:?} at {slash:?}"
+    );
     shell.capture("session-notes__53-slash-menu__1200x800");
     shell.type_text("se");
     assert!(

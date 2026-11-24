@@ -65,18 +65,21 @@ fn race_in_play(shell: &mut Shell) {
         root.app.lookup.refresh();
         root.app.lookup.files_changed = true;
     });
-    // The content is read again in the background.
-    for _ in 0..40 {
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        shell.wait(std::time::Duration::from_millis(100));
-        if shell.read(|root| root.app.trackers.in_play()) {
-            break;
-        }
-    }
+    // The content is read again in the background: wait for that read's result, not a clock.
+    read_content_again(shell);
     assert!(
         shell.read(|root| root.app.trackers.in_play()),
         "the note is in play"
     );
+}
+
+/// The content index read that `Lookup::refresh` started, carried to its end: the frame that
+/// starts the read has run (`update` settles), so this blocks on the read's own result, and the
+/// frames after it take the new index as any frame does. No wall clock, so a loaded machine
+/// only makes it slower.
+pub(crate) fn read_content_again(shell: &mut Shell) {
+    shell.update(|root, _, _| root.app.lookup.wait_for_load());
+    shell.settle();
 }
 
 fn value(shell: &mut Shell, key: &str, instance: Option<&str>) -> i64 {

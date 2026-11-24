@@ -12,6 +12,7 @@
 
 pub mod button;
 pub mod checkbox;
+pub mod comparison;
 pub mod dialog;
 pub mod empty;
 pub mod fact;
@@ -20,6 +21,7 @@ pub mod hp;
 pub mod link;
 pub mod list;
 pub mod markdown;
+pub mod markdown_source;
 pub mod menu;
 pub mod messages;
 pub mod nav;
@@ -39,6 +41,7 @@ pub mod virtual_list;
 
 pub use button::{Button, IconButton};
 pub use checkbox::{Checkbox, Switch};
+pub use comparison::DraftComparison;
 pub use dialog::Dialog;
 pub use empty::empty_state;
 pub use field::{EditorHandle, TextEditor, TextField, field, help};

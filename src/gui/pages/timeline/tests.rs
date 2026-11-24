@@ -145,19 +145,15 @@ fn a_journeys_checks() {
         fs::write(campaign.path.join("Road.md"), ROAD).unwrap();
         root.app.lookup.refresh();
     });
-    for _ in 0..40 {
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        shell.wait(std::time::Duration::from_millis(100));
-        let tables = shell.read(|root| {
-            root.app
-                .lookup
-                .index()
-                .is_some_and(|index| !index.loot_sources().tables.is_empty())
-        });
-        if tables {
-            break;
-        }
-    }
+    crate::gui::pages::trackers::tests::read_content_again(&mut shell);
+    assert!(
+        shell.read(|root| root
+            .app
+            .lookup
+            .index()
+            .is_some_and(|index| !index.loot_sources().tables.is_empty())),
+        "the road's table is read"
+    );
     shell.click("Timeline");
     shell.settle();
     first_day(&mut shell);

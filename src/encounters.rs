@@ -4514,6 +4514,19 @@ impl Encounters {
         self.pending.is_some()
     }
 
+    /// Block until the load in flight has its result (its completion signal, never a clock),
+    /// and hand that result to the next `poll`, which takes it as it takes any. A test's wait.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn wait_for_load(&mut self) {
+        if let Some(rx) = self.pending.take() {
+            let (tx, ready) = mpsc::channel();
+            if let Ok(result) = rx.recv() {
+                let _ = tx.send(result);
+            }
+            self.pending = Some(ready);
+        }
+    }
+
     #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_sync_conflict(&mut self, name: &str) {
         self.run

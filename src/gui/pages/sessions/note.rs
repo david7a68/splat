@@ -7,10 +7,10 @@ use super::with_plan;
 use crate::gui::{SplatRoot, kit, theme};
 use gpui::{
     AnyElement, App, Context, ElementId, InteractiveElement, IntoElement, KeyBinding,
-    ParentElement, SharedString, Styled, Window, actions, div, prelude::*,
+    ParentElement, SharedString, Styled, Window, actions, div,
 };
 use std::collections::HashMap;
-use theme::{HAIRLINE_WIDTH, L, READER_MEASURE, S, Type, XS, colors};
+use theme::{HAIRLINE_WIDTH, READER_MEASURE, S, Type, XS, colors};
 use uuid::Uuid;
 
 actions!(session_note, [SaveNote]);
@@ -34,6 +34,16 @@ fn handle(root: &SplatRoot, in_panel: bool) -> Option<kit::EditorHandle> {
         .editors
         .get(&(session, in_panel))
         .cloned()
+}
+
+/// Where the note editor last drew the character at byte `at`, in window coordinates.
+pub(super) fn bounds_at(
+    root: &SplatRoot,
+    in_panel: bool,
+    at: usize,
+    cx: &App,
+) -> Option<gpui::Bounds<gpui::Pixels>> {
+    handle(root, in_panel)?.bounds_at(at, cx)
 }
 
 /// The note editor's caret, as a byte offset of its words.
@@ -160,6 +170,7 @@ pub(super) fn editor(
         .handle(&handle)
         .name("Note text")
         .text_type(Type::Prose)
+        .markdown_source()
         .fill()
         .on_change(cx.listener(move |root, words: &str, _, cx| {
             let before = root
@@ -293,74 +304,23 @@ fn parts(
 }
 
 /// The file changed on disk during an edit: the draft beside the file, until the DM chooses in
-/// the banner (`Overwrite with my draft`, `Reload and lose my draft`).
+/// the banner (`Overwrite with my draft`, `Reload and lose my draft`). The note's grouped
+/// comparison (`design::grouped_draft_comparison`, in the note's prose face).
 pub(super) fn conflict(
     root: &mut SplatRoot,
     _window: &mut Window,
     _cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
-    let c = colors();
+    let session = root.app.sessions.gv_selected();
     let Some((draft, disk)) = root.app.sessions.gv_conflict_texts() else {
         return div().into_any_element();
     };
-    // Paragraphs, not blank lines: the two texts side by side, each line once.
-    let (draft_lines, disk_lines): (Vec<&str>, Vec<&str>) = (
-        draft
-            .lines()
-            .filter(|line| !line.trim().is_empty())
-            .collect(),
-        disk.lines()
-            .filter(|line| !line.trim().is_empty())
-            .collect(),
-    );
-    let summary = changed_lines(&draft_lines, &disk_lines);
-    let column = |title: &'static str, lines: &[&str], other: &[&str]| {
-        div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_w_0()
-            .gap(XS)
-            .child(kit::label(title, 0))
-            .children(lines.iter().map(|line| {
-                let differs = !other.contains(line);
-                div()
-                    .px(S)
-                    .when(differs, |row| {
-                        row.bg(c.raised)
-                            .border_l(theme::MARK_WIDTH)
-                            .border_color(c.focus)
-                    })
-                    .child(kit::text(Type::Prose, c.text, (*line).to_owned()))
-            }))
-    };
-    kit::scroll_column(
-        "session-conflict",
-        div()
-            .flex()
-            .flex_col()
-            .gap(S)
-            .child(kit::text(Type::Small, c.muted, summary))
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap(L)
-                    .child(column("Your draft", &draft_lines, &disk_lines))
-                    .child(column("In the file now", &disk_lines, &draft_lines)),
-            ),
-    )
-    .into_any_element()
-}
-
-/// `1 line differs`, `3 lines differ`.
-fn changed_lines(draft: &[&str], disk: &[&str]) -> String {
-    let count = draft.iter().filter(|line| !disk.contains(line)).count()
-        + disk.iter().filter(|line| !draft.contains(line)).count();
-    let count = count.div_ceil(2).max(1);
-    if count == 1 {
-        "1 line differs".to_owned()
-    } else {
-        format!("{count} lines differ")
-    }
+    let id = ElementId::Name(SharedString::from(format!(
+        "session-conflict-{}",
+        session.map_or_else(String::new, |id| id.to_string())
+    )));
+    div()
+        .size_full()
+        .child(kit::DraftComparison::new(id, draft, disk))
+        .into_any_element()
 }

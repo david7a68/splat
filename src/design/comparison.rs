@@ -54,6 +54,32 @@ impl Layout {
     }
 }
 
+/// Two texts' lines aligned for a side-by-side comparison, as the egui comparison draws them: each
+/// row's line on each side (`None`: no line there), how many rows differ, and the first row of
+/// each run of differing rows (a `Next difference` stop). For a view that keeps it between
+/// frames itself (the GPUI comparison keeps it until either text changes).
+pub struct Aligned {
+    pub rows: Vec<[Option<String>; 2]>,
+    pub changed: usize,
+    pub groups: Vec<usize>,
+}
+
+/// Align `text`'s two sides (`[draft, disk]`): about n × m line comparisons, so a caller keeps
+/// the result while the texts stay.
+pub fn aligned(text: [&str; 2]) -> Aligned {
+    let lines = text.map(|text| text.lines().collect::<Vec<_>>());
+    let layout = Layout::of(&lines);
+    Aligned {
+        rows: layout
+            .rows
+            .iter()
+            .map(|row| [0, 1].map(|side| row[side].map(|at| lines[side][at].to_owned())))
+            .collect(),
+        changed: layout.changed,
+        groups: layout.groups,
+    }
+}
+
 impl<'a> Comparison<'a> {
     /// Uncached, for tests; the app uses `cached`.
     #[cfg(test)]
@@ -202,6 +228,20 @@ mod tests {
             ),
         ] {
             let comparison = Comparison::new([left, right]);
+            let shared = aligned([left, right]);
+            assert_eq!(
+                shared
+                    .rows
+                    .iter()
+                    .map(|row| [row[0].as_deref(), row[1].as_deref()])
+                    .collect::<Vec<_>>(),
+                expected,
+                "the shared alignment is the egui one"
+            );
+            assert_eq!(
+                (shared.changed, shared.groups),
+                (comparison.changed, comparison.groups.clone())
+            );
             let rows: Vec<_> = comparison.columns[0]
                 .iter()
                 .zip(&comparison.columns[1])

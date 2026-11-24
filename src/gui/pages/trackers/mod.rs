@@ -10,7 +10,7 @@
 pub(crate) mod history;
 pub(crate) mod measure;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use crate::design::memo::Revision;
 use crate::design::outcome::{PaneFrame, fault_words, plain::fault_tone};

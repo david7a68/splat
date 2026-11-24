@@ -12,7 +12,7 @@ use pulldown_cmark::{Event, HeadingLevel, LinkType, Options, Parser, Tag};
 use std::{ops::Range, sync::Arc};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum Role {
+pub enum Role {
     #[default]
     Prose,
     Strong,
@@ -26,18 +26,18 @@ enum Role {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct Look {
-    role: Role,
+pub struct Look {
+    pub role: Role,
     /// Syntax and not words, such as `##`, `**` or the target of a link.
-    markup: bool,
-    link: bool,
-    struck: bool,
+    pub markup: bool,
+    pub link: bool,
+    pub struck: bool,
     /// Part of a `<!-- splat:… -->` mark that Splat wrote (a travel check). It folds to one muted
     /// mark unless the caret is on its line (closure FE9).
-    folded: bool,
+    pub folded: bool,
 }
 
-type Runs = Arc<Vec<(Range<usize>, Look)>>;
+pub type Runs = Arc<Vec<(Range<usize>, Look)>>;
 
 const OPTIONS: Options = Options::ENABLE_TABLES
     .union(Options::ENABLE_STRIKETHROUGH)
@@ -164,6 +164,25 @@ fn looks(text: &str) -> Runs {
         runs.push((0..0, Look::default()));
     }
     Arc::new(runs)
+}
+
+/// A text's looks for an editor that is not egui's (the GPUI note editor, `gui::kit::field`): each
+/// stretch's look, as [`layouter`] styles it, and the byte where each section heading ends (its
+/// rule goes under that line, as [`paint_section_rules`] draws it). Toolkit-free.
+pub fn source_looks(text: &str) -> (Runs, Vec<usize>) {
+    let runs = looks(text);
+    let section_ends = runs
+        .iter()
+        .enumerate()
+        .filter(|(index, (_, look))| {
+            look.role == Role::Section
+                && runs
+                    .get(index + 1)
+                    .is_none_or(|(_, next)| next.role != Role::Section)
+        })
+        .map(|(_, (range, _))| range.end)
+        .collect();
+    (runs, section_ends)
 }
 
 /// The marks Splat writes itself, and only those, fold (closure FE9; P2 of the PR 331 review): a
