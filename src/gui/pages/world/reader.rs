@@ -12,13 +12,35 @@ use crate::world::model::{
 };
 use crate::world::page::WorldPage;
 use gpui::{
-    AnyElement, Context, Hsla, IntoElement, ParentElement, SharedString, Styled, div,
+    AnyElement, Context, Hsla, IntoElement, ParentElement, SharedString, Styled, Window, div,
     prelude::*, px,
 };
 use uuid::Uuid;
 
 /// The label column of a value row (egui: `XXL * 3 + S`).
 const LABEL_COLUMN: f32 = 104.0;
+
+/// The widest value column (egui: `relationship_width`, `XXL * 7 + L`).
+const VALUE_COLUMN: gpui::Pixels = px(240.0);
+
+/// The width of `words` set in `ty`.
+fn words_width(window: &Window, ty: theme::Type, words: &str) -> gpui::Pixels {
+    let mut font = gpui::font(ty.family());
+    font.weight = ty.weight();
+    font.style = ty.style();
+    let run = gpui::TextRun {
+        len: words.len(),
+        font,
+        color: theme::colors().text,
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    };
+    window
+        .text_system()
+        .shape_line(SharedString::from(words.to_owned()), ty.size(), &[run], None)
+        .width
+}
 
 /// A handler that acts on the note `id` with the page, its reader's item, the notes and the
 /// campaign; the `Nav` an act returns goes to the page.
@@ -44,6 +66,7 @@ pub(super) fn render(
     campaign: &Campaign,
     index: &ContentIndex,
     at: usize,
+    window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let item = &index.items[at];
@@ -60,7 +83,7 @@ pub(super) fn render(
         );
     });
     let footer = footer::render(root, lines, cx);
-    let body = render_reader(root, item, index, campaign, cx);
+    let body = render_reader(root, item, index, campaign, window, cx);
     let mut pane = kit::Pane::new(("world-reader", item.entry.id.as_u128() as u64)).flush();
     for line in footer {
         pane = pane.footer(line);
@@ -74,6 +97,7 @@ pub fn render_reader(
     item: &Item,
     index: &ContentIndex,
     campaign: &Campaign,
+    window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = theme::colors();
@@ -119,7 +143,7 @@ pub fn render_reader(
         .body_facts(item, index, Some(campaign));
     column = column.child(faults(&facts, item, campaign, cx));
     if facts.values {
-        column = column.child(values(root, item, index, campaign, cx));
+        column = column.child(values(root, item, index, campaign, window, cx));
     }
     if facts.duplicate_values {
         column = column.child(duplicate_values(item, index, cx));
@@ -214,7 +238,7 @@ fn title_line(
                 .flex_col()
                 .max_w(theme::LIST_MEASURE)
                 .child(kit::text(theme::Type::Display, c.text, facts.title))
-                .child(kit::text(theme::Type::Small, c.muted, facts.kind_line)),
+                .child(kit::text(theme::Type::Small, c.muted, facts.kind_line).pt(theme::XS)),
         )
         .child(
             div()
@@ -437,12 +461,40 @@ fn values(
     item: &Item,
     index: &ContentIndex,
     campaign: &Campaign,
+    window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = theme::colors();
     let id = item.entry.id;
     let reader = &mut root.app.world_page.reader;
     let rows = reader.value_rows(item, index);
+    // One Change column (AI1): `L` after the widest value, which wraps in the column when it is
+    // wider than the reader's value room (egui: `relationship_value_width`).
+    let body = |words: &str| words_width(window, theme::Type::Body, words);
+    let small = |words: &str| words_width(window, theme::Type::Small, words);
+    let column_width = rows
+        .iter()
+        .map(|row| match &row.value {
+            ValueShown::Link(_, name) | ValueShown::Words(name) => body(name),
+            ValueShown::PlaceChoices(words) => body(&format!("{} {words}", icons::WARN)),
+            ValueShown::Missing(name) => {
+                body(&missing_text(name)) + small(crate::world::model::NOT_FOUND_WORDS)
+            }
+            ValueShown::NotSet => small("not set"),
+            ValueShown::NotRead => small("not read"),
+            ValueShown::Groups(groups) => groups
+                .iter()
+                .map(|(name, target)| match target {
+                    Some(_) => body(name),
+                    None => {
+                        body(&missing_text(name)) + small(crate::world::model::NOT_FOUND_WORDS)
+                    }
+                })
+                .fold(px(0.0), |a, b| a.max(b)),
+        })
+        .fold(px(0.0), |a, b| a.max(b))
+        .min(VALUE_COLUMN)
+        + px(1.0);
     let mut column = div().flex().flex_col().pt(theme::L);
     for row in rows {
         let key = row.key;
@@ -497,7 +549,12 @@ fn values(
                 page.reader.press_change(key, item);
                 None
             }));
-        column = column.child(value_row(row.label, value, Some(change.into_any_element())));
+        column = column.child(value_row(
+            row.label,
+            value,
+            column_width,
+            Some(change.into_any_element()),
+        ));
         if key == "in" && root.app.world_page.reader.place_choices_open() {
             column = column.child(place_chooser(item, index, cx));
         }
@@ -545,7 +602,12 @@ fn missing(name: &str) -> impl IntoElement {
 }
 
 /// A labelled value: the muted label column, the value, then its Change `L` after it.
-fn value_row(label: &str, value: AnyElement, change: Option<AnyElement>) -> impl IntoElement {
+fn value_row(
+    label: &str,
+    value: AnyElement,
+    width: gpui::Pixels,
+    change: Option<AnyElement>,
+) -> impl IntoElement {
     let c = theme::colors();
     div()
         .flex()
@@ -558,7 +620,7 @@ fn value_row(label: &str, value: AnyElement, change: Option<AnyElement>) -> impl
                 .flex_none()
                 .child(kit::text(theme::Type::Small, c.muted, label.to_owned())),
         )
-        .child(div().flex_none().max_w(px(256.0)).child(value))
+        .child(div().flex_none().w(width).child(value))
         .when_some(change, |row, change| row.child(div().pl(theme::L).child(change)))
 }
 
@@ -937,7 +999,7 @@ fn duplicate_values(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoo
             None if label == "Status" => kit::text(theme::Type::Body, c.text, name).into_any_element(),
             None => missing(&name).into_any_element(),
         };
-        column = column.child(value_row(label, value, None));
+        column = column.child(value_row(label, value, VALUE_COLUMN, None));
     }
     column.into_any_element()
 }

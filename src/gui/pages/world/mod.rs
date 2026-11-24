@@ -21,7 +21,7 @@ mod reader;
 #[cfg(test)]
 mod tests;
 
-actions!(world, [Escape]);
+actions!(world, [Escape, Save]);
 
 /// The width the list column starts at, and its range (egui's `list_column`).
 const LIST_WIDTH: f32 = 260.0;
@@ -41,7 +41,10 @@ pub struct State {
 
 /// Once, when the root is built.
 pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
-    cx.bind_keys([KeyBinding::new("escape", Escape, Some("World"))]);
+    cx.bind_keys([
+        KeyBinding::new("escape", Escape, Some("World")),
+        KeyBinding::new("ctrl-s", Save, Some("World")),
+    ]);
 }
 
 /// Once per frame, before anything draws.
@@ -67,6 +70,9 @@ pub(crate) fn act<E: ?Sized + 'static>(
     }))
 }
 
+/// A boxed handler with no event (Enter or Escape in a field).
+pub(crate) type KeyHandler = Box<dyn Fn(&mut Window, &mut App) + 'static>;
+
 /// A boxed handler of `E`, which a kit part's `on_click` (or `on_change`) takes.
 pub(crate) type Handler<E> = Box<dyn Fn(&E, &mut Window, &mut App) + 'static>;
 
@@ -86,7 +92,7 @@ pub(crate) fn on_key(
     cx: &mut Context<SplatRoot>,
     f: impl Fn(&mut SplatRoot, &Campaign, &ContentIndex, &mut Window, &mut Context<SplatRoot>)
     + 'static,
-) -> Box<dyn Fn(&mut Window, &mut App) + 'static> {
+) -> KeyHandler {
     let handler = act::<()>(cx, f);
     Box::new(move |window, cx| handler(&(), window, cx))
 }
@@ -107,6 +113,7 @@ pub(crate) fn render(
     let page = div()
         .key_context("World")
         .on_action(cx.listener(escape))
+        .on_action(cx.listener(save))
         .flex()
         .flex_col()
         .size_full()
@@ -158,6 +165,38 @@ fn escape(root: &mut SplatRoot, _: &Escape, _: &mut Window, cx: &mut Context<Spl
     } else {
         cx.propagate();
     }
+}
+
+/// Ctrl+S: the open edit form's `Save changes`, the repair's `Save repaired note`, or the
+/// creation form's `Create`. It waits while a modal is open.
+fn save(root: &mut SplatRoot, _: &Save, _: &mut Window, cx: &mut Context<SplatRoot>) {
+    if root.modal_open(cx) {
+        return;
+    }
+    let Some((campaign, index)) = world(root) else {
+        return;
+    };
+    let page = &mut root.app.world_page;
+    match page.pane(&index) {
+        crate::world::page::Pane::Repair
+            if page
+                .repair_mut()
+                .is_some_and(|repair| repair.press_save(&campaign)) =>
+        {
+            page.repair_saved(&campaign);
+        }
+        crate::world::page::Pane::Creation => page.create(&campaign),
+        crate::world::page::Pane::Note(at) => {
+            let item = &index.items[at];
+            if page.reader.editing(item.entry.id, &campaign)
+                && let Some(nav) = page.reader.save_draft(item, &index, &campaign)
+            {
+                page.take_nav(nav, &index);
+            }
+        }
+        _ => {}
+    }
+    cx.notify();
 }
 
 /// The header (M0603): the title and its count, `New ▾`, the count of notes that need fixing

@@ -436,7 +436,7 @@ impl Repair {
                 .unwrap_or(&self.path)
                 .to_owned();
             if let Some(shown) = self.undos.get(&self.owner()) {
-                messages.kept(shown.outcome(&frame, |undo| {
+                messages.kept(shown.outcome(frame, |undo| {
                     match undo {
                         RepairUndo::Discard { .. } => KeptOutcome::Notice(
                             Notice::new(crate::sentence!("{} draft discarded.", name)),

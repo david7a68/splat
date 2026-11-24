@@ -18,7 +18,7 @@ pub(super) fn render(
     root: &mut SplatRoot,
     campaign: &Campaign,
     index: &ContentIndex,
-    _window: &mut Window,
+    window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let held = root.app.world_page.held_name().map(str::to_owned);
@@ -27,7 +27,7 @@ pub(super) fn render(
         Pane::Unread => unread(root, campaign, index, cx),
         Pane::Creation => creation(root, campaign, index, cx),
         Pane::Checks(view) => checks(root, campaign, index, view, cx),
-        Pane::Note(at) => super::reader::render(root, campaign, index, at, cx),
+        Pane::Note(at) => super::reader::render(root, campaign, index, at, window, cx),
         Pane::Empty => empty(root, campaign, index, cx),
     };
     div()
@@ -402,12 +402,16 @@ fn checks(
                         .flex_row()
                         .items_start()
                         .child(div().w(theme::XXL).flex_none().when(editable, |slot| {
-                            slot.child(
-                                kit::Checkbox::new(("world-tick", at), "", false)
-                                    .on_click(act(cx, move |root, campaign, index, _, _| {
-                                        root.app.world_page.press_tick(index, campaign, at);
-                                    })),
-                            )
+                            slot.child(kit::target(
+                                div().child(
+                                    kit::Checkbox::new(("world-tick", at), "", false).on_click(
+                                        act(cx, move |root, campaign, index, _, _| {
+                                            root.app.world_page.press_tick(index, campaign, at);
+                                        }),
+                                    ),
+                                ),
+                                format!("Open: {}", line.words),
+                            ))
                         }))
                         .child(link)
                         .into_any_element()

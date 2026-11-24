@@ -374,6 +374,7 @@ fn broken_row(
         .child(
             kit::Row::new(("world-broken", at), format!("{path} · {cause}"))
                 .height(px(40.0))
+                .grows()
                 .selected(open)
                 .on_click(press(entity, move |root, campaign, _| {
                     root.app.world_page.press_repair(campaign, &owned);
@@ -401,7 +402,11 @@ fn broken_row(
                                 .items_start()
                                 .gap(theme::XS)
                                 .child(kit::icon(icons::ERROR, theme::Type::Small, c.result.error))
-                                .child(kit::text(theme::Type::Small, c.muted, cause.to_owned())),
+                                .child(
+                                    kit::text(theme::Type::Small, c.muted, cause.to_owned())
+                                        .flex_1()
+                                        .min_w_0(),
+                                ),
                         ),
                 ),
         )
