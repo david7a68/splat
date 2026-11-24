@@ -206,6 +206,18 @@ impl Default for Campaigns {
 
 impl Campaigns {
     pub fn start_import(&mut self, act: design::reveal::Act, id: &str, name: &str) {
+        self.begin_import(id, name);
+        // The form opens with the name field taking the keyboard, and shows whole (the folder
+        // Splat proposes and its preview too: G138).
+        let visit = (id, self.data.active_campaign_id);
+        if let Some(form) = &mut self.remote {
+            form.reveal.ask(act, visit, IMPORT_FORM);
+        }
+    }
+
+    /// `Add…` on a remote campaign: the import form opens for it, with a folder Splat proposes
+    /// and the name field taking the keyboard. (`start_import` also brings it whole into view.)
+    pub fn begin_import(&mut self, id: &str, name: &str) {
         self.clear_form();
         self.name = name.into();
         let parent = self
@@ -232,14 +244,10 @@ impl Campaigns {
             }
             self.path = candidate.to_string_lossy().into_owned();
         }
-        // The form opens with the name field taking the keyboard, and shows whole (the folder
-        // Splat proposes and its preview too: G138).
-        let mut reveal = design::reveal::Reveal::default();
-        reveal.ask(act, (id, self.data.active_campaign_id), IMPORT_FORM);
         self.remote = Some(ImportForm {
             id: id.into(),
             name: name.into(),
-            reveal,
+            reveal: design::reveal::Reveal::default(),
         });
         self.focus_name = true;
     }
@@ -975,18 +983,9 @@ impl Campaigns {
         });
         block.end();
         if edit.is_some_and(|edit| edit.clicked()) {
-            if self.editing.is_none() {
-                self.add_name = self.name.clone();
-                self.add_path = self.path.clone();
-            }
-            self.remote = None;
-            self.editing = Some(campaign.id);
-            self.end_discard();
             // The keyboard goes to the form's first field, and the form comes whole into view
             // with it (`show_form_if_editing`).
-            self.focus_name = true;
-            self.name = campaign.name.clone();
-            self.path = campaign.path.to_string_lossy().into_owned();
+            self.start_edit(&campaign, true);
         }
         design::gap(ui, design::Gap::S);
         design::rule(ui);
@@ -1064,22 +1063,10 @@ impl Campaigns {
                 );
             },
         );
-        if keep {
-            self.confirm_remove = None;
-        }
         if remove {
-            self.confirm_remove = None;
-            let mut data = self.data.clone();
-            data.campaigns.retain(|c| c.id != id);
-            if data.active_campaign_id == Some(id) {
-                data.active_campaign_id = None;
-            }
-            self.save(data);
-            // The result of registering a removed campaign ends with it.
-            if !self.data.campaigns.iter().any(|c| c.id == id) {
-                self.campaign_copy = None;
-                self.results.owner_changed(&FormResult::Added);
-            }
+            self.remove_confirmed();
+        } else if keep {
+            self.keep_campaign();
         }
     }
 
@@ -1294,15 +1281,7 @@ impl Campaigns {
                                         .show(ui)
                                         .clicked()
                                 {
-                                    if self.editing.is_none() {
-                                        self.add_name = self.name.clone();
-                                        self.add_path = self.path.clone();
-                                    }
-                                    self.remote = None;
-                                    self.editing = Some(campaign.id);
-                                    self.end_discard();
-                                    self.name = campaign.name.clone();
-                                    self.path = campaign.path.to_string_lossy().into_owned();
+                                    self.start_edit(&campaign, false);
                                 }
                                 if !active
                                     && Action::secondary("Open")
@@ -1758,20 +1737,8 @@ impl Campaigns {
                         );
                         if !unchanged {
                             self.end_discard();
-                            if Action::quiet("Discard").show(ui).clicked()
-                                && let Some(saved) = self
-                                    .data
-                                    .campaigns
-                                    .iter()
-                                    .find(|c| Some(c.id) == self.editing)
-                            {
-                                self.results.record(FormKept::Discarded {
-                                    campaign: saved.id,
-                                    name: self.name.clone(),
-                                    path: self.path.clone(),
-                                });
-                                self.name = saved.name.clone();
-                                self.path = saved.path.to_string_lossy().into_owned();
+                            if Action::quiet("Discard").show(ui).clicked() {
+                                self.discard_details();
                             }
                         } else if Action::quiet("Cancel").line_start().show(ui).clicked() {
                             self.clear_form();
@@ -1785,10 +1752,7 @@ impl Campaigns {
                     });
                 }
                 if commit {
-                    match self.save_form() {
-                        Ok(()) => added = !editing,
-                        Err(error) => self.error = Some(error),
-                    }
+                    added = self.commit_form();
                 }
             };
             let form = if direct {
@@ -1841,7 +1805,7 @@ const CAMPAIGN_FOLDER: design::FieldName = crate::field_id!("campaign_folder");
 const ADD_CAMPAIGN: design::Word = crate::word!("Add campaign");
 const BROWSE: design::Word = crate::word!("Browse…");
 const CANCEL: design::Word = crate::word!("Cancel");
-const FOLDER_HELP: &str = "Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.";
+pub const FOLDER_HELP: &str = "Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.";
 
 /// By number, because a link can be stored with other formatting. An ID that is not a number
 /// links to nothing, and neither does a campaign with no link.
@@ -1890,6 +1854,9 @@ const WILL_CREATE: &str = "Will create ";
 pub fn copy_registered(name: &str) -> String {
     format!("{name} is registered as a new campaign. Its D&D Beyond link is off.")
 }
+
+#[path = "campaigns/view.rs"]
+mod view;
 
 #[cfg(test)]
 mod tests {

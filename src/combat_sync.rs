@@ -2511,6 +2511,9 @@ pub fn sync_heading(
     ui.add(egui::Label::new(job).wrap())
 }
 
+#[path = "combat_sync/view.rs"]
+pub mod view;
+
 #[cfg(test)]
 mod tests {
     use super::*;

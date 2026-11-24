@@ -387,7 +387,14 @@ fn undo_discard_stays_in_its_campaign() {
             .build_ui_state(
                 move |ui, content: &mut CampaignContent| {
                     let frame = design::outcome::PaneFrame::new(ui);
-                    let messages = content.page_footer(&frame, ui, &campaigns, &active, 600.0);
+                    let open = |path: &str| {
+                        ui.data(|data| {
+                            data.get_temp::<bool>(egui::Id::new(("repair_open", path)))
+                                .unwrap_or(false)
+                        })
+                    };
+                    let messages =
+                        content.page_footer_with(&frame, &open, &campaigns, &active, 600.0);
                     let paned = messages.pane(ui, design::Body::Content, |_| ());
                     content.press_result(ui.ctx(), &campaigns, paned.pressed);
                 },

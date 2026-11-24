@@ -523,11 +523,12 @@ impl DndBeyond {
         // Round 28 FO7: the pane's lock (a run) blocks Refresh list as it blocks the picker.
         if crate::design::Action::secondary("Refresh list")
             .density(crate::design::Density::Read)
-            .blocked(self.refresh_blocked(session.as_ref(), blocked))
+            .blocked(self.link_refresh_lock(blocked, session.is_some()))
             .show(ui)
             .clicked()
+            && let Some(session) = session.clone()
         {
-            self.refresh_link(session.clone(), local, ui.ctx());
+            self.refresh_link(session, local, ui.ctx());
         }
         // Round 26: the link's error and result are in the pane's footer (`footer_messages`).
         let current = campaign.dndbeyond_campaign_id;
@@ -569,11 +570,11 @@ impl DndBeyond {
                 .blocked(blocked)
                 .show(ui, &mut selected);
             if ui.is_rect_visible(dropdown.response.rect) {
-                self.link_seen(session, local, ui.ctx());
+                self.link_in_view(session, local, ui.ctx());
             }
         });
         if selected != current {
-            self.choose_link(selected, local);
+            self.choose_link(local, selected);
         }
         if let Some(id) = &current {
             ui.horizontal_wrapped(|ui| {
@@ -598,168 +599,8 @@ impl DndBeyond {
     }
 }
 
-/// One choice of the link's picker: the remote campaign's id (`None`: not linked), its name,
-/// and why it cannot be chosen.
-pub type LinkChoice = (Option<String>, String, Option<&'static str>);
-
-/// The link's field as data and acts, for both UIs (the GPUI port, `docs/gpui-port.md`).
-impl DndBeyond {
-    /// Why Refresh list waits: the pane's lock (a run), no account, or a refresh on its way.
-    pub fn refresh_blocked<'a>(
-        &self,
-        session: Option<&Session>,
-        blocked: Option<&'a str>,
-    ) -> Option<&'a str> {
-        if let Some(lock) = blocked {
-            Some(lock)
-        } else if session.is_none() {
-            Some("Connect to D&D Beyond in Settings first.")
-        } else if self.pending.is_some() {
-            Some("Already refreshing.")
-        } else {
-            None
-        }
-    }
-
-    /// Refresh list: the account's campaigns again, and the open campaign's link name with them.
-    pub fn refresh_link(
-        &mut self,
-        session: Option<Session>,
-        local: &Campaigns,
-        ctx: &egui::Context,
-    ) {
-        let (Some(session), Some(campaign)) = (session, local.active_campaign()) else {
-            return;
-        };
-        if self.pending.is_some() {
-            return;
-        }
-        self.pending_link = campaign
-            .dndbeyond_campaign_id
-            .clone()
-            .map(|id| (campaign.id, id));
-        self.requested_visible_link = self.pending_link.clone();
-        self.refresh(session, ctx);
-    }
-
-    /// The link's picker is in view this frame: a link not yet checked against the account is
-    /// checked once.
-    pub fn link_seen(&mut self, session: Option<Session>, local: &Campaigns, ctx: &egui::Context) {
-        self.visible_last_frame = true;
-        let Some(campaign) = local.active_campaign() else {
-            return;
-        };
-        let key = campaign
-            .dndbeyond_campaign_id
-            .clone()
-            .map(|id| (campaign.id, id));
-        if key.is_some()
-            && key != self.requested_visible_link
-            && self.pending.is_none()
-            && let Some(session) = session
-        {
-            self.requested_visible_link = key.clone();
-            self.pending_link = key;
-            self.refresh(session, ctx);
-        }
-    }
-
-    /// The DM chose a link (or `Not linked`) for the open campaign.
-    pub fn choose_link(&mut self, selected: Option<String>, local: &mut Campaigns) {
-        let Some(campaign) = local.active_campaign() else {
-            return;
-        };
-        match local.link(selected.clone()) {
-            Ok(()) => {
-                self.requested_visible_link = None;
-                self.message.record(LinkSaved(campaign.id));
-                self.error = None;
-                if let Some(remote) = self
-                    .campaigns
-                    .iter()
-                    .find(|c| Some(&c.id) == selected.as_ref())
-                    && let Err(error) =
-                        local.cache_remote_name(campaign.id, &remote.id, &remote.name)
-                {
-                    self.error = Some(error);
-                }
-            }
-            // A failed attempt is the newest answer: the older success ends.
-            Err(error) => {
-                self.error = Some(error);
-                self.end_link_result();
-            }
-        }
-    }
-
-    /// The picker's choices for the open campaign: `Not linked`, a saved link the list does not
-    /// hold, then each remote campaign (with why it cannot be chosen), and the chosen one.
-    pub fn link_choices(
-        &self,
-        local: &Campaigns,
-    ) -> (Vec<LinkChoice>, usize) {
-        let Some(campaign) = local.active_campaign() else {
-            return (Vec::new(), 0);
-        };
-        let current = campaign.dndbeyond_campaign_id.clone();
-        let mut choices = vec![(None, "Not linked".to_owned(), None)];
-        if let Some(id) = current
-            .as_ref()
-            .filter(|id| !self.campaigns.iter().any(|c| &c.id == *id))
-        {
-            choices.push((
-                Some(id.clone()),
-                campaign
-                    .dndbeyond_campaign_name
-                    .clone()
-                    .unwrap_or_else(|| format!("Campaign {id}")),
-                None,
-            ));
-        }
-        for remote in &self.campaigns {
-            choices.push((
-                Some(remote.id.clone()),
-                remote.name.clone(),
-                local
-                    .linked_elsewhere(&remote.id)
-                    .then_some("Already linked to another campaign."),
-            ));
-        }
-        let chosen = choices
-            .iter()
-            .position(|(id, ..)| *id == current)
-            .unwrap_or(0);
-        (choices, chosen)
-    }
-
-    /// The linked campaign's details: its DM and players, and its page on D&D Beyond.
-    pub fn link_details(&self, local: &Campaigns) -> Option<(Vec<String>, String)> {
-        let id = local.active_campaign()?.dndbeyond_campaign_id?;
-        let mut words = Vec::new();
-        if let Some(remote) = self.campaigns.iter().find(|c| c.id == id) {
-            if let Some(dm) = &remote.dm_username {
-                words.push(format!("DM: {dm}"));
-            }
-            if let Some(count) = remote.player_count {
-                words.push(format!("Players: {count}"));
-            }
-        }
-        Some((words, format!("https://www.dndbeyond.com/campaigns/{id}")))
-    }
-
-    /// Whether a refresh is on its way, and whether a refresh found no campaigns.
-    pub fn list_state(&self) -> (bool, bool) {
-        (
-            self.pending.is_some(),
-            self.loaded && self.campaigns.is_empty(),
-        )
-    }
-
-    /// The list's error, as the footer says it.
-    pub fn error(&self) -> Option<&str> {
-        self.error.as_deref()
-    }
-}
+#[path = "dndbeyond/view.rs"]
+pub mod view;
 
 #[cfg(test)]
 mod tests {

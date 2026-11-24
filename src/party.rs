@@ -35,16 +35,47 @@ impl PartyPage {
     }
 }
 
-struct Party<'a> {
-    view: &'a mut PartyPage,
-    party: &'a mut PartyState,
+impl PartyPage {
+    /// The page's footer lines (`page_footer`), for a UI that draws them itself.
+    pub fn footer_lines(
+        &mut self,
+        party: &mut PartyState,
+        connected: bool,
+        linked: bool,
+    ) -> Vec<design::outcome::plain::PlainLine<PartyPress>> {
+        let frame = design::outcome::PaneFrame::plain();
+        Party { view: self, party }
+            .page_footer(&frame, connected, linked)
+            .into_plain()
+    }
+
+    /// Do a press of the page's footer; a file to show comes back as its URL.
+    pub fn footer_press(
+        &mut self,
+        party: &mut PartyState,
+        press: design::outcome::Press<PartyPress>,
+    ) -> Option<String> {
+        Party { view: self, party }.press(Some(press))
+    }
 }
 
-impl Party<'_> {
-    #[allow(clippy::disallowed_methods)]
-    fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
-        let reader = &self.party.reader;
-        let ready = self.party.combat.ready();
+/// The Party page's header: its state words and which actions it offers.
+pub struct PartyHeader {
+    /// `Not connected · Fetched 3 min ago`, with its icon first.
+    pub context: String,
+    pub icon: &'static str,
+    /// Why Refresh party waits.
+    pub refresh_reason: Option<String>,
+    /// `Connect to refresh` shows.
+    pub connect: bool,
+    /// `Refresh party` shows.
+    pub refresh: bool,
+}
+
+impl PartyHeader {
+    pub fn of(party: &PartyState, connected: bool, linked: bool) -> Self {
+        let reader = &party.reader;
+        let ready = party.combat.ready();
         let fetched = reader
             .selected
             .as_ref()
@@ -52,13 +83,12 @@ impl Party<'_> {
             .filter(|_| !ready)
             .map(|record| format!(" · Fetched {}", record_age(record)))
             .unwrap_or_default();
-        let connect_reason = format!("Not connected{fetched} · Connect to refresh");
-        let can_refresh = if session.is_none() {
-            Some(connect_reason.as_str())
+        let refresh_reason = if !connected {
+            Some(format!("Not connected{fetched} · Connect to refresh"))
         } else if !linked {
-            Some("Link this campaign to D&D Beyond first.")
+            Some("Link this campaign to D&D Beyond first.".to_owned())
         } else if reader.loading() {
-            Some("Already refreshing.")
+            Some("Already refreshing.".to_owned())
         } else {
             None
         };
@@ -66,7 +96,7 @@ impl Party<'_> {
             reader.selected.as_ref().is_some_and(|id| {
                 reader.online_ids.contains(id) && !reader.errors.contains_key(id)
             }) && reader.error.is_none();
-        let (status_icon, status_word) = if session.is_none() {
+        let (icon, word) = if !connected {
             (icons::OFFLINE, "Not connected")
         } else if ready {
             (icons::ONLINE, "Connected · Sync reads this sheet")
@@ -84,17 +114,57 @@ impl Party<'_> {
             .as_ref()
             .map(|name| format!(" · Sheets save on {name}"))
             .unwrap_or_default();
-        let context = format!("{status_icon} {status_word}{fetched}{writer}");
+        let refresh = linked && !reader.members.is_empty();
+        Self {
+            context: format!("{icon} {word}{fetched}{writer}"),
+            icon,
+            refresh_reason,
+            connect: refresh && !connected && reader.conflicts.is_empty(),
+            refresh,
+        }
+    }
+}
+
+/// `HP here is from tonight’s fights, as of …`, while tonight's fights count.
+pub fn tonight_words(party: &PartyState) -> Option<String> {
+    let carry = party.tonight.as_ref()?;
+    let mut parts = Vec::new();
+    if carry.full || !carry.values.is_empty() {
+        parts.push(format!(
+            "HP here is from tonight’s fights, as of {}.",
+            carry.from
+        ));
+    }
+    if !carry.missing.is_empty() {
+        parts.push(format!(
+            "Could not read the run of {}.",
+            carry.missing.join(", ")
+        ));
+    }
+    Some(parts.join(" "))
+}
+
+struct Party<'a> {
+    view: &'a mut PartyPage,
+    party: &'a mut PartyState,
+}
+
+impl Party<'_> {
+    #[allow(clippy::disallowed_methods)]
+    fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
+        let header = PartyHeader::of(self.party, session.is_some(), linked);
+        let can_refresh = header.refresh_reason.as_deref();
+        let context = header.context.clone();
         // The page's header (M0410): the title, its state, then its actions by measure.
         const REFRESH: design::Word = crate::word!("Refresh party");
         const CONNECT: design::Word = crate::word!("Connect to refresh");
         let mut line = design::TitleLine::new("Party")
             .context(Some(&context))
             .page();
-        if linked && !reader.members.is_empty() {
+        if header.refresh {
             // A signed-out local-edit notice has its own Connect D&D Beyond, so the header then
             // shows only the state: one action, one name.
-            if session.is_none() && reader.conflicts.is_empty() {
+            if header.connect {
                 line = line.action(design::TitleAction::link(CONNECT));
             }
             line = line.action(
@@ -211,21 +281,7 @@ impl Party<'_> {
             }
             return;
         }
-        if let Some(carry) = &self.party.tonight {
-            let mut parts = Vec::new();
-            if carry.full || !carry.values.is_empty() {
-                parts.push(format!(
-                    "HP here is from tonight’s fights, as of {}.",
-                    carry.from
-                ));
-            }
-            if !carry.missing.is_empty() {
-                parts.push(format!(
-                    "Could not read the run of {}.",
-                    carry.missing.join(", ")
-                ));
-            }
-            let words = parts.join(" ");
+        if let Some(words) = tonight_words(self.party) {
             design::help(ui, &words);
         }
         // Each row gives its portrait this much, and keeps the same room for its text.
@@ -395,9 +451,14 @@ impl Party<'_> {
         ctx: &egui::Context,
         pressed: Option<design::outcome::Press<PartyPress>>,
     ) {
-        let Some(design::outcome::Press { id, ticket }) = pressed else {
-            return;
-        };
+        if let Some(url) = self.press(pressed) {
+            ctx.open_url(egui::OpenUrl::new_tab(url));
+        }
+    }
+
+    /// Do a footer press; a file to show comes back as its URL.
+    fn press(&mut self, pressed: Option<design::outcome::Press<PartyPress>>) -> Option<String> {
+        let design::outcome::Press { id, ticket } = pressed?;
         match id {
             PartyPress::DismissStopped => self.party.sync_stopped = false,
             // Its own result only: a newer one keeps its line.
@@ -415,10 +476,11 @@ impl Party<'_> {
             }
             PartyPress::ShowFile(path) => {
                 if let Ok(url) = url::Url::from_file_path(&path) {
-                    ctx.open_url(egui::OpenUrl::new_tab(url.to_string()));
+                    return Some(url.to_string());
                 }
             }
         }
+        None
     }
 
     fn portrait(&self, record: Option<&EntitySnapshot>) -> Option<std::path::PathBuf> {
@@ -635,7 +697,7 @@ impl Party<'_> {
 
 /// What the DM pressed in the Party page's footer, done after the page is drawn.
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum PartyPress {
+pub enum PartyPress {
     DismissStopped,
     /// The close icon of a moved-aside sheet's result (the press's ticket names which).
     DismissArchived,
@@ -705,7 +767,7 @@ impl design::outcome::Fault for PartyFault<'_> {
     }
 }
 
-fn most_recent_sheet<'a>(party: &'a PartyState, id: &str) -> Option<&'a EntitySnapshot> {
+pub fn most_recent_sheet<'a>(party: &'a PartyState, id: &str) -> Option<&'a EntitySnapshot> {
     match (party.combat.record(), party.reader.sheets.get(id)) {
         (Some(live), Some(saved)) if saved.source.fetched_at > live.source.fetched_at => {
             Some(saved)
@@ -718,7 +780,7 @@ fn most_recent_sheet<'a>(party: &'a PartyState, id: &str) -> Option<&'a EntitySn
 const CONNECT: &str = "Connect D&D Beyond";
 /// `Fighter · Level 6`: the one form of a member's classes and level, in the sheet's kind line
 /// and in the member's row (round 28 FB12).
-fn classes_and_level(classes: &str, level: Option<impl std::fmt::Display>) -> String {
+pub fn classes_and_level(classes: &str, level: Option<impl std::fmt::Display>) -> String {
     [
         classes.to_owned(),
         level.map(|n| format!("Level {n}")).unwrap_or_default(),
@@ -729,7 +791,7 @@ fn classes_and_level(classes: &str, level: Option<impl std::fmt::Display>) -> St
     .join(" · ")
 }
 
-fn class_line(record: &EntitySnapshot) -> String {
+pub fn class_line(record: &EntitySnapshot) -> String {
     format!(
         "{} · {}",
         record.character.species,
@@ -761,7 +823,7 @@ fn compare_right(hp_right: f32, at: usize) -> f32 {
     hp_right - HP_WIDTH - AC_WIDTH - (2 - at) as f32 * COMPARE_WIDTH
 }
 
-fn compare_values(record: Option<&EntitySnapshot>) -> [String; 3] {
+pub fn compare_values(record: Option<&EntitySnapshot>) -> [String; 3] {
     let Some(record) = record else {
         return ["—"; 3].map(str::to_owned);
     };

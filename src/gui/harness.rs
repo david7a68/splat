@@ -36,6 +36,20 @@ pub(crate) fn capture_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("artifacts/screenshots/gpui")
 }
 
+/// The character cache of this test process: one folder for every shell, as the egui suite has
+/// (`hermetic::closed::use_cache_root` takes one root per process). Each campaign's characters
+/// are kept apart inside it by the campaign's id.
+fn character_cache() -> PathBuf {
+    static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    ROOT.get_or_init(|| {
+        let root = std::env::temp_dir().join(format!("splat-gpui-cache-{}", std::process::id()));
+        std::fs::create_dir_all(&root).expect("the character cache");
+        crate::hermetic::closed::use_cache_root(root.clone());
+        root
+    })
+    .clone()
+}
+
 /// A scenario's first id, from its name, so ids and dice repeat from run to run.
 fn first_uuid(name: &str) -> u128 {
     // FNV-1a, 128 bits.
@@ -58,12 +72,7 @@ impl Shell {
         crate::hermetic::closed::repeatable_uuids(first_uuid(name));
         crate::hermetic::closed::clear_next_folder();
         let home = tempfile::tempdir().expect("a test folder");
-        let world = World::build(
-            &home.path().join(name),
-            &home.path().join("character-cache"),
-            name,
-            seed,
-        )
+        let world = World::build(&home.path().join(name), &character_cache(), name, seed)
         .unwrap_or_else(|error| panic!("{name}: could not build its world: {error}"));
         Self::over(world.app(), home, window)
     }

@@ -3436,6 +3436,9 @@ impl splat_campaign::trackers::RuleSource for ContentIndex {
     }
 }
 
+#[path = "lookup/panel_view.rs"]
+pub mod panel_view;
+
 #[cfg(test)]
 mod tests {
     use super::*;

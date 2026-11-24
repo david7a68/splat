@@ -457,10 +457,7 @@ impl ProcessingSettings {
     }
 
     fn key_row(&mut self, ui: &mut egui::Ui, slot: KeySlot, label: &str) {
-        let (tx, ctx) = (
-            self.replies.as_ref().map(|(tx, _)| tx.clone()),
-            ui.ctx().clone(),
-        );
+        let ctx = ui.ctx().clone();
         let saved = self.field(slot).saved;
         let fits = match slot {
             KeySlot::Speech => self.config.speech_key_fits(),
@@ -559,23 +556,7 @@ impl ProcessingSettings {
             );
         }
         if save {
-            match slot {
-                KeySlot::Speech => self.config.speech_key_for = self.config.speech_url.clone(),
-                KeySlot::Llm => self.config.llm_key_for = self.config.llm_url.clone(),
-            }
-            self.persist();
-            let key = Zeroizing::new(self.field(slot).typing.trim().to_owned());
-            self.field(slot).typing.zeroize();
-            self.field(slot).typing.clear();
-            // Usable at once, even if the keyring is locked.
-            *self.held(slot) = Some(key.clone());
-            if let Some(tx) = tx.clone() {
-                credentials::in_background(move || {
-                    let result = credentials::save_key(slot, &key);
-                    let _ = tx.send(Reply::Saved(slot, result));
-                    ctx.request_repaint();
-                });
-            }
+            self.save_key(slot, &ctx);
         }
         if let Some(error) = self.field(slot).error.clone() {
             key_fault(ui, &SettingsFault::KeyNotKept(&error));
@@ -587,15 +568,7 @@ impl ProcessingSettings {
                 .show(ui)
                 .clicked()
         {
-            *self.held(slot) = None;
-            if let Some(tx) = self.replies.as_ref().map(|(tx, _)| tx.clone()) {
-                let ctx = ui.ctx().clone();
-                credentials::in_background(move || {
-                    let result = credentials::forget_key(slot);
-                    let _ = tx.send(Reply::Forgot(slot, result));
-                    ctx.request_repaint();
-                });
-            }
+            self.remove_key(slot, ui.ctx());
         }
     }
 
@@ -741,14 +714,7 @@ impl ProcessingSettings {
                 .show(ui, &mut chosen)
         });
         if chosen != current {
-            let (url, model) = SPEECH_CHOICES
-                .iter()
-                .find(|(name, ..)| *name == chosen)
-                .map_or(("", ""), |(_, url, model)| (*url, *model));
-            self.config.speech_url = url.to_owned();
-            self.config.speech_model = model.to_owned();
-            self.persist();
-            self.reveal_problem = true;
+            self.choose_speech_service(chosen);
             ui.ctx().request_repaint();
         }
         let mut changed = self.setting_field(
@@ -791,18 +757,7 @@ impl ProcessingSettings {
                 .show(ui, &mut chosen)
         });
         if chosen != current {
-            let (provider, url, model) = LLM_CHOICES
-                .iter()
-                .find(|(name, ..)| *name == chosen)
-                .map_or(
-                    (Provider::OpenAiCompatible, "", ""),
-                    |(_, provider, url, model)| (*provider, *url, *model),
-                );
-            self.config.provider = provider;
-            self.config.llm_url = url.to_owned();
-            self.config.llm_model = model.to_owned();
-            self.persist();
-            self.reveal_problem = true;
+            self.choose_llm_service(chosen);
             ui.ctx().request_repaint();
         }
         let codex = self.config.provider == Provider::CodexCli;
@@ -984,6 +939,9 @@ impl ProcessingSettings {
         messages
     }
 }
+
+#[path = "settings/view.rs"]
+pub mod view;
 
 /// A key's fault, where its key row is: the row's own place, so the DM reads it beside the key.
 #[allow(

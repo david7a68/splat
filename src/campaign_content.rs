@@ -374,10 +374,15 @@ macro_rules! new_result {
     };
 }
 
+/// `new_result!` as a function, for the shared acts (`view`).
+fn new_result_of(page: &mut CampaignContent, payload: Payload) {
+    new_result!(page, payload);
+}
+
 /// What the DM pressed in the page's footer: a result's Undo (its ticket names the result), an
 /// encounter that a removal left without creatures, or the write of a missing Campaign.md.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ContentPress {
+pub enum ContentPress {
     Undo,
     WriteCampaign,
     /// A broken manifest's choices, by its package.
@@ -1339,6 +1344,58 @@ impl CampaignContent {
             }
             self.reload(ui.ctx(), campaigns, active.clone());
         }
+        self.take_load(campaigns, &active);
+        if self.dirty() {
+            self.end_plain(PageResult::Saved);
+        }
+        // Round 25 review: the page scrolls, as the other pages do, so every repair and its Save
+        // stay in reach at any window size. The page keeps the scroll bar's lane whether or not
+        // the bar shows, so nothing moves when it starts to scroll.
+        let width = ui.available_width() - design::lane_width();
+        // Round 26: the page's results, reasons and package warnings sit in one footer, so none
+        // of them moves the save rows, the repairs or the package list. Round 28: the pane
+        // places it. Layout step 7 (SA4, AA2): the page is the pane's scroll column, and the
+        // package list's two columns are one task in it (`PaneColumns::shared_task`), as tall as
+        // the taller list; so the footer follows the page's content `S` below its end, with or
+        // without the package list, and is pinned only when the content fills the room.
+        let frame = design::outcome::PaneFrame::new(ui);
+        let open = |path: &str| {
+            ui.data(|data| {
+                data.get_temp::<bool>(egui::Id::new(("repair_open", path)))
+                    .unwrap_or(false)
+            })
+        };
+        let footer = self.page_footer_with(
+            &frame,
+            &open,
+            campaigns,
+            &active,
+            width.min(design::LIST_MEASURE),
+        );
+        // Layout step 11c (L11c-C.1): the page is always the pane's scroll column. The changes
+        // to review and the issue list are drawn in place (whole rows), a repair's editor keeps
+        // its own framed region (layout step 9), and the pane brings a focused control whole
+        // into view (focus clearance, layout step 10): no inner scroll is left above the columns.
+        let paned = footer.pane(ui, design::Body::Content, |ui| {
+            self.page(ui, campaigns, &active);
+        });
+        let write = matches!(
+            paned.pressed,
+            Some(design::outcome::Press {
+                id: ContentPress::WriteCampaign,
+                ..
+            })
+        );
+        self.press_result(ui.ctx(), campaigns, paned.pressed);
+        if write {
+            self.write_campaign(campaigns, &active);
+        }
+        // A key no save took (the page still loading) ends with its frame.
+        self.save_key = false;
+    }
+
+    /// A load that came in: its repairs, its snapshot or its error (`show`'s step).
+    fn take_load(&mut self, campaigns: &Campaigns, active: &Campaign) {
         if let Some(rx) = &self.pending {
             match rx.try_recv() {
                 Ok((repairs, result)) => {
@@ -1376,47 +1433,6 @@ impl CampaignContent {
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
-        if self.dirty() {
-            self.end_plain(PageResult::Saved);
-        }
-        // Round 25 review: the page scrolls, as the other pages do, so every repair and its Save
-        // stay in reach at any window size. The page keeps the scroll bar's lane whether or not
-        // the bar shows, so nothing moves when it starts to scroll.
-        let width = ui.available_width() - design::lane_width();
-        // Round 26: the page's results, reasons and package warnings sit in one footer, so none
-        // of them moves the save rows, the repairs or the package list. Round 28: the pane
-        // places it. Layout step 7 (SA4, AA2): the page is the pane's scroll column, and the
-        // package list's two columns are one task in it (`PaneColumns::shared_task`), as tall as
-        // the taller list; so the footer follows the page's content `S` below its end, with or
-        // without the package list, and is pinned only when the content fills the room.
-        let frame = design::outcome::PaneFrame::new(ui);
-        let footer = self.page_footer(
-            &frame,
-            ui,
-            campaigns,
-            &active,
-            width.min(design::LIST_MEASURE),
-        );
-        // Layout step 11c (L11c-C.1): the page is always the pane's scroll column. The changes
-        // to review and the issue list are drawn in place (whole rows), a repair's editor keeps
-        // its own framed region (layout step 9), and the pane brings a focused control whole
-        // into view (focus clearance, layout step 10): no inner scroll is left above the columns.
-        let paned = footer.pane(ui, design::Body::Content, |ui| {
-            self.page(ui, campaigns, &active);
-        });
-        let write = matches!(
-            paned.pressed,
-            Some(design::outcome::Press {
-                id: ContentPress::WriteCampaign,
-                ..
-            })
-        );
-        self.press_result(ui.ctx(), campaigns, paned.pressed);
-        if write {
-            self.write_campaign(campaigns, &active);
-        }
-        // A key no save took (the page still loading) ends with its frame.
-        self.save_key = false;
     }
 
     /// The Packages page below the tabs, inside its scroll area.
@@ -1481,10 +1497,10 @@ impl CampaignContent {
         clippy::disallowed_methods,
         reason = "ruling Q-x: the answer to the DM’s last act leads the footer (`Ban::Answer`)"
     )]
-    fn page_footer<'f>(
+    fn page_footer_with<'f>(
         &self,
         frame: &'f design::outcome::PaneFrame,
-        ui: &egui::Ui,
+        repair_open: &dyn Fn(&str) -> bool,
         campaigns: &Campaigns,
         active: &Campaign,
         width: f32,
@@ -1550,10 +1566,7 @@ impl CampaignContent {
         // cause shows once. While the repair is closed the message above says it; only an open
         // repair's message drops it, and then the footer says it.
         for repair in &self.repairs {
-            let open = ui.data(|data| {
-                data.get_temp::<bool>(egui::Id::new(("repair_open", repair.path.as_str())))
-                    .unwrap_or(false)
-            });
+            let open = repair_open(&repair.path);
             if let Some(failure) = repair
                 .failure
                 .as_ref()
@@ -3356,6 +3369,8 @@ fn needed_by(reasons: impl Iterator<Item = String>) -> String {
     format!("needed by {}", reasons.collect::<Vec<_>>().join(", "))
 }
 
+#[path = "campaign_content/view.rs"]
+pub mod view;
 #[cfg(any(test, feature = "test-support"))]
 #[path = "campaign_content/tests.rs"]
 mod tests;

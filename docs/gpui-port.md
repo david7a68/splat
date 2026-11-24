@@ -146,8 +146,7 @@ keep the names and signatures (`R` below is `crate::gui::SplatRoot`):
 Extra hooks the shell already calls: `run::render_strip` (above other pages while a run is open),
 `party::render_bar` (`Option`, on the Session page; it already sets `sessions.party_hidden`),
 `sessions::render_banner` (`Option`, at the window's bottom under the page, as egui's bottom
-panel), `sessions::render_folder_block` (the Session folder block, for the Campaign page's Link
-and folder tab to call), `sessions::render_notes_panel` and
+panel), `sessions::render_notes_panel` and
 `lookup::render_panel` (the side panel, `PANEL_MIN_WIDTH` wide; Lookup calls
 `trackers::render_view` while `lookup.on_trackers()`), `library::render_copy_dialog` (while
 `app.copy_dialog` is open), `settings::render_account`, `render_recording`,

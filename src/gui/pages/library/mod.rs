@@ -7,7 +7,6 @@
 //! page shares the list's logic with it. The footer of each pane draws the same typed lines as
 //! egui's (`design::outcome::plain`), and a press goes back to `Library::press_footer`.
 mod copy;
-mod dndbeyond;
 mod footer;
 mod forms;
 mod header;
@@ -289,15 +288,3 @@ pub(crate) fn render_copy_dialog(
     copy::render(root, window, cx)
 }
 
-/// The open campaign's D&D Beyond link (`DndBeyond::show`), for the Campaign page's Link and
-/// folder tab. `blocked` is that pane's lock (a run). Its errors and result belong in that pane's
-/// footer (`DndBeyond::footer_messages`).
-#[allow(dead_code, reason = "the Campaigns page area’s Link and folder tab calls it")]
-pub(crate) fn render_dndbeyond_link(
-    root: &mut SplatRoot,
-    blocked: Option<&str>,
-    window: &mut Window,
-    cx: &mut Context<SplatRoot>,
-) -> AnyElement {
-    dndbeyond::render_link(root, blocked, window, cx)
-}

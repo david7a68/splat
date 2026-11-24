@@ -842,10 +842,10 @@ pub fn val(record: &EntitySnapshot, key: &str) -> String {
         .map(|n| n.to_string())
         .unwrap_or("—".into())
 }
-fn signed(record: &EntitySnapshot, key: &str) -> String {
+pub fn signed(record: &EntitySnapshot, key: &str) -> String {
     record.stat(key).map(design::signed).unwrap_or("—".into())
 }
-fn skill_order(record: &EntitySnapshot) -> Vec<usize> {
+pub fn skill_order(record: &EntitySnapshot) -> Vec<usize> {
     let mut order: Vec<_> = (0..record.character.skills.len()).collect();
     order.sort_by(|&a, &b| {
         record.character.skills[a]
@@ -854,7 +854,7 @@ fn skill_order(record: &EntitySnapshot) -> Vec<usize> {
     });
     order
 }
-fn overview_death_saves(record: &EntitySnapshot, live: Option<&LiveValues>) -> Option<String> {
+pub fn overview_death_saves(record: &EntitySnapshot, live: Option<&LiveValues>) -> Option<String> {
     if live.is_some_and(|values| values.death_saves_shown) {
         return None;
     }

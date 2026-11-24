@@ -1,7 +1,9 @@
 //! A quiet section (`design::quiet_section`): a caret and `Small` muted words that open or close
 //! the section's content under them. It keeps its own open state under its id, as egui's
 //! collapsing header does, and starts closed. Use it for what most readers skip: Technical
-//! details, Source and identifiers, a form that waits (`New location…`).
+//! details, Source and identifiers, a form that waits (`New location…`). A caller that keeps the
+//! open state itself (to build a costly body only while open, or to remember it per record)
+//! gives `.open(bool)` and `.on_toggle(f)`.
 use super::{button::element_name, target};
 use crate::gui::icons;
 use crate::gui::theme::{FOCUS_WIDTH, MIN_TARGET, RADIUS_CONTROL, S, Type, TypeExt, XS, colors};
@@ -16,8 +18,11 @@ pub struct QuietSection {
     id: ElementId,
     title: SharedString,
     open: bool,
+    on_toggle: Option<OnToggle>,
     children: Vec<AnyElement>,
 }
+
+type OnToggle = std::rc::Rc<dyn Fn(&bool, &mut Window, &mut App)>;
 
 impl QuietSection {
     pub fn new(id: impl Into<ElementId>, title: impl Into<SharedString>) -> Self {
@@ -25,8 +30,22 @@ impl QuietSection {
             id: id.into(),
             title: title.into(),
             open: false,
+            on_toggle: None,
             children: Vec::new(),
         }
+    }
+
+    /// The caller keeps whether it is open: it shows `open`, and a press gives the new state to
+    /// `on_toggle` (give both).
+    pub fn open(mut self, open: bool) -> Self {
+        self.open = open;
+        self
+    }
+
+    /// The DM opened (`true`) or closed it; with `open`, the caller keeps the state.
+    pub fn on_toggle(mut self, handler: impl Fn(&bool, &mut Window, &mut App) + 'static) -> Self {
+        self.on_toggle = Some(std::rc::Rc::new(handler));
+        self
     }
 
     /// Start open (a short list), until the DM closes it.
@@ -46,12 +65,15 @@ impl RenderOnce for QuietSection {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let c = colors();
         let first = self.open;
-        let open = window.use_keyed_state(
-            ElementId::NamedChild(std::sync::Arc::new(self.id.clone()), "open".into()),
-            cx,
-            move |_, _| first,
-        );
-        let is_open = *open.read(cx);
+        let kept = self.on_toggle.is_none().then(|| {
+            window.use_keyed_state(
+                ElementId::NamedChild(std::sync::Arc::new(self.id.clone()), "open".into()),
+                cx,
+                move |_, _| first,
+            )
+        });
+        let is_open = kept.as_ref().map_or(self.open, |open| *open.read(cx));
+        let on_toggle = self.on_toggle.clone();
         let header = div()
             .id(self.id.clone())
             .flex()
@@ -68,7 +90,11 @@ impl RenderOnce for QuietSection {
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(self.title.clone())
             .on_click(move |_, window, cx| {
-                open.update(cx, |open, _| *open = !*open);
+                match (&kept, &on_toggle) {
+                    (Some(open), _) => open.update(cx, |open, _| *open = !*open),
+                    (None, Some(on_toggle)) => on_toggle(&!is_open, window, cx),
+                    (None, None) => {}
+                }
                 window.refresh();
             })
             .child(div().icon_font(Type::Small).text_color(c.muted).child(

@@ -77,6 +77,9 @@ composite-child	src/encounters.rs	Encounters::editor_panes	1	Encounters	the rost
 composite-child	src/encounter_run/view.rs	Run::ended_view	1	Run	the final state and the panel beside it: a shared task (layout 11c, L11c-R.2) in a Content pane, in place of its Fills body, CentralPanel and two raw scroll areas; its children become closed blocks with the roster recipes of step 11; raised
 composite-child	src/lib.rs	Splat::page	1	App	the Settings tab's two independent task panes (campaigns, account) at 1000 px and wider: each child is a whole-height host of its own pane and footer; layout PR 8, raised
 composite-child	src/sessions/page.rs	Sessions::session_content	1	Sessions	the plan and the note beside it: a shared task (step 7) in the edges the session header was drawn in; its children become closed blocks with the plan recipes and the Editor and Reader blocks of steps 9 and 11
+footer-feed	src/gui/pages/party/sheet.rs	sync_footer	1	Party	the GPUI port reads the same egui footer (Party::sheet_view's sync footer); the port's cleanup wave deletes this lint
+footer-feed	src/gui/pages/settings/mod.rs	account_lines	1	Settings	the GPUI port reads the same egui footer (the wide Settings tab's account footer); the port's cleanup wave deletes this lint
+footer-feed	src/gui/pages/settings/mod.rs	campaign_lines	3	Settings	the GPUI port reads the same egui footers (Campaigns, Settings and D&D Beyond, as Splat::page); the port's cleanup wave deletes this lint
 footer-feed	src/lib.rs	Splat::page	5	App	the stacked narrow Settings tab's one footer for Campaigns, Settings and D&D Beyond (3), fed by the same three feeders as the wide tab's two footers, and the campaign link's for Campaigns and D&D Beyond (2)
 footer-feed	src/party.rs	Party::sheet_view	1	Party
 virtual-rows	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign
