@@ -706,6 +706,16 @@ fn notes_panel_beside_another_page() {
     let after =
         shell.update(|root, _, _| root.app.sessions.gv_note_words(true).unwrap_or_default());
     assert_ne!(after, before, "the panel's Undo history stays under the own write");
+    // The file changes under the draft: the panel shows the comparison, not an editor.
+    shell.update(|root, _, cx| {
+        root.app.sessions.simulate_conflict();
+        cx.notify();
+    });
+    assert!(
+        shell.bounds("Note text").is_none(),
+        "no editor while the draft cannot save"
+    );
+    capture(&mut shell, "session-notes-panel__02-conflict__1200x800");
     shell.click("Close notes");
     assert!(!shell.read(|root| root.app.sessions.notes_open));
 }
