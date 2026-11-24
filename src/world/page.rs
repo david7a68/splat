@@ -338,6 +338,16 @@ pub struct WorldPage {
     tick_error: Option<String>,
     /// The card's `Copy the marker` result (`MarkerCopied`).
     marker_copied: design::Results<MarkerSlot, MarkerCopied>,
+    /// The list's groups for one load of the index and one set of search words. A search reads
+    /// the text of every note, so a frame with neither changed reads none (`groups`).
+    groups: Option<GroupsKept>,
+}
+
+/// The list's groups, and the index load and search words they were found for.
+struct GroupsKept {
+    generation: u64,
+    search: String,
+    groups: Arc<WorldGroups>,
 }
 
 /// One unreadable note's row words.
@@ -1863,10 +1873,31 @@ impl WorldPage {
         }
     }
 
+    /// The list's groups for the search words: found again only when the index loads again or
+    /// the words change.
+    pub fn groups(&mut self, index: &ContentIndex) -> Arc<WorldGroups> {
+        let search = self.search.trim().to_lowercase();
+        let generation = index.generation();
+        match &self.groups {
+            Some(kept) if kept.generation == generation && kept.search == search => {
+                kept.groups.clone()
+            }
+            _ => {
+                let groups = Arc::new(index.world_groups(&search));
+                self.groups = Some(GroupsKept {
+                    generation,
+                    search,
+                    groups: groups.clone(),
+                });
+                groups
+            }
+        }
+    }
+
     /// The page has nothing at all: no note, no search, no form, no NPC and no error.
-    pub fn is_empty(&self, index: &ContentIndex, groups: &WorldGroups) -> bool {
+    pub fn is_empty(&mut self, index: &ContentIndex) -> bool {
         index.broken_world.is_empty()
-            && groups.is_empty()
+            && self.groups(index).is_empty()
             && self.search.trim().is_empty()
             && self.new_kind.is_none()
             && self.generated.is_none()
@@ -1874,8 +1905,8 @@ impl WorldPage {
     }
 
     /// The list's groups and rows for the search words.
-    pub fn list_groups(&self, index: &ContentIndex) -> Vec<ListGroup> {
-        let groups = index.world_groups(&self.search.trim().to_lowercase());
+    pub fn list_groups(&mut self, index: &ContentIndex) -> Vec<ListGroup> {
+        let groups = self.groups(index);
         groups
             .iter()
             .map(|((kind, title), rows)| ListGroup {
@@ -2854,6 +2885,35 @@ mod tests {
         assert_eq!(
             detail.hover, "Splat cannot read Notes/Broken.md as text.",
             "AD2-row-hover"
+        );
+    }
+
+    /// The list's groups are found once per load of the index and set of search words: a quiet
+    /// frame searches no note.
+    #[test]
+    fn groups_found_once_per_load_and_search() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, index) = held_npc_campaign(dir.path());
+        let mut page = WorldPage::default();
+        let first = page.groups(&index);
+        assert!(!first.is_empty());
+        assert!(
+            Arc::ptr_eq(&first, &page.groups(&index)),
+            "the same load and words find nothing again"
+        );
+        page.set_search("  ROOK ");
+        let rook = page.groups(&index);
+        assert!(!Arc::ptr_eq(&first, &rook), "new words search again");
+        assert_eq!(rook.values().map(Vec::len).sum::<usize>(), 1);
+        page.set_search("rook");
+        assert!(
+            Arc::ptr_eq(&rook, &page.groups(&index)),
+            "the same words, trimmed and lowercased"
+        );
+        let again = Arc::new(ContentIndex::load(&[], None).unwrap());
+        assert!(
+            page.groups(&again).is_empty(),
+            "a new load searches again"
         );
     }
 

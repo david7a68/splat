@@ -123,9 +123,10 @@ pub(crate) fn render(
             ))
             .into_any_element();
     };
+    // Both are kept: a quiet frame reads no note (the checks per load, the groups per load and
+    // search words).
     root.app.world_page.refresh(&index, &campaign);
-    let groups = index.world_groups(&root.app.world_page.search().trim().to_lowercase());
-    if root.app.world_page.is_empty(&index, &groups) {
+    if root.app.world_page.is_empty(&index) {
         return page
             .child(kit::empty_state(
                 icons::WORLD,
@@ -135,7 +136,6 @@ pub(crate) fn render(
             ))
             .into_any_element();
     }
-    drop(groups);
     let list = list::render(root, &index, window, cx);
     let pane = panes::render(root, &campaign, &index, window, cx);
     page.child(
