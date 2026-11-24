@@ -15,7 +15,7 @@
 //! a reading's related entries, and then the closed end sections: Source text, Technical details,
 //! Source and identifiers.
 //!
-//! A pressed dice number asks for its roll in the app's egui context (`rolls::take_ask`, taken
+//! A pressed dice number asks for its roll in the app's state context (`rolls::take_ask`, taken
 //! by the run or the preview stream); a pressed note link goes to Lookup through the frame logic,
 //! as the Markdown view's do. A followed related, feature or spell link calls `on_open` with its
 //! place in `links` (egui's returned `Option<usize>`).
@@ -23,6 +23,7 @@
     dead_code,
     reason = "the Library, Lookup and Run pages call the entry view when their ports merge; tests call it now"
 )]
+use crate::state_context::StateContext;
 mod details;
 pub mod parts;
 mod stat_block;
@@ -32,7 +33,6 @@ use crate::gui::kit;
 use crate::gui::theme::{L, M, READER_MEASURE, Type, XXL, colors};
 use crate::library::view::{Links, Origin, RunValues};
 use crate::library::{class, creature, presentation, reader};
-use eframe::egui;
 use gpui::{
     AnyElement, App, ElementId, IntoElement, ObjectFit, ParentElement, RenderOnce, ScrollHandle,
     SharedString, Styled, StyledImage, Window, div, img, prelude::*,
@@ -196,7 +196,7 @@ impl EntryView {
 }
 
 /// The app's egui context, where rolls and note links are left for the frame logic.
-fn host(cx: &App) -> Option<egui::Context> {
+fn host(cx: &App) -> Option<StateContext> {
     cx.try_global::<kit::markdown::Host>()
         .map(|host| host.0.clone())
 }
@@ -205,7 +205,7 @@ fn host(cx: &App) -> Option<egui::Context> {
 pub(super) struct Out<'w> {
     pub id: ElementId,
     pub window: &'w Window,
-    pub ctx: Option<egui::Context>,
+    pub ctx: Option<StateContext>,
     pub document: Option<uuid::Uuid>,
     pub on_open: Option<OnOpen>,
     pub on_note: Option<OnNote>,

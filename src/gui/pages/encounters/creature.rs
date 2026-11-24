@@ -75,7 +75,7 @@ pub(super) fn pane(view: &CreatureView, cx: &mut Context<SplatRoot>) -> AnyEleme
         .child(kit::status(&kit::Status::new(
             icon.clone(),
             word.clone(),
-            crate::gui::bridge::color(*color),
+            crate::gui::theme::color(*color),
         )));
     if view.discard {
         state = state.child(

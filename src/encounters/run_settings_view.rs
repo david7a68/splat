@@ -11,7 +11,7 @@ use crate::design;
 use crate::design::outcome::plain::PlainLine;
 use crate::encounter_settings::{Grouping, GroupingWords as _};
 use crate::persistence::Campaign;
-use eframe::egui;
+use crate::state_context::StateContext;
 use uuid::Uuid;
 
 /// The form's values as the tab shows them.
@@ -40,7 +40,7 @@ pub struct RunRow<'a> {
 
 impl Encounters {
     /// The tab's work before it draws: the campaign's encounters and settings are read.
-    pub fn run_settings_prepare(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    pub fn run_settings_prepare(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         self.poll(ctx, campaigns);
     }
 
@@ -154,7 +154,7 @@ impl Encounters {
     /// `Save run settings` (or Ctrl+S).
     pub fn save_run_settings(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         active: &Campaign,
         campaigns: &Campaigns,
     ) {
@@ -168,14 +168,14 @@ impl Encounters {
     /// The tab's footer lines (`run_settings_footer`).
     pub fn run_settings_lines(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         active: &Campaign,
         campaigns: &Campaigns,
     ) -> Vec<PlainLine<FooterPress>> {
         let run_open = self.has_run();
         let draft_open = self.draft_dirty();
-        let frame = design::outcome::PaneFrame::plain();
-        let mut messages = design::outcome::Messages::new(&frame, "run_settings_footer", 0.0);
+        let frame = design::outcome::PaneFrame::new();
+        let mut messages = design::outcome::Messages::new();
         self.run_settings_footer(
             ctx,
             &frame,
@@ -193,7 +193,7 @@ impl Encounters {
     /// A press in the tab's footer: the discard's Undo, or the folder warning's choices.
     pub fn run_settings_press(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         active: &Campaign,
         campaigns: &Campaigns,
         press: design::outcome::Press<FooterPress>,

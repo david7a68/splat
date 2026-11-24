@@ -621,11 +621,7 @@ fn stat_formats() {
     shell.click(&modifier);
     assert!(
         shell
-            .read(|root| crate::rolls::plain::preview_words(
-                root.bridge.ctx(),
-                "Slate Wolf",
-                &[&dexterity]
-            ))
+            .read(|root| crate::rolls::plain::preview_words(&root.ctx, "Slate Wolf", &[&dexterity]))
             .is_some(),
         "the check was rolled for Slate Wolf"
     );

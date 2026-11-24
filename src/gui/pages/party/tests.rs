@@ -252,7 +252,7 @@ fn sheet_numbers_roll() {
     shell.click(&format!("Strength {}", crate::design::signed(check)));
     let rolled = shell.read(|root| {
         crate::rolls::plain::preview_words(
-            root.bridge.ctx(),
+            &root.ctx,
             &name,
             &[&splat::content::dice_text::RollLink::d20(
                 splat::content::dice_text::D20::Check,

@@ -5,7 +5,7 @@
 use crate::gui::kit::{self, Button, Link, Pane, TextField};
 use crate::gui::pages::settings::{self, campaign_list};
 use crate::gui::theme::{Density, FORM_WIDTH, L, LIST_MEASURE, S, Type, XS, colors};
-use crate::gui::{SplatRoot, bridge, icons};
+use crate::gui::{SplatRoot, icons};
 use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div, prelude::*};
 
 pub(super) fn render(
@@ -159,7 +159,7 @@ fn session_folder(
         .items_center()
         .gap(S)
         .py(XS)
-        .child(kit::status(&bridge::status(&state.status())))
+        .child(kit::status(&kit::Status::of(&state.status())))
         .when(changed && lock.is_none(), |row| {
             row.child(
                 Button::quiet("session-folder-discard", "Discard").on_click(cx.listener(
@@ -203,9 +203,9 @@ fn dndbeyond(
     let c = colors();
     let (_, session) = root.app.settings.campaign_session();
     {
-        let SplatRoot { app, bridge, .. } = root;
+        let SplatRoot { app, ctx, .. } = root;
         app.dndbeyond
-            .link_in_view(session.clone(), &app.campaigns, bridge.ctx());
+            .link_in_view(session.clone(), &app.campaigns, ctx);
     }
     let ddb = &root.app.dndbeyond;
     let note: AnyElement = if ddb.refreshing() {
@@ -280,9 +280,8 @@ fn dndbeyond(
             .blocked(refresh_lock)
             .on_click(cx.listener(move |root, _, _, cx| {
                 if let Some(session) = refresh_session.clone() {
-                    let SplatRoot { app, bridge, .. } = root;
-                    app.dndbeyond
-                        .refresh_link(session, &app.campaigns, bridge.ctx());
+                    let SplatRoot { app, ctx, .. } = root;
+                    app.dndbeyond.refresh_link(session, &app.campaigns, ctx);
                 }
                 cx.notify();
             })),

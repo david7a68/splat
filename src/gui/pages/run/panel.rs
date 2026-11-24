@@ -5,7 +5,7 @@
 use super::{on_command, on_run};
 use crate::design::outcome::plain::PlainLine;
 use crate::encounter_run::{Command, MAX_FROM_SHEET, Panel, Participant, Phase, Run, view};
-use crate::gui::{SplatRoot, bridge, icons, kit, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::rolls::{self, ArmedAction, Ask, Mode};
 use gpui::{
     AnyElement, ClickEvent, Context, ElementId, InteractiveElement, IntoElement, ParentElement,
@@ -607,7 +607,7 @@ fn sheet(
         .get(&index)
         .is_some_and(|sync| sync.state() == SyncState::Conflict)
     {
-        let art = run.row_art(root.bridge.ctx(), p);
+        let art = run.row_art(&root.ctx, p);
         column = column.child(
             div()
                 .flex()
@@ -632,7 +632,7 @@ fn sheet(
                         .child(kit::status(&kit::Status::new(
                             freshness.icon,
                             word,
-                            bridge::color(freshness.color),
+                            theme::color(freshness.color),
                         )))
                         .child(kit::text(Type::Small, c.muted, facts)),
                 ),
@@ -1377,12 +1377,7 @@ pub(super) fn prep(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                             .line_start()
                             .on_click(cx.listener(
                                 move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
-                                    root.bridge.ctx().data_mut(|data| {
-                                        data.insert_temp(
-                                            eframe::egui::Id::new("edit_run_encounter"),
-                                            id,
-                                        );
-                                    });
+                                    root.ctx.set(crate::requests::EDIT_RUN_ENCOUNTER, id);
                                     if let Some(run) = root.app.encounters.run_mut() {
                                         run.prep_refusal = None;
                                     }

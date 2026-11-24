@@ -1,4 +1,5 @@
 //! The shared catalogue of built-in, package, and campaign entries.
+use crate::state_context::StateContext;
 #[path = "class.rs"]
 pub mod class;
 #[path = "creature.rs"]
@@ -22,7 +23,6 @@ use crate::{
     persistence::{Campaign, Module},
     world::file_fault::FileFault,
 };
-use eframe::egui;
 use presentation::Section;
 use splat::content::{
     self, Entry,
@@ -309,7 +309,7 @@ fn duplicate_consequence(users: &[String], remaining: &str, keeps: bool) -> Sent
 /// the draft holds them. The encounters a folder's batch leaves on the other folder are found
 /// once per load (an egui cache keyed by the whole owner key and the notes).
 pub fn duplicate_notice(
-    ctx: &egui::Context,
+    ctx: &StateContext,
     loaded: &Loaded,
     note: &Note,
     duplicate_indices: &[usize],
@@ -375,8 +375,7 @@ pub fn duplicate_notice(
             continue;
         };
         // Encounters outside the batch whose source changes; worked out once per load.
-        let slot = egui::Id::new((
-            "duplicate_folder_users",
+        let slot = crate::state_context::Slot::<Vec<String>>::new("duplicate_folder_users").with((
             // The whole owner key: a campaign and a package with one UUID each have their own
             // encounters outside their batch (Astra, PR 477).
             owner.key(),
@@ -389,39 +388,35 @@ pub fn duplicate_notice(
                 .map(|note| note.text.len())
                 .sum::<usize>(),
         ));
-        let users = ctx
-            .data(|data| data.get_temp::<Vec<String>>(slot))
-            .unwrap_or_else(|| {
-                let batch: std::collections::HashSet<&String> = paths.iter().collect();
-                let targets: Vec<&Entry> = loaded
-                    .notes
-                    .iter()
-                    .filter(|target| {
-                        target.owner.key() == owner.key() && batch.contains(&target.path)
-                    })
-                    .filter_map(|target| target.entry.as_ref())
-                    .collect();
-                let mut users: Vec<String> = Vec::new();
-                for other in &loaded.notes {
-                    // An encounter inside the batch gets the new identities with it.
-                    if other.owner.key() == owner.key() && batch.contains(&other.path) {
-                        continue;
-                    }
-                    let Some(encounter) = other.entry.as_ref() else {
-                        continue;
-                    };
-                    if encounter.kind == "encounter"
-                        && !users.contains(&encounter.name)
-                        && targets
-                            .iter()
-                            .any(|entry| encounter_uses_entry(encounter, entry))
-                    {
-                        users.push(encounter.name.clone());
-                    }
+        let users = ctx.get(slot).unwrap_or_else(|| {
+            let batch: std::collections::HashSet<&String> = paths.iter().collect();
+            let targets: Vec<&Entry> = loaded
+                .notes
+                .iter()
+                .filter(|target| target.owner.key() == owner.key() && batch.contains(&target.path))
+                .filter_map(|target| target.entry.as_ref())
+                .collect();
+            let mut users: Vec<String> = Vec::new();
+            for other in &loaded.notes {
+                // An encounter inside the batch gets the new identities with it.
+                if other.owner.key() == owner.key() && batch.contains(&other.path) {
+                    continue;
                 }
-                ctx.data_mut(|data| data.insert_temp(slot, users.clone()));
-                users
-            });
+                let Some(encounter) = other.entry.as_ref() else {
+                    continue;
+                };
+                if encounter.kind == "encounter"
+                    && !users.contains(&encounter.name)
+                    && targets
+                        .iter()
+                        .any(|entry| encounter_uses_entry(encounter, entry))
+                {
+                    users.push(encounter.name.clone());
+                }
+            }
+            ctx.set(slot, users.clone());
+            users
+        });
         let choice = locked(Choice::named(
             crate::choice!(
                 "Make all {} files in {}/ separate entries",

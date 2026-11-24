@@ -1080,6 +1080,7 @@ mod view;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state_context::StateContext;
 
     #[test]
     fn copied_campaign_can_register_with_new_identities_and_kept_fields() {
@@ -1506,11 +1507,10 @@ mod tests {
         // D&D Beyond's for the campaign open now; a press is done after it (`footer_act`).
         let mut dndbeyond =
             crate::dndbeyond::DndBeyond::listed_for_test(&[("12", "Watchtower"), ("34", "Harbor")]);
-        let ctx = eframe::egui::Context::default();
+        let ctx = StateContext::new();
         let lines = |campaigns: &Campaigns, dndbeyond: &crate::dndbeyond::DndBeyond| {
-            let frame = design::outcome::PaneFrame::plain();
-            let mut messages =
-                design::outcome::Messages::<CampaignAct>::new(&frame, "link_footer", 0.0);
+            let frame = design::outcome::PaneFrame::new();
+            let mut messages = design::outcome::Messages::<CampaignAct>::new();
             campaigns.footer_messages(&frame, &mut messages, false, None);
             let open = campaigns.active_campaign().map(|campaign| campaign.id);
             dndbeyond.footer_messages(&frame, &mut messages, open);

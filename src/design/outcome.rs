@@ -24,10 +24,9 @@
 use super::components::FooterRank;
 pub use super::components::{ResultOrder, Tone};
 pub use super::results::{ByTicket, Gone, Ticket};
-use egui::{self, Ui};
 use std::borrow::Cow;
 
-/// The footer's messages as plain data, for the GPUI port (`docs/gpui-port.md`).
+/// The footer's messages as plain data, for the GPUI footer (`gui::kit::messages`).
 pub mod plain;
 
 // ------------------------------------------------------------------------------------------------
@@ -1555,8 +1554,8 @@ pub fn file_url(path: &std::path::Path) -> Option<String> {
 /// ```
 /// use splat_design::outcome::{Messages, NoPress, Outcome};
 /// fn f() {
-///     let frame = splat_design::outcome::PaneFrame::plain();
-///     let mut messages = Messages::<NoPress>::new(&frame, "f", 400.0);
+///     let frame = splat_design::outcome::PaneFrame::new();
+///     let mut messages = Messages::<NoPress>::new();
 ///     messages.outcome(Outcome::Refused(splat_design::sentence!("No.")));
 ///     let _ = messages.into_plain();
 /// }
@@ -1564,8 +1563,8 @@ pub fn file_url(path: &std::path::Path) -> Option<String> {
 /// ```compile_fail
 /// use splat_design::outcome::{Done, Messages, NoPress, Verb};
 /// fn f() {
-///     let frame = splat_design::outcome::PaneFrame::plain();
-///     let mut messages = Messages::<NoPress>::new(&frame, "f", 400.0);
+///     let frame = splat_design::outcome::PaneFrame::new();
+///     let mut messages = Messages::<NoPress>::new();
 ///     messages.outcome(Done::new(Verb::Remove, "Bell"));
 ///     let _ = messages.into_plain();
 /// }
@@ -1697,10 +1696,6 @@ struct Body {
     /// No other kept result of its Undo's verb stands in its footer (`undo_alone`): the Undo
     /// paints `UndoStep::alone` for its room, else `UndoStep::fit`.
     undo_alone: bool,
-    /// The place its owner gives it (`BodyMessage::show`: the next widget's id before its words'
-    /// scope), which keys its kept Undo words and choices (`body_kept`): one slot per place,
-    /// whatever its words. None: the place where it draws.
-    place: Option<egui::Id>,
 }
 
 /// A body and the caller's ids of its Undo and of each choice, by index.
@@ -1784,7 +1779,6 @@ impl<A> Typed<A> {
                 words_hover: None,
                 help: Vec::new(),
                 undo_alone: false,
-                place: None,
             },
             undo: undo_id,
             choices: ids,
@@ -1893,9 +1887,12 @@ pub struct PaneFrame {
 }
 
 impl PaneFrame {
-    /// A token with no `Ui`, for the design system's own tests.
-    #[cfg(test)]
-    pub(in crate::design) fn for_test() -> Self {
+    /// The token for one pane's footer in this frame.
+    #[allow(
+        clippy::new_without_default,
+        reason = "a frame token is made on purpose, never by default"
+    )]
+    pub fn new() -> Self {
         Self {
             _not_static: std::marker::PhantomData,
         }
@@ -1918,7 +1915,7 @@ impl PaneFrame {
 /// fn frame() {
 ///     let mut store = Results::new();
 ///     store.record(Saved);
-///     let frame = PaneFrame::plain();
+///     let frame = PaneFrame::new();
 ///     let line: KeptLine<NoPress> = store
 ///         .get(&Link)
 ///         .unwrap()
@@ -1945,7 +1942,7 @@ impl PaneFrame {
 /// fn frame() {
 ///     let mut store = Results::new();
 ///     store.record(Saved);
-///     let frame = PaneFrame::plain();
+///     let frame = PaneFrame::new();
 ///     let line: KeptLine<NoPress> = store
 ///         .get(&Link)
 ///         .unwrap()
@@ -1963,7 +1960,7 @@ impl PaneFrame {
 /// fn frame() {
 ///     let mut store = Results::new();
 ///     store.record(Saved);
-///     let frame = PaneFrame::plain();
+///     let frame = PaneFrame::new();
 ///     let line: KeptLine<NoPress> = store
 ///         .get(&Link)
 ///         .unwrap()
@@ -1984,7 +1981,7 @@ impl PaneFrame {
 /// use splat_design::outcome::{KeptLine, NoPress, PaneFrame, Said};
 /// struct App { store: Results<Link, Saved>, kept: Option<KeptLine<'static, NoPress>> }
 /// fn frame(app: &mut App) {
-///     let frame = PaneFrame::plain();
+///     let frame = PaneFrame::new();
 ///     app.kept = app
 ///         .store
 ///         .get(&Link)
@@ -2096,20 +2093,6 @@ fn kept_place(has_undo: bool) -> FooterRank {
     }
 }
 
-/// A pane footer's message (`Footer`'s own list).
-impl<'a> Ranked
-    for (
-        FooterRank,
-        Option<ResultOrder>,
-        Cow<'a, str>,
-        Box<dyn FnOnce(&mut Ui) + 'a>,
-    )
-{
-    fn key(&self) -> (FooterRank, Option<ResultOrder>) {
-        (self.0, self.1)
-    }
-}
-
 /// What the DM pressed in a pane's footer: the kind of action, as the caller's own id, and for
 /// a kept result the store's [`Ticket`] of that entry. The store acts by the ticket
 /// (`Results::undo_by`, `use_press_by`), so a press can only reach the entry its line showed;
@@ -2118,20 +2101,6 @@ impl<'a> Ranked
 pub struct Press<A> {
     pub id: A,
     pub ticket: Option<Ticket>,
-}
-
-/// The footer line a press came from, for an answer to that press (`Messages::answer`): a copy
-/// of the line's identity that cannot act, kept by the answer's owner while the answer stands.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PressedLine(ResultOrder);
-
-impl<A> Press<A> {
-    /// The kept line this press came from, if it came from one.
-    pub fn line(&self) -> Option<PressedLine> {
-        self.ticket
-            .as_ref()
-            .map(|ticket| PressedLine(ticket.order()))
-    }
 }
 
 /// A pane's footer messages for this frame, owned and typed: built before the body runs, from
@@ -2147,8 +2116,8 @@ impl<A> Press<A> {
 /// use splat_design::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
 /// #[derive(Clone, Copy)] enum Act { Again }
 /// fn f() -> Option<Act> {
-///     let frame = PaneFrame::plain();
-///     let mut messages = Messages::new(&frame, "f", 400.0);
+///     let frame = PaneFrame::new();
+///     let mut messages = Messages::new();
 ///     messages.outcome(
 ///         Notice::new(splat_design::sentence!("Sync is off."))
 ///             .choice(Choice::new(MessageChoice::Choice("Try again"), Act::Again)),
@@ -2160,8 +2129,8 @@ impl<A> Press<A> {
 /// use splat_design::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
 /// #[derive(Clone, Copy)] enum Act { Again }
 /// fn f(name: String) -> Option<Act> {
-///     let frame = PaneFrame::plain();
-///     let mut messages = Messages::new(&frame, "f", 400.0);
+///     let frame = PaneFrame::new();
+///     let mut messages = Messages::new();
 ///     messages.outcome(
 ///         Notice::new(splat_design::sentence!("Sync is off."))
 ///             .choice(Choice::new(MessageChoice::Choice(&name), Act::Again)),
@@ -2175,8 +2144,8 @@ impl<A> Press<A> {
 /// ```compile_fail
 /// use splat_design::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
 /// fn f<'a>(app: &'a mut u8) {
-///     let frame = PaneFrame::plain();
-///     let mut messages = Messages::new(&frame, "f", 400.0);
+///     let frame = PaneFrame::new();
+///     let mut messages = Messages::new();
 ///     messages.outcome(
 ///         Notice::new(splat_design::sentence!("Sync is off."))
 ///             .choice(Choice::new(MessageChoice::Choice("Try again"), &*app)),
@@ -2210,12 +2179,16 @@ struct FooterLine<A> {
     refused: bool,
 }
 
+impl<A: 'static> Default for Messages<'_, A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'f, A: 'static> Messages<'f, A> {
-    /// No messages yet, for this frame's pane. `id` and `width` were the egui footer's; nothing
-    /// reads them now (TODO(3b): drop them with the toolkit-free context).
-    pub fn new(frame: &'f PaneFrame, id: impl std::hash::Hash, width: f32) -> Self {
-        let _ = (frame, width);
-        drop(id);
+    /// No messages yet. Its kept lines borrow this frame's [`PaneFrame`], so the footer ends
+    /// with the frame.
+    pub fn new() -> Self {
         Self {
             lines: Vec::new(),
             frame: std::marker::PhantomData,
@@ -2242,16 +2215,12 @@ impl<'f, A: 'static> Messages<'f, A> {
     /// every kept result, which are answers to older acts. One per footer (a second is refused in
     /// debug builds and tests); Clippy refuses it outside a counted use (`Ban::Answer`).
     ///
-    /// `under`: the act was a press of a kept line of this footer (`Press::line`). The egui
-    /// footer placed the answer under that line; the plain lines keep the one order, so nothing
-    /// reads it now (TODO(3b): drop it).
-    pub fn answer(&mut self, fault: FaultMessage<A>, under: Option<PressedLine>) -> &mut Self {
+    pub fn answer(&mut self, fault: FaultMessage<A>) -> &mut Self {
         debug_assert!(
             !self.answered,
             "a footer holds one answer to the DM's last act"
         );
         self.answered = true;
-        let _ = under;
         let (_, typed) = Outcome::from(fault).parts();
         self.lines.push(FooterLine {
             rank: FooterRank::Answer,

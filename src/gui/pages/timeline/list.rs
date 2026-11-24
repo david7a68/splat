@@ -128,7 +128,7 @@ fn second_line(words: &RowWords, from: usize) -> StyledText {
         let color = match tint {
             RowTint::Warning => c.result.warning,
             RowTint::Ruling(restores) => {
-                crate::gui::bridge::color(long_rest_status(*restores).color)
+                crate::gui::theme::color(long_rest_status(*restores).color)
             }
         };
         runs.push(run(end - start, color));

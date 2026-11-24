@@ -1467,8 +1467,8 @@ mod tests {
         with_plan(fights, |plan| {
             page.end_carry_results();
             let view = page.gv_last_time(book, plan);
-            let frame = crate::design::outcome::PaneFrame::plain();
-            let mut messages = crate::design::outcome::Messages::new(&frame, "carry", 0.0);
+            let frame = crate::design::outcome::PaneFrame::new();
+            let mut messages = crate::design::outcome::Messages::new();
             page.carry_in_messages(&frame, &mut messages);
             (view, messages.into_plain())
         })

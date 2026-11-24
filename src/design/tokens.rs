@@ -1,71 +1,108 @@
 //! Design tokens: colour by role, type roles, spacing, shape and density.
 //! Every raw colour and text size in the app lives in this file.
-use egui::{Color32, TextStyle};
 
-const fn rgb(hex: u32) -> Color32 {
-    Color32::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
+/// A colour token: 8-bit sRGB with its alpha. The GPUI theme turns one into its own colour
+/// (`gui::theme::color`); nothing else paints with it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Color {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+}
+
+impl Color {
+    #[cfg(test)]
+    pub const BLACK: Self = Self::from_rgb(0, 0, 0);
+    #[cfg(test)]
+    pub const WHITE: Self = Self::from_rgb(255, 255, 255);
+
+    /// An opaque colour.
+    pub const fn from_rgb(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b, a: 255 }
+    }
+
+    pub const fn r(self) -> u8 {
+        self.r
+    }
+
+    pub const fn g(self) -> u8 {
+        self.g
+    }
+
+    pub const fn b(self) -> u8 {
+        self.b
+    }
+
+    pub const fn a(self) -> u8 {
+        self.a
+    }
+}
+
+const fn rgb(hex: u32) -> Color {
+    Color::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
 }
 
 #[derive(Clone, Copy)]
 pub struct Turn {
-    pub current: Color32,
-    pub next: Color32,
+    pub current: Color,
+    pub next: Color,
 }
 #[derive(Clone, Copy)]
 pub struct Hp {
-    pub healthy: Color32,
-    pub damaged: Color32,
-    pub bloodied: Color32,
-    pub zero: Color32,
-    pub temp: Color32,
-    pub unknown: Color32,
-    pub track: Color32,
+    pub healthy: Color,
+    pub damaged: Color,
+    pub bloodied: Color,
+    pub zero: Color,
+    pub temp: Color,
+    pub unknown: Color,
+    pub track: Color,
 }
 #[derive(Clone, Copy)]
 pub struct Participant {
-    pub absent: Color32,
-    pub concentrating: Color32,
-    pub condition: Color32,
-    pub changed: Color32,
+    pub absent: Color,
+    pub concentrating: Color,
+    pub condition: Color,
+    pub changed: Color,
 }
 #[derive(Clone, Copy)]
 pub struct Side {
-    pub party: Color32,
-    pub enemies: Color32,
-    pub other: Color32,
+    pub party: Color,
+    pub enemies: Color,
+    pub other: Color,
 }
 #[derive(Clone, Copy)]
 pub struct Sync {
-    pub off: Color32,
-    pub first_read: Color32,
-    pub matching: Color32,
-    pub pending: Color32,
-    pub conflict: Color32,
-    pub read_only: Color32,
-    pub error: Color32,
+    pub off: Color,
+    pub first_read: Color,
+    pub matching: Color,
+    pub pending: Color,
+    pub conflict: Color,
+    pub read_only: Color,
+    pub error: Color,
 }
 #[derive(Clone, Copy)]
 pub struct Connection {
-    pub connected: Color32,
-    pub offline: Color32,
-    pub busy: Color32,
+    pub connected: Color,
+    pub offline: Color,
+    pub busy: Color,
 }
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub struct Document {
-    pub clean: Color32,
-    pub unsaved: Color32,
-    pub saved: Color32,
-    pub invalid: Color32,
-    pub external: Color32,
-    pub read_only: Color32,
+    pub clean: Color,
+    pub unsaved: Color,
+    pub saved: Color,
+    pub invalid: Color,
+    pub external: Color,
+    pub read_only: Color,
 }
 #[derive(Clone, Copy)]
 pub struct ResultTones {
-    pub error: Color32,
-    pub warning: Color32,
-    pub success: Color32,
-    pub info: Color32,
+    pub error: Color,
+    pub warning: Color,
+    pub success: Color,
+    pub info: Color,
 }
 
 /// One theme. A later theme is another value of this struct. Every family is
@@ -73,28 +110,28 @@ pub struct ResultTones {
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub struct Colors {
-    pub page: Color32,
-    pub rail: Color32,
-    pub raised: Color32,
-    pub well: Color32,
-    pub hover: Color32,
-    pub selected: Color32,
-    pub current_row: Color32,
-    pub hairline: Color32,
-    pub rule: Color32,
-    pub field_border: Color32,
-    pub text: Color32,
-    pub muted: Color32,
-    pub faint: Color32,
-    pub disabled: Color32,
-    pub accent: Color32,
-    pub accent_fill: Color32,
-    pub accent_hover: Color32,
-    pub on_accent: Color32,
-    pub focus: Color32,
-    pub destructive: Color32,
+    pub page: Color,
+    pub rail: Color,
+    pub raised: Color,
+    pub well: Color,
+    pub hover: Color,
+    pub selected: Color,
+    pub current_row: Color,
+    pub hairline: Color,
+    pub rule: Color,
+    pub field_border: Color,
+    pub text: Color,
+    pub muted: Color,
+    pub faint: Color,
+    pub disabled: Color,
+    pub accent: Color,
+    pub accent_fill: Color,
+    pub accent_hover: Color,
+    pub on_accent: Color,
+    pub focus: Color,
+    pub destructive: Color,
     /// A microphone is live. Always with the word and the icon.
-    pub recording: Color32,
+    pub recording: Color,
     pub turn: Turn,
     pub hp: Hp,
     pub participant: Participant,
@@ -105,13 +142,13 @@ pub struct Colors {
     pub result: ResultTones,
 }
 
-const GREEN: Color32 = rgb(0x93BF97);
-const SAND: Color32 = rgb(0xD9BC74);
-const ROSE: Color32 = rgb(0xF29BC4);
-const RED: Color32 = rgb(0xF4898A);
-const MUTED: Color32 = rgb(0xBDB3A3);
-const FAINT: Color32 = rgb(0x9D9384);
-const TEXT: Color32 = rgb(0xE9E1D3);
+const GREEN: Color = rgb(0x93BF97);
+const SAND: Color = rgb(0xD9BC74);
+const ROSE: Color = rgb(0xF29BC4);
+const RED: Color = rgb(0xF4898A);
+const MUTED: Color = rgb(0xBDB3A3);
+const FAINT: Color = rgb(0x9D9384);
+const TEXT: Color = rgb(0xE9E1D3);
 
 pub const DARK: Colors = Colors {
     page: rgb(0x1B1815),
@@ -440,14 +477,10 @@ impl Type {
             Self::Stat => FAMILY_SERIF_SMALL,
         }
     }
-
-    pub fn style(self) -> TextStyle {
-        TextStyle::Name(self.name().into())
-    }
 }
 
 #[cfg(test)]
-pub(crate) fn contrast(a: Color32, b: Color32) -> f32 {
+pub(crate) fn contrast(a: Color, b: Color) -> f32 {
     fn channel(value: u8) -> f32 {
         let value = f32::from(value) / 255.0;
         if value <= 0.03928 {
@@ -456,7 +489,7 @@ pub(crate) fn contrast(a: Color32, b: Color32) -> f32 {
             ((value + 0.055) / 1.055).powf(2.4)
         }
     }
-    fn luminance(color: Color32) -> f32 {
+    fn luminance(color: Color) -> f32 {
         0.2126 * channel(color.r()) + 0.7152 * channel(color.g()) + 0.0722 * channel(color.b())
     }
     let (a, b) = (luminance(a), luminance(b));
@@ -476,7 +509,7 @@ mod tests {
 
     use super::*;
 
-    fn all_text(c: &Colors) -> Vec<(&'static str, Color32)> {
+    fn all_text(c: &Colors) -> Vec<(&'static str, Color)> {
         vec![
             ("text", c.text),
             ("muted", c.muted),
@@ -566,23 +599,10 @@ mod tests {
         }
     }
 
-    /// What the installed style paints, not only what a token says.
-    #[test]
-    fn a_resting_field_edge_is_three_to_one_on_every_surface() {
-        let ctx = egui::Context::default();
-        super::super::theme::install(&ctx);
-        let edge = ctx.style().visuals.widgets.inactive.bg_stroke.color;
-        let c = colors();
-        for (name, background) in [("page", c.page), ("rail", c.rail), ("raised", c.raised)] {
-            let ratio = contrast(edge, background);
-            assert!(ratio >= 3.0, "on {name}: {ratio:.2}");
-        }
-    }
-
     /// A meaning must not look like another that appears in the same slot.
     #[test]
     fn neighbouring_meanings_have_distinct_colours() {
-        fn distance(a: Color32, b: Color32) -> i32 {
+        fn distance(a: Color, b: Color) -> i32 {
             (i32::from(a.r()) - i32::from(b.r())).abs()
                 + (i32::from(a.g()) - i32::from(b.g())).abs()
                 + (i32::from(a.b()) - i32::from(b.b())).abs()
@@ -647,8 +667,8 @@ mod tests {
     fn no_pure_black_or_white_in_the_neutrals() {
         let c = colors();
         for color in [c.page, c.rail, c.well, c.text, c.focus, c.on_accent] {
-            assert_ne!(color, Color32::BLACK);
-            assert_ne!(color, Color32::WHITE);
+            assert_ne!(color, Color::BLACK);
+            assert_ne!(color, Color::WHITE);
         }
     }
 

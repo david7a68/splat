@@ -1,12 +1,13 @@
-//! Shared widgets, layout, and messages for desktop features.
+//! The design system's plain parts (tokens, messages, kept results, the save row), the frame
+//! clock and the state context, shared by every crate of the app.
 #[path = "../mod.rs"]
 pub mod design;
 #[path = "../../frame_clock.rs"]
 pub mod frame_clock;
+#[path = "../../state_context.rs"]
+pub mod state_context;
 
 pub use design::{fact, layout, outcome, text_draft};
-#[cfg(test)]
-pub use egui;
 
 #[doc(hidden)]
 pub mod ownership {

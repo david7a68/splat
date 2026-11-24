@@ -261,7 +261,7 @@ impl<T: Sync> std::ops::Deref for Revised<T> {
 pub struct Measure {
     room: u32,
     size: u32,
-    family: egui::FontFamily,
+    family: &'static str,
     fonts: u64,
     scale: u32,
 }

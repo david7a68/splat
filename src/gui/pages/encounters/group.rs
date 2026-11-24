@@ -39,7 +39,7 @@ pub(super) fn render(
             cx,
         );
     }
-    let ctx = root.bridge.ctx().clone();
+    let ctx = root.ctx.clone();
     let sources = splat_encounters_ui::loot_editor::sources(&ctx);
     let Some(view) = root.app.encounters.group_frame(sources.as_deref()) else {
         return div().into_any_element();
@@ -239,7 +239,7 @@ fn head(view: &GroupView, column: gpui::Pixels, focus: bool, cx: &mut Context<Sp
         .child(kit::status(&kit::Status::new(
             icon.clone(),
             word.clone(),
-            crate::gui::bridge::color(*color),
+            crate::gui::theme::color(*color),
         )));
     if view.discard {
         row = row.child(
@@ -536,9 +536,7 @@ fn member_row(
                 )
                 .small()
                 .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
-                    root.bridge.ctx().data_mut(|data| {
-                        data.insert_temp(eframe::egui::Id::new("open_campaign_packages"), true)
-                    });
+                    root.ctx.set(crate::requests::OPEN_CAMPAIGN_PACKAGES, true);
                     cx.notify();
                 })),
             ),

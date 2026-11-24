@@ -470,7 +470,7 @@ fn plan_scene_add_and_tick() {
     shell.press("enter");
     assert!(note_words(&mut shell).contains("- [ ] Meet the ferryman"));
     shell.update(|root, _, cx| {
-        let ctx = root.bridge.ctx().clone();
+        let ctx = root.ctx.clone();
         let index = root.app.lookup.index();
         super::with_plan(&mut root.app, |sessions, _, book, plan| {
             let view = sessions.gv_plan(book, plan, index.as_deref());

@@ -5,7 +5,7 @@
 use super::{
     PLAN_BESIDE_NOTE_FROM, PLAN_MAX_WIDTH, PLAN_WIDTH, TWO_COLUMNS_FROM, footer, with_plan,
 };
-use crate::gui::{SplatRoot, bridge, icons, kit, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::sessions::page::gpui_facade::{RecordControl, RecordLine};
 use gpui::{
     AnyElement, Context, IntoElement, ParentElement, Pixels, Styled, Window, div, prelude::*, px,
@@ -246,7 +246,7 @@ fn details(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
         .app
         .sessions
         .gv_note_status()
-        .map(|status| kit::status(&bridge::status(&status)));
+        .map(|status| kit::status(&kit::Status::of(&status)));
     div()
         .flex()
         .flex_row()
@@ -277,7 +277,7 @@ pub(super) fn record_control(
                 .name(name.clone())
                 .hint(name)
                 .on_click(cx.listener(|root, _, _, cx| {
-                    let ctx = root.bridge.ctx().clone();
+                    let ctx = root.ctx.clone();
                     root.app.sessions.gv_stop_recording(&ctx);
                     cx.notify();
                 }))
@@ -333,11 +333,11 @@ pub(super) fn record_line(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> 
                             .child(kit::icon(
                                 status.icon,
                                 Type::Strong,
-                                bridge::color(status.icon_color()),
+                                theme::color(status.icon_color()),
                             ))
                             .child(kit::text(
                                 Type::Strong,
-                                bridge::color(status.word_color()),
+                                theme::color(status.word_color()),
                                 words,
                             )),
                     )
@@ -453,7 +453,7 @@ fn gone(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) 
         .app
         .sessions
         .gv_note_status()
-        .map(|status| kit::status(&bridge::status(&status)));
+        .map(|status| kit::status(&kit::Status::of(&status)));
     let title = div()
         .flex()
         .flex_row()

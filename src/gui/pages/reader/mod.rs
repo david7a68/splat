@@ -22,7 +22,7 @@ pub(crate) type Preview =
 /// Once, when the root is built: readers find the app's egui context (the link index, the art)
 /// and leave pressed links there for the frame logic, as egui's readers do.
 pub(crate) fn init(root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
-    cx.set_global(crate::gui::kit::markdown::Host(root.bridge.ctx().clone()));
+    cx.set_global(crate::gui::kit::markdown::Host(root.ctx.clone()));
 }
 
 /// Once per frame, before anything draws.

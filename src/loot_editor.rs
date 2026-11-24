@@ -4,7 +4,7 @@
 //! table has shows on its row before play.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::roll_table::Table;
-use eframe::egui;
+use crate::state_context::StateContext;
 use splat::content::loot::{Loot, MAX_ROLLS};
 use std::sync::Arc;
 
@@ -60,15 +60,13 @@ pub fn matching<'a>(sources: &'a Sources, typed: &str) -> (Vec<&'a Table>, Vec<&
 
 /// The campaign's sources, from the index every page shares. The index keeps them, so they
 /// are read once for each load of the campaign.
-pub fn sources(ctx: &egui::Context) -> Option<Arc<Sources>> {
-    ctx.data(|data| {
-        data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
-    })
-    .map(|index| index.loot_sources())
+pub fn sources(ctx: &StateContext) -> Option<Arc<Sources>> {
+    ctx.get(crate::requests::LINK_INDEX)
+        .map(|index| index.loot_sources())
 }
 
 /// The table keys in one creature's loot that cannot roll, when the sources are known.
-pub fn missing_in(ctx: &egui::Context, loot: Option<&str>) -> Vec<String> {
+pub fn missing_in(ctx: &StateContext, loot: Option<&str>) -> Vec<String> {
     match (sources(ctx), loot) {
         (Some(sources), Some(loot)) => {
             let parts = splat::content::loot::parts(loot);

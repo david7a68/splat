@@ -9,7 +9,7 @@ use crate::gui::pages::reader::entry::{self, EntryView, Source};
 use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::library::view::{NoLinks, RunValues};
 use crate::rolls::{self, ArmedView};
-use eframe::egui;
+use crate::state_context::StateContext;
 use gpui::{
     AnyElement, App, Context, ElementId, InteractiveElement, IntoElement, ParentElement,
     RenderOnce, Styled, Window, div,
@@ -28,8 +28,7 @@ pub(super) fn render(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> An
     let mut column = div().flex().flex_col().gap(theme::XS).w_full();
     column = column.children(super::ended::card_loot(run, index, cx));
     if definition.fields.contains_key("splat_external") {
-        let frame = crate::design::outcome::PaneFrame::plain();
-        let (_, notice) = run.reference_messages(&frame, index, 0.0);
+        let (_, notice) = run.reference_messages(index);
         column = column.child(kit::text(
             Type::Small,
             c.document.read_only,
@@ -92,8 +91,7 @@ pub(super) fn render(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> An
 
 /// The tab's footer: the snapshot's notice and `Read the new version`, as kit messages.
 pub(super) fn footer(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> Vec<AnyElement> {
-    let frame = crate::design::outcome::PaneFrame::plain();
-    let (messages, _) = run.reference_messages(&frame, index, 0.0);
+    let (messages, _) = run.reference_messages(index);
     kit::messages::lines(
         ElementId::Name(format!("run-reference-footer-{index}").into()),
         messages.into_plain(),
@@ -214,7 +212,7 @@ impl RenderOnce for RunReader {
 }
 
 /// The app's egui context, where rolls wait for the frame logic.
-fn host(cx: &App) -> Option<egui::Context> {
+fn host(cx: &App) -> Option<StateContext> {
     cx.try_global::<kit::markdown::Host>()
         .map(|host| host.0.clone())
 }

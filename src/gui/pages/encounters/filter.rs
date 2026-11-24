@@ -1,9 +1,7 @@
-//! The creature filter (egui: `creature_filter::filter_bar`), as the kit's `FilterBar`: the
-//! filter lives in the bridge's egui context under the egui page's id, so the roster and a group
-//! share it.
-use super::editor::FILTER_ID;
+//! The creature filter, as the kit's `FilterBar`: the filter lives in the state context
+//! (`editor::FILTER`), so the roster and a group share it.
+use super::editor::FILTER;
 use crate::gui::{SplatRoot, kit};
-use eframe::egui;
 use gpui::{Context, ElementId, IntoElement};
 use splat_content::content::creature_filter::Filter;
 
@@ -29,10 +27,7 @@ pub(super) fn bar(
     let choices = choices.cloned().unwrap_or_default();
     kit::FilterBar::new(bar_id(), filter, move || choices, cx).on_change(cx.listener(
         |root: &mut SplatRoot, filter: &Filter, _, cx| {
-            let id = egui::Id::new(FILTER_ID);
-            root.bridge
-                .ctx()
-                .data_mut(|data| data.insert_temp(id, filter.clone()));
+            root.ctx.set(FILTER, filter.clone());
             cx.notify();
         },
     ))

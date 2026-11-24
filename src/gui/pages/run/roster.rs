@@ -9,7 +9,7 @@ use crate::design::{hp_state, hp_word};
 use crate::encounter_run::rolling::RowChoice;
 use crate::encounter_run::view::{self, RowColumns};
 use crate::encounter_run::{Command, Participant, Phase, Run};
-use crate::gui::{SplatRoot, bridge, icons, kit, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::rolls::Mode;
 use gpui::{
     AnyElement, ClickEvent, Context, ElementId, Hsla, InteractiveElement, IntoElement, MouseButton,
@@ -384,7 +384,7 @@ fn parts(run: &Run, index: usize, inline: bool, conditions: usize, bonuses: Bonu
     if inline && let Some((icon, word, color)) = hp_word(p.hp, p.max_hp) {
         parts.push(part(
             format!("{icon} {word}"),
-            bridge::color(color),
+            theme::color(color),
             Act::None,
         ));
     }
@@ -977,7 +977,7 @@ pub(super) fn row(
         }
     };
     let picture = px(columns.picture.min(layout.height - 4.0).max(16.0));
-    let art = run.row_art(root.bridge.ctx(), p);
+    let art = run.row_art(&root.ctx, p);
     let name = div()
         .w(px(columns.name_width))
         .flex_none()
@@ -1058,7 +1058,7 @@ pub(super) fn row(
             let color = if current && word == "HP unknown" {
                 c.muted
             } else {
-                bridge::color(color)
+                theme::color(color)
             };
             words = words.child(state_word(icon, word, color, scale));
         }

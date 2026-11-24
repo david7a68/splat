@@ -160,7 +160,7 @@
 use super::components::ResultOrder;
 use super::memo::Revision;
 use super::outcome::Sentence;
-use egui;
+use crate::state_context::StateContext;
 use std::time::Duration;
 
 mod projection;
@@ -520,7 +520,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
     /// `record` for a kind with a [`Kept::LIFE`]: it also asks `ctx` for a repaint at its end
     /// ([`Results::expire`]), so a result recorded after its owner's update this frame still
     /// ends with no input.
-    pub fn record_timed(&mut self, value: T, ctx: &egui::Context) {
+    pub fn record_timed(&mut self, value: T, ctx: &StateContext) {
         const {
             assert!(
                 T::LIFE.is_some(),
@@ -554,7 +554,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
     /// Its cost on a frame before the next end is constant: the oldest act is kept for the
     /// store's revision, and no entry is visited. A frame at or after an end visits each entry
     /// once.
-    pub fn expire(&mut self, ctx: &egui::Context) {
+    pub fn expire(&mut self, ctx: &StateContext) {
         let Some(life) = T::LIFE else {
             return;
         };
@@ -1188,7 +1188,7 @@ mod tests {
         };
         let changed = || refusal(Cause::Changed(File::SessionNote));
         // Ruling L9: A's line, kept as data, before the refused attempt.
-        let (frame, inputs) = (super::super::outcome::PaneFrame::for_test(), no_inputs());
+        let (frame, inputs) = (super::super::outcome::PaneFrame::new(), no_inputs());
         let mut view = Retained::new();
         view.refresh(&results, &A, inputs, line_of);
         let before = view.get().unwrap();
@@ -1402,7 +1402,7 @@ mod tests {
                 .undo(UndoStep::verb(Verb::Add).pressed_as(1_u8))
                 .into()
             };
-            let (frame, inputs) = (super::super::outcome::PaneFrame::for_test(), no_inputs());
+            let (frame, inputs) = (super::super::outcome::PaneFrame::new(), no_inputs());
             let mut both = Results::new();
             both.record(Linked(a.clone(), "A."));
             both.record(Linked(b.clone(), "B."));
@@ -1477,7 +1477,7 @@ mod tests {
         let (a, b) = (A, B);
         results.record(done(A, "A1"));
         results.record(done(B, "B"));
-        let frame = super::super::outcome::PaneFrame::for_test();
+        let frame = super::super::outcome::PaneFrame::new();
         let ticket = |results: &Results<Note, Done>, owner: &Note| {
             results.get(owner).unwrap().ticket_for_test(&frame)
         };
@@ -1704,8 +1704,8 @@ mod tests {
             .undo(UndoStep::verb(Verb::Add).pressed_as(1_u8))
             .into()
         }
-        let ctx = egui::Context::default();
-        let (frame, inputs) = (super::super::outcome::PaneFrame::for_test(), no_inputs());
+        let ctx = StateContext::new();
+        let (frame, inputs) = (super::super::outcome::PaneFrame::new(), no_inputs());
         crate::frame_clock::set(10.0);
         let mut results = Results::<Note, Timed>::new();
         for id in 0..200 {
@@ -1789,7 +1789,7 @@ mod tests {
         results.record(done(A, "A."));
         results.record(done(B, "B."));
         results.record(done(OTHER, "Other."));
-        let frame = super::super::outcome::PaneFrame::for_test();
+        let frame = super::super::outcome::PaneFrame::new();
         let a_ticket = results.get(&A).unwrap().ticket_for_test(&frame);
         let orders = |results: &Results<Note, Done>| {
             [A, B, OTHER].map(|note| results.get(&note).map(|shown| shown.order()))

@@ -380,7 +380,7 @@ fn open_group(shell: &mut Shell, name: &str) {
 /// The open draft's roster rows as the view shows them: each row's name and second line.
 fn roster_lines(shell: &mut Shell) -> Vec<(String, String)> {
     shell.update(|root, _, _| {
-        let ctx = root.bridge.ctx().clone();
+        let ctx = root.ctx.clone();
         let linked = root
             .app
             .campaigns
@@ -560,7 +560,7 @@ fn an_encounters_own_groups() {
     );
     let count = |shell: &mut Shell| {
         shell.update(|root, _, _| {
-            let ctx = root.bridge.ctx().clone();
+            let ctx = root.ctx.clone();
             root.app
                 .encounters
                 .owned_groups(&ctx)
@@ -584,7 +584,7 @@ fn an_encounters_own_groups() {
     shell.click(&add);
     assert_eq!(roster_len(&mut shell), roster, "the roster did not take it");
     let members = shell.update(|root, _, _| {
-        let ctx = root.bridge.ctx().clone();
+        let ctx = root.ctx.clone();
         root.app.encounters.owned_groups(&ctx).map(|owned| {
             owned
                 .cards
@@ -620,7 +620,7 @@ fn the_encounters_loot_list() {
     open_encounter(&mut shell, crate::fixtures::RUN);
     let loot = |shell: &mut Shell| {
         shell.update(|root, _, cx| {
-            let ctx = root.bridge.ctx().clone();
+            let ctx = root.ctx.clone();
             let _ = cx;
             root.app
                 .encounters
@@ -787,7 +787,7 @@ fn reload(shell: &mut Shell) {
 /// The open roster's difficulty, as its heading says it.
 fn roster_difficulty(shell: &mut Shell) -> String {
     shell.update(|root, _, _| {
-        let ctx = root.bridge.ctx().clone();
+        let ctx = root.ctx.clone();
         root.app
             .encounters
             .roster_view(&ctx, &root.app.party, true)
@@ -970,7 +970,7 @@ fn use_it_offers_a_creature_from_an_unused_package() {
     // Lookup's index, which the search reads, is built in the background.
     reads_done(&mut shell);
     let unused = shell.update(|root, _, _| {
-        let ctx = root.bridge.ctx().clone();
+        let ctx = root.ctx.clone();
         root.app
             .encounters
             .unused_creatures(&ctx)

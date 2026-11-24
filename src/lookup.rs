@@ -2,6 +2,7 @@
 //! It covers built-in, package and campaign-owned entries in one index (T2.3), and the
 //! campaign's plain notes, with each heading as its own result.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
+use crate::state_context::StateContext;
 use crate::{
     campaigns::Campaigns,
     content_workspace::Catalogue,
@@ -11,7 +12,6 @@ use crate::{
     persistence::{Campaign, Module},
     world::{self, Go, Nav, Reader, Role, lines::Line},
 };
-use eframe::egui;
 use splat::content::{Entry, Reference};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -1369,34 +1369,32 @@ impl ContentIndex {
         output
     }
 
-    /// `unused_creatures` for one view, `id`, kept in egui's memory for that view and worked out
-    /// again only when the query or the index (its load, `generation`) changes: a repaint of an
-    /// encounter search with no match as typed ranks nothing (review of PR 450, P2). The view's
-    /// own state, never a process-wide one: the visual suite draws scenarios on parallel threads.
+    /// `unused_creatures` for one view, `view`, kept in the state context for that view and
+    /// worked out again only when the query or the index (its load, `generation`) changes: a
+    /// repaint of an encounter search with no match as typed ranks nothing (review of PR 450,
+    /// P2). The view's own state, never a process-wide one: GUI tests run on parallel threads.
     pub fn unused_creatures_kept(
         &self,
-        ctx: &eframe::egui::Context,
-        id: eframe::egui::Id,
+        ctx: &StateContext,
+        view: &str,
         query: &str,
     ) -> Arc<Vec<(Uuid, Uuid, String, String)>> {
-        let key = id.with("unused_creatures");
-        let kept = ctx.data(|data| data.get_temp::<UnusedKept>(key));
+        let key = crate::state_context::Slot::<UnusedKept>::new("unused_creatures").with(view);
+        let kept = ctx.get(key);
         if let Some(kept) =
             kept.filter(|kept| kept.generation == self.generation && kept.query == query)
         {
             return kept.found;
         }
         let found = Arc::new(self.unused_creatures(query));
-        ctx.data_mut(|data| {
-            data.insert_temp(
-                key,
-                UnusedKept {
-                    generation: self.generation,
-                    query: query.to_owned(),
-                    found: found.clone(),
-                },
-            );
-        });
+        ctx.set(
+            key,
+            UnusedKept {
+                generation: self.generation,
+                query: query.to_owned(),
+                found: found.clone(),
+            },
+        );
         found
     }
 
@@ -1823,7 +1821,8 @@ pub struct Lookup {
     /// A check of campaign and package files, away from the frame.
     pub files_changed: bool,
     checking: Option<mpsc::Receiver<u64>>,
-    was_focused: bool,
+    /// The first poll started its check of the files.
+    files_checked: bool,
     /// The panel shows the Trackers view in place of what it held, which it keeps.
     trackers_shown: bool,
     /// Ctrl+T opened the panel, so Ctrl+T closes it again.
@@ -1876,22 +1875,21 @@ impl Lookup {
     }
 
     /// Load or reload in the background when the active campaign or packages change.
-    pub fn poll(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    pub fn poll(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         let active = campaigns.active_campaign();
-        // Coming back from Obsidian, show what was just written there.
-        let focused = ctx.input(|i| i.focused);
-        if focused && !self.was_focused {
+        // Once, at the first poll: show what was written while the app was closed.
+        if !self.files_checked {
             let (tx, rx) = mpsc::channel();
             let campaign = active.clone();
             let modules = campaigns.modules().to_vec();
-            let waker = ctx.clone();
+            let waker = ctx.waker();
             std::thread::spawn(move || {
                 let _ = tx.send(content_fingerprint(&modules, campaign.as_ref()));
                 waker.request_repaint();
             });
             self.checking = Some(rx);
         }
-        self.was_focused = focused;
+        self.files_checked = true;
         if let Some(seen) = self.checking.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.checking = None;
             if self
@@ -1945,15 +1943,10 @@ impl Lookup {
         self.scope = None;
     }
 
-    fn start_load(
-        &mut self,
-        ctx: &egui::Context,
-        modules: Vec<Module>,
-        campaign: Option<Campaign>,
-    ) {
+    fn start_load(&mut self, ctx: &StateContext, modules: Vec<Module>, campaign: Option<Campaign>) {
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         std::thread::spawn(move || {
             let _ = tx.send(ContentIndex::load(&modules, campaign.as_ref()));
             ctx.request_repaint();
@@ -2118,7 +2111,7 @@ impl Lookup {
     }
 
     /// Open one entry from a link somewhere else in the app.
-    pub fn open_note_link(&mut self, target: &str, from: Option<Uuid>, ctx: &egui::Context) {
+    pub fn open_note_link(&mut self, target: &str, from: Option<Uuid>, ctx: &StateContext) {
         let Some(index) = &self.index else {
             return;
         };
@@ -3599,8 +3592,8 @@ mod tests {
         // as typed only (no typo compared); another load of the index ranks again.
         let names = || UNUSED_NAMES.with(std::cell::Cell::get);
         let typos = crate::matching::typo_checks;
-        let ctx = eframe::egui::Context::default();
-        let view = eframe::egui::Id::new("search");
+        let ctx = StateContext::new();
+        let view = "search";
         let kept = |index: &ContentIndex, query: &str| {
             index
                 .unused_creatures_kept(&ctx, view, query)

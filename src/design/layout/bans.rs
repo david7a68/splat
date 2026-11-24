@@ -155,7 +155,7 @@ mod tests {
         }
         for text in [
             "use crate::design::{Body, Results};",
-            "use egui::accesskit::Action as Access;",
+            "use gpui::prelude::FluentBuilder as Fluent;",
             "type Groups = BTreeMap<String, Value>;",
             "use splat::content::formats::patch_model as patch_fields;",
         ] {

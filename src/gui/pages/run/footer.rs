@@ -188,8 +188,8 @@ fn end_step(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
 /// The footer messages under a body (`run_messages`, the egui footer's typed lines), drawn by
 /// `kit::messages`; a press goes through `run_press` with its ticket, as in egui.
 pub(super) fn messages(run: &Run, setup: bool, cx: &mut Context<SplatRoot>) -> Vec<AnyElement> {
-    let frame = crate::design::outcome::PaneFrame::plain();
-    let lines = run.run_messages(&frame, setup, 0.0).into_plain();
+    let frame = crate::design::outcome::PaneFrame::new();
+    let lines = run.run_messages(&frame, setup).into_plain();
     kit::messages::lines(
         "run-messages",
         lines,

@@ -105,7 +105,7 @@ fn change(
 
 /// The campaign's tables and items, from the index every page shares.
 fn sources(root: &SplatRoot) -> Option<Arc<Sources>> {
-    loot_editor::sources(root.bridge.ctx())
+    loot_editor::sources(&root.ctx)
 }
 
 /// The list and its add field. `key` keys its fields and its kept state (an encounter draft's id,
@@ -306,7 +306,7 @@ fn line_row(
                         .on_click(cx.listener(
                             move |root: &mut SplatRoot, _, _, cx| {
                                 crate::markdown_view::send_note_link(
-                                    root.bridge.ctx(),
+                                    &root.ctx,
                                     target.clone(),
                                     None,
                                 );

@@ -10,7 +10,7 @@ use crate::campaigns::Campaigns;
 use crate::content_workspace::{EntryRef, PackageSelection, Selection};
 use crate::design::outcome::plain::PlainLine;
 use crate::persistence::Campaign;
-use eframe::egui;
+use crate::state_context::StateContext;
 use uuid::Uuid;
 
 /// What the page can show now.
@@ -116,7 +116,7 @@ pub struct Issues {
 impl CampaignContent {
     /// The page's work before it draws (`show`'s first steps): a new campaign's load, a load
     /// that came in, and a changed draft's end of the Saved result.
-    pub fn prepare(&mut self, ctx: &egui::Context, campaigns: &Campaigns) -> Ready {
+    pub fn prepare(&mut self, ctx: &StateContext, campaigns: &Campaigns) -> Ready {
         let scope = (self.module, self.dependencies);
         if self.notice_scope.is_some_and(|previous| previous != scope) {
             self.clear_notice();
@@ -146,7 +146,7 @@ impl CampaignContent {
     }
 
     /// `Discard and switch campaign`.
-    pub fn discard_and_switch(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    pub fn discard_and_switch(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         if let Some(active) = campaigns.active_campaign() {
             self.reload(ctx, campaigns, active);
         }
@@ -186,7 +186,7 @@ impl CampaignContent {
     }
 
     /// The campaign folder is missing: `Create campaign folder`.
-    pub fn create_folder(&mut self, ctx: &egui::Context, campaigns: &Campaigns, active: &Campaign) {
+    pub fn create_folder(&mut self, ctx: &StateContext, campaigns: &Campaigns, active: &Campaign) {
         match std::fs::create_dir_all(&active.path) {
             Ok(()) => self.reload(ctx, campaigns, active.clone()),
             Err(e) => self.fail_or_content(e.to_string()),
@@ -201,15 +201,15 @@ impl CampaignContent {
         active: &Campaign,
         open: &dyn Fn(&str) -> bool,
     ) -> Vec<PlainLine<ContentPress>> {
-        let frame = crate::design::outcome::PaneFrame::plain();
-        self.page_footer_with(&frame, open, campaigns, active, 0.0)
+        let frame = crate::design::outcome::PaneFrame::new();
+        self.page_footer_with(&frame, open, campaigns, active)
             .into_plain()
     }
 
     /// A press in the page's footer.
     pub fn footer_press(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         campaigns: &Campaigns,
         active: &Campaign,
         press: crate::design::outcome::Press<ContentPress>,
@@ -277,7 +277,7 @@ impl CampaignContent {
     }
 
     /// `Reload from disk`.
-    pub fn reload_now(&mut self, ctx: &egui::Context, campaigns: &Campaigns, active: &Campaign) {
+    pub fn reload_now(&mut self, ctx: &StateContext, campaigns: &Campaigns, active: &Campaign) {
         self.reload(ctx, campaigns, active.clone());
     }
 
@@ -942,7 +942,7 @@ impl CampaignContent {
     /// and when no draft is left the page reads the campaign again.
     pub fn save_repair(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         campaigns: &Campaigns,
         active: &Campaign,
         path: &str,

@@ -1,4 +1,5 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
+use crate::state_context::StateContext;
 #[path = "encounter_run/ad_hoc.rs"]
 pub mod ad_hoc;
 #[path = "encounter_run/dock.rs"]
@@ -42,7 +43,6 @@ fn read_saved(path: &Path, campaign: Uuid) -> Result<SavedRun, String> {
 }
 pub use ad_hoc::RunCreature;
 pub use effect::Condition;
-use eframe::egui;
 use serde_yaml_ng::{Mapping, Value};
 use splat::content::inspiration::Inspiration;
 #[cfg(test)]
@@ -3081,7 +3081,7 @@ fn recognized_condition(text: &str) -> Option<(u64, serde_json::Value)> {
 impl Run {
     pub fn tick_sync(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         session: Option<crate::auth::Session>,
         epoch: u64,
         linked: Option<&str>,
@@ -3511,7 +3511,7 @@ impl Run {
             .collect();
     }
     /// The picture for a participant's row: a character's portrait, or a creature's art.
-    pub fn row_art(&self, ctx: &egui::Context, p: &Participant) -> Option<PathBuf> {
+    pub fn row_art(&self, ctx: &StateContext, p: &Participant) -> Option<PathBuf> {
         match remote_identity(p) {
             Some((_, id)) => self.portraits.get(&id).cloned().flatten(),
             None => crate::art::entry_art(ctx, &p.definition),
@@ -6218,7 +6218,7 @@ mod tests {
         linked(&mut run, 0, "11");
         linked(&mut run, 1, "22");
         let (campaign, _) = remote_identity(&run.state.participants[0]).unwrap();
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let session = || {
             let hour = std::time::Duration::from_secs(3600);
             Some(crate::auth::Session::for_test(hour, hour))
@@ -6270,7 +6270,7 @@ mod tests {
             .configure_storage(campaign, dir.path(), Initiative::default())
             .unwrap();
         first.keep_party_synced();
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         first.tick_sync(&ctx, test_session(), 1, Some(&remote));
         first.syncs.get_mut(&1).unwrap().stop();
         first.save().unwrap();
@@ -6288,7 +6288,7 @@ mod tests {
         linked(&mut run, 0, "11");
         let (remote, _) = remote_identity(&run.state.participants[0]).unwrap();
         run.keep_party_synced();
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         run.tick_sync(&ctx, test_session(), 1, Some(&remote));
         assert!(run.syncs[&0].enabled);
 
@@ -6360,7 +6360,7 @@ mod tests {
         sync.simulate_sheet(11, 20, &sheet);
         run.syncs.insert(0, sync);
 
-        run.tick_sync(&egui::Context::default(), test_session(), 1, Some(&remote));
+        run.tick_sync(&StateContext::new(), test_session(), 1, Some(&remote));
 
         assert_eq!(run.syncs[&0].state(), SyncState::ReadOnly);
         assert_eq!(run.state.participants[0].hp, Some(10));
@@ -6401,7 +6401,7 @@ mod tests {
         run.stop_simulating_sync();
         assert!(run.close_block().is_some(), "on their way: wait for them");
 
-        run.tick_sync(&egui::Context::default(), None, 1, Some(&campaign));
+        run.tick_sync(&StateContext::new(), None, 1, Some(&campaign));
 
         let sync = &run.syncs[&0];
         assert!(!sync.enabled);
@@ -6448,10 +6448,10 @@ mod tests {
             std::time::Duration::from_secs(3600),
             std::time::Duration::from_secs(7200),
         );
-        run.tick_sync(&egui::Context::default(), Some(session), 1, Some("1"));
+        run.tick_sync(&StateContext::new(), Some(session), 1, Some("1"));
     }
     fn offline_tick(run: &mut Run) {
-        run.tick_sync(&egui::Context::default(), None, 1, Some("1"));
+        run.tick_sync(&StateContext::new(), None, 1, Some("1"));
     }
     fn read_sheet(run: &mut Run, max: i64, damage: i64) {
         run.syncs
@@ -8097,9 +8097,9 @@ mod tests {
         let b_max = run.state.participants[2].max_hp;
         // The footer's line as the page shows it, its press made before B (as a press that
         // the page drew before the step lands).
-        let frame = crate::design::outcome::PaneFrame::plain();
+        let frame = crate::design::outcome::PaneFrame::new();
         let press = run
-            .run_messages(&frame, true, 0.0)
+            .run_messages(&frame, true)
             .into_plain()
             .iter()
             .find(|line| {
@@ -8705,7 +8705,7 @@ mod tests {
         if walk == Walk::Outage {
             // Timeline.md is repaired outside Splat. The open run's last word reaches it.
             fs::write(&timeline, valid).unwrap();
-            book.poll(&egui::Context::default());
+            book.poll(&StateContext::new());
             assert!(book.unreadable.is_none());
         }
         b_is_last(&book, &b, "Won, round 1", "Won · Ended · Round 1", true);

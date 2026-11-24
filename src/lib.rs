@@ -1,4 +1,5 @@
 //! Desktop application and shared content APIs.
+use crate::state_context::StateContext;
 /// Typed messages (`design::outcome`). Public so that `sentence!` works and its compile-fail
 /// proofs can name the types; screens use them through `design`.
 #[doc(hidden)]
@@ -68,7 +69,7 @@ pub mod ownership {
 use splat_content_ui::dndbeyond;
 use splat_content_ui::hermetic;
 use splat_content_ui::history;
-use splat_design::frame_clock;
+pub use splat_design::state_context;
 use splat_encounters_ui::encounter_run;
 #[cfg(test)]
 use splat_encounters_ui::encounter_settings;
@@ -79,6 +80,7 @@ mod load_bench;
 use splat_content_ui::lookup;
 use splat_content_ui::markdown_view;
 use splat_content_ui::persistence;
+use splat_content_ui::requests;
 use splat_content_ui::roll_table;
 use splat_content_ui::rolls;
 use splat_party::party;
@@ -102,7 +104,6 @@ mod world {
 }
 
 use design::{Status, colors, icons};
-use eframe::egui;
 pub use splat_design::{choice, create_reasons, lead, sentence, word};
 
 /// Start Splat: a command when there are arguments, else the app's window.
@@ -630,7 +631,7 @@ impl Splat {
     }
 
     /// What the World page, Lookup and the roll tables in them need from the rest of the app.
-    fn follow_world(&mut self, ctx: &egui::Context) {
+    fn follow_world(&mut self, ctx: &StateContext) {
         let sides = self.encounters.run().map(|run| run.side_names());
         let live = self.encounters.run().is_some_and(|run| run.strip().running);
         let in_run = self
@@ -667,8 +668,7 @@ impl Splat {
             self.world_page
                 .set_lookup_npc(self.lookup.generated_name().map(str::to_owned));
         }
-        if let Some(id) = ctx
-            .data_mut(|data| data.remove_temp::<uuid::Uuid>(egui::Id::new("reveal_encounter_npc")))
+        if let Some(id) = ctx.take(requests::REVEAL_ENCOUNTER_NPC)
             && let Some(campaign) = self.campaigns.active_campaign()
         {
             self.world_page.reveal(campaign.id, id);
@@ -692,7 +692,7 @@ impl Splat {
         }
         // An edit form in one reader holds back the other's Log field for that entry, and the
         // one save row on screen says so (ruling Q-t).
-        let pass = ctx.cumulative_pass_nr();
+        let pass = ctx.pass();
         self.lookup
             .reader
             .share_with(&mut self.world_page.reader, pass);
@@ -942,7 +942,7 @@ impl Splat {
         statuses
     }
 
-    /// Before the Run page draws (egui and GPUI): the app's facts that the run shows. `room` is
+    /// Before the Run page draws: the app's facts that the run shows. `room` is
     /// the page's width and `window` the window's content width. False when there is no run.
     pub(crate) fn run_page_begin(&mut self, room: f32, window: f32) -> bool {
         if !self.encounters.has_run() {
@@ -971,7 +971,7 @@ impl Splat {
         true
     }
 
-    /// After the Run page drew (egui and GPUI): `closed` when the DM closed the run.
+    /// After the Run page drew: `closed` when the DM closed the run.
     pub(crate) fn run_page_end(&mut self, closed: bool) {
         if closed {
             self.page = self.run_origin;
@@ -1006,7 +1006,7 @@ impl Splat {
 
     /// A press on a dice link. Beside the run, the run rolls it on its own dice and keeps it in
     /// the Log; anywhere else it is a preview roll that changes nothing.
-    fn route_rolls(&mut self, ctx: &egui::Context) {
+    fn route_rolls(&mut self, ctx: &StateContext) {
         let Some(ask) = rolls::take_ask(ctx) else {
             return;
         };
@@ -1026,7 +1026,7 @@ impl Splat {
     /// What the copy dialog asked for as it drew (both UIs): the copy opens in the Library,
     /// joins the open encounter draft, or refreshes the pages that read its folder; a dialog
     /// that closed goes.
-    pub(crate) fn follow_copy_dialog(&mut self, ctx: &egui::Context, open: bool) {
+    pub(crate) fn follow_copy_dialog(&mut self, ctx: &StateContext, open: bool) {
         let Some(dialog) = &mut self.copy_dialog else {
             return;
         };
@@ -1049,20 +1049,18 @@ impl Splat {
         }
     }
 
-    fn route(&mut self, ctx: &egui::Context) {
+    fn route(&mut self, ctx: &StateContext) {
         if let Some(target) = markdown_view::take_note_link(ctx) {
-            let from = ctx.data_mut(|data| {
-                data.remove_temp::<Option<uuid::Uuid>>(egui::Id::new("clicked_reader_document"))
-                    .flatten()
-            });
+            let from = ctx.take(requests::CLICKED_READER_DOCUMENT).flatten();
             self.notes_give_way();
             self.lookup.open_note_link(&target, from, ctx);
         }
-        if let Some((package, entry)) = self.library.use_entry.take().or_else(|| {
-            ctx.data_mut(|data| {
-                data.remove_temp::<(uuid::Uuid, uuid::Uuid)>(egui::Id::new("use_package_entry"))
-            })
-        }) && let Some(campaign) = self.campaigns.active_campaign()
+        if let Some((package, entry)) = self
+            .library
+            .use_entry
+            .take()
+            .or_else(|| ctx.take(requests::USE_PACKAGE_ENTRY))
+            && let Some(campaign) = self.campaigns.active_campaign()
             && let Some(module) = self
                 .campaigns
                 .modules()
@@ -1125,9 +1123,7 @@ impl Splat {
             self.notes_give_way();
             self.lookup.open_creature_result(id);
         }
-        if let Some(path) = ctx.data_mut(|data| {
-            data.remove_temp::<std::path::PathBuf>(egui::Id::new("open_library_repair"))
-        }) {
+        if let Some(path) = ctx.take(requests::OPEN_LIBRARY_REPAIR) {
             if crate::world::repair_in_world(&path)
                 && let Some(campaign) = self.campaigns.active_campaign()
                 && let Ok(relative) = path.strip_prefix(&campaign.path)
@@ -1138,19 +1134,13 @@ impl Splat {
                 );
                 self.page = Page::World;
             } else {
-                let link = ctx.data_mut(|data| {
-                    data.remove_temp::<Option<(splat::content::Reference, String)>>(egui::Id::new(
-                        "open_library_repair_link",
-                    ))
-                });
-                self.library.repair_file_link(path, link.flatten());
+                self.library.repair_file_link(path, None);
                 self.page = Page::Library;
             }
         }
         // Prep's `Edit encounter` names the run's encounter by its ID; the Encounters page finds
         // it in its own list. When it cannot open, the reason goes back to the run's Prep.
-        if let Some(id) =
-            ctx.data_mut(|data| data.remove_temp::<uuid::Uuid>(egui::Id::new("edit_run_encounter")))
+        if let Some(id) = ctx.take(requests::EDIT_RUN_ENCOUNTER)
             && let Some(campaign) = self.campaigns.active_campaign()
         {
             match self.encounters.edit_from_plan(id, None, &campaign) {
@@ -1177,10 +1167,7 @@ impl Splat {
                 run.prep_refusal = now.map(encounter_run::PrepRefusal::Draft);
             }
         }
-        if ctx
-            .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("open_campaign_packages")))
-            .is_some()
-        {
+        if ctx.take(requests::OPEN_CAMPAIGN_PACKAGES).is_some() {
             self.page = Page::Campaign;
             self.campaign_tab = CampaignTab::Packages;
         }
@@ -1245,11 +1232,11 @@ impl Splat {
         // The end events of the plan's refusal, on any page, read only while one is stored
         // (B4b N1): another session is selected; nothing unsaved refuses any more (saved,
         // discarded, campaign changed); or a new read of the campaign lost the group (B4c F2,
-        // also while the plan is not drawn). B4c F1: an unchanged frame compares no draft.
+        // also while the plan is not drawn). B4c F1: an unchanged campaign read compares no draft.
         match self.sessions.plan_group_refused {
             Some((session, group))
                 if session != self.sessions.selected_id()
-                    || !self.encounters.plan_refusal_stands(ctx, group) =>
+                    || !self.encounters.plan_refusal_stands(group) =>
             {
                 self.sessions.plan_group_refused = None;
                 self.encounters.forget_plan_refusal();
@@ -1350,10 +1337,7 @@ impl Splat {
             }
             self.page = Page::Run;
         }
-        if ctx
-            .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("open_account_settings")))
-            .unwrap_or(false)
-        {
+        if ctx.take(requests::OPEN_ACCOUNT_SETTINGS).unwrap_or(false) {
             self.page = Page::Settings;
             self.settings_tab = SettingsTab::default();
             self.settings.focus_sign_in();
@@ -1468,17 +1452,14 @@ impl Splat {
     /// Poll background work (sign-in, D&D Beyond, art, Lookup's index, encounters, processing,
     /// sessions, trackers) and follow the open run into the Timeline. Returns the account's
     /// session epoch and session.
-    fn poll_background(&mut self, ctx: &egui::Context) -> (u64, Option<auth::Session>) {
+    fn poll_background(&mut self, ctx: &StateContext) -> (u64, Option<auth::Session>) {
         self.settings.poll(ctx);
         let (epoch, session) = self.settings.campaign_session();
         self.dndbeyond.begin_frame();
         self.dndbeyond
             .poll(ctx, epoch, session.is_some(), &mut self.campaigns);
         self.art.poll(ctx, self.campaigns.modules());
-        if ctx
-            .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("encounter_identity_changed")))
-            .is_some()
-        {
+        if ctx.take(requests::ENCOUNTER_IDENTITY_CHANGED).is_some() {
             self.lookup.refresh();
             self.lookup.files_changed = true;
         }
@@ -1498,14 +1479,7 @@ impl Splat {
                 self.encounters.refresh_content(ctx, &self.campaigns, &root);
             }
         }
-        ctx.data_mut(|data| {
-            let key = egui::Id::new("reader_link_index");
-            if let Some(index) = self.lookup.index() {
-                data.insert_temp(key, index);
-            } else {
-                data.remove::<std::sync::Arc<lookup::ContentIndex>>(key);
-            }
-        });
+        ctx.put(requests::LINK_INDEX, self.lookup.index());
         self.encounters.poll(ctx, &self.campaigns);
         self.lookup.library_draft = self.library.dirty();
         self.sessions.run_open = self.encounters.has_run();
@@ -1571,7 +1545,7 @@ impl Splat {
     }
 
     /// Party sync and the run's D&D Beyond sync, for the account's session.
-    fn sync_party(&mut self, ctx: &egui::Context, epoch: u64, session: Option<auth::Session>) {
+    fn sync_party(&mut self, ctx: &StateContext, epoch: u64, session: Option<auth::Session>) {
         let active = self.campaigns.active_campaign();
         self.party.sync(
             ctx,

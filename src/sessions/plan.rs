@@ -2,6 +2,7 @@
 //! Add strip, a row's menu and its opened detail.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Plan, Sessions, kept, kept::PlanKind};
+use crate::state_context::StateContext;
 use crate::{
     design::{
         self, Tone,
@@ -23,7 +24,6 @@ use crate::{
         removed_event_words,
     },
 };
-use eframe::egui;
 use std::{
     collections::BTreeMap,
     path::Path,
@@ -2644,7 +2644,7 @@ impl Sessions {
 
     /// An event the plan's Add strip just added: its title is its kind's word, and its result
     /// (`kept::PlanAdded`) keeps one step of Undo (both UIs).
-    pub(super) fn record_plan_add(&mut self, id: &str, book: &mut Book, ctx: &egui::Context) {
+    pub(super) fn record_plan_add(&mut self, id: &str, book: &mut Book, ctx: &StateContext) {
         let session = self.selected;
         if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
             event.title = event.kind.word().to_owned();
@@ -2873,7 +2873,6 @@ impl Sessions {
             &crate::sessions::Note,
         )>,
         (shown, planned_results): (Shown, &[(String, bool)]),
-        width: f32,
     ) -> Messages<'f, super::SessionAct> {
         // Round 26 FL1, round 28: the plan's results, reasons and notices sit in its pane's
         // message footer, which the part places `S` below the rows (pinned only when the rows
@@ -2883,10 +2882,8 @@ impl Sessions {
         let here = self.group_session == session;
         self.end_plan_marks();
         let mut messages = match page {
-            Some((settings, note)) => {
-                self.session_messages(frame, settings, book, plan, note, width)
-            }
-            None => Messages::new(frame, ("session_plan_footer", session), width),
+            Some((settings, note)) => self.session_messages(frame, settings, book, plan, note),
+            None => Messages::new(),
         };
         if plan.group_open && self.not_being_played().is_none() {
             let label = self
@@ -4717,7 +4714,7 @@ mod tests {
         let frame = |sessions: &mut Sessions| {
             sessions.last_scan = Some(Instant::now());
             sessions.poll(
-                &egui::Context::default(),
+                &StateContext::new(),
                 home_campaign.as_ref(),
                 &mut Book::default(),
             );
@@ -4879,7 +4876,7 @@ mod tests {
         // R45 (e): both readers' lines, made on unchanged frames, walk no entry either; the
         // refused line offers no Undo, the other line does.
         let draw = |sessions: &mut Sessions| {
-            let frame = PaneFrame::plain();
+            let frame = PaneFrame::new();
             let timeline = sessions.plan_line_kept(&frame, None, ());
             let plan = sessions.plan_line_kept(&frame, Some(Some(b)), ());
             assert_eq!((timeline.len(), plan.len()), (2, 1));
@@ -5129,7 +5126,7 @@ mod tests {
             ..Default::default()
         };
         let settings = ProcessingSettings::default();
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut runs = Revised::new(vec![saved.clone()]);
         // The app's frame: the owner update, then the plan's footer.
         let footer = |page: &mut Sessions, book: &mut Book, runs: &Revised<Vec<SavedRunInfo>>| {
@@ -5226,7 +5223,7 @@ mod tests {
             ..Default::default()
         };
         let mut runs = vec![other, saved.clone()];
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut revisions = crate::design::memo::Revised::new(());
         let resume = |page: &mut Sessions,
                       book: &mut Book,

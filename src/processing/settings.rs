@@ -3,14 +3,12 @@
 use super::{
     ANTHROPIC_MODEL, ANTHROPIC_URL, CODEX_MODEL, Config, OPENAI_SPEECH_MODEL, OPENAI_URL, Provider,
 };
+use crate::state_context::StateContext;
 use crate::{
     credentials::{self, KeySlot},
-    design::outcome::{
-        Fault, FaultMessage, Messages, NoPress, Notice, PaneFrame, Sentence, Severity,
-    },
+    design::outcome::{Fault, FaultMessage, Messages, NoPress, Notice, Sentence, Severity},
     recording::{self, Probe},
 };
-use eframe::egui;
 use std::{
     fs,
     io::Write,
@@ -250,7 +248,7 @@ impl Default for ProcessingSettings {
 }
 
 impl ProcessingSettings {
-    fn start(&mut self, ctx: &egui::Context) {
+    fn start(&mut self, ctx: &StateContext) {
         if self.started {
             return;
         }
@@ -264,7 +262,7 @@ impl ProcessingSettings {
         self.codex_found = cfg!(any(test, feature = "test-support")) || recording::on_path("codex");
         let (tx, rx) = mpsc::channel();
         for slot in [KeySlot::Speech, KeySlot::Llm] {
-            let (tx, ctx) = (tx.clone(), ctx.clone());
+            let (tx, ctx) = (tx.clone(), ctx.waker());
             credentials::in_background(move || {
                 let found = credentials::load_key(slot).is_ok_and(|key| key.is_some());
                 let _ = tx.send(Reply::Found(slot, found));
@@ -282,7 +280,7 @@ impl ProcessingSettings {
         }
     }
 
-    pub fn poll(&mut self, ctx: &egui::Context) {
+    pub fn poll(&mut self, ctx: &StateContext) {
         self.start(ctx);
         // The table is waiting while a chosen input is missing, so keep looking.
         if self.input_missing()
@@ -415,8 +413,8 @@ impl ProcessingSettings {
     /// Round 27 FI7: the Recording tab's notices sit in its message footer, so the form never
     /// moves when one comes or goes (the DM fills the last missing value, a save fails). Round
     /// 28 FM11: so does the notice that a new input waits for the next recording.
-    fn messages<'f>(&self, frame: &'f PaneFrame, width: f32) -> Messages<'f, NoPress> {
-        let mut messages = Messages::new(frame, "recording_settings_footer", width);
+    fn messages(&self) -> Messages<'static, NoPress> {
+        let mut messages = Messages::new();
         if let Some(error) = &self.load_error {
             messages.outcome(FaultMessage::new(&SettingsFault::Unreadable(error)));
         }

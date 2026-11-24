@@ -4,7 +4,7 @@
 use super::measure;
 use super::{on_command, on_run};
 use crate::encounter_run::{Command, NOBODY_PRESENT, Panel, Run};
-use crate::gui::{SplatRoot, bridge, icons, kit, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use gpui::{
     Context, InteractiveElement, IntoElement, ParentElement, Pixels, Styled, Window, div, px,
 };
@@ -24,7 +24,7 @@ fn sync_alert(run: &Run) -> Option<SyncAlert> {
     let party_sync_off = run.party_sync_off();
     let offline = run
         .account_status
-        .map_or(c.connection.offline, |status| bridge::color(status.color));
+        .map_or(c.connection.offline, |status| theme::color(status.color));
     let alert = |icon, words: String, color| Some(SyncAlert { icon, words, color });
     if let Some(name) = &strip.conflict {
         alert(

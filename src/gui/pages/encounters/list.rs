@@ -3,7 +3,6 @@
 use super::common::{detail_line, footer, on_page, reason, row_menu, small_icon};
 use crate::gui::theme::{Density, ICON_SLOT, L, M, S, Type, TypeExt, XS, colors};
 use crate::gui::{SplatRoot, icons, kit};
-use eframe::egui;
 use gpui::{
     AnyElement, Context, Div, ElementId, InteractiveElement, IntoElement, ParentElement, Pixels,
     StatefulInteractiveElement, Styled, Window, div, px,
@@ -639,9 +638,7 @@ fn group_row(row: &GroupRow, columns: &Columns, cx: &mut Context<SplatRoot>) -> 
             (
                 "Campaign → Packages",
                 Box::new(|root: &mut SplatRoot| {
-                    root.bridge.ctx().data_mut(|data| {
-                        data.insert_temp(egui::Id::new("open_campaign_packages"), true)
-                    });
+                    root.ctx.set(crate::requests::OPEN_CAMPAIGN_PACKAGES, true);
                 }),
             )
         } else {
@@ -849,7 +846,7 @@ fn read_run(read: &ReadRun, row: &PastRow, names: Pixels, cx: &mut Context<Splat
                 }
                 rest = rest.child(
                     div()
-                        .text_color(crate::gui::bridge::color(*color))
+                        .text_color(crate::gui::theme::color(*color))
                         .child(words.clone()),
                 );
             }

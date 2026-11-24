@@ -8,7 +8,7 @@ use crate::gui::pages::reader::entry::{EntryView, Source};
 use crate::gui::theme::{
     Density, HAIRLINE_WIDTH, L, M, READER_MEASURE, S, Type, TypeExt, XS, colors,
 };
-use crate::gui::{SplatRoot, bridge, icons, kit};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::library::model::ReaderView;
 use crate::library::view::NoLinks;
 use crate::lookup::ContentIndex;
@@ -166,7 +166,7 @@ fn file_line(view: &ReaderView) -> AnyElement {
         .child(kit::status(&kit::Status::new(
             *icon,
             words.clone(),
-            bridge::color(*color),
+            theme::color(*color),
         )));
     if let Some((folder, relative)) = &line.file {
         let path = folder.join(relative);
@@ -253,7 +253,7 @@ fn save_row(
             .child(kit::status(&kit::Status::new(
                 SharedString::from(icon.clone()),
                 word.clone(),
-                bridge::color(*color),
+                theme::color(*color),
             )))
             .when(row.discard, |line| {
                 line.child(
@@ -340,7 +340,7 @@ fn notice(
             .blocked(blocked.clone())
             .on_click(cx.listener(move |root, _, _, cx| {
                 if again {
-                    let ctx = root.bridge.ctx().clone();
+                    let ctx = root.ctx.clone();
                     root.app.library.read_again(&ctx, &root.app.campaigns);
                 } else {
                     root.app.library.repair();
@@ -514,7 +514,7 @@ fn read_body(
         if let Some(index) = &link_index
             && let crate::world::Go::Item(_, heading) = index.resolve_link(note, from)
         {
-            crate::markdown_view::want_heading(root.bridge.ctx(), heading);
+            crate::markdown_view::want_heading(&root.ctx, heading);
         }
         root.app.library.follow_link(note, link_index.as_deref());
         cx.notify();
@@ -568,7 +568,7 @@ fn disk_body(
                 .density(Density::Read)
                 .on_click(cx.listener(move |root, _, _, cx| {
                     if unread {
-                        let ctx = root.bridge.ctx().clone();
+                        let ctx = root.ctx.clone();
                         root.app.library.read_again(&ctx, &root.app.campaigns);
                     } else {
                         root.app.library.overwrite_with_draft();

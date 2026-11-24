@@ -391,7 +391,7 @@ fn card_view(
 /// A card's table file opens as a note link does (egui: the card leaves `markdown_clicked_note`):
 /// the frame logic's `Splat::route` opens it in Lookup, by its path, not by a search.
 pub(crate) fn open_note(root: &mut SplatRoot, path: &str) {
-    crate::markdown_view::send_note_link(root.bridge.ctx(), path.to_owned(), None);
+    crate::markdown_view::send_note_link(&root.ctx, path.to_owned(), None);
 }
 
 /// The checks views: Open questions (with a box to tick each) and Things to check.

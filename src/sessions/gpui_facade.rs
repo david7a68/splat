@@ -8,9 +8,9 @@ use super::{
 };
 use crate::design::CreateReasons as _;
 use crate::design::outcome::{PaneFrame, Press, plain};
+use crate::state_context::StateContext;
 use crate::timeline::Book;
 use crate::timeline::EventDisplay as _;
-use eframe::egui;
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -143,7 +143,7 @@ impl Sessions {
     }
 
     /// `Stop recording`, from the header or a record control.
-    pub fn gv_stop_recording(&mut self, ctx: &egui::Context) {
+    pub fn gv_stop_recording(&mut self, ctx: &StateContext) {
         self.finish_recording(ctx);
     }
 
@@ -416,8 +416,8 @@ impl Sessions {
         let Some(note) = self.gv_selected_note().cloned() else {
             return Vec::new();
         };
-        let frame = PaneFrame::plain();
-        let messages = self.session_messages(&frame, settings, book, plan, &note, 0.0);
+        let frame = PaneFrame::new();
+        let messages = self.session_messages(&frame, settings, book, plan, &note);
         messages.into_plain()
     }
 
@@ -428,8 +428,8 @@ impl Sessions {
 
     /// The footer of a pane whose body is the draft's editor (`draft_messages`).
     pub fn gv_draft_footer(&mut self, template: bool) -> Vec<FooterLine> {
-        let frame = PaneFrame::plain();
-        let messages = self.draft_messages(&frame, "gpui_draft_footer", template, 0.0);
+        let frame = PaneFrame::new();
+        let messages = self.draft_messages(&frame, template);
         messages.into_plain()
     }
 
@@ -1120,7 +1120,7 @@ impl Sessions {
     pub fn gv_banner_act(
         &mut self,
         act: BannerAct,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         settings: &ProcessingSettings,
         book: &Book,
     ) {
@@ -1466,8 +1466,8 @@ impl Sessions {
     }
 
     pub fn gv_panel_footer(&mut self) -> Vec<FooterLine> {
-        let frame = PaneFrame::plain();
-        let messages = self.panel_messages(&frame, 0.0);
+        let frame = PaneFrame::new();
+        let messages = self.panel_messages(&frame);
         messages.into_plain()
     }
 
@@ -1968,14 +1968,13 @@ impl Sessions {
             .then_some(())
             .and(note.as_ref())
             .map(|note| (settings, note));
-        let frame = PaneFrame::plain();
+        let frame = PaneFrame::new();
         let messages = self.plan_footer_messages(
             &frame,
             book,
             plan,
             page,
             (shown, &projection.planned_results),
-            0.0,
         );
         messages.into_plain()
     }
@@ -2066,7 +2065,7 @@ impl Sessions {
         book: &mut Book,
         plan: &Plan<'_>,
         index: Option<&crate::lookup::ContentIndex>,
-        ctx: &egui::Context,
+        ctx: &StateContext,
     ) {
         use super::plan::{RewardsAct, SceneAct};
         let session = self.selected;
@@ -2101,7 +2100,7 @@ impl Sessions {
                     book.add(kind, session)
                 };
                 // The row after the new one comes into view.
-                self.row_reveal = Some((id.clone(), 0, ctx.cumulative_pass_nr()));
+                self.row_reveal = Some((id.clone(), 0, ctx.pass()));
                 self.record_plan_add(&id, book, ctx);
             }
             PlanAct::OpenScene => {
@@ -2230,7 +2229,7 @@ impl Sessions {
                 self.end_plan_add();
             }
             PlanAct::Travel(id, act) => {
-                self.row_reveal = Some((id.clone(), 0, ctx.cumulative_pass_nr()));
+                self.row_reveal = Some((id.clone(), 0, ctx.pass()));
                 self.travel_act(book, session, &id, act, plan);
             }
             PlanAct::TravelUndo(id) => self.travel.done.undo(&id, book),
@@ -2238,7 +2237,7 @@ impl Sessions {
             PlanAct::FightLog => self.show_fight_log = !self.show_fight_log,
             PlanAct::WholeRun(path) => self.wants_saved_run = Some(path),
             PlanAct::RollForEncounters(id) => {
-                self.row_reveal = Some((id.clone(), 0, ctx.cumulative_pass_nr()));
+                self.row_reveal = Some((id.clone(), 0, ctx.pass()));
                 self.travel_act(
                     book,
                     session,
@@ -2750,7 +2749,7 @@ impl Sessions {
         act: RecordingAct,
         settings: &ProcessingSettings,
         book: &mut Book,
-        ctx: &egui::Context,
+        ctx: &StateContext,
     ) {
         let Some(recording) = self
             .recordings
@@ -3134,8 +3133,8 @@ impl Sessions {
 
     /// The templates list's footer (`list_messages`): a deleted template's Undo.
     pub fn gv_template_list_footer(&self) -> Vec<FooterLine> {
-        let frame = PaneFrame::plain();
-        let messages = self.list_messages(&frame, "gpui_template_list_footer", 0.0);
+        let frame = PaneFrame::new();
+        let messages = self.list_messages(&frame);
         messages.into_plain()
     }
 }

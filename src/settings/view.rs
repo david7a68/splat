@@ -1,7 +1,7 @@
 //! The account's reads and acts, free of any toolkit, so the egui account column
 //! (`Settings::show_account`) and the GPUI Settings page (`src/gui/pages/settings/`) share them.
 use super::{Account, SESSION_ENDED, Settings};
-use eframe::egui;
+use crate::state_context::StateContext;
 use zeroize::Zeroizing;
 
 impl Settings {
@@ -81,7 +81,7 @@ impl Settings {
     }
 
     /// `Connect` with the pasted cookie.
-    pub fn connect(&mut self, ctx: &egui::Context) {
+    pub fn connect(&mut self, ctx: &StateContext) {
         self.sign_in_again = false;
         let cookie = Zeroizing::new(self.cookie_input.trim().to_owned());
         self.send(
@@ -94,7 +94,7 @@ impl Settings {
     }
 
     /// `Disconnect`, or `Cancel` while busy.
-    pub fn forget(&mut self, ctx: &egui::Context) {
+    pub fn forget(&mut self, ctx: &StateContext) {
         self.disconnect(ctx);
     }
 }

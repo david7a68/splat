@@ -7,7 +7,9 @@ use super::{
     parts_of, plain_links, recording_title, rename_links, rename_links_in_file, save_folder,
     section_text, unreadable_notes, update_details, without_empty_sections, without_own_heading,
 };
+use crate::design::Color;
 use crate::design::text_draft::TextDraft;
+use crate::state_context::StateContext;
 use crate::{
     credentials::{self, KeySlot},
     design::{
@@ -25,7 +27,6 @@ use crate::{
     recording::{Health, Recorder},
     timeline::{self, Book, EventDisplay, page::SessionLink},
 };
-use eframe::egui::{self, Color32};
 use std::{
     collections::BTreeMap,
     fs,
@@ -726,8 +727,8 @@ pub struct Sessions {
     pub manifest_changed: Option<PathBuf>,
     /// The Sessions page is showing, so a button there need not lead here.
     pub on_page: bool,
-    /// A modal is open over the app (its dialogs, the full-window image, any egui modal: the
-    /// app's one test, `art::modal_open`). Ctrl+S waits for it, as every shortcut does.
+    /// A modal is open over the app (the close prompt or the copy dialog, set by the frame
+    /// logic). Ctrl+S waits for it, as every shortcut does.
     pub modal: bool,
     pub wants_processing_settings: bool,
     pub wants_speech_key: bool,
@@ -935,7 +936,7 @@ enum RecordingLook {
     /// A status whose kind decides its icon's and its words' colours.
     Kind(design::StatusKind),
     /// The icon and the words in one colour: a fault, a warning, a result.
-    One(Color32),
+    One(Color),
 }
 
 impl RecordingStatus {
@@ -957,14 +958,14 @@ impl RecordingStatus {
         }
     }
 
-    pub fn icon_color(self) -> Color32 {
+    pub fn icon_color(self) -> Color {
         match self.look {
             RecordingLook::Kind(kind) => kind.icon_color(),
             RecordingLook::One(color) => color,
         }
     }
 
-    pub fn word_color(self) -> Color32 {
+    pub fn word_color(self) -> Color {
         match self.look {
             RecordingLook::Kind(kind) => kind.word_color(),
             RecordingLook::One(color) => color,
@@ -1500,7 +1501,7 @@ impl Sessions {
     }
 
     /// Follow the active campaign, watch the recorder and the job, and save what is due.
-    pub fn poll(&mut self, ctx: &egui::Context, active: Option<&Campaign>, book: &mut Book) {
+    pub fn poll(&mut self, ctx: &StateContext, active: Option<&Campaign>, book: &mut Book) {
         if self.campaign.as_ref().map(|c| (c.id, &c.path)) != active.map(|c| (c.id, &c.path)) {
             self.open_campaign(active);
         }
@@ -2855,7 +2856,7 @@ impl Sessions {
     /// `poll`, after the book's last update and before any page or rail reads them: each ends
     /// here, by the frame clock, and asks for a repaint at its next end, so it ends with no
     /// input. No reader reads the clock.
-    fn settle_timed(&mut self, ctx: &egui::Context, book: &Book) {
+    fn settle_timed(&mut self, ctx: &StateContext, book: &Book) {
         self.settle_plan_add(ctx, book);
         self.settle_words(ctx);
     }
@@ -2863,7 +2864,7 @@ impl Sessions {
     /// The plan's Add result: its life ends it (`Results::expire`); so does a book whose events
     /// no longer hold what the add left (their count, its label), checked only when the book's
     /// revision changed (a reload, a file event, an edit), never on an unchanged frame.
-    fn settle_plan_add(&mut self, ctx: &egui::Context, book: &Book) {
+    fn settle_plan_add(&mut self, ctx: &StateContext, book: &Book) {
         self.added.expire(ctx);
         let revision = book.revision();
         if self.added_seen == Some(revision) {
@@ -2894,7 +2895,7 @@ impl Sessions {
     /// `recording::HEARD_FOR` after the last sound, on the frame clock; each asks for a repaint
     /// at its end while it stands. The revision of the two words changes only when one comes or
     /// goes.
-    fn settle_words(&mut self, ctx: &egui::Context) {
+    fn settle_words(&mut self, ctx: &StateContext) {
         if let Some((_, at)) = self.saved_at {
             if crate::frame_clock::passed(at, SAVED_WORD_FOR) {
                 self.saved_at = None;
@@ -2984,7 +2985,7 @@ impl Sessions {
 
     /// Stop the recording, and arm the end of its `Recording saved` (`settle_words`), so a stop
     /// made after this frame's owner update still ends with no input.
-    fn finish_recording(&mut self, ctx: &egui::Context) {
+    fn finish_recording(&mut self, ctx: &StateContext) {
         self.stop_recorder(true);
         self.settle_words(ctx);
     }
@@ -3073,7 +3074,7 @@ impl Sessions {
 
     fn start_processing(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         recording: &Path,
         settings: &ProcessingSettings,
         book: &Book,
@@ -3085,7 +3086,7 @@ impl Sessions {
 
     fn process_recording(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         recording: &Path,
         settings: &ProcessingSettings,
         book: &Book,
@@ -3239,14 +3240,8 @@ impl Sessions {
     /// The message footer of a pane whose body is one draft's editor: the draft's own result
     /// with its Undo, and for a template, the template action's error. Returns where the body
     /// ends.
-    fn draft_messages<'f>(
-        &self,
-        frame: &'f PaneFrame,
-        id: &str,
-        template: bool,
-        width: f32,
-    ) -> Messages<'f, SessionAct> {
-        let mut messages = Messages::new(frame, (id, self.selected), width);
+    fn draft_messages<'f>(&self, frame: &'f PaneFrame, template: bool) -> Messages<'f, SessionAct> {
+        let mut messages = Messages::new();
         let draft = if template {
             self.template_draft.as_ref()
         } else {
@@ -3650,14 +3645,14 @@ impl Sessions {
 
     /// The Notes panel's footer: the draft's dropped words with their Undo, and, for a session
     /// dated before today, `Play it tonight` and `New session` (both UIs).
-    fn panel_messages<'f>(&mut self, frame: &'f PaneFrame, width: f32) -> Messages<'f, SessionAct> {
+    fn panel_messages<'f>(&mut self, frame: &'f PaneFrame) -> Messages<'f, SessionAct> {
         let today = self.today();
         let dated = self
             .selected
             .and_then(|id| self.notes.iter().find(|note| note.id == id))
             .filter(|note| note.date.as_str() < today.as_str())
             .map(|note| note.date.clone());
-        let mut messages = Messages::new(frame, "notes_panel_footer", width);
+        let mut messages = Messages::new();
         if let Some(draft) = &self.draft {
             let name = self.note_name().unwrap_or_default();
             add_dropped(frame, &mut messages, draft, &name, &self.dropped);
@@ -3965,7 +3960,6 @@ impl Sessions {
         book: &Book,
         plan: &Plan<'_>,
         note: &Note,
-        width: f32,
     ) -> Messages<'f, SessionAct> {
         self.expire_move(book);
         self.end_carry_results();
@@ -3973,7 +3967,7 @@ impl Sessions {
         if shown && self.job_done() {
             self.job_done = false;
         }
-        let mut messages = Messages::new(frame, ("session_footer", self.selected), width);
+        let mut messages = Messages::new();
         let dismiss = || Choice::new(MessageChoice::Dismiss(Lost::Nothing), SessionAct::Dismiss);
         if let Some(draft) = &self.draft {
             let name = self.note_name().unwrap_or_default();
@@ -4269,13 +4263,8 @@ impl Sessions {
     }
 
     /// The template list's footer, with the list alone on screen: the delete result.
-    fn list_messages<'f>(
-        &self,
-        frame: &'f PaneFrame,
-        id: &str,
-        width: f32,
-    ) -> Messages<'f, SessionAct> {
-        let mut messages = Messages::new(frame, id, width);
+    fn list_messages<'f>(&self, frame: &'f PaneFrame) -> Messages<'f, SessionAct> {
+        let mut messages = Messages::new();
         if let Some(shown) = self.deleted_templates.get(&self.page()) {
             messages.kept(shown.outcome(frame, |deleted| {
                 Said::new(crate::sentence!("Deleted “{}”.", deleted.name))
@@ -5900,7 +5889,7 @@ mod tests {
             .join("Sessions")
             .join(super::super::TEMPLATES)
             .join("Mine.md");
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut book = Book::default();
         let mut sessions = Sessions::default();
         sessions.poll(&ctx, Some(&a), &mut book);
@@ -5996,8 +5985,8 @@ mod tests {
         // The act's result is kept in its store, owned by this campaign's page.
         assert!(page.moves.get(&page.page()).is_some());
         // The footer's own Undo, by its ticket. M0483: the Undo names the run it moves back.
-        let frame = PaneFrame::plain();
-        let mut messages = Messages::new(&frame, "kept", 0.0);
+        let frame = PaneFrame::new();
+        let mut messages = Messages::new();
         page.kept_lines(&frame, &book, &mut messages);
         let lines = messages.into_plain();
         let undo = lines

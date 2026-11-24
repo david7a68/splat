@@ -181,8 +181,8 @@ pub(crate) fn footer(
     note: uuid::Uuid,
     cx: &mut Context<SplatRoot>,
 ) -> Vec<AnyElement> {
-    let frame = PaneFrame::plain();
-    let mut messages = Messages::new(&frame, ("tracker_history_footer", note), 0.0);
+    let frame = PaneFrame::new();
+    let mut messages = Messages::new();
     crate::trackers::history::footer(
         &root.app.trackers,
         note,

@@ -27,7 +27,7 @@ mod strip;
 mod tests;
 
 use crate::encounter_run::{Command, Phase, Run, view};
-use crate::gui::{SplatRoot, bridge, kit, theme};
+use crate::gui::{SplatRoot, kit, theme};
 use crate::{Page, design};
 use gpui::{
     AnyElement, App, ClickEvent, Context, FocusHandle, InteractiveElement, IntoElement,
@@ -217,8 +217,8 @@ fn arrivals_prepare(
     };
     run.keep_offered_lines();
     let _ = run.arrival_words();
-    let frame = design::outcome::PaneFrame::plain();
-    let mut messages = design::outcome::Messages::new(&frame, ("arrival_footer", run.id()), 0.0);
+    let frame = design::outcome::PaneFrame::new();
+    let mut messages = design::outcome::Messages::new();
     run.arrival_lines(&mut messages, &frame);
     messages.into_plain()
 }
@@ -277,7 +277,7 @@ fn portrait(path: Option<std::path::PathBuf>, name: &str, size: Pixels, dim: boo
 
 /// The design status as the kit's.
 fn status(status: &design::Status<'_>) -> kit::Status {
-    bridge::status(status)
+    kit::Status::of(status)
 }
 
 /// The save state beside Keys and at the end of each footer: `Saved`, `Not saved`, the copy's
@@ -289,7 +289,7 @@ fn save_status(run: &Run) -> impl IntoElement {
         |copy| format!("{} · {copy}", value.word),
     );
     let hover = run.path().map(|path| path.display().to_string());
-    let shown = kit::Status::new(value.icon, word, bridge::color(value.color));
+    let shown = kit::Status::new(value.icon, word, theme::color(value.color));
     let mut element = div()
         .id("run-save-status")
         .flex_none()

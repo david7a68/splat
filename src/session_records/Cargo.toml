@@ -14,7 +14,6 @@ splat-content = { path = "../../crates/content" }
 splat-content-ui = { path = "../content_ui" }
 splat-design = { path = "../design" }
 splat-execution = { path = "../../crates/execution" }
-eframe = { version = "0.33", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_yaml_ng = "0.10"
 sha2 = "0.10"

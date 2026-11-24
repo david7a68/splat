@@ -9,7 +9,7 @@
 //! the rows' heights for the scenes' fold (`Sessions::note_fold_measure`), and the rows' width
 //! for a planned fight's line, which keeps the party's size while the row has room for it.
 use super::{footer, with_plan};
-use crate::gui::{SplatRoot, bridge, icons, kit, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::sessions::page::gpui_facade::{
     EventRow, FightRow, GroupRow, PlanAct, PlanRow, PlanView, SceneRow,
 };
@@ -122,7 +122,7 @@ fn id(words: impl std::fmt::Display) -> ElementId {
 
 /// Do a plan act through the page's state.
 pub(super) fn act(root: &mut SplatRoot, act: PlanAct) {
-    let ctx = root.bridge.ctx().clone();
+    let ctx = root.ctx.clone();
     let index = root.app.lookup.index();
     with_plan(&mut root.app, |sessions, _, book, plan| {
         sessions.gv_plan_act(act, book, plan, index.as_deref(), &ctx);
@@ -823,7 +823,7 @@ fn event_row(
             if !summary.is_empty() {
                 line = line.child(small("·"));
             }
-            line = line.child(kit::status(&bridge::status(&status)));
+            line = line.child(kit::status(&kit::Status::of(&status)));
         }
         line.into_any_element()
     };
@@ -1026,7 +1026,7 @@ fn event_details(
                     .flex_row()
                     .items_center()
                     .gap(L)
-                    .child(kit::status(&bridge::status(&status)))
+                    .child(kit::status(&kit::Status::of(&status)))
                     .child(
                         kit::Button::quiet(
                             id(format!("plan-rest-ruling-{event}")),

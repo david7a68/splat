@@ -100,8 +100,8 @@ impl Sessions {
     /// refusal of Save without moving ends first when its cause went.
     pub fn folder_lines(&mut self, book: &Book, locked: bool) -> Vec<PlainLine<FolderAct>> {
         self.settle_folder_error(book);
-        let frame = design::outcome::PaneFrame::plain();
-        let mut messages = design::outcome::Messages::new(&frame, "session_folder_messages", 0.0);
+        let frame = design::outcome::PaneFrame::new();
+        let mut messages = design::outcome::Messages::new();
         self.folder_messages(&frame, &mut messages, book, locked);
         messages.into_plain()
     }

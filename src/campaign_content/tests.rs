@@ -110,8 +110,7 @@ fn iter8_e_campaign_deleted_manifest_action_does_not_guess_a_filename() {
             ..Default::default()
         };
         // Round 26 FD1: the page's footer says the warnings; the package list's rows follow.
-        let frame = design::outcome::PaneFrame::plain();
-        let mut messages = design::outcome::Messages::new(&frame, "warnings", 0.0);
+        let mut messages = design::outcome::Messages::new();
         let unavailable = content.package_warnings_of(&campaigns).unavailable;
         content.package_messages(&mut messages, &campaigns, &unavailable);
         let lines = messages.into_plain();
@@ -340,7 +339,7 @@ fn undo_discard_stays_in_its_campaign() {
         campaign(&temp.path().join("b")),
     );
     let campaigns = Campaigns::at(temp.path().join("settings.json"));
-    let ctx = egui::Context::default();
+    let ctx = StateContext::new();
     let mut content = CampaignContent {
         active: Some(first.clone()),
         ..Default::default()
@@ -455,7 +454,7 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
         /// How often the app read Lookup and Encounters again for the page's written choices
         /// (`choices_written`, taken by `Splat::route`).
         refreshed: usize,
-        ctx: egui::Context,
+        ctx: StateContext,
     }
     impl Page {
         /// One frame as the GPUI app runs it: `tick` on any page, the Packages tab's reads
@@ -587,7 +586,7 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
         campaigns,
         hidden: false,
         refreshed: 0,
-        ctx: egui::Context::default(),
+        ctx: StateContext::new(),
     };
     let moved = |page: &mut Page, from: &str, to: &str| {
         fs::rename(packages.join(from), packages.join(to)).unwrap();

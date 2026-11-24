@@ -1,10 +1,10 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
+use crate::state_context::StateContext;
 use crate::{
     campaigns::Campaigns,
     content_workspace::{Catalogue, CopyPlan, CopySource, check_destination},
     persistence::Campaign,
 };
-use eframe::egui;
 use std::{path::PathBuf, sync::mpsc};
 use uuid::Uuid;
 
@@ -39,11 +39,11 @@ impl CopyDialog {
         self.pending.is_some()
     }
 
-    pub fn new(source: CopySource, campaigns: &Campaigns, ctx: &egui::Context) -> Self {
+    pub fn new(source: CopySource, campaigns: &Campaigns, ctx: &StateContext) -> Self {
         let modules = campaigns.modules().to_vec();
         let campaign = source.campaign.clone();
         let (tx, rx) = mpsc::channel();
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         std::thread::spawn(move || {
             let _ = tx.send(Catalogue::load(&modules, campaign.as_ref()));
             ctx.request_repaint();

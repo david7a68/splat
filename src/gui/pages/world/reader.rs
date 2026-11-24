@@ -176,7 +176,7 @@ pub(crate) fn render_reader(
     let id = item.entry.id;
     // A followed link's heading: the text scrolls to it in this frame (`read_in_pane`).
     let heading = host.reader(root).take_heading_for(id);
-    let ctx = root.bridge.ctx().clone();
+    let ctx = root.ctx.clone();
     let jump = host.jump(root);
     if let Some(old) = jump.pending.take() {
         let _ = crate::markdown_view::wanted_heading(&ctx, &old);

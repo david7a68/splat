@@ -211,7 +211,7 @@ mod tests {
                     .map(|row| [row[0].as_deref(), row[1].as_deref()])
                     .collect::<Vec<_>>(),
                 expected,
-                "the shared alignment is the egui one"
+                "the shared alignment is the comparison's"
             );
             assert_eq!(
                 (shared.changed, shared.groups),

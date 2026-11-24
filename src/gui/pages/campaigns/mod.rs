@@ -43,9 +43,9 @@ pub(crate) fn save_key(root: &mut SplatRoot, _: &mut Context<SplatRoot>) {
                 .run_row(&active)
                 .is_some_and(|row| row.state.can_save())
             {
-                let SplatRoot { app, bridge, .. } = root;
+                let SplatRoot { app, ctx, .. } = root;
                 app.encounters
-                    .save_run_settings(bridge.ctx(), &active, &app.campaigns);
+                    .save_run_settings(ctx, &active, &app.campaigns);
             }
         }
         crate::CampaignTab::Link => {

@@ -14,7 +14,6 @@ splat-character = { path = "../../crates/character" }
 splat-content = { path = "../../crates/content" }
 splat-content-ui = { path = "../content_ui" }
 splat-design = { path = "../design" }
-eframe = { version = "0.33", default-features = false }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["raw_value"] }

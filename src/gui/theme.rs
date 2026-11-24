@@ -1,24 +1,14 @@
 //! Splat's tokens as GPUI values: colours, the type ramp, spacing, radii, widths and fonts.
 //!
-//! This is the GPUI copy of `src/design/tokens.rs` and `src/design/theme.rs` (the egui source of
-//! truth until the port's cleanup deletes it). `docs/design-system.md` explains every value. A test
-//! (`the_gpui_tokens_are_the_egui_tokens`) keeps the two copies equal while both exist.
+//! The colours come from `src/design/tokens.rs` (`design::Color`, turned into GPUI colours by
+//! [`color`]); the sizes are their GPUI copy. `docs/design-system.md` explains every value. A test
+//! (`the_gpui_theme_is_the_design_tokens`) keeps the two equal.
 //!
 //! Pages and kit parts take every colour, size and font from here, never a literal. Text styles
 //! come from [`Type`] through [`TypeExt::ty`]; spaces from [`XS`]..[`XXL`]; control heights from
 //! [`Density`].
 use gpui::{App, FontStyle, FontWeight, Hsla, Pixels, Rgba, SharedString, Styled, TextAlign, px};
 use std::sync::LazyLock;
-
-/// A colour from its hex code.
-const fn hex(code: u32) -> Rgba {
-    Rgba {
-        r: ((code >> 16) & 0xff) as f32 / 255.0,
-        g: ((code >> 8) & 0xff) as f32 / 255.0,
-        b: (code & 0xff) as f32 / 255.0,
-        a: 1.0,
-    }
-}
 
 /// Whose turn it is and whose is next.
 #[derive(Clone, Copy, Debug)]
@@ -136,104 +126,110 @@ pub struct Colors {
     pub result: ResultTones,
 }
 
-const GREEN: u32 = 0x93BF97;
-const SAND: u32 = 0xD9BC74;
-const ROSE: u32 = 0xF29BC4;
-const RED: u32 = 0xF4898A;
-const MUTED: u32 = 0xBDB3A3;
-const FAINT: u32 = 0x9D9384;
-const TEXT: u32 = 0xE9E1D3;
-
-fn c(code: u32) -> Hsla {
-    hex(code).into()
+/// A design token's colour as a GPUI colour.
+pub fn color(token: crate::design::Color) -> Hsla {
+    Rgba {
+        r: f32::from(token.r()) / 255.0,
+        g: f32::from(token.g()) / 255.0,
+        b: f32::from(token.b()) / 255.0,
+        a: f32::from(token.a()) / 255.0,
+    }
+    .into()
 }
 
-fn alpha(code: u32, a: f32) -> Hsla {
-    let mut color = c(code);
-    color.a = a;
-    color
+/// Black at `alpha` (a backdrop, a shadow).
+fn black(alpha: f32) -> Hsla {
+    Hsla {
+        a: alpha,
+        ..gpui::black()
+    }
 }
 
-/// The one dark theme.
-static DARK: LazyLock<Colors> = LazyLock::new(|| Colors {
-    page: c(0x1B1815),
-    rail: c(0x151210),
-    raised: c(0x25211C),
-    well: c(0x120F0D),
-    hover: c(0x29241F),
-    selected: c(0x2F2A24),
-    current_row: c(0x343D55),
-    hairline: c(0x342E28),
-    rule: c(0x4A4238),
-    field_border: c(0x7A6E5F),
-    text: c(TEXT),
-    muted: c(MUTED),
-    faint: c(FAINT),
-    disabled: c(0x8A7F70),
-    accent: c(0xA9BDE6),
-    accent_fill: c(0x8FA6D4),
-    accent_hover: c(0xA9BDE6),
-    on_accent: c(0x14110E),
-    focus: c(0xC9D6F2),
-    destructive: c(RED),
-    recording: c(RED),
-    // egui's `from_black_alpha(120)` behind a dialog and `110` under a layer.
-    backdrop: alpha(0x000000, 120.0 / 255.0),
-    shadow: alpha(0x000000, 110.0 / 255.0),
-    // egui's `accent.gamma_multiply(0.28)`.
-    selection: alpha(0xA9BDE6, 0.28),
-    turn: Turn {
-        current: c(0xA9BDE6),
-        next: c(MUTED),
-    },
-    hp: Hp {
-        healthy: c(0x8FB08A),
-        damaged: c(TEXT),
-        bloodied: c(0xEBA176),
-        zero: c(RED),
-        temp: c(0x86C5C0),
-        unknown: c(FAINT),
-        track: c(0x3D362E),
-    },
-    participant: Participant {
-        absent: c(FAINT),
-        concentrating: c(0x7CCBEA),
-        condition: c(0xDCCBA9),
-        changed: c(MUTED),
-    },
-    side: Side {
-        party: c(0xCFC6B4),
-        enemies: c(0xFA8F55),
-        other: c(0xB8A9D4),
-    },
-    sync: Sync {
-        off: c(FAINT),
-        first_read: c(MUTED),
-        matching: c(GREEN),
-        pending: c(SAND),
-        conflict: c(ROSE),
-        read_only: c(MUTED),
-        error: c(RED),
-    },
-    connection: Connection {
-        connected: c(GREEN),
-        offline: c(FAINT),
-        busy: c(MUTED),
-    },
-    document: Document {
-        clean: c(FAINT),
-        unsaved: c(SAND),
-        saved: c(GREEN),
-        invalid: c(RED),
-        external: c(SAND),
-        read_only: c(MUTED),
-    },
-    result: ResultTones {
-        error: c(RED),
-        warning: c(SAND),
-        success: c(GREEN),
-        info: c(MUTED),
-    },
+/// The one dark theme: the design tokens' colours, and the layers' own.
+static DARK: LazyLock<Colors> = LazyLock::new(|| {
+    let t = crate::design::colors();
+    Colors {
+        page: color(t.page),
+        rail: color(t.rail),
+        raised: color(t.raised),
+        well: color(t.well),
+        hover: color(t.hover),
+        selected: color(t.selected),
+        current_row: color(t.current_row),
+        hairline: color(t.hairline),
+        rule: color(t.rule),
+        field_border: color(t.field_border),
+        text: color(t.text),
+        muted: color(t.muted),
+        faint: color(t.faint),
+        disabled: color(t.disabled),
+        accent: color(t.accent),
+        accent_fill: color(t.accent_fill),
+        accent_hover: color(t.accent_hover),
+        on_accent: color(t.on_accent),
+        focus: color(t.focus),
+        destructive: color(t.destructive),
+        recording: color(t.recording),
+        // Behind a dialog, and under a layer.
+        backdrop: black(120.0 / 255.0),
+        shadow: black(110.0 / 255.0),
+        selection: Hsla {
+            a: 0.28,
+            ..color(t.accent)
+        },
+        turn: Turn {
+            current: color(t.turn.current),
+            next: color(t.turn.next),
+        },
+        hp: Hp {
+            healthy: color(t.hp.healthy),
+            damaged: color(t.hp.damaged),
+            bloodied: color(t.hp.bloodied),
+            zero: color(t.hp.zero),
+            temp: color(t.hp.temp),
+            unknown: color(t.hp.unknown),
+            track: color(t.hp.track),
+        },
+        participant: Participant {
+            absent: color(t.participant.absent),
+            concentrating: color(t.participant.concentrating),
+            condition: color(t.participant.condition),
+            changed: color(t.participant.changed),
+        },
+        side: Side {
+            party: color(t.side.party),
+            enemies: color(t.side.enemies),
+            other: color(t.side.other),
+        },
+        sync: Sync {
+            off: color(t.sync.off),
+            first_read: color(t.sync.first_read),
+            matching: color(t.sync.matching),
+            pending: color(t.sync.pending),
+            conflict: color(t.sync.conflict),
+            read_only: color(t.sync.read_only),
+            error: color(t.sync.error),
+        },
+        connection: Connection {
+            connected: color(t.connection.connected),
+            offline: color(t.connection.offline),
+            busy: color(t.connection.busy),
+        },
+        document: Document {
+            clean: color(t.document.clean),
+            unsaved: color(t.document.unsaved),
+            saved: color(t.document.saved),
+            invalid: color(t.document.invalid),
+            external: color(t.document.external),
+            read_only: color(t.document.read_only),
+        },
+        result: ResultTones {
+            error: color(t.result.error),
+            warning: color(t.result.warning),
+            success: color(t.result.success),
+            info: color(t.result.info),
+        },
+    }
 });
 
 /// The active colours. Splat has one warm dark theme.
@@ -654,12 +650,12 @@ pub fn install(cx: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::design::tokens as egui_tokens;
+    use crate::design::tokens;
 
-    fn same(name: &str, gpui: Hsla, egui: eframe::egui::Color32) {
+    fn same(name: &str, gpui: Hsla, token: crate::design::Color) {
         let rgba = gpui.to_rgb();
         let channels = [rgba.r, rgba.g, rgba.b].map(|v| (v * 255.0).round() as i32);
-        let expected = [egui.r(), egui.g(), egui.b()].map(i32::from);
+        let expected = [token.r(), token.g(), token.b()].map(i32::from);
         let close = channels
             .iter()
             .zip(expected)
@@ -667,10 +663,11 @@ mod tests {
         assert!(close, "{name}: {channels:?} != {expected:?}");
     }
 
-    /// The GPUI theme and the egui tokens are one design while both exist.
+    /// The GPUI theme and the design tokens are one design: the colours arrive whole, and the
+    /// sizes are the same.
     #[test]
-    fn the_gpui_tokens_are_the_egui_tokens() {
-        let (g, e) = (colors(), egui_tokens::colors());
+    fn the_gpui_theme_is_the_design_tokens() {
+        let (g, e) = (colors(), tokens::colors());
         for (name, a, b) in [
             ("page", g.page, e.page),
             ("rail", g.rail, e.rail),
@@ -708,46 +705,43 @@ mod tests {
             same(name, a, b);
         }
         for ty in Type::ALL {
-            let egui = match ty {
-                Type::Display => egui_tokens::Type::Display,
-                Type::Title => egui_tokens::Type::Title,
-                Type::Section => egui_tokens::Type::Section,
-                Type::Heading => egui_tokens::Type::Heading,
-                Type::Body => egui_tokens::Type::Body,
-                Type::Strong => egui_tokens::Type::Strong,
-                Type::Name => egui_tokens::Type::Name,
-                Type::Small => egui_tokens::Type::Small,
-                Type::Label => egui_tokens::Type::Label,
-                Type::Numeral => egui_tokens::Type::Numeral,
-                Type::NumeralLarge => egui_tokens::Type::NumeralLarge,
-                Type::Round => egui_tokens::Type::Round,
-                Type::Prose => egui_tokens::Type::Prose,
-                Type::ProseCompact => egui_tokens::Type::ProseCompact,
-                Type::ProseStrong => egui_tokens::Type::ProseStrong,
-                Type::ProseItalic => egui_tokens::Type::ProseItalic,
-                Type::StatLabel => egui_tokens::Type::StatLabel,
-                Type::Stat => egui_tokens::Type::Stat,
-                Type::Mono => egui_tokens::Type::Mono,
+            let token = match ty {
+                Type::Display => tokens::Type::Display,
+                Type::Title => tokens::Type::Title,
+                Type::Section => tokens::Type::Section,
+                Type::Heading => tokens::Type::Heading,
+                Type::Body => tokens::Type::Body,
+                Type::Strong => tokens::Type::Strong,
+                Type::Name => tokens::Type::Name,
+                Type::Small => tokens::Type::Small,
+                Type::Label => tokens::Type::Label,
+                Type::Numeral => tokens::Type::Numeral,
+                Type::NumeralLarge => tokens::Type::NumeralLarge,
+                Type::Round => tokens::Type::Round,
+                Type::Prose => tokens::Type::Prose,
+                Type::ProseCompact => tokens::Type::ProseCompact,
+                Type::ProseStrong => tokens::Type::ProseStrong,
+                Type::ProseItalic => tokens::Type::ProseItalic,
+                Type::StatLabel => tokens::Type::StatLabel,
+                Type::Stat => tokens::Type::Stat,
+                Type::Mono => tokens::Type::Mono,
             };
-            assert_eq!(f32::from(ty.size()), egui.size(), "{ty:?} size");
-            assert_eq!(f32::from(ty.line()), egui.line(), "{ty:?} line");
+            assert_eq!(f32::from(ty.size()), token.size(), "{ty:?} size");
+            assert_eq!(f32::from(ty.line()), token.line(), "{ty:?} line");
         }
-        for (density, egui) in [
-            (Density::Glance, egui_tokens::Density::Glance),
-            (Density::Scan, egui_tokens::Density::Scan),
-            (Density::Read, egui_tokens::Density::Read),
+        for (density, token) in [
+            (Density::Glance, tokens::Density::Glance),
+            (Density::Scan, tokens::Density::Scan),
+            (Density::Read, tokens::Density::Read),
         ] {
-            assert_eq!(f32::from(density.control()), egui.control());
-            assert_eq!(f32::from(density.row()), egui.row());
+            assert_eq!(f32::from(density.control()), token.control());
+            assert_eq!(f32::from(density.row()), token.row());
         }
-        assert_eq!(RUN_LARGE.row, egui_tokens::RUN_LARGE.row);
-        assert_eq!(f32::from(L), egui_tokens::L);
-        assert_eq!(f32::from(RAIL_WIDTH), egui_tokens::RAIL_WIDTH);
-        assert_eq!(f32::from(PANEL_LEAVES_PAGE), egui_tokens::PANEL_LEAVES_PAGE);
-        assert_eq!(
-            f32::from(RAIL_LEAVES_WINDOW),
-            egui_tokens::RAIL_LEAVES_WINDOW
-        );
-        assert_eq!(f32::from(READER_MEASURE), egui_tokens::READER_MEASURE);
+        assert_eq!(RUN_LARGE.row, tokens::RUN_LARGE.row);
+        assert_eq!(f32::from(L), tokens::L);
+        assert_eq!(f32::from(RAIL_WIDTH), tokens::RAIL_WIDTH);
+        assert_eq!(f32::from(PANEL_LEAVES_PAGE), tokens::PANEL_LEAVES_PAGE);
+        assert_eq!(f32::from(RAIL_LEAVES_WINDOW), tokens::RAIL_LEAVES_WINDOW);
+        assert_eq!(f32::from(READER_MEASURE), tokens::READER_MEASURE);
     }
 }

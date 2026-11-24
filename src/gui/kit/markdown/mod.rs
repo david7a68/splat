@@ -1,8 +1,7 @@
-//! The Reader's Markdown view (egui: `markdown_view`): headings, paragraphs, emphasis, lists with
-//! each mark in its own column, task boxes, block quotes, code, rules, tables (wide ones scroll
-//! sideways under a fixed first column), roll tables, field rows, figures, and links that go
-//! where the egui reader's go: a note link to Lookup, a bold name to Lookup, a web link to the
-//! browser, a dice link to whoever rolls.
+//! The Reader's Markdown view: headings, paragraphs, emphasis, lists with each mark in its own
+//! column, task boxes, block quotes, code, rules, tables (wide ones scroll sideways under a fixed
+//! first column), roll tables, field rows, figures, and links: a note link to Lookup, a bold name
+//! to Lookup, a web link to the browser, a dice link to whoever rolls.
 //!
 //! ```ignore
 //! kit::Markdown::new(("entry", id), &entry.body)
@@ -11,10 +10,10 @@
 //!     .jump_in(&state.scroll)          // a typed jump to a heading scrolls this column
 //! ```
 //!
-//! A pressed link with no handler of the caller's is left in the app's egui context for the
-//! frame logic, as the egui reader leaves it: `markdown_view::take_note_link` (routed by
-//! `Splat::route`), `markdown_view::take_lookup_link`, `rolls::take_ask`, `roll_table::take_roll`.
-//! The context is the [`Host`] global, which `pages::reader::init` installs.
+//! A pressed link with no handler of the caller's is left in the app's state context for the
+//! frame logic: `markdown_view::take_note_link` (routed by `Splat::route`),
+//! `markdown_view::take_lookup_link`, `rolls::take_ask`, `roll_table::take_roll`. The context is
+//! the [`Host`] global, which `pages::reader::init` installs.
 //!
 //! What a document prepares (its parsed blocks, its tables' columns) is kept under its element id
 //! and made again only when its words, its mode, its document, the link index, the art or its
@@ -29,7 +28,7 @@ use crate::gui::theme::{
     HAIRLINE_WIDTH, L, LINE_GAP, M, READER_MEASURE, S, Type, TypeExt, XL, XS, colors,
 };
 pub use crate::markdown_view::LinkTarget;
-use eframe::egui;
+use crate::state_context::{Key, StateContext};
 use gpui::{
     AnyElement, App, AppContext, Bounds, ElementId, Entity, FontStyle, FontWeight, InteractiveText,
     IntoElement, ObjectFit, ParentElement, Pixels, RenderOnce, ScrollHandle, SharedString,
@@ -45,22 +44,20 @@ use std::sync::Arc;
 type OnLink = Rc<dyn Fn(&str, &mut Window, &mut App)>;
 type OnTarget = Rc<dyn Fn(&LinkTarget, &mut Window, &mut App)>;
 
-/// The app's egui context (`root.bridge.ctx()`): where a reader finds its link index and the art,
+/// The app's state context (`SplatRoot::ctx`): where a reader finds its link index and the art,
 /// and leaves a pressed link for the frame logic.
-pub struct Host(pub egui::Context);
+pub struct Host(pub StateContext);
 
 impl gpui::Global for Host {}
 
 /// The host's context, when the app installed one (a kit test may not).
-fn host(cx: &App) -> Option<egui::Context> {
+fn host(cx: &App) -> Option<StateContext> {
     cx.try_global::<Host>().map(|host| host.0.clone())
 }
 
-/// The link index the app keeps for readers (`reader_link_index`), when a campaign is open.
-fn link_index(ctx: &egui::Context) -> Option<Arc<crate::lookup::ContentIndex>> {
-    ctx.data(|data| {
-        data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
-    })
+/// The link index the app keeps for readers (`requests::LINK_INDEX`), when a campaign is open.
+fn link_index(ctx: &StateContext) -> Option<Arc<crate::lookup::ContentIndex>> {
+    ctx.get(crate::requests::LINK_INDEX)
 }
 
 /// A Markdown document in the reader's voice.
@@ -282,7 +279,7 @@ impl RenderOnce for Markdown {
             }),
             ctx: ctx.clone(),
             kept: kept.clone(),
-            reader: egui::Id::new(("gpui_reader", format!("{:?}", self.id))),
+            reader: Key::new("gpui_reader").with(format!("{:?}", self.id)),
         };
         // The width tables share: the whole document's in a wide reader, else the measure's.
         let table_width = width.map(|width| {
@@ -645,10 +642,10 @@ struct Draw {
     document: Option<uuid::Uuid>,
     on_link: Option<OnLink>,
     on_target: Option<OnTarget>,
-    ctx: Option<egui::Context>,
+    ctx: Option<StateContext>,
     kept: Entity<Prepared>,
-    /// The reader's id in the egui context, where a roll table keeps its state.
-    reader: egui::Id,
+    /// The reader's key in the state context, where a roll table keeps its state.
+    reader: Key,
 }
 
 impl Draw {
@@ -798,13 +795,13 @@ impl Draw {
         block.child(super::gap(S)).into_any_element()
     }
 
-    /// The id a roll table's state has in the egui context: this reader's and the table's.
-    fn roll_reader(&self, at: usize) -> egui::Id {
+    /// The key a roll table's state has in the state context: this reader's and the table's.
+    fn roll_reader(&self, at: usize) -> Key {
         self.reader.with(at)
     }
 
     /// **Roll** and a box for a typed result under a marked table, its result line, and its
-    /// warnings (egui `roll_table::roll_control`).
+    /// warnings.
     fn roll_control(
         &self,
         at: usize,
@@ -931,11 +928,11 @@ fn warning(words: &str) -> AnyElement {
         .into_any_element()
 }
 
-/// Follow a pressed link: the caller's handler, else the reader's routing, as egui's.
+/// Follow a pressed link: the caller's handler, else the reader's routing.
 fn follow(
     target: &LinkTarget,
     from: Option<uuid::Uuid>,
-    (on_link, on_target, ctx): (Option<&OnLink>, Option<&OnTarget>, Option<&egui::Context>),
+    (on_link, on_target, ctx): (Option<&OnLink>, Option<&OnTarget>, Option<&StateContext>),
     window: &mut Window,
     cx: &mut App,
 ) {
@@ -985,7 +982,7 @@ fn follow(
 /// A link's hover words: where it goes, or why it goes nowhere.
 fn hint(
     target: &LinkTarget,
-    ctx: Option<&egui::Context>,
+    ctx: Option<&StateContext>,
     from: Option<uuid::Uuid>,
 ) -> Option<String> {
     match target {

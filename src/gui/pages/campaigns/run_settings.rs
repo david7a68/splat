@@ -2,10 +2,10 @@
 //! initiative, ties in roster order, the inspiration rule when there are several, the house
 //! rules in play, then the save row; the tab's footer holds the discard's Undo, the unread rule
 //! choices, the runs a folder change leaves with their two choices, and the errors.
+use crate::gui::SplatRoot;
 use crate::gui::kit::{self, Button, Checkbox, Dropdown, Pane, TextField};
 use crate::gui::pages::settings;
 use crate::gui::theme::{FORM_WIDTH, L, S, Type, XS, colors};
-use crate::gui::{SplatRoot, bridge};
 use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
     prelude::*,
@@ -23,9 +23,8 @@ pub(super) fn render(
 ) -> AnyElement {
     let c = colors();
     {
-        let SplatRoot { app, bridge, .. } = root;
-        app.encounters
-            .run_settings_prepare(bridge.ctx(), &app.campaigns);
+        let SplatRoot { app, ctx, .. } = root;
+        app.encounters.run_settings_prepare(ctx, &app.campaigns);
     }
     let Some(active) = root.app.campaigns.active_campaign() else {
         return div().into_any_element();
@@ -40,9 +39,9 @@ pub(super) fn render(
         .draft_dirty()
         .then_some("Save or discard the open encounter first.");
     let lines = {
-        let SplatRoot { app, bridge, .. } = root;
+        let SplatRoot { app, ctx, .. } = root;
         app.encounters
-            .run_settings_lines(bridge.ctx(), &active, &app.campaigns)
+            .run_settings_lines(ctx, &active, &app.campaigns)
     };
     let row = root.app.encounters.run_row(&active);
     let mut column = div()
@@ -148,9 +147,9 @@ pub(super) fn render(
         .key("Ctrl+S")
         .blocked(reason.clone())
         .on_click(cx.listener(move |root, _, _, cx| {
-            let SplatRoot { app, bridge, .. } = root;
+            let SplatRoot { app, ctx, .. } = root;
             app.encounters
-                .save_run_settings(bridge.ctx(), &save_active, &app.campaigns);
+                .save_run_settings(ctx, &save_active, &app.campaigns);
             cx.notify();
         }));
         column = column.child(
@@ -160,7 +159,7 @@ pub(super) fn render(
                 .items_center()
                 .gap(S)
                 .py(XS)
-                .child(kit::status(&bridge::status(&row.state.status())))
+                .child(kit::status(&kit::Status::of(&row.state.status())))
                 .when(row.changed && closed.is_none(), |line| {
                     line.child(Button::quiet("run-settings-discard", "Discard").on_click(
                         cx.listener(|root, _, _, cx| {
@@ -183,9 +182,9 @@ pub(super) fn render(
         "run-settings-footer",
         lines,
         settings::on_press(cx, move |root, press, cx| {
-            let SplatRoot { app, bridge, .. } = root;
+            let SplatRoot { app, ctx, .. } = root;
             app.encounters
-                .run_settings_press(bridge.ctx(), &press_active, &app.campaigns, press);
+                .run_settings_press(ctx, &press_active, &app.campaigns, press);
             cx.notify();
         }),
     );

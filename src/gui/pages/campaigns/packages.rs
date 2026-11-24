@@ -22,8 +22,8 @@ pub(super) fn render(
 ) -> AnyElement {
     let c = colors();
     let ready = {
-        let crate::gui::SplatRoot { app, bridge, .. } = root;
-        let ready = app.campaign_content.prepare(bridge.ctx(), &app.campaigns);
+        let crate::gui::SplatRoot { app, ctx, .. } = root;
+        let ready = app.campaign_content.prepare(ctx, &app.campaigns);
         if std::mem::take(&mut app.campaign_content.open_run_settings) {
             app.campaign_tab = crate::CampaignTab::RunSettings;
         }
@@ -47,9 +47,9 @@ pub(super) fn render(
                 .child(
                     Button::destructive("content-discard-switch", "Discard and switch campaign")
                         .on_click(cx.listener(|root, _, _, cx| {
-                            let crate::gui::SplatRoot { app, bridge, .. } = root;
+                            let crate::gui::SplatRoot { app, ctx, .. } = root;
                             app.campaign_content
-                                .discard_and_switch(bridge.ctx(), &app.campaigns);
+                                .discard_and_switch(ctx, &app.campaigns);
                             cx.notify();
                         })),
                 )
@@ -67,9 +67,9 @@ pub(super) fn render(
         "campaign-content-footer",
         lines,
         settings::on_press(cx, move |root, press, cx| {
-            let crate::gui::SplatRoot { app, bridge, .. } = root;
+            let crate::gui::SplatRoot { app, ctx, .. } = root;
             app.campaign_content
-                .footer_press(bridge.ctx(), &app.campaigns, &footer_active, press);
+                .footer_press(ctx, &app.campaigns, &footer_active, press);
             cx.notify();
         }),
     );
@@ -110,9 +110,9 @@ pub(super) fn render(
             Message::new(Tone::Error, "The campaign folder is missing.").action(
                 Button::secondary("content-create-folder", "Create campaign folder").on_click(
                     cx.listener(move |root, _, _, cx| {
-                        let crate::gui::SplatRoot { app, bridge, .. } = root;
+                        let crate::gui::SplatRoot { app, ctx, .. } = root;
                         app.campaign_content
-                            .create_folder(bridge.ctx(), &app.campaigns, &folder);
+                            .create_folder(ctx, &app.campaigns, &folder);
                         cx.notify();
                     }),
                 ),
@@ -176,11 +176,11 @@ pub(super) fn save_key(root: &mut SplatRoot, active: &crate::persistence::Campai
                 .repair_state(path, owner.as_deref())
                 .is_some_and(|state| state.can_save())
         });
-    let crate::gui::SplatRoot { app, bridge, .. } = root;
+    let crate::gui::SplatRoot { app, ctx, .. } = root;
     match repair {
         Some(path) => app
             .campaign_content
-            .save_repair(bridge.ctx(), &app.campaigns, active, &path),
+            .save_repair(ctx, &app.campaigns, active, &path),
         None if app.campaign_content.repair_paths().is_empty()
             && app.campaign_content.save_bar().is_some_and(|bar| bar.dirty) =>
         {
@@ -236,7 +236,7 @@ fn repairs(
         else {
             continue;
         };
-        let word = crate::gui::bridge::status(&state.status());
+        let word = crate::gui::kit::Status::of(&state.status());
         let discard = state.discard_shown();
         let lock = state.lock_reason();
         let blocked = state.save_blocked().map(str::to_owned);
@@ -307,9 +307,9 @@ fn repairs(
                         .key("Ctrl+S")
                         .blocked(blocked)
                         .on_click(cx.listener(move |root, _, _, cx| {
-                            let crate::gui::SplatRoot { app, bridge, .. } = root;
+                            let crate::gui::SplatRoot { app, ctx, .. } = root;
                             app.campaign_content.save_repair(
-                                bridge.ctx(),
+                                ctx,
                                 &app.campaigns,
                                 &save_active,
                                 &save_path,
@@ -373,9 +373,9 @@ fn save_bar(
                         .then_some("Save or discard your changes first."),
                 )
                 .on_click(cx.listener(move |root, _, _, cx| {
-                    let crate::gui::SplatRoot { app, bridge, .. } = root;
+                    let crate::gui::SplatRoot { app, ctx, .. } = root;
                     app.campaign_content
-                        .reload_now(bridge.ctx(), &app.campaigns, &reload);
+                        .reload_now(ctx, &app.campaigns, &reload);
                     cx.notify();
                 })),
         );
@@ -477,12 +477,8 @@ fn issues(
                         label,
                     )
                     .on_click(cx.listener(move |root, _, _, cx| {
-                        root.bridge.ctx().data_mut(|data| {
-                            data.insert_temp(
-                                eframe::egui::Id::new("open_library_repair"),
-                                path.clone(),
-                            )
-                        });
+                        root.ctx
+                            .set(crate::requests::OPEN_LIBRARY_REPAIR, path.clone());
                         cx.notify();
                     })),
                 );

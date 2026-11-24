@@ -1,10 +1,10 @@
 //! The same disk comparison for encounter, group and creature drafts.
 #![warn(deprecated)] // Its parent allows old message functions; this file uses none.
+use crate::state_context::StateContext;
 use crate::{
     design::{self, outcome::Sentence},
     library::note_path,
 };
-use eframe::egui;
 use std::{fs, path::Path};
 
 #[derive(Clone, Default)]
@@ -392,7 +392,7 @@ impl super::Encounters {
     /// draft, else the draft goes (with Undo) and the file's text comes back.
     pub fn encounter_disk_choice(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         campaign: &crate::persistence::Campaign,
         modules: &[crate::persistence::Module],
         keep: bool,

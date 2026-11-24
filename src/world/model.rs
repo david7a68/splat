@@ -1119,8 +1119,8 @@ impl Reader {
         campaign: Option<&Campaign>,
         more: impl for<'f> FnOnce(&'f design::outcome::PaneFrame, &mut Messages<'f, FooterAct>),
     ) -> Vec<plain::PlainLine<FooterAct>> {
-        let frame = design::outcome::PaneFrame::plain();
-        let mut messages = Messages::new(&frame, "plain", 0.0);
+        let frame = design::outcome::PaneFrame::new();
+        let mut messages = Messages::new();
         self.footer(&frame, &mut messages, item, index, campaign);
         more(&frame, &mut messages);
         messages.into_plain()

@@ -213,7 +213,7 @@ fn header(
             kit::Button::quiet("header-stop-recording", "Stop recording")
                 .icon(icons::STOP_RECORDING)
                 .on_click(cx.listener(|root, _, _, cx| {
-                    let ctx = root.bridge.ctx().clone();
+                    let ctx = root.ctx.clone();
                     root.app.sessions.gv_stop_recording(&ctx);
                     cx.notify();
                 }))

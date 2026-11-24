@@ -156,7 +156,7 @@ fn creature_stat_block_and_its_dice() {
     let check = RollLink::d20(D20::Check, 6, "Strength");
     shell.click(&format!("{} +6", crate::rolls::link_label(&check)));
     let rolled = shell.read(|root| {
-        crate::rolls::plain::preview_words(root.bridge.ctx(), "Adult Black Dragon", &[&check])
+        crate::rolls::plain::preview_words(&root.ctx, "Adult Black Dragon", &[&check])
     });
     assert!(
         rolled.is_some_and(|parts| !parts.is_empty()),
@@ -170,7 +170,7 @@ fn creature_stat_block_and_its_dice() {
         .link
         .clone();
     shell.update(|root, _, cx| {
-        let ctx = root.bridge.ctx();
+        let ctx = &root.ctx;
         crate::rolls::set_roller(ctx, Some(0));
         crate::rolls::set_armed(
             ctx,
@@ -194,7 +194,7 @@ fn creature_stat_block_and_its_dice() {
     shell.capture("reader-armed-tile__01-armed-action-in-a-run__1200x800");
     shell.click("Stop");
     assert_eq!(
-        shell.read(|root| crate::rolls::take_armed_action(root.bridge.ctx())),
+        shell.read(|root| crate::rolls::take_armed_action(&root.ctx)),
         Some(crate::rolls::ArmedAction::Stop),
         "Stop goes to the run"
     );

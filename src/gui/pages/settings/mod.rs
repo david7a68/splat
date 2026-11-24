@@ -60,8 +60,8 @@ pub(crate) fn campaign_lines(
     link: Option<uuid::Uuid>,
     blocked: Option<&str>,
 ) -> Vec<PlainLine<CampaignAct>> {
-    let frame = PaneFrame::plain();
-    let mut messages = Messages::<CampaignAct>::new(&frame, "campaign_footer", 0.0);
+    let frame = PaneFrame::new();
+    let mut messages = Messages::<CampaignAct>::new();
     root.app
         .campaigns
         .footer_messages(&frame, &mut messages, list, blocked);
@@ -76,8 +76,7 @@ pub(crate) fn campaign_lines(
 
 /// The account's footer lines (`Settings::footer_messages`).
 fn account_lines(root: &SplatRoot) -> Vec<PlainLine<CampaignAct>> {
-    let frame = PaneFrame::plain();
-    let mut messages = Messages::<CampaignAct>::new(&frame, "account_footer", 0.0);
+    let mut messages = Messages::<CampaignAct>::new();
     root.app.settings.footer_messages(&mut messages);
     messages.into_plain()
 }

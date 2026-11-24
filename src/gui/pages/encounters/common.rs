@@ -4,7 +4,7 @@ use crate::campaigns::Campaigns;
 use crate::gui::theme::{self, Type, TypeExt, XS, colors};
 use crate::gui::{SplatRoot, icons, kit};
 use crate::persistence::Campaign;
-use eframe::egui;
+use crate::state_context::StateContext;
 use gpui::{
     AnyElement, App, ClickEvent, Context, Div, ElementId, Hsla, ParentElement, Pixels,
     SharedString, Styled, Window, div, px,
@@ -13,30 +13,25 @@ use splat_encounters_ui::encounters::Encounters;
 use splat_encounters_ui::encounters::FooterPress;
 use splat_encounters_ui::encounters::model::Line;
 
-/// Run `act` on the page's state with the active campaign and the bridge's egui context (for
-/// the state methods that start a read in the background). Nothing runs with no campaign.
+/// Run `act` on the page's state with the active campaign and the state context, in a pass of its
+/// own (`StateContext::begin_pass`), for the state methods that start a read in the background.
+/// Nothing runs with no campaign.
 pub(super) fn with_page(
     root: &mut SplatRoot,
-    act: impl FnOnce(&mut Encounters, &egui::Context, &Campaign, &Campaigns),
+    act: impl FnOnce(&mut Encounters, &StateContext, &Campaign, &Campaigns),
 ) {
-    let SplatRoot { app, bridge, .. } = root;
+    let SplatRoot { app, ctx, .. } = root;
     let Some(active) = app.campaigns.active_campaign() else {
         return;
     };
-    let mut act = Some(act);
-    let encounters = &mut app.encounters;
-    let campaigns = &app.campaigns;
-    bridge.pass(|ctx| {
-        if let Some(act) = act.take() {
-            act(encounters, ctx, &active, campaigns);
-        }
-    });
+    ctx.begin_pass();
+    act(&mut app.encounters, ctx, &active, &app.campaigns);
 }
 
 /// A click handler that runs `act` on the page (`with_page`) and draws again.
 pub(super) fn on_page(
     cx: &mut Context<SplatRoot>,
-    act: impl Fn(&mut Encounters, &egui::Context, &Campaign, &Campaigns) + 'static,
+    act: impl Fn(&mut Encounters, &StateContext, &Campaign, &Campaigns) + 'static,
 ) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
     cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
         with_page(root, |page, ctx, active, campaigns| {

@@ -5,29 +5,21 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
 const ALLOWLIST: &str = include_str!("lint_allowlist.txt");
-const COLOUR_CONSTANTS: [&str; 22] = [
-    "BLACK",
-    "BLUE",
-    "BROWN",
-    "CYAN",
-    "DARK_BLUE",
-    "DARK_GRAY",
-    "DARK_GREEN",
-    "DARK_RED",
-    "GOLD",
-    "GRAY",
-    "GREEN",
-    "KHAKI",
-    "LIGHT_BLUE",
-    "LIGHT_GRAY",
-    "LIGHT_GREEN",
-    "LIGHT_RED",
-    "LIGHT_YELLOW",
-    "MAGENTA",
-    "ORANGE",
-    "RED",
-    "WHITE",
-    "YELLOW",
+/// GPUI's ways to make a colour from numbers or by its name. Only the tokens (`design::tokens`)
+/// and the GPUI theme (`gui::theme`) make colours.
+const RAW_COLOURS: [&str; 12] = [
+    "rgb(",
+    "rgba(",
+    "hsla(",
+    "Rgba {",
+    "Hsla {",
+    "Color::from_rgb(",
+    "gpui::red()",
+    "gpui::green()",
+    "gpui::blue()",
+    "gpui::yellow()",
+    "gpui::white()",
+    "opaque_grey(",
 ];
 
 fn followed_by_number(text: &str) -> bool {
@@ -77,34 +69,20 @@ fn violations(line: &str) -> Vec<&'static str> {
     if string_literals(code).into_iter().any(straight_apostrophe) {
         found.push("straight-apostrophe");
     }
-    for constant in COLOUR_CONSTANTS {
-        let pattern = format!("Color32::{constant}");
-        if code.match_indices(&pattern).any(|(at, _)| {
-            !code[at + pattern.len()..].starts_with(|c: char| c.is_alphanumeric() || c == '_')
-        }) {
-            found.push("raw-colour");
-        }
-    }
-    for pattern in ["Color32::from_", "Rgba::from_", "Hsva::new"] {
-        if code.contains(pattern) {
-            found.push("raw-colour");
-        }
+    if RAW_COLOURS.iter().any(|pattern| {
+        code.match_indices(pattern).any(|(at, _)| {
+            // A name that ends in the pattern (`to_rgb(`) is another function.
+            !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_')
+        })
+    }) {
+        found.push("raw-colour");
     }
     for symbol in ['⋯', '⚠', 'ⓘ', '▾', '▸', '✕'] {
         if code.contains(symbol) && !code.contains(".name(") {
             found.push("raw-symbol");
         }
     }
-    // A moving spinner draws from the clock, so captures of one state would differ.
-    if code.contains("ui.spinner()") {
-        found.push("raw-spinner");
-    }
-    for pattern in [
-        ".size(",
-        "FontId::proportional(",
-        "FontId::monospace(",
-        "FontId::new(",
-    ] {
+    for pattern in [".size(", ".text_size(px(", ".line_height(px("] {
         if code
             .match_indices(pattern)
             .any(|(at, _)| followed_by_number(&code[at + pattern.len()..]))
@@ -184,36 +162,36 @@ fn reasons_without_end_mark(text: &str, last_line: usize) -> usize {
 
 /// Whether a label is only arrows (and spaces): a bare back or forward arrow with no word.
 fn arrow_only(label: &str) -> bool {
-    let phosphor = [
-        egui_phosphor::regular::ARROW_LEFT,
-        egui_phosphor::regular::ARROW_RIGHT,
-        egui_phosphor::regular::ARROW_UP,
-        egui_phosphor::regular::ARROW_DOWN,
-        egui_phosphor::regular::ARROW_U_UP_LEFT,
-        egui_phosphor::regular::ARROW_BEND_UP_LEFT,
-        egui_phosphor::regular::ARROW_ARC_LEFT,
-        egui_phosphor::regular::ARROW_CIRCLE_LEFT,
-        egui_phosphor::regular::ARROW_FAT_LEFT,
-        egui_phosphor::regular::CARET_LEFT,
-        egui_phosphor::regular::CARET_RIGHT,
+    use super::icons::phosphor;
+    let glyphs = [
+        phosphor::ARROW_LEFT,
+        phosphor::ARROW_RIGHT,
+        phosphor::ARROW_UP,
+        phosphor::ARROW_DOWN,
+        phosphor::ARROW_U_UP_LEFT,
+        phosphor::ARROW_BEND_UP_LEFT,
+        phosphor::ARROW_ARC_LEFT,
+        phosphor::ARROW_CIRCLE_LEFT,
+        phosphor::ARROW_ELBOW_UP_LEFT,
+        phosphor::ARROW_FAT_LEFT,
+        phosphor::CARET_LEFT,
+        phosphor::CARET_RIGHT,
+        phosphor::CARET_UP,
+        phosphor::CARET_DOWN,
     ];
     let arrow = |c: char| {
         matches!(c as u32, 0x2190..=0x21FF | 0x27F0..=0x27FF | 0x2900..=0x297F | 0x2B00..=0x2BFF)
             || "<>‹›«»".contains(c)
-            || phosphor.iter().any(|glyph| glyph.starts_with(c))
+            || glyphs.iter().any(|glyph| glyph.starts_with(c))
     };
     let label = label.trim();
     !label.is_empty() && label.chars().filter(|c| !c.is_whitespace()).all(arrow)
 }
 
-/// The name of the deprecated bare back arrow in `design::icons`, spelled in two parts so that
-/// its STAGED text count (`design::results::STAGED`) counts only real uses.
-const LEGACY: &str = concat!("LEGACY", "_BACK");
-
-/// Whether a path's last segment names an arrow glyph: the legacy back arrow, or any of
-/// Phosphor's `ARROW_…` and `CARET_…` families (`egui_phosphor::regular::ARROW_ELBOW_UP_LEFT`).
+/// Whether a path's last segment names an arrow glyph: the reader's back arrow, or any of
+/// Phosphor's `ARROW_…` and `CARET_…` families (`design::icons::phosphor::ARROW_LEFT`).
 fn arrow_name(name: &str) -> bool {
-    name == LEGACY || name.starts_with("ARROW_") || name.starts_with("CARET_")
+    name == "HISTORY_BACK" || name.starts_with("ARROW_") || name.starts_with("CARET_")
 }
 
 /// Whether a label argument is an arrow alone: a string literal of arrows, or a path whose last
@@ -236,12 +214,11 @@ fn arrow_argument(argument: Option<&syn::Expr>) -> bool {
     }
 }
 
-/// Controls whose label is only an arrow, read by `syn`, on lines up to `last_line`: the first
-/// argument of `Action::quiet`, `secondary`, `primary` or `destructive`, of `Link::new` and
-/// `Button::new`, of a `.link(…)`, `.button(…)` or `.small_button(…)` call, and the icon of
-/// `icon_button(ui, icon, name)` and `icon_button_with_hint(ui, icon, name, hint)`, when it is a literal of arrows alone or names an arrow glyph
-/// (the legacy back arrow, `egui_phosphor::regular::ARROW_LEFT`). Limit: an arrow behind another
-/// name (a local `const` or binding) passes; the legacy arrow's STAGED count is the second net.
+/// Kit controls whose label is only an arrow, read by `syn`, on lines up to `last_line`: the
+/// label (the second argument) of `Button::primary`, `secondary`, `quiet` or `destructive`, of
+/// `Link::new` and `link`, and the icon of `IconButton::new(id, icon, name)`, when it is a
+/// literal of arrows alone or names an arrow glyph (`icons::phosphor::ARROW_LEFT`). Limit: an
+/// arrow behind another name (a local `const` or binding) passes.
 fn arrow_labels(text: &str, last_line: usize) -> usize {
     use syn::{
         spanned::Spanned,
@@ -265,33 +242,18 @@ fn arrow_labels(text: &str, last_line: usize) -> usize {
                     .len()
                     .checked_sub(2)
                     .map_or("", |at| names[at].as_str());
-                let label = if owner == "Action"
+                let labelled = owner == "Button"
                     && ["quiet", "secondary", "primary", "destructive"].contains(&last)
-                    || ["Link", "Button"].contains(&owner) && last == "new"
-                {
-                    call.args.first()
-                } else if ["icon_button", "icon_button_with_hint"].contains(&last) {
-                    call.args.iter().nth(1)
-                } else {
-                    None
-                };
-                if label.is_some()
+                    || ["Link", "IconButton"].contains(&owner) && last == "new"
+                    || owner == "kit" && last == "link";
+                if labelled
                     && call.span().start().line <= self.last_line
-                    && arrow_argument(label)
+                    && arrow_argument(call.args.iter().nth(1))
                 {
                     self.bad += 1;
                 }
             }
             visit::visit_expr_call(self, call);
-        }
-        fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
-            if ["link", "button", "small_button"].contains(&call.method.to_string().as_str())
-                && call.span().start().line <= self.last_line
-                && arrow_argument(call.args.first())
-            {
-                self.bad += 1;
-            }
-            visit::visit_expr_method_call(self, call);
         }
     }
     let Ok(file) = syn::parse_file(text) else {
@@ -335,9 +297,8 @@ fn phrase_owner(path: &str, words: &str) -> bool {
 /// - `reason-end-mark`: a blocked reason without `.`, `?` or `!`.
 /// - `phrase-owner`: a phrase in a string literal outside its owner file.
 /// - `arrow-label`: a control whose label is only an arrow, as a literal or by the glyph's name
-///   (`Action::quiet("←")`, the legacy back arrow by name; see `arrow_labels`). An
-///   editor's back is `EditorHead`; a back link that starts a line is `TitleLine::back`; both
-///   always show their word (K4b, R38).
+///   (`Button::quiet(id, "←")`, `IconButton::new(id, icons::phosphor::ARROW_LEFT, name)`; see
+///   `arrow_labels`). A back control always shows its word (K4b, R38).
 fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     let mut found = Vec::new();
     for line in text.lines().take(last_line) {
@@ -787,7 +748,9 @@ fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
                 }
                 continue;
             }
-            for line in code.lines() {
+            // The GPUI theme turns the tokens into GPUI colours and sizes.
+            let theme = key == "src/gui/theme.rs";
+            for line in code.lines().filter(|_| !theme) {
                 for rule in violations(line) {
                     *counts.entry(format!("{key} {rule}")).or_default() += 1;
                 }
@@ -850,9 +813,7 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                 "fact-owner" => {
                     "Make a sheet's fact with `design::fact::line` and a tile label that holds its number with `fact::tile_label` (M5)"
                 }
-                "arrow-label" => {
-                    "Give the control its word: an editor's back is `EditorHead` (its `BackTo` gives the word)"
-                }
+                "arrow-label" => "Give the control its word: a back control says where it goes",
                 _ => "Use design tokens",
             };
             problems.push(format!("{key}: {count} found, {limit} allowed. {fix}."));
@@ -898,7 +859,7 @@ fn the_message_rules_find_what_they_should() {
     assert_eq!(
         rules(
             "src/a.rs",
-            "fn f() { icon_button(ui, icons::CLOSE, \"Dismiss this message\"); }"
+            "fn f() { IconButton::new(\"close\", icons::CLOSE, \"Dismiss this message\"); }"
         ),
         ["phrase-owner"]
     );
@@ -914,80 +875,81 @@ fn the_message_rules_find_what_they_should() {
         rules("src/a.rs", "const A: &str = \"{a} of {b} chosen\";"),
         ["phrase-owner"]
     );
-    // K4b: an action whose label is only an arrow; a word with an arrow, or an icon, passes.
+    // K4b: a control whose label is only an arrow; a word with an arrow, or an icon, passes.
     for label in [
         "←",
         " ← ",
         "‹",
         "\u{2190}",
-        egui_phosphor::regular::ARROW_LEFT,
+        super::icons::phosphor::ARROW_LEFT,
     ] {
         assert_eq!(
             rules(
                 "src/a.rs",
-                &format!("fn f() {{ Action::quiet({label:?}).show(ui); }}")
+                &format!("fn f() {{ kit::Button::quiet(\"back\", {label:?}); }}")
             ),
             ["arrow-label"],
             "{label:?}"
         );
     }
     assert_eq!(
-        rules(
-            "src/a.rs",
-            "fn f() { design::Action::secondary(\"→\").show(ui); }"
-        ),
+        rules("src/a.rs", "fn f() { Button::secondary(\"next\", \"→\"); }"),
         ["arrow-label"]
     );
-    // R38: a bare back arrow by name, as both Encounters editors had it, and the other controls
-    // that take a label.
+    // R38: a bare back arrow by name, and the other controls that take a label.
     for code in [
-        format!(
-            "fn f() {{ Action::quiet(icons::{LEGACY}).name(\"Back to encounters\").show(ui); }}"
-        ),
-        "fn f() { Action::quiet(egui_phosphor::regular::ARROW_LEFT).show(ui); }".to_owned(),
-        "fn f() { Action::quiet(ARROW_U_UP_LEFT).show(ui); }".to_owned(),
-        "fn f() { Action::quiet(egui_phosphor::regular::ARROW_ELBOW_UP_LEFT).show(ui); }"
-            .to_owned(),
-        "fn f() { Action::quiet((egui_phosphor::regular::ARROW_LEFT)).show(ui); }".to_owned(),
-        "fn f() { Action::quiet((\"←\")).show(ui); }".to_owned(),
-        format!("fn f() {{ design::icon_button(ui, icons::{LEGACY}, \"Back\"); }}"),
-        "fn f() { icon_button(ui, \"←\", \"Back\"); }".to_owned(),
-        "fn f() { icon_button_with_hint(ui, \"←\", \"Back\", \"Back (Alt+Left)\"); }".to_owned(),
-        "fn f() { ui.link(\"←\"); }".to_owned(),
-        "fn f() { ui.add(egui::Link::new(egui_phosphor::regular::CARET_LEFT)); }".to_owned(),
-        "fn f() { ui.add(egui::Button::new(\"‹\")); }".to_owned(),
-        format!("fn f() {{ ui.button(&icons::{LEGACY}); }}"),
+        "fn f() { kit::Button::quiet(\"back\", icons::HISTORY_BACK).name(\"Back\"); }",
+        "fn f() { Button::quiet(\"back\", icons::phosphor::ARROW_LEFT); }",
+        "fn f() { Button::quiet(\"back\", ARROW_U_UP_LEFT); }",
+        "fn f() { Button::primary(\"back\", (icons::phosphor::ARROW_ELBOW_UP_LEFT)); }",
+        "fn f() { Button::destructive(\"back\", &icons::phosphor::CARET_LEFT); }",
+        "fn f() { Button::quiet(\"back\", (\"←\")); }",
+        "fn f() { kit::IconButton::new(\"back\", icons::phosphor::ARROW_LEFT, \"Back\"); }",
+        "fn f() { IconButton::new(\"back\", \"←\", \"Back\"); }",
+        "fn f() { kit::Link::new(\"back\", \"‹\"); }",
+        "fn f() { Link::new(\"back\", icons::phosphor::CARET_LEFT); }",
+        "fn f() { kit::link(\"back\", \"«\"); }",
     ] {
-        assert_eq!(rules("src/a.rs", &code), ["arrow-label"], "{code}");
+        assert_eq!(rules("src/a.rs", code), ["arrow-label"], "{code}");
     }
     for code in [
-        "fn f() { Action::quiet(\"← Back\").show(ui); }".to_owned(),
-        "fn f() { Action::quiet(\"Back\").icon(icons::UNDO).show(ui); }".to_owned(),
-        "fn f() { Action::quiet(icons::EXPAND).show(ui); }".to_owned(),
-        "fn f() { other::quiet(\"←\"); }".to_owned(),
-        format!("fn f() {{ Action::quiet(\"Back\").icon(icons::{LEGACY}).show(ui); }}"),
-        "fn f() { icon_button(ui, icons::CLOSE, \"Close\"); }".to_owned(),
-        "fn f() { ui.link(\"Encounters\"); }".to_owned(),
+        "fn f() { Button::quiet(\"back\", \"← Back\"); }",
+        "fn f() { Button::quiet(\"back\", \"Back\").icon(icons::UNDO); }",
+        "fn f() { Button::quiet(\"back\", \"Back\").icon(icons::HISTORY_BACK); }",
+        "fn f() { IconButton::new(\"more\", icons::EXPAND, \"More\"); }",
+        "fn f() { other::quiet(\"x\", \"←\"); }",
+        "fn f() { Button::quiet(\"←\", \"Back\"); }",
+        "fn f() { IconButton::new(\"close\", icons::CLOSE, \"Close\"); }",
+        "fn f() { kit::link(\"list\", \"Encounters\"); }",
     ] {
-        assert!(rules("src/a.rs", &code).is_empty(), "{code}");
+        assert!(rules("src/a.rs", code).is_empty(), "{code}");
     }
 }
 
 #[test]
 fn the_lint_finds_what_it_should() {
-    assert_eq!(
-        violations("ui.colored_label(Color32::LIGHT_RED, x)"),
-        ["raw-colour"]
-    );
-    assert_eq!(violations("Color32::from_rgb(1, 2, 3)"), ["raw-colour"]);
-    assert_eq!(violations("egui::Color32::from_gray(205)"), ["raw-colour"]);
-    assert_eq!(violations("RichText::new(x).size(17.0)"), ["raw-size"]);
-    assert_eq!(violations("egui::FontId::proportional(13.0)"), ["raw-size"]);
-    assert_eq!(violations("ui.menu_button(\"⋯\", add)"), ["raw-symbol"]);
-    assert!(violations("design::row_menu(ui, name, add)").is_empty());
+    for raw in [
+        "div().bg(rgb(0x1B1815))",
+        "div().text_color(gpui::rgba(0x0000_0080))",
+        "let c = hsla(0.1, 0.2, 0.3, 1.0);",
+        "let c = Hsla { a: 0.5, ..colors().text };",
+        "let c = gpui::Rgba { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };",
+        "let c = Color::from_rgb(1, 2, 3);",
+        "div().text_color(gpui::white())",
+        "div().bg(opaque_grey(0.5, 1.0))",
+    ] {
+        assert_eq!(violations(raw), ["raw-colour"], "{raw}");
+    }
+    assert_eq!(violations("div().text_size(px(17.0))"), ["raw-size"]);
+    assert_eq!(violations("div().line_height(px(22.0))"), ["raw-size"]);
+    assert_eq!(violations("font.size(13.0)"), ["raw-size"]);
+    assert_eq!(violations("kit::button(\"⋯\", add)"), ["raw-symbol"]);
+    assert!(violations("kit::row_menu(name, add)").is_empty());
     assert!(violations("Type::Body.size()").is_empty());
-    assert!(violations("// Color32::RED in a comment").is_empty());
-    assert!(violations("Color32::TRANSPARENT").is_empty());
+    assert!(violations("div().text_size(Type::Body.size())").is_empty());
+    assert!(violations("let channels = gpui.to_rgb();").is_empty());
+    assert!(violations("// rgb(0x000000) in a comment").is_empty());
+    assert!(violations("div().bg(gpui::transparent_black())").is_empty());
     assert!(violations("font_id.size = prose.size();").is_empty());
     assert_eq!(
         violations("format!(\"Not in this campaign's packages.\")"),

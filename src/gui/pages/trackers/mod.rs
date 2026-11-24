@@ -388,8 +388,8 @@ pub(crate) fn render_body(
 /// The footer's messages (`view::messages`): why the last act recorded nothing, then the last
 /// act with `Undo: <label>` and `Add to Timeline`, or `Added to the Timeline.` with `Undo add`.
 fn footer(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Vec<AnyElement> {
-    let frame = PaneFrame::plain();
-    let lines = crate::trackers::view::messages(&frame, &root.app.trackers, 0.0).into_plain();
+    let frame = PaneFrame::new();
+    let lines = crate::trackers::view::messages(&frame, &root.app.trackers).into_plain();
     kit::messages::lines(
         "trackers-footer",
         lines,

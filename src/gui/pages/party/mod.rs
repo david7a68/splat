@@ -78,8 +78,8 @@ pub(crate) fn render(
                 .blocked(header.refresh_reason.clone())
                 .on_click(cx.listener(move |root, _, _, cx| {
                     if let Some(session) = refresh_session.clone() {
-                        let SplatRoot { app, bridge, .. } = root;
-                        app.party.reader.refresh_by_hand(session, bridge.ctx());
+                        let SplatRoot { app, ctx, .. } = root;
+                        app.party.reader.refresh_by_hand(session, ctx);
                     }
                     cx.notify();
                 }))

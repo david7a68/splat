@@ -566,9 +566,9 @@ fn import(
         return section.into_any_element();
     }
     {
-        let SplatRoot { app, bridge, .. } = root;
+        let SplatRoot { app, ctx, .. } = root;
         if app.dndbeyond.wants_first_list() {
-            app.dndbeyond.refresh_list(session.clone(), bridge.ctx());
+            app.dndbeyond.refresh_list(session.clone(), ctx);
         }
     }
     let refreshing = root.app.dndbeyond.refreshing();
@@ -578,9 +578,8 @@ fn import(
             .density(Density::Read)
             .blocked(refreshing.then_some("Already refreshing."))
             .on_click(cx.listener(move |root, _, _, cx| {
-                let SplatRoot { app, bridge, .. } = root;
-                app.dndbeyond
-                    .refresh_list(refresh_session.clone(), bridge.ctx());
+                let SplatRoot { app, ctx, .. } = root;
+                app.dndbeyond.refresh_list(refresh_session.clone(), ctx);
                 cx.notify();
             })),
     );

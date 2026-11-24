@@ -1,4 +1,5 @@
 //! The Library page and its authoring state.
+use crate::state_context::StateContext;
 #[path = "library/kept.rs"]
 mod kept;
 #[path = "library/model.rs"]
@@ -19,7 +20,6 @@ use crate::{
     persistence::{Campaign, Module},
     world::file_fault::FileFault,
 };
-use eframe::egui;
 use kept::{KeptKind, LibraryKept};
 use presentation::Section;
 use splat::content::{
@@ -1385,12 +1385,7 @@ impl Library {
         !self.dirty()
     }
 
-    pub fn refresh_destination(
-        &mut self,
-        root: &Path,
-        _ctx: &egui::Context,
-        campaigns: &Campaigns,
-    ) {
+    pub fn refresh_destination(&mut self, root: &Path, _ctx: &StateContext, campaigns: &Campaigns) {
         // Point 3 of the review: the registration results follow the write at its event,
         // even while a draft holds the reload back.
         self.reconcile_registrations(campaigns);
@@ -1484,12 +1479,12 @@ impl Library {
         self.matches = None;
         self.scope_counts = None;
     }
-    fn start_load(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    fn start_load(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         self.reselect = self.open_file_id();
         self.load_key = Some(load_key(campaigns));
         let modules = campaigns.modules().to_vec();
         let campaign = campaigns.active_campaign();
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.loaded = None;
@@ -1561,7 +1556,7 @@ impl Library {
     /// The start of every Library frame, before anything draws (both UIs): the New entry form's
     /// error ends with the form; the repair guidance and Remove's Undo end with their owners;
     /// a load starts, or its result arrives; an edit or a repair another page asked for opens.
-    pub fn begin(&mut self, ctx: &egui::Context, campaigns: &mut Campaigns) {
+    pub fn begin(&mut self, ctx: &StateContext, campaigns: &mut Campaigns) {
         // The New entry form's error ends with the form, however it closed.
         if !self.new_form {
             self.new_error = None;
@@ -1688,14 +1683,9 @@ impl Library {
     fn form_messages<'f>(
         &self,
         frame: &'f PaneFrame,
-        width: f32,
         campaigns: &Campaigns,
     ) -> Messages<'f, LibraryPress> {
-        let mut messages = Messages::new(
-            frame,
-            "library_form_footer",
-            width.min(design::READER_MEASURE),
-        );
+        let mut messages = Messages::new();
         self.page_messages(frame, &mut messages, &ReaderResults::default(), campaigns);
         page_faults(
             &mut messages,
@@ -3373,11 +3363,7 @@ mod tests {
             ..Default::default()
         };
         fs::remove_file(module.path.join("Wolf.md")).unwrap();
-        library.refresh_destination(
-            &module.path,
-            &egui::Context::default(),
-            &Campaigns::default(),
-        );
+        library.refresh_destination(&module.path, &StateContext::new(), &Campaigns::default());
         assert!(library.disk_change.as_ref().unwrap().moved_to.is_none());
         library.save_selected(false);
         assert!(!module.path.join("Wolf.md").exists());
@@ -3420,11 +3406,7 @@ mod tests {
             module.path.join("Moved/Rule.md"),
         )
         .unwrap();
-        library.refresh_destination(
-            &module.path,
-            &egui::Context::default(),
-            &Campaigns::default(),
-        );
+        library.refresh_destination(&module.path, &StateContext::new(), &Campaigns::default());
         library.save_selected(true);
         assert!(
             !module.path.join("Rule.md").exists(),
@@ -5214,11 +5196,9 @@ mod tests {
             "fixture: the creature and the encounter are each in both owners"
         );
         // The warning in the reader's typed footer, as plain lines (M-L0.4b).
-        let frame = PaneFrame::plain();
-        let mut messages =
-            Messages::<LibraryPress>::new(&frame, "duplicates", design::READER_MEASURE);
+        let mut messages = Messages::<LibraryPress>::new();
         messages.outcome(duplicate_notice(
-            &egui::Context::default(),
+            &StateContext::new(),
             &loaded,
             &loaded.notes[0],
             &[0, 2],
@@ -5771,7 +5751,7 @@ mod tests {
     /// The words of two frames of the whole page, as the GPUI page runs them: `begin`, the
     /// list's work (`list_view`), then the empty Campaign scope's pane or the reader pane.
     fn page_words(library: &mut Library, campaigns: &mut Campaigns) -> String {
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut words = Vec::new();
         for _ in 0..2 {
             library.begin(&ctx, campaigns);
@@ -5795,7 +5775,10 @@ mod tests {
 
     /// Row 125: the owner line's status when its words end with `words`: its icon and its
     /// colour, which the icon and the words share.
-    fn owner_line_look(library: &mut Library, words: &str) -> Option<(String, egui::Color32)> {
+    fn owner_line_look(
+        library: &mut Library,
+        words: &str,
+    ) -> Option<(String, crate::design::Color)> {
         let subtitle = library.open_subtitle();
         let (view, _) = library.reader_view(&Campaigns::default(), None, &subtitle)?;
         let (icon, said, color) = view.file_line.status;
@@ -6462,7 +6445,7 @@ mod tests {
         let file = module.path.join("Wolf.md");
         let text = note_text("Wolf", "creature", None);
         fs::write(&file, &text).unwrap();
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut library = sd1_select(load(Some(&module)).unwrap(), Some(module.id), "Wolf.md");
         let draft = format!("{text}\nMy draft.\n");
         let _ = library.draft.replace(draft.clone());

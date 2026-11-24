@@ -802,7 +802,7 @@ impl Reader {
 
     /// Hand the other reader what it needs of this one: the edit forms open here, the Log
     /// fields open here, and the note whose edit form this reader drew in the last pass (its
-    /// save row is on screen). `pass` is this pass's `cumulative_pass_nr`.
+    /// save row is on screen). `pass` is this pass's `StateContext::pass`.
     pub fn share_with(&self, other: &mut super::Reader, pass: u64) {
         self.edit_forms_into(&mut other.edited_elsewhere);
         // Copied again only when a field here opened or closed (its stamp), not each pass.

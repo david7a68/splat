@@ -1190,8 +1190,8 @@ impl WorldPage {
         campaign: &Campaign,
         more: impl for<'f> FnOnce(&'f PaneFrame, &mut Messages<'f, crate::world::FooterAct>),
     ) -> Vec<design::outcome::plain::PlainLine<crate::world::FooterAct>> {
-        let frame = design::outcome::PaneFrame::plain();
-        let mut messages = Messages::new(&frame, "plain", 0.0);
+        let frame = design::outcome::PaneFrame::new();
+        let mut messages = Messages::new();
         match (item, self.view) {
             (_, View::Questions) => self.questions_messages(&frame, &mut messages, campaign),
             (Some(item), _) => {
@@ -1214,9 +1214,8 @@ impl WorldPage {
     pub fn creation_footer(
         &self,
     ) -> Vec<design::outcome::plain::PlainLine<crate::world::FooterAct>> {
-        let frame = design::outcome::PaneFrame::plain();
-        let mut messages: Messages<'_, crate::world::FooterAct> =
-            Messages::new(&frame, "plain", 0.0);
+        let frame = design::outcome::PaneFrame::new();
+        let mut messages: Messages<'_, crate::world::FooterAct> = Messages::new();
         let form = self.new_kind.is_some() || self.card_shown();
         if let Some(npc) = self.generated.as_ref().filter(|_| self.generated_shown) {
             if let Some(name) = self.lookup_npc.as_ref().filter(|_| self.lookup_kept) {

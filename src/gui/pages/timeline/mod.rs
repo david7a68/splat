@@ -117,7 +117,7 @@ pub(crate) fn render(
     };
     let page_width = page_width(root, window);
     {
-        let SplatRoot { app, bridge, .. } = root;
+        let SplatRoot { app, ctx, .. } = root;
         let page = &mut app.timeline_page;
         // Only a real change: the first show can already have an event to reveal.
         if page.campaign.is_some_and(|old| old != campaign) {
@@ -130,7 +130,7 @@ pub(crate) fn render(
             };
         }
         page.campaign = Some(campaign);
-        page.settle_added(bridge.ctx(), &app.timeline);
+        page.settle_added(ctx, &app.timeline);
         // A pending reveal is its journey's: a changed selection drops it before any draw.
         if page
             .reveal_checks
@@ -199,9 +199,8 @@ pub(crate) fn render(
         .on_click(cx.listener(|root, _, _, cx| {
             let current = root.app.sessions.current();
             let id = root.app.timeline.add(Kind::Day, current);
-            let SplatRoot { app, bridge, .. } = root;
-            app.timeline_page
-                .record_added(id, &app.timeline, bridge.ctx());
+            let SplatRoot { app, ctx, .. } = root;
+            app.timeline_page.record_added(id, &app.timeline, ctx);
             cx.notify();
         }));
         let body = kit::empty_state(
@@ -333,12 +332,11 @@ fn list_footer(
 ) -> Vec<AnyElement> {
     let app = &mut root.app;
     let offer = open.and_then(|id| app.sessions.event_link_offer(&app.timeline, id));
-    let frame = PaneFrame::plain();
+    let frame = PaneFrame::new();
     let lines = app
         .timeline_page
         .list_messages(
             &frame,
-            0.0,
             &app.timeline,
             &mut app.sessions,
             open,
@@ -498,9 +496,8 @@ fn add_kind(root: &mut SplatRoot, kind: Kind) {
     } else {
         book.add(kind, current)
     };
-    let SplatRoot { app, bridge, .. } = root;
-    app.timeline_page
-        .record_added(id, &app.timeline, bridge.ctx());
+    let SplatRoot { app, ctx, .. } = root;
+    app.timeline_page.record_added(id, &app.timeline, ctx);
 }
 
 /// Whether every kind of the Add strip fits on its line in `room` (`hanging_add_strip`'s fit):

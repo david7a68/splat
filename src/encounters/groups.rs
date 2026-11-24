@@ -4,6 +4,7 @@
 use super::{Creature, EditorPane, Encounters, Snapshot};
 use crate::design::memo::Revised;
 use crate::design::text_draft::{KeptCompare, TextDraft};
+use crate::state_context::StateContext;
 use crate::{
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
     design::{self, Tone},
@@ -12,7 +13,6 @@ use crate::{
     library::{note_path, write_note},
     persistence::{Campaign, Module},
 };
-use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use splat::content::{
@@ -1290,7 +1290,7 @@ impl Encounters {
     /// else the draft goes (with Undo) and the file's text comes back.
     pub fn group_disk_choice(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         campaign: &Campaign,
         modules: &[Module],
         keep: bool,
@@ -1497,7 +1497,7 @@ impl Encounters {
 
     pub(super) fn save_group_draft(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         active: &Campaign,
         modules: &[Module],
     ) {
@@ -1760,7 +1760,7 @@ pub struct GroupView {
     pub back: super::model::BackLine,
     pub save_primary: bool,
     pub save_blocked: Option<String>,
-    pub state: (String, String, egui::Color32),
+    pub state: (String, String, crate::design::Color),
     pub discard: bool,
     /// `Add a creature first.` beside Save, and the campaign-switch reason.
     pub empty_reason: Option<&'static str>,
@@ -1877,7 +1877,7 @@ impl Encounters {
     /// A press in the group editor's head: Back, Discard or Save. True when it closed.
     pub fn group_head_act(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         active: &Campaign,
         modules: &[Module],
         act: super::model::HeadAct,
@@ -2004,10 +2004,8 @@ impl Encounters {
                     .collect()
             })
             .unwrap_or_default();
-        let frame = design::outcome::PaneFrame::plain();
-        let footer_id = self.group_draft.as_ref().map(|draft| draft.id());
-        let mut messages =
-            design::outcome::Messages::new(&frame, ("group_editor_footer", footer_id), 0.0);
+        let frame = design::outcome::PaneFrame::new();
+        let mut messages = design::outcome::Messages::new();
         self.group_lines(&mut messages, &frame, root, refusal.as_ref(), file_warnings);
         messages.into_plain()
     }
@@ -2099,7 +2097,7 @@ mod tests {
         // Review 2 of PR 347: the result lives while its draft can come back, and ends when it
         // cannot, through `poll` as the app calls it. Discard again: it is kept. Edit the clean
         // draft: Undo discard expires, and the result ends. Repeated, no entry builds up.
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let campaigns = crate::campaigns::Campaigns::default();
         for _ in 0..2 {
             let draft = page.group_draft.as_mut().unwrap();
@@ -2257,7 +2255,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
         let scout = creature(dir.path(), "Scout");
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut encounters = Encounters::default();
         encounters.new_group_in_plan();
         assert!(encounters.group_open_in_plan());
@@ -2292,7 +2290,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
         let scout = creature(dir.path(), "Scout");
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut encounters = Encounters::default();
         let mut paths = Vec::new();
         for name in ["Ash Pack", "Rival Team"] {
@@ -2328,7 +2326,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
         let scout = creature(dir.path(), "Scout");
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut encounters = Encounters {
             group_draft: Some(GroupDraft::new()),
             ..Encounters::default()
@@ -2364,7 +2362,7 @@ mod tests {
             &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: encounter\nsplat_name: Patrol\nsplat_encounter: {{roster: []}}\n", Uuid::new_v4()), "").expect("schema-2 fixture"),
         )
         .unwrap();
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut encounters = Encounters {
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
             group_draft: Some(GroupDraft::open(dir.path(), &draft.path).unwrap()),
@@ -2504,7 +2502,7 @@ mod tests {
             &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {owner}\nsplat_kind: encounter\nsplat_name: Bridge\nsplat_encounter: {{roster: []}}\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut encounters = Encounters::default();
         encounters.new_group_in_plan();
         let mut draft = GroupDraft::for_encounter(owner);
@@ -2586,7 +2584,7 @@ mod tests {
     fn a_group_that_cannot_save_stays_open_in_the_plan() {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut encounters = Encounters::default();
         encounters.new_group_in_plan();
         encounters.save_group_draft(&ctx, &campaign, &[]);
@@ -3266,7 +3264,7 @@ mod tests {
         );
         // The keyboard's Save goes the same way as the blocked button: the refusal starts the
         // watch and the footer stays empty. A check after the next edit keeps it so.
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut encounters = Encounters {
             snapshot: Some(snapshot),
             group_draft: Some(reopened.clone()),
@@ -3482,7 +3480,7 @@ mod tests {
             ..Default::default()
         };
         // Through the model the GPUI page draws: the conflict, the choice, the editor's footer.
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let view = editor.encounter_disk().expect("the gone group's conflict");
         assert_eq!(view.lose, "Remove group and lose draft");
         editor.encounter_disk_choice(&ctx, &campaign, &[], false);
@@ -3490,7 +3488,7 @@ mod tests {
         assert!(draft.groups.is_empty(), "the gone group left the draft");
         assert!(editor.error.is_none());
         editor.draft.as_mut().unwrap().name = "Renamed again".into();
-        let lines = editor.editor_footer(&ctx, &campaign.path);
+        let lines = editor.editor_footer(&campaign.path);
         let removed = lines
             .iter()
             .find(|line| line.words == "Changed removed. Its draft was discarded.")

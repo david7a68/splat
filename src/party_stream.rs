@@ -1,6 +1,6 @@
 //! Official campaign message-broker transport. Receives events; never publishes game events.
 use crate::auth::Session;
-use eframe::egui;
+use crate::state_context::StateContext;
 use serde_json::Value;
 use std::{
     collections::VecDeque,
@@ -29,7 +29,7 @@ impl Drop for Stream {
     }
 }
 impl Stream {
-    pub fn start(session: Session, campaign: String, ctx: &egui::Context) -> Self {
+    pub fn start(session: Session, campaign: String, ctx: &StateContext) -> Self {
         let (tx, rx) = mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
         // Test builds have no route to D&D Beyond. A signed-in test has an open stream.
@@ -38,7 +38,7 @@ impl Stream {
             return Self { rx, cancel };
         }
         let stop = cancel.clone();
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         thread::spawn(move || {
             let _run = (|| -> Result<(), ()> {
                 let request = crate::auth::stream_request(&session, &campaign).map_err(|_| ())?;
@@ -192,7 +192,7 @@ mod live_monitor {
                 .unwrap(),
         ))
         .unwrap();
-        let stream = Stream::start(session, remote.into(), &egui::Context::default());
+        let stream = Stream::start(session, remote.into(), &StateContext::new());
         let started = Instant::now();
         let mut updates = 0;
         while started.elapsed() < Duration::from_secs(180) {

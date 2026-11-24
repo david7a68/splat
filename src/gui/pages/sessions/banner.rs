@@ -4,7 +4,7 @@
 //! third of the window; it scrolls past that.
 use super::footer::tone;
 use crate::design::outcome::plain::ChoiceForm as Kind;
-use crate::gui::{SplatRoot, bridge, kit, theme};
+use crate::gui::{SplatRoot, kit, theme};
 use crate::sessions::page::gpui_facade::{BannerAct, BannerChoice, BannerMessage};
 use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
@@ -32,11 +32,11 @@ pub(super) fn render(
             .child(kit::icon(
                 other.status.icon,
                 Type::Small,
-                bridge::color(other.status.icon_color()),
+                theme::color(other.status.icon_color()),
             ))
             .child(kit::text(
                 Type::Small,
-                bridge::color(other.status.word_color()),
+                theme::color(other.status.word_color()),
                 other.words,
             ))
             .child(kit::text(Type::Small, c.muted, other.detail))
@@ -148,7 +148,7 @@ fn message(at: usize, message: BannerMessage, cx: &mut Context<SplatRoot>) -> An
 }
 
 fn press(root: &mut SplatRoot, act: BannerAct) {
-    let ctx = root.bridge.ctx().clone();
+    let ctx = root.ctx.clone();
     let app = &mut root.app;
     app.sessions
         .gv_banner_act(act, &ctx, &app.processing, &app.timeline);

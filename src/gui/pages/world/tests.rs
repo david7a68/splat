@@ -563,11 +563,7 @@ fn world_entry_rolls_and_links_to_a_heading() {
     shell.click_at(gpui::point(dice.left() + px(8.0), dice.top() + px(10.0)));
     assert!(
         shell
-            .read(|root| crate::rolls::plain::preview_words(
-                root.bridge.ctx(),
-                "Gate Warden",
-                &[&check]
-            ))
+            .read(|root| crate::rolls::plain::preview_words(&root.ctx, "Gate Warden", &[&check]))
             .is_some(),
         "the dice link rolled for Gate Warden"
     );

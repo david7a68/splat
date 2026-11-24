@@ -105,19 +105,15 @@ pub(crate) fn poll(root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<
     if let Some(folder) = app.library.content_changed.take() {
         app.campaign_content.refresh_destination(&folder);
         app.encounters
-            .refresh_content(root.bridge.ctx(), &app.campaigns, &folder);
+            .refresh_content(&root.ctx, &app.campaigns, &folder);
         app.lookup.refresh();
     }
 }
 
-/// The link index the reader and the list read (`reader_link_index`), as the Encounters page's
-/// content refresh leaves it.
+/// The link index the reader and the list read (`requests::LINK_INDEX`), as the frame logic
+/// leaves it.
 pub(crate) fn link_index(root: &SplatRoot) -> Option<Arc<crate::lookup::ContentIndex>> {
-    root.bridge.ctx().data(|data| {
-        data.get_temp::<Arc<crate::lookup::ContentIndex>>(eframe::egui::Id::new(
-            "reader_link_index",
-        ))
-    })
+    root.ctx.get(crate::requests::LINK_INDEX)
 }
 
 /// The page's width: the window less the rail, the page's padding and a side panel.
@@ -131,7 +127,7 @@ pub(crate) fn render(
     window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
-    let ctx = root.bridge.ctx().clone();
+    let ctx = root.ctx.clone();
     {
         let app = &mut root.app;
         app.library.begin(&ctx, &mut app.campaigns);

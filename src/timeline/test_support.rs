@@ -14,8 +14,8 @@ pub enum TestUndo {
 /// returns (the event put back), else `None`. With no such result, no Undo shows: `None`.
 pub fn press_footer_undo(book: &mut Book, which: TestUndo) -> Option<String> {
     use crate::design::outcome::{Messages, PaneFrame, Said, UndoStep, Verb};
-    let frame = PaneFrame::plain();
-    let mut messages = Messages::new(&frame, "test_footer", 0.0);
+    let frame = PaneFrame::new();
+    let mut messages = Messages::new();
     let file = book.file();
     let words = crate::sentence!("A result.");
     let step = match which {

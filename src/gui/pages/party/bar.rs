@@ -5,7 +5,7 @@
 //! and `N more` names the rest.
 use crate::gui::kit::{self, IconButton, WithTooltip as _};
 use crate::gui::theme::{Density, L, M, S, Type, TypeExt, XS, colors};
-use crate::gui::{SplatRoot, bridge, icons};
+use crate::gui::{SplatRoot, icons, theme};
 use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, Pixels, SharedString, Styled,
     Window, div, prelude::*, px,
@@ -174,7 +174,7 @@ pub(super) fn render(
             .child(kit::status(&kit::Status::new(
                 source.icon,
                 words,
-                bridge::color(source.color),
+                theme::color(source.color),
             )))
             .with_tooltip(source.word.clone())
     });

@@ -45,7 +45,7 @@ pub(super) fn render(
                 let Some(press) = pressed.take() else {
                     return;
                 };
-                let ctx = root.bridge.ctx().clone();
+                let ctx = root.ctx.clone();
                 let app = &mut root.app;
                 app.library.press_footer(press, &ctx, &mut app.campaigns);
                 cx.notify();

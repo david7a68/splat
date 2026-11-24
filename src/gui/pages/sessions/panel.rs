@@ -1,7 +1,7 @@
 //! The Notes panel beside another page (`Sessions::notes_panel`, Ctrl+J): the note of the session
 //! being played, from its `## What happened` on, with its title, date, state and close icon.
 use super::footer;
-use crate::gui::{SplatRoot, bridge, kit, theme};
+use crate::gui::{SplatRoot, kit, theme};
 use crate::sessions::page::gpui_facade::PanelState;
 use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div, prelude::*};
 use std::rc::Rc;
@@ -18,7 +18,7 @@ pub(super) fn render(
         .app
         .sessions
         .gv_note_status()
-        .map(|status| kit::status(&bridge::status(&status)));
+        .map(|status| kit::status(&kit::Status::of(&status)));
     let head = div()
         .flex()
         .flex_row()

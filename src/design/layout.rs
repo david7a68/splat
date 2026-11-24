@@ -93,7 +93,10 @@ impl Word {
 macro_rules! word {
     ($word:literal) => {
         const {
-            #[allow(clippy::disallowed_methods, reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)")]
+            #[allow(
+                clippy::disallowed_methods,
+                reason = "owner: the design system checks a word (design::results::OWNED_ALLOWS)"
+            )]
             let word = $crate::layout::Word::checked($word);
             word
         }

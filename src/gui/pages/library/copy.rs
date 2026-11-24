@@ -32,7 +32,7 @@ pub(super) fn render(
     };
     let mut frame = kit::Dialog::new("copy-entry", "Copy entry")
         .on_escape(act(cx, |root, _, cx| {
-            let ctx = root.bridge.ctx().clone();
+            let ctx = root.ctx.clone();
             root.app.follow_copy_dialog(&ctx, false);
             cx.notify();
         }))
@@ -56,7 +56,7 @@ pub(super) fn render(
                         if let Some(dialog) = &mut root.app.copy_dialog {
                             dialog.add_copy_to_draft();
                         }
-                        let ctx = root.bridge.ctx().clone();
+                        let ctx = root.ctx.clone();
                         root.app.follow_copy_dialog(&ctx, false);
                         cx.notify();
                     }),
@@ -73,7 +73,7 @@ pub(super) fn render(
                 if let Some(dialog) = &mut root.app.copy_dialog {
                     dialog.edit_the_copy();
                 }
-                let ctx = root.bridge.ctx().clone();
+                let ctx = root.ctx.clone();
                 root.app.follow_copy_dialog(&ctx, false);
                 cx.notify();
             })))
@@ -90,7 +90,7 @@ pub(super) fn render(
             .action(
                 kit::Button::quiet("copy-close", "Close").on_click(cx.listener(
                     |root, _, _, cx| {
-                        let ctx = root.bridge.ctx().clone();
+                        let ctx = root.ctx.clone();
                         root.app.follow_copy_dialog(&ctx, false);
                         cx.notify();
                     },
@@ -195,7 +195,7 @@ pub(super) fn render(
     }
     let cancel =
         kit::Button::quiet("copy-cancel", "Cancel").on_click(cx.listener(|root, _, _, cx| {
-            let ctx = root.bridge.ctx().clone();
+            let ctx = root.ctx.clone();
             root.app.follow_copy_dialog(&ctx, false);
             cx.notify();
         }));
@@ -318,6 +318,6 @@ pub(super) fn render(
 
 /// What the dialog asked of the app (a refresh after a copy), as egui does after it draws.
 fn follow(root: &mut SplatRoot) {
-    let ctx = root.bridge.ctx().clone();
+    let ctx = root.ctx.clone();
     root.app.follow_copy_dialog(&ctx, true);
 }

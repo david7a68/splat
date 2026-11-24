@@ -181,8 +181,8 @@ fn sync_footer(root: &SplatRoot, connected: bool, cx: &mut Context<SplatRoot>) -
     if !connected {
         return Vec::new();
     }
-    let frame = crate::design::outcome::PaneFrame::plain();
-    let mut messages = crate::design::outcome::Messages::new(&frame, "party_sheet_footer", 0.0);
+    let frame = crate::design::outcome::PaneFrame::new();
+    let mut messages = crate::design::outcome::Messages::new();
     root.app.party.combat.footer_messages(&frame, &mut messages);
     kit::messages::lines(
         "party-sheet-footer",
