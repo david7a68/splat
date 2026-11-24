@@ -213,8 +213,8 @@ says otherwise (`cx.listener` makes them).
 | Page header (`title`) | `page_header(title, Option<context>, Vec<AnyElement>)`, `page_header_with(title, Option<AnyElement>, Vec<AnyElement>)`, `title::actions(items)` | A page's first line, rule and `L`; `_with` for a context that is an element (a status) |
 | Scroll (`scroll`) | `scroll_column(id, content)`, `scroll::scroll_column_with(id, &ScrollHandle, content)`, `scroll::sideways(id, content)` | A column that keeps its bar's lane |
 | Virtual list (`virtual_list`) | `uniform_column(id, &UniformListScrollHandle, count, cx.processor(\|root, range, window, cx\| Vec<row>))`, `measured_column(id, &ListState, \|at, window, cx\| AnyElement)` | A long list that builds only the rows in view, in a column that keeps its bar's lane. `uniform_column` when every row has one height (Library entries, Timeline events); `measured_column` when rows have their own heights (World's headings and notes; `splice` the `ListState` when the rows change). Keep the handle or state in your page's GPUI state |
-| Panes (`panes`) | `Pane::new(id).header(..).footer(element).fixed().flush().child(..)`, `Columns::new(id).column(width, min..max, pane).rest(pane)` | Task columns with splitters; messages in the footer |
-| Markdown (`markdown`) | `markdown(id, source)` / `Markdown::new(id, source)` then `.document(uuid)`, `.compact()`, `.fields()`, `.skills()`, `.row_words(muted)`, `.full_width()`, `.wide_tables()`, `.jump_in(&ScrollHandle)`, `.on_link(\|&str, window, cx\|)`, `.on_target(\|&LinkTarget, window, cx\|)` | Every Markdown document; see Reader parts |
+| Panes (`panes`) | `Pane::new(id).header(..).footer(element).fixed().flush().scroll(&ScrollHandle).child(..)`, `Columns::new(id).column(width, min..max, pane).rest(pane)` | Task columns with splitters; messages in the footer |
+| Markdown (`markdown`) | `markdown(id, source)` / `Markdown::new(id, source)` then `.document(uuid)`, `.compact()`, `.fields()`, `.skills()`, `.row_words(muted)`, `.full_width()`, `.wide_tables()`, `.jump_in(&ScrollHandle)`, `.on_note(\|&str, window, cx\|)`, `.on_link(\|&str, window, cx\|)`, `.on_target(\|&LinkTarget, window, cx\|)` | Every Markdown document; see Reader parts |
 | Nav (`nav`) | `NavItem::new(..).detail(..).selected(bool).hint(..).name(..).on_click(f)`, `NavToggle::new(..).hint(..).on_click(f)` | The rail only |
 | Tooltip (`tooltip`) | `.with_tooltip(words)` on an element with an id (`WithTooltip`), `tooltip::tip(words)` | Hints and blocked reasons |
 | Target | `kit::target(element, name)` | Name your own pressable element for the harness |
@@ -261,6 +261,8 @@ made again only when the words, mode, document, link index, art or width change.
 | `.row_words(muted)` | `show_row_words` | A plan row's words: `Body` on `XL` lines, no space after |
 | `.full_width()` / `.wide_tables()` | `with_wide_tables` | Fill the parent / tables take the parent while prose keeps the measure |
 | `.jump_in(&handle)` | `want_heading` | The scroll column a typed jump (`markdown_view::want_heading(ctx, Some(h))`) scrolls |
+| `.on_note(f)` | `take_note_link` | A note link goes to the caller with the note's words; web links, bold names and dice keep the reader's routing (World's and the Library's readers) |
+| `markdown::jump_here(handle)` | `want_heading` | A heading drawn outside a document (a note's or an entry's section): put it before the heading when `markdown_view::wanted_heading` says so |
 | `.on_link(f)` / `.on_target(f)` | `take_note_link` | Replace the reader's routing (a note's `splat-note:…`, a URL, a bold name / any `LinkTarget`) |
 
 **Entry view** (`pages::reader::entry`): the one reader of a content entry (egui `library::view`),
@@ -274,7 +276,9 @@ EntryView::new(id, &name, Some(&entry), entry.body.clone(), Source::from(&origin
     .run(RunValues { .. })               // egui `show_run`: live vitals, printed values under them
     .related(element)                    // egui `show_with_related`'s closure
     .on_open(|index: usize, window, cx| …)   // a followed related/feature/spell link (egui's `Option<usize>`)
+    .on_note(|note: &str, window, cx| …)     // a note link in its words (else it goes to Lookup)
     .jump_in(&scroll);                   // typed jumps to section headings
+// `.render_with(&links, window, cx)` draws it now with borrowed links (the Library's own notes).
 entry::title_with_art(title, subtitle, Some(&entry), cx)  // name, subtitle and picture
 ```
 
@@ -367,9 +371,9 @@ fn library_browse() {
   instead of the row's width; Markdown source (`markdown_source`: reader faces, folded
   `splat:` marks, section rules where a note is typed) is not ported, as the kit's
   `TextEditor` has one font size per editor (`text_type`).
-- The entry view (`pages::reader::entry::EntryView`) is not yet drawn by the Library reader,
-  Lookup or the run's side panel: they show the entry's Markdown (`kit::Markdown`) and their
-  own vitals. Moving them onto `EntryView` changes what they show, so it is a page task.
+- The Library's Read, World's reader and Lookup draw entries with the entry view
+  (`EntryView`). World's note reader is one view for two hosts (`pages::world::reader::Host`:
+  World's page and Lookup's compact panel), each with its own `world::Reader`.
 - The legacy host freeze (`src/design/legacy_hosts.tsv`) has three GPUI rows (`footer-feed` in
   `pages/settings/mod.rs` `campaign_lines`, `account_lines`, `pages/party/sheet.rs`
   `sync_footer`): the GPUI view reads the same egui footer feeders. Its growth check passes
