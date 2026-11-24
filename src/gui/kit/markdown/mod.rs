@@ -409,7 +409,9 @@ impl RenderOnce for Markdown {
 }
 
 /// An empty mark where a typed jump lands: as it is laid out, its column scrolls it to its top.
-fn jump_here(handle: ScrollHandle) -> impl IntoElement {
+/// A reader that draws a heading outside a document (an entry's section, a note's section) puts
+/// one before it when `markdown_view::wanted_heading` says the jump is for that heading.
+pub fn jump_here(handle: ScrollHandle) -> impl IntoElement {
     canvas(
         move |bounds: Bounds<Pixels>, window, _| {
             let column = handle.bounds();

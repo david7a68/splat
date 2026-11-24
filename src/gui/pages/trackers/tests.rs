@@ -172,6 +172,25 @@ fn quick_actions_notices_and_amounts() {
         3,
         "Escape presses nothing"
     );
+    // The note's reader in Lookup has each tracker's folded history under the note (egui
+    // `TrackerUi::history`, drawn by the shared World reader).
+    shell.update(|root, _, cx| {
+        root.app.lookup.back_from_trackers();
+        assert!(root.app.lookup.open_name("Tournament"), "the note opens");
+        cx.notify();
+    });
+    shell.settle();
+    let history = crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with("Seals history"))
+        .unwrap_or_else(|| {
+            panic!(
+                "the history of Seals shows: {:?}",
+                crate::gui::kit::probe::names()
+            )
+        });
+    shell.click(&history);
+    shell.capture("trackers__07-tracker-history-in-the-reader__1200x800");
 }
 
 /// The panel at the smallest window, with the race in play.

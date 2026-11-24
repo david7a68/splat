@@ -1234,6 +1234,9 @@ fn note_text(
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let id = item.entry.id;
+    let ctx = cx
+        .try_global::<kit::markdown::Host>()
+        .map(|host| host.0.clone());
     let body = crate::world::with_named_links(
         &item.entry.body,
         &std::collections::HashMap::new(),
@@ -1253,6 +1256,12 @@ fn note_text(
         });
     for (at, section) in sections.iter().enumerate() {
         if section.title != "Overview" {
+            // A followed link's heading: the column scrolls it to its top.
+            if let Some(ctx) = &ctx
+                && crate::markdown_view::wanted_heading(ctx, &section.title)
+            {
+                column = column.child(kit::markdown::jump_here(scroll.clone()));
+            }
             column = column.child(kit::heading(kit::Heading::Section(&section.title), false));
         }
         column = column.child(

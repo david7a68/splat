@@ -34,9 +34,8 @@ use crate::library::view::{Links, Origin, RunValues};
 use crate::library::{class, creature, presentation, reader};
 use eframe::egui;
 use gpui::{
-    AnyElement, App, Bounds, ElementId, IntoElement, ObjectFit, ParentElement, Pixels, RenderOnce,
-    ScrollHandle, SharedString, Styled, StyledImage, Window, canvas, div, img, point, prelude::*,
-    px,
+    AnyElement, App, ElementId, IntoElement, ObjectFit, ParentElement, RenderOnce, ScrollHandle,
+    SharedString, Styled, StyledImage, Window, div, img, prelude::*,
 };
 use splat::content::{Entry, Reference};
 use std::rc::Rc;
@@ -262,7 +261,7 @@ impl Out<'_> {
             && crate::markdown_view::wanted_heading(ctx, &title)
         {
             self.items
-                .push(jump_here(handle.clone()).into_any_element());
+                .push(kit::markdown::jump_here(handle.clone()).into_any_element());
         }
         let first = self.items.is_empty();
         self.push(parts::section_heading(title, first));
@@ -305,25 +304,6 @@ impl Out<'_> {
             }
         })
     }
-}
-
-/// An empty mark where a typed jump lands: as it is laid out, its column scrolls it to its top
-/// (as `kit::markdown`'s).
-fn jump_here(handle: ScrollHandle) -> impl IntoElement {
-    canvas(
-        move |bounds: Bounds<Pixels>, window, _| {
-            let column = handle.bounds();
-            let offset = handle.offset();
-            let below = bounds.top() - column.top();
-            if below.abs() > px(0.5) {
-                handle.set_offset(point(offset.x, offset.y - below));
-                window.on_next_frame(|window, _| window.refresh());
-            }
-        },
-        |_, _, _, _| {},
-    )
-    .w_full()
-    .h(px(0.0))
 }
 
 /// A stat block's spells: each spell its lists name is a tile under the list's label, and a line

@@ -144,7 +144,7 @@ fn creature_stat_block_and_its_dice() {
     // A press on an ability's modifier asks for its check; outside a run the preview stream
     // rolls it, and its result is kept for the entry.
     let mut shell = shell("library-browse", Seed::Empty, at(DEFAULT));
-    show_entry(
+    let scroll = show_entry(
         &mut shell,
         READER,
         builtin("definitions/creatures/adult_black_dragon.md"),
@@ -159,6 +159,39 @@ fn creature_stat_block_and_its_dice() {
     assert!(
         rolled.is_some_and(|parts| !parts.is_empty()),
         "the Strength check was rolled for the Adult Black Dragon"
+    );
+    // In a run, the armed action's tile row says what to do now and offers what can follow; a
+    // press on a follow-up goes to the run (egui `rolls::tile_row` under `show_run`).
+    let dragon = builtin("definitions/creatures/adult_black_dragon.md");
+    let armed = crate::rolls::plain::actions_of(&dragon.body)[0].1.link.clone();
+    shell.update(|root, _, cx| {
+        let ctx = root.bridge.ctx();
+        crate::rolls::set_roller(ctx, Some(0));
+        crate::rolls::set_armed(
+            ctx,
+            Some(crate::rolls::ArmedView {
+                link: armed,
+                occurrence: None,
+                status: "Click a target. Escape stops.".into(),
+                reserve: String::new(),
+                actions: vec![("Stop", crate::rolls::ArmedAction::Stop)],
+            }),
+        );
+        cx.notify();
+    });
+    shell.settle();
+    scroll_to(&mut shell, &scroll, "Stop");
+    assert!(
+        shell.bounds("Stop").is_some(),
+        "the armed action's follow-up shows under its tiles: {:?}",
+        crate::gui::kit::probe::names()
+    );
+    shell.capture("reader-armed-tile__01-armed-action-in-a-run__1200x800");
+    shell.click("Stop");
+    assert_eq!(
+        shell.read(|root| crate::rolls::take_armed_action(root.bridge.ctx())),
+        Some(crate::rolls::ArmedAction::Stop),
+        "Stop goes to the run"
     );
 }
 

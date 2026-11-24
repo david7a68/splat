@@ -820,6 +820,7 @@ fn repair(root: &mut SplatRoot, campaign: &Campaign, cx: &mut Context<SplatRoot>
                 blocked: reason,
                 lock: None,
                 cancel: None,
+                reason_under: false,
             },
             save,
             cx.listener(|root: &mut SplatRoot, _, _, cx| {
@@ -892,6 +893,8 @@ struct SaveRow {
     lock: Option<&'static str>,
     /// Cancel's reason while the form is clean, when Cancel waits.
     cancel: Option<Option<&'static str>>,
+    /// The reason goes on its own line under the row (Lookup's narrow panel), not beside Save.
+    reason_under: bool,
 }
 
 /// The save row: the draft's state word, Discard (or a clean form's Cancel), the reason, and
@@ -942,12 +945,21 @@ fn save_row(
     } else {
         None
     };
-    line.when_some(reason, |line, reason| {
-        line.child(kit::text(theme::Type::Small, c.muted, reason))
-    })
-    .child(div().flex_1())
-    .child(save)
-    .into_any_element()
+    let reason = reason.map(|reason| kit::text(theme::Type::Small, c.muted, reason));
+    if row.reason_under {
+        // In Lookup's narrow panel the reason has its own line under the row, so Save stays
+        // inside the pane (egui's narrow save row).
+        return div()
+            .flex()
+            .flex_col()
+            .child(line.child(div().flex_1()).child(save))
+            .children(reason)
+            .into_any_element();
+    }
+    line.children(reason)
+        .child(div().flex_1())
+        .child(save)
+        .into_any_element()
 }
 
 /// The edit form, in place of the note's rows and text: Stat block, Place and Part of with
@@ -1121,6 +1133,7 @@ pub(super) fn edit_form(
             },
             lock: Some("Save or discard to switch campaign."),
             cancel: Some(cancel_reason),
+            reason_under: host == super::reader::Host::Lookup,
         },
         act::<gpui::ClickEvent>(cx, move |root, campaign, index, _, _| {
             if let Some(at) = index.position(id)
