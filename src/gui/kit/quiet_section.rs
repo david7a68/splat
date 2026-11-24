@@ -87,6 +87,8 @@ impl RenderOnce for QuietSection {
             .cursor_pointer()
             .hover(|s| s.bg(c.hover))
             .focusable()
+            .tab_stop(true)
+            .role(gpui::Role::Button)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(self.title.clone())
             .on_click(move |_, window, cx| {

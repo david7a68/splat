@@ -86,6 +86,8 @@ impl RenderOnce for Row {
             .when(self.selected, |row| row.bg(c.selected))
             .when(!self.selected, |row| row.hover(|s| s.bg(c.hover)))
             .focusable()
+            .tab_stop(true)
+            .role(gpui::Role::Button)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(self.name.clone())
             .aria_selected(self.selected)

@@ -99,6 +99,8 @@ impl RenderOnce for Link {
             .cursor_pointer()
             .hover(|s| s.text_color(c.focus))
             .focusable()
+            .tab_stop(true)
+            .role(gpui::Role::Link)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(name.clone())
             .child(self.words.clone());

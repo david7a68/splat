@@ -265,8 +265,13 @@ impl RenderOnce for Button {
             .whitespace_nowrap()
             .overflow_hidden()
             .focusable()
+            .tab_stop(enabled)
+            .role(gpui::Role::Button)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
-            .aria_label(name.clone());
+            .aria_label(name.clone())
+            .when_some(hover_words.clone(), |button, words| {
+                button.aria_description(words)
+            });
         if self.full_width {
             button = button.w_full().ml(px(0.0));
         }
@@ -390,6 +395,8 @@ impl RenderOnce for IconButton {
             .cursor_pointer()
             .hover(|s| s.bg(c.hover).text_color(c.text))
             .focusable()
+            .tab_stop(true)
+            .role(gpui::Role::Button)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(self.name.clone())
             .tooltip(tip(hint))

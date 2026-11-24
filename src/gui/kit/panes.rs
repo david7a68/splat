@@ -5,7 +5,9 @@
 //!   notices (`kit::Message`s), so a message never moves the form the DM works in.
 //! - `Columns`: panes side by side with a drag handle (splitter) between them. Each fixed column
 //!   has a default width and a range; the last column takes the rest. The widths live in
-//!   gpui-component's `ResizableState`, kept under the columns' id.
+//!   gpui-component's `ResizableState`, kept under the columns' id. A column `saved` under its
+//!   egui id keeps the DM's width after a restart (`kit::edge::ColumnWidths`, `ui_state`), as
+//!   egui's `Column` does.
 //!
 //! Keep targets clear of a splitter: a pane's content has `M` padding at its sides.
 use crate::gui::theme::{HAIRLINE_WIDTH, M, S, colors};
@@ -73,6 +75,13 @@ impl ParentElement for Pane {
 impl RenderOnce for Pane {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         let body = div().flex().flex_col().w_full().children(self.body);
+        // The room a menu in the body keeps inside: the body above the footer, clear of the
+        // scroll bar's lane (`kit::layer`).
+        let lane = if self.scrolls {
+            crate::gui::theme::SCROLL_BAR_WIDTH
+        } else {
+            gpui::px(0.0)
+        };
         let body: AnyElement = if self.scrolls {
             super::scroll::scroll_column(
                 ElementId::NamedChild(
@@ -92,7 +101,15 @@ impl RenderOnce for Pane {
             .min_h_0()
             .when(self.padded, |pane| pane.px(M))
             .when_some(self.header, |pane, header| pane.child(header))
-            .child(div().flex_1().min_h_0().child(body))
+            .child(
+                div()
+                    .relative()
+                    .flex_1()
+                    .min_h_0()
+                    .child(super::layer::room_start(lane))
+                    .child(body)
+                    .child(super::layer::room_end()),
+            )
             .when(!self.footer.is_empty(), |pane| {
                 pane.child(
                     div()
@@ -111,6 +128,7 @@ impl RenderOnce for Pane {
 
 /// One column of `Columns`.
 struct Column {
+    key: Option<&'static str>,
     width: Option<Pixels>,
     range: Option<Range<Pixels>>,
     content: AnyElement,
@@ -145,6 +163,7 @@ impl Columns {
         content: impl IntoElement,
     ) -> Self {
         self.columns.push(Column {
+            key: None,
             width: Some(width),
             range: Some(range),
             content: content.into_any_element(),
@@ -152,9 +171,19 @@ impl Columns {
         self
     }
 
+    /// Keep the last column's width, as the DM drags it, under `key` (egui's column id:
+    /// `library_sections`, `world_list_panel`, …), here and after a restart.
+    pub fn saved(mut self, key: &'static str) -> Self {
+        if let Some(column) = self.columns.last_mut() {
+            column.key = Some(key);
+        }
+        self
+    }
+
     /// The column that takes the room the others leave.
     pub fn rest(mut self, content: impl IntoElement) -> Self {
         self.columns.push(Column {
+            key: None,
             width: None,
             range: None,
             content: content.into_any_element(),
@@ -173,10 +202,37 @@ impl RenderOnce for Columns {
             cx,
             |_, _| ResizableState::default(),
         );
-        let mut group = h_resizable(self.id).with_state(&state);
+        let keys: Vec<Option<&'static str>> = self.columns.iter().map(|c| c.key).collect();
+        let mut group = h_resizable(self.id)
+            .with_state(&state)
+            .on_resize(move |state, _, cx| {
+                let sizes = state.read(cx).sizes().clone();
+                for (key, size) in keys.iter().zip(sizes) {
+                    if let Some(key) = key {
+                        super::edge::set_column_width(key, Some(f32::from(size).round()), cx);
+                    }
+                }
+            });
         for column in self.columns {
-            let mut panel = resizable_panel().child(column.content);
-            if let Some(width) = column.width {
+            // A saved column is a harness target by its key (`column world_list_panel`).
+            let content = match column.key {
+                Some(key) => super::target(
+                    div().size_full().child(column.content),
+                    format!("column {key}"),
+                )
+                .into_any_element(),
+                None => column.content,
+            };
+            let mut panel = resizable_panel().child(content);
+            let saved = column
+                .key
+                .and_then(|key| super::edge::column_width(key, cx))
+                .map(gpui::px);
+            if let Some(width) = saved.or(column.width) {
+                let width = match &column.range {
+                    Some(range) => width.clamp(range.start, range.end),
+                    None => width,
+                };
                 panel = panel.size(width);
             }
             if let Some(range) = column.range {
