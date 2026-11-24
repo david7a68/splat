@@ -1017,6 +1017,27 @@ fn travel_checks_in_the_plan() {
         note_words(&mut shell).contains("[[Shrine of Cinders]]"),
         "the plan line is in the note"
     );
+    // Its row says the day it is played on, from the journey's check (W5-D1).
+    let day = shell.update(|root, _, _| {
+        let index = root.app.lookup.index();
+        super::with_plan(&mut root.app, |sessions, _, book, plan| {
+            sessions
+                .gv_plan(book, plan, index.as_deref())
+                .rows
+                .into_iter()
+                .find_map(|row| match row {
+                    crate::sessions::page::gpui_facade::PlanRow::Fight(fight)
+                        if fight.name == "Shrine of Cinders" =>
+                    {
+                        Some(fight.day)
+                    }
+                    _ => None,
+                })
+        })
+        .flatten()
+        .flatten()
+    });
+    assert_eq!(day.as_deref(), Some("Day 2 of Travel"));
     capture(&mut shell, "travel-checks-plan__04-plan-answer-in-session-plan__1200x800");
 }
 

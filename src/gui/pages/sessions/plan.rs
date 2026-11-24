@@ -1204,6 +1204,7 @@ fn fight_row(
         running,
         saved,
         open,
+        day,
     } = row;
     let lead = kit::IconButton::new(
         id(format!("plan-fight-open-{path}-{position}")),
@@ -1251,6 +1252,13 @@ fn fight_row(
         }
         words.push_str(&part);
     }
+    // The day it is played on, after the summary (egui `planned_summary_on_road`).
+    if let Some(day) = day {
+        if !words.is_empty() {
+            words.push_str(" · ");
+        }
+        words.push_str(&day);
+    }
     let highlights = strong.into_iter().map(|range| {
         (
             range,
@@ -1261,10 +1269,21 @@ fn fight_row(
             },
         )
     });
-    let second = div()
-        .ty_small()
-        .text_color(c.muted)
-        .child(gpui::StyledText::new(words).with_highlights(highlights));
+    // A paused run of the fight says its state in place of the roster (egui
+    // `plan_saved_status`); the whole saved-run record stays in Encounters.
+    let second: AnyElement = match saved.as_ref().filter(|_| !running) {
+        Some(saved) => kit::status(&kit::Status::new(
+            icons::RUN,
+            crate::encounters::run_state_word(saved, true),
+            c.muted,
+        ))
+        .into_any_element(),
+        None => div()
+            .ty_small()
+            .text_color(c.muted)
+            .child(gpui::StyledText::new(words).with_highlights(highlights))
+            .into_any_element(),
+    };
     let mut items = vec![
         kit::MenuItem::new("Remove from tonight")
             .on_click(on(cx, PlanAct::RemoveFight(position, name.clone()))),
@@ -1319,7 +1338,7 @@ fn fight_row(
     row_frame(
         Some(lead),
         title,
-        Some(second.into_any_element()),
+        Some(second),
         actions,
         details,
     )

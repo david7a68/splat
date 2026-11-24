@@ -869,6 +869,29 @@ pub enum SceneAct {
 /// Each link to a fight under the plan's heading, in order: where its line starts in the words,
 /// the fight, and whether it is still to come. A played event of the session takes one link of
 /// its name, so a plan can hold the same fight again.
+/// Each fight still to come in the plan, in order, by its name (lower case), with the day it
+/// is played on when its line came from a journey's check: `Day 2 of Road to the ford`
+/// (W5-D1).
+pub(super) fn road_days(
+    body: &str,
+    events: &[timeline::Event],
+    session: Option<Uuid>,
+    fights: &[PlanFight],
+) -> Vec<(String, Option<String>)> {
+    let starts = timeline::clock(events);
+    plan_links(body, events, session, fights)
+        .into_iter()
+        .filter(|(_, _, waiting)| *waiting)
+        .map(|(at, fight, _)| {
+            let line = body[at..].lines().next().unwrap_or_default();
+            let day = checks::marked(line)
+                .mark
+                .and_then(|mark| mark.day_words(events, &starts, session));
+            (fight.name.to_lowercase(), day)
+        })
+        .collect()
+}
+
 fn plan_links<'a>(
     body: &str,
     events: &[timeline::Event],

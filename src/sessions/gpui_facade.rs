@@ -1615,6 +1615,9 @@ pub struct FightRow {
     pub running: bool,
     pub saved: Option<crate::encounter_run::SavedRunInfo>,
     pub open: bool,
+    /// The day it is played on, when its plan line came from a journey's check (`Day 2 of
+    /// Road to the ford`).
+    pub day: Option<String>,
 }
 
 pub struct GroupRow {
@@ -1851,6 +1854,13 @@ impl Sessions {
                 }));
             }
         };
+        let road = self
+            .draft
+            .as_ref()
+            .map(|draft| {
+                super::plan::road_days(draft.body.as_str(), &book.events, session, plan.fights)
+            })
+            .unwrap_or_default();
         for (position, &at) in projection.planned.iter().enumerate() {
             scene_rows(&mut rows, position);
             let fight = &plan.fights[at];
@@ -1874,6 +1884,10 @@ impl Sessions {
                 running,
                 saved,
                 open: self.open_planned.as_ref() == Some(&fight.path),
+                day: road
+                    .iter()
+                    .find(|(name, _)| *name == fight.name.to_lowercase())
+                    .and_then(|(_, day)| day.clone()),
             }));
         }
         scene_rows(&mut rows, projection.planned.len());
