@@ -941,97 +941,34 @@ pub fn edit_in_place(
 
 /// A write of the app's own into the words of the field `id`, which the DM may be typing in (a
 /// reading's summary, a plan's rewards, a renamed link, all reaching the Notes panel's part of
-/// a note): the words become `after`, and the DM's Undo history goes on UNDER the write. Each
-/// earlier step gets the same change, so Ctrl+Z takes back what the DM typed and leaves the
-/// app's words. The change is placed in a step by the words after it. When any step does not
-/// end with them, and the changed words before them, the write cannot reach it, and the history
-/// ends at the write: a step is changed safely or not kept at all, so Ctrl+Z never takes the
-/// app's words out. The guard's record moves as in [`edit_in_place`]. Not for a change the
-/// field's owner did not make (a reload of an outside edit): that history must end.
+/// a note): the words become `after`, and **the field's typing history ends at the write**
+/// (ruling M32). Ctrl+Z after it takes back only what the DM types after it; Ctrl+Y has nothing
+/// from before it. The guard's record moves as in [`edit_in_place`], so the write is not taken
+/// for another object's text. The same words change nothing.
+///
+/// **Why no step is kept under the write** (issue #900; reviews of PR 910). egui's Undo steps
+/// are whole texts. To keep a step, the app's change must be put into it at the right place,
+/// and two whole texts do not show where the DM's edits were: equal letters hide it, a caret
+/// can move after an edit, and a letter deleted and typed again leaves the texts equal there.
+/// Every rule tried on whole texts (the words after the change; a caret; a zone around the
+/// changed letters) lost a letter or put a word back on the wrong side of the app's words in
+/// some order of edits. With no step from before the write, no Ctrl+Z can show a text made
+/// from one: nothing the app wrote can go, and nothing older can go or move. Keeping the DM's
+/// steps across an app write needs a record of each typed edit, owned by the draft.
 pub fn write_under_history(
     ctx: &egui::Context,
     id: Id,
     text: &mut super::text_draft::TextDraft,
     after: &str,
 ) {
-    let before = text.as_str().to_owned();
+    let same = text.as_str() == after;
     edit_in_place(ctx, id, text, |words| {
         words.clear();
         words.push_str(after);
     });
-    let Some(mut state) = egui::text_edit::TextEditState::load(ctx, id) else {
-        return;
-    };
-    // The steps, newest first: from a state that is no step, each `undo` gives the step before.
-    let mut walk = state.undoer();
-    let mut current = (
-        egui::text::CCursorRange::one(egui::text::CCursor::new(usize::MAX)),
-        String::new(),
-    );
-    let mut steps = Vec::new();
-    while let Some(step) = walk.undo(&current).cloned() {
-        steps.push(step.clone());
-        current = step;
+    if !same {
+        TextGuard::drop_history(ctx, id);
     }
-    if steps.is_empty() {
-        return;
-    }
-    let mut rebuilt = egui::util::undoer::Undoer::default();
-    for (cursor, words) in steps.into_iter().rev() {
-        let Some((words, at, by)) = under_write(&words, &before, after) else {
-            // A step the write cannot reach: Ctrl+Z to it would take the app's words out (review
-            // of PR 825, P1 825-b). The history ends at the write.
-            state.clear_undoer();
-            state.store(ctx, id);
-            return;
-        };
-        let moved = |cursor: egui::text::CCursor| egui::text::CCursor {
-            index: if cursor.index > at {
-                cursor.index.saturating_add_signed(by)
-            } else {
-                cursor.index
-            },
-            ..cursor
-        };
-        rebuilt.add_undo(&(
-            egui::text::CCursorRange {
-                primary: moved(cursor.primary),
-                secondary: moved(cursor.secondary),
-                ..cursor
-            },
-            words,
-        ));
-    }
-    state.set_undoer(rebuilt);
-    state.store(ctx, id);
-}
-
-/// `step` with the change from `before` to `after` (one change: `before` is a + x + b, `after`
-/// is a + y + b), placed by the words after it: `step` ends with b, and x before it. The new
-/// words, where the change starts (in characters) and how many characters it adds.
-fn under_write(step: &str, before: &str, after: &str) -> Option<(String, usize, isize)> {
-    let lead = before
-        .char_indices()
-        .zip(after.chars())
-        .find(|((_, one), other)| one != other)
-        .map_or(before.len().min(after.len()), |((at, _), _)| at);
-    let (old, new) = (&before[lead..], &after[lead..]);
-    let tail = old
-        .chars()
-        .rev()
-        .zip(new.chars().rev())
-        .take_while(|(one, other)| one == other)
-        .map(|(one, _)| one.len_utf8())
-        .sum::<usize>();
-    let (x, y, b) = (
-        &old[..old.len() - tail],
-        &new[..new.len() - tail],
-        &old[old.len() - tail..],
-    );
-    let head = step.strip_suffix(b)?.strip_suffix(x)?;
-    let at = head.chars().count();
-    let by = y.chars().count() as isize - x.chars().count() as isize;
-    Some((format!("{head}{y}{b}"), at, by))
 }
 
 /// [`edit_in_place`] for a field of a plain `String` (a single-line field).
