@@ -97,14 +97,10 @@ impl Sessions {
 
     /// The block's own messages, under its save row (`folder_messages`), as plain lines. A
     /// refusal of Save without moving ends first when its cause went.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "R24: a value block’s save row shows its own messages (`folder_block`); the GPUI tab draws the same lines"
-    )]
     pub fn folder_lines(&mut self, book: &Book, locked: bool) -> Vec<PlainLine<FolderAct>> {
         self.settle_folder_error(book);
         let frame = design::outcome::PaneFrame::headless();
-        let mut messages = design::outcome::RowMessages::new(&frame);
+        let mut messages = design::outcome::Messages::new(&frame, "session_folder_messages", 0.0);
         self.folder_messages(&frame, &mut messages, book, locked);
         messages.into_plain()
     }

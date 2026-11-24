@@ -9579,7 +9579,7 @@ impl Encounters {
     /// runs a folder change leaves with the folder's two choices, the error, and the open draft.
     #[allow(
         clippy::too_many_arguments,
-        reason = "the footer reads the frame's acts (commit, the form's run files) and its locks"
+        reason = "the footer reads the frame’s acts (commit, the form’s run files) and its locks"
     )]
     fn run_settings_footer<'f>(
         &mut self,

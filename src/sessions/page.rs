@@ -8368,13 +8368,13 @@ let paned = messages.pane_editor(ui, |ui, region| {
     fn folder_messages<'f>(
         &mut self,
         frame: &'f PaneFrame,
-        messages: &mut RowMessages<'f, FolderAct>,
+        messages: &mut impl design::outcome::plain::Sink<'f, FolderAct>,
         book: &Book,
         page_locked: bool,
     ) {
         let files = self.folder_files();
         if let Some(fault) = &self.folder_error {
-            messages.outcome(FaultMessage::new(fault));
+            messages.outcome(FaultMessage::new(fault).into());
         }
         if let Some(counts) = self.folder_move_counts(book, &files) {
             // A warning before the act, in the warning tone, with its two choices: they are the
@@ -8398,7 +8398,7 @@ let paned = messages.pane_editor(ui, |ui, region| {
                     warning = warning.choice(choice);
                 }
             }
-            messages.outcome(warning);
+            messages.outcome(warning.into());
         }
         if let Some(shown) = self.folder_link().and_then(|link| {
             self.folder_moves

@@ -2,6 +2,7 @@
 //! (`src/gui/pages/campaigns/run_settings.rs`). The footer is `run_settings_footer`, which the
 //! egui tab (`Encounters::run_settings`) calls too; the save row's state follows the egui tab's
 //! rule, step for step.
+#![warn(deprecated)]
 use super::{
     CHOOSE_MOVE, Encounters, FooterPress, KeptResult, OptionsCommit, commit_options, rule_choices,
 };

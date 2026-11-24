@@ -10,6 +10,7 @@
 //! for line in messages.into_plain() { /* draw line.words, line.undo, line.choices */ }
 //! ```
 use super::{
+    KeptLine, Outcome,
     ChoiceKind, DISMISS_NAME, Messages, MessageChoice, PaneFrame, Press, ResultOrder, RowMessages,
     Ticket, Tone, Typed, footer_order, holding, refusal_rank,
 };
@@ -186,4 +187,29 @@ fn plain<A>(typed: Typed<A>, order: Option<ResultOrder>) -> PlainLine<A> {
                     undo,
                     choices,
                 }
+}
+
+/// Where an owner's lines go: a pane's footer (`Messages`) or a save row's own messages
+/// (`RowMessages`). An owner that feeds both writes its lines once, against this.
+pub trait Sink<'f, A: 'static> {
+    fn outcome(&mut self, outcome: Outcome<A>);
+    fn kept(&mut self, line: KeptLine<'f, A>);
+}
+
+impl<'f, A: 'static> Sink<'f, A> for Messages<'f, A> {
+    fn outcome(&mut self, outcome: Outcome<A>) {
+        Messages::outcome(self, outcome);
+    }
+    fn kept(&mut self, line: KeptLine<'f, A>) {
+        Messages::kept(self, line);
+    }
+}
+
+impl<'f, A: 'static> Sink<'f, A> for RowMessages<'f, A> {
+    fn outcome(&mut self, outcome: Outcome<A>) {
+        RowMessages::outcome(self, outcome);
+    }
+    fn kept(&mut self, line: KeptLine<'f, A>) {
+        RowMessages::kept(self, line);
+    }
 }
