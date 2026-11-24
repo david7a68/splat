@@ -116,6 +116,23 @@ fn session_notes_main_states() {
     shell.click("Template text");
     shell.press("ctrl-end");
     shell.type_text("Edited in the template.\n");
+    // Ctrl+S saves the template now.
+    shell.press("ctrl-s");
+    let own = |shell: &mut Shell| {
+        shell.read(|root| {
+            root.app
+                .sessions
+                .gv_templates()
+                .iter()
+                .find(|template| template.name == "Standard session")
+                .and_then(|template| template.path.clone())
+        })
+    };
+    let saved = std::fs::read_to_string(own(&mut shell).expect("the DM's own template")).unwrap();
+    assert!(
+        saved.contains("Edited in the template."),
+        "Ctrl+S saves the template: {saved:?}"
+    );
     shell.click("New template");
     shell.type_text("Downtime");
     capture(&mut shell, "session-notes__31-templates-new__1200x800");
@@ -123,15 +140,8 @@ fn session_notes_main_states() {
     shell.click("id:template-more-button");
     shell.click("Delete");
     capture(&mut shell, "session-notes__32-templates-deleted__1200x800");
-    let own = shell.read(|root| {
-        root.app
-            .sessions
-            .gv_templates()
-            .iter()
-            .find(|template| template.name == "Standard session")
-            .and_then(|template| template.path.clone())
-    });
-    let text = std::fs::read_to_string(own.expect("the DM's own Standard session")).unwrap();
+    let text = std::fs::read_to_string(own(&mut shell).expect("the DM's own Standard session"))
+        .unwrap();
     assert!(
         text.contains("Edited in the template."),
         "the template edit is saved: {text:?}"
