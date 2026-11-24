@@ -4600,6 +4600,12 @@ impl Sessions {
         });
     }
 
+    /// Processing of the open session finishes now, as the background job would.
+    pub fn simulate_job_finished(&mut self) {
+        let session = self.selected.expect("an open session");
+        self.finish_job(Ok(None), session);
+    }
+
     /// A job that stays in progress, for a capture of that state.
     pub fn simulate_job(&mut self, progress: processing::Progress) {
         self.end_notice();

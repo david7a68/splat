@@ -89,10 +89,15 @@ fn session_notes_main_states() {
         &mut shell,
         &format!("{words}The road was covered in ash, and the wolves followed us.\n"),
     );
+    // As egui's scenario: processing of the session finishes while the DM writes.
+    shell.update(|root, _, cx| {
+        root.app.sessions.simulate_job_finished();
+        cx.notify();
+    });
     capture(&mut shell, "session-notes__06-session-written__1200x800");
     shell.click("Read");
     capture(&mut shell, "session-notes__07-session-read__1200x800");
-    shell.click("Write");
+    // The note stays in Read while the DM uses the plan's Add strip (egui: 09-11 in Read).
     // The plan's Add strip: the fight picker and the rarer kinds.
     shell.click("id:plan-add-fight-button");
     capture(&mut shell, "session-notes__09-session-plan-fight-picker__1200x800");
@@ -581,6 +586,17 @@ fn list_toggle_key_and_button() {
     );
     shell.click(crate::sessions::page::LIST_TOGGLE);
     assert!(!shell.read(|root| root.app.sessions.list_hidden));
+    // The list dragged to its widest: the pane left is too narrow for the plan beside the note,
+    // so the page takes its tabs.
+    assert!(shell.bounds("id:session-tabs-Plan").is_none(), "plan beside the note");
+    shell.update(|_, _, cx| {
+        crate::gui::kit::edge::set_column_width("session_list_panel", Some(420.0), cx);
+    });
+    shell.settle();
+    assert!(
+        shell.bounds("id:session-tabs-Plan").is_some(),
+        "the saved list width leaves the pane its tabs"
+    );
 }
 
 /// The plan's Add strip adds an event, and the footer's Undo takes it back.

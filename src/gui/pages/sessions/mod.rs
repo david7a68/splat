@@ -386,10 +386,15 @@ fn notes_view(
             .into_any_element();
     }
     let list_hides = root.app.sessions.gv_list_hides();
+    // The list's width as the DM dragged and saved it (`session_list_panel`), not its
+    // default: the pane's width chooses between the plan beside the note and the tabs.
+    let list_width = kit::edge::column_width("session_list_panel", cx)
+        .map_or(LIST_WIDTH, px)
+        .clamp(LIST_MIN, LIST_MAX);
     let session_width = if list_hides {
         width
     } else {
-        width - LIST_WIDTH - S - theme::SPLITTER_WIDTH
+        width - list_width - S - theme::SPLITTER_WIDTH
     };
     let body = if root.app.sessions.gv_form_open() {
         form::render(root, window, cx)
