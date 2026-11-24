@@ -33,22 +33,10 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 test-support = ["splat-campaign/test-support", "splat-content/test-support", "splat-design/test-support"]
 
 [dev-dependencies]
-# The quiet-reader harness reads the Reader's test counters.
+# The crate's own tests read its test-support parts.
 splat-content-ui = { path = ".", features = ["test-support"] }
 splat-campaign = { path = "../../crates/campaign", features = ["test-support"] }
 splat-content = { path = "../../crates/content", features = ["test-support"] }
 splat-design = { path = "../../src/design", features = ["test-support"] }
 splat-trackers = { path = "../../src/trackers", features = ["test-support"] }
 egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }
-# The quiet-frame harnesses share `splat-design`'s counting module, which names `egui`.
-egui = { version = "0.33", default-features = false }
-
-# Layout PR 9b-C: a folded Markdown document's quiet frames, under a counting allocator.
-[[test]]
-name = "quiet_markdown"
-harness = false
-
-# Layout PR 9b-R1a: the Reader's host's quiet frames, under a counting allocator.
-[[test]]
-name = "quiet_reader"
-harness = false

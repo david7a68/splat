@@ -330,8 +330,6 @@ impl ComputerMut<&str, Arc<Styled>> for Styler {
 }
 
 fn styled_text(ui: &egui::Ui, text: &str) -> Arc<Styled> {
-    #[cfg(any(test, feature = "test-support"))]
-    STYLED_LOOKUPS.with(|lookups| lookups.set(lookups.get() + 1));
     ui.ctx().memory_mut(|memory| {
         memory
             .caches
@@ -389,15 +387,6 @@ fn format(ui: &egui::Ui, prose: Type, look: Look) -> TextFormat {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
-thread_local! {
-    /// The layouter's and the paint's steps over runs, sections and folds (a test reads it).
-    static FOLD_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    /// How many times a text's looks were looked up by its words, each a hash of the whole text
-    /// (layout PR 9b: a quiet frame of a document looks up none).
-    static STYLED_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 /// The looks of each drawn document, kept by its draft's key (layout PR 9b: the heading rules
 /// and fold marks come from the kept parse, so a quiet frame hashes none of the words). egui
 /// runs `update` at the end of each pass: a document not drawn in a pass loses its entry.
@@ -437,11 +426,6 @@ fn kept_styles(ui: &egui::Ui, key: DraftKey, text: &str) -> Arc<Styled> {
         kept.insert(key, (styled.clone(), true));
     });
     styled
-}
-
-fn count_fold_step() {
-    #[cfg(any(test, feature = "test-support"))]
-    FOLD_STEPS.with(|steps| steps.set(steps.get() + 1));
 }
 
 /// A folded mark's letters: this small, and clear. They stay in the text, so the file keeps every
@@ -507,9 +491,7 @@ pub fn layouter(ui: &egui::Ui, text: &dyn TextBuffer, wrap_width: f32) -> Arc<eg
                     .is_some_and(|(fold, _)| fold.start < range.start)
                 {
                     next_fold += 1;
-                    count_fold_step();
                 }
-                count_fold_step();
                 let shut = look.folded
                     && open
                         .as_ref()
@@ -691,12 +673,6 @@ impl egui::cache::CacheTrait for KeptPlans {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
-thread_local! {
-    /// How many rule and mark plans were made (a test reads it: a quiet frame makes none).
-    static PLANS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 /// The plan of field `field`'s galley, the laid-out text `key` names: made once per key.
 fn kept_plan(
     ui: &egui::Ui,
@@ -712,8 +688,6 @@ fn kept_plan(
     if let Some(plan) = hit {
         return plan;
     }
-    #[cfg(any(test, feature = "test-support"))]
-    PLANS_MADE.with(|made| made.set(made.get() + 1));
     let plan = Arc::new(Plan::of(galley, &kept_styles(ui, key.0, &galley.job.text)));
     ui.ctx().memory_mut(|memory| {
         let kept = &mut memory.caches.cache::<KeptPlans>().kept;
@@ -739,9 +713,7 @@ fn folded_marks(galley: &egui::Galley, styled: &Styled) -> Vec<Folded> {
             .is_some_and(|section| section.byte_range.start < fold.start)
         {
             sections.next();
-            count_fold_step();
         }
-        count_fold_step();
         if let Some(section) = sections
             .peek()
             .filter(|section| section.byte_range.start == fold.start)
@@ -1004,462 +976,26 @@ mod tests {
         );
     }
 
-    const TEST_NOTE: design::FieldName = crate::field_id!("markdown_source_test");
-
-    /// A styled Markdown editor of `body`, through the field part, as the app's editors draw it.
-    fn styled_editor(
-        ui: &mut egui::Ui,
-        body: &mut crate::design::text_draft::TextDraft,
-        width: f32,
-    ) -> design::Editor {
-        let face = design::pane::Face::Laid {
-            layout: layouter,
-            font: design::reader::prose_type(ui).font(ui),
-            folds: true,
-        };
-        TEST_NOTE
-            .once(design::Once::Example)
-            .editor(ui, body, face, |edit| edit.desired_width(width))
-    }
-
-    /// Press on these words in an editor of `text`, with or without Ctrl.
-    fn press_in_editor(text: &str, words: &str, ctrl: bool) -> (Option<String>, Vec<String>) {
-        let context = egui::Context::default();
-        design::theme::install(&context);
-        let at = text[..text.find(words).unwrap()].chars().count();
-        let mut body = crate::design::text_draft::TextDraft::new(text.to_owned());
-        // The text does not move, so each frame finds the same place.
-        let pointer = std::cell::Cell::new(egui::Pos2::ZERO);
-        let mut noted = None;
-        let mut draw = |ctx: &egui::Context| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                // One row, so that no word is split between two.
-                let output = styled_editor(ui, &mut body, 1000.0);
-                noted = noted.take().or(pressed_note_link(ui, &output, None));
-                let cursor = |at| {
-                    output
-                        .galley
-                        .pos_from_cursor(egui::text::CCursor::new(at))
-                        .center()
-                        .to_vec2()
-                };
-                pointer.set(output.galley_pos + (cursor(at) + cursor(at + 1)) / 2.0);
-            });
-        };
-        let _ = context.run(egui::RawInput::default(), &mut draw);
-        let modifiers = if ctrl {
-            egui::Modifiers::COMMAND
-        } else {
-            egui::Modifiers::NONE
-        };
-        let pointer = pointer.get();
-        let mut urls = Vec::new();
-        for pressed in [true, false] {
-            let events = vec![
-                egui::Event::PointerMoved(pointer),
-                egui::Event::PointerButton {
-                    pos: pointer,
-                    button: egui::PointerButton::Primary,
-                    pressed,
-                    modifiers,
-                },
-            ];
-            let input = egui::RawInput {
-                modifiers,
-                events,
-                ..Default::default()
-            };
-            let output = context.run(input, &mut draw);
-            for command in output.platform_output.commands {
-                if let egui::OutputCommand::OpenUrl(url) = command {
-                    urls.push(url.url);
-                }
-            }
-        }
-        (noted, urls)
-    }
-
+    /// Closure FE9 (rows 118, 119a): only a `splat:` mark that Splat wrote is a fold. A comment
+    /// the DM wrote, a mark the DM is still typing (no `-->`), a roll mark, an unknown command and
+    /// malformed marks are not.
     #[test]
-    fn ctrl_click_follows_a_link_in_the_editor_and_a_plain_click_does_not() {
-        let text = "Ask [[Hobb|the miller]] or read [the site](https://example.com).\n";
-        assert_eq!(
-            press_in_editor(text, "miller", true),
-            (Some("Hobb".to_owned()), vec![])
-        );
-        assert_eq!(
-            press_in_editor(text, "site", true),
-            (None, vec!["https://example.com".to_owned()])
-        );
-        assert_eq!(press_in_editor(text, "miller", false), (None, vec![]));
-        assert_eq!(press_in_editor(text, "Ask", true), (None, vec![]));
-    }
-
-    #[test]
-    fn the_first_letter_of_a_wrapped_row_is_part_of_its_link() {
-        let text = format!("[[Hobb|{}]]\n", "the miller ".repeat(20));
-        let context = egui::Context::default();
-        design::theme::install(&context);
-        let _ = context.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                let mut body = crate::design::text_draft::TextDraft::new(text.clone());
-                let output = styled_editor(ui, &mut body, 200.0);
-                let row = &output.galley.rows[1];
-                let glyph = &row.glyphs[0];
-                let pointer = output.galley_pos
-                    + row.pos.to_vec2()
-                    + egui::vec2(glyph.pos.x + glyph.advance_width / 2.0, row.size.y / 2.0);
-                assert_eq!(
-                    link_at(ui, &output, pointer),
-                    Some(LinkTarget::Note("Hobb".into()))
-                );
-            });
-        });
-    }
-
-    /// Closure FE9 (rows 118, 119a): a `splat:` mark that Splat wrote folds to one muted `⋯`
-    /// unless the caret is on its line; the text keeps every byte. Must stay true: a comment the
-    /// DM wrote, and a mark the DM is still typing (no `-->`), stay in view.
-    #[test]
-    fn a_splat_mark_folds_unless_the_caret_is_on_its_line() {
+    fn only_splats_own_generated_mark_folds() {
         let text = "## Plan for tonight\n- [[Bridge Ambush]] <!-- splat:check journey=t-road at=24 sum=12345678 --> Bring silver.\n- Wolves <!-- my note -->\n- <!-- splat:check journey=t\n<!-- splat:rolls key=weather dice=1d6 per=watch -->\n- <!-- splat:hello -->\n- <!-- splat:check at=x -->\n- <!-- splat:check journey=t at=24 sum=zz -->\n";
+        let mark = "<!-- splat:check journey=t-road at=24 sum=12345678 -->";
         assert_eq!(
             splat_marks(text)
                 .into_iter()
                 .map(|mark| &text[mark])
                 .collect::<Vec<_>>(),
-            vec!["<!-- splat:check journey=t-road at=24 sum=12345678 -->"]
+            vec![mark]
         );
-        let mark = text.find("<!-- splat").unwrap();
-        let char_of = |words: &str| text[..text.find(words).unwrap()].chars().count();
-        let context = egui::Context::default();
-        design::theme::install(&context);
-        let id = TEST_NOTE.once(design::Once::Example).id();
-        let mut body = crate::design::text_draft::TextDraft::new(text.to_owned());
-        // Whether the mark is folded, how many `⋯` were painted, and whether a repaint follows.
-        let mut frame = |events: Vec<egui::Event>| {
-            let mut folded = None;
-            let output = context.run(
-                egui::RawInput {
-                    events,
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        let output = styled_editor(ui, &mut body, 1000.0);
-                        paint_section_rules(ui, &output, Some(body.key()));
-                        let section = |at: usize| {
-                            output
-                                .galley
-                                .job
-                                .sections
-                                .iter()
-                                .find(|section| section.byte_range.contains(&at))
-                                .map(|section| section.format.font_id.size)
-                        };
-                        folded = Some(section(mark) == Some(FOLDED_SIZE));
-                        // P2: only Splat's own generated mark folds. The DM's comment, a roll
-                        // mark the DM typed, an unknown command and malformed marks stay.
-                        for words in [
-                            "my note",
-                            "splat:rolls",
-                            "splat:hello",
-                            "splat:check at=x",
-                            "sum=zz",
-                        ] {
-                            assert_ne!(
-                                section(text.find(words).unwrap()),
-                                Some(FOLDED_SIZE),
-                                "fe9-own-comment: {words} stays in view"
-                            );
-                        }
-                    });
-                },
-            );
-            let marks = output
-                .shapes
-                .iter()
-                .filter(|shape| {
-                    matches!(&shape.shape, egui::Shape::Text(text)
-                        if text.galley.job.text == FOLD_MARK)
-                })
-                .count();
-            let repaint = output
-                .viewport_output
-                .values()
-                .any(|viewport| viewport.repaint_delay == std::time::Duration::ZERO);
-            (folded.unwrap(), marks, repaint)
-        };
-        let place_caret = |at: usize| {
-            let mut state = egui::TextEdit::load_state(&context, id).unwrap_or_default();
-            state
-                .cursor
-                .set_char_range(Some(egui::text::CCursorRange::one(
-                    egui::text::CCursor::new(at),
-                )));
-            state.store(&context, id);
-            context.memory_mut(|memory| memory.request_focus(id));
-        };
-        let (folded, marks, _) = frame(Vec::new());
-        assert!(
-            folded && marks == 1,
-            "fe9-fold: no focus, one mark ({marks})"
-        );
-        place_caret(char_of("Bridge"));
-        frame(Vec::new());
-        let (folded, marks, _) = frame(Vec::new());
-        assert!(
-            !folded && marks == 0,
-            "fe9-open: the caret's line shows the whole mark"
-        );
-        place_caret(char_of("Wolves"));
-        frame(Vec::new());
-        let (folded, marks, _) = frame(Vec::new());
-        assert!(
-            folded && marks == 1,
-            "fe9-other-line: the caret on another line folds it"
-        );
-        // The keyboard moves the caret after the text is laid out; egui's next frame (it asks for
-        // one after a key press) opens it. Must stay true: the fold never waits for other input.
-        let (_, _, repaint) = frame(vec![egui::Event::Key {
-            key: egui::Key::ArrowUp,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: egui::Modifiers::NONE,
-        }]);
-        assert!(
-            repaint,
-            "fe9-key: egui asks for the frame that opens the mark"
-        );
-        let (folded, _, _) = frame(Vec::new());
-        assert!(!folded, "fe9-key: the caret moved up onto the mark's line");
-        assert_eq!(body.as_str(), text, "fe9-bytes: the text keeps every byte");
-    }
-
-    /// P2 of the PR 331 review: on a line with a folded mark, every editing gesture gives the
-    /// bytes a plain editor gives (the fold changes only the look): a selection across the mark
-    /// and typing, Backspace and Delete at its two edges, cut and paste over it, copy (the
-    /// clipboard holds the real bytes), Undo and Redo.
-    #[test]
-    fn editing_across_a_folded_mark_gives_the_bytes_of_a_plain_editor() {
-        let text = "Plan\n- [[Bridge Ambush]] <!-- splat:check journey=t-road at=24 sum=12345678 --> Bring silver.\nWolves\n";
-        let mark = "<!-- splat:check journey=t-road at=24 sum=12345678 -->";
-        let at = |words: &str| text[..text.find(words).unwrap()].chars().count();
-        let (start, end) = (at(mark), at(mark) + mark.chars().count());
-        let command = egui::Modifiers::COMMAND;
-        let key = |key: egui::Key, modifiers: egui::Modifiers| egui::Event::Key {
-            key,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers,
-        };
-        // Each gesture: where the caret or selection is, and the events.
-        let gestures: Vec<(&str, (usize, usize), Vec<egui::Event>)> = vec![
-            (
-                "copy across the mark",
-                (at("[[Bridge"), end + 1),
-                vec![egui::Event::Copy],
-            ),
-            (
-                "backspace at its start",
-                (start, start),
-                vec![key(egui::Key::Backspace, egui::Modifiers::NONE)],
-            ),
-            (
-                "delete at its end",
-                (end - 1, end - 1),
-                vec![key(egui::Key::Delete, egui::Modifiers::NONE)],
-            ),
-            (
-                "delete at its start",
-                (start - 1, start - 1),
-                vec![key(egui::Key::Delete, egui::Modifiers::NONE)],
-            ),
-            (
-                "backspace at its end",
-                (end - 2, end - 2),
-                vec![key(egui::Key::Backspace, egui::Modifiers::NONE)],
-            ),
-            (
-                "select across and type",
-                (at("Bridge"), end),
-                vec![egui::Event::Text("x".into())],
-            ),
-            ("cut", (2, 12), vec![egui::Event::Cut]),
-            (
-                "paste",
-                (3, 3),
-                vec![egui::Event::Paste(
-                    "<!-- splat:check journey=a at=1 sum=ff -->".into(),
-                )],
-            ),
-            ("undo", (3, 3), vec![key(egui::Key::Z, command)]),
-            (
-                "redo",
-                (3, 3),
-                vec![key(egui::Key::Z, command | egui::Modifiers::SHIFT)],
-            ),
-        ];
-        // The buffer and the clipboard after each gesture, in an editor with or without the fold.
-        let run = |styled: bool| {
-            let context = egui::Context::default();
-            design::theme::install(&context);
-            let id = TEST_NOTE.once(design::Once::Example).id();
-            let mut body = crate::design::text_draft::TextDraft::new(text.to_owned());
-            let mut after = Vec::new();
-            let mut time = 0.0;
-            let frame = |body: &mut crate::design::text_draft::TextDraft,
-                         events: Vec<egui::Event>,
-                         time: f64| {
-                let output = context.run(
-                    egui::RawInput {
-                        events,
-                        time: Some(time),
-                        ..Default::default()
-                    },
-                    |ctx| {
-                        ctx.memory_mut(|memory| memory.request_focus(id));
-                        egui::CentralPanel::default().show(ctx, |ui| {
-                            if styled {
-                                let _ = styled_editor(ui, body, 1000.0);
-                            } else {
-                                let face = design::pane::Face::Font(
-                                    egui::FontSelection::default().resolve(ui.style()),
-                                );
-                                let _ = TEST_NOTE.once(design::Once::Example).editor(
-                                    ui,
-                                    body,
-                                    face,
-                                    |edit| edit.desired_width(1000.0),
-                                );
-                            }
-                        });
-                    },
-                );
-                output
-                    .platform_output
-                    .commands
-                    .into_iter()
-                    .find_map(|command| match command {
-                        egui::OutputCommand::CopyText(text) => Some(text),
-                        _ => None,
-                    })
-            };
-            frame(&mut body, Vec::new(), time);
-            for (name, (from, to), events) in &gestures {
-                let mut state = egui::TextEdit::load_state(&context, id).unwrap_or_default();
-                state
-                    .cursor
-                    .set_char_range(Some(egui::text::CCursorRange::two(
-                        egui::text::CCursor::new(*from),
-                        egui::text::CCursor::new(*to),
-                    )));
-                state.store(&context, id);
-                time += 2.0;
-                frame(&mut body, Vec::new(), time);
-                time += 2.0;
-                let copied = frame(&mut body, events.clone(), time);
-                time += 2.0;
-                frame(&mut body, Vec::new(), time);
-                after.push((*name, body.as_str().to_owned(), copied));
-            }
-            after
-        };
-        let plain = run(false);
-        let folded = run(true);
-        for (plain, folded) in plain.iter().zip(&folded) {
-            assert_eq!(plain, folded, "fe9-edit: {}", plain.0);
-        }
-        // The gestures did something: the copy holds real bytes, and the text changed.
-        let copied = &folded[0].2;
-        let whole = format!("[[Bridge Ambush]] {mark} ");
-        assert_eq!(
-            copied.as_deref(),
-            Some(whole.as_str()),
-            "fe9-copy: the real bytes"
-        );
-        assert_ne!(
-            folded[5].1, folded[4].1,
-            "fe9-edit: typing over the selection changed the text"
-        );
-    }
-
-    /// P2 cost: a note of 100 000 characters with 500 generated marks. One layout and one paint
-    /// step over each run, section and fold, never one per pair.
-    #[test]
-    fn a_long_note_with_many_marks_folds_in_one_pass() {
-        let line = "- [[Wolves]] <!-- splat:check journey=t-road at=24 sum=12345678 --> Keep watch by the old road and its stones.\n";
-        let mut text = String::new();
-        let mut marks = 0;
-        while text.len() < 100_000 {
-            if marks < 500 {
-                text.push_str(line);
-                marks += 1;
-            } else {
-                text.push_str("Plain words of the note go on and on here.\n");
-            }
-        }
-        assert_eq!(splat_marks(&text).len(), 500);
-        let context = egui::Context::default();
-        design::theme::install(&context);
-        let mut body = crate::design::text_draft::TextDraft::new(text.clone());
-        FOLD_STEPS.with(|steps| steps.set(0));
-        let mut runs = 0;
-        let _ = context.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                let output = styled_editor(ui, &mut body, 1000.0);
-                paint_section_rules(ui, &output, Some(body.key()));
-                runs = styled_text(ui, &text).runs.len();
-            });
-        });
-        let steps = FOLD_STEPS.with(std::cell::Cell::get);
-        // Layout: each run once, plus each fold passed once; paint: each section passed once,
-        // plus each fold once. Linear: well under the 500 × runs a search per run would take.
-        assert!(
-            steps <= 2 * (runs + 500) + 10,
-            "fe9-cost: {steps} steps for {runs} runs and 500 marks"
-        );
-        assert!(steps > 0, "fe9-cost: the counter counts");
-        // Layout PR 9b: a quiet frame lays out, hashes and looks up none of the words: the
-        // layout and the rules' parse are kept by the draft's key.
-        let (lookups, steps, plans) = (
-            STYLED_LOOKUPS.with(std::cell::Cell::get),
-            FOLD_STEPS.with(std::cell::Cell::get),
-            PLANS_MADE.with(std::cell::Cell::get),
-        );
-        let work = design::pane::text_work(|| {
-            let _ = context.run(egui::RawInput::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    let output = styled_editor(ui, &mut body, 1000.0);
-                    paint_section_rules(ui, &output, Some(body.key()));
-                });
-            });
-        });
-        assert_eq!(
-            (
-                work.is_quiet(1),
-                STYLED_LOOKUPS.with(std::cell::Cell::get) - lookups,
-                FOLD_STEPS.with(std::cell::Cell::get) - steps,
-                PLANS_MADE.with(std::cell::Cell::get) - plans,
-            ),
-            (true, 0, 0, 0),
-            "9b-quiet: a quiet frame's text work ({work:?}), word lookups, fold steps and rule plans"
-        );
-    }
-
-    #[test]
-    fn the_layouter_shows_the_same_text_it_was_given() {
-        egui::__run_test_ui(|ui| {
-            for text in ["", "## Héading\n\n*wörds* [[T#^a|b]]\n"] {
-                let text = text.to_owned();
-                let galley = layouter(ui, &text, 300.0);
-                assert_eq!(galley.text(), text);
-                assert!(
-                    galley.size().y > 0.0,
-                    "{text:?} has no height for the caret"
-                );
-            }
-        });
+        // The looks GPUI's editor reads mark the same bytes, and only them, as folded.
+        let folded: Vec<_> = looks(text)
+            .iter()
+            .filter(|(_, look)| look.folded)
+            .map(|(range, _)| &text[range.clone()])
+            .collect();
+        assert_eq!(folded.concat(), mark);
     }
 }

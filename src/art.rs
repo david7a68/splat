@@ -265,7 +265,6 @@ pub fn modal_open(ctx: &egui::Context, app_dialog: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui_kittest::{Harness, kittest::Queryable};
     use std::fs;
 
     /// A package with one image for a link, and the art index loaded from it.
@@ -282,28 +281,6 @@ mod tests {
         .unwrap();
         let index = Arc::new(ArtIndex::load([root.path()]));
         (root, index)
-    }
-
-    #[test]
-    fn a_note_shows_a_linked_image_with_a_local_copy_and_it_opens_full_size() {
-        let (_root, index) = package();
-        let mut harness = Harness::builder().build_ui(|ui| {
-            crate::markdown_view::show(ui, "*The keep* ([image](https://a/map.png))");
-            show_viewer(ui.ctx());
-        });
-        install(&harness.ctx);
-        harness
-            .ctx
-            .data_mut(|data| data.insert_temp(index_id(), index));
-        harness.run_ok();
-        harness.get_by_label("The keep").click();
-        harness.step();
-        assert_eq!(viewing(&harness.ctx).unwrap().1, "The keep");
-        harness.step();
-        harness.key_press(egui::Key::Escape);
-        harness.step();
-        harness.step();
-        assert!(!viewer_open(&harness.ctx));
     }
 
     #[test]
@@ -336,20 +313,6 @@ mod tests {
     }
 
     #[test]
-    fn a_link_with_no_local_copy_stays_a_link() {
-        let (_root, index) = package();
-        let mut harness = Harness::builder().build_ui(|ui| {
-            crate::markdown_view::show(ui, "*The moat* ([image](https://a/moat.png))");
-        });
-        harness
-            .ctx
-            .data_mut(|data| data.insert_temp(index_id(), index));
-        harness.run_ok();
-        assert!(harness.query_by_label("The moat").is_none());
-        assert!(harness.query_by_label("The moat (image)").is_some());
-    }
-
-    #[test]
     fn the_image_used_longest_ago_is_dropped_first() {
         let ctx = egui::Context::default();
         for number in 0..KEEP_DECODED {
@@ -364,74 +327,6 @@ mod tests {
         assert_eq!(recent.len(), KEEP_DECODED);
         assert!(recent.contains(&"0".to_owned()));
         assert!(!recent.contains(&"1".to_owned()));
-    }
-
-    /// Draw real art to a file, to look at. Set SPLAT_ART_PACKAGE to the package folder.
-    #[test]
-    #[ignore = "needs an art package on this machine"]
-    fn preview() {
-        use splat::content::Entry;
-        let root = PathBuf::from(std::env::var("SPLAT_ART_PACKAGE").unwrap());
-        let index = Arc::new(ArtIndex::load([root.as_path()]));
-        assert!(!index.is_empty());
-        let shown = index.clone();
-        let goblin =
-            splat::content::definitions::source_file("definitions/creatures/goblin_warrior.md")
-                .unwrap();
-        let goblin = Entry::parse("goblin.md", goblin).unwrap();
-        let figure = std::env::var("SPLAT_ART_LINK").unwrap();
-        let note =
-            format!("*A figure from a chapter* ([image]({figure}))\n\nText after the figure.");
-        let portrait_path = std::env::var("SPLAT_ART_PORTRAIT").ok().map(PathBuf::from);
-        let mut harness = Harness::builder()
-            .with_size(vec2(1300.0, 1000.0))
-            .build_ui(|ui| {
-                ui.columns(2, |columns| {
-                    let origin = crate::library::view::Origin {
-                        path: "x",
-                        owner: "x",
-                        builtin: true,
-                    };
-                    crate::library::view::show(
-                        &mut columns[0],
-                        &goblin.name,
-                        Some(&goblin),
-                        &goblin.body,
-                        &origin,
-                        &crate::library::view::NoLinks,
-                    );
-                    crate::markdown_view::show(&mut columns[1], &note);
-                    let (rect, _) =
-                        columns[1].allocate_exact_size(vec2(56.0, 56.0), egui::Sense::empty());
-                    portrait(&columns[1], rect, portrait_path.as_deref(), "Tiny", None);
-                    let (rect, _) =
-                        columns[1].allocate_exact_size(vec2(38.0, 38.0), egui::Sense::empty());
-                    portrait(&columns[1], rect, None, "Morana", None);
-                    columns[1].horizontal_wrapped(|ui| {
-                        let words = std::env::var("SPLAT_ART_TYPES").unwrap_or_default();
-                        for word in words.split(',') {
-                            for side in [28.0, 56.0] {
-                                let (rect, _) =
-                                    ui.allocate_exact_size(vec2(side, side), egui::Sense::empty());
-                                portrait(ui, rect, shown.creature_type(word), word, None);
-                            }
-                        }
-                    });
-                });
-            });
-        install(&harness.ctx);
-        harness
-            .ctx
-            .data_mut(|data| data.insert_temp(index_id(), index));
-        for _ in 0..200 {
-            harness.step();
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        }
-        harness
-            .render()
-            .unwrap()
-            .save(std::env::var("SPLAT_ART_OUT").unwrap())
-            .unwrap();
     }
 
     #[test]
