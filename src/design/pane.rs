@@ -1281,6 +1281,17 @@ fn widget_count(ui: &Ui) -> usize {
         .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count())
 }
 
+/// What a focus that came with a pointer press does when its block is cut.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pressed {
+    /// It comes whole into view when the pointer is released (a pane with an edge, a `Content`
+    /// body).
+    Reveals,
+    /// It stays where it is: only keyboard focus is revealed (a `Fills` column with no edge,
+    /// F0: Tab must not reach a hidden row, and a click moves nothing it did not move before).
+    Stays,
+}
+
 /// A body control that gained keyboard focus in this pass comes whole into the pane's view, with
 /// the words that belong to it (`components::reveal_with`: its field's caption, help and error,
 /// and a reason its act brought, [`reveal_with_focus`]), above the footer: Tab never reaches a
@@ -1294,9 +1305,17 @@ fn widget_count(ui: &Ui) -> usize {
 /// pane's layer) is scrolled to. Nothing moves while the pointer presses, holds or releases in the
 /// body's column (`reveal::cancel`; a press in another column does not hold it); a focus that
 /// came with a press and whose block is cut waits for the release, and the block then comes whole
-/// into view (a click on a cut field, a drop-down's chosen row). An editor viewport's
-/// block is its fixed frame (`components::reveal_as`), not its text.
-fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect, visible: Rect) {
+/// into view (a click on a cut field, a drop-down's chosen row); with `Pressed::Stays` (a
+/// column with no edge, where a click on a cut field never scrolled) it stays where it is and
+/// only keyboard focus is revealed. An editor viewport's block is its fixed frame
+/// (`components::reveal_as`), not its text.
+fn reveal_focus(
+    ui: &mut Ui,
+    id: Id,
+    widgets: std::ops::Range<usize>,
+    (room, visible): (Rect, Rect),
+    pressed: Pressed,
+) {
     let seen = id.with("seen_focus");
     let layer = ui.layer_id();
     // A control of this body and its rect in this pass, if it is one.
@@ -1373,8 +1392,10 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
     // same focus, room and place; a drag of the scroll bar elsewhere is not a click on it.
     let on_it = own.zip(input.at).is_some_and(|(own, at)| own.contains(at));
     if pointer && cut && (on_it || before != Some(key)) {
-        ui.ctx()
-            .data_mut(|data| data.remove::<(Option<Id>, Rect, Option<[i32; 2]>)>(seen));
+        ui.ctx().data_mut(|data| match pressed {
+            Pressed::Reveals => data.remove::<(Option<Id>, Rect, Option<[i32; 2]>)>(seen),
+            Pressed::Stays => data.insert_temp(seen, key),
+        });
         return;
     }
     if before == Some(key) {
@@ -2058,8 +2079,8 @@ pub(super) fn follow_focus<R>(
         ui,
         column.with("design_column_focus"),
         first..last,
-        view,
-        view,
+        (view, view),
+        Pressed::Reveals,
     );
     inner
 }
@@ -2070,13 +2091,24 @@ pub(super) fn follow_focus<R>(
 /// lowest row that its view's bottom would cut, as measured in the last pass with the same view
 /// (a new cut draws the pass again), and a hairline marks it. Each column cuts at its own last
 /// whole row; a row that starts at the view's top keeps the plain cut, as in `Body::Content`.
-/// Elsewhere it only runs `add`.
+/// Directly in a `Body::Fills` pane with no edge, there is no cut, but the pane is still the
+/// column's one focus arbiter: a control of it that gains keyboard focus comes whole into the
+/// column's view (review of PR 906: Tab reached an off-screen row unseen). Elsewhere it only
+/// runs `add`.
 pub(super) fn whole_rows<R>(ui: &mut Ui, column: Id, add: impl FnOnce(&mut Ui) -> R) -> R {
-    let Some(pane) = innermost(ui).filter(|pane| !pane.content && pane.edge) else {
+    let Some(pane) = innermost(ui).filter(|pane| !pane.content) else {
         return add(ui);
     };
-    let view = ui.clip_rect();
     let key = pane.pane.with(("column_cut", column));
+    if !pane.edge {
+        let first = widget_count(ui);
+        let inner = add(ui);
+        let last = widget_count(ui);
+        let view = ui.clip_rect();
+        reveal_focus(ui, key, first..last, (view, view), Pressed::Stays);
+        return inner;
+    }
+    let view = ui.clip_rect();
     let kept = ui
         .ctx()
         .data(|data| data.get_temp::<(Rect, f32)>(key))
@@ -2117,7 +2149,7 @@ pub(super) fn whole_rows<R>(ui: &mut Ui, column: Id, add: impl FnOnce(&mut Ui) -
     if let Some(cut) = cut {
         visible.max.y = visible.max.y.min(cut);
     }
-    reveal_focus(ui, key, first..last, view, visible);
+    reveal_focus(ui, key, first..last, (view, visible), Pressed::Reveals);
     if cut != kept {
         ui.ctx().data_mut(|data| match cut {
             Some(cut) => data.insert_temp(key, (view, cut)),
@@ -2609,7 +2641,7 @@ impl Footer<'_> {
                     );
                     let last = widget_count(ui);
                     open(ui, None);
-                    reveal_focus(ui, id, first..last, body_room, visible);
+                    reveal_focus(ui, id, first..last, (body_room, visible), Pressed::Reveals);
                     if options.holds {
                         super::extras::space(ui, held.room);
                     }
@@ -4633,6 +4665,22 @@ mod row_cut_tests {
                     State::default(),
                 );
             harness.run_steps(3);
+            // Review of PR 906: with no edge yet, a row below the view that gains focus comes
+            // whole into view, in a `Fills` pane's column as in a `Content` body.
+            let clip = harness.state().clip;
+            let below = harness
+                .state()
+                .rows
+                .iter()
+                .position(|row| row.top() >= clip)
+                .expect("a row is below the view");
+            harness.state_mut().focus = Some(below);
+            harness.run_steps(3);
+            let (row, clip) = (harness.state().rows[below], harness.state().clip);
+            assert!(
+                row.bottom() <= clip + 0.5 && row.top() >= 0.0,
+                "n12-focus-no-edge fills {fills}: row {below} {row:?} not whole above {clip}"
+            );
             // The last row whole in view with no edge: focus it.
             let clip = harness.state().clip;
             let target = harness

@@ -1060,9 +1060,13 @@ mod tests {
     /// point narrower: it keeps its width, then takes its row's width and cuts its own words;
     /// at both, the action painted in its rect lies inside the room. Review of PR 895 (P2): the
     /// same action with an icon and a keyboard hint, in slots from one point over its width down
-    /// to 0 (in steps that are not whole points): its rect and everything it paints that shows
-    /// lie inside the slot, exactly, and it gives up its hint, then its words, then its icon, in
-    /// that order. Red: an action at least a control wide whatever its slot.
+    /// to exactly 0 (in steps that are not whole points), at scales 1, 1.25 and 1.5, in a measured
+    /// block's slot that starts off egui's 1/32-point grid and in a plain room that ends off it:
+    /// after egui's rounding the press target lies in its room, every shape that shows lies in the
+    /// slot, and after tessellation every vertex that paints lies in the slot's own pixels; it
+    /// gives up its hint, then its words, then its icon, in that order. Red: an action at least a
+    /// control wide whatever its slot; a slot not moved inward to the grid (`LaidUi::in_slot`); an
+    /// end not floored to the grid (`Action::paint`).
     #[test]
     fn a_wrapped_long_action_paints_inside_its_room() {
         let mut harness = Harness::builder()
@@ -1109,66 +1113,134 @@ mod tests {
                 .icon(crate::design::icons::ADD)
                 .key("G")
         };
-        // The slot's width in, the slot and the action's rect out.
-        let mut sweep = Harness::builder()
-            .with_size(vec2(600.0, 200.0))
-            .themed_ui_state(
-                |ui, (width, slot, drew): &mut (f32, Rect, Rect)| {
-                    *slot = Rect::from_min_size(
-                        ui.max_rect().min + vec2(20.0, 20.0),
-                        vec2(*width, 40.0),
-                    );
-                    *drew = ui
-                        .new_child(egui::UiBuilder::new().max_rect(*slot))
-                        .add_enabled_ui(true, |ui| full().show(ui).rect)
-                        .inner;
-                },
-                (0.0, Rect::NOTHING, Rect::NOTHING),
-            );
-        let natural = {
-            sweep.state_mut().0 = 600.0;
-            sweep.run_steps(2);
-            sweep.state().2.width()
-        };
-        let mut width = natural + 1.0;
+        // Review of PR 895 (P2, P3): at the app's scales, in a slot whose edges are off egui's
+        // 1/32-point grid, down to a width of exactly 0. After egui's rounding, the press target
+        // (the response's rect) lies in the slot, and so does every shape that shows; after
+        // tessellation, every vertex that paints lies in the slot's own pixels.
         let mut seen = Vec::new();
-        while width >= 0.0 {
-            sweep.state_mut().0 = width;
-            sweep.run_steps(2);
-            let (_, slot, drew) = *sweep.state();
-            assert!(
-                slot.contains_rect(drew),
-                "at {width}: the action's rect {drew:?} leaves its slot {slot:?}"
-            );
-            let (mut words, mut icon, mut key) = (false, false, false);
-            for clipped in &sweep.output().shapes {
-                let shown = clipped
-                    .shape
-                    .visual_bounding_rect()
-                    .intersect(clipped.clip_rect);
-                // The panel's own background is not the action's.
-                if !shown.is_positive() || shown.width() >= 599.0 {
-                    continue;
-                }
-                assert!(
-                    slot.contains_rect(shown),
-                    "at {width}: a part shows at {shown:?}, outside its slot {slot:?}"
+        for scale in [1.0, 1.25, 1.5] {
+            // The slot's width in; the slot, the press target and the pixels per point out.
+            let mut sweep = Harness::builder()
+                .with_size(vec2(600.0, 200.0))
+                .with_pixels_per_point(scale)
+                .themed_ui_state(
+                    |ui, (width, slot, drew): &mut (f32, Rect, Rect)| {
+                        // A measured block's slot, as a host draws in it (`LaidUi::in_slot`).
+                        let laid = Laid::new(
+                            Id::new("sweep"),
+                            vec2(*width + 1.0, 41.0),
+                            None,
+                            Vec::new(),
+                            vec![Rect::from_min_size(pos2(0.013, 0.007), vec2(*width, 40.0))],
+                        );
+                        let block = draw_laid(ui, &laid, |ui| {
+                            *slot = ui.slot(0);
+                            *drew = ui.in_slot(0, |ui| {
+                                ui.add_enabled_ui(true, |ui| full().show(ui).rect).inner
+                            });
+                        });
+                        ui.ctx()
+                            .data_mut(|data| data.insert_temp(Id::new("sweep_block"), block));
+                        // A plain `Ui` that starts on egui's grid and ends off it (the review's
+                        // slot ending at 47.99): its end bounds the press target after rounding.
+                        let plain = Rect::from_min_size(
+                            pos2(ui.max_rect().left(), 120.0),
+                            vec2((*width - 0.01).max(0.0), 40.0),
+                        );
+                        let target = ui
+                            .new_child(egui::UiBuilder::new().max_rect(plain))
+                            .add_enabled_ui(true, |ui| full().show(ui).rect)
+                            .inner;
+                        ui.ctx().data_mut(|data| {
+                            data.insert_temp(Id::new("sweep_plain"), (plain, target));
+                        });
+                    },
+                    (0.0, Rect::NOTHING, Rect::NOTHING),
                 );
-                if let egui::Shape::Text(text) = &clipped.shape {
-                    match text.galley.text() {
-                        "G" => key = true,
-                        glyph if glyph == crate::design::icons::ADD => icon = true,
-                        _ => words = true,
+            let natural = {
+                sweep.state_mut().0 = 600.0;
+                sweep.run_steps(2);
+                sweep.state().2.width()
+            };
+            let widths = (0..)
+                .map(|step| natural + 1.0 - step as f32 * 0.75)
+                .take_while(|width| *width > 0.0)
+                .chain([0.0]);
+            for width in widths {
+                sweep.state_mut().0 = width;
+                sweep.run_steps(2);
+                let (_, slot, drew) = *sweep.state();
+                // A slot of no width off egui's grid has no grid point inside it, so its empty
+                // target rounds to one just beside it: it has no area to press.
+                assert!(
+                    slot.contains_rect(drew) || (width == 0.0 && drew.width() == 0.0),
+                    "at {width}@{scale}: the press target {drew:?} leaves its slot {slot:?}"
+                );
+                let (plain, target) = sweep
+                    .ctx
+                    .data(|data| data.get_temp::<(Rect, Rect)>(Id::new("sweep_plain")))
+                    .expect("drawn");
+                assert!(
+                    target.right() <= plain.right() && target.left() >= plain.left(),
+                    "at {width}@{scale}: in a plain room ending off the grid, the press target \
+                     {target:?} ends past {plain:?}"
+                );
+                let (mut words, mut icon, mut key) = (false, false, false);
+                let mut shapes = Vec::new();
+                for clipped in &sweep.output().shapes {
+                    let shown = clipped
+                        .shape
+                        .visual_bounding_rect()
+                        .intersect(clipped.clip_rect);
+                    // The panel's own background and the block's own row are not the action's.
+                    let block = sweep
+                        .ctx
+                        .data(|data| data.get_temp::<Rect>(Id::new("sweep_block")))
+                        .unwrap_or(Rect::NOTHING);
+                    if !shown.is_positive()
+                        || shown.width() >= 599.0
+                        || block.contains_rect(shown) && shown.height() > 40.5
+                        || shown.top() >= 110.0
+                    {
+                        continue;
+                    }
+                    assert!(
+                        slot.contains_rect(shown),
+                        "at {width}@{scale}: a part shows at {shown:?}, outside its slot {slot:?}"
+                    );
+                    if let egui::Shape::Text(text) = &clipped.shape {
+                        match text.galley.text() {
+                            "G" => key = true,
+                            glyph if glyph == crate::design::icons::ADD => icon = true,
+                            _ => words = true,
+                        }
+                    }
+                    shapes.push(clipped.clone());
+                }
+                // The slot's own pixels: its edges out to the pixel grid.
+                let pixels = Rect::from_min_max(
+                    (slot.min.to_vec2() * scale).floor().to_pos2() / scale,
+                    (slot.max.to_vec2() * scale).ceil().to_pos2() / scale,
+                );
+                for primitive in sweep.ctx.tessellate(shapes, scale) {
+                    if let egui::epaint::Primitive::Mesh(mesh) = primitive.primitive {
+                        for vertex in mesh.vertices.iter().filter(|vertex| vertex.color.a() > 0) {
+                            assert!(
+                                pixels.expand(1e-3).contains(vertex.pos),
+                                "at {width}@{scale}: a vertex paints at {:?}, outside its slot's \
+                                 pixels {pixels:?}",
+                                vertex.pos
+                            );
+                        }
                     }
                 }
+                assert!(
+                    (!key || words) && (!words || icon),
+                    "at {width}@{scale}: the hint goes first, then the words, then the icon \
+                     (hint {key}, words {words}, icon {icon})"
+                );
+                seen.push((key, words, icon));
             }
-            assert!(
-                (!key || words) && (!words || icon),
-                "at {width}: the hint goes first, then the words, then the icon \
-                 (hint {key}, words {words}, icon {icon})"
-            );
-            seen.push((key, words, icon));
-            width -= 0.75;
         }
         for stage in [
             (true, true, true),
@@ -1242,8 +1314,11 @@ mod tests {
     /// length paint their new words (as painted, not as named) in the same pass, and the next
     /// quiet frame paints them again from what was laid. A new action, a wider name column, a new
     /// font atlas, another theme and another scale each lay the lines out again, and the pass
-    /// shows it. Red: actions that lay their own words, hints or icons; a key without the atlas;
-    /// a host that lays its lines every frame; a host that keeps its laid lines after an edit.
+    /// shows it. egui's galley cache, which keeps only what a pass asked for, counts every text
+    /// laid in a quiet pass however it was laid: the atlas probe alone. Red: actions that lay
+    /// their own words, hints or icons; a hint laid again by hand in paint (the cache count); a key
+    /// without the atlas; a host that lays its lines every frame; a host that keeps its laid lines
+    /// after an edit.
     #[test]
     fn a_quiet_frame_lays_no_line_and_a_change_lays_it_again() {
         use crate::design::theme::ATLAS_PROBES;
@@ -1263,6 +1338,13 @@ mod tests {
                 probes() - probed <= passes,
                 "{what}: the atlas probe is laid at most once a pass ({} in {passes})",
                 probes() - probed
+            ); // Every text laid in a pass, however it was laid: egui keeps a galley in its cache
+            // only while a pass asks for it, so after a quiet pass the cache holds exactly what
+            // that pass laid out (review of PR 895, P3: a hint laid again by hand passed).
+            let cached = harness.ctx.fonts(|fonts| fonts.num_galleys_in_cache());
+            assert_eq!(
+                cached, 1,
+                "{what}: a quiet pass lays out one text, the atlas probe, and nothing else"
             );
         };
         quiet(&mut harness, "at first");
