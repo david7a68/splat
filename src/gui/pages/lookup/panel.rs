@@ -26,8 +26,10 @@ pub(super) fn render(
     // The title line: Lookup, Back while there is somewhere to go back to, the open action
     // with its words, and Close.
     let back = lookup.can_go_back().then(|| {
-        IconButton::new("lookup-back", icons::HISTORY_BACK, "Back")
-            .hint("Back (Alt+←)")
+        Button::quiet("lookup-back", "Back")
+            .icon(icons::HISTORY_BACK)
+            .key("Alt+Left")
+            .density(Density::Read)
             .on_click(cx.listener(|root, _, _, cx| {
                 root.app.lookup.go(crate::history::Step::Back);
                 cx.notify();

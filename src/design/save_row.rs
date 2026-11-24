@@ -609,6 +609,27 @@ impl<'a> DraftState<'a> {
             }
         })
     }
+
+    /// A form draft's quiet `Cancel` (`cancels`): it stands where `Discard` would while the
+    /// draft has no changes and the comparison does not own the pane. It is never blocked.
+    pub fn cancel_shown(&self) -> bool {
+        self.cancels.is_some() && !self.changed() && !self.on_disk
+    }
+
+    /// The one reason the row says after its state word and `Discard` or `Cancel`: with changes,
+    /// the lock sentence (`holds`, else [`Self::lock_reason`]); with none, the reason after
+    /// `Cancel` (`cancels`).
+    pub fn row_reason(&self) -> Option<&str> {
+        if self.on_disk {
+            None
+        } else if self.changed() {
+            self.holds
+                .filter(|_| self.locks_campaign)
+                .or_else(|| self.lock_reason())
+        } else {
+            self.cancels.flatten()
+        }
+    }
 }
 
 /// One reason's place on a draft head's save row (layout step 6): every form the reason can take

@@ -46,7 +46,7 @@ pub fn width(root: &SplatRoot, window: &Window, cx: &gpui::App) -> gpui::Pixels 
 pub fn render(
     root: &mut SplatRoot,
     connection: crate::Connection,
-    _window: &mut Window,
+    window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> gpui::Stateful<Div> {
     let c = colors();
@@ -59,7 +59,7 @@ pub fn render(
         .child(kit::gap(XS))
         .child(switcher(root, cx))
         .child(kit::gap(S))
-        .child(run_slot(root, page, cx));
+        .child(run_slot(root, page, window, cx));
     let review = root.app.campaign_content.review_detail();
     for (item, icon) in [
         (Page::Encounters, icons::ENCOUNTERS),
@@ -140,6 +140,7 @@ fn switcher(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Div {
     )
     .placeholder(label)
     .blocked(lock)
+    .lock_when_blocked()
     .on_select(cx.listener(move |root, index: &usize, _, cx| {
         let Some(id) = ids.get(*index).copied() else {
             return;
@@ -165,7 +166,12 @@ fn switcher(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Div {
 }
 
 /// The Run slot: the open run, the paused run, or a quiet `Run` with `No fight open`.
-fn run_slot(root: &mut SplatRoot, page: Option<Page>, cx: &mut Context<SplatRoot>) -> Div {
+fn run_slot(
+    root: &mut SplatRoot,
+    page: Option<Page>,
+    window: &Window,
+    cx: &mut Context<SplatRoot>,
+) -> Div {
     let app = &root.app;
     let item = if app.encounters.has_run() {
         let detail = app
@@ -178,8 +184,10 @@ fn run_slot(root: &mut SplatRoot, page: Option<Page>, cx: &mut Context<SplatRoot
             "{detail}{}",
             copy.map_or(String::new(), |copy| format!(" · {copy}"))
         );
+        // The rail's room less its sides: a long state shortens to the word that matters.
+        let shown = kit::nav::fit_run_detail(window, &detail, root.rail_width() - S * 2.0);
         kit::NavItem::new("nav-run", icons::RUN, "Run")
-            .detail(Some(detail.clone()))
+            .detail(Some(shown))
             .name(format!("Run · {detail}"))
             .selected(page == Some(Page::Run))
             .hint(hint)

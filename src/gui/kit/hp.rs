@@ -33,10 +33,23 @@ pub fn current_color(state: HpState) -> Hsla {
 /// `26/33`: `current` in its role, `/33` in `max`. The maximum keeps a slot three digits wide,
 /// so the slash holds its place from row to row.
 pub fn readout(hp: Option<i64>, max: Option<i64>, current: Type, max_role: Type) -> Div {
+    let max_text = max.map_or_else(|| "?".to_owned(), |max| max.to_string());
+    let slot = max_role.size() * 0.62 * (3.max(max_text.len()) as f32 + 1.0);
+    readout_in_slot(hp, max, current, max_role, slot)
+}
+
+/// [`readout`] with the maximum's slot as the caller measured it, for a line fitted by measured
+/// widths (the party bar), where the estimate would leave room unused.
+pub fn readout_in_slot(
+    hp: Option<i64>,
+    max: Option<i64>,
+    current: Type,
+    max_role: Type,
+    slot: Pixels,
+) -> Div {
     let c = colors();
     let state = hp_state(hp, max);
     let max_text = max.map_or_else(|| "?".to_owned(), |max| max.to_string());
-    let slot = max_role.size() * 0.62 * (3.max(max_text.len()) as f32 + 1.0);
     div()
         .flex()
         .flex_row()

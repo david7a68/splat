@@ -27,17 +27,23 @@ fn name_words(glance: &Glance, initial: bool) -> String {
     }
 }
 
-/// The width of the HP readout (`kit::hp::readout` at `Numeral` over `Small`): the current HP,
-/// then the maximum's slot, at least three digits and the slash.
-fn hp_width(window: &Window, glance: &Glance) -> Pixels {
+/// The maximum's slot in the HP readout, measured as egui measured it: three digits at least,
+/// or the `/max` words when they are wider.
+fn max_slot(window: &Window, glance: &Glance) -> Pixels {
     let max = known(glance.max_hp);
-    let slot = Type::Small.size() * 0.62 * (3.max(max.len()) as f32 + 1.0);
-    kit::measure::width(window, Type::Numeral, &known(glance.hp))
-        + slot.max(kit::measure::width(
+    kit::measure::width(window, Type::Small, &"0".repeat(3.max(max.len()))).max(
+        kit::measure::width(
             window,
             Type::Small,
             &splat_party::combat_sync::fraction("", &max),
-        ))
+        ),
+    )
+}
+
+/// The width of the HP readout (`kit::hp::readout_in_slot` at `Numeral` over `Small`): the
+/// current HP, then the maximum's measured slot.
+fn hp_width(window: &Window, glance: &Glance) -> Pixels {
+    kit::measure::width(window, Type::Numeral, &known(glance.hp)) + max_slot(window, glance)
 }
 
 /// A stat as it reads: its label, a space, its value.
@@ -135,52 +141,88 @@ pub(super) fn render(
         .into_iter()
         .find(|words| source_width(words) <= free)
         .map(str::to_owned);
+    // The items' line is the room they were fitted to, less the source beside the close button,
+    // so a fitted item is never clipped by a label or button drawn a pixel wider than measured.
+    let line_width = room
+        - shown_source
+            .as_deref()
+            .map_or(px(0.0), |words| source_width(words) + S);
     let mut items = div()
         .flex()
         .flex_row()
         .items_center()
         .gap(gap)
-        .flex_1()
-        .min_w_0()
+        .flex_none()
+        .w(line_width)
         .overflow_hidden();
     for (at, (glance, width)) in glances.iter().zip(&fitted.widths).take(kept).enumerate() {
         items = items.child(item(glance, step, px(*width), at, &source.word, window, cx));
     }
     let hidden: Vec<&Glance> = glances.iter().skip(kept).collect();
     if !hidden.is_empty() {
-        let words = hidden
+        let lines: Vec<String> = hidden
             .iter()
             .map(|glance| format!("{} · {}", glance.name, glance.facts()[0]))
-            .collect::<Vec<_>>()
-            .join("; ");
-        items = items.child(
-            div()
-                .id("party-bar-more")
-                .flex_none()
-                .px(XS)
-                .child(kit::text(
-                    Type::Small,
-                    c.muted,
-                    format!("{} more", hidden.len()),
-                ))
-                .with_tooltip(words),
-        );
+            .collect();
+        let words = lines.join("; ");
+        // It takes keyboard focus. Hover and focus show the players it hides, each with HP, and
+        // its accessible name lists them too. GPUI's tooltip shows on hover only, so focus
+        // draws the same box under the count.
+        let count = format!("{} more", hidden.len());
+        let focus = root
+            .pages
+            .party
+            .more_focus
+            .get_or_insert_with(|| cx.focus_handle().tab_stop(true))
+            .clone();
+        let more = div()
+            .id("party-bar-more")
+            .flex()
+            .items_center()
+            .flex_none()
+            .h(Density::Read.row())
+            // The ring is inside the measured `XS` sides, so the fit's width holds.
+            .px(XS - theme::FOCUS_WIDTH)
+            .rounded(theme::RADIUS_CONTROL)
+            .border(theme::FOCUS_WIDTH)
+            .border_color(gpui::transparent_black())
+            .track_focus(&focus)
+            .focus_visible(|s| s.border_color(c.focus))
+            .aria_label(format!("{count}: {words}"))
+            .child(kit::text(Type::Small, c.muted, count.clone()))
+            .with_tooltip(lines.join("\n"))
+            .when(focus.is_focused(window), |more| {
+                // Under the count, its right edge at the count's: the count ends the items, so
+                // the box opens toward them and stays in the window.
+                more.relative().child(
+                    div().absolute().right_0().bottom_0().child(
+                        gpui::deferred(gpui::anchored().anchor(gpui::Anchor::TopRight).child(
+                            kit::target(
+                                kit::tooltip::tip_box(lines.join("\n").into()),
+                                "party-bar-more-list",
+                            ),
+                        ))
+                        .with_priority(1),
+                    ),
+                )
+            });
+        items = items.child(kit::target(more, count));
     }
     let source_status = shown_source.map(|words| {
-        div()
+        let status = div()
             .id("party-bar-source")
             .child(kit::status(&kit::Status::new(
                 source.icon,
-                words,
+                words.clone(),
                 theme::color(source.color),
             )))
-            .with_tooltip(source.word.clone())
+            .with_tooltip(source.word.clone());
+        kit::target(status, words)
     });
     div()
         .flex()
         .flex_row()
         .items_center()
-        .gap(L)
         .h(Density::Read.row() + XS * 2.0)
         .px(M)
         .py(XS)
@@ -188,15 +230,19 @@ pub(super) fn render(
         .border_b(crate::gui::theme::HAIRLINE_WIDTH)
         .border_color(c.hairline)
         .when(inert, |bar| bar.opacity(0.6))
-        .child(kit::text(Type::Label, c.muted, "Party"))
-        .child(items)
+        // The spaces the fit's room counts: `L` after the label, `S` before the close button.
+        .child(div().mr(L).child(kit::text(Type::Label, c.muted, "Party")))
+        .child(kit::target(items, "party-bar-items"))
         .child(
             div()
                 .flex()
                 .flex_row()
                 .items_center()
                 .gap(S)
-                .flex_none()
+                .ml(S)
+                .flex_1()
+                .min_w_0()
+                .justify_end()
                 .children(source_status)
                 .child(
                     IconButton::new("party-bar-hide", icons::CLOSE, "Hide the party").on_click(
@@ -265,11 +311,12 @@ fn item(
             .flex_none()
             .w(hp)
             .gap(px(2.0))
-            .child(kit::hp::readout(
+            .child(kit::hp::readout_in_slot(
                 glance.hp,
                 glance.max_hp,
                 Type::Numeral,
                 Type::Small,
+                max_slot(window, glance),
             ))
             .child(kit::hp::bar(glance.hp, glance.max_hp, glance.temp, hp)),
     );

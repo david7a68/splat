@@ -80,6 +80,22 @@ impl NavItem {
     }
 }
 
+/// The run slot's detail as it fits a nav item `item_width` wide (egui's `run_nav_detail`): the
+/// whole state when it fits; else `Ended` or `Paused` alone, the word that matters at a glance;
+/// else the words, cut at the item's edge.
+pub fn fit_run_detail(window: &Window, detail: &str, item_width: gpui::Pixels) -> String {
+    let room = item_width - px(WORDS_LEFT) - S;
+    if super::measure::width(window, Type::Small, detail) <= room {
+        detail.to_owned()
+    } else if detail.starts_with("Ended ·") {
+        "Ended".to_owned()
+    } else if detail.ends_with("· Paused") {
+        "Paused".to_owned()
+    } else {
+        detail.to_owned()
+    }
+}
+
 impl RenderOnce for NavItem {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         let c = colors();

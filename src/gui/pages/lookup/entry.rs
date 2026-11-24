@@ -68,7 +68,7 @@ pub(super) fn render(
     let body = render_reader(root, Host::Lookup, item, &index, &campaign, window, cx);
     let mut pane = kit::Pane::new(("lookup-entry", id.as_u128() as u64))
         .flush()
-        .scroll(&root.pages.lookup.jump.scroll)
+        .scroll(&root.pages.lookup.jump.scroll(id))
         .children(lock)
         .child(body);
     for line in footer {
@@ -114,10 +114,10 @@ fn without_campaign(
     )
     .on_open(move |at, window, cx| open(&at, window, cx))
     .on_note(follow)
-    .jump_in(&root.pages.lookup.jump.scroll);
+    .jump_in(&root.pages.lookup.jump.scroll(id));
     kit::Pane::new(("lookup-entry", id.as_u128() as u64))
         .flush()
-        .scroll(&root.pages.lookup.jump.scroll)
+        .scroll(&root.pages.lookup.jump.scroll(id))
         .child(crate::gui::pages::reader::entry::title_with_art(
             &item.entry.name,
             &index.result_detail(position),

@@ -114,7 +114,8 @@ impl RenderOnce for FilterBar {
             child(&self.id, "button"),
             format!("{} {}", filter_word(filter), icons::DOWN),
         )
-        .line_start()
+        // Not `line_start`: the bar starts at a pane's edge beside a splitter, and a hung frame
+        // would touch it (every target clear of a splitter).
         .selected(count > 0)
         .name("Filter creatures");
         let menu = match &self.choices {
