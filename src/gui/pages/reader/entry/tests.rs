@@ -113,6 +113,8 @@ fn shell(name: &str, seed: Seed, window: Size<Pixels>) -> Shell {
             break;
         }
         shell.wait(std::time::Duration::from_millis(100));
+        // The index loads on a real thread: give it real time too, as a loaded machine needs.
+        std::thread::sleep(std::time::Duration::from_millis(20));
     }
     shell
 }
