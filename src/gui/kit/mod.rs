@@ -12,6 +12,7 @@
 
 pub mod button;
 pub mod checkbox;
+pub mod comparison;
 pub mod dialog;
 pub mod empty;
 pub mod fact;

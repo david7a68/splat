@@ -12,13 +12,13 @@ use std::sync::Arc;
 pub use splat_campaign::loot::{Item, Sources};
 
 /// The most suggestions of each kind under the add field.
-const MOST_TABLES: usize = 4;
+pub const MOST_TABLES: usize = 4;
 const MOST_ITEMS: usize = 6;
-const NO_SEPARATOR: &str = "Use one row for each item. A ; separates items in the roster table.";
+pub const NO_SEPARATOR: &str = "Use one row for each item. A ; separates items in the roster table.";
 
 /// Tables, then items, that match what the DM typed. `Roll` before a word looks for tables
 /// only.
-fn matching<'a>(sources: &'a Sources, typed: &str) -> (Vec<&'a Table>, Vec<&'a Item>) {
+pub fn matching<'a>(sources: &'a Sources, typed: &str) -> (Vec<&'a Table>, Vec<&'a Item>) {
     let lower = typed.trim().to_lowercase();
     let (tables_only, query) = match lower.strip_prefix("roll") {
         Some(rest) if rest.is_empty() || rest.starts_with(' ') => {
@@ -408,7 +408,7 @@ fn table_menu(
     chosen
 }
 
-const NO_TABLES: &str =
+pub const NO_TABLES: &str =
     "No roll tables yet. Put <!-- splat:rolls key=gems dice=1d6 --> above a table in a World note.";
 
 /// The field that adds a line, the table menu beside it, and the suggestions under it.
@@ -512,7 +512,7 @@ fn add_row(
     }
 }
 
-pub(crate) const ROLL_MENU: &str = "Roll on a table";
+pub const ROLL_MENU: &str = "Roll on a table";
 
 /// The count typed after `Roll`, such as 2 in `Roll 2× ge`.
 fn typed_count(typed: &str) -> Option<u32> {
@@ -527,12 +527,12 @@ fn typed_count(typed: &str) -> Option<u32> {
 }
 
 /// The count to keep when the DM picks a table, at most `MAX_ROLLS`.
-fn typed_times(typed: &str) -> u32 {
+pub fn typed_times(typed: &str) -> u32 {
     typed_count(typed).map_or(1, |times| times.clamp(1, MAX_ROLLS))
 }
 
 /// A roll with a count above what one line can hold.
-fn too_many(typed: &str) -> bool {
+pub fn too_many(typed: &str) -> bool {
     typed_count(typed).is_some_and(|times| times > MAX_ROLLS)
 }
 

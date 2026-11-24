@@ -26,6 +26,10 @@ use splat::content::{
 use std::{fs, sync::Arc};
 use uuid::Uuid;
 
+#[path = "groups/view.rs"]
+pub mod view;
+pub use view::{GroupFields, MemberRow};
+
 const FOLDER: &str = "Encounter Groups";
 const DEFAULT_SIDE: &str = "enemies";
 const SIDE_FIELD: &str = "Default side";
@@ -1145,34 +1149,41 @@ impl GroupDraft {
     pub(super) fn has_disk_change(&self) -> bool {
         self.recovery.change.is_some()
     }
-    pub(super) fn disk_choice(
+    /// The group's disk conflict, drawn in its editor's place; the DM's choice, if any.
+    pub(super) fn show_disk(
         &mut self,
         ui: &mut egui::Ui,
-        root: &std::path::Path,
         snapshot: &Snapshot,
     ) -> Result<Option<bool>, String> {
-        let choice =
-            self.recovery
-                .show(ui, &self.comparison_text(snapshot)?, ("group", &self.name));
-        if let Some(keep) = choice {
-            if keep {
-                if let Some(change) = self.recovery.accept() {
-                    self.path = change.path;
-                    self.baseline = change.text.clone();
-                    if let Some(text) = change.text {
-                        self.source = text;
-                        self.reread_lines();
-                    }
-                    // N1: the comparison text decides `dirty`, which decides what Save checks.
-                    self.touch();
+        Ok(self
+            .recovery
+            .show(ui, &self.comparison_text(snapshot)?, ("group", &self.name)))
+    }
+    /// The group's disk conflict as data.
+    pub(super) fn disk_view(&self, snapshot: &Snapshot) -> Option<super::disk::DiskView> {
+        self.recovery
+            .view(&self.comparison_text(snapshot).ok()?, ("group", &self.name))
+    }
+    /// The DM's choice in the group's disk conflict: `keep` takes the file's place and text as
+    /// the baseline, else the group's file is read again.
+    pub(super) fn disk_choice(&mut self, root: &std::path::Path, keep: bool) -> Result<(), String> {
+        if keep {
+            if let Some(change) = self.recovery.accept() {
+                self.path = change.path;
+                self.baseline = change.text.clone();
+                if let Some(text) = change.text {
+                    self.source = text;
+                    self.reread_lines();
                 }
-            } else if !self.recovery.file_gone() {
-                *self = Self::open(root, &self.path)?;
+                // N1: the comparison text decides `dirty`, which decides what Save checks.
+                self.touch();
             }
-            // A group whose file is gone has nothing to reopen: the encounter removes it and
-            // keeps it for Undo remove.
+        } else if !self.recovery.file_gone() {
+            *self = Self::open(root, &self.path)?;
         }
-        Ok(choice)
+        // A group whose file is gone has nothing to reopen: the encounter removes it and
+        // keeps it for Undo remove.
+        Ok(())
     }
     pub(super) fn write(&mut self, campaign: &Campaign, text: &str) -> Result<(), String> {
         let path = note_path(&campaign.path, &self.path)?;
@@ -1656,26 +1667,51 @@ impl Encounters {
             &draft.comparison_text(snapshot).unwrap_or_default(),
             ("group", &draft.name),
         ) {
-            if keep {
-                if let Some(change) = draft.recovery.accept() {
-                    draft.path = change.path;
-                    draft.baseline = change.text.clone();
-                    if let Some(text) = change.text {
-                        draft.source = text;
-                        draft.reread_lines();
-                    }
-                    draft.touch();
-                    self.save_group_draft(ui.ctx(), campaign, modules);
-                }
-            } else {
-                let path = draft.path.clone();
-                self.discarded_group = self.group_draft.take();
-                self.stamp_kept(super::KeptResult::GroupDiscarded);
-                self.group_draft = GroupDraft::open(&campaign.path, &path).ok();
-                self.error = None;
-            }
+            self.group_disk_choice(ui.ctx(), campaign, modules, keep);
         }
         true
+    }
+
+    /// The group editor's disk conflict, while it has one.
+    pub fn group_disk(&self) -> Option<super::disk::DiskView> {
+        let snapshot = self.snapshot.as_ref()?;
+        let draft = self.group_draft.as_ref()?;
+        draft.recovery.view(
+            &draft.comparison_text(snapshot).unwrap_or_default(),
+            ("group", &draft.name),
+        )
+    }
+
+    /// The DM's choice in the group editor's disk conflict: `keep` overwrites with the draft,
+    /// else the draft goes (with Undo) and the file's text comes back.
+    pub fn group_disk_choice(
+        &mut self,
+        ctx: &egui::Context,
+        campaign: &Campaign,
+        modules: &[Module],
+        keep: bool,
+    ) {
+        let Some(draft) = self.group_draft.as_mut() else {
+            return;
+        };
+        if keep {
+            if let Some(change) = draft.recovery.accept() {
+                draft.path = change.path;
+                draft.baseline = change.text.clone();
+                if let Some(text) = change.text {
+                    draft.source = text;
+                    draft.reread_lines();
+                }
+                draft.touch();
+                self.save_group_draft(ctx, campaign, modules);
+            }
+        } else {
+            let path = draft.path.clone();
+            self.discarded_group = self.group_draft.take();
+            self.stamp_kept(super::KeptResult::GroupDiscarded);
+            self.group_draft = GroupDraft::open(&campaign.path, &path).ok();
+            self.error = None;
+        }
     }
 }
 
@@ -4478,31 +4514,11 @@ pub struct GroupView {
     pub lock_reason: Option<&'static str>,
     /// The words beside Save while its refusal is said in a row or under Belongs to.
     pub elsewhere: Option<&'static str>,
-    pub side: String,
-    /// Belongs to: `Any encounter`, then each encounter; the chosen one; its help or fault.
-    pub belongs: Vec<(Option<Uuid>, String)>,
-    pub belongs_chosen: Option<usize>,
-    pub belongs_help: Option<&'static str>,
-    pub belongs_fault: Option<&'static str>,
-    pub count: usize,
-    pub heading: String,
-    pub members: Vec<MemberRow>,
-    /// Members whose rows cannot be read, as their words.
-    pub unread: Vec<String>,
-    pub notes: String,
+    /// Default side, Belongs to, the members and the notes.
+    pub fields: GroupFields,
+    /// The members' summary under the search, in the narrow layout (`draft_member_summary`).
+    pub summary: String,
     pub reading: bool,
-}
-
-/// One member of the open group.
-pub struct MemberRow {
-    pub index: usize,
-    pub name: String,
-    pub detail: String,
-    pub hp_missing: bool,
-    pub count: u64,
-    pub missing: bool,
-    pub first: bool,
-    pub last: bool,
 }
 
 /// A change to a group's member from its row.
@@ -4540,7 +4556,10 @@ impl GroupEdit<'_> {
 
 impl Encounters {
     /// The group editor's head, save row and body (`group_editor_view`), as data.
-    pub fn group_frame(&mut self) -> Option<GroupView> {
+    pub fn group_frame(
+        &mut self,
+        sources: Option<&crate::loot_editor::Sources>,
+    ) -> Option<GroupView> {
         let dirty = self.draft_dirty();
         let has_run = self.has_run();
         let refusal = self.group_refusal();
@@ -4570,98 +4589,14 @@ impl Encounters {
             RefusalPlace::Member(_) => Some(MEMBER_BESIDE_SAVE),
             _ => None,
         });
-        let mut belongs: Vec<(Option<Uuid>, String)> = vec![(None, ANY_ENCOUNTER.to_owned())];
-        if let Some(snapshot) = snapshot {
-            belongs.extend(
-                snapshot
-                    .encounter_choices()
-                    .map(|(id, name)| (Some(id), name.to_owned())),
-            );
-        }
-        let current = draft
-            .setup
-            .encounter
-            .as_ref()
-            .and_then(|reference| reference.id);
-        let mut belongs_chosen = belongs.iter().position(|(id, _)| *id == current);
-        let gone = current.is_some() && belongs_chosen.is_none();
-        if gone {
-            belongs.push((current, MISSING_ENCOUNTER.to_owned()));
-            belongs_chosen = Some(belongs.len() - 1);
-        }
-        let unread =
-            splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
-        let members = snapshot.map_or_else(Vec::new, |snapshot| {
-            let total = draft.setup.members.len();
-            draft
-                .setup
-                .members
-                .iter()
-                .enumerate()
-                .map(|(index, member)| {
-                    let parsed = Overrides::parse(&member.overrides);
-                    let assessed = assess_member(
-                        &snapshot.catalogue,
-                        &snapshot.creatures,
-                        &member.creature,
-                        &draft.setup.side,
-                        parsed.as_ref().map_err(String::as_str),
-                    );
-                    let entry = assessed.entry;
-                    let base = entry.map_or_else(
-                        || missing_member_name(None, member.creature.link.as_deref()),
-                        |entry| entry.name.clone(),
-                    );
-                    let name = entry
-                        .and(parsed.as_ref().ok())
-                        .and_then(|overrides| overrides.name.as_deref())
-                        .map_or(base, |changed| changed.trim().to_owned());
-                    let (detail, hp_missing) = entry
-                        .zip(assessed.creature)
-                        .map(|(entry, creature)| {
-                            let changed = assessed.changed.as_ref().ok().and_then(Option::as_ref);
-                            let (mut detail, hp_missing) = changed.map_or_else(
-                                || (creature.detail.clone(), creature.hp_missing),
-                                |changed| {
-                                    (
-                                        super::creature_detail(
-                                            entry,
-                                            creature.party,
-                                            Some(changed),
-                                        ),
-                                        changed.max_hp.is_none(),
-                                    )
-                                },
-                            );
-                            if member.overrides.contains_key("name") {
-                                detail.push_str(&format!(" · as {}", entry.name));
-                            }
-                            (detail, hp_missing)
-                        })
-                        .unwrap_or_default();
-                    MemberRow {
-                        index,
-                        name,
-                        detail,
-                        hp_missing,
-                        count: member.count,
-                        missing: entry.is_none(),
-                        first: index == 0,
-                        last: index + 1 == total,
-                    }
-                })
-                .collect()
-        });
-        let count = draft
-            .setup
-            .members
-            .iter()
-            .map(|member| member.count)
-            .sum::<u64>()
-            + unread.iter().filter_map(|member| member.count).sum::<u64>();
+        let summary = snapshot.map_or_else(String::new, |snapshot| draft_member_summary(draft, snapshot));
+        let reading = snapshot.is_none();
+        let id = draft.id();
+        let name = draft.name.clone();
+        let fields = self.group_fields_at(view::GroupAt::Open, sources)?;
         Some(GroupView {
-            id: draft.id(),
-            name: draft.name.clone(),
+            id,
+            name,
             back: super::model::BackLine {
                 word,
                 name: back_name,
@@ -4676,28 +4611,9 @@ impl Encounters {
             empty_reason: empty.then_some(EMPTY_REASON),
             lock_reason: state.lock_reason(),
             elsewhere,
-            side: draft.setup.side.clone(),
-            belongs,
-            belongs_chosen,
-            belongs_help: match current {
-                None => Some("A run of any encounter offers this group."),
-                Some(_) if gone => None,
-                Some(_) => Some("Only runs of this encounter offer this group."),
-            },
-            belongs_fault: gone.then_some(GONE_ENCOUNTER),
-            count: count as usize,
-            heading: if draft.setup.members.is_empty() {
-                String::new()
-            } else {
-                snapshot.map_or_else(String::new, |snapshot| members_heading(draft, snapshot))
-            },
-            members,
-            unread: unread
-                .iter()
-                .map(|member| member.flag.message.clone())
-                .collect(),
-            notes: draft.notes.to_string(),
-            reading: snapshot.is_none(),
+            fields,
+            summary,
+            reading,
         })
     }
 
@@ -7061,7 +6977,7 @@ mod tests {
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let mut harness = egui_kittest::Harness::new(|ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                assert_eq!(group.disk_choice(ui, dir.path(), &snapshot).unwrap(), None);
+                assert_eq!(group.show_disk(ui, &snapshot).unwrap(), None);
             });
         });
         harness.run_steps(2);

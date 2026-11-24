@@ -14,7 +14,18 @@ use gpui::{
     Styled, Window, div, prelude::*,
 };
 use gpui_component::{ResizableState, h_resizable, resizable_panel};
+use gpui_component::resizable::ResizablePanelEvent;
 use std::ops::Range;
+use std::rc::Rc;
+
+/// A handler of a finished drag: each column's width, in order.
+type OnResized = Rc<dyn Fn(&[Pixels], &mut Window, &mut App)>;
+
+/// What the columns keep to tell their caller of a finished drag.
+struct ResizeWatch {
+    handler: Option<OnResized>,
+    _resized: gpui::Subscription,
+}
 
 /// One pane: a header, a scrolling body and a footer.
 #[derive(IntoElement)]
@@ -127,6 +138,7 @@ struct Column {
 pub struct Columns {
     id: ElementId,
     columns: Vec<Column>,
+    on_resized: Option<OnResized>,
 }
 
 impl Columns {
@@ -134,7 +146,18 @@ impl Columns {
         Self {
             id: id.into(),
             columns: Vec::new(),
+            on_resized: None,
         }
+    }
+
+    /// When the DM ends a drag of a splitter: each column's width, in order (to save a dragged
+    /// width, as `design::column_widths` keeps egui's). The columns keep the drag either way.
+    pub fn on_resized(
+        mut self,
+        handler: impl Fn(&[Pixels], &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_resized = Some(Rc::new(handler));
+        self
     }
 
     /// A column of a default width that the DM can drag within `range`.
@@ -173,6 +196,30 @@ impl RenderOnce for Columns {
             cx,
             |_, _| ResizableState::default(),
         );
+        if let Some(handler) = self.on_resized {
+            let watched = state.clone();
+            let watch = window.use_keyed_state(
+                ElementId::NamedChild(
+                    std::sync::Arc::new(self.id.clone()),
+                    SharedString::new_static("resized"),
+                ),
+                cx,
+                move |window, cx| ResizeWatch {
+                    handler: None,
+                    _resized: cx.subscribe_in(
+                        &watched,
+                        window,
+                        |watch: &mut ResizeWatch, state, _: &ResizablePanelEvent, window, cx| {
+                            if let Some(handler) = watch.handler.clone() {
+                                let sizes = state.read(cx).sizes().clone();
+                                handler(&sizes, window, cx);
+                            }
+                        },
+                    ),
+                },
+            );
+            watch.update(cx, |watch, _| watch.handler = Some(handler));
+        }
         let mut group = h_resizable(self.id).with_state(&state);
         for column in self.columns {
             let mut panel = resizable_panel().child(column.content);

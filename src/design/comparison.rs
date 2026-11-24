@@ -296,3 +296,29 @@ mod tests {
         }
     }
 }
+
+/// Two texts' lines aligned for a side-by-side comparison, toolkit-free (the GPUI comparison,
+/// `gui::kit::comparison`): each row holds the left and right line, or none where that side has
+/// no line; `changed` counts the rows that differ and `groups` lists the first row of each run
+/// of them (`Next difference`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Aligned {
+    pub rows: Vec<[Option<String>; 2]>,
+    pub changed: usize,
+    pub groups: Vec<usize>,
+}
+
+/// Align `text` (the draft, then the file) as `draft_comparison` does.
+pub fn aligned(text: [&str; 2]) -> Aligned {
+    let lines = text.map(|text| text.lines().collect::<Vec<_>>());
+    let layout = Layout::of(&lines);
+    Aligned {
+        rows: layout
+            .rows
+            .iter()
+            .map(|row| [0, 1].map(|side| row[side].map(|at| lines[side][at].to_owned())))
+            .collect(),
+        changed: layout.changed,
+        groups: layout.groups,
+    }
+}

@@ -170,3 +170,65 @@ pub(super) fn egui_color(color: egui::Color32) -> Hsla {
 pub(super) fn measure() -> Pixels {
     theme::LIST_MEASURE
 }
+
+/// A side choice (egui `side_control`): Party, Enemies, the encounter's other sides and
+/// `Other…`, which opens a field for a new side's name. `id` keys it; `name` names it.
+pub(super) fn side_choice(
+    root: &SplatRoot,
+    (id, name): (String, &'static str),
+    side: &str,
+    sides: &[String],
+    on_pick: impl Fn(&mut SplatRoot, &str) + Clone + 'static,
+    cx: &mut Context<SplatRoot>,
+) -> Div {
+    let mut named: Vec<String> = vec!["party".to_owned(), "enemies".to_owned()];
+    for other in sides {
+        if !named.contains(other) {
+            named.push(other.clone());
+        }
+    }
+    if !named.iter().any(|known| known == side) && !side.trim().is_empty() {
+        named.push(side.to_owned());
+    }
+    let other_open = root.pages.encounters.other_side.as_deref() == Some(id.as_str());
+    let chosen = if other_open {
+        Some(named.len())
+    } else {
+        named.iter().position(|known| known == side)
+    };
+    let mut options: Vec<String> = named
+        .iter()
+        .map(|side| crate::design::reader::human_label(side))
+        .collect();
+    options.push("Other…".to_owned());
+    let (picked, pick, open_id) = (named.clone(), on_pick.clone(), id.clone());
+    let mut row = div().flex().flex_row().items_center().gap(theme::S).child(
+        kit::Dropdown::new(ElementId::Name(id.clone().into()), name, options, chosen)
+            .width(px(104.0))
+            .density(theme::Density::Read)
+            .on_select(cx.listener(move |root: &mut SplatRoot, at: &usize, _, cx| {
+                match picked.get(*at) {
+                    Some(side) => {
+                        root.pages.encounters.other_side = None;
+                        pick(root, side);
+                    }
+                    None => root.pages.encounters.other_side = Some(open_id.clone()),
+                }
+                cx.notify();
+            })),
+    );
+    if other_open {
+        row = row.child(
+            kit::TextField::new(ElementId::Name(format!("{id}:other").into()), "")
+                .name(format!("Other side for {name}"))
+                .placeholder("Side name")
+                .width(px(96.0))
+                .focus(true)
+                .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                    on_pick(root, words);
+                    cx.notify();
+                })),
+        );
+    }
+    row
+}

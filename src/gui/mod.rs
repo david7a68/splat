@@ -292,6 +292,16 @@ impl SplatRoot {
         self.remember();
     }
 
+    /// The width the DM dragged the column `id` to, if they did (egui `design::column_width`).
+    pub(crate) fn column_width(&self, id: &str) -> Option<f32> {
+        self.column_widths.get(id).copied()
+    }
+
+    /// Keep a column's dragged width; `ui_state` saves it with the others (`remember`).
+    pub(crate) fn set_column_width(&mut self, id: &str, width: f32) {
+        self.column_widths.insert(id.to_owned(), width);
+    }
+
     /// Save what this computer remembers, when it changed.
     fn remember(&mut self) {
         let now = self.app.ui_state_now(self.column_widths.clone());

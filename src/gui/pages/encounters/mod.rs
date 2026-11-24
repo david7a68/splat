@@ -11,11 +11,15 @@ use gpui::{
 };
 use splat_encounters_ui::encounters::model::PageShown;
 
+mod changes;
 mod common;
+mod creature;
+mod disk;
 mod editor;
 mod filter;
 mod group;
 mod list;
+mod loot;
 #[cfg(test)]
 mod tests;
 
@@ -34,10 +38,16 @@ pub struct State {
     pub groups_closed: bool,
     /// The list's History section is closed (an ended run read there opens it).
     pub history_closed: bool,
-    /// The words typed in the loot list's add field.
-    pub loot_typed: String,
-    /// The roster row whose side is being typed (`Other…`), by its key.
+    /// The side choice whose `Other…` field is open, by its id.
     pub other_side: Option<String>,
+    /// Each loot list's kept state, by its key (`loot::list`).
+    pub loot: std::collections::HashMap<String, loot::LootState>,
+    /// Each Changes form's Other effect being typed, by the form's key.
+    pub other_effects: std::collections::HashMap<String, String>,
+    /// The search results' scroll (`kit::virtual_list::uniform_column`).
+    pub results_scroll: gpui::UniformListScrollHandle,
+    /// Each open replacement picker's words and its `Replace all`, by its row's key.
+    pub replacing: std::collections::HashMap<String, (String, bool)>,
     /// The page's own keyboard focus, so its keys (Ctrl+S) reach it when the control that had
     /// the keyboard went away (a footer's Undo).
     pub focus: Option<gpui::FocusHandle>,

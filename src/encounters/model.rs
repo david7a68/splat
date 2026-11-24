@@ -8,6 +8,12 @@ use crate::design::outcome::plain::PlainLine;
 use crate::encounter_run::SavedRunInfo;
 use std::path::PathBuf;
 
+pub use super::disk::DiskView;
+pub use super::forms::{CreatureAct, CreatureField, CreatureView, NarrowPane, UnusedCreature};
+pub use super::groups::view::{
+    ChangeEdit, ChangeHow, ChangeRowView, ChangesForm, ChangesOf, GroupAt, GroupCard, GroupFields,
+    OwnedAct, OwnedGroups, SideView,
+};
 pub use super::groups::{GroupEdit, GroupView, MemberAct, MemberRow};
 
 /// What the page shows now (`Encounters::show_page`).
@@ -846,7 +852,7 @@ impl Draft {
     }
 
     /// Every side a row names is one of the encounter's sides.
-    fn keep_sides(&mut self) {
+    pub(super) fn keep_sides(&mut self) {
         let named: Vec<String> = self
             .setup
             .roster

@@ -1,7 +1,14 @@
 //! The encounter editor (egui: `Encounters::editor_view`, `editor_panes`, `roster`,
 //! `add_pane`, `creature_search`): the back line, the name and its actions, the save row, the
-//! roster column, Add participants, and the footer.
-use super::common::{egui_color, footer, on_page, reason, row_menu, small_icon, text_width};
+//! roster column (its rows with their Changes and replacement, options, loot, notes and the
+//! encounter's own groups), Add participants or the creature made yours, and the footer. Below
+//! 760 px the roster and Add participants take turns under tabs. While the encounter's file (or
+//! one of its groups') changed on disk, the conflict takes the editor's place.
+use super::changes;
+use super::common::{
+    egui_color, footer, on_page, reason, row_menu, small_icon, text_width, with_page,
+};
+use super::loot::{self, LootOwner};
 use crate::gui::theme::{
     Density, HAIRLINE_WIDTH, L, LIST_MEASURE, M, PANEL_MIN_WIDTH, S, Type, TypeExt, XS, colors,
 };
@@ -10,15 +17,37 @@ use eframe::egui;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
     AnyElement, Context, Div, ElementId, InteractiveElement, IntoElement, ParentElement, Pixels,
-    StatefulInteractiveElement, Styled, Window, div, px, uniform_list,
+    Styled, Window, div, px,
 };
 use splat_encounters_ui::encounters::model::{
-    AddView, EditorView, HeadAct, PartyButton, ResultRow, RosterAct, RosterRow, RosterView,
+    AddView, ChangesOf, EditorView, GroupAt, HeadAct, NarrowPane, OwnedAct, PartyButton,
+    ResultRow, RosterAct, RosterRow, RosterView, UnusedCreature,
 };
 use std::sync::Arc;
 
 /// The id of the page's creature filter, shared by the roster and a group (as in egui).
 pub(super) const FILTER_ID: &str = "creature_search_filter";
+/// Add participants' column, by the id egui saves its dragged width under (`ADD_PANE`).
+pub(super) const ADD_PANE: &str = "encounter_add";
+/// The widest Add participants takes by itself (`ADD_PANE_MAX_WIDTH`).
+pub(super) const ADD_PANE_MAX_WIDTH: Pixels = px(640.0);
+/// Below this the roster and Add participants take turns under tabs (egui `compact`).
+pub(super) const NARROW: Pixels = px(760.0);
+
+/// The editor's room: the window less the rail and the page's padding.
+pub(super) fn content_width(window: &Window) -> Pixels {
+    window.viewport_size().width - crate::gui::theme::RAIL_WIDTH - M * 2.0
+}
+
+/// Add participants' width: the DM's dragged width, else its own (`editor_columns`).
+pub(super) fn add_width(root: &SplatRoot, content: Pixels) -> Pixels {
+    match root.column_width(ADD_PANE) {
+        Some(width) => px(width).clamp(PANEL_MIN_WIDTH, ADD_PANE_MAX_WIDTH),
+        None => px(crate::design::side_panel_width(f32::from(content)))
+            .max(content - LIST_MEASURE)
+            .min(ADD_PANE_MAX_WIDTH),
+    }
+}
 
 /// The encounter editor.
 pub(super) fn render(
@@ -29,6 +58,19 @@ pub(super) fn render(
     let Some(active) = root.app.campaigns.active_campaign() else {
         return div().into_any_element();
     };
+    // The file (or a group's) changed on disk: the conflict in the editor's place.
+    if let Some(disk) = root.app.encounters.encounter_disk() {
+        return super::disk::view(
+            "encounter-disk",
+            &disk,
+            |root: &mut SplatRoot, keep| {
+                with_page(root, |page, ctx, active, campaigns| {
+                    page.encounter_disk_choice(ctx, active, campaigns.modules(), keep)
+                });
+            },
+            cx,
+        );
+    }
     let Some(view) = root.app.encounters.editor_frame(&active) else {
         return div().into_any_element();
     };
@@ -40,43 +82,60 @@ pub(super) fn render(
         .roster_view(&ctx, &root.app.party, linked);
     let filter = filter(&ctx);
     let add = root.app.encounters.add_view(filter);
+    let unused = root.app.encounters.unused_creatures(&ctx);
+    let creature = root.app.encounters.creature_view();
+    let owned = root.app.encounters.owned_groups(&ctx);
     let lines = root.app.encounters.editor_footer(&ctx, &active.path);
     let choices = kit::menu::is_open(&super::filter::menu_id(), cx)
         .then(|| root.app.encounters.filter_choices());
     let focus_name = root.app.encounters.take_focus_name();
     let focus_search = root.app.encounters.take_focus_search();
 
-    let content = window.viewport_size().width - crate::gui::theme::RAIL_WIDTH - M * 2.0;
-    let add_width = px(crate::design::side_panel_width(f32::from(content)))
-        .max(content - LIST_MEASURE)
-        .min(px(640.0));
-    let roster_width = (content - add_width).max(PANEL_MIN_WIDTH);
-    let head = head(&view, roster_width, focus_name, cx);
+    let content = content_width(window);
+    let narrow = content < NARROW;
+    let add_width = add_width(root, content);
+    let roster_width = (content - add_width).clamp(PANEL_MIN_WIDTH, LIST_MEASURE);
+    let head = head(&view, (roster_width, content, narrow), focus_name, window, cx);
     let body: AnyElement = match (roster, add, view.reading) {
         (Some(roster), Some(add), false) => {
+            let roster_column = roster_column(root, &view, &roster, owned, !narrow, window, cx);
             let roster_pane = kit::Pane::new(("encounter-roster", view.draft.as_u128() as u64))
                 .flush()
-                .child(roster_column(root, &view, &roster, window, cx));
-            kit::Columns::new("encounter-editor-columns")
-                .column(
-                    roster_width,
-                    PANEL_MIN_WIDTH..LIST_MEASURE,
-                    div().size_full().pr(S).child(roster_pane),
+                .child(roster_column);
+            let side: AnyElement = match &creature {
+                Some(creature) => super::creature::pane(creature, cx),
+                None => add_column(
+                    &add,
+                    &unused,
+                    choices.as_ref(),
+                    (focus_search, !narrow),
+                    &root.pages.encounters.results_scroll.clone(),
+                    cx,
                 )
-                .rest(add_column(&add, choices.as_ref(), focus_search, cx))
-                .into_any_element()
+                .into_any_element(),
+            };
+            if narrow {
+                narrow_body(root, &roster, creature.is_some(), roster_pane, side, cx)
+            } else {
+                // The two panes stay together at the left: the roster at most the list
+                // measure, then Add participants at its own or dragged width.
+                div()
+                    .size_full()
+                    .max_w(LIST_MEASURE + add_width + S)
+                    .child(
+                        kit::Columns::new("encounter-editor-columns")
+                            .rest(div().size_full().max_w(LIST_MEASURE).pr(S).child(roster_pane))
+                            .column(
+                                add_width,
+                                PANEL_MIN_WIDTH..ADD_PANE_MAX_WIDTH,
+                                div().size_full().pl(M).child(side),
+                            )
+                            .on_resized(save_add_width(cx)),
+                    )
+                    .into_any_element()
+            }
         }
-        _ => div()
-            .flex()
-            .flex_row()
-            .gap(S)
-            .child(small_icon(icons::BUSY, colors().muted))
-            .child(kit::text(
-                Type::Body,
-                colors().muted,
-                "Reading this campaign…",
-            ))
-            .into_any_element(),
+        _ => reading(),
     };
     let footer_lines = footer("encounter-editor-footer", lines, cx);
     div()
@@ -98,6 +157,103 @@ pub(super) fn render(
                     .children(footer_lines),
             )
         })
+        .into_any_element()
+}
+
+/// `Reading this campaign…` while the campaign is read.
+pub(super) fn reading() -> AnyElement {
+    div()
+        .flex()
+        .flex_row()
+        .gap(S)
+        .child(small_icon(icons::BUSY, colors().muted))
+        .child(kit::text(
+            Type::Body,
+            colors().muted,
+            "Reading this campaign…",
+        ))
+        .into_any_element()
+}
+
+/// Keep Add participants' width when the DM ends a drag (`ui_state` saves it, as egui's
+/// `column_widths`).
+pub(super) fn save_add_width(
+    cx: &mut Context<SplatRoot>,
+) -> impl Fn(&[Pixels], &mut Window, &mut gpui::App) + 'static {
+    let root = cx.entity().downgrade();
+    move |sizes, _, cx| {
+        if let Some(width) = sizes.last().copied() {
+            let _ = root.update(cx, |root, cx| {
+                root.set_column_width(ADD_PANE, f32::from(width));
+                cx.notify();
+            });
+        }
+    }
+}
+
+/// The narrow editor: the roster's tab with its count, then Add participants' (or the open
+/// creature's), the roster's difficulty at the row's end, and the chosen pane under them.
+fn narrow_body(
+    root: &SplatRoot,
+    roster: &RosterView,
+    creature: bool,
+    roster_pane: kit::Pane,
+    side: AnyElement,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    let c = colors();
+    let pane = root.app.encounters.narrow_pane();
+    let count = if roster.count == 0 {
+        "Roster".to_owned()
+    } else {
+        format!("Roster {}", crate::design::count(roster.count, "", ""))
+    };
+    let other = if creature {
+        "This creature"
+    } else {
+        "Add participants"
+    };
+    let tabs = kit::Segmented::new(
+        "encounter-narrow-tabs",
+        [count, other.to_owned()],
+        usize::from(pane == NarrowPane::Add),
+    )
+    .on_select(cx.listener(|root: &mut SplatRoot, at: &usize, _, cx| {
+        root.app.encounters.show_narrow_pane(if *at == 0 {
+            NarrowPane::Roster
+        } else {
+            NarrowPane::Add
+        });
+        cx.notify();
+    }));
+    let mut difficulty = div().flex().flex_row().items_baseline().gap(XS);
+    for (words, word) in &roster.difficulty {
+        difficulty = difficulty.child(
+            div()
+                .ty(Type::Small)
+                .text_color(if *word { c.text } else { c.muted })
+                .child(words.clone()),
+        );
+    }
+    div()
+        .flex()
+        .flex_col()
+        .size_full()
+        .gap(S)
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(L)
+                .child(tabs)
+                .child(div().flex_1())
+                .child(difficulty),
+        )
+        .child(div().flex_1().min_h_0().child(match pane {
+            NarrowPane::Roster => roster_pane.into_any_element(),
+            NarrowPane::Add => side,
+        }))
         .into_any_element()
 }
 
@@ -130,8 +286,34 @@ pub(super) fn back_line(
         .children(held.map(|(long, _)| reason(long).whitespace_nowrap()))
 }
 
+/// The head's plan (`save_row::head_plan`): the name ends at the roster column's edge, and its
+/// actions stand `L` after it while the name keeps at least `NAME_LEAST`; else the actions take
+/// a line of their own at the text edge. The plan comes from widths only, so nothing moves while
+/// the DM types.
+pub(super) fn head_plan(column: Pixels, line: Pixels, actions: Pixels) -> (Pixels, bool) {
+    let least = Density::Scan.control();
+    let full = (column - S * 2.0).max(least);
+    let beside = line - S * 2.0 - L - actions;
+    if beside >= full.min(px(crate::design::save_row::NAME_LEAST)) {
+        (full.min(beside).max(least), true)
+    } else {
+        (line, false)
+    }
+}
+
+/// A button's width in its wider form, as the head measures it.
+pub(super) fn button_width(window: &mut Window, words: &str) -> Pixels {
+    text_width(window, Type::Strong, words) + M * 2.0 + px(2.0)
+}
+
 /// The head: the back line, the name with Save and Start, the save row, the run's note.
-fn head(view: &EditorView, roster_width: Pixels, focus: bool, cx: &mut Context<SplatRoot>) -> Div {
+fn head(
+    view: &EditorView,
+    (roster_width, content, narrow): (Pixels, Pixels, bool),
+    focus: bool,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> Div {
     let c = colors();
     let back = back_line(
         "encounter-back",
@@ -142,20 +324,6 @@ fn head(view: &EditorView, roster_width: Pixels, focus: bool, cx: &mut Context<S
             page.editor_head_act(ctx, active, campaigns.modules(), HeadAct::Back);
         }),
     );
-    let name = kit::TextField::new(
-        ElementId::Name(format!("encounter-name:{}", view.draft).into()),
-        view.name.clone(),
-    )
-    .name("Encounter name")
-    .placeholder("Encounter name")
-    .focus_selected(focus)
-    .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
-        root.app.encounters.edit_draft(|draft| draft.name(words));
-        cx.notify();
-    }))
-    .on_enter(on_key(cx, |root: &mut SplatRoot| {
-        root.app.encounters.ask_focus_search();
-    }));
     let save = if view.save_primary {
         kit::Button::primary("encounter-save", "Save encounter")
     } else {
@@ -184,7 +352,11 @@ fn head(view: &EditorView, roster_width: Pixels, focus: bool, cx: &mut Context<S
         .items_center()
         .gap(S)
         .child(save);
+    let mut actions_width = button_width(window, "Save encounter")
+        + S
+        + button_width(window, view.start_word);
     if view.run_open {
+        actions_width += text_width(window, Type::Small, "Close the open run first.") + L + S;
         actions = actions.child(
             reason("Close the open run first.")
                 .whitespace_nowrap()
@@ -193,6 +365,7 @@ fn head(view: &EditorView, roster_width: Pixels, focus: bool, cx: &mut Context<S
     }
     actions = actions.child(start);
     if let Some(blocked) = view.start_another.clone() {
+        actions_width += Density::Read.control() + S;
         actions = actions.child(row_menu(
             "encounter-start-another",
             &view.name,
@@ -211,20 +384,39 @@ fn head(view: &EditorView, roster_width: Pixels, focus: bool, cx: &mut Context<S
             ],
         ));
     }
-    let name_row = div()
-        .flex()
-        .flex_row()
-        .flex_wrap()
-        .items_center()
-        .gap(L)
-        .child(
-            div()
-                .w(roster_width - L)
-                .min_w(px(200.0))
-                .ty(Type::Heading)
-                .child(name),
+    let column = if narrow { content } else { roster_width };
+    let (name_width, beside) = head_plan(column, content, actions_width);
+    let name = div().w(name_width).flex_none().child(
+        kit::TextField::new(
+            ElementId::Name(format!("encounter-name:{}", view.draft).into()),
+            view.name.clone(),
         )
-        .child(actions);
+        .name("Encounter name")
+        .placeholder("Encounter name")
+        .text_type(Type::Heading)
+        .focus_selected(focus)
+        .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
+            root.app.encounters.edit_draft(|draft| draft.name(words));
+            cx.notify();
+        }))
+        .on_enter(on_key(cx, |root: &mut SplatRoot| {
+            root.app.encounters.ask_focus_search();
+        })),
+    );
+    let name_rows: Vec<AnyElement> = if beside {
+        vec![
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(L)
+                .child(name)
+                .child(actions)
+                .into_any_element(),
+        ]
+    } else {
+        vec![name.into_any_element(), actions.into_any_element()]
+    };
     let (icon, word, color) = &view.state;
     let mut row = div()
         .flex()
@@ -240,6 +432,7 @@ fn head(view: &EditorView, roster_width: Pixels, focus: bool, cx: &mut Context<S
     if let Some(blocked) = view.discard {
         row = row.child(
             kit::Button::quiet("encounter-discard", "Discard")
+                .density(Density::Read)
                 .blocked(blocked)
                 .on_click(on_page(cx, |page, ctx, active, campaigns| {
                     page.editor_head_act(ctx, active, campaigns.modules(), HeadAct::Discard);
@@ -264,57 +457,52 @@ fn head(view: &EditorView, roster_width: Pixels, focus: bool, cx: &mut Context<S
         .gap(XS)
         .pb(S)
         .child(back)
-        .child(name_row)
+        .children(name_rows)
         .child(row)
         .children(view.unfinished_note.map(reason))
 }
 
-/// The roster column: its heading, rows, options, loot and notes.
+/// The roster column: its heading, rows, options, loot, notes and the encounter's own groups.
 fn roster_column(
     root: &mut SplatRoot,
     view: &EditorView,
     roster: &RosterView,
+    owned: Option<splat_encounters_ui::encounters::model::OwnedGroups>,
+    heading_shown: bool,
     window: &mut Window,
     cx: &mut Context<SplatRoot>,
-) -> Div {
+) -> impl IntoElement {
     let c = colors();
-    let mut heading = kit::label("Roster", roster.count);
-    if !roster.difficulty.is_empty() {
-        heading = heading.child(kit::text(Type::Label, c.muted, "·"));
-        for (words, word) in &roster.difficulty {
-            heading = heading.child(
-                div()
-                    .ty(Type::Label)
-                    .text_color(if *word { c.text } else { c.muted })
-                    .child(words.clone()),
-            );
+    let mut column = div().flex().flex_col().w_full();
+    if heading_shown {
+        let mut heading = kit::label("Roster", roster.count);
+        if !roster.difficulty.is_empty() {
+            heading = heading.child(kit::text(Type::Label, c.muted, "·"));
+            for (words, word) in &roster.difficulty {
+                heading = heading.child(
+                    div()
+                        .ty(Type::Label)
+                        .text_color(if *word { c.text } else { c.muted })
+                        .child(words.clone()),
+                );
+            }
         }
+        column = column.child(
+            div()
+                .id("encounter-roster-heading")
+                .pb(XS)
+                .child(heading)
+                .when_some(roster.budgets.clone(), |heading, budgets| {
+                    kit::WithTooltip::with_tooltip(heading, budgets)
+                }),
+        );
     }
-    let heading = div()
-        .id("encounter-roster-heading")
-        .pb(XS)
-        .child(heading)
-        .when_some(roster.budgets.clone(), |heading, budgets| {
-            kit::WithTooltip::with_tooltip(heading, budgets)
-        });
-    let mut column = div().flex().flex_col().w_full().child(heading);
     if roster.rows.is_empty() {
         column = column.child(kit::gap(S)).child(reason(
             "No participants yet. Add the party and creatures from Add participants.",
         ));
     }
-    let facts = roster
-        .rows
-        .iter()
-        .map(|row| {
-            text_width(
-                window,
-                Type::Strong,
-                &format!("{}. {}", row.index + 1, row.name),
-            )
-        })
-        .fold(px(0.0), Pixels::max);
-    let _ = facts;
+    let _ = window;
     for row in &roster.rows {
         column = column.child(roster_row(root, view, row, cx));
     }
@@ -341,8 +529,8 @@ fn roster_column(
                 .child(kit::text(Type::Small, c.text, line.clone()));
             if sync.connect {
                 line_row = line_row.child(
-                    kit::Button::quiet("encounter-connect", "Connect to sync")
-                        .plain()
+                    kit::Link::new("encounter-connect", "Connect to sync")
+                        .small()
                         .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
                             root.bridge.ctx().data_mut(|data| {
                                 data.insert_temp(egui::Id::new("open_account_settings"), true)
@@ -370,7 +558,7 @@ fn roster_column(
         .child(kit::help(
             "Lists this encounter under Ready to run while a fight from it is unfinished. Start fight waits until no fight is open.",
         ))
-        .child(loot(root, view, roster, cx))
+        .child(loot_block(root, view, roster, cx))
         .child(kit::gap(M))
         .child(kit::field(
             "Read-aloud and notes",
@@ -390,17 +578,24 @@ fn roster_column(
                 cx.notify();
             })),
         ));
-    column.max_w(LIST_MEASURE)
+    if let Some(owned) = owned {
+        column = column.child(owned_groups(root, owned, cx));
+    }
+    kit::scroll_column(
+        ElementId::Name(format!("encounter-roster-scroll:{}", view.draft).into()),
+        column.max_w(LIST_MEASURE),
+    )
 }
 
-/// The encounter's loot: one field per line, a remove for each, and a field that adds a line.
-fn loot(
-    root: &mut SplatRoot,
+/// The encounter's loot (`loot_field`): its heading, then the loot list, or why the note's
+/// Loot section stays in the notes.
+fn loot_block(
+    root: &SplatRoot,
     view: &EditorView,
     roster: &RosterView,
     cx: &mut Context<SplatRoot>,
 ) -> Div {
-    let mut block = div().flex().flex_col().child(kit::heading(
+    let block = div().flex().flex_col().child(kit::heading(
         kit::Heading::Group {
             title: "Loot",
             count: roster.loot.lines.len(),
@@ -412,83 +607,151 @@ fn loot(
             "The Loot section of this note has more than a list. Edit it in Read-aloud and notes.",
         ));
     }
-    block = block.child(kit::help(
-        "What the party finds when this fight ends. A creature’s own loot is in its Changes.",
-    ));
-    for (at, line) in roster.loot.lines.iter().enumerate() {
-        let lines = roster.loot.lines.clone();
-        let removed = lines.clone();
-        block = block.child(
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(S)
-                .child(
-                    div().flex_1().child(
-                        kit::TextField::new(
-                            ElementId::Name(format!("encounter-loot:{}:{at}", view.draft).into()),
-                            line.clone(),
-                        )
-                        .name(format!("the encounter loot line {}", at + 1))
-                        .on_change(cx.listener(
-                            move |root: &mut SplatRoot, words: &str, _, cx| {
-                                let mut lines = lines.clone();
-                                if let Some(line) = lines.get_mut(at) {
-                                    *line = words.to_owned();
-                                }
-                                root.app.encounters.edit_draft(|draft| draft.loot(lines));
-                                cx.notify();
-                            },
-                        )),
-                    ),
-                )
-                .child(
-                    kit::IconButton::new(
-                        ElementId::Name(format!("encounter-loot-remove:{at}").into()),
-                        icons::CLOSE,
-                        format!("Remove loot line {}", at + 1),
-                    )
-                    .on_click(cx.listener(
-                        move |root: &mut SplatRoot, _, _, cx| {
-                            let mut lines = removed.clone();
-                            if at < lines.len() {
-                                lines.remove(at);
-                            }
-                            root.app.encounters.edit_draft(|draft| draft.loot(lines));
-                            cx.notify();
-                        },
-                    )),
-                ),
-        );
+    block
+        .child(kit::help(
+            "What the party finds when this fight ends. A creature’s own loot is in its Changes.",
+        ))
+        .child(loot::list(
+            root,
+            format!("encounter:{}", view.draft),
+            "the encounter".to_owned(),
+            roster.loot.lines.clone(),
+            LootOwner::Encounter,
+            cx,
+        ))
+}
+
+/// Groups for this encounter (`groups::of_encounter`): each in a card of its own with its name,
+/// `Add here` and its `⋯` (Move to, Make available to any encounter, Delete group), and its
+/// fields; then `New group for this encounter`.
+fn owned_groups(
+    root: &SplatRoot,
+    owned: splat_encounters_ui::encounters::model::OwnedGroups,
+    cx: &mut Context<SplatRoot>,
+) -> Div {
+    let c = colors();
+    let mut block = div()
+        .flex()
+        .flex_col()
+        .child(kit::heading(
+            kit::Heading::Group {
+                title: "Groups for this encounter",
+                count: owned.count,
+            },
+            false,
+        ))
+        .child(kit::help(
+            "They arrive when you add them to a run of this encounter. Save encounter saves them too.",
+        ));
+    if !owned.cards.is_empty() {
+        block = block.child(kit::gap(XS));
     }
-    let typed = root.pages.encounters.loot_typed.clone();
-    let lines = roster.loot.lines.clone();
-    block.child(
-        div().max_w(px(460.0)).child(
-            kit::TextField::new(
-                ElementId::Name(format!("encounter-loot-add:{}", view.draft).into()),
-                typed,
+    for card in owned.cards {
+        let index = card.index;
+        let at = GroupAt::Owned(index);
+        let mut move_to = Vec::new();
+        for (id, name) in &card.move_to {
+            move_to.push(
+                kit::MenuItem::new(format!("Move to {name}"))
+                    .on_click(owned_act(cx, index, OwnedAct::MoveTo(*id))),
+            );
+        }
+        let mut items = move_to;
+        items.push(
+            kit::MenuItem::new("Make available to any encounter")
+                .on_click(owned_act(cx, index, OwnedAct::AnyEncounter)),
+        );
+        items.push(
+            kit::MenuItem::new("Delete group")
+                .icon(icons::REMOVE)
+                .on_click(owned_act(cx, index, OwnedAct::Delete)),
+        );
+        let adding = card.adding;
+        let name = kit::TextField::new(
+            ElementId::Name(format!("owned-group-name:{}", card.fields.id).into()),
+            card.name.clone(),
+        )
+        .name(format!("Group name: {}", card.name))
+        .text_type(Type::Heading)
+        .focus_selected(card.focus)
+        .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+            root.app
+                .encounters
+                .owned_act(index, OwnedAct::Name(words.to_owned()));
+            cx.notify();
+        }));
+        let top = div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(S)
+            .child(div().flex_1().min_w_0().max_w(crate::gui::theme::FORM_WIDTH).child(name))
+            .child(
+                kit::Button::quiet(
+                    ElementId::Name(format!("owned-group-add:{}", card.fields.id).into()),
+                    if adding { "Adding here" } else { "Add here" },
+                )
+                .icon(if adding { icons::OK } else { icons::ADD })
+                .density(Density::Read)
+                .selected(adding)
+                .name(format!("Add creatures to {}", card.name))
+                .on_click(owned_act(cx, index, OwnedAct::AddHere)),
             )
-            .name("Add loot")
-            .placeholder("Type loot, or find an item or table")
-            .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
-                root.pages.encounters.loot_typed = words.to_owned();
-                cx.notify();
-            }))
-            .on_enter(on_key(cx, move |root: &mut SplatRoot| {
-                let words = std::mem::take(&mut root.pages.encounters.loot_typed);
-                if !words.trim().is_empty() {
-                    let mut lines = lines.clone();
-                    lines.push(words.trim().to_owned());
-                    root.app.encounters.edit_draft(|draft| draft.loot(lines));
-                }
-            })),
+            .child(row_menu(
+                ElementId::Name(format!("owned-group-menu:{}", card.fields.id).into()),
+                &card.name,
+                items,
+            ));
+        let fields = super::group::fields(root, at, &card.fields, cx);
+        block = block
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(XS)
+                    .p(S + crate::gui::theme::FOCUS_WIDTH - if adding {
+                        crate::gui::theme::FOCUS_WIDTH
+                    } else {
+                        HAIRLINE_WIDTH
+                    })
+                    .rounded(crate::gui::theme::RADIUS_CONTROL)
+                    .border(if adding {
+                        crate::gui::theme::FOCUS_WIDTH
+                    } else {
+                        HAIRLINE_WIDTH
+                    })
+                    .border_color(if adding { c.accent } else { c.rule })
+                    .child(top)
+                    .child(fields),
+            )
+            .child(kit::gap(S));
+    }
+    block.child(
+        div().flex().child(
+            kit::Button::secondary("owned-group-new", "New group for this encounter")
+                .icon(icons::ADD)
+                .density(Density::Read)
+                .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
+                    root.app.encounters.new_owned_group();
+                    cx.notify();
+                })),
         ),
     )
 }
 
-/// One roster row: its name and second line, Edit and its menu, and its fields while open.
+fn owned_act(
+    cx: &mut Context<SplatRoot>,
+    index: usize,
+    act: OwnedAct,
+) -> impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) + 'static {
+    cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+        root.app.encounters.owned_act(index, act.clone());
+        cx.notify();
+    })
+}
+
+/// One roster row: its name and second line, Edit and its menu, and while open its fields and
+/// its Changes, or a missing creature's replacement picker.
 fn roster_row(
     root: &mut SplatRoot,
     view: &EditorView,
@@ -530,17 +793,20 @@ fn roster_row(
     }
     if let Some(word) = &row.changed {
         let open = key.clone();
-        line = line.child(div().child(" · ")).child(
-            kit::Button::quiet(
-                ElementId::Name(format!("roster-change:{key}").into()),
-                format!("{} {word}", icons::EDIT),
-            )
-            .plain()
-            .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                root.app.encounters.toggle_row(&open);
-                cx.notify();
-            })),
-        );
+        line = line
+            .child(div().child(" · "))
+            .child(small_icon(icons::CHANGED, c.muted).mr(XS))
+            .child(
+                kit::Link::new(
+                    ElementId::Name(format!("roster-change:{key}").into()),
+                    word.clone(),
+                )
+                .small()
+                .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+                    root.app.encounters.toggle_row(&open);
+                    cx.notify();
+                })),
+            );
     }
     let facts = div()
         .flex()
@@ -594,6 +860,7 @@ fn roster_row(
                 ElementId::Name(format!("roster-repair:{key}").into()),
                 *label,
             )
+            .density(Density::Read)
             .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
                 root.bridge.ctx().data_mut(|data| {
                     data.insert_temp(egui::Id::new("open_library_repair"), path.clone())
@@ -609,6 +876,7 @@ fn roster_row(
                 row.edit_word,
             )
             .name(format!("{} {}", row.edit_word, row.name))
+            .density(Density::Read)
             .selected(row.open)
             .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
                 root.app.encounters.toggle_row(&toggle);
@@ -643,9 +911,26 @@ fn roster_row(
     );
     if let Some(form) = &row.form {
         block = block.child(row_form(root, view, row, form, cx));
+        if let Some(changes) = root
+            .app
+            .encounters
+            .changes_form(&ChangesOf::Row(key.clone()))
+        {
+            block = block.child(changes::form(root, ChangesOf::Row(key.clone()), changes, cx));
+        }
     } else if row.open && row.missing.is_some() && row.repair.is_none() {
-        block = block.child(reason(
-            "To replace this creature, remove the row and add another from Add participants.",
+        let count = root.app.encounters.missing_rows(&key);
+        let replaced = key.clone();
+        block = block.child(changes::replacement(
+            root,
+            &key,
+            count,
+            &row.name,
+            move |root: &mut SplatRoot, creature, all| {
+                root.app.encounters.replace_row(&replaced, creature, all);
+                root.pages.encounters.replacing.remove(&replaced);
+            },
+            cx,
         ));
     }
     block.child(kit::rule())
@@ -660,77 +945,25 @@ fn row_form(
     cx: &mut Context<SplatRoot>,
 ) -> Div {
     let key = row.key.clone();
-    let mut named: Vec<String> = vec!["party".to_owned(), "enemies".to_owned()];
-    for side in &form.sides {
-        if !named.contains(side) {
-            named.push(side.clone());
-        }
-    }
-    if !named.contains(&form.side) && !form.side.trim().is_empty() {
-        named.push(form.side.clone());
-    }
-    let other_open = root.pages.encounters.other_side.as_deref() == Some(key.as_str());
-    let chosen = if other_open {
-        Some(named.len())
-    } else {
-        named.iter().position(|side| *side == form.side)
-    };
-    let mut options: Vec<String> = named
-        .iter()
-        .map(|side| crate::design::reader::human_label(side))
-        .collect();
-    options.push("Other…".to_owned());
-    let picked = named.clone();
     let side_key = key.clone();
-    let mut side_row = div()
+    let side_row = div()
         .flex()
         .flex_row()
         .items_center()
         .gap(S)
         .child(reason("Side"))
-        .child(
-            kit::Dropdown::new(
-                ElementId::Name(format!("roster-side:{key}").into()),
-                "Side",
-                options,
-                chosen,
-            )
-            .width(px(104.0))
-            .on_select(cx.listener(
-                move |root: &mut SplatRoot, index: &usize, _, cx| {
-                    match picked.get(*index) {
-                        Some(side) => {
-                            root.pages.encounters.other_side = None;
-                            root.app
-                                .encounters
-                                .edit_draft(|draft| draft.side(&side_key, side));
-                        }
-                        None => root.pages.encounters.other_side = Some(side_key.clone()),
-                    }
-                    cx.notify();
-                },
-            )),
-        );
-    if other_open {
-        let other_key = key.clone();
-        side_row = side_row.child(
-            kit::TextField::new(
-                ElementId::Name(format!("roster-side-other:{key}").into()),
-                "",
-            )
-            .name("Other side for Side")
-            .placeholder("Side name")
-            .width(px(80.0))
-            .on_change(
-                cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                    root.app
-                        .encounters
-                        .edit_draft(|draft| draft.side(&other_key, words));
-                    cx.notify();
-                }),
-            ),
-        );
-    }
+        .child(super::common::side_choice(
+            root,
+            (format!("roster-side:{key}"), "Side"),
+            &form.side,
+            &form.sides,
+            move |root: &mut SplatRoot, side: &str| {
+                root.app
+                    .encounters
+                    .edit_draft(|draft| draft.side(&side_key, side));
+            },
+            cx,
+        ));
     let group_key = key.clone();
     let mut values = div()
         .flex()
@@ -830,25 +1063,27 @@ fn roster_act(
 /// Add participants' head: its heading, the party's line, the target and the search.
 pub(super) fn add_head(
     add: &AddView,
+    unused: &[UnusedCreature],
     choices: Option<&super::filter::Choices>,
     focus: bool,
+    heading: bool,
+    summary: Option<&str>,
     cx: &mut Context<SplatRoot>,
 ) -> Div {
     let c = colors();
     let group = matches!(add.party, PartyButton::None);
-    let mut head = div()
-        .flex()
-        .flex_col()
-        .gap(XS)
-        .child(div().pb(XS).child(kit::label(
+    let mut head = div().flex().flex_col().gap(XS);
+    if heading {
+        head = head.child(div().pb(XS).child(kit::label(
             if group { "Add creatures" } else { "Add participants" },
             0,
-        )))
-        .child(kit::help(if group {
-            "From this campaign and the packages it uses. Party members go on an encounter’s roster."
-        } else {
-            "Party members come from the sheets Splat saved last."
-        }));
+        )));
+    }
+    head = head.child(kit::help(if group {
+        "From this campaign and the packages it uses. Party members go on an encounter’s roster."
+    } else {
+        "Party members come from the sheets Splat saved last."
+    }));
     head = match add.party {
         PartyButton::None => head,
         PartyButton::InRoster => head.child(kit::status(&kit::Status::new(
@@ -878,7 +1113,50 @@ pub(super) fn add_head(
     } else {
         "Find a creature or party member"
     };
-    head.child(search(add, choices, focus, name, cx))
+    head = head.child(search(add, choices, focus, name, cx));
+    if let Some(summary) = summary.filter(|summary| !summary.is_empty()) {
+        head = head.child(
+            kit::WithTooltip::with_tooltip(
+                kit::text::one_line(Type::Small, c.muted, summary.to_owned())
+                    .id("group-member-summary"),
+                summary.to_owned(),
+            ),
+        );
+    }
+    if add.close_names {
+        head = head.child(kit::text(
+            Type::Small,
+            c.muted,
+            "No exact match. These names are close.",
+        ));
+    }
+    for (at, unused) in unused.iter().enumerate() {
+        let (package, entry) = (unused.package, unused.entry);
+        head = head.child(
+            div()
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .items_baseline()
+                .gap(S)
+                .child(kit::text(Type::Small, c.muted, unused.words.clone()))
+                .child(
+                    kit::Link::new(ElementId::Name(format!("use-it:{at}").into()), "Use it")
+                        .small()
+                        .name(format!("Use it: {}", unused.words))
+                        .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+                            root.bridge.ctx().data_mut(|data| {
+                                data.insert_temp(
+                                    egui::Id::new("use_package_entry"),
+                                    (package, entry),
+                                )
+                            });
+                            cx.notify();
+                        })),
+                ),
+        );
+    }
+    head
 }
 
 /// The search field and the filter's words.
@@ -908,12 +1186,12 @@ pub(super) fn search(
     );
     if !add.search.is_empty() {
         field = field.child(
-            kit::Button::quiet("encounter-search-clear", "Clear").on_click(cx.listener(
-                |root: &mut SplatRoot, _, _, cx| {
+            kit::Button::quiet("encounter-search-clear", "Clear")
+                .density(Density::Read)
+                .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
                     root.app.encounters.set_search("");
                     cx.notify();
-                },
-            )),
+                })),
         );
     }
     div()
@@ -927,91 +1205,166 @@ pub(super) fn search(
 /// Add participants: its head, then the results in a virtual list that fills the column.
 pub(super) fn add_column(
     add: &AddView,
+    unused: &[UnusedCreature],
     choices: Option<&super::filter::Choices>,
-    focus: bool,
+    (focus, heading): (bool, bool),
+    handle: &gpui::UniformListScrollHandle,
+    cx: &mut Context<SplatRoot>,
+) -> Div {
+    add_column_with(add, unused, choices, (focus, heading, None), handle, cx)
+}
+
+/// Add participants (or Add creatures, with the members' summary in the narrow group editor).
+pub(super) fn add_column_with(
+    add: &AddView,
+    unused: &[UnusedCreature],
+    choices: Option<&super::filter::Choices>,
+    (focus, heading, summary): (bool, bool, Option<&str>),
+    handle: &gpui::UniformListScrollHandle,
     cx: &mut Context<SplatRoot>,
 ) -> Div {
     div()
         .flex()
         .flex_col()
         .size_full()
-        .pl(M)
-        .child(div().flex_none().child(add_head(add, choices, focus, cx)))
-        .child(div().flex_1().min_h_0().pt(S).child(results(add, cx)))
+        .child(div().flex_none().child(add_head(
+            add, unused, choices, focus, heading, summary, cx,
+        )))
+        .child(div().flex_1().min_h_0().pt(S).child(results(add, handle, cx)))
 }
 
-/// The search's results: a virtual list of rows, or the empty state.
-pub(super) fn results(add: &AddView, cx: &mut Context<SplatRoot>) -> AnyElement {
+/// The search's results: a virtual list of rows with its scroll bar, or the empty state.
+pub(super) fn results(
+    add: &AddView,
+    handle: &gpui::UniformListScrollHandle,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     if add.results.is_empty() {
         let words = if add.filter.is_empty() {
-            "Check the spelling, or check Campaign → Packages."
+            "Check the spelling, or check"
         } else {
-            "Remove a filter, or check Campaign → Packages."
+            "Remove a filter, or check"
         };
-        return kit::empty_state(
-            icons::SEARCH,
-            "No creatures match",
-            words,
-            None::<AnyElement>,
-        )
-        .into_any_element();
+        // One sentence in one size: the link is a Body link inside it, and the full stop
+        // follows its last word.
+        let body = div()
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .justify_center()
+            .items_baseline()
+            .gap(XS)
+            .child(kit::text(Type::Body, c.muted, words))
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_baseline()
+                    .child(
+                        kit::Link::new("encounter-packages", "Campaign → Packages").on_click(
+                            cx.listener(|root: &mut SplatRoot, _, _, cx| {
+                                root.bridge.ctx().data_mut(|data| {
+                                    data.insert_temp(
+                                        egui::Id::new("open_campaign_packages"),
+                                        true,
+                                    )
+                                });
+                                cx.notify();
+                            }),
+                        ),
+                    )
+                    .child(kit::text(Type::Body, c.muted, ".")),
+            );
+        return kit::empty_state(icons::SEARCH, "No creatures match", "", Some(body))
+            .into_any_element();
     }
     let rows: Arc<Vec<ResultRow>> = add.results.clone();
-    let close = add.close_names;
-    let list = uniform_list(
+    let status = rows.iter().any(|row| row.unavailable.is_some());
+    let list = kit::virtual_list::uniform_column(
         "encounter-results",
+        handle,
         rows.len(),
         cx.processor(
             move |_root: &mut SplatRoot, range: std::ops::Range<usize>, _window, cx| {
                 range
-                    .filter_map(|at| rows.get(at).map(|row| result_row(row, cx)))
+                    .filter_map(|at| rows.get(at).map(|row| result_row(row, status, cx)))
                     .collect::<Vec<_>>()
             },
         ),
-    )
-    .size_full();
+    );
     div()
         .flex()
         .flex_col()
         .size_full()
-        .when(close, |block| {
-            block.child(kit::text(
-                Type::Small,
-                c.muted,
-                "No exact match. These names are close.",
-            ))
-        })
         .child(div().flex_1().min_h_0().child(list))
         .into_any_element()
 }
 
-/// One result: its name and stats, then Add (or `In roster`).
-fn result_row(row: &ResultRow, cx: &mut Context<SplatRoot>) -> AnyElement {
+/// One result: its name (it opens the entry in Lookup) and stats, or why it cannot be added,
+/// then Add (with `Open in World` when it cannot), or `In roster`.
+fn result_row(row: &ResultRow, status: bool, cx: &mut Context<SplatRoot>) -> AnyElement {
     let c = colors();
-    let detail = div()
-        .flex()
-        .flex_row()
-        .items_baseline()
-        .ty(Type::Small)
-        .text_color(c.muted)
-        .whitespace_nowrap()
-        .min_w_0()
-        .overflow_hidden()
-        .children(stat_cells(&row.detail, row.hp_missing))
-        .children(row.source.clone().map(|source| div().ml(XS).child(source)));
+    let detail: AnyElement = match &row.unavailable {
+        // The warning wraps in the two lines its row keeps; it is never cut short in one.
+        Some(why) => div()
+            .flex()
+            .flex_row()
+            .items_start()
+            .gap(XS)
+            .max_h(Type::Small.line() * 2.0)
+            .overflow_hidden()
+            .child(small_icon(icons::WARN, c.result.warning))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(kit::text(Type::Small, c.result.warning, why.clone())),
+            )
+            .into_any_element(),
+        None => div()
+            .flex()
+            .flex_row()
+            .items_baseline()
+            .ty(Type::Small)
+            .text_color(c.muted)
+            .whitespace_nowrap()
+            .min_w_0()
+            .overflow_hidden()
+            .children(stat_cells(&row.detail, row.hp_missing))
+            .children(row.source.clone().map(|source| div().ml(XS).child(source)))
+            .into_any_element(),
+    };
     let action: AnyElement = if row.in_roster {
         kit::status(&kit::Status::new(icons::OK, "In roster", c.muted)).into_any_element()
     } else {
         let (id, party) = (row.id, row.party);
-        kit::Button::secondary(ElementId::Name(format!("add:{}", row.id).into()), "Add")
+        let add = kit::Button::secondary(ElementId::Name(format!("add:{}", row.id).into()), "Add")
             .name(format!("Add {}", row.name))
+            .density(Density::Read)
             .blocked(row.unavailable.clone())
             .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
                 root.app.encounters.add_result(id, party);
                 cx.notify();
-            }))
-            .into_any_element()
+            }));
+        let mut action = div().flex().flex_row().items_center().gap(S).child(add);
+        if row.unavailable.is_some() {
+            let creature = row.id;
+            action = action.child(
+                kit::Button::quiet(
+                    ElementId::Name(format!("open-in-world:{}", row.id).into()),
+                    "Open in World",
+                )
+                .density(Density::Read)
+                .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+                    root.bridge.ctx().data_mut(|data| {
+                        data.insert_temp(egui::Id::new("reveal_encounter_npc"), creature)
+                    });
+                    cx.notify();
+                })),
+            );
+        }
+        action.into_any_element()
     };
     let peek = row.id;
     div()
@@ -1020,34 +1373,41 @@ fn result_row(row: &ResultRow, cx: &mut Context<SplatRoot>) -> AnyElement {
         .flex_row()
         .items_center()
         .gap(L)
-        .h(result_height())
-        .pr(S)
+        .h(result_height(status))
         .child(
             div()
                 .flex()
                 .flex_col()
                 .flex_1()
                 .min_w_0()
-                .cursor_pointer()
-                .child(kit::text::one_line(Type::Strong, c.text, row.name.clone()))
-                .child(detail)
-                .id(ElementId::Name(format!("result-read:{}", row.id).into()))
-                .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                    root.app.encounters.peek = Some(peek);
-                    cx.notify();
-                })),
+                .child(
+                    div().flex().child(
+                        kit::Link::new(
+                            ElementId::Name(format!("result-read:{}", row.id).into()),
+                            row.name.clone(),
+                        )
+                        .hint("Read this entry in Lookup")
+                        .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+                            root.app.encounters.peek = Some(peek);
+                            cx.notify();
+                        })),
+                    ),
+                )
+                .child(detail),
         )
-        .child(div().flex_none().w(px(96.0)).child(action))
+        .child(div().flex_none().child(action))
         .into_any_element()
 }
 
-/// A result row's height: its two lines and its Add, with room between rows.
-fn result_height() -> Pixels {
-    Density::Scan.row() + S
+/// A result row's height: its two lines and its Add, with room between rows; a third line while
+/// a result's warning can take two (`Row::Action { status }`).
+fn result_height(status: bool) -> Pixels {
+    let base = Density::Scan.row() + S;
+    if status { base + Type::Small.line() } else { base }
 }
 
 /// A result's stats, each in its own cell (`detail_columns`): CR, HP and AC.
-fn stat_cells(detail: &str, hp_missing: bool) -> Vec<Div> {
+pub(super) fn stat_cells(detail: &str, hp_missing: bool) -> Vec<Div> {
     let c = colors();
     let parts: Vec<&str> = detail.split(" · ").collect();
     let other = parts

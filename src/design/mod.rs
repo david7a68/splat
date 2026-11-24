@@ -4,6 +4,7 @@
 pub mod action_rows;
 pub mod column;
 mod comparison;
+pub use comparison::{Aligned, aligned};
 pub mod components;
 pub mod extras;
 pub mod fact;
