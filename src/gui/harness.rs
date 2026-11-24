@@ -248,6 +248,53 @@ impl Shell {
         }
     }
 
+    /// Press at `from` and move to `to` with the button held, without letting go (a drag in
+    /// progress), then settle. `release` ends it.
+    pub(crate) fn hold_and_move(&mut self, from: Point<Pixels>, to: Point<Pixels>) {
+        let mut inputs = vec![PlatformInput::MouseDown(MouseDownEvent {
+            button: MouseButton::Left,
+            position: from,
+            modifiers: Modifiers::default(),
+            click_count: 1,
+            first_mouse: false,
+        })];
+        for step in 1..=4 {
+            let along = step as f32 / 4.0;
+            inputs.push(PlatformInput::MouseMove(MouseMoveEvent {
+                position: point(
+                    from.x + (to.x - from.x) * along,
+                    from.y + (to.y - from.y) * along,
+                ),
+                pressed_button: Some(MouseButton::Left),
+                modifiers: Modifiers::default(),
+            }));
+        }
+        for input in inputs {
+            self.cx
+                .update_window(self.window, |_, window, cx| {
+                    window.dispatch_event(input, cx);
+                })
+                .expect("the window");
+            self.settle();
+        }
+    }
+
+    /// Let go of the left button at `at` (the end of `hold_and_move`), then settle.
+    pub(crate) fn release(&mut self, at: Point<Pixels>) {
+        let input = PlatformInput::MouseUp(MouseUpEvent {
+            button: MouseButton::Left,
+            position: at,
+            modifiers: Modifiers::default(),
+            click_count: 1,
+        });
+        self.cx
+            .update_window(self.window, |_, window, cx| {
+                window.dispatch_event(input, cx);
+            })
+            .expect("the window");
+        self.settle();
+    }
+
     /// Drag the target `from` to the middle of the target `to` with the left button (a row or a
     /// group dropped on a list), then settle.
     pub(crate) fn drag_target(&mut self, from: &str, to: &str) {
@@ -279,15 +326,26 @@ impl Shell {
         self.settle();
     }
 
-    /// Press keys, as GPUI writes them: `"ctrl-k"`, `"escape"`, `"tab shift-tab"`.
+    /// Press keys, as GPUI writes them: `"ctrl-k"`, `"escape"`, `"tab shift-tab"`. Each key goes
+    /// down and then up, as a keyboard sends it: Enter or Space on a focused button presses it
+    /// as the key comes up.
     pub(crate) fn press(&mut self, keystrokes: &str) {
         for text in keystrokes.split_whitespace() {
             let os = self.cx.update(|cx| cx.platform_info().os);
             let keystroke = Keystroke::parse_with_os(text, os)
                 .unwrap_or_else(|_| panic!("{text:?} is not a keystroke"));
+            let up = PlatformInput::KeyUp(gpui::KeyUpEvent {
+                keystroke: keystroke.clone(),
+            });
             self.cx
                 .update_window(self.window, |_, window, cx| {
                     window.dispatch_keystroke(keystroke, cx);
+                })
+                .expect("the window");
+            self.cx.run_until_parked();
+            self.cx
+                .update_window(self.window, |_, window, cx| {
+                    window.dispatch_event(up, cx);
                 })
                 .expect("the window");
             self.settle();

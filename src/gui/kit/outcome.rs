@@ -105,6 +105,8 @@ impl RenderOnce for Message {
             .flex()
             .flex_row()
             .items_start()
+            // In a row it gives way to the row's other parts, and its words wrap there.
+            .min_w_0()
             .max_w(LIST_MEASURE)
             .border_l(MARK_WIDTH)
             .border_color(color)

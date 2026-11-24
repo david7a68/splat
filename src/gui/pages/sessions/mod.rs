@@ -407,6 +407,18 @@ fn notes_view(
         .into_any_element()
 }
 
+/// Whether the note's `/` menu is open for the session shown: its own key interceptor takes
+/// Escape (`slash::init`), so the root's Escape steps aside (`SplatRoot::watch_keys`).
+pub(crate) fn takes_escape(root: &SplatRoot) -> bool {
+    let session = root.app.sessions.gv_selected();
+    root.pages
+        .sessions
+        .note
+        .slash
+        .as_ref()
+        .is_some_and(|open| open.session == session)
+}
+
 /// Ctrl+S on the Session page (`pages::save_key`): the shown template's draft; a group open in
 /// the plan while the note does not have the keyboard (`Encounters::group_open_in_plan`); else
 /// the note, which saves at once.

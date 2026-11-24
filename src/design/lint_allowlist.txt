@@ -14,8 +14,3 @@ src/sessions/plan.rs phrase-owner 1
 # `line` builds `<label>: <cells>` as a line's search words, not drawn (lane W0 decides).
 src/encounter_run/notice.rs fact-owner 1
 src/world/lines.rs fact-owner 1
-# Back controls that show the history arrow alone (`arrow-label`, found when the rule moved to
-# the kit's controls in wave 3 step 3b): Lookup's and the trackers panel's `Back` icon buttons.
-# A back control shows its word (K4b, R38); the fix changes how they look, so review decides.
-src/gui/pages/lookup/panel.rs arrow-label 1
-src/gui/pages/trackers/mod.rs arrow-label 1

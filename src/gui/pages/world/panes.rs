@@ -3,6 +3,7 @@
 //! open note, or no note. Each is a pane whose messages sit in its footer.
 use super::{SplatRoot, act, footer, on_key, on_words};
 use crate::design::DiskConflictChoice;
+use crate::design::save_row::{Changed, Diagnosis, DraftOrigin, DraftState, Primary, SaveWeight};
 use crate::gui::{icons, kit, theme};
 use crate::lookup::{ContentIndex, Item};
 use crate::persistence::Campaign;
@@ -789,10 +790,25 @@ fn repair(root: &mut SplatRoot, campaign: &Campaign, cx: &mut Context<SplatRoot>
             root.app.world_page.repair_saved(campaign);
         }
     });
-    let reason = view
-        .problem
-        .clone()
-        .or_else(|| (!view.dirty).then(|| crate::design::save_row::NO_CHANGES.to_owned()));
+    // One rule for the save row: a draft Save refuses is Invalid, changed or not; after Save
+    // failed on the disk it stays open to try again, but is not primary; an open run owns the
+    // primary action.
+    let mut state = DraftState::new(
+        DraftOrigin::Saved, // a repair edits a file on disk
+        Changed::from(view.dirty),
+        if run_open {
+            Primary::Elsewhere
+        } else {
+            Primary::Draft
+        },
+    )
+    .locks_campaign();
+    if let Some(problem) = &view.problem {
+        state = state.check(Diagnosis::refused(problem.as_str()));
+    }
+    if view.failed {
+        state = state.not_saved();
+    }
     column = column
         .child(
             div().max_w(theme::LIST_MEASURE).h(px(360.0)).child(
@@ -812,16 +828,9 @@ fn repair(root: &mut SplatRoot, campaign: &Campaign, cx: &mut Context<SplatRoot>
             ),
         )
         .child(save_row(
-            SaveRow {
-                dirty: view.dirty,
-                failed: view.failed,
-                primary: !run_open,
-                save: "Save repaired note",
-                blocked: reason,
-                lock: None,
-                cancel: None,
-                reason_under: false,
-            },
+            &state,
+            "Save repaired note",
+            false,
             save,
             cx.listener(|root: &mut SplatRoot, _, _, cx| {
                 if let Some(repair) = root.app.world_page.repair_mut() {
@@ -881,44 +890,25 @@ fn compare(mine: &str, theirs: &str) -> AnyElement {
         .into_any_element()
 }
 
-/// A save row's facts (`design::save_row`).
-struct SaveRow {
-    dirty: bool,
-    failed: bool,
-    primary: bool,
-    save: &'static str,
-    /// Why Save waits.
-    blocked: Option<String>,
-    /// The lock's sentence while the draft has changes (`Save or discard to switch campaign.`).
-    lock: Option<&'static str>,
-    /// Cancel's reason while the form is clean, when Cancel waits.
-    cancel: Option<Option<&'static str>>,
-    /// The reason goes on its own line under the row (Lookup's narrow panel), not beside Save.
-    reason_under: bool,
-}
-
 /// The save row: the draft's state word, Discard (or a clean form's Cancel), the reason, and
-/// Save at the row's end.
+/// Save at the row's end. Every part comes from the one rule of a save row
+/// (`design::save_row::DraftState`): the word and its tone, Save's weight and why it waits,
+/// Discard or Cancel, and the reason. `reason_under` puts the reason on its own line under the
+/// row (Lookup's narrow panel), not beside Save.
 fn save_row(
-    row: SaveRow,
+    state: &DraftState<'_>,
+    save_words: &'static str,
+    reason_under: bool,
     save: impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) + 'static,
     discard: impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) + 'static,
 ) -> AnyElement {
     let c = theme::colors();
-    let (icon, word, color) = if row.failed {
-        (icons::ERROR, "Not saved", c.result.error)
-    } else if row.dirty {
-        (icons::DRAFT, "Unsaved", c.document.unsaved)
-    } else {
-        (icons::OK, "No changes", c.muted)
-    };
-    let save = if row.primary && !row.failed {
-        kit::Button::primary("world-save", row.save)
-    } else {
-        kit::Button::secondary("world-save", row.save)
+    let save = match state.save_weight() {
+        SaveWeight::Primary => kit::Button::primary("world-save", save_words),
+        SaveWeight::Secondary => kit::Button::secondary("world-save", save_words),
     }
     .key("Ctrl+S")
-    .blocked(row.blocked.clone())
+    .blocked(state.save_blocked().map(str::to_owned))
     .on_click(save);
     let mut line = div()
         .flex()
@@ -926,27 +916,25 @@ fn save_row(
         .items_center()
         .gap(theme::S)
         .min_h(theme::Density::Scan.control())
-        .child(kit::status(&kit::Status::new(icon, word, color)));
-    match (row.dirty, row.cancel) {
-        (false, Some(reason)) => {
-            line = line.child(
-                kit::Button::quiet("world-cancel", "Cancel")
-                    .blocked(reason)
-                    .on_click(discard),
-            );
-        }
-        (true, _) => {
-            line = line.child(kit::Button::quiet("world-discard", "Discard").on_click(discard));
-        }
-        (false, None) => {}
+        .child({
+            let status = state.status();
+            // Named for the harness by its word (`Save row: Invalid`).
+            kit::target(
+                kit::status(&kit::Status::of(&status)).relative(),
+                format!("Save row: {}", status.word),
+            )
+        });
+    if state.discard_shown() {
+        line = line.child(kit::Button::quiet("world-discard", "Discard").on_click(discard));
+    } else if state.cancel_shown() {
+        // A clean form loses nothing: Cancel always closes it. What waits for the form to close
+        // is the reason after it, not a lock on it.
+        line = line.child(kit::Button::quiet("world-cancel", "Cancel").on_click(discard));
     }
-    let reason = if row.dirty {
-        row.lock.map(str::to_owned).or(row.blocked)
-    } else {
-        None
-    };
-    let reason = reason.map(|reason| kit::text(theme::Type::Small, c.muted, reason));
-    if row.reason_under {
+    let reason = state
+        .row_reason()
+        .map(|reason| kit::text(theme::Type::Small, c.muted, reason.to_owned()));
+    if reason_under {
         // In Lookup's narrow panel the reason has its own line under the row, so Save stays
         // inside the pane (the narrow save row).
         return div()
@@ -1041,6 +1029,8 @@ pub(super) fn edit_form(
             }))
         };
     let picker_key = host.reader(root).picker_view().map(|view| view.key);
+    let status_focus = host.jump(root).field(super::reader::Field::Status, cx);
+    let text_focus = host.jump(root).field(super::reader::Field::Text, cx);
     let mut rows: Vec<(&'static str, &'static str, &DraftValue, Option<String>)> = Vec::new();
     if let Some(creature) = &view.creature {
         rows.push(("creature", "Stat block", creature, None));
@@ -1089,21 +1079,27 @@ pub(super) fn edit_form(
             "Status",
             None,
             None,
-            kit::TextField::new(
-                ("world-draft-status", id.as_u128() as u64),
-                view.status.clone(),
-            )
-            .placeholder(crate::world::edit::STATUS_HINT)
-            .name("Status")
-            .on_change(on_words(cx, move |root, words| {
-                host.reader(root).set_draft_status(id, words);
-            })),
+            div().w_full().track_focus(&status_focus).child(
+                kit::TextField::new(
+                    ("world-draft-status", id.as_u128() as u64),
+                    view.status.clone(),
+                )
+                .placeholder(crate::world::edit::STATUS_HINT)
+                .name("Status")
+                .on_change(on_words(cx, move |root, words| {
+                    host.reader(root).set_draft_status(id, words);
+                }))
+                // Escape leaves the field; the form stays open (and Lookup with it).
+                .on_escape(on_key(cx, |root, _, _, window, cx| {
+                    window.focus(&root.focus, cx);
+                })),
+            ),
         ))
         .child(kit::field(
             "Text",
             None,
             None,
-            div().h(px(194.0)).child(
+            div().h(px(194.0)).track_focus(&text_focus).child(
                 kit::TextEditor::new(("world-draft-text", id.as_u128() as u64), view.text.clone())
                     .name("Text")
                     .rows(8)
@@ -1113,26 +1109,29 @@ pub(super) fn edit_form(
                     })),
             ),
         ));
-    let cancel_reason = view
-        .log_waits
-        .then_some(crate::world::model::LOG_WAITS_FOR_CANCEL_WORDS);
-    form.child(save_row(
-        SaveRow {
-            dirty: view.dirty,
-            failed: false,
-            primary: !view.live,
-            save: "Save changes",
-            blocked: if view.log_waits {
-                Some(crate::world::LOG_WAITS_FOR_SAVE.to_owned())
-            } else if !view.dirty {
-                Some(crate::design::save_row::NO_CHANGES.to_owned())
-            } else {
-                None
-            },
-            lock: Some("Save or discard to switch campaign."),
-            cancel: Some(cancel_reason),
-            reason_under: host == super::reader::Host::Lookup,
+    // An open Log line of this note waits for the form (ruling Q-t): the row says so in its one
+    // sentence, and Save and Cancel stay open, since either ends the wait.
+    let mut state = DraftState::new(
+        DraftOrigin::Saved,
+        Changed::from(view.dirty),
+        if view.live {
+            Primary::Elsewhere
+        } else {
+            Primary::Draft
         },
+    )
+    .locks_campaign()
+    .cancels(
+        view.log_waits
+            .then_some(crate::world::model::LOG_WAITS_FOR_CANCEL_WORDS),
+    );
+    if view.log_waits {
+        state = state.holds(crate::world::LOG_WAITS_FOR_SAVE);
+    }
+    form.child(save_row(
+        &state,
+        "Save changes",
+        host == super::reader::Host::Lookup,
         act::<gpui::ClickEvent>(cx, move |root, campaign, index, _, _| {
             if let Some(at) = index.position(id)
                 && let Some(nav) = host
