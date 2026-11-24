@@ -75,24 +75,6 @@ fn line_id<A>(id: &ElementId, at: usize, line: &PlainLine<A>) -> ElementId {
     ElementId::NamedChild(std::sync::Arc::new(id.clone()), SharedString::from(name))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A kept result's controls keep their id when the footer puts a newer result before it, so
-    /// the keyboard on its Undo never lands on another result's Undo.
-    #[test]
-    fn a_kept_line_keeps_its_id_when_the_footer_order_changes() {
-        let footer = ElementId::Name("footer".into());
-        let ash = PlainLine::<()>::for_test("Removed Ash.", Some(1));
-        let rook = PlainLine::<()>::for_test("Added Rook.", Some(2));
-        assert_eq!(line_id(&footer, 0, &ash), line_id(&footer, 1, &ash));
-        assert_ne!(line_id(&footer, 0, &ash), line_id(&footer, 0, &rook));
-        let notice = PlainLine::<()>::for_test("A notice.", None);
-        assert_ne!(line_id(&footer, 0, &notice), line_id(&footer, 1, &notice));
-    }
-}
-
 /// One line as a message: its words, its file line and help, its Undo first, then its choices
 /// (a choice that loses something last, `L` after the others), each choice's help under it.
 /// Every control's words are its accessible name, so the harness finds it by them.
@@ -235,4 +217,22 @@ pub fn message<A: Clone + 'static>(
         }
     }
     message
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A kept result's controls keep their id when the footer puts a newer result before it, so
+    /// the keyboard on its Undo never lands on another result's Undo.
+    #[test]
+    fn a_kept_line_keeps_its_id_when_the_footer_order_changes() {
+        let footer = ElementId::Name("footer".into());
+        let ash = PlainLine::<()>::for_test("Removed Ash.", Some(1));
+        let rook = PlainLine::<()>::for_test("Added Rook.", Some(2));
+        assert_eq!(line_id(&footer, 0, &ash), line_id(&footer, 1, &ash));
+        assert_ne!(line_id(&footer, 0, &ash), line_id(&footer, 0, &rook));
+        let notice = PlainLine::<()>::for_test("A notice.", None);
+        assert_ne!(line_id(&footer, 0, &notice), line_id(&footer, 1, &notice));
+    }
 }

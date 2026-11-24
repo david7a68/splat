@@ -134,6 +134,15 @@ fn the_global_keys_open_and_close_panels() {
     assert!(shell.read(|root| root.app.sessions.notes_open));
     shell.click("Note text");
     shell.type_text("Ash");
+    // The note's `/` menu takes its own Escape: the menu closes and the panel stays.
+    shell.type_text(" /");
+    assert!(shell.bounds("Search").is_some(), "the / menu is open");
+    shell.press("escape");
+    assert!(shell.bounds("Search").is_none(), "Escape closed the / menu");
+    assert!(
+        shell.read(|root| root.app.sessions.notes_open),
+        "and not the notes panel"
+    );
     shell.press("ctrl-j");
     assert!(!shell.read(|root| root.app.sessions.notes_open));
     shell.press("ctrl-k");

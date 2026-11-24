@@ -180,10 +180,11 @@ impl SplatRoot {
         };
         kit::edge::restore_column_widths(saved.column_widths, cx);
         window.focus(&root.focus, cx);
+        // Before the pages' own interceptors, so the root sees a key before they act on it.
+        root._keys = root.watch_keys(window, cx);
         pages::init(&mut root, window, cx);
         root.watch_close(window, cx);
         root._poll = Some(root.start_poll(window, cx));
-        root._keys = root.watch_keys(window, cx);
         root
     }
 
@@ -210,8 +211,12 @@ impl SplatRoot {
             {
                 return;
             }
+            // Every interceptor runs, even after one stopped the key: the note's `/` menu takes
+            // its Escape itself (it runs after this one), so the root leaves it alone then.
             let took = root
-                .update(cx, |root, cx| root.take_escape(window, cx))
+                .update(cx, |root, cx| {
+                    !pages::sessions::takes_escape(root) && root.take_escape(window, cx)
+                })
                 .unwrap_or(false);
             if took {
                 cx.stop_propagation();
