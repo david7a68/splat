@@ -344,6 +344,12 @@ fn party_bar_holds_through_a_fight() {
 /// The fixture's saved run open with three of five players Bloodied and two with temporary HP,
 /// then the Session page with the party bar shown and its fight's hold made.
 fn crowded_fight(shell: &mut Shell) {
+    // A settled shell has the party's sheets: the harness waits for their read in flight
+    // (`Shell::settle`), as egui's driver waited while the party was busy.
+    assert!(
+        shell.read(|root| root.app.party.has_members() && !root.app.party.reader.loading()),
+        "the party's sheets are read before the first step"
+    );
     shell.update(|root, _, cx| {
         let campaign = root.app.campaigns.active_campaign().expect("a campaign");
         let modules = root.app.campaigns.modules().to_vec();
