@@ -7,7 +7,7 @@ use splat_content_ui::hermetic;
 use splat_content_ui::{
     campaigns, content_actions, content_workspace, design, library, persistence, world,
 };
-use splat_design::{choice, field_id, sentence};
+use splat_design::{choice, sentence};
 
 #[path = "../../campaign_content.rs"]
 pub mod campaign_content;

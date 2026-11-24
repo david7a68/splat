@@ -1,4 +1,5 @@
 use super::*;
+use splat::character::campaign_package::Move;
 
 #[test]
 fn folder_recovery_requires_exactly_one_matching_identity() {
@@ -104,46 +105,36 @@ fn iter8_e_campaign_deleted_manifest_action_does_not_guess_a_filename() {
         let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
         campaigns.register_module(module.clone()).unwrap();
         fs::remove_file(module.path.join(filename)).unwrap();
-        let mut content = CampaignContent {
+        let content = CampaignContent {
             snapshot: Some(load_snapshot(&active, &[module]).1.unwrap()),
             ..Default::default()
         };
-        let ctx = egui::Context::default();
-        let mut rendered = String::new();
-        for _ in 0..2 {
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(1200.0, 2400.0),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        // Round 26 FD1: the page's footer draws the warnings.
-                        let frame = design::outcome::PaneFrame::new(ui);
-                        let mut messages =
-                            design::outcome::Messages::new(&frame, "warnings", 800.0);
-                        let unavailable = content.package_warnings_of(&campaigns).unavailable;
-                        content.package_messages(&mut messages, &campaigns, &unavailable);
-                        // The footer, then the package list beside it (a Content pane
-                        // refuses the list's own scroll column).
-                        let _ = messages.pane(ui, design::Body::Content, |_| ());
-                        content.packages_content(ui, &campaigns, &active);
-                    });
-                },
-            );
-            rendered = output
-                .shapes
-                .iter()
-                .filter_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-        }
+        // Round 26 FD1: the page's footer says the warnings; the package list's rows follow.
+        let frame = design::outcome::PaneFrame::plain();
+        let mut messages = design::outcome::Messages::new(&frame, "warnings", 0.0);
+        let unavailable = content.package_warnings_of(&campaigns).unavailable;
+        content.package_messages(&mut messages, &campaigns, &unavailable);
+        let lines = messages.into_plain();
+        let rows = content.package_rows(&campaigns);
+        let rendered = lines
+            .iter()
+            .flat_map(|line| {
+                std::iter::once(line.words.clone())
+                    .chain(line.help.iter().cloned())
+                    .chain(line.choices.iter().map(|choice| choice.words.clone()))
+            })
+            .chain(rows.iter().flat_map(|row| {
+                [
+                    row.name.clone(),
+                    row.detail.clone(),
+                    row.mark
+                        .map(|(_, words)| words.to_owned())
+                        .unwrap_or_default(),
+                    row.note.clone().unwrap_or_default(),
+                ]
+            }))
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(rendered.contains("Write the manifest again"), "{rendered}");
         assert!(
             rendered.contains("The package manifest was deleted."),
@@ -173,9 +164,9 @@ fn outside_words_keep_a_path_s_spelling() {
         words(ContentFault::Error(&undo)),
         "Undo did not work: package.md changed on disk. Reload before undoing."
     );
-    // A content layer's flag or a load error that starts with the note's path.
+    // A load error that starts with the note's path.
     assert_eq!(
-        words(ContentFault::Flag("notes/a.md: Missing YAML frontmatter")),
+        words(ContentFault::Error("notes/a.md: Missing YAML frontmatter")),
         "Problem: notes/a.md: Missing YAML frontmatter."
     );
     assert_eq!(
@@ -292,11 +283,10 @@ fn a_check_reaches_the_sidebar_and_the_review_list_and_changes_nothing() {
     assert_eq!(content.review_detail().as_deref(), Some("2 to review"));
     assert!(content.reconcile.pending.is_none());
     assert!(!content.refresh_pending);
-    // Showing the list starts nothing. Only the DM's click applies a change.
-    let _ = egui::Context::default().run(Default::default(), |ctx| {
-        egui::CentralPanel::default()
-            .show(ctx, |ui| content.reconcile_section(ui, &campaigns, &active));
-    });
+    // Reading the page starts nothing. Only the DM's click applies a change.
+    let _ = content.issues(&active);
+    let _ = content.package_rows(&campaigns);
+    let _ = content.footer_lines(&campaigns, &active, &|_| false);
     assert!(content.reconcile.pending.is_none());
 }
 
@@ -304,7 +294,6 @@ fn a_check_reaches_the_sidebar_and_the_review_list_and_changes_nothing() {
 fn closure_follows_a_selection_change() {
     let temp = tempfile::tempdir().unwrap();
     let active = campaign(temp.path());
-    let campaigns = Campaigns::at(temp.path().join("settings.json"));
     let catalogue = Catalogue::load(&[], None).unwrap();
     let document = CampaignDocument::load(&active).unwrap();
     let closure = catalogue.closure(&document.selections, active.id);
@@ -319,14 +308,9 @@ fn closure_follows_a_selection_change() {
         }),
         ..Default::default()
     };
-    let ctx = egui::Context::default();
+    // The page's save row reads the closure again when the selections changed (`save_bar`).
     let frame = |content: &mut CampaignContent| {
-        let _ = ctx.run(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                content.selection_bar(ui, &campaigns, &active);
-                content.packages(ui, &campaigns, &active);
-            });
-        });
+        let _ = content.save_bar();
     };
     let kept = |content: &CampaignContent| content.snapshot.as_ref().unwrap().closure.0.as_ptr();
     let before = kept(&content);
@@ -379,42 +363,27 @@ fn undo_discard_stays_in_its_campaign() {
     new_result!(content, repair_discard(0, "note.md", "words"));
     new_result!(content, repair_discard(1, "other.md", "more"));
     {
-        use egui_kittest::kittest::Queryable;
-        let active = first.clone();
-        let campaigns = Campaigns::at(temp.path().join("settings.json"));
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(960.0, 640.0))
-            .build_ui_state(
-                move |ui, content: &mut CampaignContent| {
-                    let frame = design::outcome::PaneFrame::new(ui);
-                    let open = |path: &str| {
-                        ui.data(|data| {
-                            data.get_temp::<bool>(egui::Id::new(("repair_open", path)))
-                                .unwrap_or(false)
-                        })
-                    };
-                    let messages =
-                        content.page_footer_with(&frame, &open, &campaigns, &active, 600.0);
-                    let paned = messages.pane(ui, design::Body::Content, |_| ());
-                    content.press_result(ui.ctx(), &campaigns, paned.pressed);
-                },
-                content,
-            );
-        harness.run_steps(2);
-        assert!(harness.query_by_label("Undo discard of other.md").is_some());
-        harness.get_by_label("Undo discard of note.md").click();
-        harness.run_steps(3);
+        // The page's footer as the GPUI page builds it, and a press of an Undo in it.
+        let undo_of = |content: &CampaignContent, label: &str| {
+            content
+                .footer_lines(&campaigns, &first, &|_| false)
+                .iter()
+                .find(|line| line.undo.as_ref().is_some_and(|undo| undo.label == label))
+                .and_then(|line| line.press_undo())
+        };
+        assert!(undo_of(&content, "Undo discard of other.md").is_some());
+        let press = undo_of(&content, "Undo discard of note.md").expect("A's Undo");
+        content.footer_press(&ctx, &campaigns, &first, press);
         assert_eq!(
-            repair_discards(harness.state(), first.id),
+            repair_discards(&content, first.id),
             ["other.md"],
             "Undo of A ends A only"
         );
         assert!(
-            harness.query_by_label("Undo discard of note.md").is_none()
-                && harness.query_by_label("Undo discard of other.md").is_some(),
+            undo_of(&content, "Undo discard of note.md").is_none()
+                && undo_of(&content, "Undo discard of other.md").is_some(),
             "B keeps its result and its Undo"
         );
-        content = std::mem::take(harness.state_mut());
     }
     new_result!(content, repair_discard(2, "note.md", "words"));
     content.reload(&ctx, &campaigns, first.clone());
@@ -477,17 +446,106 @@ fn undo_discard_stays_in_its_campaign() {
 #[test]
 fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     use crate::content_workspace::{EntryRef, PackageSelection, Selection};
-    use egui_kittest::kittest::Queryable;
+    use design::outcome::plain::{ChoiceForm, PlainLine};
     struct Page {
         content: CampaignContent,
         campaigns: Campaigns,
         /// The Campaign page is not drawn (another page is open); its `tick` still runs.
         hidden: bool,
-        /// The app's modal test (`crate::modal_open`), which Ctrl+S waits for.
-        modal: bool,
         /// How often the app read Lookup and Encounters again for the page's written choices
         /// (`choices_written`, taken by `Splat::route`).
         refreshed: usize,
+        ctx: egui::Context,
+    }
+    impl Page {
+        /// One frame as the GPUI app runs it: `tick` on any page, the Packages tab's reads
+        /// while it is shown, then the app's own steps after the page (`lib.rs`).
+        fn frame(&mut self) {
+            self.content.tick(&self.ctx, &self.campaigns);
+            if !self.hidden {
+                let _ = self.content.prepare(&self.ctx, &self.campaigns);
+                let _ = self.content.save_bar();
+            }
+            if let Some(module) = self.content.found_package.take() {
+                let result = self.campaigns.restore_module(module);
+                self.content.package_restored(result);
+            }
+            if let Some(id) = self.content.forget_package.take() {
+                let result = self.campaigns.unregister_module(id);
+                self.content.package_restored(result);
+            }
+            if std::mem::take(&mut self.content.choices_written) {
+                self.refreshed += 1;
+            }
+        }
+        /// The page's footer, in its order.
+        fn lines(&self) -> Vec<PlainLine<ContentPress>> {
+            let active = self.campaigns.active_campaign().unwrap();
+            self.content
+                .footer_lines(&self.campaigns, &active, &|_| false)
+        }
+        /// Where the first line whose words contain `words` stands in the footer.
+        fn message(&self, words: &str) -> Option<usize> {
+            self.lines()
+                .iter()
+                .position(|line| line.words.contains(words))
+        }
+        /// Where the line with the Undo `label` stands.
+        fn undo(&self, label: &str) -> Option<usize> {
+            self.lines()
+                .iter()
+                .position(|line| line.undo.as_ref().is_some_and(|undo| undo.label == label))
+        }
+        fn press(&mut self, press: design::outcome::Press<ContentPress>) {
+            let active = self.campaigns.active_campaign().unwrap();
+            self.content
+                .footer_press(&self.ctx, &self.campaigns, &active, press);
+        }
+        fn press_undo(&mut self, label: &str) {
+            let at = self.undo(label).unwrap_or_else(|| panic!("no {label}"));
+            let press = self.lines()[at].press_undo().expect("the Undo is open");
+            self.press(press);
+        }
+        /// The first line's choice `words` (Watch's `Find the folder…`: the list's order).
+        fn press_choice(&mut self, words: &str) {
+            let press = self
+                .lines()
+                .iter()
+                .find_map(|line| {
+                    let at = line
+                        .choices
+                        .iter()
+                        .position(|choice| choice.words == words)?;
+                    line.press_choice(at)
+                })
+                .unwrap_or_else(|| panic!("no choice {words}"));
+            self.press(press);
+        }
+        /// Waits on the loader itself, not on the clock: its answer (or its end) is received
+        /// here and handed back for the page to take in its next frame.
+        fn settle(&mut self) {
+            for _ in 0..50 {
+                self.frame();
+                self.frame();
+                if let Some(rx) = self.content.pending.take() {
+                    let (tx, again) = mpsc::channel();
+                    if let Ok(loaded) = rx.recv() {
+                        tx.send(loaded).unwrap();
+                    }
+                    self.content.pending = Some(again);
+                } else if !self.content.refresh_pending {
+                    self.frame();
+                    return;
+                }
+            }
+            panic!("the page did not load");
+        }
+        fn answer(&self) -> Option<String> {
+            self.content
+                .answer
+                .as_ref()
+                .map(|answer| answer.words.clone())
+        }
     }
     crate::hermetic::closed::clear_next_folder();
     let temp = tempfile::tempdir().unwrap();
@@ -524,249 +582,88 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     let (first, second) = (open("a"), open("b"));
     campaigns.open_for_test(&second);
     campaigns.open_for_test(&first);
-    let mut harness = egui_kittest::Harness::builder()
-        .with_size(egui::vec2(1200.0, 900.0))
-        .build_ui_state(
-            |ui, page: &mut Page| {
-                page.content.tick(ui.ctx(), &page.campaigns);
-                if !page.hidden {
-                    page.content.save_shortcut(ui.ctx(), page.modal);
-                    page.content.show(ui, &page.campaigns);
-                }
-                // The app's own steps after the page (`lib.rs`).
-                if let Some(module) = page.content.found_package.take() {
-                    let result = page.campaigns.restore_module(module);
-                    page.content.package_restored(result);
-                }
-                if let Some(id) = page.content.forget_package.take() {
-                    let result = page.campaigns.unregister_module(id);
-                    page.content.package_restored(result);
-                }
-                if std::mem::take(&mut page.content.choices_written) {
-                    page.refreshed += 1;
-                }
-            },
-            Page {
-                content: CampaignContent::default(),
-                campaigns,
-                hidden: false,
-                modal: false,
-                refreshed: 0,
-            },
-        );
-    // Waits on the loader itself, not on the clock: its answer (or its end) is received here
-    // and handed back for the page to take in its next frame.
-    let settle = |harness: &mut egui_kittest::Harness<'_, Page>| {
-        for _ in 0..50 {
-            harness.run_steps(2);
-            let content = &mut harness.state_mut().content;
-            if let Some(rx) = content.pending.take() {
-                let (tx, again) = mpsc::channel();
-                if let Ok(loaded) = rx.recv() {
-                    tx.send(loaded).unwrap();
-                }
-                content.pending = Some(again);
-            } else if !content.refresh_pending {
-                harness.run_steps(2);
-                return;
-            }
-        }
-        panic!("the page did not load");
+    let mut page = Page {
+        content: CampaignContent::default(),
+        campaigns,
+        hidden: false,
+        refreshed: 0,
+        ctx: egui::Context::default(),
     };
-    let find = |harness: &mut egui_kittest::Harness<'_, Page>, from: &str, to: &str| {
-        let to = packages.join(to);
-        fs::rename(packages.join(from), &to).unwrap();
-        harness.state_mut().content.refresh_destination(&to);
-        settle(harness);
-        crate::hermetic::closed::next_folder(to);
-        harness.get_by_label("Find the folder…").click();
-        settle(harness);
+    let moved = |page: &mut Page, from: &str, to: &str| {
+        fs::rename(packages.join(from), packages.join(to)).unwrap();
+        page.content.refresh_destination(&packages.join(to));
+        page.settle();
     };
-    let registered = |harness: &egui_kittest::Harness<'_, Page>, id: Uuid| {
-        harness
-            .state()
-            .campaigns
+    let pick = |page: &mut Page, folder: &str| {
+        crate::hermetic::closed::next_folder(packages.join(folder));
+        page.press_choice("Find the folder…");
+        page.settle();
+    };
+    let registered = |page: &Page, id: Uuid| {
+        page.campaigns
             .modules()
             .iter()
             .find(|module| module.id == id)
             .map(|module| module.path.clone())
     };
-    settle(&mut harness);
-    // Issue #513: Ctrl+S, taken before the page draws and saved after the package list. The
-    // built-in package unticked (Space on its focused box) and Ctrl+S in ONE input frame: the
-    // save is without it, and the app reads Lookup and Encounters again (#509). Behind a modal
-    // the key saves nothing (first, while the list can still be saved; Discard ends its draft).
-    // A new campaign's first choice, the built-in package (the fixture adds Watch and Toll).
-    let builtin = CampaignDocument::load(&first).unwrap().selections[0]
-        .package
-        .id
-        .unwrap();
-    let chosen_on_disk = |id: Uuid| {
-        CampaignDocument::load(&first)
-            .unwrap()
-            .selections
-            .iter()
-            .any(|selection| selection.package.id == Some(id))
-    };
-    let key = |key, modifiers| egui::Event::Key {
-        key,
-        physical_key: None,
-        pressed: true,
-        repeat: false,
-        modifiers,
-    };
-    let one_frame = |harness: &mut egui_kittest::Harness<'_, Page>, events: &[egui::Event]| {
-        let frame = harness.ctx.cumulative_frame_nr();
-        harness.input_mut().events.extend(events.iter().cloned());
-        harness.step();
-        assert_eq!(
-            harness.ctx.cumulative_frame_nr() - frame,
-            1,
-            "one input frame"
-        );
-    };
-    let space = key(egui::Key::Space, egui::Modifiers::NONE);
-    let ctrl_s = key(egui::Key::S, egui::Modifiers::COMMAND);
-    assert!(builtin != watch.id && builtin != toll.id && chosen_on_disk(watch.id));
-    let focus_builtin = |harness: &mut egui_kittest::Harness<'_, Page>| {
-        harness.get_by_label("Use D&D 2024 · SRD 5.2.1").focus();
-        harness.run_steps(2);
-    };
-    focus_builtin(&mut harness);
-    harness.state_mut().modal = true;
-    one_frame(&mut harness, &[space.clone(), ctrl_s.clone()]);
-    harness.state_mut().modal = false;
-    assert!(
-        chosen_on_disk(builtin)
-            && harness.state().content.selections_changed()
-            && harness.state().refreshed == 0,
-        "behind a modal Ctrl+S saved"
+    page.settle();
+    // Ruling R21 (G45): the repairs, then the links, then `Remove from this campaign` last, in
+    // the lose form (the kit draws it `L` after the others).
+    moved(&mut page, "watch", "watch-moved");
+    let order = [
+        "Use this folder",
+        "Find the folder…",
+        "Technical details",
+        "Remove from this campaign",
+    ];
+    let line = page
+        .lines()
+        .into_iter()
+        .find(|line| line.choices.iter().any(|c| c.words == "Find the folder…"))
+        .expect("the moved folder's message");
+    let words: Vec<&str> = line
+        .choices
+        .iter()
+        .map(|choice| choice.words.as_str())
+        .filter(|words| order.contains(words))
+        .collect();
+    assert_eq!(
+        words, order,
+        "the moved-folder choices are not in the order repairs, links, Remove"
     );
-    harness.run_steps(2);
-    harness.get_by_label("Discard").click();
-    harness.run_steps(2);
-    assert!(!harness.state().content.selections_changed());
-    focus_builtin(&mut harness);
-    one_frame(&mut harness, &[space, ctrl_s]);
-    assert!(
-        !chosen_on_disk(builtin)
-            && chosen_on_disk(watch.id)
-            && chosen_on_disk(toll.id)
-            && !harness.state().content.selections_changed()
-            && harness.state().refreshed == 1,
-        "Ctrl+S in the frame of the untick saves it: built-in on disk {}, draft left {}, \
-         refreshed {}",
-        chosen_on_disk(builtin),
-        harness.state().content.selections_changed(),
-        harness.state().refreshed
+    assert_eq!(
+        line.choices.last().map(|choice| choice.form),
+        Some(ChoiceForm::Lose)
     );
-    // Ruling R21 (G45): the repairs, then the links, then `Remove from this campaign` last
-    // with exactly `L` before it. A reading-order test on the message's choices.
-    fs::rename(packages.join("watch"), packages.join("watch-moved")).unwrap();
-    harness
-        .state_mut()
-        .content
-        .refresh_destination(&packages.join("watch-moved"));
-    settle(&mut harness);
-    // `L` after the choice before it on a shared line; else a line of its own at the words,
-    // `M` below the others (`docs/design-system.md`, the destructive choice rule).
-    let check = |harness: &egui_kittest::Harness<'_, Page>| {
-        let order = [
-            "Use this folder",
-            "Find the folder…",
-            "Technical details",
-            "Remove from this campaign",
-        ]
-        .map(|name| harness.get_by_label(name).rect());
-        assert!(
-            order
-                .windows(2)
-                .all(|pair| (pair[0].center().y - pair[1].center().y).abs() < 1.0
-                    && pair[0].right() < pair[1].left()
-                    || pair[0].bottom() <= pair[1].top()),
-            "the moved-folder choices are not in the order repairs, links, Remove: {order:?}"
-        );
-        let (before, remove) = (order[2], order[3]);
-        let shares = (before.center().y - remove.center().y).abs() < 1.0;
-        let gap = remove.left() - before.right();
-        let above = remove.top()
-            - order[..3]
-                .iter()
-                .map(|rect| rect.bottom())
-                .fold(f32::MIN, f32::max);
-        assert!(
-            if shares {
-                (gap - design::L).abs() < 0.5
-            } else {
-                (remove.left() - order[0].left()).abs() < 0.5 && (above - design::M).abs() < 0.5
-            },
-            "`Remove from this campaign` has not its room: shares a line {shares}, gap {gap}, \
-             above {above}"
-        );
-        shares
-    };
-    assert!(
-        check(&harness),
-        "at 1200 px Remove shares the safe choices' line"
-    );
-    // Narrow: Remove wraps to a line of its own.
-    harness.set_size(egui::vec2(500.0, 900.0));
-    harness.run_steps(2);
-    assert!(!check(&harness), "at 500 px Remove wraps");
-    harness.set_size(egui::vec2(1200.0, 900.0));
-    harness.run_steps(2);
-    let moved = |harness: &mut egui_kittest::Harness<'_, Page>, from: &str, to: &str| {
-        fs::rename(packages.join(from), packages.join(to)).unwrap();
-        harness
-            .state_mut()
-            .content
-            .refresh_destination(&packages.join(to));
-        settle(harness);
-    };
-    // The first package's `Find the folder…` (Watch's: the list's order).
-    let pick = |harness: &mut egui_kittest::Harness<'_, Page>, folder: &str| {
-        crate::hermetic::closed::next_folder(packages.join(folder));
-        harness
-            .get_all_by_label("Find the folder…")
-            .next()
-            .unwrap()
-            .click();
-        settle(harness);
-    };
     // Ruling Q-x (G149): A = the refusal of a wrong pick for Watch, B = Toll's package fault.
     // A is the answer to the last act, so it is first; B stays; A ends when its cause ends.
-    moved(&mut harness, "toll", "toll-a");
-    pick(&mut harness, "toll-a");
+    moved(&mut page, "toll", "toll-a");
+    pick(&mut page, "toll-a");
     let refusal =
         "The folder toll-a/ holds a different package. Choose the folder that holds Watch.";
-    // The footer and the message carry the words too: the smallest node is the words' own.
-    let message = |harness: &egui_kittest::Harness<'_, Page>, words: &str| {
-        harness
-            .query_all_by_label_contains(words)
-            .map(|node| node.rect())
-            .min_by(|a, b| a.area().total_cmp(&b.area()))
-    };
-    let toll_fault =
-        |harness: &egui_kittest::Harness<'_, Page>| message(harness, "Toll moved from ");
-    let shown = harness.get_by_label(refusal).rect();
-    let fault = toll_fault(&harness).expect("Toll's fault stays beside the refusal");
-    let watch_fault = message(&harness, "Watch moved from ").expect("Watch's fault stays");
+    let shown = page.message(refusal).expect("the refusal");
+    let fault = page
+        .message("Toll moved from ")
+        .expect("Toll's fault stays beside the refusal");
+    let watch_fault = page
+        .message("Watch moved from ")
+        .expect("Watch's fault stays");
     assert!(
-        shown.bottom() <= fault.top() && shown.bottom() <= watch_fault.top(),
-        "the refusal {shown:?} is not first, above the package faults {watch_fault:?}, {fault:?}"
+        shown < fault && shown < watch_fault,
+        "the refusal {shown} is not first, above the package faults {watch_fault}, {fault}"
     );
     // Watch comes back to its folder outside Splat, with no press: the refusal's cause ends,
     // and the refusal with it. Toll's fault stays.
-    moved(&mut harness, "watch-moved", "watch");
-    assert!(harness.query_by_label(refusal).is_none());
-    assert!(toll_fault(&harness).is_some());
-    moved(&mut harness, "watch", "watch-a");
+    moved(&mut page, "watch-moved", "watch");
+    assert!(page.message(refusal).is_none());
+    assert!(page.message("Toll moved from ").is_some());
+    moved(&mut page, "watch", "watch-a");
     // The newest failed answer first, whatever its kind: a kept result whose Undo will fail
     // (the package choices it would restore are not the file's), then a refusal (first,
     // above that older result), then the failed Undo: its error is first and the refusal
     // is gone.
     {
-        let content = &mut harness.state_mut().content;
+        let content = &mut page.content;
         new_result!(
             content,
             Payload::Removed(RemovedPackage {
@@ -779,86 +676,65 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
             })
         );
     }
-    harness.run_steps(2);
-    pick(&mut harness, "toll-a");
-    let kept = harness.get_by_label("Undo remove Gone").rect();
-    let shown = harness.get_by_label(refusal).rect();
+    page.frame();
+    pick(&mut page, "toll-a");
+    let kept = page.undo("Undo remove Gone").expect("the kept result");
+    let shown = page.message(refusal).expect("the refusal");
     assert!(
-        shown.bottom() <= kept.top(),
-        "the refusal {shown:?} is not above the older kept result {kept:?}"
+        shown < kept,
+        "the refusal {shown} is not above the older kept result {kept}"
     );
-    harness.get_by_label("Undo remove Gone").click();
-    settle(&mut harness);
+    page.press_undo("Undo remove Gone");
+    page.settle();
     let failed = "Campaign choices changed. Keep them and edit the package choices here.";
-    let error = message(&harness, failed).expect("the failed Undo says why");
-    let kept = harness.get_by_label("Undo remove Gone").rect();
+    let error = page.message(failed).expect("the failed Undo says why");
+    let kept = page
+        .undo("Undo remove Gone")
+        .expect("the kept result stays");
     assert!(
-        error.bottom() <= kept.top() && harness.query_by_label(refusal).is_none(),
-        "the failed Undo's error {error:?} is not first above {kept:?}, or the refusal stays"
+        error < kept && page.message(refusal).is_none(),
+        "the failed Undo's error {error} is not first above {kept}, or the refusal stays"
     );
     // The campaign file, as the page last read it; a line added outside Splat makes the next
     // write of it fail, and the file put back lets the same act succeed.
     let file = {
-        let document = &harness.state().content.snapshot.as_ref().unwrap().document;
+        let document = &page.content.snapshot.as_ref().unwrap().document;
         document.campaign.path.join(&document.path)
     };
     let text = fs::read_to_string(&file).unwrap();
     let outside = format!("{text}\nA line written outside Splat.\n");
-    let answer = |harness: &egui_kittest::Harness<'_, Page>| {
-        harness
-            .state()
-            .content
-            .answer
-            .as_ref()
-            .map(|answer| answer.words.clone())
-    };
     // A refusal, then a failed `Save selections`: the save's failure replaces the refusal and
     // leads the footer; its successful retry ends it.
-    pick(&mut harness, "toll-a");
-    assert!(harness.query_by_label(refusal).is_some());
-    harness
-        .state_mut()
-        .content
-        .snapshot
-        .as_mut()
-        .unwrap()
-        .document
-        .selections[1]
-        .name = Some("Toll of the old road".into());
+    pick(&mut page, "toll-a");
+    assert!(page.message(refusal).is_some());
+    page.content.snapshot.as_mut().unwrap().document.selections[1].name =
+        Some("Toll of the old road".into());
     fs::write(&file, &outside).unwrap();
-    harness.run_steps(2);
-    let refreshed = harness.state().refreshed;
-    harness.get_by_label("Save selections").click();
-    settle(&mut harness);
-    assert_eq!(
-        harness.state().refreshed,
-        refreshed,
-        "a failed save wrote no choices"
-    );
-    let failed = answer(&harness).expect("the failed save is the newest answer");
-    let error = message(&harness, &failed).expect("the failed save says why");
-    let kept = harness.get_by_label("Undo remove Gone").rect();
+    page.frame();
+    let refreshed = page.refreshed;
+    page.content.save_now();
+    page.settle();
+    assert_eq!(page.refreshed, refreshed, "a failed save wrote no choices");
+    let failed = page.answer().expect("the failed save is the newest answer");
+    let error = page.message(&failed).expect("the failed save says why");
+    let kept = page.undo("Undo remove Gone").expect("the kept result");
     assert!(
-        harness.query_by_label(refusal).is_none() && error.bottom() <= kept.top(),
-        "the failed save {error:?} does not lead above {kept:?}, or the refusal stays"
+        page.message(refusal).is_none() && error < kept,
+        "the failed save {error} does not lead above {kept}, or the refusal stays"
     );
     fs::write(&file, &text).unwrap();
-    harness.get_by_label("Save selections").click();
-    settle(&mut harness);
+    page.content.save_now();
+    page.settle();
     assert!(
-        answer(&harness).is_none() && message(&harness, &failed).is_none(),
+        page.answer().is_none() && page.message(&failed).is_none(),
         "the successful save did not end its failed try"
     );
-    assert_eq!(
-        harness.state().refreshed,
-        refreshed + 1,
-        "the save refreshed"
-    );
+    assert_eq!(page.refreshed, refreshed + 1, "the save refreshed");
     // A removal's Undo that fails (the file changed outside Splat), then its successful retry
     // (the file put back): the success ends the failure it stored.
     let text = fs::read_to_string(&file).unwrap();
     {
-        let content = &mut harness.state_mut().content;
+        let content = &mut page.content;
         let selections = content
             .snapshot
             .as_ref()
@@ -879,108 +755,87 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
         );
     }
     fs::write(&file, format!("{text}\nA line written outside Splat.\n")).unwrap();
-    harness.run_steps(2);
-    let refreshed = harness.state().refreshed;
-    harness.get_by_label("Undo remove Gone").click();
-    settle(&mut harness);
-    let failed = answer(&harness).expect("the failed Undo is the newest answer");
-    assert!(message(&harness, &failed).is_some());
-    assert_eq!(
-        harness.state().refreshed,
-        refreshed,
-        "a failed Undo wrote no choices"
-    );
+    page.frame();
+    let refreshed = page.refreshed;
+    page.press_undo("Undo remove Gone");
+    page.settle();
+    let failed = page.answer().expect("the failed Undo is the newest answer");
+    assert!(page.message(&failed).is_some());
+    assert_eq!(page.refreshed, refreshed, "a failed Undo wrote no choices");
     fs::write(&file, &text).unwrap();
-    harness.get_by_label("Undo remove Gone").click();
-    settle(&mut harness);
-    assert_eq!(
-        harness.state().refreshed,
-        refreshed + 1,
-        "the Undo refreshed"
-    );
+    page.press_undo("Undo remove Gone");
+    page.settle();
+    assert_eq!(page.refreshed, refreshed + 1, "the Undo refreshed");
     assert!(
-        answer(&harness).is_none()
-            && message(&harness, &failed).is_none()
-            && harness.query_by_label("Undo remove Gone").is_none(),
+        page.answer().is_none()
+            && page.message(&failed).is_none()
+            && page.undo("Undo remove Gone").is_none(),
         "the successful Undo did not end its failed try"
     );
     // A refusal, and a round trip to another campaign while the page is hidden: the change
     // of campaign ends the stored answer, not only its words on screen.
-    pick(&mut harness, "toll-a");
-    assert!(harness.query_by_label(refusal).is_some());
-    harness.state_mut().hidden = true;
-    harness.state_mut().campaigns.open_for_test(&second);
-    harness.run_steps(4);
-    harness.state_mut().campaigns.open_for_test(&first);
-    harness.run_steps(4);
+    pick(&mut page, "toll-a");
+    assert!(page.message(refusal).is_some());
+    page.hidden = true;
+    page.campaigns.open_for_test(&second);
+    page.frame();
+    page.frame();
+    page.campaigns.open_for_test(&first);
+    page.frame();
+    page.frame();
     assert!(
-        harness.state().content.answer.is_none(),
+        page.content.answer.is_none(),
         "a refused pick of the first campaign outlived a change of campaign"
     );
-    harness.state_mut().hidden = false;
-    settle(&mut harness);
-    assert!(harness.query_by_label(refusal).is_none());
+    page.hidden = false;
+    page.settle();
+    assert!(page.message(refusal).is_none());
     // A newer act answers: the refusal of a second wrong pick ends when Watch is found.
-    pick(&mut harness, "toll-a");
-    assert!(harness.query_by_label(refusal).is_some());
-    pick(&mut harness, "watch-a");
-    assert!(harness.query_by_label(refusal).is_none());
-    assert!(toll_fault(&harness).is_some());
+    pick(&mut page, "toll-a");
+    assert!(page.message(refusal).is_some());
+    pick(&mut page, "watch-a");
+    assert!(page.message(refusal).is_none());
+    assert!(page.message("Toll moved from ").is_some());
     // A finds Watch in watch-a/ and Toll in toll-a/.
-    pick(&mut harness, "toll-a");
+    pick(&mut page, "toll-a");
     assert!(
-        harness
-            .query_by_label("Undo recover Watch in packages/watch-a/")
+        page.undo("Undo recover Watch in packages/watch-a/")
             .is_some()
     );
-    assert!(
-        harness
-            .query_by_label("Undo recover Toll in packages/toll-a/")
-            .is_some()
-    );
+    assert!(page.undo("Undo recover Toll in packages/toll-a/").is_some());
     // B: Watch moved again, and B finds it in watch-b/.
-    harness.state_mut().campaigns.open_for_test(&second);
-    settle(&mut harness);
-    find(&mut harness, "watch-a", "watch-b");
+    page.campaigns.open_for_test(&second);
+    page.settle();
+    moved(&mut page, "watch-a", "watch-b");
+    pick(&mut page, "watch-b");
     assert!(
-        harness
-            .query_by_label("Undo recover Watch in packages/watch-b/")
+        page.undo("Undo recover Watch in packages/watch-b/")
             .is_some()
     );
     // Back in A: no line names B's folder, and A's Watch result ended with B's recovery.
-    harness.state_mut().campaigns.open_for_test(&first);
-    settle(&mut harness);
+    page.campaigns.open_for_test(&first);
+    page.settle();
     for gone in [
         "Undo recover Watch in packages/watch-b/",
         "Undo recover Watch in packages/watch-a/",
     ] {
         assert!(
-            harness.query_by_label(gone).is_none(),
+            page.undo(gone).is_none(),
             "A shows {gone}: an Undo that is not A's to act on"
         );
     }
     // A's Toll line names A's folder, and its Undo acts on A's data: Toll's registration
     // goes back to toll/; Watch stays where B found it.
-    harness
-        .get_by_label("Undo recover Toll in packages/toll-a/")
-        .click();
-    settle(&mut harness);
-    assert_eq!(registered(&harness, toll.id), Some(toll.path.clone()));
-    assert_eq!(
-        registered(&harness, watch.id),
-        Some(packages.join("watch-b"))
-    );
-    assert!(
-        harness
-            .query_by_label("Undo recover Toll in packages/toll-a/")
-            .is_none()
-    );
+    page.press_undo("Undo recover Toll in packages/toll-a/");
+    page.settle();
+    assert_eq!(registered(&page, toll.id), Some(toll.path.clone()));
+    assert_eq!(registered(&page, watch.id), Some(packages.join("watch-b")));
+    assert!(page.undo("Undo recover Toll in packages/toll-a/").is_none());
     // B keeps its result and its Undo.
-    harness.state_mut().campaigns.open_for_test(&second);
-    settle(&mut harness);
+    page.campaigns.open_for_test(&second);
+    page.settle();
     assert!(
-        harness
-            .query_by_label("Undo recover Watch in packages/watch-b/")
+        page.undo("Undo recover Watch in packages/watch-b/")
             .is_some()
     );
 }
@@ -1224,63 +1079,5 @@ pub fn applied_changes_reload_the_catalogue_and_failures_are_shown(
             .map(|answer| (answer.campaign, answer.words.as_str())),
         Some((first.id, "A sheet has local edits.")),
         "the Apply's failure answers in its own campaign"
-    );
-}
-
-/// Review of PR 740 (P2): Campaign content's issues section stays as the DM left it when a
-/// repair changes its count (one of several issues repaired), and Campaign.md flags that appear
-/// open it.
-#[test]
-fn the_issues_section_keeps_its_state_through_a_repair() {
-    use crate::design::test_harness::ThemedPage as _;
-    use egui_kittest::kittest::{NodeT, Queryable};
-    let shown = std::rc::Rc::new(std::cell::Cell::new(("3 content issues to repair", false)));
-    let drawn = shown.clone();
-    let mut harness = egui_kittest::Harness::builder()
-        .with_size(egui::vec2(600.0, 300.0))
-        .themed_ui(move |ui| {
-            let (heading, flagged) = drawn.get();
-            let _ = issues_section(ui, heading, flagged, |ui| ui.label("The issue lines"));
-        });
-    harness.run_steps(2);
-    let header = |heading: &str| format!("{} {heading}", design::icons::WARN);
-    let open = |harness: &egui_kittest::Harness<'_>, heading: &str| {
-        harness
-            .get_by_label(&header(heading))
-            .accesskit_node()
-            .data()
-            .is_expanded()
-    };
-    assert_eq!(
-        open(&harness, "3 content issues to repair"),
-        Some(false),
-        "closed at first: no Campaign.md flags"
-    );
-    harness
-        .get_by_label(&header("3 content issues to repair"))
-        .click();
-    harness.run_steps(3);
-    assert!(harness.query_by_label("The issue lines").is_some());
-    // The DM repairs one of the three: the count changes, and the list stays open.
-    shown.set(("2 content issues to repair", false));
-    harness.run_steps(3);
-    assert_eq!(
-        open(&harness, "2 content issues to repair"),
-        Some(true),
-        "m-p0-issues-stay-open: a repair that changes the count keeps the list open"
-    );
-    assert!(harness.query_by_label("The issue lines").is_some());
-    // The DM closes it; then Campaign.md flags appear (a reload), and the list opens for them.
-    harness
-        .get_by_label(&header("2 content issues to repair"))
-        .click();
-    harness.run_steps(3);
-    assert!(harness.query_by_label("The issue lines").is_none());
-    shown.set(("2 content issues to repair · 1 Campaign.md issue", true));
-    harness.run_steps(3);
-    assert_eq!(
-        open(&harness, "2 content issues to repair · 1 Campaign.md issue"),
-        Some(true),
-        "m-p0-issues-flags-open: flags that appear open the list"
     );
 }

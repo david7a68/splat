@@ -42,6 +42,9 @@ fn link_and_folder() {
         shell.read(|root| root.app.sessions.folder_text().to_owned()),
         saved
     );
+    // Offline, the link's help leads to the account in Settings (iter1-C).
+    shell.click("id:link-open-settings");
+    assert_eq!(shell.read(|root| root.app.page), Page::Settings);
 }
 
 /// Packages: the list and the chosen package; a box changes the choices (Unsaved), and Discard
@@ -73,6 +76,13 @@ fn packages_choose_and_discard() {
         after[0].checked, checked,
         "Discard brings the saved choice back"
     );
+    // Ctrl+S saves the changed choices (issue #513).
+    shell.click(&format!("id:content-use-{id}"));
+    assert!(shell.read(|root| root.app.campaign_content.selections_changed()));
+    shell.press("ctrl-s");
+    assert!(!shell.read(|root| root.app.campaign_content.selections_changed()));
+    let saved = shell.read(|root| root.app.campaign_content.package_rows(&root.app.campaigns));
+    assert_eq!(saved[0].checked, !checked, "Ctrl+S saved the choice");
 }
 
 /// Rules and runs: an edit makes the form Unsaved; Discard brings the saved settings back with
