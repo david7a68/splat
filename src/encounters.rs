@@ -4905,6 +4905,10 @@ impl Encounters {
     }
     /// Read the campaign again now: a row must not show a new creature as unavailable.
     fn reload_snapshot(&mut self, active: &Campaign, modules: &[Module]) {
+        // A read made now is newer than any read still in flight: that one's result is older
+        // and must not replace this one when it lands.
+        self.pending = None;
+        self.refreshing = false;
         match Snapshot::load(active, modules) {
             // Run settings being edited are the DM's, and this read must not drop them.
             Ok(mut snapshot) => {
@@ -6289,6 +6293,32 @@ pub use splat_content_ui::content_actions::{blocked_draft_switch_reason, draft_s
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// A read made now (after a save, or `refresh_now`) ends the older read still in flight, so
+    /// that read's result cannot land later and put back the campaign as it was before.
+    #[test]
+    fn a_read_made_now_ends_the_older_read_in_flight() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let older = Snapshot::load(&active, &[]);
+        creature(dir.path(), "Mist Rider", false);
+        let mut encounters = Encounters::default();
+        let (tx, rx) = mpsc::channel();
+        encounters.pending = Some(rx);
+        encounters.refresh_now(&active, &[]);
+        assert!(!encounters.busy(), "the older read no longer counts");
+        assert!(
+            tx.send(older).is_err(),
+            "nothing takes the older read's result"
+        );
+        assert!(
+            encounters
+                .snapshot
+                .as_ref()
+                .is_some_and(|s| s.creatures.iter().any(|c| c.name == "Mist Rider")),
+            "the read made now is the one kept"
+        );
+    }
+
     #[test]
     fn run_copy_word_names_copies_and_not_the_original() {
         assert_eq!(
