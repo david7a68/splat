@@ -2319,6 +2319,89 @@ impl<A> KeptOutcome<A> {
     }
 }
 
+/// A message as plain data, for a view that does not draw with egui (the GPUI port,
+/// `src/gui/`): its tone, its words, its Undo's whole label with the caller's id, and each
+/// choice's whole words with its id and whether it loses something. The words are the ones the
+/// egui footer draws whole; a view fits them itself.
+pub struct Plain<A> {
+    pub tone: Tone,
+    pub words: String,
+    pub undo: Option<(String, A)>,
+    pub choices: Vec<PlainChoice<A>>,
+}
+
+/// One choice of a [`Plain`] message.
+pub struct PlainChoice<A> {
+    pub words: String,
+    pub id: A,
+    /// A red choice (`MessageChoice::Lose`), after the safe ones with `L` before it.
+    pub loses: bool,
+    /// The reason it is locked now.
+    pub blocked: Option<String>,
+}
+
+impl<A> Typed<A> {
+    fn plain(self) -> Plain<A> {
+        let Body {
+            tone,
+            words,
+            undo,
+            choices,
+            named,
+            locks,
+            ..
+        } = self.body;
+        let undo = undo.zip(self.undo).map(|(step, id)| (step.label(), id));
+        let choices = choices
+            .into_iter()
+            .zip(named)
+            .zip(locks)
+            .zip(self.choices)
+            .map(|(((what, named), lock), id)| {
+                let words = match (&named, what) {
+                    (Some((_, words)), _) => words.label(),
+                    (
+                        None,
+                        MessageChoice::Choice(word)
+                        | MessageChoice::Primary(word)
+                        | MessageChoice::Lose(word)
+                        | MessageChoice::Link { word, .. },
+                    ) => word.to_owned(),
+                    (None, MessageChoice::Dismiss(_)) => DISMISS_NAME.to_owned(),
+                };
+                let loses = matches!(what, MessageChoice::Lose(_))
+                    || matches!(named, Some((ChoiceKind::Lose, _)));
+                PlainChoice {
+                    words,
+                    id,
+                    loses,
+                    blocked: holding(&lock).map(str::to_owned),
+                }
+            })
+            .collect();
+        Plain {
+            tone,
+            words: words.as_str().to_owned(),
+            undo,
+            choices,
+        }
+    }
+}
+
+impl<A> KeptOutcome<A> {
+    /// The message as plain data ([`Plain`]).
+    pub fn plain(self) -> Plain<A> {
+        self.typed().plain()
+    }
+}
+
+impl<A> Outcome<A> {
+    /// The message as plain data ([`Plain`]).
+    pub fn plain(self) -> Plain<A> {
+        self.parts().1.plain()
+    }
+}
+
 /// This frame's token for one pane: a local value that every kept line and the pane's
 /// [`Messages`] borrow. A line therefore cannot outlive the frame it was made in: it cannot be
 /// kept in app state and shown after its result was replaced or ended. The body may still take

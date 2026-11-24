@@ -335,6 +335,9 @@ mod groups;
 mod history;
 #[path = "encounters/results_key.rs"]
 mod results_key;
+/// The page as plain data and its acts, for the GPUI page (`src/gui/pages/encounters/`).
+#[path = "encounters/model.rs"]
+pub mod model;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
 pub(crate) use groups::{
@@ -3654,7 +3657,7 @@ impl Snapshot {
 }
 /// One of a draft's own results in the editor's footer.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum DraftResult {
+pub enum DraftResult {
     RemovedGroup,
     Replacement,
 }
@@ -3779,7 +3782,7 @@ impl design::results::Kept for EditorMark {
 /// `removed_saved_group`, `removed_encounter`) and ends with it (FI1, FJ4). Its footer order is
 /// issued when its action is done (`stamp_kept`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-enum KeptResult {
+pub enum KeptResult {
     Discarded,
     GroupDiscarded,
     RunDeleted,
@@ -3950,7 +3953,7 @@ fn outcome_words(words: &str) -> design::outcome::Sentence {
 
 /// What a press in an Encounters footer asks for. An Undo names its line by the press's ticket.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FooterPress {
+pub enum FooterPress {
     Undo,
     /// The Undo of the encounter draft's own result (`editor_results`).
     UndoEditor,
@@ -4228,7 +4231,8 @@ pub struct Story<'a> {
     pub revision: Option<(crate::design::memo::Revision, u64)>,
 }
 /// What the DM asked for from a row of the list. One press in a frame, so one of these.
-enum ListAction {
+#[derive(Clone, Debug)]
+pub enum ListAction {
     Resume(std::path::PathBuf),
     ReadHistory(std::path::PathBuf),
     ContinueFight(std::path::PathBuf),
@@ -7233,21 +7237,13 @@ impl Encounters {
             return;
         }
         if new_group {
-            self.search.clear();
-            self.group_in_plan = false;
-            self.group_draft = Some(GroupDraft::new());
-            self.expanded = None;
-            self.focus_name = true;
-            self.error = None;
-            self.message = None;
+            self.new_group();
             return;
         }
         if reload {
-            if self.has_run() {
-                self.error = None;
-                self.refresh_content(ui.ctx(), campaigns, &active.path);
-            } else {
-                self.reload(ui.ctx(), active.clone(), campaigns.modules().to_vec());
+            let run = self.has_run();
+            self.reload_from_disk(ui.ctx(), active, campaigns);
+            if !run {
                 return;
             }
         }
@@ -7309,6 +7305,11 @@ impl Encounters {
         let Some(action) = paned.body else {
             return;
         };
+        self.list_act(action, active, campaigns);
+    }
+
+    /// A row action of the list (`ListAction`), for both views: the egui list and the GPUI page.
+    pub fn list_act(&mut self, action: ListAction, active: &Campaign, campaigns: &Campaigns) {
         self.clear_notice();
         match action {
             ListAction::BackToRun => self.go_to_run = true,

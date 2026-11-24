@@ -272,7 +272,7 @@ fn heading(ui: &mut egui::Ui, word: &str, count: usize) {
 
 /// Q-o: the In progress heading says the rows' order after its count, in the count's muted
 /// form, from `Arranged::in_progress_order` (the rows as arranged, the open run first).
-fn in_progress_heading(ui: &mut egui::Ui, page: &history::Arranged<'_>) {
+pub(super) fn in_progress_heading(ui: &mut egui::Ui, page: &history::Arranged<'_>) {
     let mut job = design::group_heading_text(ui, "IN PROGRESS", page.in_progress.len());
     if let Some(order) = page.in_progress_order()
         && let Some(format) = job.sections.last().map(|section| section.format.clone())
@@ -655,7 +655,7 @@ fn rest_of_ledger(
 }
 
 /// A Ready row's second line: its roster's words.
-fn ready_detail(template: &Template) -> &str {
+pub(super) fn ready_detail(template: &Template) -> &str {
     template
         .summary
         .as_ref()
@@ -666,7 +666,7 @@ fn ready_detail(template: &Template) -> &str {
 
 /// FJ7: whether a Ready row's run is open, and the short reason its Start is blocked; the long
 /// form is on Start's hover. An open run also gets its link, at the reason.
-fn ready_reason(
+pub(super) fn ready_reason(
     page: &history::Arranged<'_>,
     row: &history::ReadyRow<'_>,
     live: Option<&SavedRunInfo>,
@@ -693,7 +693,7 @@ fn ready_reason(
 }
 
 /// A History row's second line: the outcome, the state, the date, and a deleted encounter.
-fn history_detail(past: &history::PastRun<'_>) -> String {
+pub(super) fn history_detail(past: &history::PastRun<'_>) -> String {
     let run = past.run;
     let date = run
         .saved_at
@@ -1002,7 +1002,7 @@ fn row_menu_for_run(
 }
 
 /// A duplicate name uses its session first, and has only one save time.
-fn paused_run_detail(
+pub(super) fn paused_run_detail(
     run: &SavedRunInfo,
     runs: &[&SavedRunInfo],
     open: bool,
@@ -1165,7 +1165,7 @@ pub(super) fn in_progress_list(
 
 /// Whether a run of this encounter is saved: unfinished, ended, or in a file that cannot be read
 /// but names it. Only an encounter with none can be removed.
-fn has_saved_run(page: &history::Arranged<'_>, row: &history::ReadyRow<'_>) -> bool {
+pub(super) fn has_saved_run(page: &history::Arranged<'_>, row: &history::ReadyRow<'_>) -> bool {
     let template = row.template;
     row.unfinished_run
         || page
