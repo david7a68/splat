@@ -224,10 +224,12 @@ pub(super) fn side_choice(
                 .placeholder("Side name")
                 .width(px(96.0))
                 .focus(true)
-                .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                    on_pick(root, words);
-                    cx.notify();
-                })),
+                .on_change(
+                    cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                        on_pick(root, words);
+                        cx.notify();
+                    }),
+                ),
         );
     }
     row
@@ -236,7 +238,9 @@ pub(super) fn side_choice(
 /// An empty layer over its parent that keeps the width its parent is laid out at in `room`,
 /// and draws again when it changed: an editor's narrow layout follows the room it has (beside
 /// Lookup, inside the session plan), as egui's `ui.available_width()` does.
-pub(super) fn room_probe(room: std::rc::Rc<std::cell::Cell<Option<Pixels>>>) -> impl gpui::IntoElement {
+pub(super) fn room_probe(
+    room: std::rc::Rc<std::cell::Cell<Option<Pixels>>>,
+) -> impl gpui::IntoElement {
     gpui::canvas(
         move |bounds, window, _| {
             let width = bounds.size.width;

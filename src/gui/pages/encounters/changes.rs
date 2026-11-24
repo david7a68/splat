@@ -49,21 +49,18 @@ pub(super) fn form(
         .min_h(Density::Read.control())
         .child(div().flex_1().child(kit::label(form.title.clone(), 0)))
         .child(
-            kit::Button::quiet(ElementId::Name(format!("changes-done:{key}").into()), "Done")
-                .name("Done with changes")
-                .density(Density::Read)
-                .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
-                    root.app.encounters.close_form();
-                    cx.notify();
-                })),
+            kit::Button::quiet(
+                ElementId::Name(format!("changes-done:{key}").into()),
+                "Done",
+            )
+            .name("Done with changes")
+            .density(Density::Read)
+            .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
+                root.app.encounters.close_form();
+                cx.notify();
+            })),
         );
-    let mut column = div()
-        .flex()
-        .flex_col()
-        .gap(XS)
-        .pt(XS)
-        .pb(S)
-        .child(heading);
+    let mut column = div().flex().flex_col().gap(XS).pt(XS).pb(S).child(heading);
     if let Some(words) = form.unreadable {
         return column.child(kit::Message::new(kit::Tone::Error, words).small());
     }
@@ -72,8 +69,13 @@ pub(super) fn form(
     }
     column = column.child(text_row(
         &of,
-        (&key, "Display name", form.name.clone(), form.name_hint.clone()),
-        |words| ChangeEdit::Name(words),
+        (
+            &key,
+            "Display name",
+            form.name.clone(),
+            form.name_hint.clone(),
+        ),
+        ChangeEdit::Name,
         cx,
     ));
     for row in &form.rows {
@@ -157,8 +159,13 @@ pub(super) fn form(
     }
     column = column.child(text_row(
         &of,
-        (&key, "Note", form.note.clone(), "Why this creature differs".to_owned()),
-        |words| ChangeEdit::Note(words),
+        (
+            &key,
+            "Note",
+            form.note.clone(),
+            "Why this creature differs".to_owned(),
+        ),
+        ChangeEdit::Note,
         cx,
     ));
     column = column
@@ -198,22 +205,21 @@ fn text_row(
                 )
                 .name(label_words)
                 .placeholder(hint)
-                .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                    root.app.encounters.edit_changes(&of, make(words.to_owned()));
-                    cx.notify();
-                })),
+                .on_change(cx.listener(
+                    move |root: &mut SplatRoot, words: &str, _, cx| {
+                        root.app
+                            .encounters
+                            .edit_changes(&of, make(words.to_owned()));
+                        cx.notify();
+                    },
+                )),
             ),
         )
 }
 
 /// One number: its label, how it changes, its value or amount, its preview, and its fault
 /// under its own field (`change_row`).
-fn change_row(
-    of: &ChangesOf,
-    key: &str,
-    row: &ChangeRowView,
-    cx: &mut Context<SplatRoot>,
-) -> Div {
+fn change_row(of: &ChangesOf, key: &str, row: &ChangeRowView, cx: &mut Context<SplatRoot>) -> Div {
     let c = colors();
     let label_words = row.label;
     let mut hows = vec![(ChangeHow::Same, "Same")];
@@ -250,7 +256,11 @@ fn change_row(
             })),
         );
     if row.how != ChangeHow::Same {
-        let word = if row.how == ChangeHow::Set { "value" } else { "amount" };
+        let word = if row.how == ChangeHow::Set {
+            "value"
+        } else {
+            "amount"
+        };
         line = line.child(stepper(
             of,
             ElementId::Name(format!("changes-number:{label_words}:{key}").into()),
@@ -314,26 +324,34 @@ fn stepper(
         .items_center()
         .gap(XS)
         .child(
-            kit::IconButton::new(less_id, icons::SUBTRACT, format!("{name}: less"))
-                .on_click(edit(cx, of, move || ChangeEdit::Number(label_words, less))),
+            kit::IconButton::new(less_id, icons::SUBTRACT, format!("{name}: less")).on_click(edit(
+                cx,
+                of,
+                move || ChangeEdit::Number(label_words, less),
+            )),
         )
         .child(
             kit::TextField::new(id, shown)
                 .name(name.clone())
                 .width(px(56.0))
-                .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                    let words = words.trim().trim_start_matches('+').replace('−', "-");
-                    if let Ok(number) = words.parse::<i64>() {
-                        root.app
-                            .encounters
-                            .edit_changes(&typed_of, ChangeEdit::Number(label_words, number));
-                    }
-                    cx.notify();
-                })),
+                .on_change(
+                    cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                        let words = words.trim().trim_start_matches('+').replace('−', "-");
+                        if let Ok(number) = words.parse::<i64>() {
+                            root.app
+                                .encounters
+                                .edit_changes(&typed_of, ChangeEdit::Number(label_words, number));
+                        }
+                        cx.notify();
+                    }),
+                ),
         )
         .child(
-            kit::IconButton::new(more_id, icons::ADD, format!("{name}: more"))
-                .on_click(edit(cx, of, move || ChangeEdit::Number(label_words, more))),
+            kit::IconButton::new(more_id, icons::ADD, format!("{name}: more")).on_click(edit(
+                cx,
+                of,
+                move || ChangeEdit::Number(label_words, more),
+            )),
         )
 }
 
@@ -378,7 +396,9 @@ fn conditions_block(
     let mut column = div().flex().flex_col().gap(XS).child(grid);
     let customs: Vec<&String> = conditions.iter().filter(|c| !official(c)).collect();
     if !customs.is_empty() {
-        column = column.child(kit::gap(S)).child(kit::label("Other effects", 0));
+        column = column
+            .child(kit::gap(S))
+            .child(kit::label("Other effects", 0));
     }
     for custom in customs {
         let gone = custom.clone();
@@ -390,20 +410,21 @@ fn conditions_block(
                 .gap(S)
                 .max_w(FORM_WIDTH)
                 .min_h(Density::Read.control())
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .child(kit::text(Type::Body, c.text, custom.clone())),
-                )
+                .child(div().flex_1().min_w_0().child(kit::text(
+                    Type::Body,
+                    c.text,
+                    custom.clone(),
+                )))
                 .child(super::common::row_menu(
                     ElementId::Name(format!("changes-effect:{custom}:{key}").into()),
                     custom,
-                    vec![kit::MenuItem::new("Remove").icon(icons::REMOVE).on_click(edit(
-                        cx,
-                        of,
-                        move || ChangeEdit::RemoveCondition(gone.clone()),
-                    ))],
+                    vec![
+                        kit::MenuItem::new("Remove")
+                            .icon(icons::REMOVE)
+                            .on_click(edit(cx, of, move || {
+                                ChangeEdit::RemoveCondition(gone.clone())
+                            })),
+                    ],
                 )),
         );
     }
@@ -447,13 +468,15 @@ fn conditions_block(
                     )
                     .name("Other effect")
                     .placeholder("Other effect…")
-                    .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                        root.pages
-                            .encounters
-                            .other_effects
-                            .insert(typing.clone(), words.to_owned());
-                        cx.notify();
-                    }))
+                    .on_change(
+                        cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                            root.pages
+                                .encounters
+                                .other_effects
+                                .insert(typing.clone(), words.to_owned());
+                            cx.notify();
+                        }),
+                    )
                     .on_enter(super::editor::on_key(cx, add)),
                 ),
             )
@@ -499,15 +522,17 @@ pub(super) fn replacement(
         )
         .name("Replacement creature")
         .placeholder("Choose another creature…")
-        .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-            root.pages
-                .encounters
-                .replacing
-                .entry(typing.clone())
-                .or_insert_with(|| (String::new(), true))
-                .0 = words.to_owned();
-            cx.notify();
-        })),
+        .on_change(
+            cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                root.pages
+                    .encounters
+                    .replacing
+                    .entry(typing.clone())
+                    .or_insert_with(|| (String::new(), true))
+                    .0 = words.to_owned();
+                cx.notify();
+            }),
+        ),
     );
     if count > 1 {
         let toggling = key.to_owned();
@@ -564,10 +589,12 @@ pub(super) fn replacement(
                     .name(format!("Use {}", row.name))
                     .density(Density::Read)
                     .blocked(row.unavailable.clone())
-                    .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                        use_it(root, id, all);
-                        cx.notify();
-                    })),
+                    .on_click(cx.listener(
+                        move |root: &mut SplatRoot, _, _, cx| {
+                            use_it(root, id, all);
+                            cx.notify();
+                        },
+                    )),
                 ),
         );
     }

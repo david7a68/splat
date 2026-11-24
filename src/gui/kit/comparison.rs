@@ -7,7 +7,6 @@
 //! kit::comparison::DraftComparison::new("encounter-disk", &disk.draft, &disk_text)
 //! ```
 use super::{Button, label};
-use gpui_component::scroll::ScrollableElement as _;
 use crate::gui::theme::{
     Density, HAIRLINE_WIDTH, L, S, SCROLL_BAR_WIDTH, Type, TypeExt, XS, colors,
 };
@@ -15,6 +14,7 @@ use gpui::{
     App, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, ScrollHandle,
     SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _,
 };
+use gpui_component::scroll::ScrollableElement as _;
 use std::sync::Arc;
 
 /// What the comparison keeps between frames: its texts' alignment (made again only when a text
@@ -148,20 +148,9 @@ impl RenderOnce for DraftComparison {
                     .flex()
                     .flex_row()
                     .when(differs, |cell| cell.bg(c.selected))
-                    .child(
-                        div()
-                            .flex_none()
-                            .w(XS)
-                            .when(differs, |mark| {
-                                mark.child(
-                                    div()
-                                        .h_full()
-                                        .w(HAIRLINE_WIDTH)
-                                        .ml(XS / 2.0)
-                                        .bg(c.accent),
-                                )
-                            }),
-                    )
+                    .child(div().flex_none().w(XS).when(differs, |mark| {
+                        mark.child(div().h_full().w(HAIRLINE_WIDTH).ml(XS / 2.0).bg(c.accent))
+                    }))
                     .child(match words {
                         Some(words) => div()
                             .flex_1()
@@ -169,7 +158,11 @@ impl RenderOnce for DraftComparison {
                             .pl(S)
                             .ty(Type::Mono)
                             .text_color(c.text)
-                            .child(if words.is_empty() { " ".to_owned() } else { words }),
+                            .child(if words.is_empty() {
+                                " ".to_owned()
+                            } else {
+                                words
+                            }),
                         // The side has no line here: a quiet hatch, named for a reader.
                         None => super::target(
                             div()

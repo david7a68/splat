@@ -4591,7 +4591,9 @@ impl Encounters {
             RefusalPlace::Member(_) => Some(MEMBER_BESIDE_SAVE),
             _ => None,
         });
-        let summary = snapshot.map_or_else(String::new, |snapshot| draft_member_summary(draft, snapshot));
+        let summary = snapshot.map_or_else(String::new, |snapshot| {
+            draft_member_summary(draft, snapshot)
+        });
         let reading = snapshot.is_none();
         let id = draft.id();
         let name = draft.name.clone();

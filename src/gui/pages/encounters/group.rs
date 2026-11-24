@@ -71,55 +71,65 @@ pub(super) fn render(
         cx,
     );
     let handle = root.pages.encounters.results_scroll.clone();
-    let body: AnyElement = match add {
-        Some(add) if !view.reading => {
-            let members = kit::Pane::new(("group-members", view.id.as_u128() as u64))
-                .flush()
-                .child(kit::scroll_column(
-                    ("group-members-scroll", view.id.as_u128() as u64),
-                    fields(root, GroupAt::Open, &view.fields, cx).max_w(LIST_MEASURE),
-                ));
-            let room = if narrow { content } else { add_width - M };
-            let facts = super::editor::results_facts(root, &add, room, window);
-            if narrow {
-                let summary = view.summary.clone();
-                let side = add_column_with(
-                    &add,
-                    &[],
-                    choices.as_ref(),
-                    (focus_search, false, Some(&summary)),
-                    (&handle, facts),
-                    cx,
-                );
-                narrow_body(root, &view, members, side.into_any_element(), cx)
-            } else {
-                div()
-                    .flex()
-                    .flex_row()
-                    .size_full()
-                    .child(div().flex_1().min_w_0().max_w(LIST_MEASURE).pr(S).child(members))
-                    .child(
-                        div().flex_none().w(add_width).h_full().pl(M).child(add_column_with(
-                            &add,
-                            &[],
-                            choices.as_ref(),
-                            (focus_search, true, None),
-                            (&handle, facts),
-                            cx,
-                        )),
-                    )
-                    .into_any_element()
+    let body: AnyElement =
+        match add {
+            Some(add) if !view.reading => {
+                let members = kit::Pane::new(("group-members", view.id.as_u128() as u64))
+                    .flush()
+                    .child(kit::scroll_column(
+                        ("group-members-scroll", view.id.as_u128() as u64),
+                        fields(root, GroupAt::Open, &view.fields, cx).max_w(LIST_MEASURE),
+                    ));
+                let room = if narrow { content } else { add_width - M };
+                let facts = super::editor::results_facts(root, &add, room, window);
+                if narrow {
+                    let summary = view.summary.clone();
+                    let side = add_column_with(
+                        &add,
+                        &[],
+                        choices.as_ref(),
+                        (focus_search, false, Some(&summary)),
+                        (&handle, facts),
+                        cx,
+                    );
+                    narrow_body(root, &view, members, side.into_any_element(), cx)
+                } else {
+                    div()
+                        .flex()
+                        .flex_row()
+                        .size_full()
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .max_w(LIST_MEASURE)
+                                .pr(S)
+                                .child(members),
+                        )
+                        .child(div().flex_none().w(add_width).h_full().pl(M).child(
+                            add_column_with(
+                                &add,
+                                &[],
+                                choices.as_ref(),
+                                (focus_search, true, None),
+                                (&handle, facts),
+                                cx,
+                            ),
+                        ))
+                        .into_any_element()
+                }
             }
-        }
-        _ => super::editor::reading(),
-    };
+            _ => super::editor::reading(),
+        };
     let footer_lines = footer("group-editor-footer", lines, cx);
     div()
         .relative()
         .flex()
         .flex_col()
         .size_full()
-        .child(super::common::room_probe(root.pages.encounters.room.clone()))
+        .child(super::common::room_probe(
+            root.pages.encounters.room.clone(),
+        ))
         .child(head)
         .child(kit::rule())
         .child(div().flex_1().min_h_0().pt(S).child(body))
@@ -150,7 +160,10 @@ fn narrow_body(
     let count = if view.fields.count == 0 {
         "Members".to_owned()
     } else {
-        format!("Members {}", crate::design::count(view.fields.count, "", ""))
+        format!(
+            "Members {}",
+            crate::design::count(view.fields.count, "", "")
+        )
     };
     let tabs = kit::Segmented::new(
         "group-narrow-tabs",
@@ -381,12 +394,14 @@ pub(super) fn fields(
         .name("Group notes")
         .placeholder("When they arrive, what they want. Markdown is fine.")
         .rows(4)
-        .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-            root.app
-                .encounters
-                .edit_group_at(at, |group| group.notes(words));
-            cx.notify();
-        })),
+        .on_change(
+            cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                root.app
+                    .encounters
+                    .edit_group_at(at, |group| group.notes(words));
+                cx.notify();
+            }),
+        ),
     ))
 }
 
@@ -421,12 +436,7 @@ fn member_row(
     let c = colors();
     let index = member.index;
     let count = member.count;
-    let mut detail = div()
-        .flex()
-        .flex_row()
-        .flex_wrap()
-        .items_baseline()
-        .gap(XS);
+    let mut detail = div().flex().flex_row().flex_wrap().items_baseline().gap(XS);
     if !member.detail.is_empty() {
         detail = detail.child(kit::text(Type::Small, c.muted, member.detail.clone()));
     }
@@ -464,7 +474,11 @@ fn member_row(
                 icons::SUBTRACT,
                 format!("Fewer {}", member.name),
             )
-            .on_click(act(cx, at, MemberAct::Count(index, count.saturating_sub(1)))),
+            .on_click(act(
+                cx,
+                at,
+                MemberAct::Count(index, count.saturating_sub(1)),
+            )),
         )
         .child(
             kit::TextField::new(member_id(at, "member-count", index), count.to_string())
@@ -530,7 +544,11 @@ fn member_row(
                 .child(stepper)
                 .child(div().flex_1())
                 .child(edit)
-                .child(row_menu(member_id(at, "member-menu", index), &member.name, items)),
+                .child(row_menu(
+                    member_id(at, "member-menu", index),
+                    &member.name,
+                    items,
+                )),
         );
     if let Some((words, error)) = &member.fault {
         // The fault, its help under its words, then its repair at them.
@@ -548,17 +566,17 @@ fn member_row(
                 "Choose a replacement, check the packages it uses, or remove this member.",
             ))
             .action(
-                kit::Link::new(member_id(at, "member-packages", index), "Campaign → Packages")
-                    .small()
-                    .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
-                        root.bridge.ctx().data_mut(|data| {
-                            data.insert_temp(
-                                eframe::egui::Id::new("open_campaign_packages"),
-                                true,
-                            )
-                        });
-                        cx.notify();
-                    })),
+                kit::Link::new(
+                    member_id(at, "member-packages", index),
+                    "Campaign → Packages",
+                )
+                .small()
+                .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
+                    root.bridge.ctx().data_mut(|data| {
+                        data.insert_temp(eframe::egui::Id::new("open_campaign_packages"), true)
+                    });
+                    cx.notify();
+                })),
             ),
         );
         if member.open {

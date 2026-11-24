@@ -13,8 +13,8 @@ use gpui::{
     AnyElement, App, ElementId, IntoElement, ParentElement, Pixels, RenderOnce, SharedString,
     Styled, Window, div, prelude::*,
 };
-use gpui_component::{ResizableState, h_resizable, resizable_panel};
 use gpui_component::resizable::ResizablePanelEvent;
+use gpui_component::{ResizableState, h_resizable, resizable_panel};
 use std::ops::Range;
 use std::rc::Rc;
 

@@ -493,7 +493,10 @@ fn a_members_changes_and_its_replacement() {
     shell.click(&replace);
     shell.click("Replacement creature");
     shell.type_text("Ember");
-    assert!(shell.bounds("Use Ember Cultist").is_some(), "the picker offers it");
+    assert!(
+        shell.bounds("Use Ember Cultist").is_some(),
+        "the picker offers it"
+    );
     shell.capture("encounter-groups__12-group-member-replacement-search__1200x800");
     shell.click("Use Ember Cultist");
     let replaced = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
@@ -545,7 +548,11 @@ fn an_encounters_own_groups() {
     };
     let before = count(&mut shell);
     shell.click("New group for this encounter");
-    assert_eq!(count(&mut shell), before + 1, "a new group for the encounter");
+    assert_eq!(
+        count(&mut shell),
+        before + 1,
+        "a new group for the encounter"
+    );
     shell.capture("encounter-owned-groups__05-new-group-in-the-encounter__1200x1800");
     // The new group takes what the search adds.
     shell.type_text("Ash Hounds");
@@ -607,23 +614,31 @@ fn the_encounters_loot_list() {
     shell.press("enter");
     let added = loot(&mut shell);
     assert_eq!(added.len(), before.len() + 1, "Enter adds a line");
-    assert_eq!(added.last().map(String::as_str), Some("120 gp in a locked coffer"));
+    assert_eq!(
+        added.last().map(String::as_str),
+        Some("120 gp in a locked coffer")
+    );
     shell.type_text("roll");
     let gems = first_target(&mut shell, "gems");
     shell.capture("run-loot__04-loot-table-suggestion__1200x1400");
     shell.click(&gems);
     let rolled = loot(&mut shell);
-    assert_eq!(rolled.last().map(String::as_str), Some("Roll gems"), "{rolled:?}");
-    assert!(
-        shell.bounds("Table for the encounter loot line 2").is_some()
-            || first_target(&mut shell, "Table for the encounter loot line").len() > 0,
-        "a roll line has its table menu"
+    assert_eq!(
+        rolled.last().map(String::as_str),
+        Some("Roll gems"),
+        "{rolled:?}"
     );
+    // A roll line has its table menu (`first_target` fails when it has none).
+    first_target(&mut shell, "Table for the encounter loot line");
     shell.capture("run-loot__05-loot-in-the-editor__1200x1400");
     let menu = first_target(&mut shell, "More actions for the encounter loot line 1");
     shell.click(&menu);
     shell.click("Remove");
-    assert_eq!(loot(&mut shell).len(), rolled.len() - 1, "Remove takes the line");
+    assert_eq!(
+        loot(&mut shell).len(),
+        rolled.len() - 1,
+        "Remove takes the line"
+    );
     shell.click("Undo remove loot");
     assert_eq!(loot(&mut shell), rolled, "Undo puts it back");
 }
@@ -714,7 +729,8 @@ fn the_narrow_editor_takes_turns_and_a_dragged_width_is_kept() {
     let mut shell = Shell::with_size("column-resize", Seed::Campaign, size(px(900.0), px(640.0)));
     ready(&mut shell);
     open_encounter(&mut shell, "");
-    assert!(shell.bounds("Roster").is_some() || first_target(&mut shell, "Roster").len() > 0);
+    // The roster's tab (`first_target` fails when it has none).
+    first_target(&mut shell, "Roster");
     shell.capture("column-resize__09-roster-follows-add-panel__900x640");
     let add = first_target(&mut shell, "Add participants");
     shell.click(&add);
@@ -950,7 +966,9 @@ fn use_it_offers_a_creature_from_an_unused_package() {
     }
     shell.settle();
     assert!(
-        unused.iter().any(|words| words.starts_with("Gloam Stalker is in ")),
+        unused
+            .iter()
+            .any(|words| words.starts_with("Gloam Stalker is in ")),
         "the search names the unused package's creature: {unused:?}"
     );
     shell.capture("encounter-build__17-use-it__1200x800");

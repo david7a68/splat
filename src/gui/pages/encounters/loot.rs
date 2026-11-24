@@ -66,11 +66,15 @@ fn write(root: &mut SplatRoot, key: &str, owner: &LootOwner, lines: Vec<String>)
         LootOwner::Encounter => root.app.encounters.edit_draft(|draft| draft.loot(lines)),
         LootOwner::Changes(of) => {
             let joined = parts(&lines.join(";")).join("; ");
-            root.pages.encounters.loot.entry(key.to_owned()).or_default().cell = Some(lines);
-            root.app.encounters.edit_changes(
-                of,
-                ChangeEdit::Loot((!joined.is_empty()).then_some(joined)),
-            );
+            root.pages
+                .encounters
+                .loot
+                .entry(key.to_owned())
+                .or_default()
+                .cell = Some(lines);
+            root.app
+                .encounters
+                .edit_changes(of, ChangeEdit::Loot((!joined.is_empty()).then_some(joined)));
         }
     }
 }
@@ -115,7 +119,13 @@ pub(super) fn list(
     owner: LootOwner,
     cx: &mut Context<SplatRoot>,
 ) -> Div {
-    let state = root.pages.encounters.loot.get(&key).cloned().unwrap_or_default();
+    let state = root
+        .pages
+        .encounters
+        .loot
+        .get(&key)
+        .cloned()
+        .unwrap_or_default();
     let sources = sources(root);
     let lines = shown_lines(Some(&state), &owner, &stored);
     let stored = Arc::new(stored);
@@ -155,7 +165,14 @@ pub(super) fn list(
             ),
         );
     }
-    list.child(add_row(&key, &name, &state, sources.as_deref(), (&owner, &stored), cx))
+    list.child(add_row(
+        &key,
+        &name,
+        &state,
+        sources.as_deref(),
+        (&owner, &stored),
+        cx,
+    ))
 }
 
 /// One line: a roll, a Library item, or words in a field; then its `⋯` with Remove.
@@ -202,20 +219,22 @@ fn line_row(
                     .name(format!("Rolls on {table}, {row_name}"))
                     .placeholder("1")
                     .width(XXL + S)
-                    .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                        let words = words.to_owned();
-                        let table = count_table.clone();
-                        change(root, &k, &o, &s, |lines, state| {
-                            if let Ok(times) = words.trim().parse::<u32>()
-                                && (1..=MAX_ROLLS).contains(&times)
-                                && let Some(line) = lines.get_mut(at)
-                            {
-                                *line = Loot::Roll { times, key: table }.line();
-                            }
-                            state.count = Some((at, words));
-                        });
-                        cx.notify();
-                    }))
+                    .on_change(
+                        cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                            let words = words.to_owned();
+                            let table = count_table.clone();
+                            change(root, &k, &o, &s, |lines, state| {
+                                if let Ok(times) = words.trim().parse::<u32>()
+                                    && (1..=MAX_ROLLS).contains(&times)
+                                    && let Some(line) = lines.get_mut(at)
+                                {
+                                    *line = Loot::Roll { times, key: table }.line();
+                                }
+                                state.count = Some((at, words));
+                            });
+                            cx.notify();
+                        }),
+                    )
                     .on_blur({
                         let k = key.to_owned();
                         super::editor::on_key(cx, move |root: &mut SplatRoot| {
@@ -284,14 +303,16 @@ fn line_row(
                             ElementId::Name(format!("loot-item:{key}:{at}").into()),
                             shown,
                         )
-                        .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                            crate::markdown_view::send_note_link(
-                                root.bridge.ctx(),
-                                target.clone(),
-                                None,
-                            );
-                            cx.notify();
-                        })),
+                        .on_click(cx.listener(
+                            move |root: &mut SplatRoot, _, _, cx| {
+                                crate::markdown_view::send_note_link(
+                                    root.bridge.ctx(),
+                                    target.clone(),
+                                    None,
+                                );
+                                cx.notify();
+                            },
+                        )),
                     )
                 }
                 None => row.child(kit::text(Type::Body, c.text, shown)),
@@ -310,19 +331,21 @@ fn line_row(
                     )
                     .name(row_name.clone())
                     .placeholder("What the party finds")
-                    .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                        let words = words.to_owned();
-                        change(root, &k, &o, &s, |lines, state| {
-                            state.editing = Some(at);
-                            if one_cell && words.contains(SEPARATOR) {
-                                state.reason = Some(loot_editor::NO_SEPARATOR.into());
-                            } else if let Some(line) = lines.get_mut(at) {
-                                *line = words;
-                                state.reason = None;
-                            }
-                        });
-                        cx.notify();
-                    }))
+                    .on_change(
+                        cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                            let words = words.to_owned();
+                            change(root, &k, &o, &s, |lines, state| {
+                                state.editing = Some(at);
+                                if one_cell && words.contains(SEPARATOR) {
+                                    state.reason = Some(loot_editor::NO_SEPARATOR.into());
+                                } else if let Some(line) = lines.get_mut(at) {
+                                    *line = words;
+                                    state.reason = None;
+                                }
+                            });
+                            cx.notify();
+                        }),
+                    )
                     .on_blur({
                         let (k, o, s) = (key.to_owned(), owner.clone(), stored.clone());
                         let root = cx.entity().downgrade();
@@ -364,7 +387,12 @@ fn line_row(
             },
         ))],
     );
-    let row = if grows { row } else { row.child(div().flex_1()) }.child(menu);
+    let row = if grows {
+        row
+    } else {
+        row.child(div().flex_1())
+    }
+    .child(menu);
     let mut block = div().flex().flex_col().child(row);
     if let Some(words) = below {
         // Under the key it is about, so the row stays one line.
@@ -395,19 +423,19 @@ where
     );
     let tables = sources.map_or(&[][..], |sources| &sources.tables[..]);
     if tables.is_empty() {
-        menu = menu.item(kit::MenuItem::new(loot_editor::NO_TABLES).blocked(Some(
-            "Mark a table in a World note to roll on it.",
-        )));
+        menu = menu.item(
+            kit::MenuItem::new(loot_editor::NO_TABLES)
+                .blocked(Some("Mark a table in a World note to roll on it.")),
+        );
     }
     for table in tables {
         let act = picked(table.key.clone());
         menu = menu.item(
-            kit::MenuItem::new(format!("{} · {} · {}", table.key, table.dice, table.path)).on_click(
-                cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+            kit::MenuItem::new(format!("{} · {} · {}", table.key, table.dice, table.path))
+                .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
                     act(root);
                     cx.notify();
-                }),
-            ),
+                })),
         );
     }
     menu.into_any_element()
@@ -468,12 +496,19 @@ fn add_row(
     )
     .name(format!("Add loot to {name}"))
     .placeholder("Type loot, or find an item or table")
-    .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-        let state = root.pages.encounters.loot.entry(field_key.clone()).or_default();
-        state.add = words.to_owned();
-        state.reason = None;
-        cx.notify();
-    }))
+    .on_change(
+        cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+            let state = root
+                .pages
+                .encounters
+                .loot
+                .entry(field_key.clone())
+                .or_default();
+            state.add = words.to_owned();
+            state.reason = None;
+            cx.notify();
+        }),
+    )
     .on_enter(super::editor::on_key(cx, adder(None, true)));
     let menu = table_menu(
         ElementId::Name(format!("loot-roll:{key}").into()),

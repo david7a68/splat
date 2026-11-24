@@ -168,10 +168,7 @@ impl Recovery {
                 .map(|text| differences(draft, text))
                 .unwrap_or_default(),
             draft: draft.to_owned(),
-            disk: change
-                .text
-                .clone()
-                .map(|text| (change.path.clone(), text)),
+            disk: change.text.clone().map(|text| (change.path.clone(), text)),
         })
     }
 

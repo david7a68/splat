@@ -329,13 +329,13 @@ fn named_note_path(root: &std::path::Path, folder: &str, name: &str) -> Result<S
 
 #[path = "encounters/disk.rs"]
 mod disk;
+/// The creature pane, replacement and narrow tabs as plain data, for the GPUI page.
+#[path = "encounters/forms.rs"]
+pub mod forms;
 #[path = "encounters/groups.rs"]
 mod groups;
 #[path = "encounters/history.rs"]
 mod history;
-/// The creature pane, replacement and narrow tabs as plain data, for the GPUI page.
-#[path = "encounters/forms.rs"]
-pub mod forms;
 /// The page as plain data and its acts, for the GPUI page (`src/gui/pages/encounters/`).
 #[path = "encounters/model.rs"]
 pub mod model;

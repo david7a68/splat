@@ -14,7 +14,8 @@ pub use splat_campaign::loot::{Item, Sources};
 /// The most suggestions of each kind under the add field.
 pub const MOST_TABLES: usize = 4;
 const MOST_ITEMS: usize = 6;
-pub const NO_SEPARATOR: &str = "Use one row for each item. A ; separates items in the roster table.";
+pub const NO_SEPARATOR: &str =
+    "Use one row for each item. A ; separates items in the roster table.";
 
 /// Tables, then items, that match what the DM typed. `Roll` before a word looks for tables
 /// only.

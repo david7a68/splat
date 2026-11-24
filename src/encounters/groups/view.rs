@@ -178,9 +178,7 @@ pub fn changes_form(
     let overrides = match Overrides::parse(block) {
         Ok(overrides) => overrides,
         Err(error) => {
-            form.unreadable = Some(format!(
-                "{error} Repair it in Campaign → Campaign entries."
-            ));
+            form.unreadable = Some(format!("{error} Repair it in Campaign → Campaign entries."));
             return form;
         }
     };
@@ -522,7 +520,8 @@ impl Encounters {
             }
             MemberAct::Remove(index) if index < total => {
                 // Only the removed member's own form closes: a form is keyed by its member.
-                if expanded.as_deref() == Some(member_key(&path, &group.setup.members[index]).as_str())
+                if expanded.as_deref()
+                    == Some(member_key(&path, &group.setup.members[index]).as_str())
                 {
                     *expanded = None;
                 }
@@ -610,9 +609,9 @@ impl Encounters {
             ChangesOf::Member(at, index) => {
                 let group = match at {
                     GroupAt::Open => group_draft.as_mut(),
-                    GroupAt::Owned(owned) => {
-                        draft.as_mut().and_then(|draft| draft.groups.get_mut(*owned))
-                    }
+                    GroupAt::Owned(owned) => draft
+                        .as_mut()
+                        .and_then(|draft| draft.groups.get_mut(*owned)),
                 };
                 if let Some(group) = group
                     && let Some(member) = group.setup.members.get_mut(*index)
@@ -794,7 +793,11 @@ fn member_row(
         change_word,
         fault,
         change_fault,
-        edit_word: if entry.is_none() { "Replace…" } else { "Edit" },
+        edit_word: if entry.is_none() {
+            "Replace…"
+        } else {
+            "Edit"
+        },
         edit_name,
     }
 }
@@ -845,13 +848,14 @@ impl Encounters {
             .as_mut()
             .and_then(|draft| draft.focus_group.take());
         let draft = self.draft.as_ref()?;
-        let move_to: Vec<(Uuid, String)> = self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
-            snapshot
-                .encounter_choices()
-                .filter(|(id, _)| *id != this)
-                .map(|(id, name)| (id, name.to_owned()))
-                .collect()
-        });
+        let move_to: Vec<(Uuid, String)> =
+            self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
+                snapshot
+                    .encounter_choices()
+                    .filter(|(id, _)| *id != this)
+                    .map(|(id, name)| (id, name.to_owned()))
+                    .collect()
+            });
         let cards: Vec<GroupCard> = draft
             .groups
             .iter()
@@ -919,11 +923,13 @@ impl Encounters {
                     // N1: a group for any encounter is checked against the others' names.
                     draft.groups[index].touch();
                 }
-                draft.new_results.push(super::super::DraftUndo::RemovedGroup {
-                    index,
-                    group: Box::new(gone),
-                    delete,
-                });
+                draft
+                    .new_results
+                    .push(super::super::DraftUndo::RemovedGroup {
+                        index,
+                        group: Box::new(gone),
+                        delete,
+                    });
             }
         }
     }

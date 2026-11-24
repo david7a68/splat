@@ -51,11 +51,11 @@ pub(super) fn pane(view: &CreatureView, cx: &mut Context<SplatRoot>) -> AnyEleme
         .flex_row()
         .items_center()
         .min_h(Density::Read.control())
-        .child(div().flex_1().child(kit::text(
-            Type::Heading,
-            c.text,
-            "This campaign’s creature",
-        )));
+        .child(
+            div()
+                .flex_1()
+                .child(kit::text(Type::Heading, c.text, "This campaign’s creature")),
+        );
     if !view.dirty {
         heading = heading.child(
             kit::Button::quiet("creature-done", "Done")

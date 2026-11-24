@@ -52,29 +52,30 @@ pub(super) fn view(
                     .flex()
                     .flex_row()
                     .items_start()
-                    .child(
-                        div()
-                            .flex_none()
-                            .w(XXL * 3.0 + S)
-                            .child(kit::text(Type::Small, c.muted, label.clone())),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(kit::text(Type::Small, c.text, words.clone())),
-                    ),
+                    .child(div().flex_none().w(XXL * 3.0 + S).child(kit::text(
+                        Type::Small,
+                        c.muted,
+                        label.clone(),
+                    )))
+                    .child(div().flex_1().min_w_0().child(kit::text(
+                        Type::Small,
+                        c.text,
+                        words.clone(),
+                    ))),
             );
         }
         block = block.child(parts);
     }
     if let Some((_, text)) = &disk.disk {
         block = block.child(
-            div().flex_1().min_h_0().child(kit::comparison::DraftComparison::new(
-                ElementId::Name(format!("{id}-comparison").into()),
-                disk.draft.clone(),
-                text.clone(),
-            )),
+            div()
+                .flex_1()
+                .min_h_0()
+                .child(kit::comparison::DraftComparison::new(
+                    ElementId::Name(format!("{id}-comparison").into()),
+                    disk.draft.clone(),
+                    text.clone(),
+                )),
         );
     }
     block.into_any_element()

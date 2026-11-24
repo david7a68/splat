@@ -20,8 +20,8 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 use splat_encounters_ui::encounters::model::{
-    AddView, ChangesOf, EditorView, GroupAt, HeadAct, NarrowPane, OwnedAct, PartyButton,
-    ResultRow, RosterAct, RosterRow, RosterView, UnusedCreature,
+    AddView, ChangesOf, EditorView, GroupAt, HeadAct, NarrowPane, OwnedAct, PartyButton, ResultRow,
+    RosterAct, RosterRow, RosterView, UnusedCreature,
 };
 use std::sync::Arc;
 
@@ -100,7 +100,13 @@ pub(super) fn render(
     let narrow = content < NARROW;
     let add_width = add_width(root, content);
     let roster_width = (content - add_width).clamp(PANEL_MIN_WIDTH, LIST_MEASURE);
-    let head = head(&view, (roster_width, content, narrow), focus_name, window, cx);
+    let head = head(
+        &view,
+        (roster_width, content, narrow),
+        focus_name,
+        window,
+        cx,
+    );
     let body: AnyElement = match (roster, add, view.reading) {
         (Some(roster), Some(add), false) => {
             let roster_column = roster_column(root, &view, &roster, owned, !narrow, window, cx);
@@ -133,7 +139,13 @@ pub(super) fn render(
                     .max_w(LIST_MEASURE + add_width + S)
                     .child(
                         kit::Columns::new("encounter-editor-columns")
-                            .rest(div().size_full().max_w(LIST_MEASURE).pr(S).child(roster_pane))
+                            .rest(
+                                div()
+                                    .size_full()
+                                    .max_w(LIST_MEASURE)
+                                    .pr(S)
+                                    .child(roster_pane),
+                            )
                             .column(
                                 add_width,
                                 PANEL_MIN_WIDTH..ADD_PANE_MAX_WIDTH,
@@ -152,7 +164,9 @@ pub(super) fn render(
         .flex()
         .flex_col()
         .size_full()
-        .child(super::common::room_probe(root.pages.encounters.room.clone()))
+        .child(super::common::room_probe(
+            root.pages.encounters.room.clone(),
+        ))
         .child(head)
         .child(kit::rule())
         .child(div().flex_1().min_h_0().pt(S).child(body))
@@ -363,9 +377,8 @@ fn head(
         .items_center()
         .gap(S)
         .child(save);
-    let mut actions_width = button_width(window, "Save encounter")
-        + S
-        + button_width(window, view.start_word);
+    let mut actions_width =
+        button_width(window, "Save encounter") + S + button_width(window, view.start_word);
     if view.run_open {
         actions_width += text_width(window, Type::Small, "Close the open run first.") + L + S;
         actions = actions.child(
@@ -663,14 +676,20 @@ fn owned_groups(
         let mut move_to = Vec::new();
         for (id, name) in &card.move_to {
             move_to.push(
-                kit::MenuItem::new(format!("Move to {name}"))
-                    .on_click(owned_act(cx, index, OwnedAct::MoveTo(*id))),
+                kit::MenuItem::new(format!("Move to {name}")).on_click(owned_act(
+                    cx,
+                    index,
+                    OwnedAct::MoveTo(*id),
+                )),
             );
         }
         let mut items = move_to;
         items.push(
-            kit::MenuItem::new("Make available to any encounter")
-                .on_click(owned_act(cx, index, OwnedAct::AnyEncounter)),
+            kit::MenuItem::new("Make available to any encounter").on_click(owned_act(
+                cx,
+                index,
+                OwnedAct::AnyEncounter,
+            )),
         );
         items.push(
             kit::MenuItem::new("Delete group")
@@ -685,18 +704,26 @@ fn owned_groups(
         .name(format!("Group name: {}", card.name))
         .text_type(Type::Heading)
         .focus_selected(card.focus)
-        .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-            root.app
-                .encounters
-                .owned_act(index, OwnedAct::Name(words.to_owned()));
-            cx.notify();
-        }));
+        .on_change(
+            cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                root.app
+                    .encounters
+                    .owned_act(index, OwnedAct::Name(words.to_owned()));
+                cx.notify();
+            }),
+        );
         let top = div()
             .flex()
             .flex_row()
             .items_center()
             .gap(S)
-            .child(div().flex_1().min_w_0().max_w(crate::gui::theme::FORM_WIDTH).child(name))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .max_w(crate::gui::theme::FORM_WIDTH)
+                    .child(name),
+            )
             .child(
                 kit::Button::quiet(
                     ElementId::Name(format!("owned-group-add:{}", card.fields.id).into()),
@@ -720,11 +747,12 @@ fn owned_groups(
                     .flex()
                     .flex_col()
                     .gap(XS)
-                    .p(S + crate::gui::theme::FOCUS_WIDTH - if adding {
-                        crate::gui::theme::FOCUS_WIDTH
-                    } else {
-                        HAIRLINE_WIDTH
-                    })
+                    .p(S + crate::gui::theme::FOCUS_WIDTH
+                        - if adding {
+                            crate::gui::theme::FOCUS_WIDTH
+                        } else {
+                            HAIRLINE_WIDTH
+                        })
                     .rounded(crate::gui::theme::RADIUS_CONTROL)
                     .border(if adding {
                         crate::gui::theme::FOCUS_WIDTH
@@ -927,7 +955,12 @@ fn roster_row(
             .encounters
             .changes_form(&ChangesOf::Row(key.clone()))
         {
-            block = block.child(changes::form(root, ChangesOf::Row(key.clone()), changes, cx));
+            block = block.child(changes::form(
+                root,
+                ChangesOf::Row(key.clone()),
+                changes,
+                cx,
+            ));
         }
     } else if row.open && row.missing.is_some() && row.repair.is_none() {
         let count = root.app.encounters.missing_rows(&key);
@@ -1086,7 +1119,11 @@ pub(super) fn add_head(
     let mut head = div().flex().flex_col().gap(XS);
     if heading {
         head = head.child(div().pb(XS).child(kit::label(
-            if group { "Add creatures" } else { "Add participants" },
+            if group {
+                "Add creatures"
+            } else {
+                "Add participants"
+            },
             0,
         )));
     }
@@ -1126,13 +1163,11 @@ pub(super) fn add_head(
     };
     head = head.child(search(add, choices, focus, name, cx));
     if let Some(summary) = summary.filter(|summary| !summary.is_empty()) {
-        head = head.child(
-            kit::WithTooltip::with_tooltip(
-                kit::text::one_line(Type::Small, c.muted, summary.to_owned())
-                    .id("group-member-summary"),
-                summary.to_owned(),
-            ),
-        );
+        head = head.child(kit::WithTooltip::with_tooltip(
+            kit::text::one_line(Type::Small, c.muted, summary.to_owned())
+                .id("group-member-summary"),
+            summary.to_owned(),
+        ));
     }
     if add.close_names {
         head = head.child(kit::text(
@@ -1222,13 +1257,25 @@ pub(super) fn add_column(
     (handle, facts): (&gpui::UniformListScrollHandle, Pixels),
     cx: &mut Context<SplatRoot>,
 ) -> Div {
-    add_column_with(add, unused, choices, (focus, heading, None), (handle, facts), cx)
+    add_column_with(
+        add,
+        unused,
+        choices,
+        (focus, heading, None),
+        (handle, facts),
+        cx,
+    )
 }
 
 /// Where the results' action column starts (layout PR 4): `L` after the widest facts of every
 /// result, so each `Add` keeps its x as the DM scrolls. Measured once per ranking (kept in the
 /// page's state by the results' list), at most the column's room less the action.
-pub(super) fn results_facts(root: &mut SplatRoot, add: &AddView, room: Pixels, window: &mut Window) -> Pixels {
+pub(super) fn results_facts(
+    root: &mut SplatRoot,
+    add: &AddView,
+    room: Pixels,
+    window: &mut Window,
+) -> Pixels {
     // The ranking's list, while the page keeps it (`add_view`), with its length.
     let key = (Arc::as_ptr(&add.results) as usize, add.results.len());
     let widest = match root.pages.encounters.results_facts {
@@ -1274,9 +1321,11 @@ pub(super) fn add_column_with(
         .flex()
         .flex_col()
         .size_full()
-        .child(div().flex_none().child(add_head(
-            add, unused, choices, focus, heading, summary, cx,
-        )))
+        .child(
+            div()
+                .flex_none()
+                .child(add_head(add, unused, choices, focus, heading, summary, cx)),
+        )
         .child(
             div()
                 .flex_1()
@@ -1318,10 +1367,7 @@ pub(super) fn results(
                         kit::Link::new("encounter-packages", "Campaign → Packages").on_click(
                             cx.listener(|root: &mut SplatRoot, _, _, cx| {
                                 root.bridge.ctx().data_mut(|data| {
-                                    data.insert_temp(
-                                        egui::Id::new("open_campaign_packages"),
-                                        true,
-                                    )
+                                    data.insert_temp(egui::Id::new("open_campaign_packages"), true)
                                 });
                                 cx.notify();
                             }),
@@ -1372,12 +1418,11 @@ fn result_row(
             .max_h(Type::Small.line() * 2.0)
             .overflow_hidden()
             .child(small_icon(icons::WARN, c.result.warning))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .child(kit::text(Type::Small, c.result.warning, why.clone())),
-            )
+            .child(div().flex_1().min_w_0().child(kit::text(
+                Type::Small,
+                c.result.warning,
+                why.clone(),
+            )))
             .into_any_element(),
         None => div()
             .flex()
@@ -1474,7 +1519,11 @@ fn name_link(row: &ResultRow, cx: &mut Context<SplatRoot>) -> impl IntoElement {
 /// a result's warning can take two (`Row::Action { status }`).
 fn result_height(status: bool) -> Pixels {
     let base = Density::Scan.row() + S;
-    if status { base + Type::Small.line() } else { base }
+    if status {
+        base + Type::Small.line()
+    } else {
+        base
+    }
 }
 
 /// A result's stats, each in its own cell (`detail_columns`): CR, HP and AC.

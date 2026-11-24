@@ -67,7 +67,12 @@ impl Draft {
     /// same missing creature) takes `creature`, keeping its old name as its changed name, with a
     /// result whose Undo gives the rows back.
     pub(super) fn replace_missing(
-        &mut self, selected: usize, creature: Uuid, all: bool, snapshot: &Snapshot) {
+        &mut self,
+        selected: usize,
+        creature: Uuid,
+        all: bool,
+        snapshot: &Snapshot,
+    ) {
         let before = self.setup.roster.clone();
         replace_roster(&mut self.setup.roster, selected, creature, all, snapshot);
         let old = roster_name(&before[selected], None, &snapshot.known_creature_names);
