@@ -686,6 +686,13 @@ fn the_encounters_loot_list() {
     // The loot ends the roster's column: a tall window shows it and its suggestions whole.
     let mut shell = Shell::with_size("run-loot", Seed::Loot, size(px(1200.0), px(1400.0)));
     ready(&mut shell);
+    // The suggestions read Lookup's index, built in the background: wait on its own result
+    // (under a loaded machine the typed words came before it, and no table was offered).
+    reads_done(&mut shell);
+    assert!(
+        shell.read(|root| splat_encounters_ui::loot_editor::sources(&root.ctx).is_some()),
+        "the loot sources are read"
+    );
     open_encounter(&mut shell, crate::fixtures::RUN);
     let loot = |shell: &mut Shell| {
         shell.update(|root, _, cx| {
