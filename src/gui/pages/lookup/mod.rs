@@ -1,4 +1,4 @@
-//! Lookup, the search panel beside any page (egui: `src/lookup.rs`). Ctrl+K opens and closes it;
+//! Lookup, the search panel beside any page. Ctrl+K opens and closes it;
 //! Escape closes it (the shell's `Dismiss`). Its acts are `Lookup`'s own (`lookup::view`).
 mod entry;
 mod panel;
@@ -22,7 +22,7 @@ pub struct State {
 pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Context<SplatRoot>) {}
 
 /// Once per frame, before anything draws: the found notes are read again when the panel opens
-/// (`Lookup::wants_written`, as the egui shell passes them in).
+/// (`Lookup::wants_written`).
 pub(crate) fn poll(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) {
     // A press on a result row, or Lookup closing under its field, leaves nothing with the
     // keyboard: the root takes it back, so Escape, Ctrl+K and the page's keys still reach it.

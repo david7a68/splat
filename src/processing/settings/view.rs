@@ -1,6 +1,5 @@
-//! The recording settings' reads and acts, free of any toolkit, so the egui tab
-//! (`ProcessingSettings::show`) and the GPUI tab (`src/gui/pages/settings/recording.rs`) share
-//! them.
+//! The recording settings' reads and acts, free of any toolkit, for the GPUI tab
+//! (`src/gui/pages/settings/recording.rs`).
 use super::{
     KeySlot, LLM_CHOICES, OTHER_SERVICE, ProcessingSettings, Provider, Reply, SPEECH_CHOICES,
     SettingsFault, Text, key_service_name,

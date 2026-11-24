@@ -51,7 +51,7 @@ impl Checkbox {
         self
     }
 
-    /// Partly chosen (egui's indeterminate box): a dash in place of the check.
+    /// Partly chosen (an indeterminate box): a dash in place of the check.
     pub fn mixed(mut self, mixed: bool) -> Self {
         self.mixed = mixed;
         self

@@ -1,10 +1,10 @@
-//! The Timeline page (egui: `src/timeline/page.rs`, `src/timeline/checks.rs`): the whole
+//! The Timeline page: the whole
 //! campaign in story order, apart from any one session. Its header with the count and the clock,
 //! the file's problems, the Add strip, the filters, the list of events in a virtual list, and the
 //! open event's form beside it (or in its place at a narrow width), with the list's results in
 //! its message footer.
 //!
-//! The state is the egui page's (`root.app.timeline_page`, `TimelinePage`) and the book's
+//! The state is the page's (`root.app.timeline_page`, `TimelinePage`) and the book's
 //! (`root.app.timeline`); this view calls the same methods (`row_words`, `list_messages`,
 //! `footer_act`, `apply_detail`, `checks::block`, …).
 pub(crate) mod checks;
@@ -59,8 +59,7 @@ pub(crate) fn save_key(root: &mut SplatRoot, _: &mut Context<SplatRoot>) {
     root.app.timeline.save();
 }
 
-/// Once per frame, before anything draws: what the egui app gives the page before it draws
-/// (`Splat::update`'s `Page::Timeline` arm).
+/// Once per frame, before anything draws: what the app gives the page before it draws.
 pub(crate) fn poll(root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
     let on_page = root.app.page == Page::Timeline;
     let came_back = on_page && !root.pages.timeline.shown;
@@ -513,7 +512,7 @@ fn strip_fits(window: &Window, room: Pixels) -> bool {
 
 /// `Add` and one quiet button for each kind; blocked while the file must be repaired. Fight and
 /// Long rest stay on the line; when the line has no room for every kind, the rarer kinds share
-/// `More Add actions` (egui `quick_add_with`, `hanging_add_strip`).
+/// `More Add actions`.
 fn add_strip(
     root: &SplatRoot,
     page_width: Pixels,

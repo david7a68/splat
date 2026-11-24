@@ -1,4 +1,4 @@
-//! Long lists that build only the rows in view (`design::BlockRegion`, egui's clipped lists), in a
+//! Long lists that build only the rows in view (`design::BlockRegion`), in a
 //! column that keeps its scroll bar's lane as `scroll_column` does. Two forms, one per row shape:
 //!
 //! - `uniform_column`: every row has one height (Library's entries, Timeline's events). GPUI's

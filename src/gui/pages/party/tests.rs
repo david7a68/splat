@@ -1,4 +1,4 @@
-//! Party: screenshots of the egui `party`, `party-bar-crowded` and `empty` scenarios' main
+//! Party: screenshots of the `party`, `party-bar-crowded` and `empty` scenarios' main
 //! states, and the page's flows (choose a member, change the sheet's page, open an entry).
 use crate::Page;
 use crate::fixtures::Seed;
@@ -100,7 +100,7 @@ fn signed_in(name: &str, window: gpui::Size<gpui::Pixels>) -> Shell {
 }
 
 /// A read of the selected character's sheet, with every group the sync panel can edit (the
-/// egui `signed-in` scenario's sheet).
+/// `signed-in` scenario's sheet).
 fn read_sheet(shell: &mut Shell) {
     shell.update(|root, _, _| {
         let id: u64 = root
@@ -133,7 +133,7 @@ fn values(shell: &mut Shell, key: &str, field: &str) -> serde_json::Value {
 }
 
 /// The sync editor on the sheet: before the first read it says what it waits for; after one,
-/// every value has − and +, and each press changes that value in the sync (egui `signed-in`).
+/// every value has − and +, and each press changes that value in the sync.
 #[test]
 fn party_sync_editor() {
     for (w, h) in [(1200.0, 800.0), (960.0, 640.0)] {
@@ -293,7 +293,7 @@ fn technical_details() {
 
 /// The party bar on the Session page during the fixture's fight: every member whole, fitted by
 /// measured widths; while the fight is open, an item keeps its width when its HP gets shorter,
-/// so nothing after it moves back (egui `party-bar-crowded`, `party_bar` tests).
+/// so nothing after it moves back (scenario `party-bar-crowded`).
 #[test]
 fn party_bar_holds_through_a_fight() {
     let mut shell = Shell::new("party-bar-crowded", Seed::Campaign);

@@ -1498,8 +1498,8 @@ mod tests {
         }
     }
 
-    /// The Last time line's `Carry over` and its result, by the session (ported from the egui
-    /// page test to the page's state and plain footer lines): no action during play; a last
+    /// The Last time line's `Carry over` and its result, by the session (the page's state and
+    /// plain footer lines): no action during play; a last
     /// note changed after the line read it, unsaved words over a changed file and a failed save
     /// each say why; the result and its Undo belong to the session they changed, keep their
     /// order and survive acts on other sessions and a rescan; and after a restart every part

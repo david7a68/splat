@@ -1,5 +1,5 @@
-//! The Session folder's block on Campaign → Link and folder, free of any toolkit, so the egui
-//! block (`Sessions::folder_block`) and the GPUI tab (`src/gui/pages/campaigns/`) share it.
+//! The Session folder's block on Campaign → Link and folder, free of any toolkit, for the GPUI
+//! tab (`src/gui/pages/campaigns/`).
 use super::{FolderAct, FolderFault, FolderWait, Sessions};
 use crate::design::{self, outcome::plain::PlainLine};
 use crate::timeline::Book;

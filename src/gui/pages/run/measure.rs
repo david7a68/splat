@@ -1,4 +1,4 @@
-//! Text widths in the theme's type, for the run's fitted words (egui `design::number_width`):
+//! Text widths in the theme's type, for the run's fitted words:
 //! the turn name's size, the panel's tabs, the Undo label's form, the roster's columns.
 use crate::gui::theme::{HAIRLINE_WIDTH, ICON_SLOT, M, Type};
 use gpui::{Font, FontFeatures, Pixels, SharedString, TextRun, Window, px};
@@ -53,7 +53,7 @@ pub(super) fn button_width(window: &Window, words: &str, icon: bool, key: Option
 }
 
 /// A creature's name in `room`: whole, or whole words then `…`, keeping a copy number or letter
-/// (`Ember Cultist… 12`; egui `dock_name`, `turn_heading::whole_words_name`).
+/// (`Ember Cultist… 12`; `turn_heading::whole_words_name`).
 pub(super) fn fit_name(window: &Window, ty: Type, name: &str, room: Pixels) -> String {
     crate::design::turn_heading::whole_words_name_by(name, f32::from(room), |words| {
         f32::from(width(window, ty, words))

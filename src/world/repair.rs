@@ -355,7 +355,7 @@ impl Repair {
     }
 }
 
-/// The repair as data, for a view that is not egui (the GPUI port).
+/// The repair as data, for the GPUI reader.
 pub struct RepairView {
     /// The file's name, the pane's title.
     pub file: String,

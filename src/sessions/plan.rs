@@ -86,7 +86,7 @@ fn pressed(act: FooterAct) -> super::SessionAct {
 /// from a file or the system. The one place this file takes them as a sentence.
 #[allow(
     clippy::disallowed_methods,
-    reason = "words built from the data of the plan, or from a file or the system, as text (design::results::STAGED_ALLOWS)"
+    reason = "words built from the data of the plan, or from a file or the system, as text (design::results::STAGED)"
 )]
 fn as_sentence(words: &str) -> Sentence {
     Sentence::outside(words).unwrap_or(crate::sentence!("Something changed."))
@@ -2973,7 +2973,7 @@ impl Sessions {
         self.scenes.typing || self.scenes.field.as_ref().is_some_and(|field| field.focus)
     }
 
-    /// The scenes' fold for a view that is not egui's (the GPUI plan): whether they fold now,
+    /// The scenes' fold for the plan view: whether they fold now,
     /// and whether the heading offers `N scenes`.
     pub(super) fn scene_fold(&mut self, count: usize) -> (bool, bool) {
         let hold = self.fold_holds();
@@ -2985,7 +2985,7 @@ impl Sessions {
         self.scenes.fold.open = Some(folded);
     }
 
-    /// What a view that is not egui's measured in a frame, for the next frame's fold (`Fold`):
+    /// What the plan view measured in a frame, for the next frame's fold (`Fold`):
     /// the pane's room for the rows, the closed rows without the scenes, the scenes, the opened
     /// rows' details, and the next fight still to come (its bottom, and the details and the
     /// scenes above it). Returns whether the fold changes in the next frame.
@@ -3470,7 +3470,7 @@ fn fight_row_detail(row: &crate::encounter_run::FightRow) -> String {
     detail
 }
 
-/// One player of a played fight's block, for a view that is not egui's: the first name, HP and
+/// One player of a played fight's block, for the plan view: the first name, HP and
 /// its max, temporary HP, and the whole line (`fight_row_detail`).
 pub struct FightCell {
     pub first: String,
@@ -3502,8 +3502,8 @@ pub(super) fn fight_cells(
         .collect()
 }
 
-/// The plain line of a played fight's fault, as its block says it (`fight_block`), for a view
-/// that is not egui's: the folder's cause in Encounters' words and tone (R41), or that the run
+/// The plain line of a played fight's fault, as its block says it (`fight_block`), for the plan
+/// view: the folder's cause in Encounters' words and tone (R41), or that the run
 /// cannot be read.
 pub(super) fn fight_fault_line(fault: &FightFault) -> design::outcome::plain::PlainLine<()> {
     match fault {
@@ -5098,7 +5098,7 @@ mod tests {
     /// that keep their saved HP. Its kept line follows the saved runs' facts by their own
     /// revision: the DM deletes the saved run (the book does not change), and the clause goes
     /// while the rest's result and its Undo stay; Undo of the deletion brings the clause back.
-    /// Ported from the egui plan test to the plan's acts and plain footer lines.
+    /// The plan's acts and plain footer lines.
     #[test]
     fn long_rest_added_on_plan_restores_and_undo_removes_its_ruling() {
         use crate::design::memo::{Changed, Revised};
@@ -5191,8 +5191,7 @@ mod tests {
 
     /// A Timeline fight resumes by its run's ID, with no planned source: the row offers its
     /// paused run, and `Resume` asks for that run's file (not another run of the same fight).
-    /// An ended or unreadable run, or the run already open, offers none. Ported from the egui
-    /// plan test to the plan's rows and acts.
+    /// An ended or unreadable run, or the run already open, offers none. The plan's rows and acts.
     #[test]
     fn iter5_c_timeline_fight_resumes_by_run_id_without_a_planned_source() {
         use crate::encounter_run::{SavedRunInfo, Standing};

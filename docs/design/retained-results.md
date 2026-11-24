@@ -64,7 +64,7 @@ with `record_timed(value, ctx)` (`record` of a timed kind, and `record_timed` of
 compile). It stores the act's time on the frame clock (not a key) and arms the end at once, so a result
 recorded after the owner's update in the same frame still ends with no input. The owner calls
 `expire(ctx)` in its update, before any projection lookup. It ends each entry whose end passed, advances
-the revision only when one ended, and asks egui for a repaint at the soonest remaining end
+the revision only when one ended, and asks the state context for a repaint at the soonest remaining end
 (`request_repaint_after(remaining)`), so the line ends with no input. No key holds `now()` or a frame
 number: a projection's key is the store's revision and the owner's input revisions. `present` refuses an
 entry whose end passed (the owner did not expire first): `Mismatch::Expired`, a debug assertion, nothing
@@ -176,7 +176,7 @@ names it, the action's width), the room the lines take (`bare`), the room their 
   store's sweep, once per frame when the first footer draws: the store holds the footers of about two frames.
   The sweep visits each kept footer once (`FooterWork::swept`), and the store's spare room shrinks with it.
 - **Presses.** One press slot per `Messages` per pass, taken by `pane`; nothing keeps a press across passes, so
-  a press is acted on once, also when egui draws the frame again or declines to.
+  a press is acted on once, also when the frame is drawn again or not drawn.
 - **The old path, removed (L2c).** Every app footer is typed. `Footer::legacy_kept`, `legacy_kept_line`,
   `FooterResult`, `Shown::footer`, `outcome::kept_result` and `KeptGroup` are gone; `Footer::result`,
   `legacy_reason` and `legacy_notice` are `#[cfg(test)]`: only the design system's own pane tests draw closure

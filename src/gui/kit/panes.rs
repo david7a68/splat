@@ -6,8 +6,7 @@
 //! - `Columns`: panes side by side with a drag handle (splitter) between them. Each fixed column
 //!   has a default width and a range; the last column takes the rest. The widths live in
 //!   gpui-component's `ResizableState`, kept under the columns' id. A column `saved` under its
-//!   egui id keeps the DM's width after a restart (`kit::edge::ColumnWidths`, `ui_state`), as
-//!   egui's `Column` does.
+//!   id keeps the DM's width after a restart (`kit::edge::ColumnWidths`, `ui_state`).
 //!
 //! Keep targets clear of a splitter: a pane's content has `M` padding at its sides.
 use crate::gui::theme::{HAIRLINE_WIDTH, M, S, colors};
@@ -182,7 +181,7 @@ impl Columns {
         self
     }
 
-    /// Keep the last column's width, as the DM drags it, under `key` (egui's column id:
+    /// Keep the last column's width, as the DM drags it, under `key` (the column id:
     /// `library_sections`, `world_list_panel`, …), here and after a restart.
     pub fn saved(mut self, key: &'static str) -> Self {
         if let Some(column) = self.columns.last_mut() {

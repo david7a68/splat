@@ -37,8 +37,8 @@
 /// below the roster uses the same width for its own words (`DOCK_ALL_WORDS_FROM`).
 pub const ADD_WORDS_FROM: f32 = 500.0;
 
-/// [`whole_words_name`] with any measure of a line's width (a view that does not draw with
-/// egui).
+/// A run's name in whole words that fit `width`, with any measure of a line's width (GPUI's text
+/// system's).
 pub fn whole_words_name_by(name: &str, width: f32, measure: impl Fn(&str) -> f32) -> String {
     let fitted = super::components::words_that_fit_by(name, width, &measure);
     if fitted == name {

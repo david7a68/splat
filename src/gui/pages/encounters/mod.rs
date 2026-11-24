@@ -1,8 +1,8 @@
-//! The Encounters page (egui: `src/encounters.rs`, `src/encounters/`, `src/difficulty.rs`,
+//! The Encounters page (state: `src/encounters.rs`, `src/encounters/`, `src/difficulty.rs`,
 //! `src/creature_filter.rs`, `src/loot_editor.rs`, `src/encounters_ui/`).
 //!
 //! The page's state and logic stay in `Encounters` (`root.app.encounters`); its plain-data views
-//! and acts are in `encounters::model`, shared with the egui page. This folder draws them: the
+//! and acts are in `encounters::model`. This folder draws them: the
 //! list (`list`), the encounter editor (`editor`) and the group editor (`group`).
 use crate::gui::SplatRoot;
 use gpui::{
@@ -66,7 +66,7 @@ pub(crate) fn save_key(root: &mut SplatRoot, _: &mut Context<SplatRoot>) {
 }
 
 /// The group editor drawn in place of a session's plan while a group is assembled there
-/// (egui `Encounters::group_in_plan_view`). The Sessions page calls it; its Ctrl+S reaches
+///. The Sessions page calls it; its Ctrl+S reaches
 /// `save_key` through the Session page's (`sessions::save_key`).
 pub(crate) fn render_group_in_plan(
     root: &mut SplatRoot,

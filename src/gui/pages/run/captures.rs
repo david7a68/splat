@@ -1,6 +1,6 @@
-//! Captures of the run page for side-by-side review with the egui references. Each test builds
-//! the state of one egui scenario's run steps (`src/visual_tests/scenarios.rs`) and captures it
-//! as `<scenario>__<step>__<w>x<h>`, so it pairs with `artifacts/screenshots/egui-reference/`.
+//! Captures of the run page for side-by-side review with the reference captures. Each test
+//! builds the state of one scenario's run steps and captures it as `<scenario>__<step>__<w>x<h>`,
+//! so it pairs with its reference by name.
 //! The asserts only check that each state was reached, so a fixture change fails here rather
 //! than giving a wrong picture.
 use crate::Page;
@@ -200,7 +200,7 @@ fn rolls_tiles(shell: &mut Shell) {
     target_starting(shell, "Bite");
 }
 
-/// egui `run-rolls`: the attack tiles, an armed attack, its roll on a row, a row's menu, a
+/// Scenario `run-rolls`: the attack tiles, an armed attack, its roll on a row, a row's menu, a
 /// damage question, a save’s targets and their damage, and a player's attack.
 #[test]
 fn run_rolls() {
@@ -225,7 +225,7 @@ fn run_rolls() {
     shell.capture("run-rolls__03-attack-rolled__1200x800");
     shell.press("enter");
 
-    // The row menu, with Bite armed (egui opens it with a right-click on the row).
+    // The row menu, with Bite armed (a right-click on the row opens it).
     let target = index(&mut shell, TARGET);
     let key = with_run(&mut shell, |run| run.state.participants[target].key.clone());
     assert!(
@@ -339,7 +339,7 @@ fn every_sync_state(shell: &mut Shell) {
     assert!(states >= 5, "every linked row has a sync state: {states}");
 }
 
-/// egui `run-sync-states`: each sync state on its row, a linked row with sync off, and the
+/// Scenario `run-sync-states`: each sync state on its row, a linked row with sync off, and the
 /// ended view with a conflict.
 #[test]
 fn run_sync_states() {
@@ -385,7 +385,7 @@ fn arrivals_made_up(shell: &mut Shell) {
     assert!(with_run(shell, |run| run.panel == Panel::Groups));
 }
 
-/// egui `run-add-creature`: Arrivals empty, a made-up creature from its HP to its row, a found
+/// Scenario `run-add-creature`: Arrivals empty, a made-up creature from its HP to its row, a found
 /// creature, every match, and a group whose Add waits for a total.
 #[test]
 fn run_add_creature() {
@@ -508,7 +508,7 @@ fn long_effect(shell: &mut Shell) {
     );
 }
 
-/// egui `run-edge-states`: a long effect, Conc on and off with its Undo, every row absent,
+/// Scenario `run-edge-states`: a long effect, Conc on and off with its Undo, every row absent,
 /// the run changed on disk, the close dialog while not saved, and saving it as a new run.
 #[test]
 fn run_edge_states() {
@@ -622,7 +622,7 @@ fn effects_on_its_turn(shell: &mut Shell) -> String {
     current
 }
 
-/// egui `run-effects`: effects on the current row, uses and a recharge on rows, an effect beside
+/// Scenario `run-effects`: effects on the current row, uses and a recharge on rows, an effect beside
 /// Lookup, and the effects in Conditions.
 #[test]
 fn run_effects() {
@@ -675,7 +675,7 @@ fn run_effects() {
 // ---------------------------------------------------------------------------------------------
 // run-overrides
 
-/// egui `run-overrides`: a changed creature's card in the run, and setup with its row.
+/// Scenario `run-overrides`: a changed creature's card in the run, and setup with its row.
 #[test]
 fn run_overrides() {
     let mut shell = Shell::new("run-overrides", Seed::Groups);
@@ -701,7 +701,7 @@ fn in_the_run(shell: &mut Shell) {
     select(shell, CASTER);
 }
 
-/// egui `run-lookup`: the run, a spell read beside it, entries found, the run back, a spell
+/// Scenario `run-lookup`: the run, a spell read beside it, entries found, the run back, a spell
 /// opened from the stat block, and Lookup’s Back by key.
 #[test]
 fn run_lookup() {
@@ -750,7 +750,7 @@ fn run_lookup() {
 // ---------------------------------------------------------------------------------------------
 // column-resize
 
-/// egui `column-resize`, the run's steps: the panel at its narrowest and widest, Next turn with
+/// Scenario `column-resize`, the run's steps: the panel at its narrowest and widest, Next turn with
 /// the wide panel, and Lookup beside the run; then the panel's splitter by drag and keys.
 #[test]
 fn column_resize() {
@@ -787,7 +787,7 @@ fn column_resize() {
     let mut shell = Shell::new("column-resize", Seed::Campaign);
     open_saved(&mut shell, RUN);
     // The panel's splitter (`kit::EdgeColumn`): a drag moves its edge, the width is saved under
-    // egui's id for the next start, Left widens it by `L`, and Home gives the natural width back.
+    // its id for the next start, Left widens it by `L`, and Home gives the natural width back.
     let saved = |shell: &mut Shell| {
         shell.read(|root| {
             root.remembered
@@ -828,7 +828,7 @@ fn encounters_read(shell: &mut Shell) {
     shell.settle();
 }
 
-/// egui `npc-in-encounter`: a named NPC added to a new encounter, then the encounter's setup.
+/// Scenario `npc-in-encounter`: a named NPC added to a new encounter, then the encounter's setup.
 #[test]
 fn npc_in_encounter() {
     let mut shell = Shell::new("npc-in-encounter", Seed::Campaign);
@@ -891,7 +891,7 @@ fn npc_in_encounter() {
 // ---------------------------------------------------------------------------------------------
 // run-large-roster
 
-/// egui `run-large-roster`: rosters of 12 and 20, and the middle of a round of 20.
+/// Scenario `run-large-roster`: rosters of 12 and 20, and the middle of a round of 20.
 #[test]
 fn run_large_roster() {
     let mut shell = Shell::new("run-large-roster", Seed::LargeRosters);
@@ -1010,7 +1010,7 @@ fn ready_with_one_absent(shell: &mut Shell) {
     assert_eq!(with_run(shell, Run::setup_blocked), None, "ready to begin");
 }
 
-/// egui `run-absent-player`: setup with one absent, the fight begun without them, back with no
+/// Scenario `run-absent-player`: setup with one absent, the fight begun without them, back with no
 /// initiative, its field in the row, and the initiative set in combat.
 #[test]
 fn run_absent_player() {
@@ -1056,7 +1056,7 @@ fn run_absent_player() {
 // ---------------------------------------------------------------------------------------------
 // run-restart
 
-/// egui `run-restart`, the run's steps: the run before a restart, and the paused run resumed
+/// Scenario `run-restart`, the run's steps: the run before a restart, and the paused run resumed
 /// from its saved file.
 #[test]
 fn run_restart() {
@@ -1101,7 +1101,7 @@ fn conflict_of_12(shell: &mut Shell) {
     assert_eq!(count(shell), 12);
 }
 
-/// egui `run-roster-conflict`: a conflict in a roster of 12, a sheet message on one line, the
+/// Scenario `run-roster-conflict`: a conflict in a roster of 12, a sheet message on one line, the
 /// conditions read from their summary, the loaded roster with a fault, and a full round of 20.
 #[test]
 fn run_roster_conflict() {

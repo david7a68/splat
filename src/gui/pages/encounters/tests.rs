@@ -1,5 +1,5 @@
 //! The Encounters page's screenshots and interaction tests. Captures are named
-//! `<egui-scenario>__<step>__<w>x<h>` so they pair with `artifacts/screenshots/egui-reference/`.
+//! `<scenario>__<step>__<w>x<h>` so they pair with the reference captures.
 use crate::Page;
 use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
@@ -551,7 +551,7 @@ fn an_encounters_own_groups() {
     ready(&mut shell);
     open_encounter(&mut shell, "Shrine of Cinders");
     wait_for_sheets(&mut shell);
-    // Gap 11: the party's rows read the sheets the harness shares (egui shows `HP 58/62`).
+    // Gap 11: the party's rows read the sheets the harness shares (`HP 58/62`).
     let rows = roster_lines(&mut shell);
     assert!(
         rows.iter()
@@ -939,7 +939,7 @@ fn an_npc_is_found_and_added_by_its_name() {
 #[test]
 fn use_it_offers_a_creature_from_an_unused_package() {
     // The fixture's unchosen Ash Wraith shares its words with the SRD's Wraith, which the
-    // search finds as typed, so (as in egui) it offers nothing to use. A creature of the same
+    // search finds as typed, so it offers nothing to use. A creature of the same
     // package that the campaign did not choose, with a name of its own, is offered.
     crate::hermetic::closed::repeatable_uuids(1);
     let home = tempfile::tempdir().expect("a test folder");

@@ -64,7 +64,7 @@ pub struct FromGroup {
     pub pages: Vec<(usize, String, Vec<LineFacts>, usize)>,
 }
 
-/// What `related` draws, as data, for a view that is not egui (the GPUI port).
+/// What the reader shows of related notes, as data.
 #[derive(Default)]
 pub struct RelatedFacts {
     pub here: Vec<PageFacts>,

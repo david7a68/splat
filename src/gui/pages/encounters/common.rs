@@ -135,7 +135,7 @@ pub(super) fn measure() -> Pixels {
     theme::LIST_MEASURE
 }
 
-/// A side choice (egui `side_control`): Party, Enemies, the encounter's other sides and
+/// A side choice: Party, Enemies, the encounter's other sides and
 /// `Other…`, which opens a field for a new side's name. `id` keys it; `name` names it.
 pub(super) fn side_choice(
     root: &SplatRoot,
@@ -201,7 +201,7 @@ pub(super) fn side_choice(
 
 /// An empty layer over its parent that keeps the width its parent is laid out at in `room`,
 /// and draws again when it changed: an editor's narrow layout follows the room it has (beside
-/// Lookup, inside the session plan), as egui's `ui.available_width()` does.
+/// Lookup, inside the session plan).
 pub(super) fn room_probe(
     room: std::rc::Rc<std::cell::Cell<Option<Pixels>>>,
 ) -> impl gpui::IntoElement {

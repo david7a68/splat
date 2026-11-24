@@ -1,5 +1,5 @@
 //! The close prompt (`Splat::close_prompt`): what closing would lose, by name, and the ways on.
-//! Its words and choices are the egui prompt's: the title and actions depend on whether only a
+//! Its words and choices: the title and actions depend on whether only a
 //! recording or processing runs, only the run could not be saved, or only sync has not finished.
 use super::{SplatRoot, kit, theme};
 use crate::{Page, SettingsTab};

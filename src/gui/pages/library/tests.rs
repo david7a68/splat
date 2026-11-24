@@ -1,4 +1,4 @@
-//! Screenshots and interaction tests of the Library page. Captures are named after the egui
+//! Screenshots and interaction tests of the Library page. Captures are named after the
 //! scenarios' steps (`<scenario>__<step>__<w>x<h>`), so they pair with the references.
 use crate::Page;
 use crate::fixtures::Seed;
@@ -274,7 +274,7 @@ fn library_scope() {
         shell.read(|root| root.app.library.section()),
         crate::library::model::Section::Creatures
     );
-    // As in egui, the section's first entry opens in About's place.
+    // The section's first entry opens in About's place.
     assert_ne!(
         shell.read(|root| root.app.library.open_name().map(str::to_owned)),
         Some("Ashen Marches".to_owned())
@@ -419,7 +419,7 @@ fn remove_package_in_use() {
     );
 }
 
-/// Up and Down move the keyboard from row to row of the entry list (egui's list region), Enter
+/// Up and Down move the keyboard from row to row of the entry list, Enter
 /// opens the row that holds it, and Alt+Left and Alt+Right go Back and Forward between the
 /// entries opened.
 #[test]
@@ -455,8 +455,7 @@ fn library_keys() {
     assert_eq!(open(&mut shell), Some(first), "Alt+Right goes Forward");
 }
 
-/// The list heading's count groups its thousands (`design::count`), as egui's `group_heading`
-/// does: a search that matches over a thousand entries says `SEARCH RESULTS 1,234`.
+/// The list heading's count groups its thousands (`design::count`): a search that matches over a thousand entries says `SEARCH RESULTS 1,234`.
 #[test]
 fn library_counts_group_thousands() {
     let mut shell = Shell::new("library-counts", Seed::Empty);
@@ -589,9 +588,9 @@ fn open_found(shell: &mut Shell, name: &str) {
     );
 }
 
-/// The Library's Read is the entry reader (egui `view::show_with_related`): a campaign
+/// The Library's Read is the entry reader: a campaign
 /// creature's stat block with its rolling ability table and its action tile, a flagged HP cell,
-/// a flagged spell cell and an item's facts (egui scenario `stat-formats`).
+/// a flagged spell cell and an item's facts (scenario `stat-formats`).
 #[test]
 fn stat_formats() {
     let mut shell = Shell::with_size("stat-formats", Seed::Formats, size(px(960.0), px(640.0)));
@@ -659,7 +658,7 @@ fn list_heading(shell: &mut Shell) -> (Option<&'static str>, usize) {
     })
 }
 
-/// The creature filter (egui `creature-filter`): the Filter menu's facts open their values, each
+/// The creature filter: the Filter menu's facts open their values, each
 /// chosen value is a chip that removes it, the challenge's lowest and highest rows, and Clear
 /// filters; the list shows only the creatures that match.
 #[test]

@@ -1,4 +1,4 @@
-//! Settings → Recording and processing (egui: `ProcessingSettings::pane`, `show`): the recorder
+//! Settings → Recording and processing: the recorder
 //! and its input, the speech service, the transcript and summary service with their keys, and
 //! the two prompts; the tab's notices in its footer.
 use crate::credentials::KeySlot;

@@ -1,4 +1,4 @@
-//! The page's larger part (egui: `WorldPage::show`'s central panel): the held NPC's row, then
+//! The page's larger part: the held NPC's row, then
 //! the repair, an unreadable note, a creation form or the held NPC's card, a checks view, the
 //! open note, or no note. Each is a pane whose messages sit in its footer.
 use super::{SplatRoot, act, footer, on_key, on_words};
@@ -247,7 +247,7 @@ fn new_form(
     .into_any_element()
 }
 
-/// The held NPC's card (egui: `lookup::generator_card`): its name and attributes, the names
+/// The held NPC's card: its name and attributes, the names
 /// help with `Copy the marker`, the tables it used and their problems, the file it will save,
 /// then Save NPC, Reroll and Discard.
 fn card_view(
@@ -388,7 +388,7 @@ fn card_view(
         .into_any_element()
 }
 
-/// A card's table file opens as a note link does (egui: the card leaves `markdown_clicked_note`):
+/// A card's table file opens as a note link does (`markdown_view::send_note_link`):
 /// the frame logic's `Splat::route` opens it in Lookup, by its path, not by a search.
 pub(crate) fn open_note(root: &mut SplatRoot, path: &str) {
     crate::markdown_view::send_note_link(&root.ctx, path.to_owned(), None);
@@ -948,7 +948,7 @@ fn save_row(
     let reason = reason.map(|reason| kit::text(theme::Type::Small, c.muted, reason));
     if row.reason_under {
         // In Lookup's narrow panel the reason has its own line under the row, so Save stays
-        // inside the pane (egui's narrow save row).
+        // inside the pane (the narrow save row).
         return div()
             .flex()
             .flex_col()

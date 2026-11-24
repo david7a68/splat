@@ -1,4 +1,4 @@
-//! The open event's form (egui: `TimelinePage::detail`): its title line (the kind, the title, Copy
+//! The open event's form: its title line (the kind, the title, Copy
 //! link, the save state and the `⋯` menu with `Roll for encounters` and `Remove`), its Title, then
 //! the form that scrolls: Kind, How long (with a journey's encounter checks under it), the rest
 //! ruling, Starts and Ends, Where (with the locations it could be), Session, From the run,

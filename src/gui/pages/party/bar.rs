@@ -1,5 +1,4 @@
-//! The party at a glance, above the Session page while a session is played (egui:
-//! `party_bar::show`, `Splat::party_bar`). Each member is a portrait, a first name, HP with its
+//! The party at a glance, above the Session page while a session is played. Each member is a portrait, a first name, HP with its
 //! bar and a few numbers; a press opens the sheet. When the line is short of room, the optional
 //! numbers go first, then the portraits, then the names shorten to an initial; no item is cut,
 //! and `N more` names the rest.
@@ -68,8 +67,7 @@ fn measure(window: &Window, glance: &Glance) -> Measured {
     }
 }
 
-/// The bar: each member measured by GPUI's text layout and fitted as egui's bar is
-/// (`party_bar::fit`). While a fight is open, the bar holds its level and its item widths until
+/// The bar: each member measured by GPUI's text layout and fitted (`party_bar::fit`). While a fight is open, the bar holds its level and its item widths until
 /// the fight ends, so nothing moves back as HP changes.
 pub(super) fn render(
     root: &mut SplatRoot,

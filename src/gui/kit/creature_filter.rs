@@ -1,8 +1,9 @@
-//! The creature filter (egui `creature_filter::filter_bar`): a Filter menu with a submenu for
+//! The creature filter: a Filter menu with a submenu for
 //! each fact, a removable chip for each chosen value, and `Clear filters` when two or more are
 //! chosen. The Library and the encounter's creature search share it.
 //!
-//! The caller keeps the filter where its egui page keeps it and gives the changed filter back in
+//! The caller keeps the filter (the Encounters page: in the state context) and gives the changed
+//! filter back in
 //! `on_change`:
 //!
 //! ```ignore
@@ -47,7 +48,7 @@ pub struct FilterBar {
 
 impl FilterBar {
     /// The bar of `filter`. `choices` gives the facts the menu offers; it runs only while the
-    /// menu is open, as egui's closure does.
+    /// menu is open.
     pub fn new(
         id: impl Into<ElementId>,
         filter: &Filter,
@@ -176,7 +177,7 @@ fn menu(
             .child(super::text(Type::Small, c.muted, "No creatures to filter."))
             .into_any_element();
     }
-    // The open facts, in the order they opened (egui's `SubmenuState::open`).
+    // The open facts, in the order they opened.
     let open = window.use_keyed_state(child(id, "open"), cx, |_, _| Vec::<Facet>::new());
     let opened = open.read(cx).clone();
     let mut rows = div().flex().flex_col().w(MENU_WIDTH);

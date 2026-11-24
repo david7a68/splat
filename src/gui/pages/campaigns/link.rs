@@ -1,5 +1,4 @@
-//! Campaign → Link and folder (egui: the Link branch of `Splat::page`, `Sessions::folder_block`,
-//! `Campaigns::show_active`, `DndBeyond::show`): the page's lock said once, then one block per
+//! Campaign → Link and folder: the page's lock said once, then one block per
 //! value (the Session folder, the campaign's folder, its D&D Beyond link), the details form
 //! while it is open, and the tab's footer.
 use crate::gui::kit::{self, Button, Link, Pane, TextField};

@@ -113,7 +113,7 @@ pub(super) fn render(
         );
     }
     // The shared title line (M0327-M0329): the title and its count, then the actions after
-    // them, as egui's `TitleLine::page` places them.
+    // them, as `TitleLine::page` places them.
     let mut title = div()
         .flex()
         .flex_row()

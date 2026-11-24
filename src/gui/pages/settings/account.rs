@@ -1,4 +1,4 @@
-//! The D&D Beyond account (egui: `Settings::show`, `show_compact`, `show_account`): its status,
+//! The D&D Beyond account: its status,
 //! its help, the sign-in form, and Disconnect. Wide, it is the Settings tab's right column;
 //! narrow, a compact group under (or, during a run, above) the campaigns.
 use crate::gui::SplatRoot;

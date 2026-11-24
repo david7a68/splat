@@ -172,7 +172,7 @@ pub(super) fn new_entry(
                         .pb(gpui::px(0.0)),
                     ),
                 )
-                // Create stands on the field's line, below its caption (egui drops it there).
+                // Create stands on the field's line, below its caption.
                 .child(div().pt(Type::Small.line() + XS).child(create)),
         )
         .child(kit_line_gap())

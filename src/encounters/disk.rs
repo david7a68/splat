@@ -43,7 +43,7 @@ pub(super) fn changed_on_disk(what: &str, name: &str) -> Sentence {
     }
 }
 
-/// A draft's disk conflict (`Recovery::show`), as data for a view that does not draw with egui.
+/// A draft's disk conflict, as data for the GPUI page.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DiskView {
     /// The facts before the last one (another file claims this identity).

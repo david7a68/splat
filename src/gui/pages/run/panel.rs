@@ -1,5 +1,4 @@
-//! The run's own panel beside the roster (egui `view::side_panel`, `setup_panel`, `panel_tabs`,
-//! `panel_body`): the selected participant's name or `This fight · …`, the tabs, the death
+//! The run's own panel beside the roster: the selected participant's name or `This fight · …`, the tabs, the death
 //! saves and a sync conflict, then the tab's body: the stat block or sheet with its action
 //! tiles, Conditions, Correct, Log, Prep, Keys, or Arrivals.
 use super::{on_command, on_run};
@@ -45,7 +44,7 @@ pub(super) fn render(
     let is_sheet = p.definition.fields.contains_key("splat_external");
     // The panel's own room: its width less the gutter before its words.
     let inner = width - theme::L - theme::HAIRLINE_WIDTH;
-    // A long name gives up whole words, keeping its copy number (egui `dock_name`).
+    // A long name gives up whole words, keeping its copy number.
     let shown = super::measure::fit_name(window, Type::Title, &title, inner);
     let mut top = div()
         .flex()
@@ -1547,7 +1546,7 @@ fn arrivals(run: &Run, room: Pixels, window: &Window, cx: &mut Context<SplatRoot
 }
 
 /// What a drag of an Arrivals group carries: the group, and its name for the ghost. A group
-/// whose Add waits carries none; its ghost still follows the pointer (egui `drag_source`).
+/// whose Add waits carries none; its ghost still follows the pointer.
 #[derive(Clone)]
 pub(super) struct GroupDrag {
     pub(super) id: Option<uuid::Uuid>,

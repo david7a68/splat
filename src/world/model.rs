@@ -1,11 +1,9 @@
-//! The reader as plain data and acts, for a view that is not egui (the GPUI port,
-//! `docs/gpui-port.md`). The egui reader calls the acts here too (`Reader::rename_note`,
-//! `rename_file`, `separate`, `check_disk`, `title_facts`), so both views are one reader: each
-//! act writes, records its result and says what the page does next in one place.
+//! The reader as plain data and acts, for the GPUI reader (`gui::pages::world::reader`). Each act
+//! (`Reader::rename_note`, `rename_file`, `separate`, `check_disk`, `title_facts`) writes, records its result and says what the page does next in one place.
 //!
 //! Nothing here draws. A view reads the facts (`TitleFacts`, `BodyFacts`, `ValueRow`, …), draws
 //! them its own way, and calls the act a press asks for. An act returns the `Nav` the page takes,
-//! as the egui reader's `read_in_pane` does.
+//! and the reader follows it.
 use super::*;
 use crate::design::outcome::{Messages, plain};
 
@@ -407,7 +405,7 @@ impl Reader {
     }
 
     /// The entry the reader reads for `item`: the file's own parse when a value of it could
-    /// not be read (its other values still show), else the index's (egui `draw`).
+    /// not be read (its other values still show), else the index's.
     pub fn read_entry<'a>(&'a self, item: &'a Item) -> &'a Entry {
         self.group_fault
             .as_ref()
@@ -438,7 +436,7 @@ impl Reader {
         self.settle(go)
     }
 
-    /// `rename_note`, as the egui reader's body takes it.
+    /// `rename_note`.
     pub(super) fn note_renamed(
         &mut self,
         campaign: &Campaign,
@@ -482,7 +480,7 @@ impl Reader {
         self.settle(go)
     }
 
-    /// `rename_file`, as the egui reader's body takes it.
+    /// `rename_file`.
     pub(super) fn file_renamed(
         &mut self,
         campaign: &Campaign,
@@ -517,7 +515,7 @@ impl Reader {
         self.settle(go)
     }
 
-    /// `separate`, as the egui reader's body takes it.
+    /// `separate`.
     pub(super) fn separated(&mut self, campaign: &Campaign, path: &str) -> Option<Go> {
         match new_identity(campaign, path) {
             Ok((undo, id)) => {
@@ -1160,7 +1158,7 @@ impl Reader {
         (nav, effect)
     }
 
-    /// `footer_act` without the egui context: every press but a copy and an open, which the
+    /// `footer_act` without the state context: every press but a copy and an open, which the
     /// view does (`footer_press`).
     fn footer_act_plain(
         &mut self,

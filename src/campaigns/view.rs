@@ -1,6 +1,5 @@
-//! The campaign list's and form's acts and reads, free of any toolkit, so the egui list
-//! (`Campaigns::show`, `form`, `show_active`) and the GPUI pages (`src/gui/pages/settings/`,
-//! `src/gui/pages/campaigns/`) share them.
+//! The campaign list's and form's acts and reads, free of any toolkit, for the GPUI pages
+//! (`src/gui/pages/settings/`, `src/gui/pages/campaigns/`).
 use super::{Campaigns, FormKept, FormReason, folder_preview};
 use crate::design::CreateReasons as _;
 use crate::persistence::Campaign;
@@ -158,7 +157,7 @@ impl Campaigns {
         }
     }
 
-    /// An edit of the details form ends the discard's result (as the egui form's frame does).
+    /// An edit of the details form ends the discard's result.
     pub fn details_edited(&mut self) {
         if !self.details_unchanged() {
             self.end_discard();

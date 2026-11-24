@@ -1,6 +1,5 @@
-//! D&D Beyond's remote list and the active campaign's link, free of any toolkit, so the egui
-//! import list and link block (`DndBeyond::show_import`, `show_link`) and the GPUI pages
-//! (`src/gui/pages/settings/`, `src/gui/pages/campaigns/`) share them.
+//! D&D Beyond's remote list and the active campaign's link, free of any toolkit, for the GPUI
+//! pages (`src/gui/pages/settings/`, `src/gui/pages/campaigns/`).
 #![warn(deprecated)]
 use super::{DndBeyond, LinkSaved};
 use crate::state_context::StateContext;

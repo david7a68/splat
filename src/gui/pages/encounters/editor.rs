@@ -1,5 +1,4 @@
-//! The encounter editor (egui: `Encounters::editor_view`, `editor_panes`, `roster`,
-//! `add_pane`, `creature_search`): the back line, the name and its actions, the save row, the
+//! The encounter editor: the back line, the name and its actions, the save row, the
 //! roster column (its rows with their Changes and replacement, options, loot, notes and the
 //! encounter's own groups), Add participants or the creature made yours, and the footer. Below
 //! 760 px the roster and Add participants take turns under tabs. While the encounter's file (or
@@ -26,11 +25,11 @@ use std::sync::Arc;
 /// The page's creature filter, shared by the roster and a group.
 pub(super) const FILTER: Slot<splat_content::content::creature_filter::Filter> =
     Slot::new("creature_search_filter");
-/// Add participants' column, by the id egui saves its dragged width under (`ADD_PANE`).
+/// Add participants' column, by the id its dragged width is saved under (`ADD_PANE`).
 pub(super) const ADD_PANE: &str = "encounter_add";
 /// The widest Add participants takes by itself (`ADD_PANE_MAX_WIDTH`).
 pub(super) const ADD_PANE_MAX_WIDTH: Pixels = px(640.0);
-/// Below this the roster and Add participants take turns under tabs (egui `compact`).
+/// Below this the roster and Add participants take turns under tabs.
 pub(super) const NARROW: Pixels = px(760.0);
 
 /// Add participants' width: the DM's dragged width, else its own (`editor_columns`).

@@ -84,7 +84,7 @@ pub fn set_entry(ctx: &StateContext, name: &str) {
     ctx.set(ENTRY, name.to_owned());
 }
 
-/// A press on a rollable number in a view that is not egui (the GPUI reader), with the keys
+/// A press on a rollable number in the reader, with the keys
 /// held: Shift rolls a d20 with advantage, Ctrl with disadvantage, as a click here does. The ask
 /// waits in `ctx` for whoever owns the dice ([`take_ask`]).
 pub fn ask_pressed(ctx: &StateContext, link: &RollLink, shift: bool, command: bool) {
@@ -1434,8 +1434,7 @@ mod tests {
     }
 }
 
-/// Action tiles for a view that is not egui (the GPUI reader): the words and state `tile_row`
-/// paints, without painting them. Presses go back through [`ask_pressed_at`].
+/// Action tiles for the reader: the words and state of each tile, without painting them. Presses go back through [`ask_pressed_at`].
 pub mod plain {
     use super::*;
 

@@ -378,8 +378,8 @@ pub fn compare_values(record: Option<&EntitySnapshot>) -> [String; 3] {
     ]
 }
 
-/// The technical details' words, free of any toolkit: egui's `source_and_parity` and the GPUI
-/// sheet (`src/gui/pages/party/sheet.rs`) both show them.
+/// The technical details' words, free of any toolkit, for the sheet
+/// (`src/gui/pages/party/sheet.rs`).
 pub mod technical {
     use splat_character::character;
     use splat_content::content;

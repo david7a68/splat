@@ -321,7 +321,7 @@ impl Fault for FileFault {
 /// the Timeline builds from the events. The one place this file takes them as a sentence.
 #[allow(
     clippy::disallowed_methods,
-    reason = "words of a file, of the system or of the events, as text (design::results::STAGED_ALLOWS)"
+    reason = "words of a file, of the system or of the events, as text (design::results::STAGED)"
 )]
 pub fn as_sentence(words: &str) -> Sentence {
     Sentence::outside(words).unwrap_or(crate::sentence!("Something changed."))
@@ -910,7 +910,7 @@ impl TimelinePage {
     /// new place, and Remove.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: raw calls that a design part replaces (design::results::STAGED_ALLOWS)"
+        reason = "staged: raw calls that a design part replaces (design::results::STAGED)"
     )]
     pub fn apply_detail(
         &mut self,

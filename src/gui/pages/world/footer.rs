@@ -1,4 +1,4 @@
-//! A pane's footer messages (egui: `design::outcome::Messages` in a `PaneFrame`): every result
+//! A pane's footer messages (`design::outcome::Messages` in a `PaneFrame`): every result
 //! with its Undo, then the reasons, then the notices, from the stores' own lines
 //! (`design::outcome::plain`), drawn by `kit::messages`. Each control's press carries its store's
 //! ticket, so an Undo acts only on the result its line showed; a replaced result's press does

@@ -1,4 +1,4 @@
-//! The Reader: entries and notes shown as reference (egui: `src/markdown_view.rs`,
+//! The Reader: entries and notes shown as reference (`src/markdown_view.rs`,
 //! `src/markdown_source.rs`, `src/content_ui/`). Its Markdown view is `kit::markdown`; the
 //! readers that pages show (Library, World, Lookup) build on what this area adds.
 pub mod entry;
@@ -19,8 +19,8 @@ pub struct State {
 pub(crate) type Preview =
     std::rc::Rc<dyn Fn(&mut SplatRoot, &mut Window, &mut Context<SplatRoot>) -> gpui::AnyElement>;
 
-/// Once, when the root is built: readers find the app's egui context (the link index, the art)
-/// and leave pressed links there for the frame logic, as egui's readers do.
+/// Once, when the root is built: readers find the app's state context (the link index, the art)
+/// and leave pressed links there for the frame logic.
 pub(crate) fn init(root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
     cx.set_global(crate::gui::kit::markdown::Host(root.ctx.clone()));
 }

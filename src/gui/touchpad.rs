@@ -3,9 +3,9 @@
 //! element sees it (the capture phase, first listener), drops it, and sends it again with its
 //! distance multiplied by the chosen speed, once the current event is done. Every scroll area in
 //! the window (kit scroll columns, virtual lists, text editors, gpui-component's own) then moves
-//! by the same factor, as egui's `TouchpadSpeed::apply` makes every scroll area move.
+//! by the same factor.
 //!
-//! As in egui, only a touchpad's scroll moves further: a precise scroll in pixels
+//! Only a touchpad's scroll moves further: a precise scroll in pixels
 //! (`ScrollDelta::Pixels`) from a pointing device. A mouse wheel's lines, a touchscreen's pan and
 //! a scroll with Ctrl held (a zoom) keep their distance.
 use crate::touchpad::TouchpadSpeed;
@@ -20,8 +20,8 @@ thread_local! {
     static RESENT: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Whether `event` is a touchpad scroll that `speed` moves further (egui: a `Point` wheel event
-/// without the command key).
+/// Whether `event` is a touchpad scroll that `speed` moves further (a scroll in pixels without
+/// the command key).
 fn scales(event: &ScrollEvent, speed: TouchpadSpeed) -> bool {
     speed.factor() != 1.0
         && event.source == ScrollSource::Pointer

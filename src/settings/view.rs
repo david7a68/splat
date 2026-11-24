@@ -1,5 +1,5 @@
-//! The account's reads and acts, free of any toolkit, so the egui account column
-//! (`Settings::show_account`) and the GPUI Settings page (`src/gui/pages/settings/`) share them.
+//! The account's reads and acts, free of any toolkit, for the GPUI Settings page
+//! (`src/gui/pages/settings/`).
 use super::{Account, SESSION_ENDED, Settings};
 use crate::state_context::StateContext;
 use zeroize::Zeroizing;

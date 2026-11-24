@@ -94,7 +94,7 @@ impl Button {
         Self::new(Kind::Destructive, id, label)
     }
 
-    /// An icon after the words: a menu button's caret (egui's `MenuButton`, `Packages ▾`).
+    /// An icon after the words: a menu button's caret.
     pub fn icon_after(mut self, icon: &'static str) -> Self {
         self.icon_after = Some(icon);
         self
@@ -335,7 +335,7 @@ impl RenderOnce for Button {
     }
 }
 
-/// egui's `disabled_alpha`: a disabled control is drawn at this opacity.
+/// A disabled control is drawn at this opacity.
 pub const DISABLED_OPACITY: f32 = 0.6;
 
 /// The harness name of an element id (`id:<id>`).
@@ -374,8 +374,8 @@ impl IconButton {
         }
     }
 
-    /// Shown but not pressable (a stepper's − at its lowest value), as egui's disabled icon
-    /// button: drawn at the disabled opacity, its press ignored. Its hover words stay.
+    /// Shown but not pressable (a stepper's − at its lowest value): drawn at the disabled
+    /// opacity, its press ignored. Its hover words stay.
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self

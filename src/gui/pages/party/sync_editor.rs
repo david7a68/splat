@@ -1,4 +1,4 @@
-//! The combat sync sheet editor (egui `CombatSync::show`), drawn once for both places that show
+//! The combat sync sheet editor, drawn once for both places that show
 //! it: the Party page's sheet (`Combat sync · On`) and the run's Correct tab (`D&D Beyond combat
 //! sync`). Its switch, its state words and Check now, each conflict with its two choices, then,
 //! after a read, every value Splat can send with − and +: HP, temporary HP, the maximum HP
@@ -7,7 +7,7 @@
 //!
 //! The values and their acts are the sync's own (`combat_sync::view`): a change goes half a
 //! second after the DM stops. In the run, the run's frame logic takes each change into the
-//! participant with a named Undo step, as egui's does.
+//! participant with a named Undo step.
 use crate::gui::kit::{self, Button, Checkbox, Link, Section, Stepper, stepper};
 use crate::gui::theme::{Density, L, READER_MEASURE, S, Type, XS, colors};
 use crate::gui::{SplatRoot, icons};
@@ -300,7 +300,7 @@ fn value_line(label: &'static str, value: String) -> Div {
         .child(kit::text(Type::Strong, c.text, value))
 }
 
-/// A muted capital label over a block (egui `Heading::Label`).
+/// A muted capital label over a block.
 fn block_label(words: &'static str) -> Div {
     div()
         .pt(L)
@@ -656,7 +656,7 @@ fn rests(
 }
 
 /// The caret sections: conditions, slots, limited uses, purse, inventory, companions. Each keeps
-/// whether it is open under its id (closed at first), as egui's `design::section` does.
+/// whether it is open under its id (closed at first).
 fn sections(host: Host, editor: &Editor, window: &Window, cx: &mut Context<SplatRoot>) -> Div {
     let writable = editor.writable;
     let mut column = div().flex().flex_col().gap(XS).pt(S);

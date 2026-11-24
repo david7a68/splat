@@ -1,5 +1,5 @@
-//! The World page's screenshots and interaction tests. Captures pair with the egui references by
-//! name (`<egui-scenario>__<step>__<w>x<h>`), in `artifacts/screenshots/gpui/`.
+//! The World page's screenshots and interaction tests. Captures pair with the references by
+//! name (`<scenario>__<step>__<w>x<h>`), in `artifacts/screenshots/gpui/`.
 use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
 use crate::{Page, world::page::View};
@@ -19,7 +19,7 @@ fn root(shell: &mut Shell) -> PathBuf {
     })
 }
 
-/// A World entry of `kind` at `path`, as the egui scenarios write one (`world_build::entry`).
+/// A World entry of `kind` at `path`, as the scenarios write one.
 fn entry(shell: &mut Shell, path: &str, name: &str, kind: &str, fields: &str) -> Uuid {
     let id = splat::character::stable_id(path);
     let file = root(shell).join(path);
@@ -94,7 +94,7 @@ fn small_size() -> gpui::Size<gpui::Pixels> {
     size(px(960.0), px(640.0))
 }
 
-/// The list, New's menu, an NPC's form and the note it makes (egui scenario `world`).
+/// The list, New's menu, an NPC's form and the note it makes (scenario `world`).
 #[test]
 fn world_list_and_new_npc() {
     let mut shell = world("world", small_size());
@@ -124,7 +124,7 @@ fn world_list_and_new_npc() {
     shell.capture("world__04-world-new-note-created__1200x800");
 }
 
-/// An NPC's place and stat block, a change with its Undo (egui scenario `world-places`).
+/// An NPC's place and stat block, a change with its Undo (scenario `world-places`).
 #[test]
 fn world_places_change_and_undo() {
     let mut shell = world("world-places", default_size());
@@ -223,7 +223,7 @@ fn undo_words(verb: crate::design::outcome::Verb, object: &str) -> String {
 }
 
 /// Generate NPC holds a card; another note keeps its row above the reader; Discard has an Undo
-/// that brings the same NPC back (egui scenario `world-held-npc`).
+/// that brings the same NPC back (scenario `world-held-npc`).
 #[test]
 fn world_held_npc_row_discard_and_undo() {
     let mut shell = world("world-held-npc", default_size());
@@ -254,7 +254,7 @@ fn world_held_npc_row_discard_and_undo() {
 }
 
 /// Edit, a typed status, Ctrl+S: one write; a disk edit under a changed draft waits for the
-/// DM's choice, and Reload takes the file (egui scenario `world-edit-round-trip`).
+/// DM's choice, and Reload takes the file (scenario `world-edit-round-trip`).
 #[test]
 fn world_edit_round_trip() {
     let mut shell = world("world-edit-round-trip", default_size());
@@ -311,7 +311,7 @@ fn world_edit_round_trip() {
 }
 
 /// A note that cannot be read: the header's count opens its repair, which saves the fixed text
-/// and opens the note with `Note repaired.` (egui scenario `world-broken-note`).
+/// and opens the note with `Note repaired.` (scenario `world-broken-note`).
 #[test]
 fn world_broken_note_repair() {
     let mut shell = world("world-broken-note", default_size());
@@ -350,7 +350,7 @@ fn world_broken_note_repair() {
     shell.capture("world-broken-note__10-broken-note-repaired__1200x800");
 }
 
-/// Ticking an open question writes its box; `Undo tick` opens it again (egui scenario
+/// Ticking an open question writes its box; `Undo tick` opens it again (scenario
 /// `world-facts`).
 #[test]
 fn world_question_tick_and_undo() {
@@ -396,7 +396,7 @@ fn world_escape_closes_a_picker() {
 }
 
 /// A file renamed outside Splat: the note offers both renames; `Rename the note` writes the
-/// file's name with an Undo (egui scenario `world-note-renamed`).
+/// file's name with an Undo (scenario `world-note-renamed`).
 #[test]
 fn world_note_renamed_takes_the_file_name() {
     let mut shell = world("world-note-renamed", default_size());
@@ -418,7 +418,7 @@ fn world_note_renamed_takes_the_file_name() {
     shell.capture("world-note-renamed__03-renamed-npc-name-updated__1200x800");
 }
 
-/// Two files with one identity: each has its repair (egui scenario `world-note-duplicated`).
+/// Two files with one identity: each has its repair (scenario `world-note-duplicated`).
 #[test]
 fn world_note_duplicated_offers_each_repair() {
     let mut shell = world("world-note-duplicated", default_size());
@@ -481,7 +481,7 @@ fn world_at_960() {
 }
 
 /// A malformed value is flagged on its line, below the file line and above the values, and
-/// reading never changes the file (egui scenario `file-formats`).
+/// reading never changes the file (scenario `file-formats`).
 #[test]
 fn file_formats_flagged_value() {
     let mut shell = Shell::with_size("file-formats", Seed::Formats, default_size());
@@ -601,7 +601,7 @@ fn world_entry_rolls_and_links_to_a_heading() {
 }
 
 /// The held NPC's card names the campaign's table it used; the table's link opens that note,
-/// and a bad table's `Open Names.md` does too (egui scenario `generator-tables`: the card leaves
+/// and a bad table's `Open Names.md` does too (scenario `generator-tables`: the card leaves
 /// a note link, which the frame logic opens in Lookup by its path).
 #[test]
 fn world_card_table_links_open_the_note() {

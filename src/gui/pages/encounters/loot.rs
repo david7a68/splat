@@ -1,4 +1,4 @@
-//! The loot list (egui: `loot_editor::show`, `show_cell`): each line a row (a roll on a table with
+//! The loot list: each line a row (a roll on a table with
 //! its count and table menu, a Library item that opens, or words in a field), each with its `⋯`
 //! and Remove; the Undo of the last removal; the add field with the campaign's tables and items
 //! offered as the DM types, and `Roll on a table` beside it. For an encounter the lines are its

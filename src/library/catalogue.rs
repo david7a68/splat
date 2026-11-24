@@ -307,7 +307,7 @@ fn duplicate_consequence(users: &[String], remaining: &str, keeps: bool) -> Sent
 /// The duplicate warning and its repair choices: one per file, and one per folder whose files
 /// all repeat another folder's, each with its consequence in its help line (M8), locked while
 /// the draft holds them. The encounters a folder's batch leaves on the other folder are found
-/// once per load (an egui cache keyed by the whole owner key and the notes).
+/// once per load (a slot in the state context keyed by the whole owner key and the notes).
 pub fn duplicate_notice(
     ctx: &StateContext,
     loaded: &Loaded,

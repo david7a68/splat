@@ -1,4 +1,4 @@
-//! The Encounters list (egui: `Encounters::ledger_view`, `encounters/list.rs`): the header, In
+//! The Encounters list: the header, In
 //! progress, Ready to run, Groups and History, one facts column across them, and the footer.
 use super::common::{detail_line, footer, on_page, reason, row_menu, small_icon};
 use crate::gui::theme::{Density, ICON_SLOT, L, M, S, Type, TypeExt, XS, colors};

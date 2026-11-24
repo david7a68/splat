@@ -1,4 +1,4 @@
-//! The Timeline's list of events (egui: `TimelinePage::list`, `row`): one row for each event that
+//! The Timeline's list of events: one row for each event that
 //! passes the filters, in story order, in a virtual list, so a long timeline costs a frame no more
 //! than a short one. Each row has the spine and the kind's icon, the title (a day's in capitals),
 //! and its second line in `Small` with each status part in its own colour; an open fight's result
@@ -13,7 +13,7 @@ use gpui::{
     div, prelude::*, px,
 };
 
-/// A row's height (egui's `ROW`), and the gap under it.
+/// A row's height, and the gap under it.
 const ROW: gpui::Pixels = px(44.0);
 const ROW_GAP: gpui::Pixels = px(6.0);
 /// The row's icon column: the spine sits at its centre, `SPINE` from the row's left.
@@ -260,7 +260,7 @@ fn row_element(
     .child(icon)
     .child(text);
     let row = div().h(ROW + ROW_GAP).pb(ROW_GAP).child(row);
-    // A length the clock cannot count says why on hover, and how to write one (egui `row`).
+    // A length the clock cannot count says why on hover, and how to write one.
     if words.warning {
         row.id(ElementId::Name(format!("timeline-row-hover-{id}").into()))
             .tooltip(kit::tooltip::tip(

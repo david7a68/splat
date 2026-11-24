@@ -1,17 +1,15 @@
-//! Markdown source styled where it is typed (egui `markdown_source::layouter` and
-//! `paint_section_rules`), for `TextEditor::markdown_source`. Only the look changes: every
+//! Markdown source styled where it is typed, for `TextEditor::markdown_source`. Only the look changes: every
 //! character stays, markup included, so the file holds exactly what was typed.
 //!
-//! The looks come from the egui parser (`markdown_source::source_looks`): strong words and minor
+//! The looks come from the source parser (`markdown_source::source_looks`): strong words and minor
 //! headings bold, italics and block quotes italic, inline code on its fill, struck words struck,
 //! markup (`##`, `**`, a link's target, comments) faint, link words in the accent, and a rule under
 //! each section heading.
 //!
 //! What GPUI's editor cannot do, and what it does in its place: one editor lays out one font size
-//! and one family, so a title or section heading keeps the prose size and is bold (egui sets it
-//! in the heading's size and face), and code keeps the prose face (egui sets `Mono`). A
-//! `splat:` mark that egui folds to `⋯` while the caret is off its line stays in full, faint, as
-//! all markup is: a folded run would change what the caret steps over.
+//! and one family, so a title or section heading keeps the prose size and is bold, and code
+//! keeps the prose face. A `splat:` mark stays in full, faint, as all markup is, even while the
+//! caret is off its line: a folded run would change what the caret steps over.
 use crate::gui::theme::{Type, colors};
 use gpui::{HighlightStyle, StrikethroughStyle, px};
 use gpui_component::input::TextDecoration;

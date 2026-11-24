@@ -86,7 +86,7 @@ pub fn markdown(id: impl Into<ElementId>, source: impl Into<SharedString>) -> Ma
 
 impl Markdown {
     /// The Reader's prose at `READER_MEASURE`. Its type is `Prose`, or `ProseCompact` in a column
-    /// narrower than `READER_MEASURE - 60` (as egui's `reader::prose_type`).
+    /// narrower than `READER_MEASURE - 60`.
     pub fn new(id: impl Into<ElementId>, source: impl Into<SharedString>) -> Self {
         Self {
             id: id.into(),
@@ -111,7 +111,7 @@ impl Markdown {
         self
     }
 
-    /// Compact field rows in `Stat` type (egui `show_compact`): a `Field`/`Value` table becomes
+    /// Compact field rows in `Stat` type: a `Field`/`Value` table becomes
     /// field rows, headings are `StatLabel`, and code is not set apart.
     pub fn fields(mut self) -> Self {
         self.mode = Mode::Dense;
@@ -119,7 +119,7 @@ impl Markdown {
         self
     }
 
-    /// A stat block's Skills row (egui `show_skills`): field rows whose links are each one
+    /// A stat block's Skills row: field rows whose links are each one
     /// skill's bonus, their target covering the skill's name before them.
     pub fn skills(mut self) -> Self {
         self = self.fields();
@@ -127,7 +127,7 @@ impl Markdown {
         self
     }
 
-    /// A plan row's words (egui `show_row_words`): `Body` type on `XL` lines, marks kept in the
+    /// A plan row's words: `Body` type on `XL` lines, marks kept in the
     /// line, no space after; `muted` for a done scene (its links keep their underline).
     pub fn row_words(mut self, muted: bool) -> Self {
         self.mode = Mode::Row { muted };
@@ -142,8 +142,7 @@ impl Markdown {
         self
     }
 
-    /// Let tables take the parent's whole width while prose keeps its measure (egui
-    /// `with_wide_tables`): a table wider than the measure scrolls only when the pane is too
+    /// Let tables take the parent's whole width while prose keeps its measure: a table wider than the measure scrolls only when the pane is too
     /// narrow for it.
     pub fn wide_tables(mut self) -> Self {
         self.wide_tables = true;
@@ -333,7 +332,7 @@ impl RenderOnce for Markdown {
                 }
                 Block::Paragraph(paragraph) => {
                     // A plan row's words, and field rows' last line, end with no space: the row
-                    // around them owns the space after them (egui's `show_skills` in its row).
+                    // around them owns the space after them.
                     let row = matches!(mode, Mode::Row { .. })
                         || (mode == Mode::Dense && at + 1 == blocks.len());
                     Some(
@@ -429,7 +428,7 @@ pub fn jump_here(handle: ScrollHandle) -> impl IntoElement {
     .h(px(0.0))
 }
 
-/// Give each short link at least `XL` of width, as the egui reader does, so its press target
+/// Give each short link at least `XL` of width, so its press target
 /// covers no other words. In prose the spare width is no-break space around the words (all of it
 /// after a link that starts its paragraph or that punctuation follows, the punctuation then part
 /// of the target); in a Skills row (`entries`) the target grows left over its own entry instead.

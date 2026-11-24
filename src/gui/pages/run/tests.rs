@@ -1,6 +1,6 @@
-//! The run's screenshots and interaction tests. Captures are named after the egui scenarios'
-//! steps (`encounter-run__04-participant-selected__1200x800`), so they pair with
-//! `artifacts/screenshots/egui-reference/`.
+//! The run's screenshots and interaction tests. Captures are named after the scenarios' steps
+//! (`encounter-run__04-participant-selected__1200x800`), so they pair with the reference
+//! captures.
 use crate::Page;
 use crate::encounter_run::{Panel, Phase};
 use crate::fixtures::{RUN, Seed};
@@ -82,7 +82,7 @@ fn participant(shell: &mut Shell, name: &str) -> crate::encounter_run::Participa
 }
 
 /// The live run: Next turn by click and by key, a selection, damage typed in Amount, a
-/// condition and its Undo (egui `encounter-run`).
+/// condition and its Undo.
 #[test]
 fn encounter_run_live() {
     let mut shell = Shell::new("encounter-run", Seed::Campaign);
@@ -166,7 +166,7 @@ fn encounter_run_small() {
 }
 
 /// Setup: rows with their initiative, Roll NPCs, Begin combat waits for initiative, and typed
-/// totals let it begin (egui `encounter-run` steps 12 and 13).
+/// totals let it begin (scenario `encounter-run` steps 12 and 13).
 #[test]
 fn encounter_run_setup() {
     let mut shell = Shell::new("encounter-run", Seed::Campaign);
@@ -220,7 +220,7 @@ fn encounter_run_setup() {
     );
 }
 
-/// End encounter, its outcome, the ended view, its Undo; then Close run (egui `run-continue`).
+/// End encounter, its outcome, the ended view, its Undo; then Close run.
 #[test]
 fn run_end_undo_and_close() {
     let mut shell = Shell::new("run-continue", Seed::Campaign);
@@ -240,8 +240,7 @@ fn run_end_undo_and_close() {
         Phase::Running
     );
     // A run that cannot close quietly (here its file changed on disk) asks first; Keep running
-    // and Escape, the safe choice, keep the run at every opening (egui
-    // `iter_1_b_unsaved_close_still_asks_and_keeps_the_run`).
+    // and Escape, the safe choice, keep the run at every opening.
     let conflict = |shell: &mut Shell, on: bool| {
         shell.update(|root, _, cx| {
             root.app.encounters.run_mut().unwrap().disk_conflict = on;
@@ -296,7 +295,7 @@ fn run_strip_on_another_page() {
     assert_eq!(shell.read(|root| root.app.page), Page::Run);
 }
 
-/// The ended view with loot to roll; Roll all rolls it (egui `run-loot`).
+/// The ended view with loot to roll; Roll all rolls it.
 #[test]
 fn run_loot() {
     let mut shell = Shell::new("run-loot", Seed::Loot);
@@ -358,7 +357,7 @@ fn sync_of(shell: &mut Shell, name: &str) -> Option<splat_party::combat_sync::Sy
     })
 }
 
-/// Every sync state on the roster, and a linked row whose sync is off (egui `run-sync-states`).
+/// Every sync state on the roster, and a linked row whose sync is off.
 #[test]
 fn run_sync_states() {
     use splat_party::combat_sync::SyncState;
@@ -385,8 +384,8 @@ fn run_sync_states() {
     shell.capture("run-sync-states__02-linked-row-sync-off__1200x800");
 }
 
-/// A conflict on a row, its choices in the panel, and Use D&D Beyond values settling it (egui
-/// `run-sync-conflict`).
+/// A conflict on a row, its choices in the panel, and Use D&D Beyond values settling it
+/// (scenario `run-sync-conflict`).
 #[test]
 fn run_sync_conflict() {
     use splat_party::combat_sync::SyncState;
@@ -501,7 +500,7 @@ fn names() -> Vec<String> {
         .collect()
 }
 
-/// Arrivals (egui `groups_tab`, `run-add-creature`): each group's heading says the fight after
+/// Arrivals: each group's heading says the fight after
 /// it joins; a typed total and Enter add the group; a total that ties a row gives the footer's
 /// Move, which moves the arrival before that row; a group dragged to the initiative list joins
 /// as its Add does.
@@ -588,7 +587,7 @@ fn run_arrivals_add_tie_and_drag() {
     );
 }
 
-/// Effects on rows (egui `run-effects`): an effect typed in Conditions shows on its row's second
+/// Effects on rows: an effect typed in Conditions shows on its row's second
 /// line, and U takes it back.
 #[test]
 fn run_effects_on_rows() {
@@ -620,7 +619,7 @@ fn run_effects_on_rows() {
             .any(|name| name.starts_with("Shield of Faith")),
         "U takes the effect off the row"
     );
-    // The dock's Effect field belongs to its row (egui `the_effect_field_belongs_to_its_row`):
+    // The dock's Effect field belongs to its row:
     // its words wait while another row is selected, and Enter adds them to that row only.
     let cultist = participant(&mut shell, "Ember Cultist").key;
     let other = shell.read(|root| {
@@ -683,8 +682,6 @@ fn run_effects_on_rows() {
         "Escape adds nothing"
     );
     // Exhaustion moves one level a press, each its own Undo step, and stops at 6 with the reason
-    // (egui `iter9_b_exhaustion_stepper_uses_scan_and_keeps_undo`,
-    // `iter10_b_exhaustion_limit_says_why`).
     shell.update(|root, _, cx| {
         root.app.encounters.run_mut().unwrap().panel = Panel::Conditions;
         cx.notify();
@@ -724,7 +721,7 @@ fn run_effects_on_rows() {
     assert_eq!(level(&mut shell), Some(6), "Undo takes back one level");
 }
 
-/// A creature the encounter changed (egui `run-overrides`): its card says what to add by hand
+/// A creature the encounter changed: its card says what to add by hand
 /// and its row marks the change.
 #[test]
 fn run_overrides_card_and_row() {
@@ -748,8 +745,8 @@ fn run_overrides_card_and_row() {
     );
 }
 
-/// The keyboard comes back to the run when Lookup or Notes close (egui: the run's letters work
-/// again once nothing else holds the keyboard).
+/// The keyboard comes back to the run when Lookup or Notes close: the run's letters work again
+/// once nothing else holds the keyboard.
 #[test]
 fn run_keys_after_lookup_and_notes() {
     let mut shell = Shell::new("encounter-run", Seed::Campaign);

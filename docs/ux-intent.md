@@ -130,8 +130,8 @@ checkbox: 2 or 3 per character, and again after every resume (`src/encounter_run
   stays hidden in a collapsed section of one participant. The log only says
   "See sync status" (`:982`).
 - Incoming changes clear undo history with no visible warning (`:985-987`).
-- `Save and close run` is disabled during sync, but its reason is an `on_hover_text`.
-  egui does not show that on a disabled control (`:662-665`, egui 0.33 `response.rs`).
+- `Save and close run` is disabled during sync, but its reason is only hover text, which a
+  disabled control did not show (`:662-665`).
 - App close does not warn about pending sync (`src/main.rs:98`,
   `src/encounters.rs:293-296`), although the README tells the user to wait
   (`README.md:266-267`).
@@ -311,8 +311,7 @@ HP, and it follows the same initiative rules as a group. A creature made up this
 ### W14. Run the evening from one page
 **Trigger:** the DM sits down at the table, or a fight ends. **Goal:** the next thing to do is on the page already: the
 recap, the plan, the note, the rest to record. **Context:** table. **Frequency:** every session. The session's page holds
-the plan, so that a DM never chooses between Encounters, Timeline and the note in the gap between two fights. A measured
-evening is in `artifacts/dm-audit/README.md`.
+the plan, so that a DM never chooses between Encounters, Timeline and the note in the gap between two fights.
 
 When a fight ends, the party searches it. The ended view lists the encounter's loot and the loot of each creature
 at 0 HP, and each roll on a loot table is one button, with Undo.
@@ -724,13 +723,13 @@ reading the code, not from a test run.
 | T19.3 | A value that passes a mark raises a Due row above the trackers and the rail's count, on every page. The Run page shows no tracker part except the rail's count. With no house rule note in play the rail says nothing | trackers, run-lookup | state | New |
 | T19.4 | Case D, beside the Session page: three notices with four rolls and the result line are in view with no scroll | trackers | view | New |
 | T19.5 | The Timeline's day count raises a day mark's Due row and the rail's count, and raising it writes nothing. Days that pass in one step are one row that says how many, with `Done: Day 32`. A clock that goes back takes the row away and keeps what was done. At 960x640 with Lookup narrow, the row, its `Done` and the result line are in view | trackers | view, state | New |
-| T19.6 | The house rule note's reader lists the note's problems, also a value below its `min`, and each tracker's history, folded, with its start value. Only a row with another session's stamp has `Remove` in its menu; Remove takes the entry with its press and the notice it raised, and `Undo remove` puts them back in their places after an unrelated act. An entry changed on disk, a later notice that depends on it, a failed save and an unreadable `Trackers.md` write nothing and say so. Costs 6 from the session page (audit) | trackers, dm-audit | cost, state | New |
+| T19.6 | The house rule note's reader lists the note's problems, also a value below its `min`, and each tracker's history, folded, with its start value. Only a row with another session's stamp has `Remove` in its menu; Remove takes the entry with its press and the notice it raised, and `Undo remove` puts them back in their places after an unrelated act. An entry changed on disk, a later notice that depends on it, a failed save and an unreadable `Trackers.md` write nothing and say so. Costs 6 from the session page | trackers | cost, state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |
 | G4 | All pages have no ergonomics violations at 960x640 and one high density | all | `ergonomics.rs` | Not measured |
 | G5 | Read text stays readable under every shipped theme | all | look | Fail on fixed-grey screens |
-| G6 | The unchanged evening of the audit gives the counts it gave before: each task's page transitions, interactions and path match `artifacts/dm-audit/counts.json`, and no counted act misses its control | dm-audit | cost, state | Pass |
+| G6 | The unchanged evening gives the counts it gave before: each task's page transitions, interactions and path, and no counted act misses its control | none | cost, state | Not measured: no audit tool counts the evening now |
 | G7 | The plain campaign differs from its reference only by rows of `docs/design/session-cycle.md` section 2.5, each listed in `src/visual_tests/plain_evening/allowed.json`: every view that `SCREENS` names (pages, readers, open menus, hover texts), every act's words and file writes, and every campaign file by its bytes | plain-evening | view, state | Pass |
 
 **New scenarios, in priority order:** `run-lookup`, `prep-to-table`, `run-resume`, `run-large-roster`,

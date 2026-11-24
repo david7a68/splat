@@ -1975,7 +1975,7 @@ pub struct ConflictView {
     pub texts: Option<(String, String)>,
 }
 
-/// The edit form as data, for a view that is not egui (the GPUI port).
+/// The edit form as data, for the GPUI reader.
 pub struct DraftView {
     pub path: String,
     /// Stat block, for an NPC; Place; Part of.

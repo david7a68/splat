@@ -4930,7 +4930,7 @@ impl Encounters {
             }
         }
     }
-    /// What the run reads from this page before the Run page draws (egui and GPUI): the
+    /// What the run reads from this page before the Run page draws: the
     /// campaign's creature names, groups, scale and creatures, and tonight's planned groups.
     pub fn run_reads(&mut self) {
         let Some(run) = &mut self.run else {
@@ -4943,7 +4943,7 @@ impl Encounters {
         }
         run.planned.clone_from(&self.planned_groups);
     }
-    /// The DM closed the run on the Run page (egui and GPUI): it goes, and the list reads its
+    /// The DM closed the run on the Run page: it goes, and the list reads its
     /// runs again.
     pub fn close_shown_run(&mut self, active: &Campaign) {
         let Some(run) = &self.run else {
@@ -5682,7 +5682,7 @@ impl Encounters {
 
     pub fn clear_notice(&mut self) {}
 
-    /// A row action of the list (`ListAction`), for both views: the egui list and the GPUI page.
+    /// A row action of the list (`ListAction`).
     pub fn list_act(&mut self, action: ListAction, active: &Campaign, campaigns: &Campaigns) {
         self.clear_notice();
         match action {

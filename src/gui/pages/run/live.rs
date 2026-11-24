@@ -1,4 +1,4 @@
-//! The Running phase (egui `view::live_view`): the header, the roster with its notices and
+//! The Running phase: the header, the roster with its notices and
 //! message footer, the action line while the panel is hidden, the dock and the footer, with the
 //! run's panel beside them.
 use super::{Side, dock, footer, header, on_run, panel, roster};
@@ -10,7 +10,7 @@ use gpui::{
 };
 use theme::{Density, Type, colors};
 
-/// The footer's height (egui `FOOTER_HEIGHT`).
+/// The footer's height.
 pub(super) const FOOTER_HEIGHT: f32 = 28.0 + 7.0;
 
 #[cfg(test)]
@@ -34,7 +34,7 @@ pub(super) fn render(
     let height = window.viewport_size().height - theme::S * 2.0;
     let side = super::side_width(Side::Live, room, window_width, cx);
     let arrivals = super::arrivals_prepare(root);
-    // A changed window size must not leave the selected row out of view (egui `roster`).
+    // A changed window size must not leave the selected row out of view.
     let scroll = root
         .app
         .encounters

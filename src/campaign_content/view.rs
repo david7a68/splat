@@ -1,6 +1,5 @@
-//! Campaign → Packages' reads and acts, free of any toolkit, so the egui page
-//! (`CampaignContent::show`) and the GPUI tab (`src/gui/pages/campaigns/packages.rs`) share
-//! them.
+//! Campaign → Packages' reads and acts, free of any toolkit, for the GPUI tab
+//! (`src/gui/pages/campaigns/packages.rs`).
 use super::{
     CampaignContent, Cause, ContentFault, ContentPress, MISSING_CAMPAIGN, PageResult, Payload,
     end_results, manifest_mark, manifest_on_disk, missing_package, needed_by, package_count,
@@ -237,8 +236,7 @@ impl CampaignContent {
         let document = &snapshot.document;
         let changed = document.selections != self.saved_selections;
         if changed {
-            // While the choices differ from Campaign.md, Discard's result has ended, as the
-            // egui bar ends it each frame (`choices_edited`).
+            // While the choices differ from Campaign.md, Discard's result has ended.
             end_results(&mut self.results, document.campaign.id, |payload| {
                 matches!(payload, Payload::Discarded { .. })
             });

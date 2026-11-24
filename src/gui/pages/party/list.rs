@@ -1,4 +1,4 @@
-//! The member list (egui: `member_header`, `member_row`): to compare the party at a glance,
+//! The member list: to compare the party at a glance,
 //! each member's portrait, name, class and level, conditions, the compare columns (passive
 //! Perception and Insight, spell DC), AC and HP with its bar.
 use crate::gui::kit::{self, Row};

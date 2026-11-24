@@ -1,7 +1,6 @@
 //! What the GPUI Session page (`src/gui/pages/sessions/`) reads from the page's state and the
-//! acts it asks for. Toolkit-free: no egui `Ui` here. Each act is the same state change the egui
-//! page makes for the same press, by the same methods, so the two UIs share one behaviour. The
-//! GPUI view holds no copy of the page's logic; what it needs from a private field is read here.
+//! acts it asks for. Toolkit-free. Each act calls the page's own methods, so a press makes one
+//! state change wherever it comes from. The GPUI view holds no copy of the page's logic; what it needs from a private field is read here.
 use super::{
     DraftState, Form, Note, Plan, ProcessingSettings, SessionAct, Sessions, Tab, Template, View,
     form_reason,
@@ -1514,7 +1513,7 @@ pub struct EventRow {
     pub details: Option<EventDetails>,
 }
 
-/// An open event's details (a simpler form of the egui plan's open row).
+/// An open event's details (a simple form of the plan's open row).
 pub struct EventDetails {
     pub title: String,
     pub notes: String,
@@ -3162,7 +3161,7 @@ mod tests {
     /// Round 30 review F4 of PR 400: every warning of the session note that the banner shows on
     /// any page names its note, with its cause: the conflict, the missing note, the discarded
     /// and missing note, and the failed save. A template's warning (no name) keeps `This note`.
-    /// Ported from the egui banner test to the banner's data (`draft_warning`).
+    /// The banner's data (`draft_warning`).
     #[test]
     fn a_session_note_warning_names_its_note_in_every_state() {
         let folder = tempfile::tempdir().unwrap();

@@ -258,7 +258,7 @@ impl CopyDialog {
 /// A copy's destination: is a campaign, its id, its words, its folder, the campaign.
 pub type Destination = (bool, Uuid, String, PathBuf, Option<Campaign>);
 
-/// The dialog as data, for a UI that draws it itself (the GPUI port, `docs/gpui-port.md`).
+/// The dialog as data, for the GPUI dialog (`gui::pages::library::copy`).
 impl CopyDialog {
     pub fn source_name(&self) -> &str {
         &self.source.entry.name

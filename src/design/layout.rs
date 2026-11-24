@@ -95,7 +95,7 @@ macro_rules! word {
         const {
             #[allow(
                 clippy::disallowed_methods,
-                reason = "owner: the design system checks a word (design::results::OWNED_ALLOWS)"
+                reason = "owner: the design system checks a word"
             )]
             let word = $crate::layout::Word::checked($word);
             word

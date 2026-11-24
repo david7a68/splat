@@ -1,7 +1,6 @@
 //! What the run's views read and do (the GPUI views are `gui::pages::run`): the words, sizes and
 //! columns of the rows, the presses of the run's messages, the Arrivals words, the close
-//! dialog's words, the Undo forms and the keys. The condition grid and the other-effect field
-//! stay here for the Encounters page's egui group form until that page's strip.
+//! dialog's words, the Undo forms and the keys, and the other effects of a participant.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Command, Panel, Participant, PartySync, Phase, Run, SHEET_SOURCE};
 use crate::{
@@ -1466,7 +1465,7 @@ impl Run {
     }
 
     /// A group's `Cannot join` faults in Arrivals, each with its repair, as plain lines for a
-    /// view that is not egui (`group_row`'s `member_fault_row` rows): the members' faults, then
+    /// view (the group row's member fault rows): the members' faults, then
     /// the group's own reasons. When every fault points to packages, the last also offers the
     /// group editor.
     pub fn arrival_faults(

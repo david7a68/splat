@@ -710,7 +710,7 @@ impl LengthDraft {
 }
 
 /// Enter in **How long** of the journey `id`, or focus gone elsewhere: the event takes the typed
-/// length, as the egui field does when it loses focus.
+/// length, as the field does when it loses focus.
 pub fn commit_length(book: &mut Book, id: &str) {
     if book.length.0.as_ref().is_none_or(|(held, _, _)| held != id) {
         return;

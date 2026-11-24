@@ -39,7 +39,7 @@ use uuid::Uuid;
 mod carry;
 #[path = "folder_view.rs"]
 mod folder_view;
-/// What the GPUI view reads and does (`src/gui/pages/sessions/`, `docs/gpui-port.md`).
+/// What the GPUI view reads and does (`src/gui/pages/sessions/`).
 #[path = "gpui_facade.rs"]
 pub mod gpui_facade;
 #[path = "kept.rs"]
@@ -3951,7 +3951,7 @@ impl Sessions {
     /// the body may change anything; `session_press` acts on the footer's press after it.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: the notice slot of the page keeps its own order (`outcome_at`, design::results::STAGED_ALLOWS)"
+        reason = "staged: the notice slot of the page keeps its own order (`outcome_at`, design::results::STAGED)"
     )]
     fn session_messages<'f>(
         &mut self,
@@ -5850,7 +5850,7 @@ mod tests {
     /// Round 28 K4a, the New session form's facts: the chosen template is read from the folder
     /// at the press (changed or removed outside Splat since the form opened), a refused press
     /// keeps the form and its words, and the form belongs to its campaign (a switch ends it, and
-    /// B's form never offers A's template). Ported from the egui form test to the state.
+    /// B's form never offers A's template).
     #[test]
     fn the_new_session_form_reads_its_template_at_the_press_and_keeps_to_its_campaign() {
         let dirs = [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()];
@@ -5958,7 +5958,7 @@ mod tests {
 
     /// The run moved to this session keeps `Undo move <run>` in the page's footer, owned by this
     /// campaign's page: its Undo puts the event back, and an edit of the note or a change to the
-    /// Timeline ends it. Ported from the egui footer test to the plain footer lines.
+    /// Timeline ends it, in the plain footer lines.
     #[test]
     fn move_run_undo_restores_the_event_and_expires_after_an_edit() {
         let folder = tempfile::tempdir().unwrap();

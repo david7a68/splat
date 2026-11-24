@@ -1,4 +1,4 @@
-//! The Campaign page's tabs (egui: `src/campaigns.rs`, `src/campaign_content.rs`,
+//! The Campaign page's tabs (state: `src/campaigns.rs`, `src/campaign_content.rs`,
 //! `src/campaign_content/`). The shell draws the page's header and tabs (`SplatRoot::campaign_page`).
 mod link;
 mod packages;
@@ -24,8 +24,7 @@ pub struct State {
 }
 
 /// Ctrl+S on the Campaign page (`pages::save_key`): the shown tab's save, exactly when its button
-/// can (`Save selections`, `Save run settings`, `Save folder`; egui `save_shortcut`,
-/// `run_settings`, `folder_save_row`).
+/// can (`Save selections`, `Save run settings`, `Save folder`).
 pub(crate) fn save_key(root: &mut SplatRoot, _: &mut Context<SplatRoot>) {
     match root.app.campaign_tab {
         crate::CampaignTab::Packages => {

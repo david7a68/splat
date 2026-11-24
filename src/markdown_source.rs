@@ -158,9 +158,8 @@ fn looks(text: &str) -> Runs {
     Arc::new(runs)
 }
 
-/// A text's looks for an editor that is not egui's (the GPUI note editor, `gui::kit::field`): each
-/// stretch's look, as [`layouter`] styles it, and the byte where each section heading ends (its
-/// rule goes under that line, as [`paint_section_rules`] draws it). Toolkit-free.
+/// A text's looks for the note editor (`gui::kit::field`): each stretch's look, and the byte where
+/// each section heading ends (its rule goes under that line). Toolkit-free.
 pub fn source_looks(text: &str) -> (Runs, Vec<usize>) {
     let runs = looks(text);
     let section_ends = runs

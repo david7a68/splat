@@ -243,8 +243,8 @@ impl TextField {
         self
     }
 
-    /// The words' type (`Body` by default): `Heading` for a name that heads its editor (egui's
-    /// name fields set `Type::Heading`), with the field one `Scan` control high.
+    /// The words' type (`Body` by default): `Heading` for a name that heads its editor, with the
+    /// field one `Scan` control high.
     pub fn text_type(mut self, ty: Type) -> Self {
         self.text_type = Some(ty);
         self
@@ -588,7 +588,7 @@ impl RenderOnce for TextEditor {
 /// in the rule colour `RULE_GAP` under the heading's last line, across the text. Only headings in
 /// view have a place (`range_to_bounds`), so a frame paints only those.
 fn section_rules(input: Entity<TextareaState>, rules: Rc<Vec<usize>>) -> impl IntoElement {
-    /// The egui source's gap between a heading's line and its rule.
+    /// The gap between a heading's line and its rule in Markdown source.
     const RULE_GAP: gpui::Pixels = gpui::px(3.0);
     gpui::canvas(
         |_, _, _| {},

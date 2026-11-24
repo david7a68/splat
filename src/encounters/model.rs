@@ -1,6 +1,6 @@
-//! The Encounters page as plain data, and its acts, for a view that does not draw with egui (the
-//! GPUI page, `src/gui/pages/encounters/`). The egui view keeps its own drawing; both views call
-//! the acts here and in `Encounters`, so the logic has one home. Nothing here draws or measures:
+//! The Encounters page as plain data, and its acts, for the GPUI page
+//! (`src/gui/pages/encounters/`). The page calls the acts here and in `Encounters`, so the logic
+//! has one home. Nothing here draws or measures:
 //! a view fits the words itself.
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::*;
@@ -942,7 +942,7 @@ impl Encounters {
     }
 
     /// The encounter editor's head and save row (`editor_view`), as data, with the frame's
-    /// checks that the egui editor makes before it draws: Save's refusal for Ctrl+S, the
+    /// checks that the editor makes before it draws: Save's refusal for Ctrl+S, the
     /// encounter's groups read once, and the last refusal checked again.
     pub fn editor_frame(&mut self, active: &Campaign) -> Option<EditorView> {
         // After a load in progress, so that a group just saved is among them.

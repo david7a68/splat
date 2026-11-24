@@ -1,7 +1,6 @@
 //! A group's fields, a creature's Changes, a missing member's replacement and the encounter's
-//! own groups, as plain data and acts for a view that does not draw with egui (the GPUI page).
-//! The egui editor keeps its own drawing (`overrides_form`, `members`, `of_encounter`); the rules
-//! (ranges, which rows show, how a change is written) are the ones those functions use.
+//! own groups, as plain data and acts for the GPUI page: the rules
+//! (ranges, which rows show, how a change is written) and the words.
 #![warn(deprecated)]
 use super::*;
 use crate::state_context::StateContext;

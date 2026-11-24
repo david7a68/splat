@@ -1,5 +1,4 @@
-//! The run strip above every other page while a run is open (egui `Splat::run_strip`,
-//! `design::TurnStrip`): the round, whose turn it is and who is next; Next turn and Back to run;
+//! The run strip above every other page while a run is open: the round, whose turn it is and who is next; Next turn and Back to run;
 //! and what needs the DM: Not saved, a stopped sync, a sync error or a conflict.
 use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::{Page, party};

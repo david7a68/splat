@@ -274,7 +274,7 @@ fn save_row(
 
 /// The reason on the save row (`save_row_with`): its long form when it fits whole beside the
 /// widest state word, Discard and Save, else its short form, else none. Measured in the type
-/// each part is set in, as egui measures them.
+/// each part is set in.
 fn row_reason(window: &mut Window, width: f32, long: &str, short: &str) -> Option<String> {
     use crate::design::save_row::{InvalidCause, SaveWord};
     let gap = f32::from(S);
@@ -475,7 +475,7 @@ fn entry(
 }
 
 /// Read: the title with the entry's picture, the body's notices, then the entry as the reader
-/// shows it (egui `view::title_with_art` and `view::show_with_related`): a stat block, a spell's
+/// shows it: a stat block, a spell's
 /// or an item's facts, class features, related entries and the closed end sections. Its related,
 /// feature and spell links open their entries here; a note link in its words opens its entry, or
 /// offers its choices.

@@ -1,7 +1,5 @@
-//! The encounter editor's other views as plain data and acts, for a view that does not draw with
-//! egui (the GPUI page): the creature pane that `Make it yours` opens, a missing row's
-//! replacement picker, the search's `Use it` lines, and the narrow layout's tabs. The egui editor
-//! draws the same state and calls the same acts (`replace_missing`).
+//! The encounter editor's other views as plain data and acts, for the GPUI page: the creature pane that `Make it yours` opens, a missing row's
+//! replacement picker, the search's `Use it` lines, and the narrow layout's tabs (`replace_missing`).
 #![warn(deprecated)]
 use super::*;
 use crate::state_context::StateContext;
@@ -293,7 +291,7 @@ impl Encounters {
     }
 }
 
-/// Whether the search's words find a creature note with a twin file (the egui search's repair
+/// Whether the search's words find a creature note with a twin file (the search's repair
 /// messages, `duplicate_creature_results`).
 fn hidden_duplicates(index: &crate::lookup::ContentIndex, query: &str) -> bool {
     index.campaign.is_some()

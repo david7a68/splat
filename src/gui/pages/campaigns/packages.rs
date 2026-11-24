@@ -1,4 +1,4 @@
-//! Campaign → Packages (egui: `CampaignContent::show`, `selection_bar`, `packages_content`): the
+//! Campaign → Packages: the
 //! save row of the package choices, the issues, then the package list beside the chosen
 //! package's entries (or `Needed by your entries`), and the page's footer.
 use crate::campaign_content::view::{Ready, SaveBar};

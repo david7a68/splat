@@ -1,4 +1,4 @@
-//! An entry's actions as tiles (egui `rolls::tile_row`): each tile its icon, name and key number,
+//! An entry's actions as tiles: each tile its icon, name and key number,
 //! then its numbers and where it lands; its rules text on hover. A press asks for the roll (Shift
 //! for advantage, Ctrl for disadvantage), which the run or the preview stream takes
 //! (`rolls::take_ask`); a spell's open tile opens its entry. Under the tiles, in a run, the armed

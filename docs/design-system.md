@@ -189,9 +189,10 @@ the spaces `XS S M L XL XXL`, `ICON_SLOT`, `RADIUS_CONTROL`, `RADIUS_LAYER`, `HA
 panel and measure widths (`READER_MEASURE`, `LIST_MEASURE`, `FORM_WIDTH`, `PANEL_MIN_WIDTH`, …),
 `Density::{Glance, Scan, Read}.control()/.row()`, `RunScale` (`RUN_COMPACT`, `RUN_REGULAR`, `RUN_LARGE`,
 `fit`) and `Type` (the 19 roles). Set text with `.ty(Type::Body)` and icons with `.icon_font(Type::Body)`
-(trait `TypeExt`). `theme::install` loads the fonts and sets gpui-component's theme from the tokens. A
-test keeps the GPUI values equal to `design::tokens`. TODO(3b): name that test and the plain colour type
-when the tokens leave `egui::Color32`.
+(trait `TypeExt`). `theme::install` loads the fonts and sets gpui-component's theme from the tokens. The
+colours are `design::Color` tokens (8-bit sRGB); `theme::color` turns one into a GPUI colour, and
+`colors()` is built from them. A test (`the_gpui_theme_is_the_design_tokens`) keeps the GPUI colours, type
+and sizes equal to `design::tokens`.
 
 ### Motion and scrolling
 
@@ -641,8 +642,8 @@ package, Register a copy; the Library's New entry):
 ### Messages and results
 
 The data is in `src/design/` and the drawing in `kit::messages`. A page builds `Messages` as it would for
-any footer (`let frame = PaneFrame::plain();`; TODO(3b): the frame's name when the design parts are plain
-data), then calls `messages.into_plain() -> Vec<PlainLine<A>>`. `RowMessages::into_plain()`, `KeptLine`,
+any footer (`let frame = PaneFrame::new(); let mut messages = Messages::new();`: a kept line borrows the
+frame, so no line outlives the frame it was made in), then calls `messages.into_plain() -> Vec<PlainLine<A>>`. `RowMessages::into_plain()`, `KeptLine`,
 `FaultMessage` and `Notice::into_plain()` give one `PlainLine<A>`. An owner that feeds both a footer and a
 save row writes to `impl plain::Sink<'f, A>`. A view with its own choice look (a banner) takes
 `plain::ChoiceForm`. The kit draws the lines (`kit::messages::lines`), in the one order
@@ -686,7 +687,7 @@ of letters (at least three) with `…`, never the fixed words, and the action is
 A choice may give shorter forms of itself (`ChoiceWords::or_shorter`): a form gives up a whole part, never
 a piece of one. `clippy.toml` lists the escapes (`Sentence::outside` and the macros' helpers); each use
 carries one reviewed suppression on its innermost function and one counted row
-(`design::results::STAGED_ALLOWS`; TODO(3b): check where this table lives once `src/design/` is plain data).
+(`design::results::STAGED`).
 
 **Undo.** Undo comes first, quiet with its icon, its words at the message's words. Its words are typed
 (`UndoStep`: a `Verb`, an optional object, and the joining word from the verb's table, `Verb::join`), so no
@@ -990,8 +991,8 @@ line`.
 ### Reader parts
 
 The Reader parts (`src/gui/kit/markdown/`, `src/gui/pages/reader/`) give every page its Markdown and entry
-views. Pressed links, rolls and roll tables go through the app's context (`kit::markdown::Host`, installed by
-`pages::reader::init`; TODO(3b): the context's name), and the frame logic routes them (`Splat::route`,
+views. Pressed links, rolls and roll tables go through the app's state context (`StateContext`, which
+`kit::markdown::Host` holds, installed by `pages::reader::init`), and the frame logic routes them (`Splat::route`,
 `poll_background`). So a page calls the same state methods after a reader (`markdown_view::take_lookup_link`,
 `rolls::take_ask`, …) and needs no handler for them.
 
@@ -3535,7 +3536,9 @@ with the campaign.
 Icons are Phosphor Regular (MIT), from the bundled font (`assets/fonts/Phosphor-Regular.ttf`).
 `.gitignore` forbids committed images, so icons are glyphs or drawn shapes. All icons come from
 `gui::icons`, which names only glyphs in use (`icons::RUN`, `icons::WARN`, …); `icons::phosphor::*` holds
-the raw glyphs. TODO(3b): say where the code points come from once `egui-phosphor` is gone. Never pass raw
+the raw glyphs. The code points live in `design::icons` (which `gui::icons` re-exports), so a state
+method names its icon from there; to add a glyph, look up its code point in the font and add a constant
+with the glyph's Phosphor name in its doc line. Never pass raw
 symbols as widget text (the lint's `raw-symbol` rule). Icons support words; replace words only for universal
 meanings, with accessible names and tooltips. `PIN` marks an effect with a time: the dock's `Effect`, a row's
 count of effects and the notice line's reminders.

@@ -1,7 +1,7 @@
 //! A message line (`design::outcome`'s look): a bar and an icon in the tone's colour, the words in
 //! the text colour, and the message's actions under the words, at the words' edge.
 //!
-//! Where a message goes is the page's rule, as in egui: a pane's results, reasons and notices sit
+//! Where a message goes is the page's rule: a pane's results, reasons and notices sit
 //! in its footer (`kit::Pane::footer`); a notice that came by itself sits at the top of the pane's
 //! body; a row's fault sits on its row. The tone comes from what happened (`Tone`), never from the
 //! caller's taste: Error for a failure, Warning for a risk, Success for a done act, Info otherwise.

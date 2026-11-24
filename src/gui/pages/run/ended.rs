@@ -1,4 +1,4 @@
-//! The Ended phase (egui `view::ended_view`, `ended_panel`, `loot::loot_section`): the title
+//! The Ended phase: the title
 //! with the outcome, the save state, Undo of the ending or Continue fight (or why not), Close
 //! run; the final state's rows and the loot; beside them sync, Prep and the combat log.
 use super::{on_run, panel, roster, run_title, save_status};

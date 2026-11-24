@@ -700,8 +700,7 @@ pub struct UnreadView {
     pub system: String,
 }
 
-/// The page's view of the World, for a view that is not egui (the GPUI port). Each act here is
-/// the one the egui page runs, which calls it too.
+/// The page's view of the World, for the GPUI page, and its acts.
 impl WorldPage {
     /// The list's search words.
     pub fn search(&self) -> &str {

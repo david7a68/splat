@@ -163,7 +163,7 @@ fn creature_stat_block_and_its_dice() {
         "the Strength check was rolled for the Adult Black Dragon"
     );
     // In a run, the armed action's tile row says what to do now and offers what can follow; a
-    // press on a follow-up goes to the run (egui `rolls::tile_row` under `show_run`).
+    // press on a follow-up goes to the run.
     let dragon = builtin("definitions/creatures/adult_black_dragon.md");
     let armed = crate::rolls::plain::actions_of(&dragon.body)[0]
         .1

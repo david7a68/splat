@@ -1,5 +1,4 @@
-//! A character's sheet (egui: `Party::sheet_view`, `splat_party::party::sheet_page`, `overview`,
-//! `details`, `background`): its name and kind line, the page tabs, the Combat sync section, and
+//! A character's sheet: its name and kind line, the page tabs, the Combat sync section, and
 //! the page. The Run page's side panel can show the same pages (`page`).
 use crate::gui::kit::{self, Link, Message, Section, Segmented, TextField, Tone};
 use crate::gui::theme::{
@@ -341,12 +340,12 @@ fn bonus_line(
         .into_any_element()
 }
 
-/// A d20 roll for an ability, a save or a skill, named in book case (egui `sheets::d20`).
+/// A d20 roll for an ability, a save or a skill, named in book case.
 fn d20(what: D20, bonus: i64, name: &str) -> RollLink {
     RollLink::d20(what, bonus, crate::design::reader::human_label(name))
 }
 
-/// A bonus that rolls for the sheet's character (egui `numeral_link`), or a dash when the sheet
+/// A bonus that rolls for the sheet's character, or a dash when the sheet
 /// has none.
 fn numeral(
     id: String,
@@ -952,7 +951,7 @@ fn details(
 const TECHNICAL: &str = "party-technical";
 
 /// The sheet's campaign content entry and its character check, made once for each content
-/// version (egui `PartyPage::content_entry`, `character_review`): the page draws every frame.
+/// version: the page draws every frame.
 pub(crate) struct Checked {
     hash: String,
     entry: Result<splat_content::content::Entry, String>,
@@ -983,7 +982,7 @@ fn review(root: &mut SplatRoot, record: &EntitySnapshot) {
 }
 
 /// The attacks as action tiles that preview their roll, with the last preview's result under
-/// them (egui `rolls::tiles` outside a run).
+/// them, outside a run.
 fn attack_tiles(
     record: &EntitySnapshot,
     search: &str,

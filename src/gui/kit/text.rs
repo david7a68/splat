@@ -18,7 +18,7 @@ pub fn text(ty: Type, color: Hsla, words: impl Into<SharedString>) -> Div {
 /// A hair space (U+200A): 0.059 em in IBM Plex Sans, 0.65 px at `Label`'s 11 px.
 const HAIR_SPACE: char = '\u{200A}';
 
-/// `words` with `Label`'s tracking (egui: `extra_letter_spacing` 0.6): a hair space between the
+/// `words` with `Label`'s tracking (+0.6 letter spacing): a hair space between the
 /// letters of each word. Spaces between words are left as they are, so a label still wraps only
 /// between its words.
 fn tracked(words: &str) -> String {
@@ -123,7 +123,7 @@ trait WhenSome: Styled + Sized {
 }
 impl<T: Styled> WhenSome for T {}
 
-/// The width of `words` set in `ty` on one line (egui's `number_width`): to choose between a
+/// The width of `words` set in `ty` on one line: to choose between a
 /// long and a short form of words by what fits.
 pub fn width(window: &mut gpui::Window, ty: Type, words: &str) -> Pixels {
     if words.is_empty() {

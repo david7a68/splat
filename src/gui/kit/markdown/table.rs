@@ -1,4 +1,4 @@
-//! A reader table (egui `markdown_view::reader_table`): columns as wide as their words without
+//! A reader table: columns as wide as their words without
 //! breaking a word, shrunk toward their longest word when the reader is narrower, a rule under
 //! each row and a heavier look for the header, no stripes. A table that still does not fit says
 //! so and scrolls sideways under its fixed first column, whose rule then runs through the header
@@ -81,7 +81,7 @@ fn lines(text: &str, role: Type, width: Pixels, window: &Window) -> usize {
 }
 
 /// Fit columns to their words without breaking a word; a table that cannot fit those widths
-/// scrolls (egui `column_widths`).
+/// scrolls.
 pub(crate) fn lay_out(table: &Table, available: Pixels, window: &Window) -> Laid {
     let count = table.columns.len();
     if count == 0 || table.rows.is_empty() {

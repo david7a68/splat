@@ -1,4 +1,4 @@
-//! Campaign → Rules and runs (egui: `Encounters::run_settings`): the run folder, how NPCs roll
+//! Campaign → Rules and runs: the run folder, how NPCs roll
 //! initiative, ties in roster order, the inspiration rule when there are several, the house
 //! rules in play, then the save row; the tab's footer holds the discard's Undo, the unread rule
 //! choices, the runs a folder change leaves with their two choices, and the errors.

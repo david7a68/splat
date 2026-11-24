@@ -1,5 +1,5 @@
 //! The Reader's screenshots and interaction tests: the Markdown view and the entry views, drawn
-//! in place of the page (`State::preview`) at the widths the egui scenarios show them.
+//! in place of the page (`State::preview`) at the widths the scenarios show them.
 use super::Preview;
 use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
@@ -8,7 +8,7 @@ use crate::gui::theme::{L, READER_MEASURE, colors};
 use gpui::{IntoElement, ParentElement, Styled, div, px};
 use std::rc::Rc;
 
-/// The egui gallery's note (`design::gallery::NOTE`), as its Read column shows it.
+/// The gallery's note, as its Read column shows it.
 const NOTE: &str = "# Session 4: The Old Mill
 
 2026-11-02, The Emberfall Marches

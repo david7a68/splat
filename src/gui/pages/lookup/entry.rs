@@ -1,4 +1,4 @@
-//! The entry Lookup shows (egui: the reader part of `Lookup::panel`): Lookup's own `world::Reader`,
+//! The entry Lookup shows: Lookup's own `world::Reader`,
 //! compact, drawn by the same view as World's reader (`world::reader::render_reader` with
 //! `Host::Lookup`): the title line with Edit, Start fight or Add to fight and Add to Log, the Log
 //! field, the faults and their repairs, the value rows with Change, the NPC's edit form, the
@@ -155,7 +155,7 @@ pub(super) fn gone_lines(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> V
 }
 
 /// A press in the reader's footer: the trackers take their Undo, the reader every other press
-/// (egui: `Lookup::panel` after its pane); what it opens next goes to Lookup.
+/// after its pane; what it opens next goes to Lookup.
 fn footer_press(
     root: &mut SplatRoot,
     press: Press<FooterAct>,

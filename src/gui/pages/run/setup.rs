@@ -1,4 +1,4 @@
-//! The Setup phase (egui `view::setup_view`, `setup_body`, `setup_row`): the title, Roll NPCs
+//! The Setup phase: the title, Roll NPCs
 //! and Begin combat with its reason, Add to fight and Undo; each participant's row with its
 //! initiative, Roll, tie moves, place, Absent and menu; the message footer; Close run.
 use super::{Side, on_command, on_run, panel, plain, run_title, save_status};

@@ -1,6 +1,5 @@
-//! Markdown made into the reader's blocks, as `markdown_view::prepare` makes them for egui: the
-//! links resolved, the figures found, each paragraph's words styled. Nothing here lays out or
-//! draws; `super` draws the blocks. Keep the two in step until the port's cleanup deletes egui's.
+//! Markdown made into the reader's blocks: the links resolved, the figures found, each
+//! paragraph's words styled. Nothing here lays out or draws; `super` draws the blocks.
 use crate::gui::icons;
 use crate::gui::theme::{L, M, S, Type, XL, XS, colors};
 use crate::markdown_view::{FILE_LINK, LinkTarget};
@@ -819,7 +818,7 @@ mod tests {
     }
 
     #[test]
-    fn blocks_follow_the_egui_reader() {
+    fn blocks_keep_headings_lists_quotes_tables_and_links() {
         let source = "# Title\n\nSome **strong** and *soft* words with [a link](https://a.example).\n\n## Part\n\n- one\n- two\n  1. inner\n\n> quoted\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n```\ncode\n```\n";
         let blocks = read(source, Mode::Reader);
         assert_eq!(

@@ -10,7 +10,7 @@ use gpui::{
 };
 use std::rc::Rc;
 
-/// Where the icon's column starts, and where the words start (egui's `S + 2` and 28).
+/// Where the icon's column starts, and where the words start (`S + 2` and 28).
 const ICON_LEFT: f32 = 10.0;
 const WORDS_LEFT: f32 = 28.0;
 

@@ -1,4 +1,4 @@
-//! Screenshots and interaction tests of the Session page. Captures pair with the egui references
+//! Screenshots and interaction tests of the Session page. Captures pair with the references
 //! by name (`<scenario>__<step>__<w>x<h>`).
 use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
@@ -145,7 +145,7 @@ fn plain_evening_states() {
     shell.click("Road to the ford");
     shell.click("Shrine of Cinders");
     shell.capture("plain-evening__03-session-tonight: planned fight open__1200x800");
-    // Gap 4: the opened played fight shows how it ended (egui `fight_block`): each player's
+    // Gap 4: the opened played fight shows how it ended: each player's
     // final HP, `Log · Whole run · Timeline`, and the Log under them while it is open.
     use crate::fixtures::{PLAIN_LAST, PLAIN_PLAYED};
     let last = shell
@@ -187,7 +187,7 @@ fn plain_evening_states() {
     shell.capture("plain-evening__16-session-new__1200x800");
 }
 
-/// Scenes in the plan (egui `session-plan-scenes`): task lines are rows in the note's order;
+/// Scenes in the plan: task lines are rows in the note's order;
 /// where the closed rows with the scenes do not fit the plan, the scenes fold under `N scenes`
 /// on the heading's line, which opens them in place and closes them again.
 #[test]
@@ -250,8 +250,7 @@ fn plan_scenes_and_their_fold() {
     }
 }
 
-/// After an add, the row after the new one scrolls into view above the plan's footer (egui
-/// `Reveal`), so its action needs no extra gesture.
+/// After an add, the row after the new one scrolls into view above the plan's footer, so its action needs no extra gesture.
 #[test]
 fn plan_add_reveals_its_row() {
     let mut shell = Shell::with_size(
@@ -562,7 +561,7 @@ fn slash_menu_in_the_note() {
         "the / menu lists Generate NPC"
     );
     assert!(shell.bounds("Search").is_some(), "the / menu lists Search");
-    // The menu opens at the `/`: under it, from its left edge (egui `popup_at`).
+    // The menu opens at the `/`: under it, from its left edge.
     let slash = shell
         .update(|root, _, cx| {
             let words = root.app.sessions.gv_note_words(false).unwrap_or_default();
@@ -692,7 +691,7 @@ fn timeline_events(shell: &mut Shell) -> Vec<crate::timeline::Event> {
     shell.read(|root| root.app.timeline.events.clone())
 }
 
-/// Gap 1 of the port (egui `travel_block`): an open Travel row of the plan shows its encounter
+/// Gap 1 of the port: an open Travel row of the plan shows its encounter
 /// checks under it, as the Timeline does: `Roll for encounters` from the row's menu, How long
 /// with its range, a roll and its result with Undo, a typed roll, and a result's
 /// `Plan “<name>”`, which adds the fight to tonight's plan.
@@ -816,7 +815,7 @@ fn more_fights(shell: &mut Shell, count: usize) {
     shell.settle();
 }
 
-/// The plan's Fight menu (egui `plan_menu`): a search shows only once the campaign has more
+/// The plan's Fight menu: a search shows only once the campaign has more
 /// than `FIGHT_SEARCH_FROM` fights, takes the keyboard as the menu opens, and lists the fights
 /// that hold its words; a chosen fight joins the plan and the search empties.
 #[test]
@@ -855,7 +854,7 @@ fn plan_fight_picker_search() {
     );
 }
 
-/// A group assembled in the plan (egui `session-plan-groups`): New group opens the group editor
+/// A group assembled in the plan: New group opens the group editor
 /// in the plan's place, on the Session page, with its back line to the plan; Discard has its
 /// Undo in the plan's footer; Ctrl+S saves it and links it in the plan.
 #[test]

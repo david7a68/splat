@@ -256,9 +256,9 @@ pub const FOCUS_WIDTH: Pixels = px(2.0);
 pub const MARK_WIDTH: Pixels = px(3.0);
 /// The underline of a chosen segment.
 pub const UNDERLINE_WIDTH: Pixels = px(2.0);
-/// A scroll bar's width (egui's `bar_width`).
+/// A scroll bar's width.
 pub const SCROLL_BAR_WIDTH: Pixels = px(8.0);
-/// The gap egui leaves between items in a column (`item_spacing.y`).
+/// The gap between items in a column.
 pub const LINE_GAP: Pixels = px(6.0);
 /// The rail's own small gap between its items (`item_spacing.y = 2`).
 pub const RAIL_ITEM_GAP: Pixels = px(2.0);
@@ -383,7 +383,7 @@ pub mod family {
     pub const SERIF_TITLE: &str = "Source Serif 4 Subhead";
     /// Source Serif 4 SmText: stat blocks, 13 to 14 px.
     pub const SERIF_SMALL: &str = "Source Serif 4 SmText";
-    /// Hack: source text and code, egui's bundled monospace (`splat_assets::MONO`).
+    /// Hack: source text and code (`splat_assets::MONO`).
     pub const MONO: &str = "Hack";
     /// Phosphor icons.
     pub const ICONS: &str = crate::gui::icons::FAMILY;
@@ -510,7 +510,7 @@ impl Type {
         }
     }
 
-    /// `Label` is set in capitals, with egui's +0.6 tracking (`kit::text` draws both: GPUI has no
+    /// `Label` is set in capitals, with +0.6 tracking (`kit::text` draws both: GPUI has no
     /// letter spacing, so it puts a hair space between the letters of each word, 0.65 px in IBM
     /// Plex at 11 px).
     pub const fn capitals(self) -> bool {

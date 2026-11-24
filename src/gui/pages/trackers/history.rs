@@ -1,12 +1,9 @@
-//! A member's history and the problems list in the reader of a house rule note in play (egui:
+//! A member's history and the problems list in the reader of a house rule note in play (state:
 //! `src/trackers/history.rs`). World's reader calls `render` under the note and `footer` in its
 //! pane's footer. Each tracker and each day mark of the note has a folded section with its entries
 //! in the ledger's order (a tracker's says its start value first); a row with another session's
 //! stamp has `Remove` in its menu, whose result and one Undo stand in the footer.
-#![allow(
-    dead_code,
-    reason = "World’s reader of a house rule note calls these (docs/gpui-port.md)"
-)]
+#![allow(dead_code, reason = "World’s reader of a house rule note calls these")]
 use super::{TrackerFault, fault_message, measure, section_heading};
 use crate::design::outcome::{Messages, PaneFrame};
 use crate::gui::theme::{Density, S, Type, TypeExt, XS, colors};

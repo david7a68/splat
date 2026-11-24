@@ -1,4 +1,4 @@
-//! Lookup: screenshots of the panel beside a page (egui `run-lookup`), and its flows: Ctrl+K
+//! Lookup: screenshots of the panel beside a page, and its flows: Ctrl+K
 //! opens it with the field focused, typing finds and opens the best match, the arrows move
 //! through the results, Back returns, Escape closes.
 use crate::fixtures::Seed;
@@ -74,7 +74,7 @@ fn nothing_found_offers_new_entries() {
     shell.capture("lookup-new__01-nothing-found__1200x800");
 }
 
-/// A World entry of `kind` at `path` in the open campaign (egui `world_build::entry`).
+/// A World entry of `kind` at `path` in the open campaign.
 fn world_entry(shell: &mut Shell, path: &str, name: &str, kind: &str, fields: &str) -> uuid::Uuid {
     let id = splat::character::stable_id(path);
     let file = shell.read(|root| {
@@ -140,7 +140,7 @@ fn open_run(shell: &mut Shell) {
     assert!(shell.read(|root| root.app.encounters.has_run()));
 }
 
-/// An NPC in Lookup is World's reader, compact (egui `npc-in-lookup`): its title line's Edit,
+/// An NPC in Lookup is World's reader, compact: its title line's Edit,
 /// Add to fight and Add to Log, its Stat block and Place rows with Change, its links, the entry's
 /// end sections; Add to fight adds it to the run; its edit form saves, and its Undo takes the
 /// change back.

@@ -1,4 +1,4 @@
-//! Campaign: screenshots of its tabs (egui `campaign-content`, `signed-in` step 15), and the
+//! Campaign: screenshots of its tabs (scenarios `campaign-content`, `signed-in` step 15), and the
 //! Link and folder tab's flows (Edit details from the folder block; the session folder's draft).
 use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
@@ -133,7 +133,7 @@ fn content_loaded(shell: &mut Shell) {
     shell.settle();
 }
 
-/// An invalid note in the campaign (egui `campaign-content` 11-14): its message offers Repair,
+/// An invalid note in the campaign (scenario `campaign-content` 11-14): its message offers Repair,
 /// which opens the note's editor and save row; Discard brings the file's text back with an
 /// Undo, and a draft Save accepts saves with Ctrl+S, after which the page reads the campaign
 /// again and the repair ends.

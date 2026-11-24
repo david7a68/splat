@@ -1,7 +1,6 @@
 //! Campaign → Rules and runs, free of any toolkit, for the GPUI tab
-//! (`src/gui/pages/campaigns/run_settings.rs`). The footer is `run_settings_footer`, which the
-//! egui tab (`Encounters::run_settings`) calls too, as it calls the save row's rule
-//! (`run_row_of`).
+//! (`src/gui/pages/campaigns/run_settings.rs`). The footer is `run_settings_footer`; the save
+//! row's rule is `run_row_of`.
 #![warn(deprecated)]
 use super::{
     CHOOSE_MOVE, Encounters, FooterPress, KeptResult, OptionsCommit, commit_options, rule_choices,
@@ -119,9 +118,9 @@ impl Encounters {
         }
     }
 
-    /// The save row (the egui tab's rule): the word, the repair of an unread choice, Save's
+    /// The save row: the word, the repair of an unread choice, Save's
     /// weight and why it waits. It ends the last Save's `Saved` and the discard's draft at the
-    /// form's first edit, as the egui tab does.
+    /// form's first edit.
     pub fn run_row<'a>(&mut self, active: &Campaign) -> Option<RunRow<'a>> {
         let run_open = self.has_run();
         let draft_open = self.draft_dirty();
@@ -219,8 +218,7 @@ impl Encounters {
     }
 }
 
-/// The save row's rule of Rules and runs, which both tabs call (`run_row`, egui's
-/// `Encounters::run_settings`): the word (`Unsaved`, `Saved` while the last Save's settings
+/// The save row's rule of Rules and runs (`run_row`): the word (`Unsaved`, `Saved` while the last Save's settings
 /// hold, `No changes`), the repair of an unread choice, Save's weight and why it waits, Discard
 /// and the campaign lock. It ends the last Save's `Saved` at the form's first edit, at another
 /// campaign and when the file's settings changed outside Splat, and the discard's result at

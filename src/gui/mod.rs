@@ -20,13 +20,13 @@ mod gallery;
 pub(crate) mod harness;
 #[allow(
     dead_code,
-    reason = "the kit's foundation: parts that no page calls yet"
+    reason = "the foundation of the kit: parts that no page calls yet"
 )]
 pub mod icons;
 #[allow(
     dead_code,
     unused_imports,
-    reason = "the kit's foundation: parts that no page calls yet"
+    reason = "the foundation of the kit: parts that no page calls yet"
 )]
 pub mod kit;
 pub mod pages;
@@ -35,7 +35,7 @@ mod rail;
 mod tests;
 #[allow(
     dead_code,
-    reason = "the kit's foundation: parts that no page calls yet"
+    reason = "the foundation of the kit: parts that no page calls yet"
 )]
 pub mod theme;
 mod touchpad;
@@ -143,7 +143,7 @@ pub struct SplatRoot {
     /// Each page's GPUI-only state (`pages::States`).
     #[allow(
         dead_code,
-        reason = "each page port keeps its GPUI state here (docs/gpui-port.md)"
+        reason = "each page keeps its GPUI state here; some fields wait for their page"
     )]
     pub pages: pages::States,
     /// The root's keyboard focus, so the global keys reach it with nothing else focused.
@@ -213,7 +213,7 @@ impl SplatRoot {
         });
     }
 
-    /// Whether the window may close now (egui's `close_requested` branch of `update`).
+    /// Whether the window may close now.
     pub fn should_close(&mut self, _: &mut Window, cx: &mut Context<Self>) -> bool {
         let app = &mut self.app;
         app.sessions.flush();
@@ -399,8 +399,8 @@ impl SplatRoot {
         }
     }
 
-    /// Ctrl+S, with one owner for the whole window, in egui's order (`update` draws the side
-    /// panels before the page, and each takes the key with `design::save_row::save_key`): nothing
+    /// Ctrl+S, with one owner for the whole window, side panels before the page (each takes the
+    /// key with `design::save_row::save_key`): nothing
     /// under a modal (the close prompt, the copy dialog, a kit dialog or menu); the Notes panel's
     /// note when it had the keyboard; else the page shown (`pages::save_key`). No page binds
     /// Ctrl+S itself, so the key saves the same thing wherever the keyboard is.
@@ -443,7 +443,7 @@ impl SplatRoot {
             return;
         }
         let view_takes_escape = if app.lookup.on_trackers() {
-            // Escape ends a typed amount, not Lookup (egui: the field loses focus).
+            // Escape ends a typed amount, not Lookup (the field loses focus).
             if app.trackers.takes_escape() {
                 app.trackers.end_asking(false, 0);
                 cx.notify();
