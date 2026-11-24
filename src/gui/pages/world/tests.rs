@@ -164,8 +164,21 @@ fn world_places_change_and_undo() {
     reload(&mut shell, Some(rook));
     shell.update(|root, _, _| root.app.world_page.press_note(rook));
     shell.capture("world-places__01-npc-place__1200x800");
-    assert!(shell.bounds("Change Stat block").is_some());
-    assert!(shell.bounds("Change Place").is_some());
+    // One Change column (iter-3 D): each value's Change starts at the same x, whatever its
+    // value's width (`not set` and `Ashfall Keep`).
+    let lefts: Vec<_> = ["Change Stat block", "Change Place"]
+        .map(|name| {
+            shell
+                .bounds(name)
+                .unwrap_or_else(|| panic!("{name}"))
+                .origin
+                .x
+        })
+        .into();
+    assert!(
+        lefts.iter().all(|x| (*x - lefts[0]).abs() < gpui::px(1.0)),
+        "the Changes share one column: {lefts:?}"
+    );
     let path = root(&mut shell).join("NPCs/Rook Ambry.md");
     let original = std::fs::read(&path).unwrap();
     shell.click("Change Stat block");

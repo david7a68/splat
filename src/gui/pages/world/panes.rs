@@ -411,7 +411,7 @@ fn checks(
     let Some(checks) = root.app.world_page.checks() else {
         return pane("world-checks", footer, div());
     };
-    const ROWS: usize = 40;
+    const ROWS: usize = crate::world::page::CHECK_ROWS;
     let note = |words: String| kit::text(theme::Type::Small, c.muted, words);
     let open = |cx: &mut Context<SplatRoot>, page: usize, heading: Option<String>| {
         act::<gpui::ClickEvent>(cx, move |root, _, index, _, _| {
@@ -513,7 +513,7 @@ fn checks(
             c.text,
             crate::world::page::PROBLEMS_TITLE,
         ))
-        .child(note("These lists show notes with a date outside an event, a link to no note, no summary, no links, or a name or sentence on two notes. Splat only lists them. You change the notes.".to_owned()));
+        .child(note(crate::world::page::PROBLEMS_INTRO.to_owned()));
     let pages = |cx: &mut Context<SplatRoot>, pages: &[usize]| {
         div()
             .flex()
