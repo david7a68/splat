@@ -108,8 +108,26 @@ impl Shell {
     }
 
     /// Run frames until nothing is left to do: pending tasks, then a draw, a few times over so
-    /// what a frame's logic changed is drawn too.
+    /// what a frame's logic changed is drawn too. A read of the party's sheets in flight is
+    /// waited for on its own result first, as the app shows it within a frame or two: the party
+    /// bar, the run's Sheet tab and the synced roster rows read those sheets.
     pub(crate) fn settle(&mut self) {
+        self.draw_frames();
+        for _ in 0..10 {
+            if !self.read(|root| root.app.party.reader.loading()) {
+                return;
+            }
+            let root = self.root.clone();
+            self.cx
+                .update_window(self.window, |_, _, cx| {
+                    root.update(cx, |root, _| root.app.party.reader.wait_for_load());
+                })
+                .expect("the window");
+            self.draw_frames();
+        }
+    }
+
+    fn draw_frames(&mut self) {
         for _ in 0..4 {
             self.cx.run_until_parked();
             self.cx

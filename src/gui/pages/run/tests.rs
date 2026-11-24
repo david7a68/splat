@@ -299,15 +299,8 @@ fn run_strip_on_another_page() {
 #[test]
 fn run_loot() {
     let mut shell = Shell::new("run-loot", Seed::Loot);
-    let name = shell.read(|root| {
-        root.app
-            .encounters
-            .saved_runs()
-            .first()
-            .map(|run| run.encounter.clone())
-    });
-    let name = name.unwrap_or_else(|| "Sunken Vault".to_owned());
-    open_saved(&mut shell, &name);
+    // The fixture's run with loot, by name: the first saved run depends on when the list is read.
+    open_saved(&mut shell, crate::fixtures::RUN_VAULT);
     shell.capture("run-loot__01-loot-on-the-card__1200x800");
     shell.click("End encounter…");
     shell.click("id:run-end-confirm");
