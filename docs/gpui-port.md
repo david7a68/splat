@@ -88,7 +88,7 @@ each page's main states, plus interaction tests of the main flows.
   every control, keyboard path, message, Undo, confirm and empty state it has, the port has.
 - Reference screenshots of the egui app at 1200×800 are in
   `artifacts/screenshots/egui-reference/` (named `<scenario>__<step>__1200x800.png`; the scenarios
-  are in `src/visual_tests/scenarios*`). Render your GPUI page in the same states with the harness
+  were in `src/visual_tests/scenarios*`, deleted in wave 3; read them in git history). Render your GPUI page in the same states with the harness
   and compare them by eye. Write the differences you kept on purpose in your final message.
 - UI text: same words as the egui app. Colours, sizes and type come from `gui::theme`, never
   literals in a page.
@@ -111,8 +111,7 @@ you add a part, look for it in the table below: a page's own copy of a kit part 
 ### How the app runs
 
 - `splat::run()` (`src/main.rs`) runs a command when there are arguments, takes the instance lock,
-  then opens the GPUI app (`gui::run`). `SPLAT_EGUI=1 cargo run` opens the egui app instead, and
-  `splat::run_egui()` stays for comparison until cleanup.
+  then opens the GPUI app (`gui::run`). The egui app is gone (wave 3, step 1).
 - `gui::SplatRoot` is the root view. `root.app` is the same `crate::Splat` the egui app draws (all
   its fields: `app.sessions`, `app.encounters`, `app.lookup`, …; private items of the crate root are
   visible to `src/gui/`). `root.pages.<area>` is your area's GPUI-only state. `root.bridge.ctx()` is
@@ -336,7 +335,7 @@ fonts (deterministic text), the real Vulkan renderer, at scale 1.
 
 ```rust
 use crate::gui::harness::Shell;
-use crate::visual_tests::fixture::Seed;
+use crate::fixtures::Seed;
 
 #[test]
 fn library_browse() {
@@ -350,8 +349,8 @@ fn library_browse() {
 }
 ```
 
-- `Shell::new(name, Seed)` builds the same fixture as the egui scenario of that seed
-  (`visual_tests::fixture::World`); its ids and dice come from `name`. `Shell::with_size(name, seed,
+- `Shell::new(name, Seed)` builds the fixture of that seed (`fixtures::World`, the egui
+  scenarios' fixture); its ids and dice come from `name`. `Shell::with_size(name, seed,
   size(px(w), px(h)))` for another window size (a window cannot be resized after it opens).
   `Shell::over(app, tempdir, size)` for a `Splat` you built.
 - `update(|root, window, cx| …)` changes state as a test's setup; `read(|root| …)` reads it;

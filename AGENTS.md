@@ -29,12 +29,10 @@ Splat is a Rust and egui desktop app for D&D DMs. These notes hold only what you
 
 Apply the rules below to the code and checks your trace reaches.
 
-- **The baseline hides faults.** `src/visual_tests/baseline.json` may hold only egui chrome counts, and a green
-  gate means only "no worse than the baseline". Know the cause of every count you change: read both controls of
-  each new overlap in the gate's `ergonomics.json`. An app control or text over a splitter or scroll bar is an
-  app fault whatever bucket it is filed in; fix the clearance. The gate compares a menu's or popup's content
-  with a splitter or scroll bar under it, but only at the sizes its state checks (`Sizes::Default` checks only
-  960 px), so look at a new or wider menu at the other sizes yourself.
+- **Captures are not a gate.** `devenv shell -- gui-test` writes the GPUI pages' captures to
+  `artifacts/screenshots/gpui/`, and no test compares them. Look at every capture your change can affect, at
+  each size it is taken. An app control or text over a splitter or scroll bar is an app fault; fix the
+  clearance. Look at a new or wider menu at the narrowest size yourself.
 - **A proof must be able to fail.** Break the code once and see each new check go red; say so in the PR. Do the
   same for an existing check when you edit its setup. A check that also passes on the old code proves nothing.
   Watch for a filtered assertion that passes on an empty match, `expect_same` with no asserted change before
@@ -53,22 +51,15 @@ Apply the rules below to the code and checks your trace reaches.
 - **A rule fixed for one caller is not fixed.** Grep the shared helper and local copies of it, and fix every
   caller in the same change. Another screen that shows the same thing is also a caller: a list row and its
   pane, a preview and the live view.
-- **A ban is a list, not a proof.** `clippy.toml` holds the egui paths that a design part replaces. An egui helper that opens a layer or makes a text field and is not listed is found by review: add its path in the same PR.
+- **A ban is a list, not a proof.** `clippy.toml` holds the paths that a design part replaces (kept results,
+  the save row, checked words). A path that goes around a part and is not listed is found by review: add it in
+  the same PR.
 - **Layout rules that keep getting broken:** every target at least 24 px and clear of splitters; a quiet action
   that starts a line uses `line_start`; choices after a message start at its text, safe first, with exactly
   16 px (`L`) before a destructive one; nothing that grows with the content runs every frame.
 - **A raised lint count is a decision.** `src/design/lint_allowlist.txt` counts can only shrink on their own, but a
   change that raises a count and its allowance together passes the test. Say in the PR why each raised line is
-  needed (a new `allow(deprecated)`, a `Sentence::outside`, a body message place), or remove the use.
-  `src/design/legacy_hosts.tsv` (the legacy host freeze) is stricter: the lint compares each site with the merge
-  base, so a raise fails unless the gate's raise file names it (the lead passes that file at landing). Lower its
-  rows when you migrate a site; a reference, an alias or a frozen call inside `macro_rules!` fails outright.
-- **The audit's counts (G6) run in every app audit.** When your change makes a task of `artifacts/dm-audit/` cost
-  more or fewer acts on purpose, run `devenv shell -- audit-freeze counts` and say in the pull request why; add
-  a new task with `devenv shell -- audit-freeze add`.
-- **Code changes in the session-cycle build plan also run G7:** `SPLAT_FROZEN=1 devenv shell -- audit-gate
-  <label>`. The plain reference changes only in one commit made by `devenv shell -- audit-freeze reference` on
-  an unchanged commit of `main`, which it records; make that commit again after each merge of `main`. A
-  feature adds its views with `devenv shell -- audit-freeze add` and its changes as rows in `allowed.json`.
-- **Visual scenarios.** A focused run covers every scenario the change can affect. A scenario's ids and dice
-  come from a hash of its name (`first_uuid` in `src/visual_tests/mod.rs`). Renaming it gives it new ids and dice.
+  needed (a straight apostrophe in file content, a phrase outside its owner), or remove the use.
+- **GUI tests.** A focused run (`devenv shell -- gui-test gui::pages::<page>`) covers every page the change can
+  affect. A shell's ids and dice come from a hash of its name (`first_uuid` in `src/gui/harness.rs`). Renaming
+  it gives it new ids and dice.
