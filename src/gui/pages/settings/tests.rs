@@ -173,7 +173,11 @@ fn signed_in_remote_list_and_link() {
     }
     shell.settle();
     assert!(shell.bounds("Add Salt Road from D&D Beyond").is_some());
-    assert!(shell.bounds("Add The Emberfall Marches from D&D Beyond").is_none());
+    assert!(
+        shell
+            .bounds("Add The Emberfall Marches from D&D Beyond")
+            .is_none()
+    );
     shell.capture("signed-in__02-remote-campaign-list__1200x800");
     shell.click("Add Salt Road from D&D Beyond");
     assert!(
@@ -203,7 +207,10 @@ fn signed_in_remote_list_and_link() {
         .expect("a campaign linked elsewhere")
         .clone();
     shell.click("D&D Beyond campaign link");
-    assert!(shell.bounds(&name).is_some(), "the blocked choice is listed");
+    assert!(
+        shell.bounds(&name).is_some(),
+        "the blocked choice is listed"
+    );
     shell.capture("campaign-link__03-link-blocked-choice__1200x800");
     shell.click(&name);
     assert_eq!(

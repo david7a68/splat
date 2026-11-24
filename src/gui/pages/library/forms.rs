@@ -190,9 +190,16 @@ fn folder_field(root: &mut SplatRoot, value: &str, cx: &mut Context<SplatRoot>) 
     if kit::menu::is_open(&menu, cx) {
         if let Some((folder_root, folders)) = root.app.library.new_folder_choices_if(
             &root.app.campaigns,
-            state.folders.as_ref().map(|(at, kind, _)| (at.as_path(), kind.as_str())),
+            state
+                .folders
+                .as_ref()
+                .map(|(at, kind, _)| (at.as_path(), kind.as_str())),
         ) {
-            state.folders = Some((folder_root, root.app.library.new_kind().to_owned(), Arc::new(folders)));
+            state.folders = Some((
+                folder_root,
+                root.app.library.new_kind().to_owned(),
+                Arc::new(folders),
+            ));
         }
     } else {
         state.folders = None;

@@ -152,10 +152,16 @@ fn packages_repair_an_invalid_note() {
     let rows = open(&mut shell);
     assert_eq!(rows.len(), 1, "the invalid note is in repair");
     assert!(rows[0].words.starts_with("Notes/Broken.md cannot be read."));
-    assert!(shell.bounds("Save repaired note").is_none(), "closed, no editor");
+    assert!(
+        shell.bounds("Save repaired note").is_none(),
+        "closed, no editor"
+    );
     shell.capture("campaign-content__11-repair-needed__1200x800");
     shell.click("Repair");
-    assert!(shell.bounds("Save repaired note").is_some(), "Repair opens the editor");
+    assert!(
+        shell.bounds("Save repaired note").is_some(),
+        "Repair opens the editor"
+    );
     assert!(shell.bounds("Close repair").is_some());
     shell.capture("campaign-content__12-repair-open__1200x800");
     // A draft Save accepts: Unsaved, Save is the primary.
@@ -183,7 +189,11 @@ fn packages_repair_an_invalid_note() {
             .collect::<Vec<_>>()
     );
     shell.click("Undo discard of Broken.md");
-    assert_eq!(open(&mut shell)[0].draft, valid, "Undo gives the draft back");
+    assert_eq!(
+        open(&mut shell)[0].draft,
+        valid,
+        "Undo gives the draft back"
+    );
     // Ctrl+S saves the repair; the page reads the campaign again and the repair ends.
     shell.press("ctrl-s");
     content_loaded(&mut shell);

@@ -190,10 +190,7 @@ fn save_key(root: &mut SplatRoot, active: &crate::persistence::Campaign) {
             .campaign_content
             .save_repair(bridge.ctx(), &app.campaigns, active, &path),
         None if app.campaign_content.repair_paths().is_empty()
-            && app
-                .campaign_content
-                .save_bar()
-                .is_some_and(|bar| bar.dirty) =>
+            && app.campaign_content.save_bar().is_some_and(|bar| bar.dirty) =>
         {
             app.campaign_content.save_now()
         }
@@ -404,13 +401,13 @@ fn save_bar(
         } else {
             Button::secondary("content-save", "Save selections")
         }
-            .density(Density::Read)
-            .key("Ctrl+S")
-            .blocked(blocked)
-            .on_click(cx.listener(|root, _, _, cx| {
-                root.app.campaign_content.save_now();
-                cx.notify();
-            })),
+        .density(Density::Read)
+        .key("Ctrl+S")
+        .blocked(blocked)
+        .on_click(cx.listener(|root, _, _, cx| {
+            root.app.campaign_content.save_now();
+            cx.notify();
+        })),
     );
     let mut column = div().flex().flex_col().child(row);
     if let Some(reason) = bar.repair {

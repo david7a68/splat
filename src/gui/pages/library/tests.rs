@@ -145,7 +145,10 @@ fn library_author() {
     let form = |shell: &mut Shell| {
         shell.update(|root, _, _| {
             let app = &mut root.app;
-            let view = app.library.new_entry_view(&app.campaigns).expect("the form");
+            let view = app
+                .library
+                .new_entry_view(&app.campaigns)
+                .expect("the form");
             (view.name, view.folder)
         })
     };
@@ -172,7 +175,9 @@ fn library_author() {
     shell.click("Suggestions for Folder");
     assert!(
         shell.bounds("Beasts/Ash").is_some()
-            && shell.bounds("id:library-new-folder-menu-Creatures").is_none(),
+            && shell
+                .bounds("id:library-new-folder-menu-Creatures")
+                .is_none(),
         "the field's words choose the folders shown"
     );
     shell.capture("library-author__10b-folder-suggestions__1200x800");
@@ -412,15 +417,18 @@ fn library_keys() {
             .read(move |root| root.app.library.entry_row(row, None).map(|row| row.name))
             .expect("the row")
     };
-    let open = |shell: &mut Shell| {
-        shell.read(|root| root.app.library.open_name().map(str::to_owned))
-    };
+    let open =
+        |shell: &mut Shell| shell.read(|root| root.app.library.open_name().map(str::to_owned));
     let (first, second) = (name(&mut shell, 0), name(&mut shell, 1));
     // No entry open: the first Down starts at the first row, the second goes on to the next.
     shell.press("down");
     shell.press("down");
     shell.press("enter");
-    assert_eq!(open(&mut shell), Some(second.clone()), "Enter opens the row Down reached");
+    assert_eq!(
+        open(&mut shell),
+        Some(second.clone()),
+        "Enter opens the row Down reached"
+    );
     shell.capture("library-keys__01-down-and-enter__1200x800");
     shell.press("up");
     shell.press("enter");
@@ -447,7 +455,10 @@ fn library_counts_group_thousands() {
             .and_then(|list| list.heading)
     });
     let (title, count) = heading.expect("the search results heading");
-    assert!(count >= 1000, "the search matches over a thousand entries: {count}");
+    assert!(
+        count >= 1000,
+        "the search matches over a thousand entries: {count}"
+    );
     let grouped = crate::design::count(count, "", "");
     assert!(grouped.contains(','), "{grouped}");
     assert!(
@@ -487,9 +498,13 @@ fn library_comparison_matches_lines() {
         .read(|root| root.pages.library.comparison.clone())
         .expect("the comparison")
         .1;
-    assert_eq!(lines.changed, 2, "one line each side, not every line after the first change");
+    assert_eq!(
+        lines.changed, 2,
+        "one line each side, not every line after the first change"
+    );
     assert!(
-        lines.rows.iter().any(|row| row[0].is_none()) && lines.rows.iter().any(|row| row[1].is_none()),
+        lines.rows.iter().any(|row| row[0].is_none())
+            && lines.rows.iter().any(|row| row[1].is_none()),
         "a line only one side has stands beside an empty row"
     );
     let summary = lines.summary(None);
@@ -518,7 +533,12 @@ fn library_repair_puts_the_caret_on_the_line() {
     shell.click("Fix in Edit Markdown");
     assert!(shell.read(|root| root.app.library.source_open()));
     let (focused, selection, line) = shell.update(|root, window, cx| {
-        let (_, handle) = root.pages.library.editor.clone().expect("the editor's state");
+        let (_, handle) = root
+            .pages
+            .library
+            .editor
+            .clone()
+            .expect("the editor's state");
         let app = &mut root.app;
         let subtitle = app.library.open_subtitle();
         let line = app

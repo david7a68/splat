@@ -275,7 +275,8 @@ fn save_row(
 fn row_reason(window: &mut Window, width: f32, long: &str, short: &str) -> Option<String> {
     use crate::design::save_row::{InvalidCause, SaveWord};
     let gap = f32::from(S);
-    let measure = |window: &mut Window, ty: Type, words: &str| f32::from(kit::text::width(window, ty, words));
+    let measure =
+        |window: &mut Window, ty: Type, words: &str| f32::from(kit::text::width(window, ty, words));
     let button = |window: &mut Window, words: &str, key: Option<&str>| {
         measure(window, Type::Strong, words)
             + key.map_or(0.0, |key| f32::from(S) + measure(window, Type::Small, key))
@@ -295,7 +296,11 @@ fn row_reason(window: &mut Window, width: f32, long: &str, short: &str) -> Optio
     .into_iter()
     .map(|word| {
         let status = word.status();
-        measure(window, Type::Small, &format!("{} {}", status.icon, status.word))
+        measure(
+            window,
+            Type::Small,
+            &format!("{} {}", status.icon, status.word),
+        )
     })
     .fold(0.0, f32::max);
     let room = width.min(EDITOR_MAX_WIDTH)
@@ -628,7 +633,9 @@ fn comparison(
                     } else {
                         gpui::transparent_black()
                     })
-                    .when(changed, |line| line.bg(if here { c.selected } else { c.current_row }))
+                    .when(changed, |line| {
+                        line.bg(if here { c.selected } else { c.current_row })
+                    })
                     .child(if line.is_empty() {
                         " ".to_owned()
                     } else {
@@ -637,7 +644,9 @@ fn comparison(
                     .into_any_element(),
                 // No line on this side: the row keeps its height, faint, named for a reader.
                 None => div()
-                    .id(ElementId::Name(format!("library-no-line-{side}-{at}").into()))
+                    .id(ElementId::Name(
+                        format!("library-no-line-{side}-{at}").into(),
+                    ))
                     .ty(Type::Mono)
                     .pl(S)
                     .bg(c.well)

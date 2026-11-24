@@ -254,8 +254,8 @@ pub(super) fn run_row_of<'a>(
         .options
         .runs_left_in(&snapshot.saved_options, active);
     let run_files = left.as_ref().map_or(0, Vec::len);
-    let folder_changed = snapshot.options.directory(active).ok()
-        != snapshot.saved_options.directory(active).ok();
+    let folder_changed =
+        snapshot.options.directory(active).ok() != snapshot.saved_options.directory(active).ok();
     // M4: `Save run settings` is the commit in every state. While the folder change leaves
     // saved runs, it waits in its place, and the folder warning's two choices (the footer's)
     // commit, so a second press where Save was never moves runs.

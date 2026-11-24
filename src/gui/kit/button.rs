@@ -10,7 +10,8 @@
 //! - Every target is at least 24 px; the default height is a `Scan` control (30 px).
 use super::{OnClick, target, tooltip::tip};
 use crate::gui::theme::{
-    Density, FOCUS_WIDTH, HAIRLINE_WIDTH, ICON_SLOT, M, RADIUS_CONTROL, S, Type, TypeExt, XS, colors,
+    Density, FOCUS_WIDTH, HAIRLINE_WIDTH, ICON_SLOT, M, RADIUS_CONTROL, S, Type, TypeExt, XS,
+    colors,
 };
 use gpui::{
     App, ClickEvent, ElementId, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels,

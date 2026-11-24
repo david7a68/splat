@@ -689,17 +689,17 @@ pub(crate) fn link_dropdown(
     }
     Some(
         dropdown
-        .width(FORM_WIDTH)
-        .blocked(blocked)
-        .on_select(cx.listener(move |root, index: &usize, _, cx| {
-            if let Some((id, locked)) = ids.get(*index)
-                && !locked
-            {
-                let SplatRoot { app, .. } = root;
-                app.dndbeyond.choose_link(&mut app.campaigns, id.clone());
-                cx.notify();
-            }
-        }))
-        .into_any_element(),
+            .width(FORM_WIDTH)
+            .blocked(blocked)
+            .on_select(cx.listener(move |root, index: &usize, _, cx| {
+                if let Some((id, locked)) = ids.get(*index)
+                    && !locked
+                {
+                    let SplatRoot { app, .. } = root;
+                    app.dndbeyond.choose_link(&mut app.campaigns, id.clone());
+                    cx.notify();
+                }
+            }))
+            .into_any_element(),
     )
 }

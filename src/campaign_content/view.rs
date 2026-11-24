@@ -2,7 +2,7 @@
 //! (`CampaignContent::show`) and the GPUI tab (`src/gui/pages/campaigns/packages.rs`) share
 //! them.
 use super::{
-    Cause, CampaignContent, ContentFault, ContentPress, MISSING_CAMPAIGN, PageResult, Payload,
+    CampaignContent, Cause, ContentFault, ContentPress, MISSING_CAMPAIGN, PageResult, Payload,
     end_results, manifest_mark, manifest_on_disk, missing_package, needed_by, package_count,
     removal_of,
 };
@@ -904,17 +904,21 @@ impl CampaignContent {
             .iter()
             .any(|repair| repair.path == path && repair.dirty())
         {
-            end_results(&mut self.results, active.id, |payload| {
-                matches!(payload, Payload::RepairDiscard { path: p, .. } if p == path)
-            });
+            end_results(
+                &mut self.results,
+                active.id,
+                |payload| matches!(payload, Payload::RepairDiscard { path: p, .. } if p == path),
+            );
         }
     }
 
     /// The repair's `Discard`: its draft goes back to the file's text, with an Undo.
     pub fn discard_repair(&mut self, active: &Campaign, path: &str) {
-        end_results(&mut self.results, active.id, |payload| {
-            matches!(payload, Payload::RepairDiscard { path: p, .. } if p == path)
-        });
+        end_results(
+            &mut self.results,
+            active.id,
+            |payload| matches!(payload, Payload::RepairDiscard { path: p, .. } if p == path),
+        );
         let Some(text) = self
             .repairs
             .iter()
