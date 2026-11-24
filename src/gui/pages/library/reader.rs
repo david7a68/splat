@@ -5,7 +5,9 @@
 use super::{footer, forms};
 use crate::gui::kit::WithTooltip as _;
 use crate::gui::pages::reader::entry::{EntryView, Source};
-use crate::gui::theme::{Density, HAIRLINE_WIDTH, L, READER_MEASURE, S, Type, TypeExt, XS, colors};
+use crate::gui::theme::{
+    Density, HAIRLINE_WIDTH, L, M, READER_MEASURE, S, Type, TypeExt, XS, colors,
+};
 use crate::gui::{SplatRoot, bridge, icons, kit};
 use crate::library::model::ReaderView;
 use crate::library::view::NoLinks;
@@ -213,9 +215,19 @@ fn file_line(view: &ReaderView) -> AnyElement {
 }
 
 /// The save row: the draft's word, Discard and the reason at the left, Save at the right.
-fn save_row(view: &ReaderView, width: f32, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
+fn save_row(
+    view: &ReaderView,
+    width: f32,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> Option<AnyElement> {
     let row = view.save_row.as_ref()?;
     let c = colors();
+    let reason = row
+        .reason
+        .as_ref()
+        .and_then(|(long, short)| row_reason(window, width, long, short))
+        .or(row.lock.clone());
     let (icon, word, color) = &row.word;
     let save = if row.primary {
         kit::Button::primary("library-save", "Save")
@@ -253,24 +265,60 @@ fn save_row(view: &ReaderView, width: f32, cx: &mut Context<SplatRoot>) -> Optio
                     )),
                 )
             })
-            .children(
-                row.reason
-                    .as_ref()
-                    .map(|(long, short)| {
-                        // The long form when it fits whole beside the row's parts, else the
-                        // short one (`save_row_with`, measured there; estimated here from the
-                        // `Small` type's average letter).
-                        let room = width.min(EDITOR_MAX_WIDTH) - 300.0;
-                        let fits = long.chars().count() as f32 * 6.2 <= room;
-                        if fits { long.clone() } else { short.clone() }
-                    })
-                    .or(row.lock.clone())
-                    .map(|reason| kit::text(Type::Small, c.muted, reason).truncate()),
-            )
+            .children(reason.map(|reason| kit::text(Type::Small, c.muted, reason).truncate()))
             .child(div().flex_1())
             .child(save)
             .into_any_element(),
     )
+}
+
+/// The reason on the save row (`save_row_with`): its long form when it fits whole beside the
+/// widest state word, Discard and Save, else its short form, else none. Measured in the type
+/// each part is set in, as egui measures them.
+fn row_reason(window: &mut Window, width: f32, long: &str, short: &str) -> Option<String> {
+    use crate::design::save_row::{InvalidCause, SaveWord};
+    let gap = f32::from(S);
+    let measure =
+        |window: &mut Window, ty: Type, words: &str| f32::from(kit::text::width(window, ty, words));
+    let button = |window: &mut Window, words: &str, key: Option<&str>| {
+        measure(window, Type::Strong, words)
+            + key.map_or(0.0, |key| f32::from(S) + measure(window, Type::Small, key))
+            + 2.0 * f32::from(M)
+    };
+    let word = [
+        SaveWord::Invalid(InvalidCause::Incomplete),
+        SaveWord::Invalid(InvalidCause::Refused),
+        SaveWord::Invalid(InvalidCause::Unreadable),
+        SaveWord::New,
+        SaveWord::ChangedOnDisk,
+        SaveWord::NotSaved,
+        SaveWord::Unsaved,
+        SaveWord::Saved,
+        SaveWord::NoChanges,
+    ]
+    .into_iter()
+    .map(|word| {
+        let status = word.status();
+        measure(
+            window,
+            Type::Small,
+            &format!("{} {}", status.icon, status.word),
+        )
+    })
+    .fold(0.0, f32::max);
+    let room = width.min(EDITOR_MAX_WIDTH)
+        - button(window, "Save", Some("Ctrl+S"))
+        - word
+        - button(window, "Discard", None)
+        - 4.0 * gap;
+    let fits = |window: &mut Window, words: &str| measure(window, Type::Small, words) <= room;
+    if fits(window, long) {
+        Some(long.to_owned())
+    } else if fits(window, short) {
+        Some(short.to_owned())
+    } else {
+        None
+    }
 }
 
 /// A notice in the body with its repair.
@@ -341,18 +389,39 @@ fn entry(
         .flex_none()
         .child(toolbar(&view, cx))
         .child(file_line(&view));
-    if let Some(row) = save_row(&view, width, cx) {
+    if let Some(row) = save_row(&view, width, window, cx) {
         head = head.child(row);
     }
     let body: AnyElement = if let Some(disk) = &view.disk {
-        disk_body(&view, disk, cx)
+        disk_body(root, &view, disk, cx)
     } else if view.toolbar.source {
-        let focus = root.app.library.take_focus_editor();
+        // One editor state per file, kept by the page, so a repair or a new creature can put
+        // the caret where `editor_pane` puts it.
+        let key = format!("{:?}-{}", view.key.0, view.key.1);
+        let handle = match &root.pages.library.editor {
+            Some((kept, handle)) if *kept == key => handle.clone(),
+            _ => {
+                let handle = kit::EditorHandle::new("", window, cx);
+                root.pages.library.editor = Some((key.clone(), handle.clone()));
+                handle
+            }
+        };
+        if let Some(focus) = root.app.library.take_editor_focus(view.repair_line) {
+            use crate::library::model::EditorFocus;
+            handle.show_words(view.draft.clone(), window, cx);
+            handle.focus(window, cx);
+            match focus {
+                EditorFocus::Keep => {}
+                EditorFocus::Caret(at) => handle.set_caret(at, cx),
+                EditorFocus::Select(range) => handle.select(range, cx),
+            }
+        }
         let editable = view.editable;
         let editor = kit::TextEditor::new(
-            ElementId::Name(format!("library-editor-{:?}-{}", view.key.0, view.key.1).into()),
+            ElementId::Name(format!("library-editor-{key}").into()),
             view.draft.clone(),
         )
+        .handle(&handle)
         .name("Markdown editor")
         .mono()
         .fill()
@@ -362,7 +431,6 @@ fn entry(
                 cx.notify();
             }
         }));
-        let _ = (focus, window);
         div()
             .size_full()
             .max_w(px(EDITOR_MAX_WIDTH))
@@ -487,6 +555,7 @@ fn read_body(
 /// A changed file: its warning with the two choices, then the comparison (or the draft alone
 /// when the file has gone, or the system's words when it cannot be read).
 fn disk_body(
+    root: &mut SplatRoot,
     view: &ReaderView,
     disk: &crate::library::model::DiskView,
     cx: &mut Context<SplatRoot>,
@@ -526,7 +595,9 @@ fn disk_body(
         return body.into_any_element();
     }
     match &disk.disk_text {
-        Some(text) => body.child(comparison(&view.draft, text)).into_any_element(),
+        Some(text) => body
+            .child(comparison(root, &view.draft, text, cx))
+            .into_any_element(),
         None => body
             .child(kit::heading(
                 kit::Heading::Group {
@@ -550,15 +621,45 @@ fn disk_body(
     }
 }
 
-/// The draft beside the file now, line by line, with the lines that differ marked.
-fn comparison(draft: &str, disk: &str) -> impl IntoElement {
+/// The draft beside the file now (`grouped_draft_comparison`): equal lines aligned (a line
+/// only one side has stands beside an empty, hatched row), the lines that differ marked, and a
+/// summary of the count and the heading the change is under; `Next difference` steps through
+/// the changes when there are more than one.
+fn comparison(
+    root: &mut SplatRoot,
+    draft: &str,
+    disk: &str,
+    cx: &mut Context<SplatRoot>,
+) -> impl IntoElement {
+    use std::hash::{Hash, Hasher};
     let c = colors();
-    let left: Vec<&str> = draft.lines().collect();
-    let right: Vec<&str> = disk.lines().collect();
-    let differ = (0..left.len().max(right.len()))
-        .filter(|&at| left.get(at) != right.get(at))
-        .count();
-    let side = |title: &'static str, lines: &[&str], other: &[&str]| {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    (draft, disk).hash(&mut hasher);
+    let texts = hasher.finish();
+    let state = &mut root.pages.library;
+    let lines = match &state.comparison {
+        Some((seen, lines)) if *seen == texts => lines.clone(),
+        _ => {
+            let lines = Arc::new(crate::design::ComparedLines::of(draft, disk));
+            state.comparison = Some((texts, lines.clone()));
+            state.difference = None;
+            lines
+        }
+    };
+    let group = state.difference.filter(|at| *at < lines.groups.len());
+    let current = group.and_then(|at| lines.groups.get(at)).copied();
+    let summary = lines.summary(group);
+    let next = (lines.groups.len() > 1).then(|| {
+        let count = lines.groups.len();
+        kit::Button::quiet("library-next-difference", "Next difference")
+            .density(Density::Read)
+            .on_click(cx.listener(move |root, _, _, cx| {
+                let library = &mut root.pages.library;
+                library.difference = Some(library.difference.map_or(1, |at| (at + 1) % count));
+                cx.notify();
+            }))
+    });
+    let side = |side: usize, title: &'static str| {
         let mut column = div()
             .flex()
             .flex_col()
@@ -566,10 +667,11 @@ fn comparison(draft: &str, disk: &str) -> impl IntoElement {
             .min_w_0()
             .child(kit::label(title, 0))
             .child(kit::gap(XS));
-        for (at, line) in lines.iter().enumerate() {
-            let changed = other.get(at) != Some(line);
-            column = column.child(
-                div()
+        for (at, row) in lines.rows.iter().enumerate() {
+            let changed = row[0] != row[1];
+            let here = current == Some(at);
+            column = column.child(match &row[side] {
+                Some(line) => div()
                     .ty(Type::Mono)
                     .text_color(c.text)
                     .pl(S)
@@ -579,13 +681,28 @@ fn comparison(draft: &str, disk: &str) -> impl IntoElement {
                     } else {
                         gpui::transparent_black()
                     })
-                    .when(changed, |line| line.bg(c.current_row))
+                    .when(changed, |line| {
+                        line.bg(if here { c.selected } else { c.current_row })
+                    })
                     .child(if line.is_empty() {
                         " ".to_owned()
                     } else {
-                        (*line).to_owned()
-                    }),
-            );
+                        line.clone()
+                    })
+                    .into_any_element(),
+                // No line on this side: the row keeps its height, faint, named for a reader.
+                None => div()
+                    .id(ElementId::Name(
+                        format!("library-no-line-{side}-{at}").into(),
+                    ))
+                    .ty(Type::Mono)
+                    .pl(S)
+                    .bg(c.well)
+                    .text_color(c.faint)
+                    .with_tooltip("No line")
+                    .child(" ")
+                    .into_any_element(),
+            });
         }
         column
     };
@@ -594,18 +711,26 @@ fn comparison(draft: &str, disk: &str) -> impl IntoElement {
         .flex_col()
         .w_full()
         .gap(S)
-        .child(kit::text(
-            Type::Small,
-            c.muted,
-            crate::design::count(differ, "line differs", "lines differ"),
-        ))
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .items_center()
+                .gap(S)
+                .child(kit::target(
+                    kit::text(Type::Small, c.muted, summary.clone()),
+                    summary,
+                ))
+                .children(next),
+        )
         .child(
             div()
                 .flex()
                 .flex_row()
                 .w_full()
                 .gap(L)
-                .child(side("Your draft", &left, &right))
-                .child(side("In the file now", &right, &left)),
+                .child(side(0, "Your draft"))
+                .child(side(1, "In the file now")),
         )
 }

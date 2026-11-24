@@ -187,7 +187,7 @@ pub(super) fn list(
         column = column.child(kit::gap(S));
     }
     if let Some(session) = session.clone() {
-        column = column.child(import(root, session, unwritable, cx));
+        column = column.child(import(root, session, unwritable, window, cx));
     }
     let campaigns = &root.app.campaigns;
     if campaigns.editing().is_none() && !campaigns.import_open() {
@@ -547,6 +547,7 @@ fn import(
     root: &mut SplatRoot,
     session: Session,
     unwritable: Option<&'static str>,
+    window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
@@ -607,6 +608,12 @@ fn import(
             "No campaigns returned for this account.",
         ));
     }
+    // Round 27 AN2: one action column, `L` after the widest name, so each Add or Added sits
+    // near its name; a name too long for the room left ends in `…`, whole on hover.
+    let column = remotes
+        .iter()
+        .map(|(_, name)| f32::from(kit::text::width(window, Type::Strong, name)))
+        .fold(0.0, f32::max);
     for (at, (remote_id, name)) in remotes.into_iter().enumerate() {
         let added = root.app.campaigns.is_added(&remote_id);
         let importing = root.app.campaigns.importing(&remote_id);
@@ -619,6 +626,8 @@ fn import(
             .child(
                 div()
                     .id(("ddb-remote", at))
+                    .w(gpui::px(column))
+                    .flex_shrink_1()
                     .min_w_0()
                     .child(kit::text::one_line(Type::Strong, c.text, name.clone()))
                     .with_tooltip(name.clone()),
@@ -656,33 +665,41 @@ pub(crate) fn link_dropdown(
     let chosen = choices.iter().position(|(id, _, _)| *id == current);
     let names: Vec<SharedString> = choices
         .iter()
-        .map(|(_, name, lock)| match lock {
-            Some(lock) => SharedString::from(format!("{name} ({lock})")),
-            None => SharedString::from(name.clone()),
-        })
+        .map(|(_, name, _)| SharedString::from(name.clone()))
+        .collect();
+    let locks: Vec<(usize, &'static str)> = choices
+        .iter()
+        .enumerate()
+        .filter_map(|(at, (_, _, lock))| lock.map(|lock| (at, lock)))
         .collect();
     let ids: Vec<(Option<String>, bool)> = choices
         .into_iter()
         .map(|(id, _, lock)| (id, lock.is_some()))
         .collect();
+    // A campaign already linked elsewhere is a blocked choice with its reason on its row, as
+    // egui's `blocked_choice` draws it.
+    let mut dropdown = Dropdown::new(
+        id("ddb_link", campaign.id),
+        "D&D Beyond campaign link",
+        names,
+        chosen,
+    );
+    for (at, lock) in locks {
+        dropdown = dropdown.blocked_choice(at, lock);
+    }
     Some(
-        Dropdown::new(
-            id("ddb_link", campaign.id),
-            "D&D Beyond campaign link",
-            names,
-            chosen,
-        )
-        .width(FORM_WIDTH)
-        .blocked(blocked)
-        .on_select(cx.listener(move |root, index: &usize, _, cx| {
-            if let Some((id, locked)) = ids.get(*index)
-                && !locked
-            {
-                let SplatRoot { app, .. } = root;
-                app.dndbeyond.choose_link(&mut app.campaigns, id.clone());
-                cx.notify();
-            }
-        }))
-        .into_any_element(),
+        dropdown
+            .width(FORM_WIDTH)
+            .blocked(blocked)
+            .on_select(cx.listener(move |root, index: &usize, _, cx| {
+                if let Some((id, locked)) = ids.get(*index)
+                    && !locked
+                {
+                    let SplatRoot { app, .. } = root;
+                    app.dndbeyond.choose_link(&mut app.campaigns, id.clone());
+                    cx.notify();
+                }
+            }))
+            .into_any_element(),
     )
 }

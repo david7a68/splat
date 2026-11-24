@@ -138,10 +138,56 @@ fn library_author() {
         !shell.read(|root| root.app.library.forms().0),
         "Escape closes the form"
     );
-    // New entry: a creature in the package, opened in the editor.
+    // New entry: a creature in the package, opened in the editor. The form opens with the
+    // name field holding the keyboard.
     shell.click("id:library-new");
-    shell.click("id:library-new-name");
     shell.type_text("Cinder Hound");
+    let form = |shell: &mut Shell| {
+        shell.update(|root, _, _| {
+            let app = &mut root.app;
+            let view = app
+                .library
+                .new_entry_view(&app.campaigns)
+                .expect("the form");
+            (view.name, view.folder)
+        })
+    };
+    assert_eq!(
+        form(&mut shell).0,
+        "Cinder Hound",
+        "the name field takes the keyboard when the form opens"
+    );
+    // The folder's suggestions: the package's folders, read when the menu opens; a choice
+    // fills the field, and `Main folder` empties it.
+    // The menu lists the folders whose names hold the field's words, so the field is emptied
+    // first (it starts at the kind's folder).
+    std::fs::create_dir_all(package_folder(&mut shell).join("Beasts/Ash")).unwrap();
+    shell.click("id:library-new-folder");
+    shell.press("ctrl-a backspace");
+    shell.click("Suggestions for Folder");
+    assert!(
+        shell.bounds("Beasts/Ash").is_some(),
+        "a folder made outside Splat is suggested"
+    );
+    shell.press("escape");
+    shell.click("id:library-new-folder");
+    shell.type_text("ash");
+    shell.click("Suggestions for Folder");
+    assert!(
+        shell.bounds("Beasts/Ash").is_some()
+            && shell
+                .bounds("id:library-new-folder-menu-Creatures")
+                .is_none(),
+        "the field's words choose the folders shown"
+    );
+    shell.capture("library-author__10b-folder-suggestions__1200x800");
+    shell.click("Beasts/Ash");
+    assert_eq!(form(&mut shell).1, "Beasts/Ash");
+    shell.click("Suggestions for Folder");
+    shell.click("Main folder");
+    assert_eq!(form(&mut shell).1, "");
+    shell.click("Suggestions for Folder");
+    shell.click("Creatures");
     shell.capture("library-author__10-new-entry-form__1200x800");
     shell.click("Create entry");
     loaded(&mut shell);
@@ -356,6 +402,160 @@ fn remove_package_in_use() {
         1,
         "Undo registers it again"
     );
+}
+
+/// Up and Down move the keyboard from row to row of the entry list (egui's list region), Enter
+/// opens the row that holds it, and Alt+Left and Alt+Right go Back and Forward between the
+/// entries opened.
+#[test]
+fn library_keys() {
+    let mut shell = Shell::new("library-keys", Seed::Campaign);
+    library(&mut shell);
+    scope(&mut shell, "Ashen Marches");
+    let name = |shell: &mut Shell, row: usize| {
+        shell
+            .read(move |root| root.app.library.entry_row(row, None).map(|row| row.name))
+            .expect("the row")
+    };
+    let open =
+        |shell: &mut Shell| shell.read(|root| root.app.library.open_name().map(str::to_owned));
+    let (first, second) = (name(&mut shell, 0), name(&mut shell, 1));
+    // No entry open: the first Down starts at the first row, the second goes on to the next.
+    shell.press("down");
+    shell.press("down");
+    shell.press("enter");
+    assert_eq!(
+        open(&mut shell),
+        Some(second.clone()),
+        "Enter opens the row Down reached"
+    );
+    shell.capture("library-keys__01-down-and-enter__1200x800");
+    shell.press("up");
+    shell.press("enter");
+    assert_eq!(open(&mut shell), Some(first.clone()), "Up goes back a row");
+    // The list's opens leave a trail: Back returns, Forward goes again.
+    shell.press("alt-left");
+    assert_eq!(open(&mut shell), Some(second.clone()), "Alt+Left goes Back");
+    shell.press("alt-right");
+    assert_eq!(open(&mut shell), Some(first), "Alt+Right goes Forward");
+}
+
+/// The list heading's count groups its thousands (`design::count`), as egui's `group_heading`
+/// does: a search that matches over a thousand entries says `SEARCH RESULTS 1,234`.
+#[test]
+fn library_counts_group_thousands() {
+    let mut shell = Shell::new("library-counts", Seed::Empty);
+    library(&mut shell);
+    shell.click("id:library-search");
+    shell.type_text("e");
+    let heading = shell.update(|root, _, _| {
+        let app = &mut root.app;
+        app.library
+            .list_view(&app.campaigns, None, false, 900.0)
+            .and_then(|list| list.heading)
+    });
+    let (title, count) = heading.expect("the search results heading");
+    assert!(
+        count >= 1000,
+        "the search matches over a thousand entries: {count}"
+    );
+    let grouped = crate::design::count(count, "", "");
+    assert!(grouped.contains(','), "{grouped}");
+    assert!(
+        shell.bounds(&format!("{title} {grouped}")).is_some(),
+        "the heading's count {grouped} is shown grouped"
+    );
+    shell.capture("library-browse__03-search-results-count__1200x800");
+}
+
+/// A file changed on disk under a draft: the comparison aligns the lines both texts share (a
+/// line only one side has stands beside an empty row), counts only the lines that differ, and
+/// names the heading the change is under.
+#[test]
+fn library_comparison_matches_lines() {
+    let mut shell = Shell::new("library-comparison", Seed::Campaign);
+    library(&mut shell);
+    scope(&mut shell, "Ashen Marches");
+    shell.click("Ash Exposure · Rule");
+    shell.click("Edit Markdown");
+    let file = package_folder(&mut shell).join("Rules/Ash Exposure.md");
+    let text = std::fs::read_to_string(&file).unwrap();
+    // The draft adds a line at the end; the file gains one under the title heading.
+    shell.update(|root, _, _| {
+        let words = format!("{}Draft line.\n", root.app.library.draft_text());
+        root.app.library.edit_draft(&words);
+    });
+    let (head, body) = text.split_once("\n# ").expect("a heading");
+    let (heading, rest) = body.split_once('\n').expect("a body under the heading");
+    std::fs::write(
+        &file,
+        format!("{head}\n# {heading}\nA line on disk.\n{rest}"),
+    )
+    .unwrap();
+    shell.click("id:library-save");
+    assert!(shell.read(|root| root.app.library.disk_changed()));
+    let lines = shell
+        .read(|root| root.pages.library.comparison.clone())
+        .expect("the comparison")
+        .1;
+    assert_eq!(
+        lines.changed, 2,
+        "one line each side, not every line after the first change"
+    );
+    assert!(
+        lines.rows.iter().any(|row| row[0].is_none())
+            && lines.rows.iter().any(|row| row[1].is_none()),
+        "a line only one side has stands beside an empty row"
+    );
+    let summary = lines.summary(None);
+    assert!(
+        summary.starts_with("2 lines differ · Under the heading"),
+        "the summary counts the lines that differ and names their heading: {summary}"
+    );
+    assert!(shell.bounds(&summary).is_some(), "the summary is shown");
+    shell.capture("library-comparison__01-aligned__1200x800");
+}
+
+/// A note whose properties do not parse: `Fix in Edit Markdown` opens the editor, which takes
+/// the keyboard with the caret at the start of the broken line (`focus_repair`).
+#[test]
+fn library_repair_puts_the_caret_on_the_line() {
+    let mut shell = Shell::new("library-repair-caret", Seed::Campaign);
+    const BROKEN: &str = "---\nsplat_schema: 2\nsplat_id: [\n---\n# Broken\n";
+    std::fs::write(package_folder(&mut shell).join("Rules/Broken.md"), BROKEN).unwrap();
+    library(&mut shell);
+    scope(&mut shell, "Ashen Marches");
+    let row = crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with("Rules/Broken.md · ") || name.starts_with("Broken.md · "))
+        .expect("the broken note's row");
+    shell.click(&row);
+    shell.click("Fix in Edit Markdown");
+    assert!(shell.read(|root| root.app.library.source_open()));
+    let (focused, selection, line) = shell.update(|root, window, cx| {
+        let (_, handle) = root
+            .pages
+            .library
+            .editor
+            .clone()
+            .expect("the editor's state");
+        let app = &mut root.app;
+        let subtitle = app.library.open_subtitle();
+        let line = app
+            .library
+            .reader_view(&app.campaigns, None, &subtitle)
+            .and_then(|(view, _)| view.repair_line);
+        (handle.focused(window, cx), handle.selection(cx), line)
+    });
+    let line = line.expect("the broken line");
+    let at: usize = BROKEN
+        .lines()
+        .take(line - 1)
+        .map(|line| line.len() + 1)
+        .sum();
+    assert!(focused, "the editor takes the keyboard");
+    assert_eq!(selection, at..at, "the caret starts line {line}");
+    shell.capture("library-repair-caret__01-caret-on-broken-line__1200x800");
 }
 
 /// Search the Library for `name` and open the found entry whose row starts with it.

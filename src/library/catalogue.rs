@@ -2980,20 +2980,24 @@ pub fn folder_suggestions(
         });
     let folders = match kept {
         Some((.., folders)) => folders,
-        None => {
-            let mut folders = Vec::new();
-            visit_folders(root, root, &mut folders);
-            if let Some(kind) = &kind {
-                folders.push(kind_folder(kind).to_owned());
-            }
-            folders.sort();
-            folders.dedup();
-            std::sync::Arc::new(folders)
-        }
+        None => std::sync::Arc::new(folder_choices(root, kind.as_deref())),
     };
     ctx.data_mut(|data| {
         data.insert_temp(key, (pass, root.to_path_buf(), kind, folders.clone()));
     });
+    folders
+}
+
+/// Every folder under `root` (no hidden ones) and `kind`'s own folder, sorted, each once: the
+/// folder field's suggestions, read from disk.
+pub fn folder_choices(root: &Path, kind: Option<&str>) -> Vec<String> {
+    let mut folders = Vec::new();
+    visit_folders(root, root, &mut folders);
+    if let Some(kind) = kind {
+        folders.push(kind_folder(kind).to_owned());
+    }
+    folders.sort();
+    folders.dedup();
     folders
 }
 

@@ -152,3 +152,74 @@ fn recording_tab() {
     assert!(shell.bounds("Speech API key").is_some());
     shell.capture("settings-recording__01-tab__1200x800");
 }
+
+/// Signed in (egui `signed-in` 02, 03): Add from D&D Beyond lists the account's campaigns, an
+/// added one as Added and the others with Add…, which opens the import form under its row.
+/// On Link and folder, a D&D Beyond campaign linked to another campaign is a blocked choice
+/// with its reason, as egui's `blocked_choice` shows it: choosing it changes nothing.
+#[test]
+fn signed_in_remote_list_and_link() {
+    let mut shell = settings("signed-in", Seed::Campaign);
+    shell.update(|root, _, _| root.app.settings.simulate(Account::Connected));
+    if shell.bounds("Add Salt Road from D&D Beyond").is_none() {
+        shell.click("Add from D&D Beyond");
+    }
+    for _ in 0..200 {
+        if shell.read(|root| root.app.dndbeyond.loaded()) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    shell.settle();
+    assert!(shell.bounds("Add Salt Road from D&D Beyond").is_some());
+    assert!(
+        shell
+            .bounds("Add The Emberfall Marches from D&D Beyond")
+            .is_none()
+    );
+    shell.capture("signed-in__02-remote-campaign-list__1200x800");
+    shell.click("Add Salt Road from D&D Beyond");
+    assert!(
+        shell.read(|root| root
+            .app
+            .dndbeyond
+            .remotes()
+            .any(|remote| remote.name == "Salt Road" && root.app.campaigns.importing(remote.id))),
+        "Add… opens the import form of that campaign"
+    );
+    shell.capture("signed-in__03-import-remote-campaign__1200x800");
+    // The link picker: a campaign another local campaign links is blocked, with its reason.
+    shell.click("Campaign");
+    shell.click("Link and folder");
+    let (choices, current) = shell.read(|root| {
+        (
+            root.app.dndbeyond.link_choices(&root.app.campaigns),
+            root.app
+                .campaigns
+                .active_campaign()
+                .and_then(|campaign| campaign.dndbeyond_campaign_id),
+        )
+    });
+    let (_, name, _) = choices
+        .iter()
+        .find(|(_, _, lock)| lock.is_some())
+        .expect("a campaign linked elsewhere")
+        .clone();
+    shell.click("D&D Beyond campaign link");
+    assert!(
+        shell.bounds(&name).is_some(),
+        "the blocked choice is listed"
+    );
+    shell.capture("campaign-link__03-link-blocked-choice__1200x800");
+    shell.click(&name);
+    assert_eq!(
+        shell.read(|root| root
+            .app
+            .campaigns
+            .active_campaign()
+            .and_then(|campaign| campaign.dndbeyond_campaign_id)),
+        current,
+        "a blocked choice changes nothing"
+    );
+}

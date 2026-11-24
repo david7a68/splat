@@ -1874,55 +1874,30 @@ impl CampaignContent {
         campaigns: &Campaigns,
         active: &Campaign,
     ) {
-        let mut repaired = false;
-        let mut saved: Option<Option<(String, String)>> = None;
+        // Which editors are open stays in the egui context, by the repair's path; the rows,
+        // the save row's state and every act are the page's (`view.rs`), shared with GPUI.
+        let ctx = ui.ctx().clone();
+        let open_of = |path: &str| {
+            ctx.data(|data| {
+                data.get_temp::<bool>(egui::Id::new(("repair_open", path)))
+                    .unwrap_or(false)
+            })
+        };
         // One primary Save on the screen: the active repair's, else the last open changed one.
-        let changed: Vec<&str> = self
-            .repairs
-            .iter()
-            .filter(|repair| {
-                repair.dirty()
-                    && repair.refusal.is_none()
-                    && repair.failure.is_none()
-                    && ui.data(|data| {
-                        data.get_temp::<bool>(egui::Id::new(("repair_open", repair.path.as_str())))
-                            .unwrap_or(false)
-                    })
-            })
-            .map(|repair| repair.path.as_str())
-            .collect();
-        // Only a draft that Save would write, and whose last Save did not fail on the disk, can
-        // hold the primary.
-        let owner = (!self.run_open)
-            .then(|| {
-                self.active_repair
-                    .as_deref()
-                    .filter(|path| changed.contains(path))
-                    .or(changed.last().copied())
-                    .map(str::to_owned)
-            })
-            .flatten();
-        let checks = &mut self.repair_checks;
-        for repair in &mut self.repairs {
-            // The message, the state word and Save all use Save's own check of the draft, which
-            // the repair keeps until the draft changes.
-            let path = repair.path.clone();
-            let path = &path;
+        let owner = self.repair_owner(&open_of);
+        let mut saves = Vec::new();
+        let mut discards = Vec::new();
+        for row in self.repair_rows(&open_of) {
+            let path = &row.path;
             // A failed Save shows once, in the save row's state slot, so the message stops at
             // the way to fix the file.
             let id = egui::Id::new(("repair_open", path.as_str()));
-            let mut open = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(false);
+            let mut open = row.open;
             // Round 25 FD1: while the repair is open, its message keeps the same words, and the
             // cause moves to the message space below the save row. So no edit moves the editor.
-            let problem = match (&repair.refusal, &repair.failure) {
-                _ if open => None,
-                (Some(refusal), _) => Some(refusal.clone()),
-                (None, Some(_)) => None,
-                (None, None) => Some("The repair has not been saved".into()),
-            };
             if design::outcome::BodyFault::new(&ContentFault::Unreadable {
                 path,
-                problem: problem.as_deref(),
+                problem: row.problem.as_deref(),
             })
             .repair(design::outcome::Repair::new(
                 if open { "Close repair" } else { "Repair" },
@@ -1939,7 +1914,10 @@ impl CampaignContent {
                 design::group_heading(ui, "Repair", 0);
                 ui.scope(|ui| {
                     // What is wrong comes first, and stays true as the DM edits.
-
+                    let Some(repair) = self.repairs.iter_mut().find(|repair| repair.path == *path)
+                    else {
+                        return;
+                    };
                     let editor = ui.scope(|ui| {
                         crate::world::repair::editor_events(
                             ui,
@@ -1952,93 +1930,43 @@ impl CampaignContent {
                     // A click into the editor does not scroll the page: the pane's focus
                     // clearance keeps a pressed control where it is (layout step 10), and
                     // keyboard and screen-reader focus bring the editor's block into view.
-                    if edited || focused {
-                        self.active_repair = Some(path.clone());
+                    if focused {
+                        self.focus_repair(path);
                     }
                     if edited {
-                        repair.draft_changed(active, checks);
+                        self.repair_edited(active, path);
                     }
-
                     // One save row (`DraftState`): the word, Discard and the switch reason at
                     // the left, Save at the right. Primary while the draft has changes that
                     // Save would write, unless an open run owns `Next turn` or another repair
                     // is the active one. After Save failed on the disk it stays open to try
                     // again, but `owner` skips it until the next edit.
-                    let mut state = design::DraftState::new(
-                        design::save_row::DraftOrigin::Saved, // a repair edits a file on disk
-                        if repair.dirty() {
-                            design::save_row::Changed::Yes
-                        } else {
-                            design::save_row::Changed::No
-                        },
-                        if owner.as_deref() == Some(path.as_str()) {
-                            design::save_row::Primary::Draft
-                        } else {
-                            design::save_row::Primary::Elsewhere
-                        },
-                    )
-                    .locks_campaign();
-                    if let Some(found) = repair.diagnosis() {
-                        state = state.check(found.into_owned());
+                    let Some(state) = self.repair_state(path, owner.as_deref()) else {
+                        return;
+                    };
+                    let saved = design::save_row(ui, &state, "Save repaired note");
+                    if saved.save || design::save_row::save_key(ui, state.can_save()) {
+                        saves.push(path.clone());
                     }
-                    if repair.failure.is_some() {
-                        state = state.not_saved();
-                    }
-                    let row = design::save_row(ui, &state, "Save repaired note");
-                    if row.save || design::save_row::save_key(ui, state.can_save())
-                    {
-                        // The last act's result, failed or successful (see `Answer`).
-                        if repair.save(active) {
-                            repaired = true;
-                            saved = Some(None);
-                        } else if let Some(failure) = &repair.failure {
-                            saved = Some(Some((repair.path.clone(), failure.clone())));
-                        }
+                    if saved.discard {
+                        discards.push(path.clone());
                     }
                     // One discard result per repair: its next Discard or edit ends its own
                     // result only.
-                    let of_this = |payload: &Payload| {
-                        matches!(payload, Payload::RepairDiscard { path: p, .. } if p == path)
-                    };
-                    if row.discard {
-                        end_results(&mut self.results, active.id, of_this);
-                        let stamp = self.repair_stamp;
-                        self.repair_stamp += 1;
-                        new_result!(
-                            self,
-                            Payload::RepairDiscard {
-                                stamp,
-                                path: path.clone(),
-                                text: repair.draft.as_str().to_owned(),
-                            }
-                        );
-                        let _ = repair.draft.replace(repair.baseline.as_str());
-                        repair.draft_changed(active, checks);
-                    }
-                    if repair.dirty() {
-                        end_results(&mut self.results, active.id, of_this);
-                    }
+                    self.end_repair_discard(active, path);
                 });
             }
         }
-        if self.repairs.iter().any(|repair| {
-            ui.data(|data| {
-                data.get_temp::<bool>(egui::Id::new(("repair_open", repair.path.as_str())))
-                    .unwrap_or(false)
-            })
-        }) {
+        if self.repairs.iter().any(|repair| open_of(&repair.path)) {
             // The package list below draws the one rule; a second rule here would separate nothing.
             design::gap(ui, design::Gap::L);
         }
-        match saved {
-            Some(Some((path, words))) => self.fail(Cause::NotSaved { path }, words),
-            // A repair saved: the last act succeeded, so an older failure is no longer its
-            // answer (it stays in its own repair's message).
-            Some(None) => self.answer = None,
-            None => {}
+        for path in discards {
+            self.discard_repair(active, &path);
         }
-        if repaired && !self.dirty() {
-            self.reload(ui.ctx(), campaigns, active.clone());
+        // The last act's result, failed or successful (see `Answer`).
+        for path in saves {
+            self.save_repair(ui.ctx(), campaigns, active, &path);
         }
     }
 
@@ -2080,6 +2008,9 @@ impl CampaignContent {
         let c = colors();
         let mut repair_reason = None;
         let mut pressed = false;
+        // Discard and the end of its result are the page's acts (`view.rs`), shared with GPUI.
+        let mut discard = false;
+        let mut changed_now = false;
         ui.horizontal(|ui| {
             let dirty = document.selections != self.saved_selections || document.baseline.is_none();
             let repair_text = self
@@ -2097,25 +2028,11 @@ impl CampaignContent {
                         color: c.document.unsaved,
                     },
                 );
-                end_results(&mut self.results, active.id, |payload| {
-                    matches!(payload, Payload::Discarded { .. })
-                });
-                if Action::quiet("Discard")
+                changed_now = true;
+                discard = Action::quiet("Discard")
                     .density(Density::Read)
                     .show(ui)
-                    .clicked()
-                {
-                    new_result!(
-                        self,
-                        Payload::Discarded {
-                            selections: std::mem::replace(
-                                &mut document.selections,
-                                self.saved_selections.clone(),
-                            ),
-                            baseline: document.baseline.clone(),
-                        }
-                    );
-                }
+                    .clicked();
             } else {
                 design::save_row_state(
                     ui,
@@ -2180,6 +2097,12 @@ impl CampaignContent {
                     design::blocked_reason(ui, Some(reason));
                 });
             });
+        }
+        if changed_now {
+            self.choices_edited(active.id);
+        }
+        if discard {
+            self.discard_choices();
         }
         if reload {
             self.reload(ui.ctx(), campaigns, active.clone());
@@ -2623,6 +2546,7 @@ impl CampaignContent {
         let document = &mut snapshot.document;
         let closure = &snapshot.closure.1;
         let c = colors();
+        let mut acts = Vec::new();
 
         let affected: Vec<_> = catalogue
             .entries
@@ -2866,26 +2790,7 @@ impl CampaignContent {
                                         );
                                         design::named(ui, &check, &format!("Use {}", module.name));
                                         if check.changed() {
-                                            end_results(&mut self.results, active.id, |payload| {
-                                                matches!(payload, Payload::Saved)
-                                            });
-                                            if enabled {
-                                                if let Some(i) = existing {
-                                                    document.selections.remove(i);
-                                                }
-                                                document.selections.push(PackageSelection {
-                                                    name: Some(module.name.clone()),
-                                                    package: EntryRef::id(module.id),
-                                                    selection: self
-                                                        .disabled_selections
-                                                        .remove(&module.id)
-                                                        .unwrap_or(Selection::All),
-                                                });
-                                            } else if let Some(i) = existing {
-                                                let removed = document.selections.remove(i);
-                                                self.disabled_selections
-                                                    .insert(module.id, removed.selection);
-                                            }
+                                            acts.push(PackageAct::Package(module.id, enabled));
                                         }
                                         // Round 24 FF4: a manifest fault the warning above names
                                         // is marked on its row too, in its tone.
@@ -3121,24 +3026,15 @@ impl CampaignContent {
                     .show(ui)
                     .clicked()
                 {
-                    if let Some(i) = selection_index {
-                        document.selections[i].selection = Selection::All;
-                    } else {
-                        document.selections.push(PackageSelection {
-                            name: Some(module.name.clone()),
-                            package: EntryRef::id(module.id),
-                            selection: Selection::All,
-                        });
-                    }
+                    acts.push(PackageAct::All(module.id));
                 }
                 if Action::quiet("Choose none")
                     .density(Density::Read)
                     .blocked_if(selection_index.is_none(), "Nothing here is chosen.")
                     .show(ui)
                     .clicked()
-                    && let Some(i) = selection_index
                 {
-                    document.selections.remove(i);
+                    acts.push(PackageAct::None(module.id));
                 }
             });
             let width = ui.available_width();
@@ -3238,41 +3134,34 @@ impl CampaignContent {
                     }
                 });
             if let Some((id, checked)) = toggled {
-                let selection_index = document
-                    .selections
-                    .iter()
-                    .position(|s| catalogue.resolve_ref(&s.package).ok() == Some(module.id));
-                let mut selected = match selection_index.map(|i| &document.selections[i].selection)
-                {
-                    Some(Selection::All) => entry_ids
-                        .iter()
-                        .map(|id| EntryRef::id(*id))
-                        .collect::<Vec<_>>(),
-                    Some(Selection::Selected { entries }) => entries.clone(),
-                    None => Vec::new(),
-                };
-                selected.retain(|r| catalogue.resolve_ref(r).ok() != Some(id));
-                if checked {
-                    selected.push(EntryRef::id(id));
-                }
-                let empty = selected.is_empty();
-                let selection = Selection::Selected { entries: selected };
-                if empty {
-                    if let Some(i) = selection_index {
-                        document.selections.remove(i);
-                    }
-                } else if let Some(i) = selection_index {
-                    document.selections[i].selection = selection;
-                } else {
-                    document.selections.push(PackageSelection {
-                        name: Some(module.name.clone()),
-                        package: EntryRef::id(module.id),
-                        selection,
-                    });
-                }
+                acts.push(PackageAct::Entry(module.id, id, checked));
             }
         });
+        // The boxes, Choose all and Choose none act after the lists drew, through the page's
+        // acts (`view.rs`), which GPUI calls too.
+        for act in acts {
+            match act {
+                PackageAct::Package(module, enabled) => {
+                    self.toggle_package(active.id, module, enabled)
+                }
+                PackageAct::All(module) => self.choose_all(module),
+                PackageAct::None(module) => self.choose_none(module),
+                PackageAct::Entry(module, id, checked) => self.toggle_entry(module, id, checked),
+            }
+        }
     }
+}
+
+/// A press on the package lists, applied after they drew (`packages_content`).
+enum PackageAct {
+    /// A package's box: on or off.
+    Package(Uuid, bool),
+    /// `Choose all` (or `Include future additions`).
+    All(Uuid),
+    /// `Choose none`.
+    None(Uuid),
+    /// An entry's box in a package: on or off.
+    Entry(Uuid, Uuid, bool),
 }
 
 /// The catalogue's and the closure's errors that the issue list shows: not those that a

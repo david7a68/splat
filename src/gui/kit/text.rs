@@ -29,6 +29,8 @@ pub fn icon(glyph: &'static str, ty: Type, color: Hsla) -> Div {
 /// in muted (`CAMPAIGNS 3`).
 pub fn label(words: impl Into<SharedString>, count: usize) -> Div {
     let c = colors();
+    let words: SharedString = words.into();
+    let title = words.clone();
     let row =
         div()
             .flex()
@@ -39,7 +41,10 @@ pub fn label(words: impl Into<SharedString>, count: usize) -> Div {
     if count == 0 {
         row
     } else {
-        row.child(text(Type::Label, c.muted, count.to_string()))
+        // Named by the heading and its count, so a test finds the count as the DM reads it.
+        let counted = crate::design::count(count, "", "");
+        let name = format!("{title} {counted}");
+        row.child(super::target(text(Type::Label, c.muted, counted), name))
     }
 }
 
@@ -98,6 +103,33 @@ trait WhenSome: Styled + Sized {
     }
 }
 impl<T: Styled> WhenSome for T {}
+
+/// The width of `words` set in `ty` on one line (egui's `number_width`): to choose between a
+/// long and a short form of words by what fits.
+pub fn width(window: &mut gpui::Window, ty: Type, words: &str) -> Pixels {
+    if words.is_empty() {
+        return px(0.0);
+    }
+    let font = gpui::Font {
+        family: SharedString::new_static(ty.family()),
+        features: gpui::FontFeatures::default(),
+        fallbacks: None,
+        weight: ty.weight(),
+        style: ty.style(),
+    };
+    let run = gpui::TextRun {
+        len: words.len(),
+        font,
+        color: colors().text,
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    };
+    window
+        .text_system()
+        .shape_line(words.to_owned().into(), ty.size(), &[run], None)
+        .width
+}
 
 /// One line that is cut with an ellipsis when it does not fit.
 pub fn one_line(ty: Type, color: Hsla, words: impl Into<SharedString>) -> Div {

@@ -2,8 +2,9 @@
 //! (`CampaignContent::show`) and the GPUI tab (`src/gui/pages/campaigns/packages.rs`) share
 //! them.
 use super::{
-    CampaignContent, ContentPress, MISSING_CAMPAIGN, PageResult, Payload, end_results,
-    manifest_mark, manifest_on_disk, missing_package, needed_by, package_count, removal_of,
+    CampaignContent, Cause, ContentFault, ContentPress, MISSING_CAMPAIGN, PageResult, Payload,
+    end_results, manifest_mark, manifest_on_disk, missing_package, needed_by, package_count,
+    removal_of,
 };
 use crate::campaigns::Campaigns;
 use crate::content_workspace::{EntryRef, PackageSelection, Selection};
@@ -34,6 +35,22 @@ pub struct SaveBar {
     pub reload_blocked: bool,
     /// The reason beside the changes (`Discard` is the one way to switch while a repair stands).
     pub switch_reason: Option<&'static str>,
+    /// Save selections is the primary action; an open run owns `Next turn` instead.
+    pub primary: bool,
+}
+
+/// An invalid note in repair (`repair_section`): its message, and its editor while open.
+pub struct RepairRow {
+    pub path: String,
+    /// The message's words (`ContentFault::Unreadable`): the file and, while closed, what is
+    /// wrong.
+    pub words: String,
+    pub open: bool,
+    /// What is wrong, for the message (none while the editor is open).
+    pub problem: Option<String>,
+    /// The draft and the line Save's check marks.
+    pub draft: String,
+    pub error_line: Option<usize>,
 }
 
 /// One package row.
@@ -219,6 +236,13 @@ impl CampaignContent {
         }
         let document = &snapshot.document;
         let changed = document.selections != self.saved_selections;
+        if changed {
+            // While the choices differ from Campaign.md, Discard's result has ended, as the
+            // egui bar ends it each frame (`choices_edited`).
+            end_results(&mut self.results, document.campaign.id, |payload| {
+                matches!(payload, Payload::Discarded { .. })
+            });
+        }
         let repair = self
             .repairs
             .first()
@@ -235,6 +259,7 @@ impl CampaignContent {
             }),
             repair,
             reload_blocked: self.repairs.iter().any(super::Repair::dirty),
+            primary: !self.run_open,
         })
     }
 
@@ -753,5 +778,199 @@ impl CampaignContent {
             .iter()
             .map(|repair| repair.path.clone())
             .collect()
+    }
+
+    /// The invalid notes in repair, in order, each with its message (`repair_section`);
+    /// `open` says whose editor is open. While the editor is open, the message keeps the same
+    /// words and the cause moves to the save row (round 25 FD1).
+    pub fn repair_rows(&self, open: &dyn Fn(&str) -> bool) -> Vec<RepairRow> {
+        self.repairs
+            .iter()
+            .map(|repair| {
+                let open = open(&repair.path);
+                let problem = match (&repair.refusal, &repair.failure) {
+                    _ if open => None,
+                    (Some(refusal), _) => Some(refusal.clone()),
+                    (None, Some(_)) => None,
+                    (None, None) => Some("The repair has not been saved".into()),
+                };
+                let words = crate::design::outcome::fault_words(&ContentFault::Unreadable {
+                    path: &repair.path,
+                    problem: problem.as_deref(),
+                })
+                .to_string();
+                RepairRow {
+                    path: repair.path.clone(),
+                    words,
+                    open,
+                    problem,
+                    draft: repair.draft.as_str().to_owned(),
+                    error_line: repair.error_line,
+                }
+            })
+            .collect()
+    }
+
+    /// The repair whose Save is the one primary on the screen: the active repair's, else the
+    /// last open one with changes Save would write. None while an open run owns `Next turn`.
+    pub fn repair_owner(&self, open: &dyn Fn(&str) -> bool) -> Option<String> {
+        if self.run_open {
+            return None;
+        }
+        let changed: Vec<&str> = self
+            .repairs
+            .iter()
+            .filter(|repair| {
+                repair.dirty()
+                    && repair.refusal.is_none()
+                    && repair.failure.is_none()
+                    && open(&repair.path)
+            })
+            .map(|repair| repair.path.as_str())
+            .collect();
+        self.active_repair
+            .as_deref()
+            .filter(|path| changed.contains(path))
+            .or(changed.last().copied())
+            .map(str::to_owned)
+    }
+
+    /// The save row's state of the repair at `path`: its word, Discard, the switch reason and
+    /// Save's lock and weight (`owner`: the repair that holds the primary).
+    pub fn repair_state(
+        &self,
+        path: &str,
+        owner: Option<&str>,
+    ) -> Option<crate::design::DraftState<'_>> {
+        use crate::design::save_row::{Changed, DraftOrigin, Primary};
+        let repair = self.repairs.iter().find(|repair| repair.path == path)?;
+        let mut state = crate::design::DraftState::new(
+            DraftOrigin::Saved, // a repair edits a file on disk
+            if repair.dirty() {
+                Changed::Yes
+            } else {
+                Changed::No
+            },
+            if owner == Some(path) {
+                Primary::Draft
+            } else {
+                Primary::Elsewhere
+            },
+        )
+        .locks_campaign();
+        if let Some(found) = repair.diagnosis() {
+            state = state.check(found.into_owned());
+        }
+        if repair.failure.is_some() {
+            state = state.not_saved();
+        }
+        Some(state)
+    }
+
+    /// The repair at `path` became the one the DM works in (an edit, or the editor took the
+    /// keyboard).
+    pub fn focus_repair(&mut self, path: &str) {
+        self.active_repair = Some(path.to_owned());
+    }
+
+    /// The repair's draft changed in its editor: Save's check runs again, a failed Save no
+    /// longer describes it, and its Discard result ends.
+    pub fn repair_edited(&mut self, active: &Campaign, path: &str) {
+        self.active_repair = Some(path.to_owned());
+        let checks = &mut self.repair_checks;
+        if let Some(repair) = self.repairs.iter_mut().find(|repair| repair.path == path) {
+            repair.draft_changed(active, checks);
+        }
+        self.end_repair_discard(active, path);
+    }
+
+    /// The repair's editor gave new words (a UI that does not edit the draft in place).
+    pub fn edit_repair(&mut self, active: &Campaign, path: &str, words: &str) {
+        let Some(repair) = self.repairs.iter_mut().find(|repair| repair.path == path) else {
+            return;
+        };
+        if repair.draft.as_str() == words {
+            return;
+        }
+        let _ = repair.draft.replace(words);
+        self.repair_edited(active, path);
+    }
+
+    /// While a repair has changes, its Discard result has ended: one discard result per
+    /// repair, ended by its next edit or Discard only.
+    pub(super) fn end_repair_discard(&mut self, active: &Campaign, path: &str) {
+        if self
+            .repairs
+            .iter()
+            .any(|repair| repair.path == path && repair.dirty())
+        {
+            end_results(
+                &mut self.results,
+                active.id,
+                |payload| matches!(payload, Payload::RepairDiscard { path: p, .. } if p == path),
+            );
+        }
+    }
+
+    /// The repair's `Discard`: its draft goes back to the file's text, with an Undo.
+    pub fn discard_repair(&mut self, active: &Campaign, path: &str) {
+        end_results(
+            &mut self.results,
+            active.id,
+            |payload| matches!(payload, Payload::RepairDiscard { path: p, .. } if p == path),
+        );
+        let Some(text) = self
+            .repairs
+            .iter()
+            .find(|repair| repair.path == path)
+            .map(|repair| repair.draft.as_str().to_owned())
+        else {
+            return;
+        };
+        let stamp = self.repair_stamp;
+        self.repair_stamp += 1;
+        super::new_result_of(
+            self,
+            Payload::RepairDiscard {
+                stamp,
+                path: path.to_owned(),
+                text,
+            },
+        );
+        let checks = &mut self.repair_checks;
+        if let Some(repair) = self.repairs.iter_mut().find(|repair| repair.path == path) {
+            let _ = repair.draft.replace(repair.baseline.as_str());
+            repair.draft_changed(active, checks);
+        }
+    }
+
+    /// The repair's `Save repaired note` (or Ctrl+S): Save asks its own question again, then
+    /// writes. A write that failed is the newest answer; a saved repair ends an older failure,
+    /// and when no draft is left the page reads the campaign again.
+    pub fn save_repair(
+        &mut self,
+        ctx: &egui::Context,
+        campaigns: &Campaigns,
+        active: &Campaign,
+        path: &str,
+    ) {
+        let Some(repair) = self.repairs.iter_mut().find(|repair| repair.path == path) else {
+            return;
+        };
+        if repair.save(active) {
+            // A repair saved: the last act succeeded, so an older failure is no longer its
+            // answer (it stays in its own repair's message).
+            self.answer = None;
+            if !self.dirty() {
+                self.reload(ctx, campaigns, active.clone());
+            }
+        } else if let Some(failure) = repair.failure.clone() {
+            self.fail(
+                Cause::NotSaved {
+                    path: path.to_owned(),
+                },
+                failure,
+            );
+        }
     }
 }

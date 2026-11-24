@@ -332,6 +332,18 @@ impl EditorHandle {
             .update(cx, |input, cx| input.set_selected_range(at..at, cx));
     }
 
+    /// Select the bytes `range` (clipped to character boundaries): a value the DM types over.
+    pub fn select(&self, range: std::ops::Range<usize>, cx: &mut App) {
+        self.1
+            .update(cx, |input, cx| input.set_selected_range(range, cx));
+    }
+
+    /// The selected bytes (empty at the caret), for a test of where a page put the caret.
+    #[cfg(test)]
+    pub fn selection(&self, cx: &App) -> std::ops::Range<usize> {
+        self.1.read(cx).selected_range()
+    }
+
     /// Whether it has the keyboard.
     pub fn focused(&self, window: &Window, cx: &App) -> bool {
         self.1.read(cx).focus_handle(cx).is_focused(window)

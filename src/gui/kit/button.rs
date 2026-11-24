@@ -10,7 +10,8 @@
 //! - Every target is at least 24 px; the default height is a `Scan` control (30 px).
 use super::{OnClick, target, tooltip::tip};
 use crate::gui::theme::{
-    Density, FOCUS_WIDTH, HAIRLINE_WIDTH, ICON_SLOT, M, RADIUS_CONTROL, S, Type, TypeExt, colors,
+    Density, FOCUS_WIDTH, HAIRLINE_WIDTH, ICON_SLOT, M, RADIUS_CONTROL, S, Type, TypeExt, XS,
+    colors,
 };
 use gpui::{
     App, ClickEvent, ElementId, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels,
@@ -39,6 +40,7 @@ pub struct Button {
     name: Option<SharedString>,
     kind: Kind,
     icon: Option<&'static str>,
+    icon_after: Option<&'static str>,
     blocked: Option<SharedString>,
     hint: Option<SharedString>,
     height: Pixels,
@@ -58,6 +60,7 @@ impl Button {
             name: None,
             kind,
             icon: None,
+            icon_after: None,
             blocked: None,
             hint: None,
             height: Density::Scan.control(),
@@ -89,6 +92,12 @@ impl Button {
     /// before the others (`kit::Dialog`).
     pub fn destructive(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self {
         Self::new(Kind::Destructive, id, label)
+    }
+
+    /// An icon after the words: a menu button's caret (egui's `MenuButton`, `Packages ▾`).
+    pub fn icon_after(mut self, icon: &'static str) -> Self {
+        self.icon_after = Some(icon);
+        self
     }
 
     /// An icon before the words (`gui::icons`).
@@ -283,6 +292,15 @@ impl RenderOnce for Button {
             );
         }
         button = button.child(self.label.clone());
+        if let Some(icon) = self.icon_after {
+            button = button.child(
+                div()
+                    .icon_font(Type::Body)
+                    .pl(XS)
+                    .flex_none()
+                    .child(SharedString::new_static(icon)),
+            );
+        }
         if let Some(key) = self.key.clone() {
             button = button.child(div().pl(S).ty(Type::Small).text_color(c.faint).child(key));
         }

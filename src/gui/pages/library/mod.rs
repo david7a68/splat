@@ -31,6 +31,14 @@ actions!(
         Save,
         /// Alt+Left: back to the entry before the last link.
         Back,
+        /// Alt+Right: forward to the entry Back left.
+        Forward,
+        /// Up in the entry list: the keyboard goes to the row above.
+        RowUp,
+        /// Down in the entry list: the keyboard goes to the row below.
+        RowDown,
+        /// Enter or Space on a row that has the keyboard: it opens.
+        RowOpen,
     ]
 );
 
@@ -44,6 +52,22 @@ pub struct State {
     list_scroll: UniformListScrollHandle,
     /// The reader's scroll, which a typed jump to a heading moves.
     reader_scroll: gpui::ScrollHandle,
+    /// The row of the entry list that Up and Down gave the keyboard to (egui's region: the
+    /// keyboard moves row to row and the row shows whole), and its focus.
+    pub(super) row: Option<usize>,
+    pub(super) row_focus: Option<FocusHandle>,
+    /// The entry list's row count and the open entry's row, as the list drew them.
+    pub(super) list_rows: usize,
+    pub(super) list_selected: Option<usize>,
+    /// The New entry folder field's suggestions, read when its menu opens and kept while it
+    /// stays open, for one root and kind (`catalogue::folder_suggestions`).
+    pub(super) folders: Option<(std::path::PathBuf, String, Arc<Vec<String>>)>,
+    /// The Markdown editor's state, by the file it edits, so the page can place its caret.
+    pub(super) editor: Option<(String, kit::EditorHandle)>,
+    /// The comparison's aligned rows, by the two texts (`design::comparison_rows`), and the
+    /// change group `Next difference` went to.
+    pub(super) comparison: Option<(u64, Arc<crate::design::ComparedLines>)>,
+    pub(super) difference: Option<usize>,
 }
 
 /// Once, when the root is built.
@@ -51,6 +75,12 @@ pub(crate) fn init(root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<
     cx.bind_keys([
         KeyBinding::new("ctrl-s", Save, Some("Library")),
         KeyBinding::new("alt-left", Back, Some("Library")),
+        KeyBinding::new("alt-right", Forward, Some("Library")),
+        // A text field or the editor binds these keys in its own, deeper context first.
+        KeyBinding::new("up", RowUp, Some("Library")),
+        KeyBinding::new("down", RowDown, Some("Library")),
+        KeyBinding::new("enter", RowOpen, Some("Library")),
+        KeyBinding::new("space", RowOpen, Some("Library")),
     ]);
     root.pages.library.focus = Some(cx.focus_handle());
 }
@@ -157,6 +187,44 @@ pub(crate) fn render(
             root.app.library.back();
             cx.notify();
         }))
+        .on_action(cx.listener(|root, _: &RowUp, window, cx| {
+            if list_keys(root, window, cx) {
+                list::move_row(root, -1, window, cx);
+            }
+        }))
+        .on_action(cx.listener(|root, _: &RowDown, window, cx| {
+            if list_keys(root, window, cx) {
+                list::move_row(root, 1, window, cx);
+            }
+        }))
+        .on_action(cx.listener(|root, _: &RowOpen, window, cx| {
+            list::open_row(root, window, cx);
+        }))
+        .on_action(cx.listener(|root, _: &Forward, _, cx| {
+            if root.modal_open(cx) {
+                return;
+            }
+            root.app.library.forward();
+            cx.notify();
+        }))
+        .on_mouse_down(
+            gpui::MouseButton::Navigate(gpui::NavigationDirection::Back),
+            cx.listener(|root, _, _, cx| {
+                if !root.modal_open(cx) {
+                    root.app.library.back();
+                    cx.notify();
+                }
+            }),
+        )
+        .on_mouse_down(
+            gpui::MouseButton::Navigate(gpui::NavigationDirection::Forward),
+            cx.listener(|root, _, _, cx| {
+                if !root.modal_open(cx) {
+                    root.app.library.forward();
+                    cx.notify();
+                }
+            }),
+        )
         .on_action(cx.listener(dismiss))
         .flex()
         .flex_col()
@@ -165,6 +233,20 @@ pub(crate) fn render(
         .child(div().flex_1().min_h_0().child(body))
         .children(unregister)
         .into_any_element()
+}
+
+/// Whether Up and Down move in the entry list now: the page or a list row holds the keyboard
+/// and nothing modal is open. Else the key goes on to the control that holds it.
+fn list_keys(root: &SplatRoot, window: &Window, cx: &mut Context<SplatRoot>) -> bool {
+    let library = &root.pages.library;
+    let held = |focus: &Option<FocusHandle>| focus.as_ref().is_some_and(|f| f.is_focused(window));
+    let ours = window.focused(cx).is_none() || held(&library.focus) || held(&library.row_focus);
+    if ours && !root.modal_open(cx) {
+        true
+    } else {
+        cx.propagate();
+        false
+    }
 }
 
 /// Escape on the page: a form takes it (it closes), as in egui; else the root's Escape.

@@ -38,7 +38,7 @@ pub(super) fn render(
     let packages = kit::MenuButton::new(
         "library-packages",
         kit::Button::quiet("library-packages-button", "Packages")
-            .icon(icons::DOWN)
+            .icon_after(icons::DOWN)
             .blocked(header.packages_blocked.clone()),
     )
     .item(

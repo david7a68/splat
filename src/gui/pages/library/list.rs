@@ -15,7 +15,7 @@ use std::sync::Arc;
 /// The scope drop-down (`Library::scope_menu`): what the catalogue shows. Choosing here never
 /// changes the active campaign.
 fn scope_menu(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> impl IntoElement {
-    let (choices, chosen, _group) = root.app.library.scope_choices(&root.app.campaigns);
+    let (choices, chosen, group) = root.app.library.scope_choices(&root.app.campaigns);
     let scopes: Vec<_> = choices.iter().map(|(scope, _)| *scope).collect();
     kit::Dropdown::new(
         "library-scope",
@@ -23,6 +23,7 @@ fn scope_menu(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> impl IntoElement
         choices.into_iter().map(|(_, words)| words),
         Some(chosen),
     )
+    .group_at(group)
     .on_select(cx.listener(move |root, at: &usize, _, cx| {
         if let Some(scope) = scopes.get(*at) {
             root.app.library.choose_scope(*scope);
@@ -51,7 +52,14 @@ fn section_row(
                 .truncate()
                 .child(label),
         )
-        .children(count.map(|count| kit::text(Type::Small, c.muted, count.to_string()).flex_none()))
+        .children(count.map(|count| {
+            // Named by its words, so a test finds the grouped count.
+            let words = crate::design::count(count, "", "");
+            kit::target(
+                kit::text(Type::Small, c.muted, words.clone()).flex_none(),
+                words,
+            )
+        }))
 }
 
 /// The package's About row.
@@ -302,6 +310,20 @@ pub(super) fn entries_column(
     {
         handle.scroll_to_item(row, ScrollStrategy::Center);
     }
+    // The row Up and Down gave the keyboard to, while the list still has it.
+    let row_focus = root
+        .pages
+        .library
+        .row_focus
+        .get_or_insert_with(|| cx.focus_handle())
+        .clone();
+    if root.pages.library.row.is_some_and(|row| row >= list.rows) {
+        root.pages.library.row = None;
+    }
+    let keyboard_row = root.pages.library.row;
+    // What Up and Down step through (the page's keys, `move_row`).
+    root.pages.library.list_rows = list.rows;
+    root.pages.library.list_selected = list.selected_row;
     let index = index.clone();
     let rows = kit::uniform_column(
         "library-entries",
@@ -315,10 +337,18 @@ pub(super) fn entries_column(
                         let note = entry.note;
                         let c = colors();
                         let name: SharedString = entry.name.clone().into();
+                        let keyboard = keyboard_row == Some(row);
                         Some(
                             div()
                                 .id(ElementId::Name(format!("library-entry-{note}").into()))
                                 .w_full()
+                                .rounded(crate::gui::theme::RADIUS_CONTROL)
+                                .when(keyboard, |cell| {
+                                    cell.track_focus(&row_focus).focus(|s| {
+                                        s.border(crate::gui::theme::FOCUS_WIDTH)
+                                            .border_color(c.focus)
+                                    })
+                                })
                                 .with_tooltip(entry.hover.clone())
                                 .child(
                                     kit::Row::new(
@@ -347,7 +377,14 @@ pub(super) fn entries_column(
                                             .child(subtitle(&entry.subtitle)),
                                     )
                                     .on_click(cx.listener(
-                                        move |root, _, _, cx| {
+                                        move |root, _, window, cx| {
+                                            // The pressed row holds the keyboard, so Up and
+                                            // Down go on from it.
+                                            let library = &mut root.pages.library;
+                                            library.row = Some(row);
+                                            if let Some(focus) = library.row_focus.clone() {
+                                                window.focus(&focus, cx);
+                                            }
                                             root.app.library.press_entry(note);
                                             cx.notify();
                                         },
@@ -362,6 +399,38 @@ pub(super) fn entries_column(
     column
         .child(div().flex_1().min_h_0().pt(XS).child(rows))
         .into_any_element()
+}
+
+/// Up (`by` -1) or Down (+1) in the entry list, as egui's list region moves the keyboard: the
+/// keyboard goes to the next row, which scrolls into view whole. With no row holding it yet, the
+/// open entry's row (or the first) takes it.
+pub(super) fn move_row(
+    root: &mut SplatRoot,
+    by: isize,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) {
+    let library = &mut root.pages.library;
+    let (count, selected) = (library.list_rows, library.list_selected);
+    if count == 0 {
+        return;
+    }
+    let held = library
+        .row_focus
+        .as_ref()
+        .is_some_and(|focus| focus.is_focused(window));
+    let row = match library.row.filter(|_| held) {
+        Some(row) => row.saturating_add_signed(by).min(count - 1),
+        None => selected.unwrap_or(0).min(count - 1),
+    };
+    library.row = Some(row);
+    library
+        .list_scroll
+        .scroll_to_item(row, ScrollStrategy::Nearest);
+    if let Some(focus) = library.row_focus.clone() {
+        window.focus(&focus, cx);
+    }
+    cx.notify();
 }
 
 /// The campaign scope with no entries of its own: the scope drop-down, then a pane with the New
@@ -423,4 +492,22 @@ pub(super) fn empty_scope(
         .child(div().w(px(166.0)).child(scope_menu(root, cx)))
         .child(div().flex_1().min_h_0().child(pane))
         .into_any_element()
+}
+
+/// Enter or Space while a row has the keyboard: that row's entry opens (a draft keeps it, as a
+/// press does). Else the key goes on.
+pub(super) fn open_row(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) {
+    let library = &root.pages.library;
+    let held = library
+        .row_focus
+        .as_ref()
+        .is_some_and(|focus| focus.is_focused(window));
+    let Some(row) = library.row.filter(|_| held) else {
+        cx.propagate();
+        return;
+    };
+    if let Some(entry) = root.app.library.entry_row(row, None) {
+        root.app.library.press_entry(entry.note);
+        cx.notify();
+    }
 }

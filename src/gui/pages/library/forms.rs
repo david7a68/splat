@@ -6,6 +6,7 @@ use gpui::{
     AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, SharedString,
     Styled, Window, div,
 };
+use std::sync::Arc;
 
 /// `Choose for this campaign`, its help, then `L`.
 fn use_box(
@@ -51,7 +52,8 @@ pub(super) fn new_entry(
     let Some(view) = view else {
         return div().into_any_element();
     };
-    let _ = root.app.library.take_focus_new_name();
+    let focus_name = root.app.library.take_focus_new_name();
+    let folder = folder_field(root, &view.folder, cx);
     let kinds: Vec<String> = view.kinds.iter().map(|(kind, _)| kind.clone()).collect();
     let kind_at = kinds.iter().position(|kind| *kind == view.kind);
     let create = kit::Button::primary("library-create-entry", "Create entry")
@@ -96,6 +98,7 @@ pub(super) fn new_entry(
             None,
             kit::TextField::new("library-new-name", view.name.clone())
                 .name("Entry name")
+                .focus(focus_name)
                 .on_change(cx.listener(|root, words: &str, _, cx| {
                     root.app.library.set_new_name(words);
                     cx.notify();
@@ -154,28 +157,101 @@ pub(super) fn new_entry(
             div()
                 .flex()
                 .flex_row()
-                .items_end()
+                .items_start()
                 .gap(S)
                 .child(
                     div().flex_1().min_w_0().child(
                         kit::field(
                             "Folder",
+                            Some(SharedString::new_static(
+                                "Type a new folder, or choose one. A new folder is made with the file.",
+                            )),
                             None,
-                            None,
-                            kit::TextField::new("library-new-folder", view.folder.clone())
-                                .name("Folder")
-                                .on_change(cx.listener(|root, words: &str, _, cx| {
-                                    root.app.library.set_new_folder(words);
-                                    cx.notify();
-                                })),
+                            folder,
                         )
                         .pb(gpui::px(0.0)),
                     ),
                 )
-                .child(create),
+                // Create stands on the field's line, below its caption (egui drops it there).
+                .child(div().pt(Type::Small.line() + XS).child(create)),
         )
         .child(kit_line_gap())
         .child(kept_line(Some(cancel.into_any_element()), words))
+        .into_any_element()
+}
+
+/// The New entry folder field (`catalogue::folder_field`): the words, and a menu of the
+/// folders already there (`Main folder` first) whose names hold the words. The folders are read
+/// when the menu opens and kept only while it stays open, so a folder made meanwhile shows at
+/// the next open.
+fn folder_field(root: &mut SplatRoot, value: &str, cx: &mut Context<SplatRoot>) -> AnyElement {
+    let menu: ElementId = "library-new-folder-menu".into();
+    let state = &mut root.pages.library;
+    if kit::menu::is_open(&menu, cx) {
+        if let Some((folder_root, folders)) = root.app.library.new_folder_choices_if(
+            &root.app.campaigns,
+            state
+                .folders
+                .as_ref()
+                .map(|(at, kind, _)| (at.as_path(), kind.as_str())),
+        ) {
+            state.folders = Some((
+                folder_root,
+                root.app.library.new_kind().to_owned(),
+                Arc::new(folders),
+            ));
+        }
+    } else {
+        state.folders = None;
+    }
+    let query = value.to_lowercase();
+    let mut suggestions = kit::MenuButton::new(
+        menu,
+        kit::Button::quiet("library-new-folder-suggest", "")
+            .icon(crate::gui::icons::DOWN)
+            .name("Suggestions for Folder"),
+    )
+    .item(
+        kit::MenuItem::new("Main folder")
+            .checked(value.is_empty())
+            .on_click(cx.listener(|root, _, _, cx| {
+                root.app.library.set_new_folder("");
+                cx.notify();
+            })),
+    );
+    if let Some((_, _, folders)) = &root.pages.library.folders {
+        for folder in folders
+            .iter()
+            .filter(|folder| folder.to_lowercase().contains(&query))
+        {
+            let chosen = folder.clone();
+            suggestions = suggestions.item(
+                kit::MenuItem::new(folder.clone())
+                    .checked(value == folder.as_str())
+                    .on_click(cx.listener(move |root, _, _, cx| {
+                        root.app.library.set_new_folder(&chosen);
+                        cx.notify();
+                    })),
+            );
+        }
+    }
+    div()
+        .flex()
+        .flex_row()
+        .items_start()
+        .gap(XS)
+        .child(
+            div().flex_1().min_w_0().child(
+                kit::TextField::new("library-new-folder", value.to_owned())
+                    .name("Folder")
+                    .placeholder("Main folder")
+                    .on_change(cx.listener(|root, words: &str, _, cx| {
+                        root.app.library.set_new_folder(words);
+                        cx.notify();
+                    })),
+            ),
+        )
+        .child(suggestions)
         .into_any_element()
 }
 
@@ -195,7 +271,7 @@ pub(super) fn package_form(
         let app = &mut root.app;
         app.library.package_form_view(&app.campaigns)
     };
-    let _ = root.app.library.take_focus_package_name();
+    let focus_name = root.app.library.take_focus_package_name();
     let mut form = div()
         .flex()
         .flex_col()
@@ -374,6 +450,7 @@ pub(super) fn package_form(
                 None,
                 None,
                 kit::TextField::new("library-package-name", view.name.clone())
+                    .focus(focus_name)
                     .name("Name")
                     .on_change(cx.listener(|root, words: &str, _, cx| {
                         root.app.library.set_package_name(words);

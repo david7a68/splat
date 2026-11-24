@@ -9344,17 +9344,11 @@ impl Encounters {
         };
         let draft_open = self.draft_dirty();
         let run_open = self.has_run();
-        let Some(snapshot) = &self.snapshot else {
+        if self.snapshot.is_none() {
             crate::design::spinner(ui);
             return;
-        };
+        }
         design::gap(ui, design::Gap::S);
-        // The unread rule choices' lines, for the save row's state. Their warnings are the
-        // footer's (below).
-        let rule_lines: Vec<String> = rule_choices(snapshot, active.id)
-            .into_iter()
-            .map(|(line, _)| line)
-            .collect();
         let closed_while = draft_open.then_some("Save or discard the open encounter first.");
         // FC5, FN2's sibling: the unread choice's warnings, the folder move's warning, the
         // discard's result and the reasons go in the tab's footer, so their coming and going
@@ -9461,60 +9455,21 @@ impl Encounters {
                     });
                 });
             }
-            let changed = snapshot.options != snapshot.saved_options;
-            // SD7: the last Save's `Saved` ends at the form's first edit (as the discard's result
-            // does), at another campaign, and when the file's settings changed outside Splat.
-            if changed
-                || this.options_saved.as_ref().is_some_and(|(campaign, saved)| {
-                    *campaign != active.id || *saved != snapshot.saved_options
-                })
-            {
-                this.options_saved = None;
-            }
-            // The run files the folder change leaves, read once a frame for the folder the
-            // fields left; the footer's warning says them (`then` below).
-            let left = snapshot.options.runs_left_in(&snapshot.saved_options, active);
-            let left_folder = snapshot.options.folder.clone();
-            let run_files = left.as_ref().map_or(0, Vec::len);
-            let folder_changed = snapshot.options.directory(active).ok() != snapshot.saved_options.directory(active).ok();
-            // M4: `Save run settings` is the commit in every state. While the folder change
-            // leaves saved runs, it waits in its place, and the folder warning's two choices (the
-            // footer's, `then` below) commit, so a second press where Save was never moves runs.
-            let choose_move = run_files > 0 && !run_open;
-            // One rule for the row (`DraftState`): the word (`Unsaved`, `Saved` while the last
-            // Save's settings hold, `No changes`), the repair of an unread choice, Save's weight
-            // and why it waits, Discard and the campaign lock.
-            let repair = (!rule_lines.is_empty()).then(|| {
-                // Save is the repair here: it writes the shown settings over the unread choice.
-                let lines = match rule_lines.split_last() {
-                    Some((last, [])) => format!("line {last}"),
-                    Some((last, before)) => format!("lines {} and {last}", before.join(", ")),
-                    None => String::new(),
-                };
-                format!("Save replaces the unread choice on {lines} with these settings")
-            });
-            let mut state = design::DraftState::new(
-                design::save_row::DraftOrigin::Saved,
-                if changed { design::save_row::Changed::Yes } else { design::save_row::Changed::No },
-                design::save_row::Primary::Draft,
-            )
-            .locks_campaign();
-            if this.options_saved.is_some() {
-                state = state.just_saved();
-            }
-            if let Some(write) = repair {
-                state = state.repairs(write);
-            }
-            if run_open {
-                state = state.waits("Close the open run to save run settings.");
-            } else if folder_changed && left.is_err() {
-                state = state.waits("Could not read saved runs. Check the old run folder before saving.");
-            } else if choose_move {
-                state = state.commits_elsewhere(CHOOSE_MOVE);
-            }
-            if changed {
-                this.discarded_options = None;
-            }
+            // One rule for the row (`run_row_of`, shared with the GPUI tab): the word, the
+            // repair of an unread choice, Save's weight and why it waits, Discard and the
+            // campaign lock; the run files the folder change leaves. The form's lock
+            // (`closed_while`) covers an open encounter draft here.
+            let run_settings_view::RunRow {
+                state,
+                left: (left_folder, left),
+                ..
+            } = run_settings_view::run_row_of(
+                snapshot,
+                active,
+                (run_open, false),
+                &mut this.options_saved,
+                &mut this.discarded_options,
+            );
             ui.vertical(|ui| {
                 // Ctrl+S saves exactly when the button it labels can: a rule repair with no
                 // other change too. Not under a modal (the app's one test) nor the form's lock

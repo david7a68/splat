@@ -55,8 +55,8 @@ impl Layout {
 }
 
 impl<'a> Comparison<'a> {
-    /// Uncached, for tests; the app uses `cached`.
-    #[cfg(test)]
+    /// Uncached: the egui app uses `cached`; a UI that keeps its own copy of the result (the
+    /// GPUI port's `compared_lines`) calls this once per pair of texts.
     pub fn new(text: [&'a str; 2]) -> Self {
         let lines = text.map(|text| text.lines().collect::<Vec<_>>());
         Self::from_layout(&lines, Layout::of(&lines))

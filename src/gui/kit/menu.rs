@@ -153,6 +153,7 @@ pub struct MenuItem {
     checked: Option<bool>,
     blocked: Option<SharedString>,
     destructive: bool,
+    rule_before: bool,
     on_click: Option<OnClick>,
 }
 
@@ -166,8 +167,15 @@ impl MenuItem {
             checked: None,
             blocked: None,
             destructive: false,
+            rule_before: false,
             on_click: None,
         }
+    }
+
+    /// A rule above this item: it starts a new group (egui's `Dropdown::group`).
+    pub fn rule_before(mut self) -> Self {
+        self.rule_before = true;
+        self
     }
 
     pub fn icon(mut self, icon: &'static str) -> Self {
@@ -256,6 +264,9 @@ impl MenuItem {
         let mut item = div()
             .flex()
             .flex_col()
+            .when(self.rule_before, |item| {
+                item.child(div().py(XS).child(super::rule()))
+            })
             .child(target(row, self.label.clone()));
         if let Some(reason) = self.blocked {
             item = item.child(
@@ -339,6 +350,8 @@ pub struct Dropdown {
     width: Option<Pixels>,
     density: Density,
     extra: Vec<MenuItem>,
+    groups: Vec<usize>,
+    locks: Vec<(usize, SharedString)>,
     on_select: Option<super::OnIndex>,
 }
 
@@ -359,8 +372,24 @@ impl Dropdown {
             width: None,
             density: Density::Read,
             extra: Vec::new(),
+            groups: Vec::new(),
+            locks: Vec::new(),
             on_select: None,
         }
+    }
+
+    /// The choices from `index` on start a new group, under a rule (egui's `Dropdown::group`:
+    /// `Everything` apart from `D&D 2024` and the packages).
+    pub fn group_at(mut self, index: usize) -> Self {
+        self.groups.push(index);
+        self
+    }
+
+    /// The choice at `index` cannot be chosen now, with its reason on its row (egui's
+    /// `blocked_choice`: `Already linked to another campaign.`).
+    pub fn blocked_choice(mut self, index: usize, reason: impl Into<SharedString>) -> Self {
+        self.locks.push((index, reason.into()));
+        self
     }
 
     /// Words shown while nothing is chosen.
@@ -470,6 +499,12 @@ impl RenderOnce for Dropdown {
                 let on_select = self.on_select.clone();
                 let mut item = MenuItem::new(option.clone()).checked(self.chosen == Some(index));
                 item.id = format!("choice-{index}").into();
+                item.rule_before = index > 0 && self.groups.contains(&index);
+                item.blocked = self
+                    .locks
+                    .iter()
+                    .find(|(at, _)| *at == index)
+                    .map(|(_, reason)| reason.clone());
                 item.on_click(move |_, window, cx| {
                     if let Some(on_select) = &on_select {
                         on_select(&index, window, cx);
