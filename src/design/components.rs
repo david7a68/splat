@@ -6032,13 +6032,20 @@ fn grouped_comparison_shows_the_first_change_without_a_next_control() {
 
 /// Keep the count and its heading in one sentence, on one baseline.
 fn comparison_summary(ui: &mut Ui, count: &str, lines: &[Option<&str>], line: usize) {
+    let words = comparison_summary_words(count, lines, line);
+    ui.label(Type::Small.rich(ui, words).color(colors().muted));
+}
+
+/// The comparison's summary: the count, then the nearest heading at or above `line` of the left
+/// column (`5 lines differ · Under the heading “Actions”`).
+pub fn comparison_summary_words(count: &str, lines: &[Option<&str>], line: usize) -> String {
     let heading = lines
         .iter()
         .take(line + 1)
         .rev()
         .flatten()
         .find(|line| line.trim_start().starts_with('#'));
-    let words = heading.map_or_else(
+    heading.map_or_else(
         || count.to_owned(),
         |heading| {
             format!(
@@ -6046,8 +6053,55 @@ fn comparison_summary(ui: &mut Ui, count: &str, lines: &[Option<&str>], line: us
                 heading.trim_start_matches('#').trim()
             )
         },
-    );
-    ui.label(Type::Small.rich(ui, words).color(colors().muted));
+    )
+}
+
+/// A draft and the file's text aligned line by line, for a UI that draws the comparison itself
+/// (the GPUI port): the same alignment, count and change groups `draft_comparison_labeled` uses.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ComparedLines {
+    /// Each row's line of the draft and of the file; `None` where that side has no line.
+    pub rows: Vec<[Option<String>; 2]>,
+    /// How many rows differ.
+    pub changed: usize,
+    /// The row where each change starts.
+    pub groups: Vec<usize>,
+}
+
+impl ComparedLines {
+    /// Align `draft` and `disk` (about n × m line comparisons: keep the result while both texts
+    /// stay the same).
+    pub fn of(draft: &str, disk: &str) -> Self {
+        let comparison = Comparison::new([draft, disk]);
+        let [left, right] = comparison.columns;
+        Self {
+            rows: left
+                .into_iter()
+                .zip(right)
+                .map(|(left, right)| [left.map(str::to_owned), right.map(str::to_owned)])
+                .collect(),
+            changed: comparison.changed,
+            groups: comparison.groups,
+        }
+    }
+
+    /// The summary over the comparison at change `group` (the first when there is none):
+    /// `No lines differ`, or the count and the heading the change is under.
+    pub fn summary(&self, group: Option<usize>) -> String {
+        if self.groups.is_empty() {
+            return "No lines differ".into();
+        }
+        let line = group
+            .and_then(|at| self.groups.get(at))
+            .copied()
+            .unwrap_or(self.groups[0]);
+        let left: Vec<Option<&str>> = self.rows.iter().map(|row| row[0].as_deref()).collect();
+        comparison_summary_words(
+            &super::count(self.changed, "line differs", "lines differ"),
+            &left,
+            line,
+        )
+    }
 }
 
 /// A source comparison that navigates separate changes, rather than adjacent lines.

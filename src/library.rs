@@ -4230,20 +4230,7 @@ impl Library {
                 pressed => self.footer_press = pressed,
             }
         }
-        let recovery = self
-            .selected
-            .and_then(|at| self.loaded.as_ref()?.notes.get(at))
-            .filter(|note| note.is_manifest() && note.error.is_some())
-            .and_then(|note| match &note.owner {
-                Owner::Package(module) => {
-                    let path = note.path.clone();
-                    let exists = note.error.as_deref()
-                        != Some(crate::content_workspace::DELETED_MANIFEST)
-                        && module.path.join(&path).exists();
-                    Some((module.clone(), path, exists))
-                }
-                _ => None,
-            });
+        let recovery = self.recovery();
         if undo_remove
             && let Some((_, _, draft)) = self.kept.take_discarded()
             && let Some(LetGo {
@@ -4299,68 +4286,37 @@ impl Library {
             }
             self.loaded.as_mut().unwrap().invalidate();
         }
-        let draft_lock = self.draft_lock();
-        let parsed_draft = self.parsed_draft(i);
+        // The reader's computation before it draws (`model::reader_prep`), which the GPUI
+        // reader shares: the title, the draft's state, the owner's fault and words, the repair,
+        // the save row's state and the toolbar's extras.
+        let model::ReaderPrep {
+            draft_lock,
+            parsed_draft,
+            title,
+            reading_subtitle,
+            dirty,
+            editable,
+            fault,
+            conflict,
+            duplicate_indices,
+            stopped_reading,
+            about,
+            owner_fault,
+            owner_name,
+            package_word,
+            repair_problem,
+            repair_line,
+            missing_link,
+            failed,
+            draft_state,
+            can_copy,
+            can_make,
+            choose,
+        } = self.reader_prep(i, campaigns, subtitle, recovery.as_ref());
         let parsed: &Result<Entry, String> = &parsed_draft;
         let note = &self.loaded.as_ref().unwrap().notes[i];
-        let reading = parsed
-            .as_ref()
-            .ok()
-            .and_then(|entry| entry.reading().ok().flatten());
-        // A file with no entry to read is titled by its file name; the file line names its path.
-        let file_name = Path::new(&note.path)
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned());
-        let title = match &reading {
-            Some(reading) => reading.title.as_str(),
-            None if note.entry.is_none()
-                && note.error.as_deref() != Some(crate::content_workspace::DELETED_MANIFEST) =>
-            {
-                file_name.as_deref().unwrap_or(note.name())
-            }
-            None => note.name(),
-        };
-        // A duplicate keeps its folder too: the two readers differ only there.
-        let reading_subtitle = reader_subtitle(
-            &note.owner,
-            &row_line_without_fault(subtitle),
-            reading
-                .as_ref()
-                .and_then(|_| presentation::class_level(parsed.as_ref().ok()?)),
-            parsed
-                .as_ref()
-                .ok()
-                .and_then(|entry| entry.fields.get("splat_spell"))
-                .and_then(spell_kind),
-        );
-        let dirty = !self.saved_is_draft(note);
-        let editable = note.owner.editable();
-        // A file the system will not read has no text to edit: the reader names its fault.
-        let fault = note.fault.clone();
-        if fault.is_some() {
-            self.source = false;
-        }
-        let conflict = self.disk_change.is_some();
-        let mut duplicate_indices = self.loaded.as_ref().unwrap().duplicates(i);
-        if !duplicate_indices.is_empty() {
-            duplicate_indices.push(i);
-            let notes = &self.loaded.as_ref().unwrap().notes;
-            let first = crate::content_workspace::duplicate_repair_path(
-                duplicate_indices.iter().filter_map(|&at| {
-                    notes[at]
-                        .owner
-                        .root()
-                        .map(|root| root.join(&notes[at].path))
-                }),
-            );
-            duplicate_indices.sort_by_key(|&at| {
-                notes[at]
-                    .owner
-                    .root()
-                    .map(|root| root.join(&notes[at].path))
-                    != first
-            });
-        }
+        let title = title.as_str();
+        let owner_name = owner_name.as_str();
         let mut new_identity = None;
         let mut new_identities = None;
         // Only a side-by-side comparison of draft and disk text takes the full width. A deleted
@@ -4374,189 +4330,14 @@ impl Library {
         } else {
             ui.available_width().min(EDITOR_MAX_WIDTH)
         };
-        self.just_saved &= !dirty && self.source;
         // Ctrl+S is taken only where a draft could be saved; it saves exactly when Save can
         // (`DraftState::can_save`, below).
         let save_key = design::save_row::save_key(ui, dirty && editable && !conflict);
         let d = colors().document;
-        // The file stopped reading under the draft: its owner line says so, as for a file that
-        // never read.
-        let stopped_reading = self
-            .disk_change
-            .as_ref()
-            .is_some_and(|change| change.fault.is_some());
-        let about = note.entry.as_ref().is_some_and(|e| e.kind == "package");
         let mut use_every = None;
-        let mut every_chosen = false;
-        // Row 125: a fault on the owner line is typed, from the note's typed state (its file
-        // fault, its parse, a deleted manifest), never from its error words. The kind gives the
-        // status words and the tone (`outcome::fault_status`), as the row and the message have.
-        let owner_fault = match &note.owner {
-            Owner::Package(_) if stopped_reading => Some(FaultStatus::CannotRead),
-            Owner::Package(_) if about => None,
-            Owner::Package(_) if note.manifest_gone => Some(FaultStatus::ManifestDeleted),
-            Owner::Package(_) | Owner::Campaign(_)
-                if note.error.is_some() || note.fault.is_some() || stopped_reading =>
-            {
-                Some(FaultStatus::CannotRead)
-            }
-            _ => None,
-        };
-        let owner_name = match &note.owner {
-            Owner::Package(module) => module.name.as_str(),
-            _ => "Campaign",
-        };
-        let package_word = match &note.owner {
-            Owner::Package(module) if let Some(fault) = owner_fault => fault.words(&module.name),
-            Owner::Package(_) if about && campaigns.active_campaign().is_none() => {
-                "No campaign open".into()
-            }
-            Owner::Package(module) if about => {
-                let loaded = self.loaded.as_ref().unwrap();
-                let entries: Vec<_> = loaded
-                    .notes
-                    .iter()
-                    .filter(|n| {
-                        n.owner.is_package(module.id)
-                            && n.entry.as_ref().is_some_and(|e| {
-                                !["package", "reference"].contains(&e.kind.as_str())
-                            })
-                    })
-                    .collect();
-                // Round 27 FA6: the DM's choices and the entries they need, as Campaign's
-                // package row counts its ticked boxes.
-                let chosen = entries.iter().filter(|n| loaded.chose(n)).count();
-                let needed = entries
-                    .iter()
-                    .filter(|n| !loaded.chose(n) && loaded.in_scope(n, Scope::Uses))
-                    .count();
-                every_chosen = chosen == entries.len();
-                chosen_count(chosen, needed, entries.len())
-            }
-            Owner::Package(module) => format!(
-                "{} · {}",
-                module.name,
-                if self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses) {
-                    "Chosen for this campaign"
-                } else {
-                    "Not chosen"
-                }
-            ),
-            _ => String::new(),
-        };
-        // A ready state means Save would accept the draft. Every draft with changes, and every
-        // repair draft, asks Save's own check before the write (parse, identity, ownership):
-        // the parse is cached, and the identity index is cached until the notes change.
-        let refusal = (note.error.is_some() || dirty)
-            .then(|| self.loaded.as_ref().unwrap().draft_refusal(i, parsed))
-            .flatten();
-        // Why Save refuses this draft now. It blocks Save and Ctrl+S, and the state is Invalid.
-        let save_refusal = refusal.clone().filter(|_| dirty);
-        let (repair_problem, repair_line) =
-            draft_repair_problem(note, &self.draft, refusal, recovery.as_ref());
-        // A missing link Campaign sent here: the row that holds it in the parsed draft.
-        let here = note.owner.root().map(|root| root.join(&note.path));
-        let missing_link = self
-            .repair_link
-            .as_mut()
-            .filter(|link| here.as_ref() == Some(&link.path))
-            .and_then(|link| {
-                // Looked up again only for a new parse, that is, new draft text.
-                let line = (*link.found.get_or(parsed_draft.revision(), || {
-                    parsed
-                        .as_ref()
-                        .ok()
-                        .and_then(|entry| repair_row(entry, &link.target))
-                }))?;
-                // The content layer's words; the fault adds the entry, the line and the fix.
-                Some((line, link.words.clone()))
-            });
-        let repair_line = repair_line.or(missing_link.as_ref().map(|(line, _)| *line));
-        // A Save that failed on the disk, while this is still the draft it tried to write.
-        if let Some(failure) = &self.save_failure {
-            #[cfg(any(test, feature = "test-support"))]
-            {
-                let (checks, reads) = self.failure_checks.get();
-                self.failure_checks.set((checks + 1, reads));
-            }
-            let draft = DraftView::new(
-                &self.draft,
-                #[cfg(any(test, feature = "test-support"))]
-                &self.failure_checks,
-            );
-            if !failure.owns(note, self.draft_revision, draft) {
-                self.save_failure = None;
-            }
-        }
-        let failed = self
-            .save_failure
-            .as_ref()
-            .map(|failure| failure.reason.clone());
-        // The save row's state. Its word, Save's weight and why Save waits all come from it
-        // (`design::save_row`). A parse fault ends with the draft that parses: the saved file
-        // stays unreadable on the owner line until Save, but the draft is not Invalid.
-        let mut draft_state = design::DraftState::new(
-            design::save_row::DraftOrigin::Saved, // New entry writes the file before it opens
-            if dirty {
-                design::save_row::Changed::Yes
-            } else {
-                design::save_row::Changed::No
-            },
-            if self.run_open {
-                design::save_row::Primary::Elsewhere
-            } else {
-                design::save_row::Primary::Draft
-            },
-        );
-        if let Some(refusal) = &save_refusal {
-            draft_state = draft_state.check(design::save_row::Diagnosis::refused(refusal.as_str()));
-        }
-        // Lead ruling (s30 B11 F4, R41): a deleted manifest is a missing file, not unreadable
-        // text: its warning stays on the owner line and in the footer, and a draft whose text
-        // Save accepts says the ready word (`Unsaved`), never `Invalid`. Any other repair
-        // problem is unreadable data: `Invalid`, an error. Neither blocks Save (B3's contract).
-        let manifest_gone = fault.is_none()
-            && note.error.is_some()
-            && recovery.as_ref().is_some_and(|(_, _, exists)| !exists);
-        if (fault.is_some() || repair_problem.is_some()) && !manifest_gone {
-            draft_state = draft_state.check(design::save_row::Diagnosis::unreadable());
-        }
-        if conflict {
-            draft_state = draft_state.changed_on_disk();
-        }
-        if failed.is_some() {
-            // An action-time failure: the disk refused the last Save of this draft.
-            draft_state = draft_state.not_saved();
-        }
-        if self.just_saved {
-            draft_state = draft_state.just_saved();
-        }
         // Overwrite was chosen in the comparison: it saves whatever the draft holds.
         let mut save = overwrite || (save_key && draft_state.can_save());
         let mut step = history::take_if(ui.ctx(), |_| true);
-        let can_copy = note
-            .entry
-            .as_ref()
-            .is_some_and(|e| !["package", "campaign", "reference"].contains(&e.kind.as_str()));
-        let can_make = matches!(note.owner, Owner::Campaign(_))
-            && note.entry.as_ref().is_some_and(|e| e.kind == "creature");
-        // Round 25 FF3: the campaign choice is a toolbar action, so it never sends the file line's
-        // path to a second row: the title keeps one place for chosen and not-chosen entries.
-        let choose = match &note.owner {
-            Owner::Package(_)
-                if about && campaigns.active_campaign().is_some() && !every_chosen =>
-            {
-                Some("Choose all")
-            }
-            Owner::Package(_)
-                if !about
-                    && note.entry.is_some()
-                    && !self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses) =>
-            {
-                Some("Choose for this campaign")
-            }
-            _ => None,
-        };
         // Each control waits for one cause, from ONE value: the open draft (its save row, or the
         // line under the toolbar when there is none, paints the reason), `Copy to…`'s places
         // policy that it shares with `New entry` (painted under the toolbar), or, for the mode
