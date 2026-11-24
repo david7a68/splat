@@ -82,6 +82,12 @@ fn on_item<E: ?Sized + 'static>(
     })
 }
 
+/// Open the note `to`. A press carries the note's identity, not its place in the index: a
+/// reload between the draw and the press moves places, and the note may be gone.
+fn go(to: Uuid) -> impl Fn(&mut ReaderAct<'_>, &Item, &ContentIndex, &Campaign) -> Option<Nav> {
+    move |page, _, index, _| page.reader.go_to(index.position(to)?)
+}
+
 /// The open note's pane: the reader as the pane's body, its messages in the footer.
 pub(super) fn render(
     root: &mut SplatRoot,
@@ -108,9 +114,10 @@ pub(super) fn render(
         });
     let footer = footer::render(lines, cx);
     let body = render_reader(root, Host::World, item, index, campaign, window, cx);
+    let scroll = root.pages.world.jump.scroll(item.entry.id);
     let mut pane = kit::Pane::new(("world-reader", item.entry.id.as_u128() as u64))
         .flush()
-        .scroll(&root.pages.world.jump.scroll);
+        .scroll(&scroll);
     for line in footer {
         pane = pane.footer(line);
     }
@@ -152,14 +159,68 @@ impl Host {
     }
 }
 
-/// A reader's scroll column and the heading a link asked it to show (`want_heading`, for one
+/// A reader's scroll columns and the heading a link asked it to show (`want_heading`, for one
 /// draw).
 #[derive(Default)]
 pub(crate) struct Jump {
-    pub scroll: gpui::ScrollHandle,
+    /// One scroll column for each note read lately, the last read at the end: a note opens at
+    /// its top the first time and where the DM left it after that, whatever other notes did.
+    scrolls: Vec<(Uuid, gpui::ScrollHandle)>,
     /// The heading asked for in the last frame: its request ends in the next one, found or not,
     /// so it cannot reach a heading on another page.
     pending: Option<String>,
+    /// The fields of the reader that own Escape while they have the keyboard (the Log field,
+    /// the edit form's Status and Text), each in a box that tracks this focus handle: the reader
+    /// asks whether one of them holds the keyboard.
+    fields: Vec<(Field, gpui::FocusHandle)>,
+}
+
+/// A field of the reader that owns Escape while it has the keyboard.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Field {
+    Log,
+    Status,
+    Text,
+}
+
+/// How many notes keep their place in a reader.
+const KEPT_SCROLLS: usize = 32;
+
+impl Jump {
+    /// The scroll column of note `id`, made at its top when the note has none.
+    pub(crate) fn scroll(&mut self, id: Uuid) -> gpui::ScrollHandle {
+        if let Some(at) = self.scrolls.iter().position(|(note, _)| *note == id) {
+            // The last read goes to the end, unless it is there already (a quiet frame moves
+            // nothing).
+            if at + 1 != self.scrolls.len() {
+                let kept = self.scrolls.remove(at);
+                self.scrolls.push(kept);
+            }
+        } else {
+            if self.scrolls.len() == KEPT_SCROLLS {
+                self.scrolls.remove(0);
+            }
+            self.scrolls.push((id, gpui::ScrollHandle::new()));
+        }
+        self.scrolls.last().expect("just pushed").1.clone()
+    }
+
+    /// The focus handle of `field`'s box, made once.
+    pub(crate) fn field(&mut self, field: Field, cx: &mut gpui::App) -> gpui::FocusHandle {
+        if let Some((_, handle)) = self.fields.iter().find(|(kept, _)| *kept == field) {
+            return handle.clone();
+        }
+        let handle = cx.focus_handle();
+        self.fields.push((field, handle.clone()));
+        handle
+    }
+
+    /// Whether one of `fields` had the keyboard in the last frame drawn.
+    fn focused(&self, fields: &[Field], window: &Window, cx: &gpui::App) -> bool {
+        self.fields
+            .iter()
+            .any(|(field, handle)| fields.contains(field) && handle.contains_focused(window, cx))
+    }
 }
 
 /// The reader's body for the note `item`, in `host`'s reader.
@@ -185,7 +246,9 @@ pub(crate) fn render_reader(
         crate::markdown_view::want_heading(&ctx, Some(heading.clone()));
         jump.pending = Some(heading);
     }
-    let scroll = jump.scroll.clone();
+    let scroll = jump.scroll(id);
+    let log_focused = jump.focused(&[Field::Log], window, cx);
+    let form_focused = jump.focused(&[Field::Status, Field::Text], window, cx);
     let compact = host.reader(root).compact;
     let reader = &mut host.reader(root);
     let mut column = div().flex().flex_col().w_full().pb(theme::L);
@@ -197,6 +260,7 @@ pub(crate) fn render_reader(
             "This link matches more than one note. Choose one.",
         ));
         for &position in reader.link_choices() {
+            let to = index.items[position].entry.id;
             column = column.child(
                 kit::Link::new(
                     ("world-many", position),
@@ -204,7 +268,9 @@ pub(crate) fn render_reader(
                 )
                 .wrap()
                 .on_click(act(cx, move |root, _, index, _, _| {
-                    if let Some(nav) = host.reader(root).choose_many(index, position) {
+                    if let Some(position) = index.position(to)
+                        && let Some(nav) = host.reader(root).choose_many(index, position)
+                    {
                         host.take_nav(root, nav, index);
                     }
                 })),
@@ -212,10 +278,16 @@ pub(crate) fn render_reader(
         }
     }
     column = column.child(title_line(root, host, item, index, campaign, cx));
-    if let Some(log) = log_field(root, host, item, index, campaign, cx) {
+    let log = log_field(root, host, item, index, campaign, cx);
+    let editing = host.reader(root).editing(id, campaign);
+    // While a field of the reader has the keyboard, Escape is the field's, not Lookup's. A
+    // field that this frame does not draw holds nothing, wherever the focus was left.
+    host.reader(root)
+        .set_fields_focused((log.is_some() && log_focused) || (editing && form_focused));
+    if let Some(log) = log {
         column = column.child(log);
     }
-    if host.reader(root).editing(id, campaign) {
+    if editing {
         return column
             .child(super::panes::edit_form(
                 root, host, item, index, campaign, cx,
@@ -433,23 +505,32 @@ fn log_field(
     let reader = &mut host.reader(root);
     let view = reader.log_view(item, index, campaign)?;
     let (campaign_id, id) = (campaign.id, item.entry.id);
-    if view.select {
+    if view.select || view.focus {
         reader.log_selected(campaign_id, id);
     }
-    let enter = on_key(cx, move |root, campaign, index, _, _| {
-        if let Some(at) = index.position(id)
-            && let Some(nav) = host.reader(root).log_enter(&index.items[at], campaign)
-        {
+    // A field that closes under the keyboard hands it back to the window, so the next Escape
+    // reaches Lookup and the page.
+    let enter = on_key(cx, move |root, campaign, index, window, cx| {
+        let Some(at) = index.position(id) else {
+            return;
+        };
+        let item = &index.items[at];
+        if let Some(nav) = host.reader(root).log_enter(item, campaign) {
             host.take_nav(root, nav, index);
         }
+        if host.reader(root).log_view(item, index, campaign).is_none() {
+            window.focus(&root.focus, cx);
+        }
     });
-    let escape = on_key(cx, move |root, _, _, _, _| {
+    let escape = on_key(cx, move |root, _, _, window, cx| {
         host.reader(root).log_cancel(campaign_id, id);
+        window.focus(&root.focus, cx);
     });
     let field = kit::TextField::new(("world-log", id.as_u128() as u64), view.words)
         .placeholder("What happened?")
         .name(view.name)
         .focus_selected(view.select)
+        .focus(view.focus && !view.select)
         .on_change(on_words(cx, move |root, words| {
             host.reader(root).set_log_words(campaign_id, id, words);
         }))
@@ -478,7 +559,13 @@ fn log_field(
             .when_some(view.stamp, |line, stamp| {
                 line.child(kit::text(theme::Type::Small, c.muted, stamp))
             })
-            .child(div().flex_1().min_w(px(160.0)).child(field))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(160.0))
+                    .track_focus(&host.jump(root).field(Field::Log, cx))
+                    .child(field),
+            )
             .child(add)
             .child(cancel)
             .into_any_element(),
@@ -676,9 +763,7 @@ fn values(
         let value: AnyElement = match row.value {
             ValueShown::Link(at, name) => kit::Link::new(("world-value", at), name)
                 .wrap()
-                .on_click(on_item(cx, host, id, move |page, _, _, _| {
-                    page.reader.go_to(at)
-                }))
+                .on_click(on_item(cx, host, id, go(index.items[at].entry.id)))
                 .into_any_element(),
             ValueShown::PlaceChoices(words) => div()
                 .flex()
@@ -715,9 +800,7 @@ fn values(
                     match target {
                         Some(at) => kit::Link::new(("world-group", n), name)
                             .wrap()
-                            .on_click(on_item(cx, host, id, move |page, _, _, _| {
-                                page.reader.go_to(at)
-                            }))
+                            .on_click(on_item(cx, host, id, go(index.items[at].entry.id)))
                             .into_any_element(),
                         None => missing(&name).into_any_element(),
                     }
@@ -834,6 +917,7 @@ fn place_chooser(
         ));
     for at in crate::world::model::place_choices(index, id) {
         let path = index.items[at].entry.path.clone();
+        let to = index.items[at].entry.id;
         column = column.child(
             div()
                 .flex()
@@ -843,15 +927,14 @@ fn place_chooser(
                 .child(
                     kit::Link::new(("world-place-file", at), path.clone())
                         .wrap()
-                        .on_click(on_item(cx, host, id, move |page, _, _, _| {
-                            page.reader.go_to(at)
-                        })),
+                        .on_click(on_item(cx, host, id, go(to))),
                 )
                 .child(
                     kit::Button::secondary(("world-place-use", at), "Always use this one")
                         .density(theme::Density::Read)
                         .name(format!("Always use {path}"))
                         .on_click(on_item(cx, host, id, move |page, item, index, campaign| {
+                            let at = index.position(to)?;
                             page.reader.choose_place(campaign, item, index, at)
                         })),
                 ),
@@ -926,10 +1009,25 @@ pub(super) fn picker(
             })),
         );
     for (at, name) in matches {
+        // The match by its identity: its place is found again at the press.
+        let to = index.items[at].entry.id;
         column = column.child(
             kit::Link::new(("world-pick", at), name)
                 .wrap()
-                .on_click(pick(cx, PickAct::Match(at))),
+                .on_click(on_item::<gpui::ClickEvent>(
+                    cx,
+                    host,
+                    id,
+                    move |page, item, index, campaign| {
+                        let pick = PickAct::Match(index.position(to)?);
+                        if in_form {
+                            page.reader.pick_into_draft(pick, item, index, campaign);
+                            None
+                        } else {
+                            page.reader.pick_and_change(pick, item, index, campaign)
+                        }
+                    },
+                )),
         );
     }
     for (at, name) in removes.into_iter().enumerate() {
@@ -1214,9 +1312,7 @@ fn duplicate_values(
         let value = match target {
             Some(at) => kit::Link::new(("world-dup-value", at), name)
                 .wrap()
-                .on_click(on_item(cx, host, id, move |page, _, _, _| {
-                    page.reader.go_to(at)
-                }))
+                .on_click(on_item(cx, host, id, go(index.items[at].entry.id)))
                 .into_any_element(),
             None if label == "Status" => {
                 kit::text(theme::Type::Body, c.text, name).into_any_element()
@@ -1311,9 +1407,7 @@ fn related(
             .child(
                 kit::Link::new(("world-related", at), page.name)
                     .wrap()
-                    .on_click(on_item(cx, host, id, move |page, _, _, _| {
-                        page.reader.go_to(at)
-                    })),
+                    .on_click(on_item(cx, host, id, go(index.items[at].entry.id))),
             )
             .when(!page.detail.is_empty(), |row| {
                 row.child(kit::text(theme::Type::Small, c.muted, page.detail))
@@ -1379,12 +1473,11 @@ fn related(
             format!("{} {}", group.title.to_uppercase(), group.count),
         );
         for (source, name, lines, more) in group.pages {
+            let to = index.items[source].entry.id;
             section = section.child(
                 kit::Link::new(("world-from-page", source), name)
                     .wrap()
-                    .on_click(on_item(cx, host, id, move |page, _, _, _| {
-                        page.reader.go_to(source)
-                    })),
+                    .on_click(on_item(cx, host, id, go(to))),
             );
             for (line_at, line) in lines.into_iter().enumerate() {
                 let heading = line.heading.clone();
@@ -1401,6 +1494,7 @@ fn related(
                         })
                         .child(kit::text(theme::Type::Small, c.text, line.text))
                         .on_click(on_item(cx, host, id, move |page, _, index, _| {
+                            let source = index.position(to)?;
                             page.reader.show_heading(heading.clone());
                             page.take_nav(Nav::Item(source), index);
                             None
@@ -1429,9 +1523,7 @@ fn related(
             line = line.child(
                 kit::Link::new(("world-also", source), name)
                     .wrap()
-                    .on_click(on_item(cx, host, id, move |page, _, _, _| {
-                        page.reader.go_to(source)
-                    })),
+                    .on_click(on_item(cx, host, id, go(index.items[source].entry.id))),
             );
         }
         column = column.child(line);

@@ -801,9 +801,9 @@ impl Reader {
     }
 
     /// Hand the other reader what it needs of this one: the edit forms open here, the Log
-    /// fields open here, and the note whose edit form this reader drew in the last pass (its
-    /// save row is on screen). `pass` is this pass's `StateContext::pass`.
-    pub fn share_with(&self, other: &mut super::Reader, pass: u64) {
+    /// fields open here, and the note whose edit form this reader drew in the last frame (its
+    /// save row is on screen).
+    pub fn share_with(&self, other: &mut super::Reader) {
         self.edit_forms_into(&mut other.edited_elsewhere);
         // Copied again only when a field here opened or closed (its stamp), not each pass.
         if other.logs_elsewhere_from != self.held.log_fields.keys {
@@ -815,10 +815,21 @@ impl Reader {
                 .extend(self.held.log_fields.keys().copied());
             other.logs_elsewhere_from = self.held.log_fields.keys;
         }
-        other.form_shown_elsewhere = self
-            .form_drawn
-            .filter(|(id, drawn)| *drawn + 1 >= pass && self.edits.contains_key(id))
-            .map(|(id, _)| id);
+        other.form_shown_elsewhere = self.form_drawn.filter(|id| self.edits.contains_key(id));
+    }
+
+    /// A frame starts to draw: no edit form of this reader is on screen until the view draws
+    /// one (`draft_view`). The shell calls it after the frame logic and before the pages draw,
+    /// so `share_with` reads what the last frame showed.
+    pub fn begin_draw(&mut self) {
+        self.form_drawn = None;
+    }
+
+    /// Whether a field of this reader that owns Escape (the Log field, the edit form's Status
+    /// and Text) has the keyboard, as the view found it when it drew. While one has, Escape is
+    /// the field's, not Lookup's (`takes_escape`).
+    pub fn set_fields_focused(&mut self, focused: bool) {
+        self.form_focused = focused;
     }
 
     /// Drafts whose note was deleted or given a new identity outside Splat, as footer notices
@@ -2009,6 +2020,8 @@ impl Reader {
             self.edits.insert(id, draft);
             return None;
         }
+        // The form and its save row are on screen this frame (`share_with`).
+        self.form_drawn = Some(id);
         self.follow_file(&mut draft, item, campaign);
         if draft.reloaded.is_some() && !draft.now_is_start() {
             draft.reloaded = None;

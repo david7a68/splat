@@ -124,6 +124,8 @@ pub struct LogFieldView {
     pub name: String,
     /// The words came from a done scene: the field selects them once.
     pub select: bool,
+    /// The field just opened: it takes the keyboard once (`Add to Log`).
+    pub focus: bool,
 }
 
 /// The join form of an NPC with no stat block, while a run is open.
@@ -950,13 +952,15 @@ impl Reader {
             words: open.field.words.clone(),
             name: format!("Log line for {}", item.entry.name),
             select: open.select,
+            focus: open.field.focus,
         })
     }
 
-    /// The Log field selected its words.
+    /// The Log field took the keyboard and selected its words, as it was asked.
     pub fn log_selected(&mut self, campaign: Uuid, id: Uuid) {
         if let Some(open) = self.held.log_fields.get_mut(&(campaign, id)) {
             open.select = false;
+            open.field.focus = false;
         }
     }
 
