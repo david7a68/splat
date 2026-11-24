@@ -7,6 +7,8 @@ use crate::design::outcome::Plain;
 use crate::encounter_run::SavedRunInfo;
 use std::path::PathBuf;
 
+pub use super::groups::{GroupEdit, GroupView, MemberAct, MemberRow};
+
 /// What the page shows now (`Encounters::show_page`).
 pub enum PageShown {
     /// Another campaign's encounter is open: its fault stands in place of the page.
@@ -928,6 +930,8 @@ pub struct AddView {
 pub enum PartyButton {
     Add { blocked: Option<&'static str> },
     InRoster,
+    /// A group: party members go on an encounter's roster.
+    None,
 }
 
 /// A search result.
@@ -1341,6 +1345,16 @@ impl Encounters {
             .collect()
     }
 
+    /// The separations of this campaign, as footer lines (for the group editor).
+    pub(super) fn separations_plain(&self, root: &std::path::Path) -> Vec<Line> {
+        self.separation_plain(root)
+    }
+
+    /// One group draft's member result, as footer lines.
+    pub(super) fn member_plain_of(&self, root: &std::path::Path, draft: Uuid) -> Vec<Line> {
+        self.member_plain(root, vec![draft])
+    }
+
     /// Each group draft's member result, as footer lines.
     fn member_plain(&self, root: &std::path::Path, drafts: Vec<Uuid>) -> Vec<Line> {
         let revision = self.member_results.revision();
@@ -1489,6 +1503,9 @@ impl Encounters {
 
     /// Add participants (`add_pane`), as data. The ranking is kept until its key changes.
     pub fn add_view(&mut self, filter: Filter) -> Option<AddView> {
+        if self.draft.is_none() && self.group_draft.is_some() {
+            return self.group_add_view(filter);
+        }
         let snapshot = self.snapshot.as_ref()?;
         let draft = self.draft.as_mut()?;
         let on_roster = |draft: &Draft, id: Uuid| {
@@ -1570,6 +1587,52 @@ impl Encounters {
         })
     }
 
+    /// Add creatures in the group editor: every creature no NPC links, none on a roster.
+    fn group_add_view(&mut self, filter: Filter) -> Option<AddView> {
+        let snapshot = self.snapshot.as_ref()?;
+        let list = snapshot.search_list(true);
+        let key = SearchKey {
+            list: list.revision,
+            unlinked: list.unlinked,
+            query: self.search.to_lowercase(),
+            filter: filter.clone(),
+        };
+        let ranked = match self.search_ranked.as_ref().filter(|kept| kept.0.key == key) {
+            Some(kept) => kept.clone(),
+            None => {
+                let ranked = SearchRanked::rank(key, list, &filter, &|_| false, Vec::new());
+                let rows = ranked
+                    .found
+                    .iter()
+                    .map(|&at| {
+                        let c = &list.creatures[at];
+                        ResultRow {
+                            id: c.id,
+                            party: c.party,
+                            name: c.name.clone(),
+                            detail: c.detail.clone(),
+                            hp_missing: c.hp_missing,
+                            source: c.source.clone(),
+                            in_roster: false,
+                            unavailable: c.unavailable.clone(),
+                        }
+                    })
+                    .collect();
+                let kept = (Arc::new(ranked), Arc::new(rows));
+                self.search_ranked = Some(kept.clone());
+                kept
+            }
+        };
+        Some(AddView {
+            party: PartyButton::None,
+            adding_to: None,
+            search: self.search.clone(),
+            filter,
+            close_names: ranked.0.as_typed == 0 && !ranked.0.found.is_empty(),
+            results: ranked.1,
+        })
+    }
+
     /// The search's words.
     pub fn set_search(&mut self, words: &str) {
         self.search = words.to_owned();
@@ -1626,7 +1689,10 @@ impl Encounters {
             draft.add_selected(id, party, snapshot);
             draft.keep_sides();
         } else if let Some(group) = self.group_draft.as_mut() {
-            group.add(id);
+            match snapshot.npc_stat_block(id) {
+                Some((stat, name)) => group.add_named(stat, name),
+                None => group.add(id),
+            }
         }
         self.focus_search = true;
     }

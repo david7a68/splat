@@ -5,7 +5,6 @@
 //! and acts are in `encounters::model`, shared with the egui page. This folder draws them: the
 //! list (`list`), the encounter editor (`editor`) and the group editor (`group`).
 use crate::gui::SplatRoot;
-use crate::gui::theme::{Type, colors};
 use gpui::{
     AnyElement, Context, InteractiveElement, IntoElement, KeyBinding, ParentElement, Styled,
     Window, actions, div,
@@ -15,6 +14,7 @@ use splat_encounters_ui::encounters::model::PageShown;
 mod common;
 mod editor;
 mod filter;
+mod group;
 mod list;
 #[cfg(test)]
 mod tests;
@@ -81,10 +81,7 @@ pub(crate) fn render(
             .into_any_element(),
         Some(PageShown::List) => list::render(root, window, cx),
         Some(PageShown::Encounter) => editor::render(root, window, cx),
-        Some(PageShown::Group) => {
-            crate::gui::kit::text(Type::Body, colors().muted, "The editor is not ported yet.")
-                .into_any_element()
-        }
+        Some(PageShown::Group) => group::render(root, window, cx),
     };
     let mut page = div().key_context("Encounters");
     if let Some(focus) = root.pages.encounters.focus.clone() {

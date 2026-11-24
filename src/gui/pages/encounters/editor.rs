@@ -766,13 +766,22 @@ pub(super) fn add_head(
     cx: &mut Context<SplatRoot>,
 ) -> Div {
     let c = colors();
+    let group = matches!(add.party, PartyButton::None);
     let mut head = div()
         .flex()
         .flex_col()
         .gap(XS)
-        .child(div().pb(XS).child(kit::label("Add participants", 0)))
-        .child(kit::help("Party members come from the sheets Splat saved last."));
+        .child(div().pb(XS).child(kit::label(
+            if group { "Add creatures" } else { "Add participants" },
+            0,
+        )))
+        .child(kit::help(if group {
+            "From this campaign and the packages it uses. Party members go on an encounter’s roster."
+        } else {
+            "Party members come from the sheets Splat saved last."
+        }));
     head = match add.party {
+        PartyButton::None => head,
         PartyButton::InRoster => head.child(kit::status(&kit::Status::new(
             icons::OK,
             "Party in roster",
@@ -795,7 +804,12 @@ pub(super) fn add_head(
     if let Some(target) = &add.adding_to {
         head = head.child(reason(format!("Adding to {target}")));
     }
-    head.child(search(add, choices, focus, "Find a creature or party member", cx))
+    let name = if group {
+        "Find a creature"
+    } else {
+        "Find a creature or party member"
+    };
+    head.child(search(add, choices, focus, name, cx))
 }
 
 /// The search field and the filter's words.
@@ -842,7 +856,7 @@ pub(super) fn search(
 }
 
 /// Add participants: its head, then the results in a virtual list that fills the column.
-fn add_column(
+pub(super) fn add_column(
     add: &AddView,
     choices: Option<&super::filter::Choices>,
     focus: bool,

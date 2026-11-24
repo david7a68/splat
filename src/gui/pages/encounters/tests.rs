@@ -180,3 +180,80 @@ fn remove_an_encounter_and_undo() {
     shell.click(&undo);
     assert_eq!(shell.read(|root| root.app.encounters.saved_names()), before);
 }
+
+/// A saved group opens from the list; a member's count changes; a member's removal has an Undo
+/// in the footer; Save group writes it; Back returns to the list.
+#[test]
+fn a_group_is_edited_and_saved() {
+    let mut shell = Shell::new("encounter-groups", Seed::Groups);
+    ready(&mut shell);
+    shell.capture("encounter-groups__01-groups-in-the-list__1200x800");
+    let edit = first_target(&mut shell, "id:edit-group:");
+    shell.click(&edit);
+    assert_eq!(shell.read(|root| root.app.encounters.group_open()), Some(false));
+    shell.capture("encounter-groups__02-group-editor__1200x800");
+    let members = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
+    assert!(!members.is_empty(), "the fixture's group has members");
+    shell.click("id:member-more-0");
+    let more = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
+    assert_eq!(more[0].1, members[0].1 + 1, "+ adds one to the count");
+    assert_eq!(shell.read(|root| root.app.encounters.group_open()), Some(true));
+    shell.click("id:member-menu-0-button");
+    shell.click("Remove");
+    let fewer = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
+    assert_eq!(fewer.len() + 1, members.len(), "Remove takes the member away");
+    shell.capture("encounter-groups__10-group-member-removed-with-undo__1200x800");
+    let undo = first_target(&mut shell, "id:group-editor-footer-undo-");
+    shell.click(&undo);
+    let back = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
+    assert_eq!(back.len(), members.len(), "Undo brings the member back");
+    shell.click("Save group");
+    assert_eq!(shell.read(|root| root.app.encounters.group_open()), Some(false), "saved");
+    shell.capture("encounter-groups__09-group-saved__1200x800");
+    shell.click("id:group-back");
+    assert_eq!(shell.read(|root| root.app.encounters.group_open()), None);
+}
+
+/// New group: an empty group cannot be saved; a creature from the search makes it savable.
+#[test]
+fn a_new_group_needs_a_creature() {
+    let mut shell = Shell::new("encounter-groups", Seed::Groups);
+    ready(&mut shell);
+    shell.click("New group");
+    shell.type_text("Ash Hounds");
+    assert!(
+        shell.bounds("Save group").is_some(),
+        "the group editor is open"
+    );
+    shell.click("Save group");
+    assert_eq!(
+        shell.read(|root| root.app.encounters.group_members()),
+        Some(Vec::new()),
+        "an empty group is not saved"
+    );
+    assert!(shell.read(|root| root.app.encounters.group_open()).is_some());
+    shell.click("Find a creature");
+    shell.type_text("wolf");
+    let add = first_target(&mut shell, "id:add:");
+    shell.click(&add);
+    assert_eq!(
+        shell.read(|root| root.app.encounters.group_members().map(|m| m.len())),
+        Some(1)
+    );
+    shell.capture("encounter-groups__08-group-find-creature__1200x800");
+    shell.press("ctrl-s");
+    let lines: Vec<String> = shell.update(|root, _, _| {
+        let root_path = root.app.campaigns.active_campaign().unwrap().path;
+        root.app
+            .encounters
+            .group_footer(&root_path)
+            .into_iter()
+            .map(|line| line.message.words)
+            .collect()
+    });
+    assert_eq!(
+        shell.read(|root| root.app.encounters.group_open()),
+        Some(false),
+        "Ctrl+S saves: {lines:?}"
+    );
+}
