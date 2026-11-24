@@ -43,13 +43,20 @@ pub(super) fn view(
     if let Some(error) = root.app.party.reader.errors.get(&selected) {
         column = column.child(div().pb(S).child(Message::new(Tone::Error, error.clone())));
     }
-    let record = splat_party_page::most_recent_sheet(&root.app.party, &selected).cloned();
+    // What changes the page's own state comes first, so the sheet below is borrowed, not
+    // copied, on each frame.
+    let sync = connected.then(|| sync_section(root, window, cx));
+    if root.pages.party.open.contains(TECHNICAL)
+        && let Some(checked) = splat_party_page::most_recent_sheet(&root.app.party, &selected)
+            .and_then(|record| review(root.pages.party.checked.as_ref(), record))
+    {
+        root.pages.party.checked = Some(checked);
+    }
+    let root: &SplatRoot = root;
+    let record = splat_party_page::most_recent_sheet(&root.app.party, &selected);
     let lines = sync_footer(root, connected, cx);
     let Some(record) = record else {
-        let mut body = div().flex().flex_col();
-        if connected {
-            body = body.child(sync_section(root, window, cx));
-        }
+        let mut body = div().flex().flex_col().children(sync);
         if !root.app.party.reader.loading() {
             body = body.child(kit::text(
                 Type::Body,
@@ -135,14 +142,12 @@ pub(super) fn view(
             ),
         );
     }
-    let mut body = div().flex().flex_col().pr(M).pb(L);
-    if connected {
-        body = body.child(sync_section(root, window, cx));
-    }
+    // Room under the page tabs before the first heading, as egui had.
+    let mut body = div().flex().flex_col().pt(M).pr(M).pb(L).children(sync);
     let live = root
         .app
         .party
-        .tonight_values(&record)
+        .tonight_values(record)
         .map(|(hp, temporary_hp)| LiveValues {
             hp: Some(hp),
             max_hp: record.stat("max_hp"),
@@ -157,12 +162,9 @@ pub(super) fn view(
         roller: None,
         actions: None,
     };
-    body = body.child(page_body(root, &record, page, live.as_ref(), reader, cx));
+    body = body.child(page_body(root, record, page, live.as_ref(), reader, cx));
     if page == 0 {
-        if root.pages.party.open.contains(TECHNICAL) {
-            review(root, &record);
-        }
-        body = body.child(kit::gap(M)).child(technical(root, &record, cx));
+        body = body.child(kit::gap(M)).child(technical(root, record, cx));
     }
     let mut pane = kit::Pane::new(("party-sheet-page", page))
         .flush()
@@ -958,27 +960,21 @@ pub(crate) struct Checked {
     review: Option<Result<splat_character::character::check::Review, String>>,
 }
 
-/// Make the check of this sheet's content version, when it is not made yet.
-fn review(root: &mut SplatRoot, record: &EntitySnapshot) {
-    if root
-        .pages
-        .party
-        .checked
-        .as_ref()
-        .is_some_and(|checked| checked.hash == record.source.content_hash)
-    {
-        return;
+/// The check of this sheet's content version, when `checked` is not of it yet.
+fn review(checked: Option<&Checked>, record: &EntitySnapshot) -> Option<Checked> {
+    if checked.is_some_and(|checked| checked.hash == record.source.content_hash) {
+        return None;
     }
     let entry = record.entry();
     let review = entry
         .as_ref()
         .ok()
         .map(|entry| splat_character::character::check::review(record, entry));
-    root.pages.party.checked = Some(Checked {
+    Some(Checked {
         hash: record.source.content_hash.clone(),
         entry,
         review,
-    });
+    })
 }
 
 /// The attacks as action tiles that preview their roll, with the last preview's result under
