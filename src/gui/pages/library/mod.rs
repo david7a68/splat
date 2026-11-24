@@ -45,7 +45,7 @@ actions!(
 pub struct State {
     /// The page's keyboard focus, so its keys (Ctrl+S, Escape on a form) reach it while nothing
     /// else holds the keyboard.
-    focus: Option<FocusHandle>,
+    pub(crate) focus: Option<FocusHandle>,
     /// The entry list's scroll, which a link's reveal moves.
     list_scroll: UniformListScrollHandle,
     /// The reader's scroll, which a typed jump to a heading moves.

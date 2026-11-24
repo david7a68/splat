@@ -1353,6 +1353,54 @@ impl Sessions {
         Some((text, at + added.len()))
     }
 
+    /// After a step of the run, what the DM types next is a new thought (`after_a_step_back_to_note`):
+    /// the first typed words after the end of a line of words start a paragraph of their own.
+    /// `before` and `words` are the editor's words around one edit, and `caret` its caret after
+    /// it, as byte offsets. The words with the break and the caret after them, or `None` when the
+    /// edit was not typing at the end of a line of words, or no break waits.
+    pub fn gv_new_thought(
+        &mut self,
+        before: &str,
+        words: &str,
+        caret: usize,
+    ) -> Option<(String, usize)> {
+        if !self.break_before_words || words.len() <= before.len() {
+            return None;
+        }
+        // The edit put words in at the caret and took none out.
+        let start = caret.checked_sub(words.len() - before.len())?;
+        if !words.is_char_boundary(start)
+            || !words.is_char_boundary(caret)
+            || !before.is_char_boundary(start)
+            || words[..start] != before[..start]
+            || words[caret..] != before[start..]
+        {
+            return None;
+        }
+        let ends_words = !before[..start].is_empty()
+            && !before[..start].ends_with('\n')
+            && before[start..].chars().next().is_none_or(|c| c == '\n');
+        if !ends_words {
+            return None;
+        }
+        let now = format!("{}\n\n{}{}", &before[..start], &words[start..caret], &before[start..]);
+        Some((now, caret + 2))
+    }
+
+    /// A correction key in the note (Backspace, Delete, an arrow, Home, End): the DM goes on with
+    /// the same line, so no new paragraph waits.
+    pub fn gv_correcting(&mut self) {
+        self.break_before_words = false;
+    }
+
+    /// Words typed while no control had the keyboard, beside the Notes panel: they belong in
+    /// the note (egui `note_editor`: "A stray click leaves the keyboard on nothing").
+    pub fn gv_stray_words(&mut self, words: &str) {
+        self.words_for_note.push_str(words);
+        self.words_new_line = self.break_before_words;
+        self.refocus_note = true;
+    }
+
     /// Whether the note's editor should ask for the keyboard now (the Notes panel opened, words
     /// typed elsewhere wait), without taking the request.
     pub fn gv_wants_focus(&self) -> bool {

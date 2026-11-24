@@ -47,7 +47,7 @@ pub struct State {
     /// heights, for whether the title line scrolls with the form (`detail::render`).
     pub(crate) detail_room: std::rc::Rc<std::cell::Cell<(Pixels, Pixels)>>,
     /// The page's keyboard focus, so Ctrl+S reaches it while no field has the keyboard.
-    focus: Option<gpui::FocusHandle>,
+    pub(crate) focus: Option<gpui::FocusHandle>,
 }
 
 /// Once, when the root is built.

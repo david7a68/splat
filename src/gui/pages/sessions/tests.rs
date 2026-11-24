@@ -114,6 +114,20 @@ fn session_notes_small_window() {
     shell.capture("session-notes__04-session-write__960x640");
     shell.click("Note");
     shell.capture("session-notes__04-session-write-note-tab__960x640");
+    // In the tab layout, the `/` menu's Search field is the note's own: the Note tab stays, with
+    // its menu and field.
+    shell.click("Note text");
+    shell.press("ctrl-end");
+    shell.type_text(" /");
+    shell.click("Search");
+    assert!(
+        shell.bounds("Search to link").is_some(),
+        "the note's search field stays drawn in the tab layout"
+    );
+    assert!(
+        shell.bounds("Note text").is_some(),
+        "the note stays, not the plan"
+    );
 }
 
 #[test]
@@ -404,6 +418,29 @@ fn note_typing_saves_at_ctrl_s() {
     shell.press("ctrl-end");
     shell.type_text("Wolves at the ford.");
     assert!(note_words(&mut shell).contains("Wolves at the ford."));
+    // After a step of the run, what is typed next is a new paragraph.
+    shell.update(|root, _, cx| {
+        root.app.sessions.after_a_step_back_to_note(false);
+        cx.notify();
+    });
+    shell.type_text("Ogre arrives.");
+    let words = note_words(&mut shell);
+    assert!(
+        words.contains("Wolves at the ford.\n\nOgre arrives."),
+        "a new thought starts a paragraph: {words:?}"
+    );
+    // A correction key goes on with the same line.
+    shell.update(|root, _, cx| {
+        root.app.sessions.after_a_step_back_to_note(false);
+        cx.notify();
+    });
+    shell.press("left");
+    shell.type_text("!");
+    let words = note_words(&mut shell);
+    assert!(
+        words.contains("Ogre arrives!."),
+        "a correction keeps the line: {words:?}"
+    );
     shell.press("ctrl-s");
     let path = shell.read(|root| root.app.sessions.gv_selected_note().map(|n| n.path.clone()));
     let file = std::fs::read_to_string(path.expect("a note")).expect("the note's file");
@@ -539,6 +576,15 @@ fn notes_panel_beside_another_page() {
         "the panel holds the note from What happened: {slice:?}"
     );
     shell.capture("session-notes__38-notes-panel__1200x800");
+    // A stray click leaves the keyboard on nothing: what the DM types still goes in the note.
+    shell.update(|root, window, cx| window.focus(&root.focus, cx));
+    shell.type_text("Stray words");
+    let slice =
+        shell.update(|root, _, _| root.app.sessions.gv_note_words(true).unwrap_or_default());
+    assert!(
+        slice.contains("Stray words"),
+        "words typed on nothing go in the note: {slice:?}"
+    );
     shell.click("Close notes");
     assert!(!shell.read(|root| root.app.sessions.notes_open));
 }
@@ -582,6 +628,35 @@ fn slash_menu_in_the_note() {
         "the menu starts at the /: {search:?} at {slash:?}"
     );
     shell.capture("session-notes__53-slash-menu__1200x800");
+    // Keys pressed while another control has the keyboard are not the menu's: Down and Enter
+    // choose nothing.
+    shell.update(|root, window, cx| window.focus(&root.focus, cx));
+    shell.press("down enter");
+    assert!(
+        shell.bounds("id:slash-search").is_none() && note_words(&mut shell).ends_with("Met /"),
+        "keys elsewhere choose no command"
+    );
+    shell.click("Note text");
+    assert!(
+        shell.read(|root| root.pages.sessions.note.slash.is_none()),
+        "a press outside the menu closes it"
+    );
+    shell.press("ctrl-end backspace");
+    shell.type_text("/");
+    assert!(shell.bounds("Search").is_some(), "the menu opens again");
+    // With only the `/`, Enter ends the line, and the menu goes.
+    shell.press("enter");
+    assert!(
+        shell.read(|root| root.pages.sessions.note.slash.is_none()),
+        "Enter after a bare / closes the menu"
+    );
+    let words = note_words(&mut shell);
+    assert!(
+        words.ends_with("Met /\n"),
+        "Enter after a bare / ends the line: {words:?}"
+    );
+    shell.press("backspace backspace");
+    shell.type_text("/");
     shell.type_text("se");
     assert!(
         shell.bounds("Generate NPC").is_none(),

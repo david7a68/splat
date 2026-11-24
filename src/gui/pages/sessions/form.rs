@@ -1,19 +1,11 @@
 //! The New session form, and Session details for a session that exists (`Sessions::show_form`):
 //! Number, Session title, Date and, for a new session, Template; Create and Cancel; then the
-//! reason Create waits or the file it makes. Enter in a field creates; Escape cancels.
+//! reason Create waits or the file it makes. Enter in a field creates; Escape in a field cancels,
+//! after the root's own Escape (an open menu, the notes panel, Lookup) did not take it.
 use crate::gui::{SplatRoot, kit, theme};
 use crate::sessions::page::gpui_facade::FormField;
-use gpui::{
-    AnyElement, Context, InteractiveElement, IntoElement, KeyBinding, ParentElement, Styled,
-    Window, actions, div,
-};
+use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div};
 use theme::{FORM_WIDTH, L, S, Type, colors};
-
-actions!(session_form, [CancelForm]);
-
-pub(super) fn init(cx: &mut gpui::App) {
-    cx.bind_keys([KeyBinding::new("escape", CancelForm, Some("SessionForm"))]);
-}
 
 fn set(field: FormField) -> impl Fn(&mut SplatRoot, &str, &mut Window, &mut Context<SplatRoot>) {
     move |root, words, _, cx| {
@@ -48,6 +40,15 @@ pub(super) fn render(
             cx.notify();
         });
     };
+    // Escape in a field cancels (egui: only Escape that left one of the form's fields), after
+    // the root's Escape, which closes an open menu or Lookup first (`SplatRoot::dismiss`).
+    let entity = cx.entity().downgrade();
+    let on_escape = move |_: &mut Window, cx: &mut gpui::App| {
+        let _ = entity.update(cx, |root, cx| {
+            root.app.sessions.gv_form_cancel();
+            cx.notify();
+        });
+    };
     let heading = if form.editing {
         "Session details"
     } else {
@@ -57,16 +58,19 @@ pub(super) fn render(
         .name("Number")
         .width(L * 5.0)
         .on_change(cx.listener(set(FormField::Number)))
-        .on_enter(on_enter.clone());
+        .on_enter(on_enter.clone())
+        .on_escape(on_escape.clone());
     let title = kit::TextField::new(id("title"), form.title.clone())
         .name("Session title")
         .focus(form.focus_title)
         .on_change(cx.listener(set(FormField::Title)))
-        .on_enter(on_enter.clone());
+        .on_enter(on_enter.clone())
+        .on_escape(on_escape.clone());
     let date = kit::TextField::new(id("date"), form.date.clone())
         .name("Date")
         .on_change(cx.listener(set(FormField::Date)))
-        .on_enter(on_enter);
+        .on_enter(on_enter)
+        .on_escape(on_escape);
     let templates = root.app.sessions.gv_templates();
     let template = (!form.editing && !templates.is_empty()).then(|| {
         let names: Vec<String> = templates.iter().map(|t| t.name.clone()).collect();
@@ -149,15 +153,5 @@ pub(super) fn render(
         )
         .children(kept.map(|kept| kept.pt(theme::XS)))
         .children(error.map(|error| div().pt(S).child(error)));
-    kit::scroll_column(
-        "session-form",
-        div()
-            .key_context("SessionForm")
-            .on_action(cx.listener(|root, _: &CancelForm, _, cx| {
-                root.app.sessions.gv_form_cancel();
-                cx.notify();
-            }))
-            .child(fields),
-    )
-    .into_any_element()
+    kit::scroll_column("session-form", fields).into_any_element()
 }
