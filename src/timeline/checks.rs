@@ -1351,48 +1351,30 @@ mod tests {
         assert_eq!(book.events[0].duration, "4 days");
     }
 
-    /// V4, V22: the label is above the table menu; the dice words share the menu's line after
-    /// `·`, and a line of their own starts with the words.
+    /// V4, V22: the table menu says the chosen table's name, and the dice words after it say the
+    /// dice and the interval (the GPUI form draws them after `·` or on a line of their own).
     #[test]
-    fn t11_9_the_dice_words_never_start_a_line_with_the_separator() {
-        use crate::design::test_harness::ThemedPage as _;
-        use egui_kittest::{Harness, kittest::Queryable};
+    fn t11_9_the_table_menu_and_its_dice_words() {
         let tables = [table("road", "On the road", Per::Day)];
         let event = journey("journey", Some("road"));
-        for (width, words) in [(400.0, "· 1d20 each day"), (160.0, "1d20 each day")] {
-            let mut harness = Harness::builder()
-                .with_size(egui::vec2(480.0, 200.0))
-                .themed_ui(|ui| {
-                    ui.set_max_width(width);
-                    let view = View {
-                        event: &event,
-                        start: None,
-                        length: "",
-                        tables: &tables,
-                        planned: &|_| None,
-                        reveal: None,
-                    };
-                    header(ui, &view, &mut State::default());
-                });
-            harness.run_steps(2);
-            let label = harness.get_by_label("Encounter checks").rect();
-            let menu = harness.get_by_label("On the road").rect();
-            let dice = harness.get_by_label(words).rect();
-            assert!(label.bottom() <= menu.top(), "{width}: {label:?} {menu:?}");
-            if width > 200.0 {
-                assert!(
-                    menu.y_range().contains(dice.center().y),
-                    "{dice:?} {menu:?}"
-                );
-            } else {
-                // On a line of their own the words start at the text edge, the label's: the
-                // menu's target hangs left of it (`line_start`).
-                assert!(
-                    dice.top() >= menu.bottom() && (dice.left() - label.left()).abs() < 1.0,
-                    "{dice:?} {label:?}"
-                );
-            }
-        }
+        let view = View {
+            event: &event,
+            start: None,
+            length: "",
+            tables: &tables,
+            planned: &|_| None,
+            reveal: None,
+        };
+        assert_eq!(
+            table_words(&view),
+            ("On the road".to_owned(), Some("1d20 each day".to_owned()))
+        );
+        let event = journey("journey", Some("gone"));
+        let view = View {
+            event: &event,
+            ..view
+        };
+        assert_eq!(table_words(&view), ("Table not found".to_owned(), None));
     }
 
     #[test]

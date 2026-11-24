@@ -116,12 +116,40 @@ fn add_name_rule_remove_and_save() {
     shell.click("All");
     shell.settle();
 
+    // Issue #513: under a modal (an open menu), Ctrl+S saves nothing.
+    let path = shell.read(|root| root.app.timeline.path().map(|p| p.to_path_buf()));
+    let path = path.expect("a Timeline file");
+    let rest_id = rest.id.clone();
+    shell.update(|root, _, cx| {
+        if let Some(event) = root.app.timeline.event_mut(&rest_id) {
+            event.title = "Rest at the old mill".to_owned();
+        }
+        root.app.timeline.touch();
+        root.app.timeline_page.select(Some(rest_id.clone()));
+        cx.notify();
+    });
+    shell.settle();
+    shell.click("More actions for Rest at the old mill");
+    shell.settle();
+    assert!(
+        shell.update(|root, _, cx| root.modal_open(cx)),
+        "the menu is open"
+    );
+    shell.press("ctrl-s");
+    shell.settle();
+    let saved = fs::read_to_string(&path).unwrap_or_default();
+    assert!(
+        !saved.contains("Rest at the old mill"),
+        "under a modal, Ctrl+S saves nothing: {saved}"
+    );
+    shell.press("escape");
+    shell.settle();
+
     // Ctrl+S saves now.
     shell.press("ctrl-s");
     shell.settle();
-    let path = shell.read(|root| root.app.timeline.path().map(|p| p.to_path_buf()));
-    let saved = fs::read_to_string(path.expect("a Timeline file")).unwrap_or_default();
-    assert!(saved.contains("Rest at the mill"), "{saved}");
+    let saved = fs::read_to_string(&path).unwrap_or_default();
+    assert!(saved.contains("Rest at the old mill"), "{saved}");
 }
 
 /// The open event at the smallest window: two columns still fit beside the rail.
@@ -368,4 +396,59 @@ fn an_uncounted_length_says_why_on_hover() {
     });
     shell.wait(std::time::Duration::from_secs(1));
     shell.capture("timeline-uncounted__01-row-hover__1200x800");
+}
+
+/// M0556: a long Timeline opens at its last event, whole in view, with its first out of view.
+/// M0559, M0560: an event opened again, after another, opens its form at its top.
+#[test]
+fn a_long_timeline_opens_at_its_end_and_a_form_at_its_top() {
+    let mut shell = Shell::with_size("timeline-long", Seed::Campaign, size(px(1200.0), px(640.0)));
+    let ids: Vec<String> = shell.update(|root, _, _| {
+        let book = &mut root.app.timeline;
+        (0..60)
+            .map(|at| {
+                let id = book.add(Kind::Event, None);
+                book.event_mut(&id).unwrap().title = format!("Stop {at:02}");
+                id
+            })
+            .collect()
+    });
+    shell.click("Timeline");
+    shell.settle();
+    let window = shell.size();
+    let row = |shell: &mut Shell, at: usize| shell.bounds(&format!("id:timeline-row-{}", ids[at]));
+    let last = row(&mut shell, 59).expect("the last event is drawn");
+    let before = row(&mut shell, 58).expect("the event before it is drawn");
+    assert!(
+        last.top() >= before.bottom() && last.bottom() <= window.height,
+        "the last event {last:?} is whole in the {window:?} window"
+    );
+    assert!(
+        row(&mut shell, 0).is_none_or(|first| first.bottom() <= px(0.0)),
+        "the list moved: the first event is out of view"
+    );
+    // The form of Stop 57, scrolled; then Stop 56; then Stop 57 again opens at its top.
+    let open = |shell: &mut Shell, at: usize| {
+        shell.click(&format!("id:timeline-row-{}", ids[at]));
+        shell.settle();
+        assert_eq!(selected(shell).as_deref(), Some(ids[at].as_str()));
+    };
+    let form = |shell: &mut Shell| shell.read(|root| root.pages.timeline.form.offset().y);
+    open(&mut shell, 57);
+    shell.update(|root, _, cx| {
+        root.pages
+            .timeline
+            .form
+            .set_offset(gpui::point(px(0.0), px(-40.0)));
+        cx.notify();
+    });
+    shell.settle();
+    assert!(form(&mut shell) < px(0.0), "the form scrolled");
+    open(&mut shell, 56);
+    open(&mut shell, 57);
+    assert_eq!(
+        form(&mut shell),
+        px(0.0),
+        "opened again, the form is at its top"
+    );
 }
