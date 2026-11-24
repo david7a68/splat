@@ -29,7 +29,7 @@ fn close(shell: &mut Shell) {
     assert!(!shell.read(|root| root.app.encounters.has_run()), "the run closes");
 }
 
-/// The fixture's run in progress, opened as Resume opens it.
+/// The fixture’s run in progress, opened as Resume opens it.
 fn open_saved(shell: &mut Shell, name: &str) {
     close(shell);
     shell.update(|root, _, cx| {
@@ -37,7 +37,7 @@ fn open_saved(shell: &mut Shell, name: &str) {
             .app
             .campaigns
             .active_campaign()
-            .expect("the fixture's campaign");
+            .expect("the fixture’s campaign");
         let modules = root.app.campaigns.modules().to_vec();
         root.app.encounters.refresh_now(&campaign, &modules);
         let runs = root.app.encounters.saved_runs();
@@ -69,7 +69,7 @@ fn start(shell: &mut Shell, path: &str) {
             .app
             .campaigns
             .active_campaign()
-            .expect("the fixture's campaign");
+            .expect("the fixture’s campaign");
         let modules = root.app.campaigns.modules().to_vec();
         root.app.encounters.refresh_now(&campaign, &modules);
         root.app.encounters.run_path(path, &campaign, &modules);
@@ -177,7 +177,7 @@ fn open_lookup(shell: &mut Shell) {
         shell.wait(std::time::Duration::from_millis(50));
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    panic!("Lookup's index was not read");
+    panic!("Lookup’s index was not read");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -196,7 +196,7 @@ fn rolls_tiles(shell: &mut Shell) {
 }
 
 /// egui `run-rolls`: the attack tiles, an armed attack, its roll on a row, a row's menu, a
-/// damage question, a save's targets and their damage, and a player's attack.
+/// damage question, a save’s targets and their damage, and a player's attack.
 #[test]
 fn run_rolls() {
     let mut shell = Shell::new("run-rolls", Seed::Campaign);
@@ -222,7 +222,7 @@ fn run_rolls() {
     let key = with_run(&mut shell, |run| run.state.participants[target].key.clone());
     assert!(
         with_run(&mut shell, |run| !run.row_menu_sections(target).is_empty()),
-        "the target's row has a menu while Bite is armed"
+        "the target’s row has a menu while Bite is armed"
     );
     shell.update(|_, window, cx| {
         kit::menu::open_popup(
@@ -270,7 +270,7 @@ fn run_rolls() {
             run.state.participants[target].hp,
         )
     });
-    assert_ne!(before, after, "the save's damage is applied");
+    assert_ne!(before, after, "the save’s damage is applied");
     shell.capture("run-rolls__08-save-applied__1200x800");
     on_run(&mut shell, Run::disarm);
 
@@ -672,7 +672,7 @@ fn in_the_run(shell: &mut Shell) {
 }
 
 /// egui `run-lookup`: the run, a spell read beside it, entries found, the run back, a spell
-/// opened from the stat block, and Lookup's Back by key.
+/// opened from the stat block, and Lookup’s Back by key.
 #[test]
 fn run_lookup() {
     let mut shell = Shell::new("run-lookup", Seed::Campaign);
@@ -807,7 +807,7 @@ fn npc_in_encounter() {
     encounters_read(&mut shell);
     shell.click("New encounter");
     assert!(shell.read(|root| root.app.encounters.editor_open()));
-    shell.type_text("Rook's ambush");
+    shell.type_text("Rook’s ambush");
     shell.click("Find a creature or party member");
     shell.type_text("Rook Ambry");
     let add = target_starting(&mut shell, "id:add:");
@@ -1010,7 +1010,7 @@ fn run_roster_conflict() {
     select(&mut shell, LOADED_ROW);
     shell.update(|root, _, _| {
         root.app.encounters.simulate_run_error(
-            "Ember Cultist's stat block could not be read. Its row still works. Repair it in",
+            "Ember Cultist’s stat block could not be read. Its row still works. Repair it in",
         );
     });
     shell.capture("run-roster-conflict__04-loaded-roster-of-12__1200x800");

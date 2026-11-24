@@ -495,8 +495,7 @@ fn undo_room(run: &Run, width: Pixels, window: &Window) -> Pixels {
     let shortest = run
         .undo_word_forms(&label)
         .into_iter()
-        .filter(|words| words.len() < label.len())
-        .next_back()
+        .rfind(|words| words.len() < label.len())
         .unwrap_or(label);
     room.max(undo_width(window, &shortest, false))
 }

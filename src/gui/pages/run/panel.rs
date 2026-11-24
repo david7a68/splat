@@ -1806,8 +1806,7 @@ fn group_row(
     let faults = run.arrival_faults(group);
     if !faults.is_empty() {
         row = row.child(kit::text(Type::Small, c.muted, "Cannot join"));
-        let on_press: Rc<dyn Fn(&kit::messages::Pressed<view::GroupRepair>, &mut Window, &mut gpui::App)> =
-            Rc::new(cx.listener(
+        let on_press: kit::messages::OnPress<view::GroupRepair> = Rc::new(cx.listener(
                 move |root: &mut SplatRoot, pressed: &kit::messages::Pressed<view::GroupRepair>, _, cx| {
                     if let Some(press) = pressed.take()
                         && let Some(run) = root.app.encounters.run_mut()
