@@ -584,3 +584,57 @@ fn world_entry_rolls_and_links_to_a_heading() {
     );
     shell.capture("world-entry-links__02-note-at-its-heading__1200x800");
 }
+
+/// The held NPC's card names the campaign's table it used; the table's link opens that note,
+/// and a bad table's `Open Names.md` does too (egui scenario `generator-tables`: the card leaves
+/// a note link, which the frame logic opens in Lookup by its path).
+#[test]
+fn world_card_table_links_open_the_note() {
+    let mut shell = world("generator-tables", default_size());
+    let names = root(&mut shell).join("Names.md");
+    std::fs::write(
+        &names,
+        "# Names\n\n<!-- splat:rolls key=npc-name dice=1d2 -->\n\n| d2 | Name |\n|---|---|\n| 1-2 | Tally |\n",
+    )
+    .unwrap();
+    reload(&mut shell, None);
+    shell.click("New ▾");
+    shell.click("Generate NPC");
+    assert_eq!(
+        shell.read(|root| root.app.world_page.held_npc().map(str::to_owned)),
+        Some("Tally".to_owned())
+    );
+    shell.capture("generator-tables__01-generator-campaign-table__1200x800");
+    let showing = |shell: &mut Shell| {
+        shell.read(|root| match root.app.lookup.showing() {
+            crate::lookup::panel_view::Showing::Entry(at) => root
+                .app
+                .lookup
+                .index()
+                .map(|index| index.items[at].entry.name.clone()),
+            _ => None,
+        })
+    };
+    shell.click("Names.md");
+    assert!(shell.read(|root| root.app.lookup.open), "Lookup opens");
+    assert_eq!(showing(&mut shell).as_deref(), Some("Names"), "the table's note");
+    assert_eq!(
+        shell.read(|root| root.app.lookup.query().to_owned()),
+        "",
+        "the note opens by its path, not by a search"
+    );
+    shell.press("escape");
+    shell.click("Discard");
+    std::fs::write(
+        &names,
+        "# Names\n\n<!-- splat:rolls key=npc-name dice=1d6 -->\n\n| d6 | Name |\n|---|---|\n| 1 | Tally |\n",
+    )
+    .unwrap();
+    reload(&mut shell, None);
+    shell.click("New ▾");
+    shell.click("Generate NPC");
+    shell.capture("generator-tables__02-generator-bad-table__1200x800");
+    shell.click("Open Names.md");
+    assert!(shell.read(|root| root.app.lookup.open), "Lookup opens");
+    assert_eq!(showing(&mut shell).as_deref(), Some("Names"));
+}
