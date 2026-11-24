@@ -959,6 +959,20 @@ fn the_editor_says_the_rosters_difficulty() {
     let words = roster_difficulty(&mut shell);
     assert!(words.contains("High"), "the roster says High: {words}");
     shell.capture("encounter-difficulty__03-editor-high__1200x800");
+    // One more Ember Cultist takes the fight past High: the line follows the draft at once.
+    shell.click("Find a creature or party member");
+    shell.type_text("ember cultist");
+    shell.click("Add Ember Cultist");
+    let words = roster_difficulty(&mut shell);
+    assert!(
+        words.contains("Above High"),
+        "the draft is Above High: {words}"
+    );
+    shell.click("Discard");
+    shell.click("id:encounter-back");
+    open_encounter(&mut shell, "Court of Cinders");
+    let words = roster_difficulty(&mut shell);
+    assert!(words.contains("Above High"), "Court of Cinders: {words}");
     shell.click("id:encounter-back");
     open_encounter(&mut shell, "Nameless Visitor");
     let words = roster_difficulty(&mut shell);
