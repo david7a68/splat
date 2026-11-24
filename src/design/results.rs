@@ -987,7 +987,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/components.rs",
             "iter27_a_the_footer_follows_a_short_body",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::Footer],
+            &[Ban::Results, Ban::Layout(1), Ban::Footer],
         ),
         (
             "src/design/gallery.rs",

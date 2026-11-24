@@ -4201,8 +4201,7 @@ type FooterMessage<'a> = (
 ///
 /// Build it, then give it the pane's body with `Footer::pane` (`src/design/pane.rs`): the part
 /// draws the body in its own `Ui`, measures where the body's content ends, and places the
-/// footer. The caller gets no y. `show_by_hand` is the old way, staged out (Clippy's
-/// `disallowed-methods` and the lint rule `footer-by-hand`).
+/// footer. The caller gets no y.
 ///
 /// Every app footer is typed: its lines are data (`outcome::Messages`), which builds the footer
 /// and gives it to the pane.
@@ -4341,135 +4340,6 @@ impl<'a> Footer<'a> {
         self
     }
 
-    /// Staged out: use `Footer::pane`. Clippy's `disallowed-methods` refuses a call outside
-    /// `src/design/`, and the lint counts the calls left (`footer-by-hand`), shrink only.
-    ///
-    /// Draw the footer `S` below the body, or at the bottom of what is left of `ui` when the body
-    /// fills it, and return the y where the body ends: `S` above the footer's pinned place, or
-    /// the pane's bottom when the footer is empty. Each message's
-    /// `draw` runs here, in the footer's order. The body sizes itself to end there (a scroll
-    /// area's `max_height`, an editor's height). `ui` also ends there when it holds nothing below
-    /// the cursor already, but egui keeps a `Ui`'s bottom below what it holds, so do not rely on
-    /// `ui.available_height()` alone. `ui` lays out top down. It measures the body from the last
-    /// pass's widgets, and takes a `Ui` that starts at the body's top and holds a scroll area
-    /// that does not shrink for a body that fills the pane (round 28, `footer-escape.md`).
-    #[must_use = "the body must end at this y: size it with the returned value"]
-    pub fn show_by_hand(mut self, ui: &mut Ui) -> f32 {
-        debug_assert!(
-            ui.layout().main_dir() == egui::Direction::TopDown,
-            "a pane's message footer ends a top-down Ui"
-        );
-        let key = self.id.with("height");
-        let stored = ui
-            .ctx()
-            .data(|data| data.get_temp::<f32>(key))
-            .unwrap_or(0.0);
-        let pane = ui.available_rect_before_wrap();
-        let body_key = self.id.with("body");
-        let top = ui.cursor().top();
-        let whole = ui.max_rect();
-        let last = ui.ctx().data(|data| data.get_temp::<FooterBody>(body_key));
-        let remember = |ui: &Ui, limit: f32, footer: f32| {
-            ui.ctx().data_mut(|data| {
-                data.insert_temp(
-                    body_key,
-                    FooterBody {
-                        top,
-                        limit,
-                        footer,
-                        whole,
-                    },
-                );
-            });
-        };
-        if self.messages.is_empty() {
-            remember(ui, pane.bottom(), pane.bottom());
-            if stored != 0.0 {
-                ui.ctx().data_mut(|data| data.remove::<f32>(key));
-                ui.ctx().request_discard("the message footer emptied");
-            }
-            return pane.bottom();
-        }
-        let x = pane.left()..=pane.left() + self.width.min(pane.width());
-        let own = ui
-            .ctx()
-            .data(|data| data.get_temp::<std::collections::HashSet<Id>>(self.id.with("own")))
-            .unwrap_or_default();
-        let body = last.and_then(|last| last.body_height(ui, x, &own));
-        if last.is_none() {
-            // A pane that opens with a message: the body is measured in this pass, and the
-            // pass is drawn again, so the footer shows first where it belongs.
-            ui.ctx()
-                .request_discard("the message footer measures its body");
-        }
-        // Staged out, this placement keeps the old cap: a third of the pane also for a footer
-        // that follows a short body. Ruling Q-c (a following footer may take the room down to the
-        // pane's end) is `Footer::pane`'s; a legacy pane does not get it (migration-32 design §3).
-        let most = (pane.height() / 3.0).floor().max(0.0);
-        // Last pass's demand (whole), up to the cap; a change is measured below, and the pass is
-        // drawn again.
-        let height = stored.min(most);
-        // Pinned at the pane's bottom, or `S` below a body that ends above that.
-        let pinned = pane.bottom() - height;
-        let footer_top = body.map_or(pinned, |body| (top + body + S).min(pinned));
-        debug_assert!(footer_top <= pinned);
-        // The body has the same room either way, so it never moves or changes its own size
-        // when the footer follows it; the footer cuts it only when it is pinned.
-        let limit = pinned - S;
-        remember(ui, limit, footer_top);
-        // The body's end comes from the last pass, so a body that changed in it (a scroll area
-        // takes its new height a pass late) moves the footer one pass late. Draw once more, and
-        // again on the next frame if egui allows no more passes in this one, until it is still.
-        if last.is_some_and(|last| {
-            last.footer < pane.bottom() && (last.footer - footer_top).abs() > 0.5
-        }) {
-            ui.ctx()
-                .request_discard("the message footer moved with its body");
-            ui.ctx().request_repaint();
-        }
-        let cut = body.is_none_or(|body| top + body + S >= pinned);
-
-        let rect = Rect::from_min_size(
-            pos2(pane.left(), footer_top),
-            vec2(self.width.min(pane.width()), height),
-        );
-        // The widgets the footer adds, so the next pass does not take them for the body.
-        let layer = ui.layer_id();
-        let added = |ui: &Ui| {
-            ui.ctx()
-                .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count())
-        };
-        let before = added(ui);
-        let _ = self.draw_messages(ui, rect, cut, most, stored, false);
-        let own: std::collections::HashSet<Id> = ui.ctx().viewport(|viewport| {
-            let widgets = viewport.this_pass.widgets.get_layer(layer);
-            widgets.skip(before).map(|widget| widget.id).collect()
-        });
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(self.id.with("own"), own));
-        if height == 0.0 {
-            // Not measured yet: this pass is drawn again, with the body's room as it was.
-            remember(ui, pane.bottom(), pane.bottom());
-            return pane.bottom();
-        }
-        #[cfg(any(test, feature = "test-support"))]
-        record_band(ui, pane, rect);
-        // egui's `set_max_height` also moves the cursor back to the top of `ui`, so it goes
-        // back to where the body starts.
-        ui.set_max_height((limit - top).max(0.0));
-        space(ui, top - ui.cursor().top());
-        // The body is drawn after the footer, so it would take a press on the footer, and paint
-        // over it, where it reaches under it: a scroll area as tall as its room below short
-        // content, or a line typed this frame before the footer moves down. Nothing drawn next
-        // in `ui` shows or takes a press below the body's room, `S` above the footer: egui gives
-        // a press to a widget a few points away, so a body clipped at the footer's very top would
-        // still take a press on the footer's top edge.
-        let mut clip = ui.clip_rect();
-        clip.max.y = clip.max.y.min(rect.top() - S);
-        ui.set_clip_rect(clip);
-        limit
-    }
-
     /// Take `from`'s typed lines (a footer of the same id): `outcome::Messages::pane_then` gives
     /// the pane its lines after the body.
     pub(super) fn take_typed(&mut self, from: Footer<'a>) {
@@ -4565,56 +4435,6 @@ impl<'a> Footer<'a> {
                 .request_discard("the message footer changed height");
         }
         (part, wanted)
-    }
-}
-
-/// Where a pane's body started in the last pass, the y it had to end at, the footer's top (the
-/// pane's bottom when the footer was empty), and the pane `Ui`'s whole rect.
-#[derive(Clone, Copy, Debug)]
-struct FooterBody {
-    top: f32,
-    limit: f32,
-    footer: f32,
-    whole: Rect,
-}
-
-impl FooterBody {
-    /// How tall the body was in this last pass, from the widgets egui kept for it; `None` when
-    /// it filled its room (it ended less than `S` above its limit: a caller that sizes a scroll
-    /// area to leave room for a row below it does not leave the exact room) or showed nothing.
-    ///
-    /// The pane's own `Ui` cannot tell: egui's panels make their `Ui` as tall as the panel. So
-    /// the body is each widget on the pane's layer, across `x`, that is not one of the footer's
-    /// own (`own`, by id: egui can keep an older place for them), starts at or below the body's
-    /// top (also under the footer: a body grows under a footer that follows it), and does not
-    /// hold the pane `Ui`'s whole rect: those are the pane, its panel and their frames. A body
-    /// widget as tall as its room (an editor, a scroll area that does not shrink) fills it. This
-    /// runs only while the footer holds a message, and looks at each widget egui kept once.
-    fn body_height(
-        self,
-        ui: &Ui,
-        x: std::ops::RangeInclusive<f32>,
-        own: &std::collections::HashSet<Id>,
-    ) -> Option<f32> {
-        let layer = ui.layer_id();
-        let end = ui.ctx().viewport(|viewport| {
-            viewport
-                .prev_pass
-                .widgets
-                .get_layer(layer)
-                .filter(|widget| !own.contains(&widget.id))
-                .map(|widget| widget.rect)
-                .filter(|rect| {
-                    rect.is_finite()
-                        && rect.right() > *x.start()
-                        && rect.left() < *x.end()
-                        && rect.top() >= self.top - 0.5
-                        && !rect.expand(0.5).contains_rect(self.whole)
-                })
-                .map(|rect| rect.bottom())
-                .reduce(f32::max)
-        })?;
-        (end <= self.limit - S).then(|| (end - self.top).max(0.0))
     }
 }
 
@@ -7725,17 +7545,26 @@ mod tests {
                                 message(ui, Tone::Error, "Line 3 opens a list.");
                             });
                         }
-                        let bottom = footer.show_by_hand(ui);
-                        let body = egui::ScrollArea::vertical()
-                            .id_salt("test_body")
-                            .max_height(bottom - ui.cursor().top())
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                ui.label(BODY);
-                            })
-                            .inner_rect;
-                        ui.ctx()
-                            .data_mut(|data| data.insert_temp(Id::new("test_body"), body));
+                        // A body that fills the pane's room: a scroll area as tall as it, with the
+                        // footer pinned below it.
+                        footer.pane(
+                            ui,
+                            super::super::pane::Body::Fills(super::super::pane::Fills::because(
+                                super::super::pane::FillsReason::NoteEditor,
+                            )),
+                            |ui| {
+                                let body = egui::ScrollArea::vertical()
+                                    .id_salt("test_body")
+                                    .max_height(ui.available_height())
+                                    .auto_shrink([false, false])
+                                    .show(ui, |ui| {
+                                        ui.label(BODY);
+                                    })
+                                    .inner_rect;
+                                ui.ctx()
+                                    .data_mut(|data| data.insert_temp(Id::new("test_body"), body));
+                            },
+                        );
                     });
             harness.run_steps(3);
             harness
@@ -7765,10 +7594,7 @@ mod tests {
                 })
         };
         let footer_rect = |harness: &egui_kittest::Harness<'_>| {
-            harness
-                .ctx
-                .read_response(Id::new("test_footer").with("focus"))
-                .map(|response| response.rect)
+            super::super::pane::footer_rect(&harness.ctx, Id::new("test_footer"))
         };
         for size in [
             vec2(960.0, 640.0),
@@ -7825,7 +7651,10 @@ mod tests {
             // Tab: from the start, to the footer, then the arrow keys scroll it.
             let mut keyboard = harness(size, 20);
             assert!(!shown(&keyboard), "20 messages overflow at {size:?}");
-            let focus = Id::new("test_footer").with("focus");
+            let focus = super::super::pane::pane_record(&keyboard.ctx, Id::new("test_footer"))
+                .expect("the footer's pane is drawn")
+                .id()
+                .with("focus");
             // Each Undo is a stop before the footer itself.
             for _ in 0..48 {
                 if keyboard.ctx.memory(|memory| memory.has_focus(focus)) {
@@ -8111,16 +7940,13 @@ mod tests {
             harness.run_steps(2);
         };
         iter28_p_the_pane_places_its_footer_for_every_body();
-        // The press proof, for the footer placed by hand (staged out) and by `Footer::pane`.
-        for (by_hand, size) in [true, false].into_iter().flat_map(|by_hand| {
-            [
-                vec2(960.0, 640.0),
-                vec2(1200.0, 800.0),
-                vec2(1920.0, 1080.0),
-            ]
-            .map(|size| (by_hand, size))
-        }) {
-            let mode = if by_hand { "By hand" } else { "Pane" };
+        // The press proof, for `Footer::pane`.
+        for size in [
+            vec2(960.0, 640.0),
+            vec2(1200.0, 800.0),
+            vec2(1920.0, 1080.0),
+        ] {
+            let mode = "Pane";
             // How many lines the editor holds, and whether the reason shows.
             let lines = Rc::new(Cell::new(4_usize));
             let reason = Rc::new(Cell::new(false));
@@ -8191,26 +8017,13 @@ mod tests {
                                 }
                             }
                         };
-                        if by_hand {
-                            let bottom = footer.show_by_hand(ui);
+                        // The pane is the scroll column: the lines, then the save row as its
+                        // last line.
+                        footer.pane(ui, super::super::pane::Body::Content, |ui| {
                             background(ui);
-                            // The editor leaves room for its save row above `bottom`, as World's
-                            // does.
-                            let row = Type::Body.line() + ui.spacing().item_spacing.y;
-                            super::super::layout::ScrollColumn::new("follow_body")
-                                .fit_height()
-                                .max_height((bottom - ui.cursor().top() - row).max(0.0))
-                                .show(ui, lines);
+                            lines(ui);
                             ui.label(SAVE_ROW);
-                        } else {
-                            // The pane is the scroll column: the lines, then the save row as its
-                            // last line.
-                            footer.pane(ui, super::super::pane::Body::Content, |ui| {
-                                background(ui);
-                                lines(ui);
-                                ui.label(SAVE_ROW);
-                            });
-                        }
+                        });
                     });
             harness.run_steps(3);
             let text = |harness: &egui_kittest::Harness<'_>, words: &str| {
@@ -8227,15 +8040,8 @@ mod tests {
                     })
             };
             let footer = |harness: &egui_kittest::Harness<'_>| {
-                if by_hand {
-                    harness
-                        .ctx
-                        .read_response(Id::new("follow_footer").with("focus"))
-                        .map(|response| response.rect)
-                } else {
-                    super::super::pane::footer_rect(&harness.ctx, Id::new("follow_footer"))
-                }
-                .filter(|_| reason.get())
+                super::super::pane::footer_rect(&harness.ctx, Id::new("follow_footer"))
+                    .filter(|_| reason.get())
             };
             let hairline = |harness: &egui_kittest::Harness<'_>, at: Rect| {
                 harness.output().shapes.iter().any(|shape| {
@@ -8254,19 +8060,10 @@ mod tests {
             };
             // The last body action whole in the editor's view (which ends at the save row, `S` or
             // more above the footer): its index and its centre.
-            // Where the editor's view ends: by hand, at its save row; in the pane, `S` above the
-            // footer (the save row is the column's last line).
+            // Where the editor's view ends: `S` above the footer (the save row is the column's last
+            // line).
             let last_line = |harness: &egui_kittest::Harness<'_>, at: Rect| {
-                let end = if by_hand {
-                    let save = place(harness, SAVE_ROW)?;
-                    assert!(
-                        save.bottom() <= at.top() - S + 0.5,
-                        "the save row is above the footer"
-                    );
-                    save.top()
-                } else {
-                    at.top() - S + 0.5
-                };
+                let end = at.top() - S + 0.5;
                 (0..lines.get()).rev().find_map(|line| {
                     place(harness, &format!("Editor line {line}"))
                         .filter(|rect| rect.bottom() <= end)
@@ -8312,7 +8109,7 @@ mod tests {
             let at = footer(&harness).expect("the footer shows");
             click(&mut harness, pos2(at.right() - 4.0, at.top() - S / 2.0));
             assert!(
-                by_hand || (line_pressed.get(), background.get()) == (None, 0),
+                (line_pressed.get(), background.get()) == (None, 0),
                 "{mode} at {size:?} a press just above the following footer {at:?} reaches no body target: {:?}",
                 (line_pressed.get(), background.get())
             );
@@ -8354,9 +8151,7 @@ mod tests {
             // Pinned with its hairline. By hand the save row stays above it; in the pane the save
             // row is the column's last line, scrolled below the footer.
             assert!(
-                at.bottom() >= size.y - L
-                    && (!by_hand || save.bottom() <= at.top() - S + 0.5)
-                    && hairline(&harness, at),
+                at.bottom() >= size.y - L && hairline(&harness, at),
                 "{mode} at {size:?} with 60 lines the footer {at:?} is pinned with its hairline (save row {save:?})"
             );
             assert_eq!(
@@ -8366,7 +8161,7 @@ mod tests {
             );
             // Astra re-check 2: in the pane, Tab into a body row hidden under the pinned footer
             // brings it whole into view above the footer, and Enter presses that row.
-            if !by_hand {
+            {
                 use egui_kittest::kittest::{NodeT, Queryable};
                 let at = footer(&harness).expect("the footer shows");
                 let view_end = at.top() - S + 0.5;
@@ -8547,12 +8342,8 @@ mod tests {
                     && shown.is_some_and(|undo| undo.is_positive() && at.contains_rect(undo)),
                 "{mode} at {size:?} Tab reaches the last Undo of the footer {at:?}, in view: {shown:?}"
             );
-            // Placed by hand (staged out), the footer keeps the old cap: a third of the pane.
-            let tall = if by_hand {
-                at.height() <= size.y / 3.0 + 1.0
-            } else {
-                at.height() > size.y / 3.0 + 1.0
-            };
+            // In the pane, a footer of 21 results is taller than a third of it.
+            let tall = at.height() > size.y / 3.0 + 1.0;
             assert!(
                 (at.top() - (save.bottom() + S)).abs() <= 1.0
                     && tall
@@ -8570,7 +8361,7 @@ mod tests {
                 !hidden.is_some_and(|undo| undo.is_positive() && at.contains_rect(undo));
             // A part tall enough for all 21 results (the pane at 1920) has nothing to scroll to.
             assert!(
-                overflows || (!by_hand && size.x > 1500.0),
+                overflows || size.x > 1500.0,
                 "{mode} at {size:?} m-p0-part-press-setup: the last Undo {hidden:?} is out of the \
                  part {at:?}"
             );

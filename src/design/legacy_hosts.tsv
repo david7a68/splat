@@ -102,7 +102,6 @@ row-register	src/trackers/view.rs	register_block	1	Trackers
 row-register	src/world/page.rs	question_row	1	World
 row-register	src/world/related.rs	page_row	1	World
 row-clip	src/design/components.rs	Action::paint	2	design	design implementation boundary
-row-clip	src/design/components.rs	Footer::show_by_hand	1	design	design implementation boundary
 row-clip	src/design/components.rs	comparison_missing_row	1	design	design implementation boundary
 row-clip	src/design/components.rs	draft_comparison_labeled	1	design	design implementation boundary
 row-clip	src/design/layout.rs	MenuPopup::show	1	design	design implementation boundary
@@ -135,7 +134,6 @@ scroll-request	src/design/reveal.rs	settle_queued	1	design	no egui target writes
 scroll-request	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run	named follow-selection exception (PR 403)
 scroll-request	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-request	src/encounters/groups.rs	of_encounter	1	Encounters
-scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
 scroll-request	src/sessions/plan.rs	Reveal::show	1	Sessions
 scroll-request	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
 scroll-request	src/sessions/plan.rs	reveal_opened_played	3	Sessions

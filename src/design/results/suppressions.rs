@@ -39,7 +39,7 @@ pub(crate) enum Ban {
     /// add their own space (`clippy.toml`, section "Package X"). The number is how many of those
     /// calls the item holds, counted in its tokens as `Layout` is.
     Extras(u16),
-    /// Package P: `Footer::show_by_hand` (staged out: use `Footer::pane`) and `Fills::because`
+    /// Package P: `Fills::because`
     /// (the pane's one named escape), and the room-centred layouts; the number of calls in the
     /// item, counted in its tokens as `Layout` is.
     Pane(u16),

@@ -42,10 +42,12 @@ fn source_style(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
         .desired_width(f32::INFINITY)
 }
 
-/// The part of the error line's mark (`from` to `to`, screen y) that lies in the editor's view:
-/// none when it lies outside it.
-fn mark_in_view(from: f32, to: f32, view: egui::Rangef) -> Option<(f32, f32)> {
-    let (from, to) = (from.max(view.min), to.min(view.max));
+/// The part of the error line's mark (`from` to `to`, screen y) to draw so that its painted
+/// stroke stays in the editor's view: its endpoints lie at least half the stroke `width` inside
+/// the view, since egui adds the stroke's end caps after them. None when nothing of it is left.
+fn mark_in_view(from: f32, to: f32, view: egui::Rangef, width: f32) -> Option<(f32, f32)> {
+    let cap = width / 2.0;
+    let (from, to) = (from.max(view.min + cap), to.min(view.max - cap));
     (from < to).then_some((from, to))
 }
 
@@ -99,7 +101,12 @@ fn source_editor(
             .pos_from_cursor(egui::text::CCursor::new(position));
         let y = output.galley_pos.y + row.top();
         // The mark is in the frame's left margin, and only where the text is in view.
-        if let Some((from, to)) = mark_in_view(y, y + row.height(), output.view.y_range()) {
+        if let Some((from, to)) = mark_in_view(
+            y,
+            y + row.height(),
+            output.view.y_range(),
+            design::FOCUS_WIDTH,
+        ) {
             ui.painter().vline(
                 output.frame.left() + design::XS,
                 from..=to,
@@ -607,20 +614,37 @@ impl Repair {
 mod tests {
     use super::*;
 
-    /// The error line's mark shows only where the text is in view, as the clip it replaced cut it:
-    /// whole when inside, cut at the view's edge, nothing when outside (view 100 to 200).
+    /// The error line's mark shows only where the text is in view, and its PAINTED stroke stays in
+    /// the view: the stroke's end caps (half its width) come after the endpoints, so a cut end
+    /// stops a cap inside the view. The reference is the view (100 to 200), not the endpoints:
+    /// each shown mark's painted shape (`visual_bounding_rect`) lies in it.
     #[test]
     fn the_error_mark_is_cut_at_the_editors_view() {
         let view = egui::Rangef::new(100.0, 200.0);
+        let width = 2.0;
         for (mark, shown) in [
             ((120.0, 138.0), Some((120.0, 138.0))),
-            ((90.0, 108.0), Some((100.0, 108.0))),
-            ((192.0, 210.0), Some((192.0, 200.0))),
+            ((90.0, 108.0), Some((101.0, 108.0))),
+            ((192.0, 210.0), Some((192.0, 199.0))),
             ((60.0, 80.0), None),
             ((210.0, 228.0), None),
             ((80.0, 100.0), None),
+            ((90.0, 100.8), None),
         ] {
-            assert_eq!(mark_in_view(mark.0, mark.1, view), shown, "mark {mark:?}");
+            let cut = mark_in_view(mark.0, mark.1, view, width);
+            if let Some((from, to)) = cut {
+                let painted = egui::Shape::line_segment(
+                    [egui::pos2(50.0, from), egui::pos2(50.0, to)],
+                    egui::Stroke::new(width, egui::Color32::WHITE),
+                )
+                .visual_bounding_rect();
+                assert!(
+                    painted.top() >= view.min - 0.001 && painted.bottom() <= view.max + 0.001,
+                    "mark {mark:?} paints {:?}, outside the view {view:?}",
+                    painted.y_range()
+                );
+            }
+            assert_eq!(cut, shown, "mark {mark:?}");
         }
     }
 
