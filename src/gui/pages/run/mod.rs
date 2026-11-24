@@ -158,6 +158,9 @@ fn on_run(cx: &mut Context<SplatRoot>, act: impl Fn(&mut Run) + 'static) -> OnCl
     }))
 }
 
+/// A boxed handler with no event (a field's Enter, a dialog's Escape).
+type OnPlain = Box<dyn Fn(&mut Window, &mut App)>;
+
 /// A boxed click handler: it borrows nothing, so a builder can make several in one chain.
 type OnClick = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
@@ -263,7 +266,7 @@ fn undo_button(run: &Run, id: &'static str, words: String, density: theme::Densi
 fn plain(
     cx: &mut Context<SplatRoot>,
     act: impl Fn(&mut SplatRoot, &mut Window, &mut Context<SplatRoot>) + 'static,
-) -> Box<dyn Fn(&mut Window, &mut App)> {
+) -> OnPlain {
     let listener = cx.listener(move |root: &mut SplatRoot, _: &(), window, cx| act(root, window, cx));
     Box::new(move |window, cx| listener(&(), window, cx))
 }

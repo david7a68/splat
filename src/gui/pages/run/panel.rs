@@ -141,8 +141,8 @@ fn tabs(run: &Run, reference: &'static str, cx: &mut Context<SplatRoot>) -> impl
         .flex_row()
         .items_center()
         .gap(theme::L)
-        .child(participant)
-        .child(fight)
+        .child(div().flex_none().child(participant))
+        .child(div().flex_none().child(fight))
 }
 
 /// Death saves: the counts, `+ Success`, `+ Failure` and a roll (`death_saves`).

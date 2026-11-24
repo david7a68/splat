@@ -70,7 +70,7 @@ pub(super) fn render(
         .h_full()
         .w(roster_width)
         .flex_none()
-        .child(header::live(root, run, scale, cx))
+        .child(header::live(run, roster_width, scale, cx))
         .child(
             div()
                 .flex()

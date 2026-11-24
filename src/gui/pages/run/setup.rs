@@ -345,7 +345,8 @@ fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
     let expanded = run.setup_expanded == Some(index);
     let menu = kit::MenuButton::new(
         ElementId::Name(format!("run-setup-menu-{}", p.key).into()),
-        kit::Button::quiet(ElementId::Name(format!("run-setup-more-{}", p.key).into()), "⋯")
+        kit::Button::quiet(ElementId::Name(format!("run-setup-more-{}", p.key).into()), "")
+            .icon(icons::EXPAND)
             .name(format!("More actions for {name}"))
             .density(Density::Read),
     )

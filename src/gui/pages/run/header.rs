@@ -50,8 +50,8 @@ fn sync_alert(run: &Run) -> Option<SyncAlert> {
 
 /// The header of the live view.
 pub(super) fn live(
-    root: &SplatRoot,
     run: &Run,
+    width: gpui::Pixels,
     scale: theme::RunScale,
     cx: &mut Context<SplatRoot>,
 ) -> impl IntoElement {
@@ -75,13 +75,13 @@ pub(super) fn live(
             .id("run-turn-name")
             .min_w_0()
             .ty(Type::Name)
-            .text_size(px(scale.name + 2.0))
+            .text_size(px(scale.name))
             .text_color(c.turn.current)
             .truncate()
             .child(whole.clone())
             .with_tooltip_words(whole)
     });
-    let add = kit::Button::secondary("run-add-to-fight", if root.pages.run.width.is_some_and(|w| f32::from(w) < design_add_words_from()) { "Add" } else { "Add to fight" })
+    let add = kit::Button::secondary("run-add-to-fight", if f32::from(width) < design_add_words_from() { "Add" } else { "Add to fight" })
         .icon(icons::ADD)
         .name("Add to fight")
         .hint("Add an encounter group or a creature (Ctrl+G)")
@@ -98,7 +98,7 @@ pub(super) fn live(
         .flex()
         .flex_row()
         .items_center()
-        .gap(theme::M)
+        .gap(theme::S)
         .min_h(px((scale.hp * 1.6).max(36.0)))
         .child(round)
         .children(name)

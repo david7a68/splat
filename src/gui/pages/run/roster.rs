@@ -50,28 +50,36 @@ pub(super) fn sync_status(state: SyncState) -> kit::Status {
 
 /// The side's shape: a square for the party, a diamond for enemies, a circle for others. The
 /// dock and tooltip give the word.
-fn side_mark(side: &str, size: f32) -> impl IntoElement {
+fn side_mark(side: &str, size: f32) -> AnyElement {
     let c = colors().side;
     let size = px(size);
-    let mark = div().size(size).flex_none();
     match side {
-        "party" => mark.bg(c.party),
-        "enemies" => mark
-            .size(size * 0.8)
-            .bg(c.enemies)
-            .with_rotation(),
-        _ => mark.rounded_full().bg(c.other),
+        "party" => div().size(size).flex_none().bg(c.party).into_any_element(),
+        "enemies" => {
+            let color = c.enemies;
+            gpui::canvas(
+                |_, _, _| {},
+                move |bounds, _, window, _| {
+                    let center = bounds.center();
+                    let reach = bounds.size.width / 2.0 * 1.25;
+                    let mut path = gpui::PathBuilder::fill();
+                    path.move_to(gpui::point(center.x, center.y - reach));
+                    path.line_to(gpui::point(center.x + reach, center.y));
+                    path.line_to(gpui::point(center.x, center.y + reach));
+                    path.line_to(gpui::point(center.x - reach, center.y));
+                    path.close();
+                    if let Ok(path) = path.build() {
+                        window.paint_path(path, color);
+                    }
+                },
+            )
+            .size(size)
+            .flex_none()
+            .into_any_element()
+        }
+        _ => div().size(size).flex_none().rounded_full().bg(c.other).into_any_element(),
     }
 }
-
-/// A diamond is a square turned a quarter: GPUI has no rotation for a `div`, so it is drawn as
-/// a square with a corner radius that suggests the point.
-trait Diamond: Styled + Sized {
-    fn with_rotation(self) -> Self {
-        self.rounded(px(1.0))
-    }
-}
-impl<T: Styled> Diamond for T {}
 
 /// The HP readout: current in the state's colour, `/max` muted, a bar under it.
 pub(super) fn hp_block(p: &Participant, scale: RunScale) -> impl IntoElement {
@@ -279,11 +287,11 @@ fn second_line(run: &Run, index: usize, p: &Participant, scale: RunScale, live: 
         div()
             .flex()
             .flex_row()
-            .flex_wrap()
             .items_center()
             .gap_x(theme::XS)
             .min_w_0()
             .overflow_hidden()
+            .whitespace_nowrap()
             .children(parts)
             .into_any_element()
     })
@@ -457,7 +465,7 @@ pub(super) fn row(
         .items_baseline()
         .justify_end()
         .gap(px(4.0))
-        .w(px(scale.stat * 3.6))
+        .w(px(scale.stat * 3.2))
         .flex_none()
         .child(
             div()
@@ -478,7 +486,7 @@ pub(super) fn row(
         .items_center()
         .justify_end()
         .gap(px(2.0))
-        .w(px(scale.stat * 3.0))
+        .w(px(scale.stat * 2.6))
         .flex_none()
         .when(p.temporary_hp > 0, |temp| {
             temp.child(kit::icon(icons::TEMP_HP, Type::Small, c.hp.temp)).child(
@@ -489,12 +497,13 @@ pub(super) fn row(
                     .child(format!("+{}", p.temporary_hp)),
             )
         });
+    // The HP word and sync state take only their own room, after the HP, which keeps its place.
     let mut words = div()
         .flex()
         .flex_col()
         .justify_center()
         .gap(px(2.0))
-        .w(px(scale.stat * 7.0))
+        .w(px(scale.mark.max(12.0) * 7.0))
         .flex_none();
     if let Some((icon, word, color)) = hp_word(p.hp, p.max_hp) {
         let color = if current && word == "HP unknown" {
@@ -545,7 +554,7 @@ pub(super) fn row(
         .child(temp)
         .child(hp_block(p, scale))
         .child(words);
-    if selected && run.also.len() > 0 {
+    if selected && !run.also.is_empty() {
         let half = run.halved.contains(&index);
         let key = p.key.clone();
         row = row.child(

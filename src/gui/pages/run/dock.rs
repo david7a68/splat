@@ -16,6 +16,10 @@ use theme::{Density, Type, TypeExt, colors};
 /// Under this width the dock gives up the hint and an icon (egui `DOCK_ALL_WORDS_FROM`).
 const ALL_WORDS_FROM: f32 = view::DOCK_ALL_WORDS_FROM;
 
+/// The dock's width from which Effect has its word, and from which it has its icon.
+const EFFECT_WORD_FROM: f32 = 560.0;
+const EFFECT_ICON_FROM: f32 = 480.0;
+
 /// The dock.
 pub(super) fn render(run: &Run, width: gpui::Pixels, cx: &mut Context<SplatRoot>) -> impl IntoElement {
     let c = colors();
@@ -24,7 +28,7 @@ pub(super) fn render(run: &Run, width: gpui::Pixels, cx: &mut Context<SplatRoot>
     let empty = value.is_none().then_some("Type an amount first.");
     let amount = div()
         .key_context("RunAmount")
-        .w(px(if narrow { 68.0 } else { 84.0 }))
+        .w(px(if narrow { 76.0 } else { 84.0 }))
         .flex_none()
         .on_key_down(cx.listener(amount_keys))
         .child(
@@ -251,9 +255,11 @@ fn selected_line(run: &Run, width: gpui::Pixels, cx: &mut Context<SplatRoot>) ->
     } else {
         "E"
     };
-    // Effect takes the room left after Absent: its word, else its icon, else nothing.
-    let wide = f32::from(width) >= ALL_WORDS_FROM;
-    let effect = running.then(|| {
+    // Effect takes the room left after Absent: its word, else its icon, else nothing, so no
+    // control of the line moves and the name keeps its slot.
+    let room = f32::from(width);
+    let wide = room >= EFFECT_WORD_FROM;
+    let effect = (running && room >= EFFECT_ICON_FROM).then(|| {
         if wide {
             kit::Button::quiet("run-dock-effect", "Effect")
                 .icon(icons::PIN)
