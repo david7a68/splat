@@ -2,6 +2,7 @@
 //! GPUI page, `src/gui/pages/encounters/`). The egui view keeps its own drawing; both views call
 //! the acts here and in `Encounters`, so the logic has one home. Nothing here draws or measures:
 //! a view fits the words itself.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::*;
 use crate::design::outcome::Plain;
 use crate::encounter_run::SavedRunInfo;
@@ -433,15 +434,12 @@ impl Encounters {
         match (id, press) {
             (FooterPress::ChooseFolder, _) => self.wants_run_folder = true,
             (FooterPress::Undo, Some(LinePress::Kept(kind, revision))) => {
-                if self.kept.revision() != revision {
-                    return;
-                }
                 let owner = KeptOwner {
                     root: active.path.clone(),
                     kind,
                 };
                 let mut kept = std::mem::take(&mut self.kept);
-                let _ = kept.undo(&owner, |mark| {
+                let _ = kept.undo_seen(revision, &owner, |mark| {
                     if self.undo_kept(mark.0.kind, Some((active, campaigns.modules()))) {
                         Ok(())
                     } else {
@@ -451,16 +449,13 @@ impl Encounters {
                 self.kept = kept;
             }
             (FooterPress::UndoEditor, Some(LinePress::Editor(draft, kind, revision))) => {
-                if self.editor_results.revision() != revision {
-                    return;
-                }
                 let owner = EditorOwner {
                     root: active.path.clone(),
                     draft,
                     kind,
                 };
                 let mut results = std::mem::take(&mut self.editor_results);
-                let _ = results.undo(&owner, |mark| match self.draft.as_mut() {
+                let _ = results.undo_seen(revision, &owner, |mark| match self.draft.as_mut() {
                     Some(open) if open.results_key.id() == mark.owner.draft && mark.undo.holds(open) => {
                         open.undo_result(&mark.undo);
                         Ok(())
@@ -471,15 +466,12 @@ impl Encounters {
                 self.expanded = None;
             }
             (FooterPress::UndoMember, Some(LinePress::Member(draft, revision))) => {
-                if self.member_results.revision() != revision {
-                    return;
-                }
                 let owner = MemberOwner {
                     root: active.path.clone(),
                     draft,
                 };
                 let mut results = std::mem::take(&mut self.member_results);
-                let _ = results.undo(&owner, |mark| {
+                let _ = results.undo_seen(revision, &owner, |mark| {
                     let group = self
                         .group_draft
                         .iter_mut()
@@ -495,9 +487,6 @@ impl Encounters {
                 self.expanded = None;
             }
             (FooterPress::UndoSeparation, Some(LinePress::Separation(at, revision))) => {
-                if self.separations.revision() != revision {
-                    return;
-                }
                 let Some(owner) = self
                     .separations
                     .newest_first(active.path.as_path())
@@ -506,7 +495,7 @@ impl Encounters {
                 else {
                     return;
                 };
-                match self.separations.undo(&owner, |separation| {
+                match self.separations.undo_seen(revision, &owner, |separation| {
                     separation
                         .change
                         .0
@@ -514,18 +503,18 @@ impl Encounters {
                         .map(|()| separation.path.clone())
                         .map_err(|error| (separation.path.clone(), error))
                 }) {
-                    Some(Ok((_, path))) => {
+                    Ok((_, path)) => {
                         self.end_separation_failure(&active.path, &path);
                         note_identity_changed(ctx);
                     }
-                    Some(Err((path, error))) => {
+                    Err(design::results::ByTicket::Failed((path, error))) => {
                         self.separation_error = Some(SeparationFailure {
                             root: active.path.clone(),
                             path,
                             words: error,
                         });
                     }
-                    None => {}
+                    Err(design::results::ByTicket::Gone) => {}
                 }
             }
             _ => {}

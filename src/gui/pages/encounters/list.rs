@@ -574,7 +574,7 @@ fn group_row(row: &GroupRow, columns: &Columns, cx: &mut Context<SplatRoot>) -> 
         block = block.child(reason("Cannot join"));
     }
     for (index, (fault, packages)) in row.faults.iter().enumerate() {
-        let (label, repair): (&str, Box<dyn Fn(&mut SplatRoot)>) = if *packages {
+        let (label, repair): (&str, Repair) = if *packages {
             (
                 "Campaign → Packages",
                 Box::new(|root: &mut SplatRoot| {
@@ -615,6 +615,9 @@ fn group_row(row: &GroupRow, columns: &Columns, cx: &mut Context<SplatRoot>) -> 
     }
     block
 }
+
+/// A group fault's repair: Campaign → Packages, or the group's editor.
+type Repair = Box<dyn Fn(&mut SplatRoot)>;
 
 fn history_block(
     history: &History,

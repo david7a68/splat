@@ -257,3 +257,20 @@ fn a_new_group_needs_a_creature() {
         "Ctrl+S saves: {lines:?}"
     );
 }
+
+/// Both editors at the smallest window.
+#[test]
+fn the_editors_at_the_smallest_window() {
+    let mut shell = small("encounter-build", Seed::Campaign);
+    ready(&mut shell);
+    let edit = first_target(&mut shell, "id:edit:Encounters/");
+    shell.click(&edit);
+    assert!(shell.read(|root| root.app.encounters.editor_open()));
+    shell.capture("encounter-build__09-saved-roster__960x640");
+    let mut shell = small("encounter-groups", Seed::Groups);
+    ready(&mut shell);
+    let edit = first_target(&mut shell, "id:edit-group:");
+    shell.click(&edit);
+    assert_eq!(shell.read(|root| root.app.encounters.group_open()), Some(false));
+    shell.capture("encounter-groups__02-group-editor__960x640");
+}

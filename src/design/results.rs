@@ -678,6 +678,36 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         }))
     }
 
+    /// The Undo of `owner`'s entry as a view saw it at `seen` (this store's revision when the
+    /// view made its line): for a view that cannot keep a [`Ticket`] in its press handler (the
+    /// GPUI port, whose handlers may run more than once). Every record, end and Undo gives the
+    /// store a new revision, so a press made after any change is `Gone` and `run` does not run,
+    /// as a ticket's press is.
+    pub fn undo_seen<R, E>(
+        &mut self,
+        seen: Revision,
+        owner: &O,
+        run: impl FnOnce(&T) -> Result<R, E>,
+    ) -> Result<(T, R), ByTicket<E>> {
+        const {
+            assert!(
+                matches!(T::ENDS.press, Press::Undo),
+                "this kind has no Undo: its press is not `Press::Undo`"
+            )
+        };
+        if seen != self.revision {
+            return Err(ByTicket::Gone);
+        }
+        let at = self.position(owner).ok_or(ByTicket::Gone)?;
+        match run(&self.entries[at].value) {
+            Ok(done) => {
+                self.changed();
+                Ok((self.entries.remove(at).value, done))
+            }
+            Err(error) => Err(ByTicket::Failed(error)),
+        }
+    }
+
     /// The Undo of the entry `ticket` names, as `undo` does by owner: it leaves only when `run`
     /// works. An entry replaced or ended since the ticket was made is `Gone`, and `run` does not
     /// run.
@@ -2205,6 +2235,28 @@ mod tests {
                 .undo_by(b_ticket, |_| Ok::<_, ()>(()))
                 .map(|(done, ())| done.words),
             Ok("B")
+        );
+
+        // `undo_seen` (a view that keeps the store's revision for its press, not a ticket):
+        // a press made before any later record or end is `Gone`; one made now reaches its entry.
+        results.record(done(A, "A3"));
+        let seen = results.revision();
+        results.record(done(B, "B2"));
+        assert_eq!(
+            results.undo_seen(seen, &a, |_| Ok::<_, ()>(())).err(),
+            Some(ByTicket::Gone)
+        );
+        assert_eq!(results.get(&a).map(|shown| shown.value().words), Some("A3"));
+        let seen = results.revision();
+        assert_eq!(
+            results.undo_seen(seen, &a, |_| Err::<(), _>("no")).err(),
+            Some(ByTicket::Failed("no"))
+        );
+        assert_eq!(
+            results
+                .undo_seen(seen, &a, |_| Ok::<_, ()>(()))
+                .map(|(done, ())| done.words),
+            Ok("A3")
         );
 
         // Ruling L9, early review F5: kept lines of A and B share one store revision. Undo A:
