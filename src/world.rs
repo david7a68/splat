@@ -1949,7 +1949,8 @@ pub struct Reader {
     status_drafts: HashMap<Uuid, String>,
     /// Edit forms by entry. A form with changes stays while the DM reads other entries.
     edits: HashMap<Uuid, edit::EditDraft>,
-    /// A field of the form had the keyboard when it last drew.
+    /// A field of the reader that owns Escape (the Log field, the form's Status or Text) had
+    /// the keyboard when the reader last drew (`set_fields_focused`).
     form_focused: bool,
     pub compact: bool,
     other_type: String,
@@ -2013,11 +2014,12 @@ pub struct Reader {
     pub logs_elsewhere: std::collections::HashSet<LogKey>,
     /// The other reader's `LogFields` stamp that `logs_elsewhere` was copied from.
     logs_elsewhere_from: u64,
-    /// The note whose edit form the other reader drew in its last pass. Its save row explains
+    /// The note whose edit form the other reader drew in its last frame. Its save row explains
     /// a waiting Log field, so this reader's footer does not say it again.
     pub form_shown_elsewhere: Option<Uuid>,
-    /// The note whose edit form this reader drew, and the pass it drew it in.
-    form_drawn: Option<(Uuid, u64)>,
+    /// The note whose edit form this reader drew in the last frame (`draft_view`); each frame
+    /// starts with none (`begin_draw`).
+    form_drawn: Option<Uuid>,
     /// Whether the entry on show has prose, for the entry and the index's load: its body is
     /// parsed for it once, not in every frame (layout PR 9b-R1a).
     prose: Option<(Uuid, u64, bool)>,
@@ -4249,9 +4251,10 @@ mod tests {
                     } else {
                         &mut lookup
                     };
-                    form.form_drawn = Some((hob, pass));
-                    lookup.share_with(&mut world, pass);
-                    world.share_with(&mut lookup, pass);
+                    form.begin_draw();
+                    form.form_drawn = Some(hob);
+                    lookup.share_with(&mut world);
+                    world.share_with(&mut lookup);
                     // Review of f29ef2c0: unchanged passes copy no Log keys again; a field that
                     // opens or closes in one reader is the only thing that makes the other copy
                     // them.
@@ -4279,8 +4282,8 @@ mod tests {
                 );
                 // The form's save row is no longer drawn (its page is hidden): the other reader's
                 // footer says it, once.
-                form.form_drawn = None;
-                form.share_with(other, u64::MAX);
+                form.begin_draw();
+                form.share_with(other);
                 assert!(other.footer_names_log(key));
                 form.edits.clear();
                 (world, lookup)
@@ -4290,7 +4293,7 @@ mod tests {
         // A Log field in Lookup only, the form in World: World's save row says it too.
         world.held.log_fields.clear();
         world.begin_edit(&campaign, item);
-        lookup.share_with(&mut world, 0);
+        lookup.share_with(&mut world);
         assert!(world.save_row_names_log(key));
         world.edits.clear();
 

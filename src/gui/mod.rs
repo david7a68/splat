@@ -671,6 +671,7 @@ impl Render for SplatRoot {
         kit::probe::clear();
         kit::dialog::begin_frame(cx);
         self.frame_logic(window, cx);
+        self.app.begin_draw();
         // After the frame logic, which can open or close a panel or change page.
         self.measure_shell(window, cx);
         let c = colors();
