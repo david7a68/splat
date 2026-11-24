@@ -105,7 +105,7 @@ pub struct TextField {
     disabled: bool,
     width: Option<gpui::Pixels>,
     on_change: Option<OnChange>,
-    on_enter: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
+    on_enter: Option<super::OnAct>,
 }
 
 impl TextField {

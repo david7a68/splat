@@ -526,7 +526,11 @@ fn mutations(remote: &Remote, key: &str, target: &Value) -> Result<Vec<Mutation>
     if key == "currency" || key.starts_with("item/") {
         let mut expected = old.clone();
         let mut changes = Vec::new();
-        for (field, value) in &body {
+        // In field order: serde_json's map keeps insertion order when a crate in the build turns
+        // on `preserve_order` (GPUI does), and the writes and their read-backs go in one order.
+        let mut fields: Vec<_> = body.iter().collect();
+        fields.sort_by_key(|(field, _)| *field);
+        for (field, value) in fields {
             if old.get(field) == Some(value) {
                 continue;
             }

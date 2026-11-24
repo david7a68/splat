@@ -17,8 +17,7 @@ use crate::Splat;
 use crate::visual_tests::fixture::{Seed, World};
 use gpui::{
     AnyWindowHandle, AppContext, Bounds, Context, Entity, HeadlessAppContext, Keystroke, Modifiers,
-    MouseButton, MouseDownEvent, MouseUpEvent, Pixels, PlatformInput, Size, Window, point, px,
-    size,
+    MouseButton, MouseDownEvent, MouseUpEvent, Pixels, PlatformInput, Size, Window, px, size,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -238,11 +237,5 @@ impl Shell {
         self.cx
             .update_window(self.window, |_, window, _| window.viewport_size())
             .expect("the window")
-    }
-
-    /// The middle of the window, for a press that only needs to land somewhere.
-    pub(crate) fn middle(&mut self) -> gpui::Point<Pixels> {
-        let size = self.size();
-        point(size.width / 2.0, size.height / 2.0)
     }
 }

@@ -100,3 +100,167 @@ each page's main states, plus interaction tests of the main flows.
 - Before you finish: `cargo.sh build`, `cargo.sh clippy --all-targets -- -D warnings`,
   `cargo.sh test --lib gui::` and the tests of your area pass. Report what you ported, what you
   did not, and the screenshots you made.
+
+## Kit guide
+
+Wave 1 built this. Page agents read this section and the code under `src/gui/`; each part's doc
+comment says when to use it.
+
+### How the app runs
+
+- `splat::run()` (`src/main.rs`) runs a command when there are arguments, takes the instance lock,
+  then opens the GPUI app (`gui::run`). `SPLAT_EGUI=1 cargo run` opens the egui app instead, and
+  `splat::run_egui()` stays for comparison until cleanup.
+- `gui::SplatRoot` is the root view. `root.app` is the same `crate::Splat` the egui app draws (all
+  its fields: `app.sessions`, `app.encounters`, `app.lookup`, …; private items of the crate root are
+  visible to `src/gui/`). `root.pages.<area>` is your area's GPUI-only state. `root.bridge.ctx()` is
+  a headless `egui::Context` for state methods that still take one for data (`refresh_content(ctx,
+  …)`, cross-page requests left in `ctx.data`); a method that draws egui needs a GPUI view instead.
+  `bridge::color(egui::Color32)` and `bridge::status(&design::Status)` turn a state method's egui
+  colour or status into the kit's.
+- Every frame, `SplatRoot::render` first runs `frame_logic` in egui's `update` order: the shared
+  background polls (`Splat::poll_background`), `sync_party`, each area's `poll`, the tracker acts,
+  `Splat::route` and `follow_page_change`, then `ui_state` is saved when it changed. Between frames
+  one timer task (every 50 ms) runs `frame_logic` and asks for a frame only when background work
+  asked the bridge for a repaint. So: set a `wants_*` flag or call a state method in your event
+  handler and `cx.notify()`; the next frame routes it as egui did.
+- `root.show_page(Page::X, cx)` changes page. `root.modal_open(cx)` is egui's `modal_open` (close
+  prompt, copy dialog, an open kit menu): Ctrl+S and other page keys wait for it.
+- Global keys (actions in `gui/mod.rs`): Ctrl+K Lookup, Ctrl+J notes, Ctrl+T Trackers, Ctrl+\ the
+  session list, Escape (an open menu, then the notes panel, then Lookup). A page binds its own keys
+  with `actions!` + `KeyBinding` in its `init` (`cx.bind_keys`) and `.on_action(cx.listener(..))`
+  on its element, with its own `key_context`.
+
+### How a page hooks in
+
+Your folder `src/gui/pages/<area>/mod.rs` already has these, called by the shell; fill them in and
+keep the names and signatures (`R` below is `crate::gui::SplatRoot`):
+
+| Hook | Signature | Called |
+| --- | --- | --- |
+| `State` | `#[derive(Default)] pub struct State` | kept in `root.pages.<area>` |
+| `init` | `fn(&mut R, &mut Window, &mut Context<R>)` | once, when the root is built |
+| `poll` | same | each frame, before anything draws |
+| `render` | `fn(&mut R, &mut Window, &mut Context<R>) -> AnyElement` | the page, inside the page's `M`/`S` padding |
+
+Extra hooks the shell already calls: `run::render_strip` (above other pages while a run is open),
+`party::render_bar` (`Option`, on the Session page; it already sets `sessions.party_hidden`),
+`sessions::render_banner` (`Option`, above every page), `sessions::render_notes_panel` and
+`lookup::render_panel` (the side panel, `PANEL_MIN_WIDTH` wide; Lookup calls
+`trackers::render_view` while `lookup.on_trackers()`), `library::render_copy_dialog` (while
+`app.copy_dialog` is open), `settings::render_account`, `render_recording`,
+`render_add_campaign_form`, and `campaigns::render_packages`, `render_run_settings`, `render_link`.
+The shell draws the Settings and Campaign headers and tabs, Settings → Touchpad, the no-campaign
+state of pages that need a campaign, the rail and the close prompt. To add a hook, add it to your
+folder and one call in `gui/mod.rs`, and say so in your final message.
+
+Event handlers: `cx.listener(|root: &mut SplatRoot, event, window, cx| { …; cx.notify() })`. Kit
+parts take `Fn(&ClickEvent, &mut Window, &mut App)`, which `cx.listener` makes. Keep logic in the
+state types; the view reads state and calls the methods the egui code calls.
+
+### The theme (`gui::theme`)
+
+`colors()` (every token of `design::tokens`, plus `backdrop`, `shadow`, `selection`), spaces `XS S M L
+XL XXL`, `ICON_SLOT`, `RADIUS_CONTROL`, `RADIUS_LAYER`, `HAIRLINE_WIDTH`, `FOCUS_WIDTH`, `MARK_WIDTH`,
+`LINE_GAP`, `MIN_TARGET`, the rail, panel and measure widths (`READER_MEASURE`, `LIST_MEASURE`,
+`FORM_WIDTH`, …), `Density::{Glance, Scan, Read}.control()/.row()`, `RunScale` (`RUN_COMPACT`,
+`RUN_REGULAR`, `RUN_LARGE`, `fit`), and `Type` (the 19 roles). Set text with `.ty(Type::Body)` and
+icons with `.icon_font(Type::Body)` (trait `TypeExt`). Fonts: IBM Plex Sans, Source Serif 4 (Text,
+Subhead, SmText) and Phosphor, loaded by `theme::install`, which also sets gpui-component's theme
+from the tokens. A test keeps the GPUI tokens equal to the egui tokens.
+
+Icons: `gui::icons::*` has the design system's names (`icons::RUN`, `icons::WARN`, …) and
+`icons::phosphor::*` the raw glyphs egui code names. Same code points as egui-phosphor.
+
+### The kit (`gui::kit`)
+
+| Part | Call | Use |
+| --- | --- | --- |
+| Text | `text(Type, Hsla, words) -> Div`, `one_line(..)`, `icon(glyph, Type, Hsla)`, `label(words, count)`, `heading(Heading::{Group{title,count}, Section, Panel, Name}, first: bool)`, `rule()`, `gap(Pixels)` | All words; `Label` is set in capitals for you |
+| Button | `Button::{primary, secondary, quiet, destructive}(id, label)` then `.icon(glyph)`, `.key("Ctrl+S")`, `.hint(words)`, `.blocked(Option<reason>)`, `.density(Density)`, `.selected(bool)`, `.plain()`, `.line_start()`, `.full_width()`, `.name(words)`, `.on_click(f)` | One primary per view; `line_start` for a quiet action that starts a line |
+| Icon button | `IconButton::new(id, glyph, name).hint(words).toggled(bool).on_click(f)` | `⋯`, `×`, a view toggle; never an action that needs words |
+| Text field | `TextField::new(id, value).placeholder(..).name(..).masked().disabled(bool).width(px).on_change(\|&str, window, cx\|).on_enter(f)` | One line; two-way sync with your `String` (give the value each frame, take edits in `on_change`) |
+| Editor | `TextEditor::new(id, value).placeholder(..).rows(n).mono().fill().on_change(f)` | Several lines that wrap |
+| Field block | `field(caption, Option<help>, Option<error>, control) -> Div`, `help(words)` | Caption, control, help, error, then `L` |
+| Rows | `Row::new(id, name).height(px).selected(bool).on_click(f).child(..)`, `two_line_row(id, title, detail, selected)` | List rows with hover, selection and focus |
+| Tabs | `Segmented::new(id, options, chosen).on_select(\|&usize, window, cx\|)` | Page tabs and small exclusive choices |
+| Checkbox | `Checkbox::new(id, label, checked).blocked(..).on_click(f)`, `Switch::new(id, label, on)` | Yes/no settings |
+| Menu | `MenuButton::new(id, Button).item(MenuItem::new(label).icon(..).checked(bool).blocked(Option<reason>).destructive().on_click(f))` | A row's `⋯`, `New ▾` |
+| Drop-down | `Dropdown::new(id, name, options, Option<chosen>).placeholder(..).blocked(..).width(px).density(..).command(MenuItem).on_select(\|&usize, window, cx\|)` | Choose one value |
+| Popover | `Popover::new(id, Button, content)` | Content in a raised layer under a button |
+| Dialog | `Dialog::new(id, title).child(..).destructive(Button).action(safe).action(commit).on_escape(f)` | Modal tasks only; draw it while open; it covers the window |
+| Message | `Message::new(Tone::{Info, Success, Warning, Error}, words).small().action(Button).destructive(Button)` | Results, reasons, notices; safe action first, `L` before the destructive one |
+| Status | `Status::new(glyph, word, color).icon_color(c)`, `status(&Status)`, `status_link(id, Status).hint(..).on_click(f)` | Icon + word + colour |
+| Empty state | `empty_state(glyph, title, body, Option<action>)` | An empty pane or page |
+| Page header | `page_header(title, Option<context>, Vec<AnyElement>)` | A page's first line, rule and `L` |
+| Scroll | `scroll_column(id, content)`, `scroll::scroll_column_with(id, &ScrollHandle, content)`, `scroll::sideways(id, content)` | A column that keeps its bar's lane |
+| Panes | `Pane::new(id).header(..).footer(Message).fixed().flush().child(..)`, `Columns::new(id).column(width, min..max, pane).rest(pane)` | Task columns with splitters; messages in the footer |
+| Markdown | `markdown(id, source)` / `Markdown::new(..).compact().full_width().on_link(\|&str, window, cx\|)` | Reader prose (basic; the Reader agent extends it) |
+| Nav | `NavItem`, `NavToggle` | The rail only |
+| Tooltip | `.with_tooltip(words)` on an element with an id (`WithTooltip`) | Hints and blocked reasons |
+| Target | `kit::target(element, name)` | Name your own pressable element for the harness |
+
+Menus, drop-downs and popovers keep which one is open in a GPUI global (`kit::menu`): no open flag
+in your state. `kit::menu::any_open(cx)`, `open_popup(id, window, cx)` and `close_open_popup`
+exist for keys.
+
+### Screenshots and interaction tests
+
+`src/gui/harness.rs` (`#[cfg(test)]`): `Shell` runs the whole app headless, with only Splat's
+fonts (deterministic text), the real Vulkan renderer, at scale 1.
+
+```rust
+use crate::gui::harness::Shell;
+use crate::visual_tests::fixture::Seed;
+
+#[test]
+fn library_browse() {
+    let mut shell = Shell::new("library-browse", Seed::Campaign);       // 1200×800
+    shell.click("Library");                    // a kit target by its words
+    shell.click("id:library-new");             // or by its element id
+    shell.type_text("Ash");                    // into the focused field
+    shell.press("ctrl-s escape");              // keys, as GPUI writes them
+    shell.capture("library-browse__01-list__1200x800");  // artifacts/screenshots/gpui/
+    assert_eq!(shell.read(|root| root.app.page), crate::Page::Library);
+}
+```
+
+- `Shell::new(name, Seed)` builds the same fixture as the egui scenario of that seed
+  (`visual_tests::fixture::World`); its ids and dice come from `name`. `Shell::with_size(name, seed,
+  size(px(w), px(h)))` for another window size (a window cannot be resized after it opens).
+  `Shell::over(app, tempdir, size)` for a `Splat` you built.
+- `update(|root, window, cx| …)` changes state as a test's setup; `read(|root| …)` reads it;
+  `settle()` runs frames until idle; `wait(Duration)` advances the clock (timers, the poll);
+  `bounds(name)` and `click_at(point)` for a place.
+- Name captures `<scenario>__<step>__<w>x<h>` like the egui references, and compare them with
+  `artifacts/screenshots/egui-reference/` by eye.
+- Put your tests in your folder (`pages/<area>/tests.rs`, `#[cfg(test)] mod tests;`). Run them with
+  `cargo.sh test --lib gui::pages::<area>`.
+
+### GPUI gotchas found in wave 1
+
+- gpui turns on serde_json's `preserve_order`, so a `serde_json::Map` keeps insertion order instead
+  of sorting. Anything that hashed or compared serialized JSON by key order must sort itself
+  (`content::contracts::fingerprint` now does).
+- `ElementId::NamedChild` takes an `Arc<ElementId>`. Tuple ids exist for `(&str, u32/u64/usize…)`,
+  not `(&str, &str)`; use `ElementId::Name(format!(..).into())`.
+- `anchored()` starts at its parent's origin, not where it sits in a flex column: put it in a
+  zero-height box after the trigger (as `kit::menu` does) to open under it.
+- `Keystroke::parse` needs a `&'static str`; use `parse_with_os` for built strings.
+- `window.focus(&handle, cx)` takes `cx`. `focus_handle(cx)` on an input state needs `gpui::Focusable`
+  in scope.
+- `window.use_keyed_state(id, cx, init)` keeps per-element state between frames (the kit's text
+  fields and dialogs use it); its key joins the ids of the elements around it.
+- The headless window draws at scale 2 unless told otherwise; the harness sets 1.
+- Test windows do not resize: `window.resize` leaves the viewport as it was.
+- `debug_selector` bounds are not reachable from `HeadlessAppContext`, hence `kit::target`.
+- There is no letter spacing: `Type::Label`'s +0.6 tracking is not drawn.
+
+### Known gaps after wave 1
+
+- The touchpad speed is chosen and saved, but GPUI has no hook to scale scroll events; GPUI's own
+  touchpad scrolling applies.
+- The rail is not draggable and its width is not saved (136 px, 188 px from a 1400 px window).
+- Dialogs take the keyboard when they open but do not keep Tab inside them.
+- A kit menu may reach past its pane's edge (egui keeps it inside the pane, one lane clear).
+- `kit::markdown` is basic: no dice links, note links, wide-table rules or history.

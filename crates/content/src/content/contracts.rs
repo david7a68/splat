@@ -249,7 +249,7 @@ fn sorted(value: &Json) -> Json {
     match value {
         Json::Object(map) => {
             let mut entries: Vec<_> = map.iter().collect();
-            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+            entries.sort_by_key(|(key, _)| *key);
             Json::Object(
                 entries
                     .into_iter()

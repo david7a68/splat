@@ -30,7 +30,7 @@ pub mod tooltip;
 
 pub use button::{Button, IconButton};
 pub use checkbox::{Checkbox, Switch};
-pub use dialog::{Dialog, DialogAction};
+pub use dialog::Dialog;
 pub use empty::empty_state;
 pub use field::{TextEditor, TextField, field, help};
 pub use list::{Row, two_line_row};
@@ -50,6 +50,12 @@ use gpui::{IntoElement, ParentElement, SharedString};
 
 /// A click handler as the kit takes it.
 pub type OnClick = std::rc::Rc<dyn Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App)>;
+
+/// A handler with no event (Escape in a dialog, Enter in a field).
+pub type OnAct = std::rc::Rc<dyn Fn(&mut gpui::Window, &mut gpui::App)>;
+
+/// A handler of a chosen index (a segment, a drop-down's choice).
+pub type OnIndex = std::rc::Rc<dyn Fn(&usize, &mut gpui::Window, &mut gpui::App)>;
 
 /// Mark an element as a named target, so the test harness can find it by `name`
 /// (`harness::Shell::click`). Kit parts call it with their words and their id; a page calls it

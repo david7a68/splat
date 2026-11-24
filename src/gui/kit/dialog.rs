@@ -17,8 +17,40 @@ use gpui::{
 };
 use std::rc::Rc;
 
-/// An action on a dialog's line (a kit button).
-pub type DialogAction = super::Button;
+/// The Escape of the dialog drawn in this frame, so the root's Escape reaches it wherever the
+/// keyboard is (`escape_open_dialog`).
+#[derive(Default)]
+pub struct OpenDialog(Option<super::OnAct>);
+
+impl gpui::Global for OpenDialog {}
+
+/// Forget the last frame's dialog (the root calls it as each frame starts).
+pub fn begin_frame(cx: &mut App) {
+    cx.set_global(OpenDialog::default());
+}
+
+/// Run the open dialog's Escape; true when a dialog took it. The root's Escape calls it first,
+/// after an open menu.
+pub fn escape_open_dialog(window: &mut Window, cx: &mut App) -> bool {
+    let escape = cx
+        .try_global::<OpenDialog>()
+        .and_then(|open| open.0.clone());
+    match escape {
+        Some(escape) => {
+            // After the current update: the handler usually changes the view that is handling
+            // Escape now (the root).
+            window.defer(cx, move |window, cx| escape(window, cx));
+            true
+        }
+        None => false,
+    }
+}
+
+/// Whether a kit dialog was drawn in the last frame.
+pub fn any_open(cx: &App) -> bool {
+    cx.try_global::<OpenDialog>()
+        .is_some_and(|open| open.0.is_some())
+}
 
 /// `Dialog::new("unsaved-on-close", "Unsaved changes").child(...).destructive(...).action(keep)
 ///     .action(commit).on_escape(...)`.
@@ -27,9 +59,9 @@ pub struct Dialog {
     id: ElementId,
     title: SharedString,
     body: Vec<AnyElement>,
-    destructive: Option<DialogAction>,
-    actions: Vec<DialogAction>,
-    on_escape: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
+    destructive: Option<super::Button>,
+    actions: Vec<super::Button>,
+    on_escape: Option<super::OnAct>,
 }
 
 impl Dialog {
@@ -45,13 +77,13 @@ impl Dialog {
     }
 
     /// The action that loses data, at the line's left.
-    pub fn destructive(mut self, action: DialogAction) -> Self {
+    pub fn destructive(mut self, action: super::Button) -> Self {
         self.destructive = Some(action);
         self
     }
 
     /// An action at the line's right, in reading order: the safe action first, the commit last.
-    pub fn action(mut self, action: DialogAction) -> Self {
+    pub fn action(mut self, action: super::Button) -> Self {
         self.actions.push(action);
         self
     }
@@ -90,6 +122,11 @@ impl RenderOnce for Dialog {
         let viewport = window.viewport_size();
         let width = (viewport.width - DIALOG_INSET * 2.0).min(FORM_WIDTH);
         let escape = self.on_escape.clone();
+        cx.set_global(OpenDialog(
+            self.on_escape
+                .clone()
+                .or_else(|| Some(std::rc::Rc::new(|_: &mut Window, _: &mut App| {}))),
+        ));
         let line = div()
             .flex()
             .flex_row()
@@ -122,7 +159,7 @@ impl RenderOnce for Dialog {
             .border_color(c.rule)
             .rounded(RADIUS_LAYER)
             .shadow_lg()
-            .on_key_down(move |event, window, cx| {
+            .capture_key_down(move |event, window, cx| {
                 if event.keystroke.key == "escape"
                     && let Some(escape) = &escape
                 {

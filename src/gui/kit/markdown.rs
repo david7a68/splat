@@ -113,10 +113,8 @@ fn blocks(source: &str) -> Vec<Block> {
                 heading = None;
             }
             Event::Start(Tag::Paragraph) => {}
-            Event::End(TagEnd::Paragraph) => {
-                if table.is_none() && heading.is_none() {
-                    flush(&mut inline, &mut blocks, &mut item_mark, &lists, quote);
-                }
+            Event::End(TagEnd::Paragraph) if table.is_none() && heading.is_none() => {
+                flush(&mut inline, &mut blocks, &mut item_mark, &lists, quote);
             }
             Event::Start(Tag::BlockQuote(_)) => quote += 1,
             Event::End(TagEnd::BlockQuote(_)) => quote = quote.saturating_sub(1),

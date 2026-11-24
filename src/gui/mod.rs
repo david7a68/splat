@@ -22,6 +22,8 @@
 pub mod bridge;
 mod close;
 #[cfg(test)]
+mod gallery;
+#[cfg(test)]
 pub(crate) mod harness;
 #[allow(
     dead_code,
@@ -154,6 +156,9 @@ pub struct SplatRoot {
     /// What `remember` last wrote, so an unchanged frame writes nothing.
     remembered: Option<crate::ui_state::UiState>,
     _poll: Option<Task<()>>,
+    /// Tests only: the kit gallery in place of the page.
+    #[cfg(test)]
+    pub(crate) gallery: Option<gallery::Gallery>,
 }
 
 impl SplatRoot {
@@ -169,6 +174,8 @@ impl SplatRoot {
             column_widths: saved.column_widths,
             remembered: None,
             _poll: None,
+            #[cfg(test)]
+            gallery: None,
         };
         window.focus(&root.focus, cx);
         pages::init(&mut root, window, cx);
@@ -238,7 +245,10 @@ impl SplatRoot {
 
     /// Whether a modal is open: the close prompt or the copy dialog (`Splat::modal_open`).
     pub fn modal_open(&self, cx: &App) -> bool {
-        self.app.copy_dialog.is_some() || self.app.confirm_close || kit::menu::any_open(cx)
+        self.app.copy_dialog.is_some()
+            || self.app.confirm_close
+            || kit::menu::any_open(cx)
+            || kit::dialog::any_open(cx)
     }
 
     /// Go to a page (the rail, a link). The page change's follow-up runs in the next frame.
@@ -341,7 +351,8 @@ impl SplatRoot {
     /// footer's second step); then Lookup, unless its view takes Escape itself or a Library form
     /// is open. A dialog takes Escape before all of these (`kit::Dialog`).
     fn dismiss(&mut self, _: &Dismiss, window: &mut Window, cx: &mut Context<Self>) {
-        if kit::menu::close_open_popup(window, cx) {
+        if kit::menu::close_open_popup(window, cx) || kit::dialog::escape_open_dialog(window, cx) {
+            cx.notify();
             return;
         }
         if self.app.copy_dialog.is_some() || self.app.confirm_close {
@@ -377,6 +388,10 @@ impl SplatRoot {
     /// The page's own place: the no-campaign state where a page needs a campaign, else the page
     /// area's render hook (`pages::render_page`).
     fn page(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        #[cfg(test)]
+        if self.gallery.is_some() {
+            return gallery::render(self, window, cx);
+        }
         let needs_campaign = matches!(
             self.app.page,
             Page::Sessions
@@ -568,6 +583,7 @@ impl Render for SplatRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         #[cfg(test)]
         kit::probe::clear();
+        kit::dialog::begin_frame(cx);
         self.frame_logic(window, cx);
         let c = colors();
         let rail = rail::render(self, self.connection(), window, cx);

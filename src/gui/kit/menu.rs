@@ -333,7 +333,7 @@ pub struct Dropdown {
     width: Option<Pixels>,
     density: Density,
     extra: Vec<MenuItem>,
-    on_select: Option<Rc<dyn Fn(&usize, &mut Window, &mut App)>>,
+    on_select: Option<super::OnIndex>,
 }
 
 impl Dropdown {

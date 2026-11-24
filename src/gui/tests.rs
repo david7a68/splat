@@ -1,5 +1,6 @@
 //! The shell's screenshots and interaction tests (`docs/gpui-port.md`, Kit guide). Captures go to
 //! `artifacts/screenshots/gpui/`, named `<scenario>__<step>__<width>x<height>`.
+use super::gallery::Gallery;
 use super::harness::Shell;
 use crate::visual_tests::fixture::Seed;
 use crate::{Page, SettingsTab};
@@ -85,4 +86,56 @@ fn the_switcher_changes_the_campaign() {
     shell.click("Quiet Harbor");
     let after = shell.read(|root| root.app.campaigns.active_campaign().map(|c| c.name));
     assert_eq!(after.as_deref(), Some("Quiet Harbor"));
+}
+
+/// Every kit part, and the parts that keep state working: a text field takes typed words into the
+/// caller's `String`, a drop-down chooses, a menu item presses and closes its menu, a dialog opens
+/// and Escape keeps editing.
+#[test]
+fn the_kit_parts_work() {
+    let mut shell = Shell::new("gpui-kit", Seed::Campaign);
+    shell.update(|root, _, cx| {
+        root.gallery = Some(Gallery::default());
+        cx.notify();
+    });
+    shell.capture("gpui-kit__01-gallery__1200x800");
+    let gallery = |shell: &mut Shell, read: fn(&Gallery) -> String| {
+        shell.read(|root| read(root.gallery.as_ref().expect("the gallery")))
+    };
+    shell.click("Campaign name");
+    shell.type_text("Ashen");
+    assert_eq!(gallery(&mut shell, |g| g.name.clone()), "Ashen");
+    // The program's change replaces the field's words.
+    shell.update(|root, _, cx| {
+        root.gallery.as_mut().expect("the gallery").name = "Reset".into();
+        cx.notify();
+    });
+    shell.click("Campaign name");
+    shell.type_text("!");
+    assert!(gallery(&mut shell, |g| g.name.clone()).contains("Reset"));
+    shell.click("id:g-kind");
+    shell.click("Spell");
+    assert_eq!(gallery(&mut shell, |g| format!("{:?}", g.kind)), "Some(1)");
+    shell.click("Packages");
+    shell.capture("gpui-kit__02-menu__1200x800");
+    shell.click("Rename");
+    assert_eq!(gallery(&mut shell, |g| g.pressed.join(",")), "rename");
+    assert!(shell.bounds("Rename").is_none(), "the menu closed");
+    shell.click("Remember my sign-in");
+    assert_eq!(gallery(&mut shell, |g| g.remember.to_string()), "true");
+    shell.click("Rules and runs");
+    assert_eq!(gallery(&mut shell, |g| g.tab.to_string()), "1");
+    shell.click("Open dialog");
+    shell.capture("gpui-kit__03-dialog__1200x800");
+    // The dialog covers the page: a press on the page's primary does nothing.
+    shell.click("Start fight");
+    assert_eq!(gallery(&mut shell, |g| g.pressed.join(",")), "rename");
+    shell.press("escape");
+    assert_eq!(gallery(&mut shell, |g| g.dialog.to_string()), "false");
+    shell.click("Start fight");
+    assert_eq!(
+        gallery(&mut shell, |g| g.pressed.join(",")),
+        "rename,primary"
+    );
+    shell.wait(std::time::Duration::from_millis(200));
 }
