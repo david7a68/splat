@@ -24,12 +24,78 @@ fn first_day(shell: &mut Shell) {
             shell.bounds("Start with day 1").is_some(),
             "the empty state"
         );
-        crate::gui::pages::sessions::tests::capture(shell, "session-notes__15-timeline-empty__1200x800");
         shell.click("Start with day 1");
     } else {
         shell.click("Add Day");
     }
     shell.settle();
+}
+
+/// The session-notes scenario's Timeline steps, as egui's made them: a session's plan adds a
+/// Long rest (linked in the note), a Travel and a Major event; on the Timeline a Day named
+/// Harvest Eve starts the timeline, and the rest is renamed and placed. Then the Rests filter,
+/// and the rest removed while the note still links to it.
+#[test]
+fn session_notes_timeline_steps() {
+    let mut shell = Shell::new("session-notes", Seed::Campaign);
+    shell.click("Session");
+    shell.update(|root, _, _| root.app.encounters.wait_for_load());
+    shell.settle();
+    shell.click("New session");
+    shell.type_text("Ash on the Road");
+    shell.click("Create session");
+    shell.click("Long rest");
+    shell.click("id:plan-add-more-button");
+    shell.click("Travel");
+    shell.click("id:plan-add-more-button");
+    shell.click("Major event");
+    shell.click("Add to notes: Long rest");
+    shell.update(|root, _, _| root.app.sessions.flush());
+    shell.click("Timeline");
+    shell.click("Add Day");
+    shell.type_text("Harvest Eve");
+    shell.click("Place this event after");
+    shell.click("Start of the timeline");
+    let rest = events(&mut shell)
+        .into_iter()
+        .find(|event| event.kind == Kind::LongRest)
+        .expect("the plan's rest");
+    shell.update(|root, _, cx| {
+        root.app.timeline_page.select(Some(rest.id.clone()));
+        cx.notify();
+    });
+    shell.click("Title");
+    shell.press("ctrl-a");
+    shell.type_text("Rest at the mill");
+    shell.click("Where");
+    shell.type_text("Old mill");
+    shell.press("ctrl-s");
+    let now = events(&mut shell);
+    assert_eq!(now.len(), 4, "a Day, a Long rest, a Travel and a Major event");
+    assert_eq!(now[0].title, "Harvest Eve", "the Day starts the timeline");
+    let renamed = now.iter().find(|event| event.id == rest.id).unwrap();
+    assert_eq!(
+        (renamed.title.as_str(), renamed.place.as_str()),
+        ("Rest at the mill", "Old mill")
+    );
+    assert!(renamed.session.is_some(), "the rest is the session's");
+    // The title was typed letter by letter: the offer names only the old name the note's link
+    // says.
+    let old = shell.read(|root| {
+        root.app
+            .sessions
+            .event_link_offer(&root.app.timeline, &rest.id)
+            .map(|offer| offer.old().to_vec())
+    });
+    assert_eq!(old, Some(vec!["Long rest".to_owned()]));
+    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__18-timeline-event__1200x800");
+    shell.click("Rests");
+    assert_eq!(selected(&mut shell), Some(rest.id.clone()), "the rest stays open");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__21-timeline-filtered__1200x800");
+    shell.click("All");
+    shell.click("More actions for Rest at the mill");
+    shell.click("Remove");
+    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__22-timeline-removed__1200x800");
 }
 
 /// T11.2: an event added with the buttons opens with its Title taking the keyboard; its rest
@@ -41,6 +107,7 @@ fn add_name_rule_remove_and_save() {
     shell.click("Timeline");
     shell.settle();
     assert_eq!(shell.read(|root| root.app.page), crate::Page::Timeline);
+    crate::gui::pages::sessions::tests::capture(&mut shell, "timeline__01-empty__1200x800");
     first_day(&mut shell);
     let before = events(&mut shell).len();
     shell.click("Add Long rest");
@@ -72,7 +139,6 @@ fn add_name_rule_remove_and_save() {
         })
     };
     assert_eq!(title(&mut shell).as_deref(), Some("Rest at the mill"));
-    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__18-timeline-event__1200x800");
 
     // The ruling and its Undo.
     let restores = |shell: &mut Shell| {
@@ -101,7 +167,6 @@ fn add_name_rule_remove_and_save() {
     shell.settle();
     assert!(title(&mut shell).is_none(), "the event is gone");
     assert_eq!(selected(&mut shell), None);
-    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__22-timeline-removed__1200x800");
     shell.click("Undo remove Rest at the mill");
     shell.settle();
     assert_eq!(title(&mut shell).as_deref(), Some("Rest at the mill"));
@@ -112,7 +177,6 @@ fn add_name_rule_remove_and_save() {
     let shown =
         shell.update(|root, _, _| root.app.timeline_page.header_context(&root.app.timeline));
     assert!(shown.contains(" of "), "{shown}");
-    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__21-timeline-filtered__1200x800");
     shell.click("All");
     shell.settle();
 

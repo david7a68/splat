@@ -103,6 +103,13 @@ fn the_race_session(shell: &mut Shell) {
     shell.settle();
 }
 
+/// Beside Lookup the Session page has tabs: the plan's (egui `show_plan`).
+fn show_plan(shell: &mut Shell) {
+    if shell.bounds("id:session-tabs-Plan").is_some() {
+        shell.click("id:session-tabs-Plan");
+    }
+}
+
 fn value(shell: &mut Shell, key: &str, instance: Option<&str>) -> i64 {
     shell.read(|root| {
         root.app
@@ -139,7 +146,7 @@ fn quick_actions_notices_and_amounts() {
     race_in_play(&mut shell);
     the_race_session(&mut shell);
     shell.press("ctrl-t");
-    shell.settle();
+    show_plan(&mut shell);
     assert!(
         shell.bounds("Enter room").is_some(),
         "the pinned trackers show"
@@ -242,7 +249,7 @@ fn trackers_at_the_smallest_window() {
     race_in_play(&mut shell);
     the_race_session(&mut shell);
     shell.press("ctrl-t");
-    shell.settle();
+    show_plan(&mut shell);
     shell.click("Take seal: Party");
     shell.settle();
     crate::gui::pages::sessions::tests::capture(&mut shell, "trackers__03-trackers-a-notice__960x640");
