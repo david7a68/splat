@@ -2,7 +2,7 @@
 extern crate self as splat;
 use splat_character::character;
 use splat_content::content;
-pub use splat_design::{field_id, sentence};
+pub use splat_design::sentence;
 
 #[cfg(test)]
 use splat_content_ui::test_support;

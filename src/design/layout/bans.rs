@@ -126,34 +126,6 @@ pub(crate) fn syntax_rules(text: &str) -> Result<Vec<&'static str>, String> {
     Ok(rules.found)
 }
 
-#[derive(Default)]
-struct Names {
-    found: Vec<String>,
-}
-
-impl<'ast> Visit<'ast> for Names {
-    fn visit_macro(&mut self, node: &'ast syn::Macro) {
-        if node
-            .path
-            .segments
-            .last()
-            .is_some_and(|last| last.ident == "field_id")
-            && let Ok(name) = node.parse_body::<syn::LitStr>()
-        {
-            self.found.push(name.value());
-        }
-        visit::visit_macro(self, node);
-    }
-}
-
-/// Every `field_id!` name of a file.
-pub(crate) fn field_id_names(text: &str) -> Result<Vec<String>, String> {
-    let file = syn::parse_file(text).map_err(|error| error.to_string())?;
-    let mut names = Names::default();
-    names.visit_file(&file);
-    Ok(names.found)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,9 +162,5 @@ mod tests {
         ] {
             assert!(rules(text).is_empty(), "{text}");
         }
-        assert_eq!(
-            field_id_names("const A: FieldId = crate::field_id!(\"a_name\");").unwrap(),
-            ["a_name"]
-        );
     }
 }

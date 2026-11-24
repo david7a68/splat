@@ -279,39 +279,6 @@ impl egui::TextBuffer for TextDraft {
     }
 }
 
-/// A draft lent to egui's `TextEdit` for one draw (`layout::FieldId::editor`): each change
-/// reaches `live`, so the part's layouter reads the live key on every call (egui lays out
-/// again after each edit in its own pass, also several in one frame).
-pub(in crate::design) struct Lent<'a> {
-    pub draft: &'a mut TextDraft,
-    pub live: &'a std::cell::Cell<DraftKey>,
-}
-
-impl egui::TextBuffer for Lent<'_> {
-    fn is_mutable(&self) -> bool {
-        true
-    }
-
-    fn as_str(&self) -> &str {
-        &self.draft.text
-    }
-
-    fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
-        let inserted = self.draft.insert_text(text, char_index);
-        self.live.set(self.draft.key);
-        inserted
-    }
-
-    fn delete_char_range(&mut self, char_range: std::ops::Range<usize>) {
-        self.draft.delete_char_range(char_range);
-        self.live.set(self.draft.key);
-    }
-
-    fn type_id(&self) -> std::any::TypeId {
-        std::any::TypeId::of::<TextDraft>()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

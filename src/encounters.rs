@@ -345,8 +345,6 @@ use groups::GroupDraft;
 pub(crate) use groups::{
     EDIT_GROUP, ENCOUNTER_DELETED, NO_MAX_HP_CAUSE, PACKAGES_LINK, member_fault,
 };
-#[cfg(any(test, feature = "test-support"))]
-pub use groups::{change_copies, group_checks, member_comparisons};
 pub use history::{Template, template_of};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

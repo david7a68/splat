@@ -6,5 +6,5 @@ pub mod reader {
 }
 
 pub mod fact {
-    pub use splat_design::design::fact::{line, tile_label, words};
+    pub use splat_design::design::fact::{tile_label, words};
 }

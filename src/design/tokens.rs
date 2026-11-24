@@ -1,6 +1,6 @@
 //! Design tokens: colour by role, type roles, spacing, shape and density.
 //! Every raw colour and text size in the app lives in this file.
-use egui::{Color32, FontFamily, FontId, RichText, TextStyle, Ui};
+use egui::{Color32, TextStyle};
 
 const fn rgb(hex: u32) -> Color32 {
     Color32::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
@@ -216,7 +216,6 @@ pub const RAIL_WIDE_WIDTH: f32 = 188.0;
 pub const RAIL_WIDE_FROM: f32 = 1400.0;
 /// A drag can take the rail this far, in a window with room for it.
 pub const RAIL_DRAG_MAX_WIDTH: f32 = 320.0;
-pub const CONDITION_THREE_COLUMNS_FROM: f32 = 400.0;
 pub const PANEL_MIN_WIDTH: f32 = 340.0;
 pub const PANEL_MAX_WIDTH: f32 = 560.0;
 /// A drag can take a side panel past the width it has by itself.
@@ -449,32 +448,6 @@ impl Type {
     pub fn style(self) -> TextStyle {
         TextStyle::Name(self.name().into())
     }
-
-    /// The font for this role. A context with no installed theme, such as a unit
-    /// test's, has only egui's families, so it falls back to the same size there.
-    pub fn font(self, ui: &Ui) -> FontId {
-        if self == Self::Mono {
-            return FontId::new(self.size(), FontFamily::Monospace);
-        }
-        ui.style()
-            .text_styles
-            .get(&self.style())
-            .cloned()
-            .unwrap_or_else(|| FontId::proportional(self.size()))
-    }
-
-    /// This role's face at another size, for the run's scale.
-    pub fn sized(self, ui: &Ui, size: f32) -> FontId {
-        let mut font = self.font(ui);
-        font.size = size;
-        font
-    }
-
-    pub fn rich(self, ui: &Ui, text: impl Into<String>) -> RichText {
-        RichText::new(text)
-            .font(self.font(ui))
-            .extra_letter_spacing(self.tracking())
-    }
 }
 
 #[cfg(test)]
@@ -493,6 +466,9 @@ pub(crate) fn contrast(a: Color32, b: Color32) -> f32 {
     let (a, b) = (luminance(a), luminance(b));
     (a.max(b) + 0.05) / (a.min(b) + 0.05)
 }
+
+/// The height of a Library entry row.
+pub const ENTRY_ROW_HEIGHT: f32 = 44.0;
 
 #[cfg(test)]
 mod tests {

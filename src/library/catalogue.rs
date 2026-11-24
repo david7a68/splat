@@ -2534,10 +2534,6 @@ fn visit_folders(root: &Path, path: &Path, folders: &mut Vec<String>) {
     }
 }
 
-pub const REGISTER: design::Word = crate::word!("Register");
-pub const BROWSE: design::Word = crate::word!("Browse…");
-pub const CANCEL: design::Word = crate::word!("Cancel");
-
 pub fn create_module(path: &Path, name: &str, namespace: &str) -> Result<Module, String> {
     if !path.is_absolute()
         || name.trim().is_empty()

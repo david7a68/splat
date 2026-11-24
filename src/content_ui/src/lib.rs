@@ -2,7 +2,7 @@
 extern crate self as splat;
 pub use splat_character::{character, memo};
 pub use splat_content::content;
-pub use splat_design::{choice, create_reasons, field_id, frame_clock, key, lead, sentence, word};
+pub use splat_design::{choice, create_reasons, frame_clock, lead, sentence, word};
 pub use splat_execution::execution;
 pub mod file_batch {
     pub use splat_campaign::file_batch::*;

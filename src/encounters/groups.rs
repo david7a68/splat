@@ -1646,33 +1646,8 @@ fn member_key(path: &str, member: &MemberDraft) -> String {
 
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
-    /// (frames that reached `members_are_saved`, comparisons it made)
-    static MEMBER_COMPARISONS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
-}
-#[cfg(any(test, feature = "test-support"))]
-thread_local! {
     /// (frames that asked for the open group's check, checks that ran in `GroupDraft::check`)
     static GROUP_CHECKS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
-}
-/// The counts of Save's check of a group, for `CachedWork`.
-#[cfg(any(test, feature = "test-support"))]
-pub fn group_checks() -> (usize, usize) {
-    GROUP_CHECKS.with(std::cell::Cell::get)
-}
-#[cfg(any(test, feature = "test-support"))]
-thread_local! {
-    /// How often the member loop copied a member's change map (review of PR 299).
-    static CHANGE_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-/// How often the member loop copied a member's change map.
-#[cfg(any(test, feature = "test-support"))]
-pub fn change_copies() -> usize {
-    CHANGE_COPIES.with(std::cell::Cell::get)
-}
-/// The counts of `members_are_saved`, for `CachedWork`.
-#[cfg(any(test, feature = "test-support"))]
-pub fn member_comparisons() -> (usize, usize) {
-    MEMBER_COMPARISONS.with(std::cell::Cell::get)
 }
 
 /// A new revision for a group draft (`GroupDraft::touch`): larger than every one before it.

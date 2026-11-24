@@ -32,8 +32,3 @@ tempfile = "3"
 # them with a fixed seed and case count. No `fork` or `timeout` feature: no child process, no clock.
 proptest = { version = "1", default-features = false, features = ["std", "bit-set"] }
 proptest-state-machine = "0.3"
-
-# Layout PR 9b: a counting global allocator needs a process of its own.
-[[test]]
-name = "quiet_text"
-harness = false

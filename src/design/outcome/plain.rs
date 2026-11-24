@@ -14,7 +14,7 @@
 //! ```
 use super::{
     FaultMessage, FooterRank, KeptLine, Lost, MessageChoice, Messages, Outcome, PaneFrame, Press,
-    RowMessages, Tone, Typed, footer_order, holding, refusal_rank,
+    Tone, Typed, footer_order, holding, refusal_rank,
 };
 use crate::design::results::Ticket;
 
@@ -216,25 +216,6 @@ impl<'f, A: 'static> Messages<'f, A> {
     }
 }
 
-impl<'f, A: 'static> RowMessages<'f, A> {
-    /// Every line in the row's order (the footer's one order), as plain data: a save row's own
-    /// messages.
-    pub fn into_plain(self) -> Vec<PlainLine<A>> {
-        let mut items = self.items;
-        let newest = items.iter().filter_map(|item| item.1).max();
-        for (rank, order, _, _, refused) in &mut items {
-            if let (true, Some(attempt)) = (*refused, *order) {
-                *rank = refusal_rank(attempt, newest);
-            }
-        }
-        footer_order(&mut items);
-        items
-            .into_iter()
-            .map(|(_, _, typed, ticket, _)| PlainLine::of(typed, ticket.map(|t| t.order())))
-            .collect()
-    }
-}
-
 /// Where an owner's lines go: a pane's footer ([`Messages`]) or a save row's own messages
 /// ([`RowMessages`]). An owner that feeds both writes its lines once, against this.
 pub trait Sink<'f, A: 'static> {
@@ -248,15 +229,6 @@ impl<'f, A: 'static> Sink<'f, A> for Messages<'f, A> {
     }
     fn kept(&mut self, line: KeptLine<'f, A>) {
         Messages::kept(self, line);
-    }
-}
-
-impl<'f, A: 'static> Sink<'f, A> for RowMessages<'f, A> {
-    fn outcome(&mut self, outcome: Outcome<A>) {
-        RowMessages::outcome(self, outcome);
-    }
-    fn kept(&mut self, line: KeptLine<'f, A>) {
-        RowMessages::kept(self, line);
     }
 }
 

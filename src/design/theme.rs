@@ -188,14 +188,6 @@ fn font_generation_id() -> egui::Id {
     egui::Id::new("design_theme_font_generation")
 }
 
-/// The generation of the fonts that `install` put in this context: it changes at every
-/// installation, so a kept galley whose key holds it is laid out again when the font data
-/// changes under the same `FontId` (M5's kept heading). 0 before any installation.
-pub fn font_generation(ctx: &egui::Context) -> u64 {
-    ctx.data(|data| data.get_temp::<u64>(font_generation_id()))
-        .unwrap_or_default()
-}
-
 /// The last pass's atlas probe: a weak hold on a small galley that only egui's own galley cache
 /// keeps, and the epoch it stands for.
 #[derive(Clone)]

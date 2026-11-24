@@ -2,7 +2,7 @@
 extern crate self as splat;
 use splat_character::character;
 use splat_content::content;
-pub use splat_design::{choice, create_reasons, field_id, key, lead, sentence, word};
+pub use splat_design::{choice, create_reasons, lead, sentence, word};
 use splat_execution::execution;
 
 use splat_content_ui::{
