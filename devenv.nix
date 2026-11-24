@@ -4,7 +4,8 @@
   ...
 }: {
   imports = [./nix/rust-toolchain.nix];
-  packages = with pkgs; [git pkg-config alejandra dbus] ++ lib.optionals stdenv.isLinux [util-linux];
+  # GPUI builds against fontconfig, FreeType, xkbcommon, Wayland and xcb through pkg-config.
+  packages = with pkgs; [git pkg-config alejandra dbus] ++ lib.optionals stdenv.isLinux [util-linux fontconfig freetype libxkbcommon wayland libxcb vulkan-loader];
   languages.c.enable = false;
 
   env.LD_LIBRARY_PATH = lib.makeLibraryPath (with pkgs; [
@@ -16,6 +17,9 @@
     libxcursor
     libxi
     libxrandr
+    libxcb
+    fontconfig
+    freetype
   ]);
 
   env.__EGL_VENDOR_LIBRARY_FILENAMES = "${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json";
