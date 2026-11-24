@@ -100,3 +100,24 @@ pub(crate) fn render_page(
         Page::Campaign | Page::Settings => div().into_any_element(),
     }
 }
+
+/// Ctrl+S on the page shown (the root's one owner, `SplatRoot::save`, calls it after the side
+/// panels had their turn): each area's `save_key` saves exactly what its own Save would, as egui's
+/// `design::save_row::save_key` lets the page that draws take the key. A page that needs a
+/// campaign saves nothing while none is open (it shows the no-campaign state).
+pub(crate) fn save_key(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) {
+    let needs_campaign = !matches!(root.app.page, Page::Library | Page::Settings | Page::Run);
+    if needs_campaign && root.app.campaigns.active_campaign().is_none() {
+        return;
+    }
+    match root.app.page {
+        Page::Encounters => encounters::save_key(root, cx),
+        Page::Sessions => sessions::save_key(root, cx),
+        Page::Timeline => timeline::save_key(root, cx),
+        Page::World => world::save_key(root, cx),
+        Page::Library => library::save_key(root, cx),
+        Page::Campaign => campaigns::save_key(root, cx),
+        // No draft that Ctrl+S saves (egui takes no key on these pages).
+        Page::Run | Page::Party | Page::Settings => {}
+    }
+}

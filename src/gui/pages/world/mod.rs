@@ -21,7 +21,7 @@ mod reader;
 #[cfg(test)]
 mod tests;
 
-actions!(world, [Escape, Save]);
+actions!(world, [Escape]);
 
 /// The width the list column starts at, and its range (egui's `list_column`).
 const LIST_WIDTH: f32 = 260.0;
@@ -36,10 +36,7 @@ pub struct State {
 
 /// Once, when the root is built.
 pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
-    cx.bind_keys([
-        KeyBinding::new("escape", Escape, Some("World")),
-        KeyBinding::new("ctrl-s", Save, Some("World")),
-    ]);
+    cx.bind_keys([KeyBinding::new("escape", Escape, Some("World"))]);
 }
 
 /// Once per frame, before anything draws.
@@ -110,7 +107,6 @@ pub(crate) fn render(
     let page = div()
         .key_context("World")
         .on_action(cx.listener(escape))
-        .on_action(cx.listener(save))
         .flex()
         .flex_col()
         .size_full()
@@ -148,6 +144,7 @@ pub(crate) fn render(
                     px(LIST_RANGE.start)..px(LIST_RANGE.end),
                     div().size_full().pr(theme::S).child(list),
                 )
+                .saved("world_list_panel")
                 .rest(div().size_full().pl(theme::L).child(pane)),
         ),
     )
@@ -164,12 +161,9 @@ fn escape(root: &mut SplatRoot, _: &Escape, _: &mut Window, cx: &mut Context<Spl
     }
 }
 
-/// Ctrl+S: the open edit form's `Save changes`, the repair's `Save repaired note`, or the
-/// creation form's `Create`. It waits while a modal is open.
-fn save(root: &mut SplatRoot, _: &Save, _: &mut Window, cx: &mut Context<SplatRoot>) {
-    if root.modal_open(cx) {
-        return;
-    }
+/// Ctrl+S on this page (the root's one owner calls it, `pages::save_key`): the open edit form's
+/// `Save changes`, the repair's `Save repaired note`, or the creation form's `Create`.
+pub(crate) fn save_key(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) {
     let Some((campaign, index)) = world(root) else {
         return;
     };

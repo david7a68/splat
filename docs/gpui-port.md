@@ -129,9 +129,22 @@ you add a part, look for it in the table below: a page's own copy of a kit part 
 - `root.show_page(Page::X, cx)` changes page. `root.modal_open(cx)` is egui's `modal_open` (close
   prompt, copy dialog, an open kit menu): Ctrl+S and other page keys wait for it.
 - Global keys (actions in `gui/mod.rs`): Ctrl+K Lookup, Ctrl+J notes, Ctrl+T Trackers, Ctrl+\ the
-  session list, Escape (an open menu, then the notes panel, then Lookup). A page binds its own keys
-  with `actions!` + `KeyBinding` in its `init` (`cx.bind_keys`) and `.on_action(cx.listener(..))`
-  on its element, with its own `key_context`.
+  session list, Escape (an open menu, then the notes panel, then Lookup), Ctrl+S. A page binds its
+  own keys with `actions!` + `KeyBinding` in its `init` (`cx.bind_keys`) and
+  `.on_action(cx.listener(..))` on its element, with its own `key_context`.
+- Ctrl+S has one owner, the root (`SplatRoot::save`), in egui's order: nothing under a modal
+  (`modal_open`: the close prompt, the copy dialog, a kit dialog or menu); the Notes panel's note
+  when it had the keyboard; else the page shown, through its area's
+  `save_key(root, cx)` hook (`pages::save_key`). No page binds Ctrl+S, so the key saves the same
+  draft wherever the keyboard is (a rail item, the Lookup field). A page with a new draft adds its
+  save to its `save_key`, saving exactly when its Save button can.
+- Escape: a page may bind it in its own `key_context` and `cx.propagate()` when it has nothing to
+  close; the root's `Dismiss` then runs.
+- Widths: `root.page_width(window)` is the page's own width (the window less the rail, the side
+  panel and the page's sides), `root.rail_width()` and `root.side_width()` the shell's columns in
+  this frame. Never compute them from the rail or panel tokens: the DM can drag both.
+- The touchpad speed (Settings → Touchpad) scales every touchpad scroll in the window
+  (`gui::touchpad`): nothing to do in a page.
 
 ### How a page hooks in
 
@@ -213,7 +226,9 @@ says otherwise (`cx.listener` makes them).
 | Page header (`title`) | `page_header(title, Option<context>, Vec<AnyElement>)`, `page_header_with(title, Option<AnyElement>, Vec<AnyElement>)`, `title::actions(items)` | A page's first line, rule and `L`; `_with` for a context that is an element (a status) |
 | Scroll (`scroll`) | `scroll_column(id, content)`, `scroll::scroll_column_with(id, &ScrollHandle, content)`, `scroll::sideways(id, content)` | A column that keeps its bar's lane |
 | Virtual list (`virtual_list`) | `uniform_column(id, &UniformListScrollHandle, count, cx.processor(\|root, range, window, cx\| Vec<row>))`, `measured_column(id, &ListState, \|at, window, cx\| AnyElement)` | A long list that builds only the rows in view, in a column that keeps its bar's lane. `uniform_column` when every row has one height (Library entries, Timeline events); `measured_column` when rows have their own heights (World's headings and notes; `splice` the `ListState` when the rows change). Keep the handle or state in your page's GPUI state |
-| Panes (`panes`) | `Pane::new(id).header(..).footer(element).fixed().flush().child(..)`, `Columns::new(id).column(width, min..max, pane).rest(pane)` | Task columns with splitters; messages in the footer |
+| Panes (`panes`) | `Pane::new(id).header(..).footer(element).fixed().flush().child(..)`, `Columns::new(id).column(width, min..max, pane).saved(key).rest(pane)` | Task columns with splitters; messages in the footer. `.saved(key)` (egui's column id: `library_entries`, `world_list_panel`, …) keeps the DM's width after a restart; a saved column is the harness target `column <key>` |
+| Edge column (`edge`) | `EdgeColumn::new(key, Side, natural, min..=max).page_keeps(px).name(words)`, `.width(room, cx)`, `.render(room, content, window, cx)`; `edge::column_width(key, cx)`, `set_column_width` | A side column with a splitter on its inner edge (`design::Column`): the rail, the side panel. Drag, or Left/Right/Home on the focused splitter; the width is saved under `key` |
+| Layer (`layer`) | `layer::attach(container, &id, match_width, \|widest, tallest\| element)`, `layer::room_start(lane)` / `room_end()` | Where a raised layer opens (menus, drop-downs, popovers use it): under its trigger or above it, inside the innermost pane body or edge column. A part that owns a room other than `Pane` and `EdgeColumn` wraps its children in `room_start`/`room_end` |
 | Markdown (`markdown`) | `markdown(id, source)` / `Markdown::new(id, source)` then `.document(uuid)`, `.compact()`, `.fields()`, `.skills()`, `.row_words(muted)`, `.full_width()`, `.wide_tables()`, `.jump_in(&ScrollHandle)`, `.on_link(\|&str, window, cx\|)`, `.on_target(\|&LinkTarget, window, cx\|)` | Every Markdown document; see Reader parts |
 | Nav (`nav`) | `NavItem::new(..).detail(..).selected(bool).hint(..).name(..).on_click(f)`, `NavToggle::new(..).hint(..).on_click(f)` | The rail only |
 | Tooltip (`tooltip`) | `.with_tooltip(words)` on an element with an id (`WithTooltip`), `tooltip::tip(words)` | Hints and blocked reasons |
@@ -230,7 +245,17 @@ own (the reader's tests do: an entry view without its page).
 
 Menus, drop-downs and popovers keep which one is open in a GPUI global (`kit::menu`): no open flag
 in your state. `kit::menu::any_open(cx)`, `open_popup(id, window, cx)` and `close_open_popup`
-exist for keys.
+exist for keys. A layer opens under its trigger, or above it when it does not fit below and there
+is more room above, and keeps inside the pane body (above the footer, clear of the scroll bar's
+lane) or side column that holds the trigger, else the window; a long layer scrolls and narrow
+room wraps its words (egui `popups`).
+
+Every focusable kit control is a Tab stop with an accessibility role and name (`role` +
+`aria_label`; a button's hover words or blocked reason is its description): Button, Link,
+CheckBox, Tab, MenuItem, ComboBox, Dialog, Menu, Splitter. A blocked button or menu item is not a
+Tab stop. A kit `Dialog` keeps Tab and Shift+Tab inside it (gpui-component's focus trap). A page
+element the DM can press needs the same: `.focusable().tab_stop(true).role(..).aria_label(..)`, or
+a kit part.
 
 ### Reader parts
 
@@ -321,7 +346,11 @@ fn library_browse() {
   `Shell::over(app, tempdir, size)` for a `Splat` you built.
 - `update(|root, window, cx| …)` changes state as a test's setup; `read(|root| …)` reads it;
   `settle()` runs frames until idle; `wait(Duration)` advances the clock (timers, the poll);
-  `bounds(name)` and `click_at(point)` for a place.
+  `bounds(name)` and `click_at(point)` for a place; `drag(from, to)` (a splitter);
+  `scroll(at, ScrollDelta, Modifiers)` (`Pixels` is a touchpad, `Lines` a wheel);
+  `frame_cost(frames)` for the mean time of a quiet frame (`gui::tests::frame_cost_report`).
+- The harness has the app's own fonts only, Hack for monospace included (`splat_assets::MONO`, the
+  font egui bundles), so code and source text capture in mono.
 - Name captures `<scenario>__<step>__<w>x<h>` like the egui references, and compare them with
   `artifacts/screenshots/egui-reference/` by eye.
 - Put your tests in your folder (`pages/<area>/tests.rs`, `#[cfg(test)] mod tests;`). Run them with
@@ -350,16 +379,22 @@ fn library_browse() {
 - The headless window draws at scale 2 unless told otherwise; the harness sets 1.
 - Test windows do not resize: `window.resize` leaves the viewport as it was.
 - `debug_selector` bounds are not reachable from `HeadlessAppContext`, hence `kit::target`.
-- There is no letter spacing: `Type::Label`'s +0.6 tracking is not drawn.
+- There is no letter spacing. `kit::text` draws `Type::Label`'s +0.6 tracking with a hair space
+  (U+200A, 0.65 px in IBM Plex at 11 px) between the letters of each word; a page that sets
+  `.ty(Type::Label)` on its own element gets no tracking (use `kit::text`).
+- `deferred` lays out its child with the main tree, before anything is prepainted: a layer that
+  needs where its trigger is (`kit::layer`) sizes from the last frame's place and asks for one
+  more frame when it changed.
+- A node without `.role(..)` is not in the accessibility tree, whatever its `aria_label`.
+- A focusable element is not a Tab stop unless `.tab_stop(true)`.
 
 ### Known gaps after wave 1
 
-- The touchpad speed is chosen and saved, but GPUI has no hook to scale scroll events; GPUI's own
-  touchpad scrolling applies.
-- The rail is not draggable and its width is not saved (136 px, 188 px from a 1400 px window).
-- Dialogs ask for the keyboard when they open but do not keep Tab inside them; Escape reaches them
-  through the root (`kit::dialog::escape_open_dialog`) wherever the keyboard is.
-- A kit menu may reach past its pane's edge (egui keeps it inside the pane, one lane clear).
+- A splitter of `kit::Columns` (gpui-component's) cannot take the keyboard; only the rail's and the
+  side panel's (`EdgeColumn`) move with Left, Right and Home. The run's side panel, the Timeline's
+  event column and the Session note column do not use `Columns`/`EdgeColumn` yet, so their widths
+  are not dragged or saved (`run_panel`, `timeline_detail_panel`, `session_note_frame`), and the
+  encounter editors' Add column saves nothing (egui saves `encounter_add`, a right column).
 - Reader (wave 2): reader text cannot be selected or copied, and links cannot be reached with Tab
   (GPUI's `InteractiveText` has neither); a dice link or tile has no right-click mode menu (Shift
   and Ctrl still pick advantage and disadvantage); a wide table's header does not stay at the

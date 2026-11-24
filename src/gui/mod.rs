@@ -45,6 +45,7 @@ mod tests;
     reason = "foundation for the page ports (docs/gpui-port.md)"
 )]
 pub mod theme;
+mod touchpad;
 
 use crate::{CampaignTab, Page, SettingsTab, Splat};
 use bridge::Bridge;
@@ -69,6 +70,8 @@ actions!(
         ToggleSessionList,
         /// Escape: close the open layer, then the notes panel or Lookup.
         Dismiss,
+        /// Ctrl+S: save the draft the DM is working on (`SplatRoot::save`).
+        Save,
     ]
 );
 
@@ -121,6 +124,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("ctrl-t", ToggleTrackers, None),
         KeyBinding::new("ctrl-\\", ToggleSessionList, None),
         KeyBinding::new("escape", Dismiss, Some("SplatRoot")),
+        KeyBinding::new("ctrl-s", Save, Some("SplatRoot")),
     ]);
 }
 
@@ -151,8 +155,8 @@ pub struct SplatRoot {
     pub pages: pages::States,
     /// The root's keyboard focus, so the global keys reach it with nothing else focused.
     pub focus: FocusHandle,
-    /// The column widths the DM chose, kept for `ui_state` (GPUI keeps the live widths).
-    column_widths: std::collections::BTreeMap<String, f32>,
+    /// The rail's and the side panel's widths in this frame (`measure_shell`), for `page_width`.
+    shell_widths: (gpui::Pixels, Option<gpui::Pixels>),
     /// What `remember` last wrote, so an unchanged frame writes nothing.
     remembered: Option<crate::ui_state::UiState>,
     _poll: Option<Task<()>>,
@@ -171,12 +175,13 @@ impl SplatRoot {
             bridge: Bridge::new(),
             pages: pages::States::default(),
             focus: cx.focus_handle(),
-            column_widths: saved.column_widths,
             remembered: None,
+            shell_widths: (theme::RAIL_WIDTH, None),
             _poll: None,
             #[cfg(test)]
             gallery: None,
         };
+        kit::edge::restore_column_widths(saved.column_widths, cx);
         window.focus(&root.focus, cx);
         pages::init(&mut root, window, cx);
         root.watch_close(window, cx);
@@ -289,16 +294,71 @@ impl SplatRoot {
             app.route(ctx);
             app.follow_page_change();
         });
-        self.remember();
+        self.remember(cx);
     }
 
     /// Save what this computer remembers, when it changed.
-    fn remember(&mut self) {
-        let now = self.app.ui_state_now(self.column_widths.clone());
+    fn remember(&mut self, cx: &App) {
+        let now = self.app.ui_state_now(kit::edge::column_widths(cx));
         if self.remembered.as_ref() != Some(&now) {
             self.app.ui_store.save(&now);
             self.remembered = Some(now);
         }
+    }
+
+    /// The side panel beside the page, when one is open: Lookup, or the session's notes (not on
+    /// the Session page, which has the note itself). Its natural width is the window's share
+    /// (`design::side_panel_width`); the DM can drag it (`Column::panel`).
+    fn side_column(&self, window: &Window) -> Option<kit::EdgeColumn> {
+        let (key, name) = if self.app.lookup.open {
+            ("lookup", "Lookup")
+        } else if self.app.sessions.notes_open && self.app.page != Page::Sessions {
+            ("session_notes", "session notes")
+        } else {
+            return None;
+        };
+        let natural = px(crate::design::side_panel_width(f32::from(
+            window.viewport_size().width,
+        )));
+        Some(
+            kit::EdgeColumn::new(
+                key,
+                kit::edge::Side::Right,
+                natural,
+                theme::PANEL_MIN_WIDTH..=theme::PANEL_DRAG_MAX_WIDTH,
+            )
+            .page_keeps(theme::PANEL_LEAVES_PAGE)
+            .name(name),
+        )
+    }
+
+    /// Measure the rail and the side panel for this frame, before anything lays out by them.
+    fn measure_shell(&mut self, window: &Window, cx: &App) {
+        let rail = rail::width(self, window, cx);
+        let room = window.viewport_size().width - rail;
+        let side = self
+            .side_column(window)
+            .map(|column| column.width(room, cx));
+        self.shell_widths = (rail, side);
+    }
+
+    /// The rail's width in this frame.
+    pub fn rail_width(&self) -> gpui::Pixels {
+        self.shell_widths.0
+    }
+
+    /// The side panel's width in this frame (its border included), or `None` with no panel open.
+    pub fn side_width(&self) -> Option<gpui::Pixels> {
+        self.shell_widths.1
+    }
+
+    /// The page's own width: the window less the rail, the side panel and the page's sides. One
+    /// rule for every page that lays out by its width.
+    pub fn page_width(&self, window: &Window) -> gpui::Pixels {
+        window.viewport_size().width
+            - self.rail_width()
+            - self.side_width().unwrap_or_default()
+            - M * 2.0
     }
 
     /// The account's connection now.
@@ -347,6 +407,25 @@ impl SplatRoot {
             self.app.sessions.toggle_list();
             cx.notify();
         }
+    }
+
+    /// Ctrl+S, with one owner for the whole window, in egui's order (`update` draws the side
+    /// panels before the page, and each takes the key with `design::save_row::save_key`): nothing
+    /// under a modal (the close prompt, the copy dialog, a kit dialog or menu); the Notes panel's
+    /// note when it had the keyboard; else the page shown (`pages::save_key`). No page binds
+    /// Ctrl+S itself, so the key saves the same thing wherever the keyboard is.
+    fn save(&mut self, _: &Save, _: &mut Window, cx: &mut Context<Self>) {
+        if self.modal_open(cx) {
+            return;
+        }
+        let app = &mut self.app;
+        let notes_panel = app.sessions.notes_open && app.page != Page::Sessions && !app.lookup.open;
+        if notes_panel && app.sessions.gv_note_had_focus() {
+            app.sessions.gv_save_note();
+        } else {
+            pages::save_key(self, cx);
+        }
+        cx.notify();
     }
 
     /// Escape: an open menu first; then the notes panel (not on Sessions, not over the run
@@ -597,6 +676,8 @@ impl Render for SplatRoot {
         kit::probe::clear();
         kit::dialog::begin_frame(cx);
         self.frame_logic(window, cx);
+        // After the frame logic, which can open or close a panel or change page.
+        self.measure_shell(window, cx);
         let c = colors();
         let rail = rail::render(self, self.connection(), window, cx);
         let panels_inert = self.app.copy_dialog.is_some() || self.app.confirm_close;
@@ -607,6 +688,7 @@ impl Render for SplatRoot {
         let party_bar = pages::party::render_bar(self, window, cx);
         let banner = pages::sessions::render_banner(self, window, cx);
         // One panel beside the page at a time: Lookup, or the session's notes.
+        let side_column = self.side_column(window);
         let side = if self.app.lookup.open {
             Some(pages::lookup::render_panel(self, window, cx))
         } else if self.app.sessions.notes_open && self.app.page != Page::Sessions {
@@ -614,6 +696,7 @@ impl Render for SplatRoot {
         } else {
             None
         };
+        let side_room = window.viewport_size().width - self.rail_width();
         let page = self.page(window, cx);
         let main = div()
             .flex()
@@ -631,14 +714,17 @@ impl Render for SplatRoot {
                     .flex_1()
                     .min_h_0()
                     .child(div().flex_1().min_w_0().h_full().px(M).py(S).child(page))
-                    .children(side.map(|side| {
-                        div()
-                            .h_full()
-                            .w(theme::PANEL_MIN_WIDTH)
-                            .flex_none()
-                            .border_l(theme::HAIRLINE_WIDTH)
-                            .border_color(c.hairline)
-                            .child(side)
+                    .children(side.zip(side_column).map(|(side, column)| {
+                        column.render(
+                            side_room,
+                            div()
+                                .size_full()
+                                .border_l(theme::HAIRLINE_WIDTH)
+                                .border_color(c.hairline)
+                                .child(side),
+                            window,
+                            cx,
+                        )
                     })),
             )
             // The session banner sits at the bottom, so it never moves `Next turn` under a
@@ -662,6 +748,7 @@ impl Render for SplatRoot {
             .on_action(cx.listener(Self::toggle_trackers))
             .on_action(cx.listener(Self::toggle_session_list))
             .on_action(cx.listener(Self::dismiss))
+            .on_action(cx.listener(Self::save))
             .relative()
             .flex()
             .flex_row()
@@ -670,7 +757,14 @@ impl Render for SplatRoot {
             .text_color(c.text)
             .font_family(theme::family::UI)
             .text_size(theme::Type::Body.size())
-            .child(rail.when(panels_inert, |rail| rail.opacity(0.6)))
+            // First, so a touchpad's scroll is at the chosen speed before anything sees it.
+            .child(touchpad::listener(self.app.touchpad_speed))
+            .child(rail::column(self, window).render(
+                window.viewport_size().width,
+                rail.when(panels_inert, |rail| rail.opacity(0.6)),
+                window,
+                cx,
+            ))
             .child(main)
             .children(dialogs.into_iter().flatten())
     }

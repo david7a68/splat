@@ -279,6 +279,10 @@ pub const PANEL_MIN_WIDTH: Pixels = px(340.0);
 pub const PANEL_MAX_WIDTH: Pixels = px(560.0);
 pub const PANEL_DRAG_MAX_WIDTH: Pixels = px(720.0);
 pub const RUN_LIST_KEEPS: Pixels = px(454.0);
+/// What a side panel leaves for the page beside it: the run's list and its margins.
+pub const PANEL_LEAVES_PAGE: Pixels = px(454.0 + 2.0 * 12.0);
+/// What the rail leaves for the page and a side panel.
+pub const RAIL_LEAVES_WINDOW: Pixels = px(454.0 + 2.0 * 12.0 + 340.0);
 pub const READER_MEASURE: Pixels = px(488.0);
 pub const FORM_WIDTH: Pixels = px(560.0);
 pub const LIST_MEASURE: Pixels = px(880.0);
@@ -383,8 +387,8 @@ pub mod family {
     pub const SERIF_TITLE: &str = "Source Serif 4 Subhead";
     /// Source Serif 4 SmText: stat blocks, 13 to 14 px.
     pub const SERIF_SMALL: &str = "Source Serif 4 SmText";
-    /// Monospace for source text; the platform's own (egui used its bundled Hack).
-    pub const MONO: &str = "monospace";
+    /// Hack: source text and code, egui's bundled monospace (`splat_assets::MONO`).
+    pub const MONO: &str = "Hack";
     /// Phosphor icons.
     pub const ICONS: &str = crate::gui::icons::FAMILY;
 }
@@ -510,8 +514,9 @@ impl Type {
         }
     }
 
-    /// `Label` is set in capitals (the caller passes them; see [`Type::Label`]'s use in
-    /// `kit::text::label`). Its +0.6 tracking is not drawn: GPUI has no letter spacing.
+    /// `Label` is set in capitals, with egui's +0.6 tracking (`kit::text` draws both: GPUI has no
+    /// letter spacing, so it puts a hair space between the letters of each word, 0.65 px in IBM
+    /// Plex at 11 px).
     pub const fn capitals(self) -> bool {
         matches!(self, Self::Label)
     }
@@ -554,9 +559,10 @@ pub fn font_bytes() -> Vec<std::borrow::Cow<'static, [u8]>> {
     splat_assets::FONTS
         .iter()
         .map(|(_, bytes)| std::borrow::Cow::Borrowed(*bytes))
-        .chain(std::iter::once(std::borrow::Cow::Borrowed(
-            splat_assets::PHOSPHOR,
-        )))
+        .chain([
+            std::borrow::Cow::Borrowed(splat_assets::PHOSPHOR),
+            std::borrow::Cow::Borrowed(splat_assets::MONO),
+        ])
         .collect()
 }
 
@@ -737,6 +743,11 @@ mod tests {
         assert_eq!(RUN_LARGE.row, egui_tokens::RUN_LARGE.row);
         assert_eq!(f32::from(L), egui_tokens::L);
         assert_eq!(f32::from(RAIL_WIDTH), egui_tokens::RAIL_WIDTH);
+        assert_eq!(f32::from(PANEL_LEAVES_PAGE), egui_tokens::PANEL_LEAVES_PAGE);
+        assert_eq!(
+            f32::from(RAIL_LEAVES_WINDOW),
+            egui_tokens::RAIL_LEAVES_WINDOW
+        );
         assert_eq!(f32::from(READER_MEASURE), egui_tokens::READER_MEASURE);
     }
 }

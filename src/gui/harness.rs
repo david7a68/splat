@@ -17,7 +17,8 @@ use crate::Splat;
 use crate::visual_tests::fixture::{Seed, World};
 use gpui::{
     AnyWindowHandle, AppContext, Bounds, Context, Entity, HeadlessAppContext, Keystroke, Modifiers,
-    MouseButton, MouseDownEvent, MouseUpEvent, Pixels, PlatformInput, Size, Window, px, size,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformInput, Point,
+    ScrollDelta, ScrollEvent, Size, Window, point, px, size,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -191,6 +192,61 @@ impl Shell {
         self.settle();
     }
 
+    /// Press at `from`, move to `to` in a few steps with the button held, and let go (a splitter's
+    /// drag), then settle.
+    pub(crate) fn drag(&mut self, from: Point<Pixels>, to: Point<Pixels>) {
+        let steps = 4;
+        let mut inputs = vec![PlatformInput::MouseDown(MouseDownEvent {
+            button: MouseButton::Left,
+            position: from,
+            modifiers: Modifiers::default(),
+            click_count: 1,
+            first_mouse: false,
+        })];
+        for step in 1..=steps {
+            let along = step as f32 / steps as f32;
+            inputs.push(PlatformInput::MouseMove(MouseMoveEvent {
+                position: point(
+                    from.x + (to.x - from.x) * along,
+                    from.y + (to.y - from.y) * along,
+                ),
+                pressed_button: Some(MouseButton::Left),
+                modifiers: Modifiers::default(),
+            }));
+        }
+        inputs.push(PlatformInput::MouseUp(MouseUpEvent {
+            button: MouseButton::Left,
+            position: to,
+            modifiers: Modifiers::default(),
+            click_count: 1,
+        }));
+        for input in inputs {
+            self.cx
+                .update_window(self.window, |_, window, cx| {
+                    window.dispatch_event(input, cx);
+                })
+                .expect("the window");
+            self.settle();
+        }
+    }
+
+    /// Scroll at `at` by `delta`, as a touchpad (`precise`, in pixels) or a mouse wheel (lines)
+    /// reports it, with `modifiers` held, then settle.
+    pub(crate) fn scroll(&mut self, at: Point<Pixels>, delta: ScrollDelta, modifiers: Modifiers) {
+        let input = PlatformInput::Scroll(ScrollEvent {
+            position: at,
+            delta,
+            modifiers,
+            ..Default::default()
+        });
+        self.cx
+            .update_window(self.window, |_, window, cx| {
+                window.dispatch_event(input, cx);
+            })
+            .expect("the window");
+        self.settle();
+    }
+
     /// Press keys, as GPUI writes them: `"ctrl-k"`, `"escape"`, `"tab shift-tab"`.
     pub(crate) fn press(&mut self, keystrokes: &str) {
         for text in keystrokes.split_whitespace() {
@@ -239,6 +295,22 @@ impl Shell {
             .save(&path)
             .unwrap_or_else(|error| panic!("{name}: could not save {path:?}: {error}"));
         path
+    }
+
+    /// The mean time of `frames` whole frames with nothing changed (the root's render, layout,
+    /// prepaint and paint): what a frame costs while the DM only looks.
+    pub(crate) fn frame_cost(&mut self, frames: u32) -> Duration {
+        self.settle();
+        let started = std::time::Instant::now();
+        for _ in 0..frames {
+            self.cx
+                .update_window(self.window, |_, window, cx| {
+                    window.refresh();
+                    window.draw(cx).clear(cx);
+                })
+                .expect("the window");
+        }
+        started.elapsed() / frames.max(1)
     }
 
     /// The window's size now.

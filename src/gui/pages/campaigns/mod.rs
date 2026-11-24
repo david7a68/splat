@@ -20,6 +20,50 @@ pub struct State {
     pub(crate) repairs_open: std::collections::BTreeSet<String>,
 }
 
+/// Ctrl+S on the Campaign page (`pages::save_key`): the shown tab's save, exactly when its button
+/// can (`Save selections`, `Save run settings`, `Save folder`; egui `save_shortcut`,
+/// `run_settings`, `folder_save_row`).
+pub(crate) fn save_key(root: &mut SplatRoot, _: &mut Context<SplatRoot>) {
+    match root.app.campaign_tab {
+        crate::CampaignTab::Packages => {
+            let content = &mut root.app.campaign_content;
+            if content
+                .save_bar()
+                .is_some_and(|bar| bar.dirty && bar.repair.is_none())
+            {
+                content.save_now();
+            }
+        }
+        crate::CampaignTab::RunSettings => {
+            let Some(active) = root.app.campaigns.active_campaign() else {
+                return;
+            };
+            if root
+                .app
+                .encounters
+                .run_row(&active)
+                .is_some_and(|row| row.state.can_save())
+            {
+                let SplatRoot { app, bridge, .. } = root;
+                app.encounters
+                    .save_run_settings(bridge.ctx(), &active, &app.campaigns);
+            }
+        }
+        crate::CampaignTab::Link => {
+            let lock = crate::campaigns::Campaigns::link_lock(root.app.blocked_switch());
+            let crate::Splat {
+                sessions, timeline, ..
+            } = &mut root.app;
+            if sessions
+                .folder_row(timeline, lock)
+                .is_some_and(|(state, _)| state.can_save())
+            {
+                sessions.folder_act(timeline, crate::sessions::page::FolderAct::Save);
+            }
+        }
+    }
+}
+
 /// Once, when the root is built.
 pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Context<SplatRoot>) {}
 

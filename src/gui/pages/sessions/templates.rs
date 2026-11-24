@@ -4,21 +4,11 @@
 use super::footer;
 use crate::gui::{SplatRoot, bridge, icons, kit, theme};
 use gpui::{
-    AnyElement, App, Context, ElementId, InteractiveElement, IntoElement, KeyBinding,
-    ParentElement, SharedString, Styled, Window, actions, div, prelude::*, px,
+    AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, SharedString,
+    Styled, Window, div, prelude::*, px,
 };
 use std::rc::Rc;
 use theme::{Density, L, S, Type, colors};
-
-actions!(session_template, [SaveTemplate]);
-
-pub(super) fn init(cx: &mut App) {
-    cx.bind_keys([KeyBinding::new(
-        "ctrl-s",
-        SaveTemplate,
-        Some("SessionTemplate"),
-    )]);
-}
 
 fn id(words: impl std::fmt::Display) -> ElementId {
     ElementId::Name(SharedString::from(words.to_string()))
@@ -59,6 +49,7 @@ pub(super) fn render(
             super::LIST_MIN..super::LIST_MAX,
             div().size_full().pr(S).child(list),
         )
+        .saved("template_list_panel")
         .rest(div().size_full().pl(S).child(editor))
         .into_any_element()
 }
@@ -151,10 +142,6 @@ fn editor(
             );
             div()
                 .key_context("SessionTemplate")
-                .on_action(cx.listener(|root, _: &SaveTemplate, _, cx| {
-                    root.app.sessions.gv_save_template();
-                    cx.notify();
-                }))
                 .size_full()
                 .max_w(super::note::frame_width())
                 .child(

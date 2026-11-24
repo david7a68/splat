@@ -130,19 +130,7 @@ pub(crate) fn render(
 
 /// The page's width: the window less the rail, the page's padding and a side panel.
 fn page_width(root: &SplatRoot, window: &Window) -> Pixels {
-    let width = window.viewport_size().width;
-    let rail = if width >= theme::RAIL_WIDE_FROM {
-        theme::RAIL_WIDE_WIDTH
-    } else {
-        theme::RAIL_WIDTH
-    };
-    let side = root.app.lookup.open || root.app.sessions.notes_open;
-    let side = if side {
-        theme::PANEL_MIN_WIDTH + theme::HAIRLINE_WIDTH
-    } else {
-        px(0.0)
-    };
-    width - rail - theme::M * 2.0 - side
+    root.page_width(window)
 }
 
 /// The run panel's width beside the roster (egui `panel_width`): the stat block's share of the
