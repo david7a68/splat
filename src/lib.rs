@@ -325,8 +325,7 @@ enum SettingsTab {
 
 impl Splat {
     /// Restore what this computer remembers (`ui_state`): the page, the session played, the
-    /// open run, the touchpad speed. Both UIs call it once before their first frame; the egui
-    /// app also restores its column widths from the returned state.
+    /// open run, the touchpad speed. The app calls it once before its first frame.
     fn restore(&mut self) -> ui_state::UiState {
         self.started = true;
         let saved = self.ui_store.load();
@@ -1471,8 +1470,7 @@ impl Splat {
     }
 }
 
-/// The app's frame logic that draws nothing, shared by the egui and GPUI apps (`gui::SplatRoot`
-/// calls these in the same order as `update`).
+/// The app's frame logic that draws nothing (`gui::SplatRoot` calls it each frame).
 impl Splat {
     /// Poll background work (sign-in, D&D Beyond, art, Lookup's index, encounters, processing,
     /// sessions, trackers) and follow the open run into the Timeline. Returns the account's
@@ -1484,7 +1482,6 @@ impl Splat {
         self.dndbeyond
             .poll(ctx, epoch, session.is_some(), &mut self.campaigns);
         self.art.poll(ctx, self.campaigns.modules());
-        art::show_viewer(ctx);
         if ctx
             .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("encounter_identity_changed")))
             .is_some()

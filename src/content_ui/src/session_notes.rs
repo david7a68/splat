@@ -355,7 +355,7 @@ impl Fault for FolderFault {
 /// own text and is made a sentence here, the one place the page takes words from outside.
 #[allow(
     clippy::disallowed_methods,
-    reason = "an error of the system or of a file keeps its own words (design::results::STAGED_ALLOWS)"
+    reason = "an error of the system or of a file keeps its own words"
 )]
 pub fn notice_sentence(words: &str) -> Sentence {
     Sentence::outside(words).unwrap_or(crate::sentence!("Something went wrong."))
