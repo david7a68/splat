@@ -20,6 +20,8 @@
 //! and made again only when its words, its mode, its document, the link index, the art or its
 //! width change: a quiet frame parses and measures nothing.
 mod parse;
+#[cfg(test)]
+pub(crate) use parse::PREPARES;
 mod table;
 
 use crate::gui::icons;
