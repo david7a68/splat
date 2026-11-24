@@ -940,12 +940,22 @@ fn travel_checks_in_the_plan() {
     shell.click(&format!("id:plan-checks-{journey}-roll-0"));
     assert_eq!(event(&mut shell).checks.len(), 1, "one check rolled");
     assert!(shell.bounds("Undo roll 1 travel check").is_some());
-    capture(&mut shell, "travel-checks__01-travel-checks-rolled__1200x800");
     shell.click("Undo roll 1 travel check");
     assert!(
         event(&mut shell).checks.is_empty(),
         "Undo takes the roll back"
     );
+    // As egui's scenario: Day 1 rolled, Day 2 a player's 16, which the plan can take.
+    shell.click(&format!("id:plan-checks-{journey}-roll-0"));
+    shell.click("Enter a roll for Day 2");
+    shell.type_text("16");
+    shell.press("enter");
+    assert_eq!(event(&mut shell).checks.len(), 2, "both days have a result");
+    assert!(shell.bounds("Plan “Bridge Ambush”").is_some());
+    capture(&mut shell, "travel-checks__01-travel-checks-rolled__1200x800");
+    shell.click("Clear the check for Day 2");
+    shell.click("Clear the check for Day 1");
+    assert!(event(&mut shell).checks.is_empty(), "Clear takes each result off");
     // A player's roll, typed: the toll gang, which the plan can take.
     shell.click("Enter a roll for Day 2");
     shell.type_text("19");
@@ -1066,13 +1076,12 @@ fn plan_group_assembly() {
     shell.click("Undo discard of Ash Pack");
     assert!(shell.read(|root| root.app.encounters.group_open_in_plan()));
 
-    // The group editor takes its columns from the window's width (`encounters::group::render`):
-    // with the session list hidden, the plan has that width and Add creatures has its room.
-    shell.click("id:session-list-toggle");
+    // As in egui's scenario, the session list stays beside the plan.
     shell.click("Find a creature");
     shell.type_text("wolf");
-    let add = first_target(&mut shell, "id:add:");
-    shell.click(&add);
+    // Two wolves, as egui's scenario added them.
+    shell.click("Add Wolf");
+    shell.click("Add Wolf");
     assert_eq!(
         shell.read(|root| root.app.encounters.group_members().map(|m| m.len())),
         Some(1)
@@ -1086,6 +1095,14 @@ fn plan_group_assembly() {
     assert!(
         note_words(&mut shell).contains("Ash Pack"),
         "the saved group joins the plan"
+    );
+    // The plan's row comes with the campaign's next read of its groups (a background read after
+    // the save): wait on the read's own result, as egui's scenario waited for the row.
+    shell.update(|root, _, _| root.app.encounters.wait_for_load());
+    shell.settle();
+    assert!(
+        shell.bounds("Edit group Ash Pack").is_some(),
+        "the saved group is a row of the plan"
     );
     capture(&mut shell, "session-plan-groups__03-plan-group-saved__1200x800");
 

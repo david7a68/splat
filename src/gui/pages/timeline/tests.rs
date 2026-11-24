@@ -247,12 +247,23 @@ fn a_journeys_checks() {
             .is_some_and(|index| !index.loot_sources().tables.is_empty())),
         "the road's table is read"
     );
-    shell.click("Timeline");
-    shell.settle();
-    first_day(&mut shell);
-    shell.click("Add Travel");
-    shell.settle();
+    // As egui's scenario: the journey is the session's, added in its plan after a Day, then
+    // opened on Timeline.
+    shell.click("Session");
+    shell.click("New session");
+    shell.type_text("The Crossing");
+    shell.click("Create session");
+    shell.click("id:plan-add-more-button");
+    shell.click("Day");
+    shell.click("id:plan-add-more-button");
+    shell.click("Travel");
     let journey = events(&mut shell).last().unwrap().id.clone();
+    shell.click("Timeline");
+    shell.update(|root, _, cx| {
+        root.app.timeline_page.select(Some(journey.clone()));
+        cx.notify();
+    });
+    shell.settle();
     shell.click("More actions for Travel");
     shell.settle();
     shell.click("Roll for encounters");
