@@ -284,9 +284,31 @@ fn run_end_undo_and_close() {
 /// On another page the strip keeps the turn; Next turn there moves it, and Back to run returns.
 #[test]
 fn run_strip_on_another_page() {
+    const LONG_NAME: &str = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
     let mut shell = Shell::new("run-long-names", Seed::Campaign);
     open_saved(&mut shell, RUN);
+    // As in the egui scenario: Iselle, next up, has a long name and an effect, and the
+    // Library is read before the strip is seen there.
+    shell.update(|root, _, _| {
+        root.app
+            .encounters
+            .simulate_rename("Iselle Marrowind", LONG_NAME)
+    });
+    shell.click(LONG_NAME);
+    shell.press("e");
+    shell.type_text("Bless 10 rounds");
+    shell.press("enter");
     shell.update(|root, _, cx| root.show_page(Page::Library, cx));
+    for _ in 0..200 {
+        if shell.read(|root| root.app.library.loaded() && !root.app.library.loading()) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+    }
+    assert!(
+        shell.read(|root| root.app.library.loaded()),
+        "the Library loads"
+    );
     shell.capture("run-long-names__02-long-name-on-the-strip__1200x800");
     let before = current_name(&mut shell);
     shell.click("id:run-strip-next-turn");

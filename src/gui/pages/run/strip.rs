@@ -65,6 +65,14 @@ pub(crate) fn render_strip(
         }
     }
     line = line.child(div().flex_1());
+    // Back to run first, then Next turn, as in egui.
+    line = line.child(
+        kit::Button::secondary("run-strip-back", "Back to run")
+            .density(Density::Read)
+            .on_click(cx.listener(|root: &mut SplatRoot, _: &ClickEvent, _, cx| {
+                root.show_page(Page::Run, cx);
+            })),
+    );
     if strip.running {
         line = line.child(
             kit::Button::primary("run-strip-next-turn", "Next turn")
@@ -81,13 +89,6 @@ pub(crate) fn render_strip(
                 })),
         );
     }
-    line = line.child(
-        kit::Button::secondary("run-strip-back", "Back to run")
-            .density(Density::Read)
-            .on_click(cx.listener(|root: &mut SplatRoot, _: &ClickEvent, _, cx| {
-                root.show_page(Page::Run, cx);
-            })),
-    );
     if strip.not_saved {
         line = line.child(kit::status(&kit::Status::new(
             icons::ERROR,

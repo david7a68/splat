@@ -87,12 +87,22 @@ pub fn tile_row(
                     view.actions.iter().enumerate().map(|(at, (word, action))| {
                         let ctx = ctx.clone();
                         let action = *action;
-                        kit::Button::quiet(super::parts::child(id, format!("armed-{at}")), *word)
-                            .line_start()
-                            .on_click(move |_, window, _| {
+                        let id = super::parts::child(id, format!("armed-{at}"));
+                        // FI9: the step that continues the task is framed; a quiet one at the
+                        // line's start hangs its padding in the gutter.
+                        let button = if action.continues() {
+                            kit::Button::secondary(id, *word)
+                        } else if at == 0 {
+                            kit::Button::quiet(id, *word).line_start()
+                        } else {
+                            kit::Button::quiet(id, *word)
+                        };
+                        button.density(crate::gui::theme::Density::Read).on_click(
+                            move |_, window, _| {
                                 plain::send_armed_action(&ctx, action);
                                 window.refresh();
-                            })
+                            },
+                        )
                     }),
                 ));
         } else {

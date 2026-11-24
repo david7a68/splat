@@ -787,8 +787,15 @@ fn armed_line(view: &rolls::ArmedView, cx: &mut Context<SplatRoot>) -> impl Into
     let mut actions = div().flex().flex_row().flex_wrap().gap(theme::XS);
     for (at, (words, action)) in view.actions.iter().enumerate() {
         let action: ArmedAction = *action;
+        let id = ElementId::Name(format!("run-armed-{at}").into());
+        // FI9: the step that continues the task is framed; the others stay quiet.
+        let button = if action.continues() {
+            kit::Button::secondary(id, *words)
+        } else {
+            kit::Button::quiet(id, *words)
+        };
         actions = actions.child(
-            kit::Button::quiet(ElementId::Name(format!("run-armed-{at}").into()), *words)
+            button
                 .density(Density::Read)
                 .on_click(on_run(cx, move |run| run.armed_action(action))),
         );
