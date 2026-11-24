@@ -371,9 +371,6 @@ pub struct Run {
     pub turn_heading: crate::design::KeptTurnHeading,
     /// The groups' revision that `arrival_lines` was last trimmed to.
     pub arrival_lines_seen: Option<crate::design::memo::Revision>,
-    /// Each pending sync's line in the ended view, by row, with the sync values' revision it
-    /// was worked out from (G178).
-    pub pending_lines: BTreeMap<usize, (u64, String)>,
     /// How often frames asked for the Arrivals words, and how often they were worked out.
     #[cfg(any(test, feature = "test-support"))]
     pub arrival_counts: (usize, usize),
@@ -455,8 +452,6 @@ pub struct Run {
     pub setup_inputs: BTreeMap<usize, String>,
     /// The participant whose initiative the last step set, to merge keystrokes.
     pub last_initiative: Option<usize>,
-    /// An exhaustion drag shows its level and becomes one step when it ends.
-    pub exhaustion_drag: Option<view::ExhaustionDrag>,
     /// Lookup is beside the run, so the run's own panel gives up its space.
     pub hide_panel: bool,
     /// The recording needs a look, shown where the run's notices go, so nothing moves.
@@ -588,16 +583,6 @@ const CONTINUE_NEEDS_TIMELINE: &str =
 /// the Timeline's next change works the rule out again.
 const CONTINUE_DISK_CHANGED: &str =
     "Timeline.md changed on disk. Settle it on the Timeline page to continue this fight.";
-/// Every sentence that can stand where Continue fight would be, so the ended header keeps room
-/// for the widest and the tallest of them (X38).
-const CONTINUE_REASONS: [&str; 6] = [
-    CONTINUE_LATER,
-    CONTINUE_NO_EVENT,
-    CONTINUE_LATER_GONE,
-    CONTINUE_NO_EVENT_GONE,
-    CONTINUE_NEEDS_TIMELINE,
-    CONTINUE_DISK_CHANGED,
-];
 
 /// Each unread roster row's slot key, the key its participant has, with the row's line. The key
 /// is the row's own (`slot=` in its note) or its file line's, as `list_formats` gives a slot.
@@ -895,7 +880,6 @@ impl Run {
             arrival_lines: crate::difficulty::Kept::default(),
             turn_heading: crate::design::KeptTurnHeading::new(),
             arrival_lines_seen: None,
-            pending_lines: BTreeMap::new(),
             #[cfg(any(test, feature = "test-support"))]
             arrival_counts: (0, 0),
             arrival_summaries: None,
@@ -947,7 +931,6 @@ impl Run {
             undo_boundary: None,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
-            exhaustion_drag: None,
             hide_panel: false,
             lookup_open: false,
             continue_blocked: None,
@@ -1247,16 +1230,6 @@ impl Run {
             Grouping::BySide => p.side.clone(),
             Grouping::Explicit => p.initiative_group.clone().unwrap_or_else(|| p.key.clone()),
         }
-    }
-    /// True when this mode gives two or more NPCs one shared roll. Their equal totals then
-    /// show tie arrows, so setup can reserve the tie column before the roll.
-    pub fn rolls_a_group(&self, grouping: Grouping) -> bool {
-        let mut keys = std::collections::BTreeSet::new();
-        self.state
-            .participants
-            .iter()
-            .filter(|p| p.npc)
-            .any(|p| !keys.insert(Self::roll_key(p, grouping)))
     }
     /// A shared roll is one block, including its first member.
     pub fn roll_block_first(state: &State, index: usize) -> usize {
@@ -2335,10 +2308,6 @@ impl Run {
             self.selected = self.current().unwrap_or(0);
         }
         self.syncs.retain(|index, _| *index < count);
-        // A pending line ends with its row or its sync.
-        let syncs = &self.syncs;
-        self.pending_lines
-            .retain(|index, _| *index < count && syncs.contains_key(index));
         self.sync_shadows.retain(|index, _| *index < count);
         self.setup_inputs.retain(|index, _| *index < count);
         for place in [
@@ -4032,7 +4001,6 @@ impl Run {
             arrival_lines: crate::difficulty::Kept::default(),
             turn_heading: crate::design::KeptTurnHeading::new(),
             arrival_lines_seen: None,
-            pending_lines: BTreeMap::new(),
             #[cfg(any(test, feature = "test-support"))]
             arrival_counts: (0, 0),
             arrival_summaries: None,
@@ -4083,7 +4051,6 @@ impl Run {
             undo_boundary: None,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
-            exhaustion_drag: None,
             hide_panel: false,
             lookup_open: false,
             continue_blocked: None,
@@ -4352,24 +4319,6 @@ impl Run {
     pub fn hp_of(&self, index: usize) -> Option<i64> {
         self.state.participants[index].hp
     }
-    pub fn simulate_stat_block_edit(&mut self, name: &str, edit: impl FnOnce(&mut String)) {
-        let participant = self
-            .state
-            .participants
-            .iter_mut()
-            .find(|p| p.name == name)
-            .unwrap();
-        edit(&mut Arc::make_mut(&mut participant.definition).body);
-    }
-    /// Undo, then roll the first loot line that has no result, with no frame between them.
-    pub fn simulate_undo_and_roll_first_loot(&mut self) {
-        self.undo();
-        let holders: Vec<_> = self.holders().into_iter().filter(|h| h.open).collect();
-        if let Some(first) = self.unrolled(&holders).into_iter().next() {
-            let pick = (first.0.clone(), first.1);
-            self.roll_loot(&[pick]);
-        }
-    }
     pub fn simulate_connection(&mut self) {
         self.simulate_connection = true;
     }
@@ -4449,57 +4398,8 @@ impl Run {
     pub fn log_len(&self) -> usize {
         self.state.log.len()
     }
-    /// A read of this character's sheet that shows inspiration or none. Test builds have no
-    /// live sheet; this is the same note a read of the sheet makes.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn simulate_sheet_inspiration(&mut self, name: &str, has: bool) {
-        let row = self
-            .state
-            .participants
-            .iter()
-            .position(|p| p.name == name)
-            .expect("participant in this run");
-        self.note_sheet_inspiration(row, has);
-    }
     pub fn simulate_error(&mut self, message: &str) {
         self.error = (!message.is_empty()).then(|| message.to_owned());
-    }
-    /// Copies of the last participant, until the run has `count` rows.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn simulate_rows(&mut self, count: usize) {
-        while self.state.participants.len() < count {
-            let at = self.state.participants.len();
-            let mut copy = self
-                .state
-                .participants
-                .last()
-                .expect("a participant")
-                .clone();
-            copy.key = format!("simulated-row-{at}");
-            copy.name = format!("Guard {at}");
-            self.state.participants.push(copy);
-            self.state.order.push(at);
-        }
-    }
-    /// Every participant has this condition, by its word.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn simulate_condition(&mut self, word: &str) {
-        for p in &mut self.state.participants {
-            p.conditions = vec![Condition::Label(word.into())];
-        }
-    }
-    /// The named participant takes the turn and is selected, with no scroll to it.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn simulate_current(&mut self, name: &str) {
-        let at = self
-            .state
-            .participants
-            .iter()
-            .position(|p| p.name == name)
-            .expect("participant in this run");
-        self.state.cursor = self.state.order.iter().position(|i| *i == at).unwrap();
-        self.selected = at;
-        self.scroll_to_selected = false;
     }
     /// Show one participant in a sync state test builds cannot reach by themselves.
     pub fn simulate_sync_state(&mut self, name: &str, state: crate::combat_sync::SyncState) {
@@ -5409,35 +5309,6 @@ mod tests {
         assert!(run.state.participants[0].concentration);
         run.undo();
         assert!(!run.state.participants[0].concentration);
-    }
-    #[test]
-    fn render_setup_running_and_ended_views_without_changing_state() {
-        let mut run = run();
-        let ctx = egui::Context::default();
-        for phase in 0..3 {
-            if phase == 1 {
-                begin(&mut run);
-            }
-            if phase == 2 {
-                run.apply(Command::End("Undecided".into())).unwrap();
-            }
-            let log = run.state.log.clone();
-            for size in [egui::vec2(700.0, 600.0), egui::vec2(1000.0, 760.0)] {
-                let output = ctx.run(
-                    egui::RawInput {
-                        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
-                        ..Default::default()
-                    },
-                    |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| {
-                            assert!(!run.show(ui));
-                        });
-                    },
-                );
-                assert!(!output.shapes.is_empty());
-                assert_eq!(run.state.log, log);
-            }
-        }
     }
     #[test]
     fn saved_run_roundtrip_keeps_combat_state_and_rejects_external_edits() {
@@ -6565,18 +6436,6 @@ mod tests {
         run.syncs.get_mut(&0).unwrap().start();
         assert!(!run.syncs[&0].session_lost());
         assert!(!run.strip().sync_stopped);
-    }
-    /// A run whose first row is in a sync conflict: the DM's damage while sync was stopped
-    /// meets the sheet's own value.
-    pub(super) fn conflicted() -> Run {
-        let (mut run, _, max) = matched_with_sheet(5);
-        offline_tick(&mut run);
-        run.apply(Command::Damage(0, 4)).unwrap();
-        offline_tick(&mut run);
-        reconnect(&mut run);
-        read_sheet(&mut run, max, 5);
-        assert_eq!(run.sync_word(0), Some(SyncState::Conflict));
-        run
     }
     /// A linked participant with sync on, showing a sheet with this much damage taken. Its
     /// maximum is the test creature's.
@@ -7963,26 +7822,14 @@ mod tests {
         assert_eq!((run.current(), run.state.round), (Some(1), 1));
     }
 
+    /// An arrival's words never break after `·` or after `at` before its number: both are
+    /// followed by a no-break space, so no line of the message ends with them.
     fn assert_arrival_wraps(message: &str) {
-        let ctx = egui::Context::default();
-        crate::design::theme::install(&ctx);
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                for width in [240.0, 280.0, 320.0] {
-                    let galley = ui.painter().layout(
-                        message.to_owned(),
-                        crate::design::Type::Small.font(ui),
-                        crate::design::colors().text,
-                        width,
-                    );
-                    for row in &galley.rows {
-                        let text: String = row.glyphs.iter().map(|glyph| glyph.chr).collect();
-                        assert!(!text.trim_end().ends_with('·'), "{text}");
-                        assert!(!text.trim_end().ends_with(" at"), "{text}");
-                    }
-                }
-            });
-        });
+        assert!(!message.contains("· "), "{message}");
+        assert!(
+            !(0..10).any(|digit| message.contains(&format!(" at {digit}"))),
+            "{message}"
+        );
     }
 
     #[test]
@@ -8196,7 +8043,6 @@ mod tests {
     }
     #[test]
     fn use_the_saved_hp_is_its_own_step_and_undo_gives_back_the_full_hp() {
-        use crate::design::test_harness::ThemedPage as _;
         let folder = tempfile::tempdir().unwrap();
         let mut setup = run();
         linked(&mut setup, 0, "42");
@@ -8257,35 +8103,22 @@ mod tests {
         // stays, A's HP stays, and A's line stays in its store.
         let a_step = *run.history_steps.last().unwrap();
         let b_max = run.state.participants[2].max_hp;
-        let shared = std::rc::Rc::new(std::cell::RefCell::new((run, false)));
-        let inner = shared.clone();
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(600.0, 400.0))
-            .themed(move |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    let (run, add_b) = &mut *inner.borrow_mut();
-                    let frame = crate::design::outcome::PaneFrame::new(ui);
-                    let messages = run.run_messages(&frame, true, ui.available_width());
-                    let paned = messages.pane(ui, crate::design::pane::Body::Content, |_| {
-                        if std::mem::take(add_b) {
-                            run.apply(Command::Health(2, Some(2), b_max)).unwrap();
-                        }
-                    });
-                    run.run_press(paned.pressed, &mut None);
-                });
-            });
-        harness.run_steps(2);
-        shared.borrow_mut().1 = true;
-        {
-            use egui_kittest::kittest::Queryable;
-            harness.get_by_label("Undo: use saved HP").click();
-        }
-        harness.run_steps(2);
-        drop(harness);
-        let (mut run, _) = std::rc::Rc::try_unwrap(shared)
-            .ok()
-            .expect("the harness is gone")
-            .into_inner();
+        // The footer's line as the page shows it, its press made before B (as a press that
+        // the page drew before the step lands).
+        let frame = crate::design::outcome::PaneFrame::plain();
+        let press = run
+            .run_messages(&frame, true, 0.0)
+            .into_plain()
+            .iter()
+            .find(|line| {
+                line.undo
+                    .as_ref()
+                    .is_some_and(|undo| undo.label == "Undo: use saved HP")
+            })
+            .and_then(crate::design::outcome::plain::PlainLine::press_undo)
+            .expect("the footer offers Undo: use saved HP");
+        run.apply(Command::Health(2, Some(2), b_max)).unwrap();
+        run.run_press(Some(press), &mut None);
         assert_eq!(
             run.state.participants[2].hp,
             Some(2),
@@ -8983,7 +8816,6 @@ mod tests {
         assert_eq!(open(&run), ["encounter"]);
         run.apply(Command::Damage(1, 1000)).unwrap();
         assert!(run.state.participants[1].loot_ready());
-        assert!(view::row_words_for_test(&run.state.participants[1]).ends_with("Loot"));
         run.apply(Command::End("Won".into())).unwrap();
         assert_eq!(open(&run), ["encounter", "slot1"]);
         let holders: Vec<_> = run.holders().into_iter().filter(|h| h.open).collect();
@@ -9225,11 +9057,9 @@ mod tests {
         assert_eq!(run.state.participants.len(), before + 1);
         assert!(run.side_names().contains(&"enemies".to_owned()));
         let npc = run.state.participants.last().unwrap();
-        let words = view::row_words_for_test(npc);
-        assert!(
-            words.contains("as Guard") && !words.contains("Changed"),
-            "{words}"
-        );
+        // Its row says `as Guard` and no change (`roster::parts`).
+        assert!(npc.named_stat_block() && npc.definition.name == "Guard");
+        assert!(npc.changes.is_none() || !npc.stat_changes());
         run.undo();
         assert_eq!(run.state.participants.len(), before);
     }
@@ -9241,69 +9071,6 @@ mod tests {
             "enemies",
             vec![(creature(), count, Overrides::default())],
         )
-    }
-    #[test]
-    fn run_icons_have_glyphs_at_each_capture_size() {
-        use crate::design::{self, Type, icons};
-        for (width, height) in [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)] {
-            let ctx = egui::Context::default();
-            design::theme::install(&ctx);
-            let _ = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(width, height),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        for role in [
-                            Type::Small,
-                            Type::Body,
-                            Type::Strong,
-                            Type::Name,
-                            Type::Label,
-                        ] {
-                            let font = role.font(ui);
-                            for icon in [
-                                icons::DOWN,
-                                icons::TEMP_HP,
-                                icons::ABSENT,
-                                icons::CONCENTRATING,
-                                icons::MOVE_UP,
-                                icons::MOVE_DOWN,
-                                icons::WARN,
-                                icons::EDIT,
-                                icons::DRAG,
-                                icons::CHANGED,
-                                icons::OK,
-                                icons::ADD,
-                                icons::NEXT,
-                                icons::SESSIONS,
-                                icons::GROUP,
-                                icons::OFFLINE,
-                                icons::ERROR,
-                                icons::INFO,
-                                icons::KEYS,
-                                icons::DICE,
-                                icons::UNDO,
-                                icons::CLOSE,
-                                icons::SYNC_ON,
-                                "■",
-                                "◆",
-                                "•",
-                            ] {
-                                assert!(
-                                    ui.fonts_mut(|fonts| fonts.has_glyphs(&font, icon)),
-                                    "Missing icon {icon:?} at {width}×{height}"
-                                );
-                            }
-                        }
-                    });
-                },
-            );
-        }
     }
     fn group_of(name: &str, side: &str, members: Vec<(Entry, u64, Overrides)>) -> Arc<RunGroup> {
         Arc::new(RunGroup {
@@ -9751,13 +9518,6 @@ mod tests {
         assert!(run.setup_inputs.is_empty() && run.syncs.is_empty());
         assert_eq!(run.sheet_for, None);
         assert_eq!(run.undo_label(), "Undo: next turn");
-        // Nothing still points at the row, in any view.
-        let ctx = egui::Context::default();
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                run.show(ui);
-            });
-        });
         // Adding it again is a new step, with new keys.
         run.state.random = Random::controlled([10, 4]);
         run.apply(Command::AddGroup(guard_group("Wave", 1), None))
@@ -10717,8 +10477,7 @@ mod tests {
         );
     }
     #[test]
-    fn the_run_card_and_panel_draw_with_changes_and_groups_in_setup_and_in_combat() {
-        let ctx = egui::Context::default();
+    fn a_changed_arrival_keeps_its_changes_through_setup_and_combat() {
         let mut run = run();
         run.set_groups(Arc::new(vec![mixed_group(), guard_group("Wave", 2)]));
         run.apply(Command::AddGroup(
@@ -10736,32 +10495,15 @@ mod tests {
             Some(30),
         ))
         .unwrap();
-        run.selected = 3;
-        for panel in [Panel::Groups, Panel::Record, Panel::Reference] {
-            run.panel = panel;
-            let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    run.show(ui);
-                });
-            });
-        }
         for i in 0..3 {
             run.apply(Command::Initiative(i, Some(5))).unwrap();
         }
         run.apply(Command::Begin).unwrap();
-        for panel in [Panel::Groups, Panel::Reference] {
-            run.panel = panel;
-            let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    run.show(ui);
-                });
-            });
-        }
-        let name = view::row_words_for_test(&run.state.participants[3]);
-        assert!(
-            name.contains("Changed") && name.contains("Attack +1"),
-            "{name}"
-        );
+        // Its row says `Changed` and the bonus (`roster::parts`).
+        let p = &run.state.participants[3];
+        let changes = p.changes.as_ref().filter(|_| p.stat_changes()).unwrap();
+        let bonuses = changes.overrides.table_bonuses(&changes.base);
+        assert!(bonuses.iter().any(|b| b == "Attack +1"), "{bonuses:?}");
     }
     #[test]
     fn iter_1_b_saved_times_use_age_for_recent_calendar_days() {

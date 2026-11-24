@@ -4434,7 +4434,13 @@ pub(crate) enum MemberRepair {
 #[derive(Clone, Copy)]
 pub(crate) enum MemberFaultView {
     EncounterList,
-    Arrivals { edit_too: bool },
+    #[allow(
+        dead_code,
+        reason = "the Run’s egui Arrivals made it; deleted with this egui row (wave 3 step 2)"
+    )]
+    Arrivals {
+        edit_too: bool,
+    },
 }
 
 /// Both screens use the same repair for a fault. The list fits its single repair beside

@@ -2115,93 +2115,6 @@ pub(crate) fn outcome_line(ui: &mut egui::Ui, outcome: &Outcome) {
 /// The height of a line of buttons above the dock.
 pub const BAR_BUTTONS: f32 = 28.0;
 
-/// The run's actions on one line above the dock while Lookup or Notes hide the panel: a
-/// quiet button for each tile, the armed one marked, with a run's changes in its numbers.
-/// The first button starts at the dock's content edge.
-pub fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
-    let ctx = ui.ctx().clone();
-    let armed = ctx.data(|data| data.get_temp::<ArmedView>(armed_id()));
-    let changes = roller_changes(&ctx);
-    ui.horizontal(|ui| {
-        ui.set_height(BAR_BUTTONS);
-        ui.spacing_mut().item_spacing.x = design::XS;
-        design::gap(ui, design::Gap::S);
-        for (at, chip) in chips.iter().enumerate() {
-            let lit = armed.as_ref().is_some_and(|view| view.marks(chip));
-            let shown = with_changes(&chip.link, changes);
-            let label = Chip::new(shown.clone(), chip.text.clone())
-                .map_or_else(|| chip.label.clone(), |shown| shown.label);
-            let words = format!("{} {label}", icon(&chip.link));
-            let action = Action::secondary(&words)
-                .name(&label)
-                .density(Density::Read)
-                .selected(lit);
-            // A button shows whole or not at all. The actions with no room go in a menu at the
-            // line's end, by name and number, so the mouse can arm each one with Lookup open.
-            let left = chips.len() - at;
-            let more = format!("{left} more");
-            let more_width = design::menu_button_width(ui, &more) + design::XS;
-            let room = ui.available_width() - if left > 1 { more_width } else { 0.0 };
-            if action.natural_width(ui) > room {
-                more_actions(ui, &more, chips, at, changes);
-                break;
-            }
-            let response = action.show(ui);
-            let response = rules_on_hover_and_focus(response, chip, &shown, "", None);
-            press(ui, &response, &chip.link, chip.spell_occurrence, None);
-        }
-    });
-}
-
-/// The strip's actions from `from` on, which have no room on its line: a menu that lists each
-/// by name and its Ctrl number, and arms the one the DM chooses.
-fn more_actions(ui: &mut egui::Ui, word: &str, chips: &[Chip], from: usize, changes: (i64, i64)) {
-    let response = design::menu_button(ui, word, false).on_hover_text(format!(
-        "{}. Choose one to arm it.",
-        design::count(chips.len() - from, "more action", "more actions")
-    ));
-    // It owns its menu as a run's menu does: Escape or a choice gives the focus back to this
-    // button, whether a click or the keys opened it. Enter or Space also focus the first choice.
-    keep_menu_owner(&response);
-    let popup_id = egui::Popup::default_response_id(&response);
-    if response.clicked() && !egui::Popup::is_id_open(&response.ctx, popup_id) {
-        opened_menu(
-            &response,
-            !response.clicked_by(egui::PointerButton::Primary),
-        );
-    }
-    // `menu_popup` opens it on the side of the button with more room in the pane, inside it.
-    crate::design::menu_popup(&*ui, &response).show(|ui| {
-        for (place, chip) in chips.iter().enumerate().skip(from) {
-            let shown = with_changes(&chip.link, changes);
-            let label = Chip::new(shown.clone(), chip.text.clone())
-                .map_or_else(|| chip.label.clone(), |shown| shown.label);
-            // Ctrl+1 to Ctrl+9 arm the first nine actions.
-            let key = if place < 9 {
-                format!("Ctrl+{}", place + 1)
-            } else {
-                String::new()
-            };
-            let response = Action::quiet(&label)
-                .icon(icon(&chip.link))
-                .density(Density::Read)
-                .key(&key)
-                .show(ui);
-            menu_choice_focus(ui, &response);
-            if response.clicked() {
-                ask(
-                    ui.ctx(),
-                    chip.link.clone(),
-                    chip.spell_occurrence,
-                    Mode::from_keys(ui, &chip.link),
-                    false,
-                );
-                ui.close();
-            }
-        }
-    });
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2638,45 +2551,39 @@ mod tests {
     }
 
     #[test]
-    fn keyboard_focus_shows_a_tiles_rules_on_the_tiles_and_on_the_action_bar() {
+    fn keyboard_focus_shows_a_tiles_rules_on_the_tiles() {
         use egui_kittest::Harness;
         use egui_kittest::kittest::{NodeT, Queryable};
         let text = "Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage.";
-        for bar in [false, true] {
-            let mut harness = Harness::builder()
-                .with_size(egui::vec2(600.0, 300.0))
-                .build_ui(move |ui| {
-                    design::theme::install(ui.ctx());
-                    if bar {
-                        compact_tiles(ui, &chips(text));
-                    } else {
-                        tiles(ui, "Wolf", &placed(text));
-                    }
-                });
-            let rules_shown = |harness: &Harness<'_>| {
-                harness
-                    .query_all_by_label_contains("Melee Attack Roll: +4, reach 5 ft.")
-                    .any(|node| node.accesskit_node().role() == egui::accesskit::Role::Label)
-            };
-            assert!(!rules_shown(&harness), "no rules before focus (bar {bar})");
-            // The tile's name, `Bite · +4 · …`, or the bar's button, `Bite +4`.
-            let name = if bar { "Bite +4" } else { "Bite · +4" };
-            harness.get_by_label_contains(name).focus();
-            harness.run_steps(3);
-            assert!(
-                rules_shown(&harness),
-                "iter-19-R-ST3: keyboard focus shows the rules (bar {bar})"
-            );
-            assert_eq!(
-                harness
-                    .get_by_label_contains(name)
-                    .accesskit_node()
-                    .description()
-                    .as_deref(),
-                Some(text),
-                "the rules are its description (bar {bar})"
-            );
-        }
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(600.0, 300.0))
+            .build_ui(move |ui| {
+                design::theme::install(ui.ctx());
+                tiles(ui, "Wolf", &placed(text));
+            });
+        let rules_shown = |harness: &Harness<'_>| {
+            harness
+                .query_all_by_label_contains("Melee Attack Roll: +4, reach 5 ft.")
+                .any(|node| node.accesskit_node().role() == egui::accesskit::Role::Label)
+        };
+        assert!(!rules_shown(&harness), "no rules before focus");
+        // The tile's name, `Bite · +4 · …`.
+        let name = "Bite · +4";
+        harness.get_by_label_contains(name).focus();
+        harness.run_steps(3);
+        assert!(
+            rules_shown(&harness),
+            "iter-19-R-ST3: keyboard focus shows the rules"
+        );
+        assert_eq!(
+            harness
+                .get_by_label_contains(name)
+                .accesskit_node()
+                .description()
+                .as_deref(),
+            Some(text),
+            "the rules are its description"
+        );
     }
 
     #[test]

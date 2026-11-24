@@ -1485,9 +1485,6 @@ impl CombatSync {
     pub fn conflicts(&mut self, ui: &mut egui::Ui) {
         self.conflicts_inner(ui, None, true);
     }
-    pub fn conflicts_for(&mut self, ui: &mut egui::Ui, name: &str) {
-        self.conflicts_inner(ui, Some(name), false);
-    }
     fn conflicts_inner(&mut self, ui: &mut egui::Ui, name: Option<&str>, explanation: bool) {
         use crate::design::{self, Action, Density, Type, colors};
         for row in self.conflict_rows() {
