@@ -75,13 +75,15 @@ fn input_section(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElemen
                 let names: Vec<String> = inputs.iter().map(|(_, words)| words.clone()).collect();
                 let values: Vec<Option<String>> =
                     inputs.into_iter().map(|(name, _)| name).collect();
-                root.app.processing.focus_input = false;
+                // `Choose input` on the session's recording asks for the keyboard here, once.
+                let focus = std::mem::take(&mut root.app.processing.focus_input);
                 column = column.child(kit::field(
                     "Input",
                     None,
                     None,
                     Dropdown::new("recording_input", "Recording input", names, at)
                         .width(FORM_WIDTH)
+                        .focus(focus)
                         .on_select(cx.listener(move |root, index: &usize, _, cx| {
                             if let Some(value) = values.get(*index) {
                                 root.app.processing.set_input(value.clone());

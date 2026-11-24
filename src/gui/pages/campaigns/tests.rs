@@ -60,15 +60,59 @@ fn packages_choose_and_discard() {
         shell.wait(std::time::Duration::from_millis(50));
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
+    // The scenario's steps: the built-in package, Needed by your entries, then Ashen Marches,
+    // where one entry is left out; choosing it changes that package only.
+    let row = |start: &str| {
+        crate::gui::kit::probe::names()
+            .into_iter()
+            .find(|name| name.starts_with(start))
+            .unwrap_or_else(|| panic!("no row starts with {start:?}"))
+    };
+    let builtin = row("D&D 2024 · SRD");
+    shell.click(&builtin);
+    assert!(
+        shell.read(|root| root
+            .app
+            .campaign_content
+            .package_rows(&root.app.campaigns)
+            .iter()
+            .any(|row| row.selected && row.name.starts_with("D&D 2024"))),
+        "the built-in package's choices show"
+    );
     shell.capture("campaign-content__01-packages-tab__1200x800");
+    shell.click(&row("Needed by your entries"));
+    assert!(shell.read(|root| root.app.campaign_content.needed_shown()));
+    shell.capture("campaign-content__02-required-dependencies__1200x800");
+    shell.click(&row("Ashen Marches · "));
+    assert!(
+        shell.bounds("Use Ash Wraith").is_some(),
+        "Ashen Marches lists its entries: {:?}",
+        crate::gui::kit::probe::names()
+    );
+    shell.capture("campaign-content__03-packages-partial-selection__1200x800");
     let rows = shell.read(|root| root.app.campaign_content.package_rows(&root.app.campaigns));
-    let first = rows.first().expect("a package");
-    let (id, checked) = (first.id, first.checked);
-    shell.click(&format!("id:content-use-{id}"));
+    let (builtin_row, marches) = (
+        rows.iter()
+            .position(|row| row.name.starts_with("D&D 2024"))
+            .expect("the built-in package"),
+        rows.iter()
+            .position(|row| row.name == "Ashen Marches")
+            .expect("the fixture's package"),
+    );
+    let checked = rows[builtin_row].checked;
+    shell.click("Use Ash Wraith");
     let now = shell.read(|root| root.app.campaign_content.package_rows(&root.app.campaigns));
-    assert_eq!(now[0].checked, !checked, "the box changes the choice");
+    assert_eq!(
+        now[builtin_row].checked, checked,
+        "the built-in package keeps its choice"
+    );
+    assert!(
+        !now[marches].indeterminate && now[marches].checked,
+        "Ashen Marches has every entry chosen now"
+    );
     assert!(shell.read(|root| root.app.campaign_content.selections_changed()));
     shell.capture("campaign-content__04-selection-changed__1200x800");
+    let (id, checked) = (rows[0].id, rows[0].checked);
     shell.click("id:content-discard");
     assert!(!shell.read(|root| root.app.campaign_content.selections_changed()));
     let after = shell.read(|root| root.app.campaign_content.package_rows(&root.app.campaigns));

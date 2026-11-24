@@ -25,6 +25,8 @@ pub(super) fn render(
     let focus = lookup.take_focus_search();
     // The title line: Lookup, Back while there is somewhere to go back to, the open action
     // with its words, and Close.
+    // The icon buttons' density, so the title line keeps one height with or without Back, and
+    // the search field below never moves.
     let back = lookup.can_go_back().then(|| {
         Button::quiet("lookup-back", "Back")
             .icon(icons::HISTORY_BACK)
@@ -63,16 +65,16 @@ pub(super) fn render(
                 },
             )),
         );
+    // Lookup opens on its last words, selected, so typing replaces them
+    // (`design::focus_and_select`). Emptying the field from the keyboard keeps what the reader
+    // shows and the held NPC; only Clear empties the reader too.
+    let has_words = !lookup.query().is_empty();
     let field = TextField::new("lookup_search", lookup.query().to_owned())
         .placeholder(search_hint(f32::from(width)))
         .name(crate::lookup::SEARCH_NAME)
-        .focus(focus)
+        .focus_selected(focus)
         .on_change(cx.listener(|root, words: &str, _, cx| {
-            if words.is_empty() && !root.app.lookup.query().is_empty() {
-                root.app.lookup.clear_search();
-            } else {
-                root.app.lookup.set_query(words);
-            }
+            root.app.lookup.set_query(words);
             cx.notify();
         }))
         .on_enter(super::super::settings::act(cx, |root, _, cx| {
@@ -92,7 +94,21 @@ pub(super) fn render(
                 cx.notify();
             }
         }))
-        .child(field);
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(S)
+        .child(div().flex_1().min_w_0().child(field))
+        .when(has_words, |line| {
+            line.child(
+                Button::quiet("lookup-search-clear", "Clear").on_click(cx.listener(
+                    |root, _, _, cx| {
+                        root.app.lookup.clear_search();
+                        cx.notify();
+                    },
+                )),
+            )
+        });
     let mut column = div()
         .flex()
         .flex_col()

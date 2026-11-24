@@ -380,6 +380,7 @@ pub struct TextEditor {
     handle: Option<EditorHandle>,
     ty: Option<Type>,
     markdown: bool,
+    read_only: bool,
     own_write: bool,
 }
 
@@ -491,8 +492,15 @@ impl TextEditor {
             handle: None,
             ty: None,
             markdown: false,
+            read_only: false,
             own_write: false,
         }
+    }
+
+    /// The words can be read, selected and copied, but not changed (a built-in entry's source).
+    pub fn read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
     }
 
     /// The value's change since the last frame, if any, is the field's own edit (the owner's
@@ -613,6 +621,7 @@ impl RenderOnce for TextEditor {
                 // the caret in it (a frame of no fixed height gives `h_full` nothing to fill).
                 let area = Textarea::new(&input)
                     .appearance(false)
+                    .readonly(self.read_only)
                     .aria_label(name.clone())
                     .h_full()
                     .when(!self.fill, |area| {

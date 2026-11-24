@@ -3125,64 +3125,26 @@ impl Library {
             return;
         }
         self.confirm_unregister = campaigns.modules().iter().find(|m| m.id == id).cloned();
+        self.unregister_users = self
+            .confirm_unregister
+            .as_ref()
+            .and_then(|module| unregister_users(module, campaigns));
     }
 
     /// The unregister confirmation, while it is open.
-    pub fn unregister_view(&self, campaigns: &Campaigns) -> Option<UnregisterView> {
+    pub fn unregister_view(&self) -> Option<UnregisterView> {
         let module = self.confirm_unregister.as_ref()?;
         let count = self
             .loaded
             .as_ref()
             .map_or(0, |l| unregister_count(&l.notes, module.id));
-        let users = campaigns.active_campaign().and_then(|campaign| {
-            let catalogue =
-                crate::content_workspace::Catalogue::load(campaigns.modules(), Some(&campaign))
-                    .ok()?;
-            let entry_ids: Vec<_> = catalogue
-                .entries
-                .values()
-                .filter(|entry| entry.owner == module.id && catalogue.selectable(entry.entry.id))
-                .map(|entry| crate::content_workspace::EntryRef::id(entry.entry.id))
-                .collect();
-            let selection = crate::content_workspace::PackageSelection {
-                name: Some(module.name.clone()),
-                package: crate::content_workspace::EntryRef::id(module.id),
-                selection: crate::content_workspace::Selection::Selected { entries: entry_ids },
-            };
-            let users = selection.campaign_users(&catalogue);
-            if users.is_empty() {
-                return None;
-            }
-            let mut names = Vec::new();
-            for (id, _) in &users {
-                if let Some(user) = catalogue.entries.get(id) {
-                    for reference in content::required_references(&user.entry).unwrap_or_default() {
-                        if let Ok(id) = catalogue.resolve(&reference)
-                            && let Some(entry) = catalogue.entries.get(&id)
-                            && entry.owner == module.id
-                        {
-                            names.push(entry.entry.name.clone());
-                        }
-                    }
-                }
-            }
-            names.sort();
-            names.dedup();
-            let users: Vec<_> = users.into_iter().map(|(_, name)| name).collect();
-            Some(format!(
-                "{} uses {}, in {}.",
-                campaign.name,
-                name_list(&names),
-                name_list(&users)
-            ))
-        });
         Some(UnregisterView {
             title: format!("Unregister {}?", module.name),
             words: format!(
                 "{} leave Splat’s lists, and any campaign that selects them can no longer use them.",
                 design::count(count, "entry", "entries")
             ),
-            users,
+            users: self.unregister_users.clone(),
             folder: format!("The files stay in {}.", module.path.display()),
         })
     }
@@ -3203,4 +3165,57 @@ impl Library {
     pub fn unregister_open(&self) -> bool {
         self.confirm_unregister.is_some()
     }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// How often the unregister confirmation read every package (`unregister_users`).
+    pub static UNREGISTER_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The sentence that names the active campaign's entries that use `module`'s entries, or `None`
+/// when nothing uses them. It reads every package from disk.
+fn unregister_users(module: &Module, campaigns: &Campaigns) -> Option<String> {
+    #[cfg(any(test, feature = "test-support"))]
+    UNREGISTER_READS.with(|reads| reads.set(reads.get() + 1));
+    let campaign = campaigns.active_campaign()?;
+    let catalogue =
+        crate::content_workspace::Catalogue::load(campaigns.modules(), Some(&campaign)).ok()?;
+    let entry_ids: Vec<_> = catalogue
+        .entries
+        .values()
+        .filter(|entry| entry.owner == module.id && catalogue.selectable(entry.entry.id))
+        .map(|entry| crate::content_workspace::EntryRef::id(entry.entry.id))
+        .collect();
+    let selection = crate::content_workspace::PackageSelection {
+        name: Some(module.name.clone()),
+        package: crate::content_workspace::EntryRef::id(module.id),
+        selection: crate::content_workspace::Selection::Selected { entries: entry_ids },
+    };
+    let users = selection.campaign_users(&catalogue);
+    if users.is_empty() {
+        return None;
+    }
+    let mut names = Vec::new();
+    for (id, _) in &users {
+        if let Some(user) = catalogue.entries.get(id) {
+            for reference in content::required_references(&user.entry).unwrap_or_default() {
+                if let Ok(id) = catalogue.resolve(&reference)
+                    && let Some(entry) = catalogue.entries.get(&id)
+                    && entry.owner == module.id
+                {
+                    names.push(entry.entry.name.clone());
+                }
+            }
+        }
+    }
+    names.sort();
+    names.dedup();
+    let users: Vec<_> = users.into_iter().map(|(_, name)| name).collect();
+    Some(format!(
+        "{} uses {}, in {}.",
+        campaign.name,
+        name_list(&names),
+        name_list(&users)
+    ))
 }

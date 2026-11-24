@@ -37,14 +37,55 @@ Reward: 40 gp
 ```
 ";
 
-/// Show `part` in place of the page, in a column `width` wide.
-fn show(shell: &mut Shell, width: f32, part: impl Fn() -> gpui::AnyElement + 'static) {
-    let preview: Preview = Rc::new(move |_, _, _| {
+/// The gallery's Markdown tab: its tab strip, the note's source in the editor (Write) and the
+/// same note read (Read), side by side.
+#[test]
+fn gallery_markdown() {
+    use crate::gui::theme::{M, S};
+    let mut shell = Shell::new("gallery", Seed::Empty);
+    let preview: Preview = Rc::new(|_, _, _| {
+        let column = |label: &'static str, part: gpui::AnyElement| {
+            div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .gap(S)
+                .child(kit::label(label, 0))
+                .child(div().flex_1().min_h_0().child(part))
+        };
         div()
             .size_full()
             .bg(colors().page)
-            .p(L)
-            .child(div().w(px(width)).child(part()))
+            .p(M)
+            .flex()
+            .flex_col()
+            .gap(S)
+            .child(kit::Segmented::new(
+                "gallery-tabs",
+                ["Tokens", "Components", "Messages", "Markdown"],
+                3,
+            ))
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .flex_1()
+                    .min_h_0()
+                    .gap(L)
+                    .child(column(
+                        "Write",
+                        kit::TextEditor::new("gallery-write", NOTE)
+                            .markdown_source()
+                            .fill()
+                            .into_any_element(),
+                    ))
+                    .child(column(
+                        "Read",
+                        kit::markdown("note", NOTE).into_any_element(),
+                    )),
+            )
             .into_any_element()
     });
     shell.update(|root, _, cx| {
@@ -52,14 +93,7 @@ fn show(shell: &mut Shell, width: f32, part: impl Fn() -> gpui::AnyElement + 'st
         cx.notify();
     });
     shell.settle();
-}
-
-#[test]
-fn gallery_markdown() {
-    let mut shell = Shell::new("gallery", Seed::Empty);
-    show(&mut shell, f32::from(READER_MEASURE) + 40.0, || {
-        kit::markdown("note", NOTE).into_any_element()
-    });
+    assert!(shell.bounds("Markdown").is_some(), "the tab strip shows");
     shell.capture("gallery__07-markdown__1200x800");
 }
 
@@ -176,6 +210,8 @@ fn a_dice_link_and_a_roll_table_roll() {
     shell.capture("markdown-links__08-roll-table-rolled__1200x800");
 }
 
+/// The wide table's sideways scroll, at the Library reader's widths (the Library's captures of
+/// it are `library::tests::reader_tables_in_library`).
 #[test]
 fn reader_tables() {
     const TABLE: &str = "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
@@ -220,13 +256,15 @@ Read the row for your class level. A slot is spent when you cast a spell of that
             scrolls,
             "{name}: a table scrolls sideways only where it does not fit"
         );
-        shell.capture(name);
     }
 }
 
 #[test]
 fn a_typed_jump_scrolls_to_its_heading() {
     let mut shell = Shell::new("markdown-links", Seed::Empty);
+    // The content index arrives from a thread, and a new index prepares a note again (its links
+    // may resolve differently): wait for it, so the count below sees only the jump.
+    with_index(&mut shell);
     let long = format!(
         "{}\n\n## Later that night\n\nThe end.\n",
         "Words on a line.\n\n".repeat(60)
