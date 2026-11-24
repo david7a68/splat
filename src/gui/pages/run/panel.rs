@@ -10,6 +10,7 @@ use gpui::{
     AnyElement, ClickEvent, Context, ElementId, InteractiveElement, IntoElement, ParentElement,
     Pixels, SharedString, Styled, Window, div, prelude::*, px,
 };
+use crate::design::outcome::plain::PlainLine;
 use splat_party::combat_sync::SyncState;
 use theme::{Density, Type, TypeExt, colors};
 
@@ -18,6 +19,7 @@ pub(super) fn render(
     root: &SplatRoot,
     run: &Run,
     width: Pixels,
+    arrival_lines: Vec<PlainLine<view::ArrivalPress>>,
     window: &Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
@@ -96,10 +98,10 @@ pub(super) fn render(
         Panel::Log => body.child(log(run)),
         Panel::Encounter => body.child(prep(run, cx)),
         Panel::Keys => body.child(keys(run)),
-        Panel::Groups => body.child(arrivals(run, cx)),
+        Panel::Groups => body.child(arrivals(run, inner, window, cx)),
     };
     let footer = if run.panel == Panel::Groups {
-        arrivals_footer(cx)
+        arrivals_footer(arrival_lines, cx)
     } else {
         footer
     };
@@ -233,10 +235,26 @@ fn tabs(
 }
 
 /// The Arrivals footer: the newest arrival's result with a tie's `Move`, and each group's
-/// reason its Add waits for (`groups_tab`'s footer).
-fn arrivals_footer(cx: &mut Context<SplatRoot>) -> Vec<AnyElement> {
-    let _ = cx;
-    Vec::new()
+/// reason its Add waits for (`groups_tab`'s footer, `Run::arrival_lines`). A press goes to
+/// `Run::arrival_press` with its ticket: a Move whose step is no longer the newest does nothing.
+fn arrivals_footer(
+    lines: Vec<PlainLine<view::ArrivalPress>>,
+    cx: &mut Context<SplatRoot>,
+) -> Vec<AnyElement> {
+    kit::messages::lines(
+        "run-arrivals-footer",
+        lines,
+        cx.listener(
+            |root: &mut SplatRoot, pressed: &kit::messages::Pressed<view::ArrivalPress>, _, cx| {
+                if let Some(press) = pressed.take()
+                    && let Some(run) = root.app.encounters.run_mut()
+                {
+                    run.arrival_press(press);
+                }
+                cx.notify();
+            },
+        ),
+    )
 }
 
 /// Death saves: the counts, `+ Success`, `+ Failure` and a roll (`death_saves`).
@@ -1432,15 +1450,17 @@ fn keys(run: &Run) -> AnyElement {
 
 /// Arrivals (`groups_tab`): a creature to find or make up, then the campaign's encounter groups
 /// with their Add.
-fn arrivals(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn arrivals(run: &Run, room: Pixels, window: &Window, cx: &mut Context<SplatRoot>) -> AnyElement {
     let c = colors();
+    // One block for every group, no wider than a list, so the controls keep one column.
+    let block = theme::LIST_MEASURE.min(room - theme::SCROLL_BAR_WIDTH);
     let mut column = div()
         .flex()
         .flex_col()
         .gap(theme::XS)
         .max_w(theme::LIST_MEASURE);
     if run.groups.as_ref().is_some_and(|groups| !groups.is_empty()) {
-        column = column.child(kit::help("Use Add to bring a group into the fight."));
+        column = column.child(kit::help("Drag a group name to the list, or use Add."));
     }
     column = column.child(creature_form(run, cx)).child(kit::rule());
     let Some(groups) = run.groups.clone() else {
@@ -1509,108 +1529,273 @@ fn arrivals(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
             ));
         }
         for group in list {
-            column = column.child(group_row(run, group, cx)).child(kit::rule());
+            column = column
+                .child(group_row(run, group, block, window, cx))
+                .child(kit::rule());
         }
     }
     column.into_any_element()
 }
 
-/// One encounter group in Arrivals: its name and numbers, its status and members, an
-/// initiative total and Add.
+/// What a drag of an Arrivals group carries: the group, and its name for the ghost. A group
+/// whose Add waits carries none; its ghost still follows the pointer (egui `drag_source`).
+#[derive(Clone)]
+pub(super) struct GroupDrag {
+    pub(super) id: Option<uuid::Uuid>,
+    name: SharedString,
+}
+
+impl gpui::Render for GroupDrag {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let c = colors();
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(theme::XS)
+            .px(theme::S)
+            .h(Density::Read.control())
+            .rounded(theme::RADIUS_CONTROL)
+            .bg(c.raised)
+            .border(theme::HAIRLINE_WIDTH)
+            .border_color(c.rule)
+            .child(kit::icon(icons::ADD, Type::Body, c.text))
+            .child(kit::text::one_line(Type::Strong, c.text, self.name.clone()))
+    }
+}
+
+/// The initiative list as the place a group from Arrivals is dropped (`group_drop_zone`): while
+/// a group that can join is held over it, it says so with the accent outline; a drop adds the
+/// group as its Add does. A group whose Add came to wait while it was held does not join.
+pub(super) fn group_drop_zone(
+    zone: gpui::Div,
+    id: &'static str,
+    cx: &mut Context<SplatRoot>,
+) -> gpui::Stateful<gpui::Div> {
+    let c = colors();
+    zone.id(id)
+        .rounded(theme::RADIUS_CONTROL)
+        .drag_over::<GroupDrag>(move |style, drag, _, _| {
+            if drag.id.is_some() {
+                style.border(theme::FOCUS_WIDTH).border_color(c.accent)
+            } else {
+                style
+            }
+        })
+        .on_drop(cx.listener(|root: &mut SplatRoot, drag: &GroupDrag, _, cx| {
+            if let (Some(id), Some(run)) = (drag.id, root.app.encounters.run_mut()) {
+                let takes = run
+                    .groups
+                    .iter()
+                    .flat_map(|groups| groups.iter())
+                    .find(|group| group.id == id)
+                    .is_some_and(|group| run.add_waits_words(group).is_none());
+                if takes {
+                    run.add_group_from_panel(id);
+                }
+            }
+            cx.notify();
+        }))
+}
+
+/// One encounter group in Arrivals (`group_row`): its name, which drags to the initiative list,
+/// with the fight after it joins (`Fight after: Moderate`) on the heading or under it; its join
+/// status and members; an initiative total and Add, which Enter in the total presses too; then
+/// each fault with its repair.
 fn group_row(
     run: &Run,
     group: &crate::encounter_run::RunGroup,
+    block: Pixels,
+    window: &Window,
     cx: &mut Context<SplatRoot>,
 ) -> impl IntoElement {
     let c = colors();
     let id = group.id;
+    let name = group.name.clone();
     let status = run.group_status(group, run.group_joined(group));
-    let members: Vec<String> = group
-        .members
-        .iter()
-        .map(|member| {
-            if member.count > 1 {
-                format!("{} × {}", member.count, member.entry.name)
-            } else {
-                member.entry.name.clone()
-            }
-        })
-        .collect();
     let blocked = run.add_waits_words(group);
     let total = run.group_totals.get(&id).cloned().unwrap_or_default();
-    let numbers = format!(
-        "{} · {} · {}",
-        crate::design::reader::human_label(&group.side),
-        group.count_label(),
-        group.xp_label()
+    let small = |words: &str| super::measure::width(window, Type::Small, words);
+    let strong = |words: &str| super::measure::width(window, Type::Strong, words);
+    // The fight after the group joins, by the run's kept words (`arrival_words`).
+    let heading_fit = run.arrival_heading(
+        group,
+        f32::from(block),
+        |words| f32::from(small(words)),
+        |words| f32::from(strong(words)),
     );
-    div()
+    let split = &heading_fit.split;
+    let title = format!("{} {name}", icons::DRAG);
+    let answer = heading_fit.line.as_ref().map(|fitted| {
+        let mut words = div()
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .when(!fitted.wrap, |line| line.whitespace_nowrap());
+        if !fitted.lead.is_empty() {
+            let lead = if fitted.form.is_empty() {
+                fitted.lead.clone()
+            } else {
+                format!("{} · ", fitted.lead)
+            };
+            words = words.child(kit::text(Type::Small, c.muted, lead));
+        }
+        for (part, word) in &fitted.form {
+            words = words.child(kit::text(
+                Type::Small,
+                if *word { c.text } else { c.muted },
+                part.clone(),
+            ));
+        }
+        words
+    });
+    let totals_text = heading_fit.totals.clone();
+    let described = heading_fit.described.clone();
+    let hover = heading_fit.hover.clone();
+    let changed = view::changed_mark(group).is_some();
+    let movable = blocked.is_none();
+    let drag = GroupDrag {
+        id: movable.then_some(id),
+        name: name.clone().into(),
+    };
+    let grip = div()
+        .id(ElementId::Name(format!("run-arrival-grip-{id}").into()))
+        .flex_none()
+        .w(if split.below {
+            px(split.title)
+        } else {
+            px(split.title).min(block - px(split.room) - theme::L)
+        })
+        .min_w_0()
+        .h(Density::Read.control())
+        .flex()
+        .items_center()
+        .cursor_grab()
+        .child(
+            div()
+                .min_w_0()
+                .ty(Type::Strong)
+                .text_color(c.text)
+                .truncate()
+                .child(title),
+        )
+        .on_drag(drag, |drag, _, _, cx| cx.new(|_| drag.clone()))
+        .with_tooltip_words(hover);
+    let grip = kit::target(
+        grip,
+        format!(
+            "Drag {name} to the initiative list{}",
+            if changed { ". Changed." } else { "" }
+        ),
+    );
+    let mut heading = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .w(block)
+        .child(grip);
+    let mut below = None;
+    match answer {
+        Some(answer) if split.below => below = Some(answer),
+        Some(answer) => {
+            heading = heading.child(div().flex_1()).child(
+                div()
+                    .id(ElementId::Name(format!("run-arrival-fight-{id}").into()))
+                    .flex_none()
+                    .child(answer)
+                    .when_some(described.clone(), |line, words| {
+                        line.with_tooltip_words(words)
+                    }),
+            );
+        }
+        None => {}
+    }
+    let members = match view::changed_mark(group) {
+        Some(mark) => format!("{} ·\u{a0}{mark}", group.member_summary()),
+        None => group.member_summary(),
+    };
+    let summary = if status.is_empty() {
+        members
+    } else {
+        format!("{status} · {members}")
+    };
+    let add_word = view::arrival_add_word(group);
+    let on_enter = {
+        let blocked = blocked.is_some();
+        super::plain(cx, move |root, _, cx| {
+            if !blocked && let Some(run) = root.app.encounters.run_mut() {
+                run.add_group_from_panel(id);
+            }
+            cx.notify();
+        })
+    };
+    let controls = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(theme::XS)
+        .w(block)
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .child(kit::text(Type::Small, c.muted, summary)),
+        )
+        .child(kit::text(Type::Small, c.muted, "Initiative"))
+        .child(
+            div()
+                .id(ElementId::Name(format!("run-arrival-total-box-{id}").into()))
+                .key_context("RunField")
+                .w(px(72.0))
+                .flex_none()
+                .child(
+                    kit::TextField::new(
+                        ElementId::Name(format!("run-arrival-total-{id}").into()),
+                        total,
+                    )
+                    .placeholder("Roll")
+                    .name(format!("Initiative total for {name}"))
+                    .disabled(group.problem.is_some())
+                    .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                        if let Some(run) = root.app.encounters.run_mut() {
+                            run.group_totals.insert(id, words.to_owned());
+                            run.totals_revision += 1;
+                        }
+                        cx.notify();
+                    }))
+                    .on_enter(on_enter),
+                )
+                .with_tooltip_words("Blank rolls initiative"),
+        )
+        .child(
+            kit::Button::secondary(
+                ElementId::Name(format!("run-arrival-add-{id}").into()),
+                add_word,
+            )
+            .icon(icons::ADD)
+            .name(format!("Add {name} to the initiative list"))
+            .density(Density::Read)
+            .blocked(blocked.clone())
+            .on_click(on_run(cx, move |run| run.add_group_from_panel(id))),
+        );
+    let mut row = div()
         .flex()
         .flex_col()
         .gap(px(2.0))
         .py(theme::XS)
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .items_baseline()
-                .gap(theme::S)
-                .child(div().min_w_0().child(kit::text::one_line(
-                    Type::Strong,
-                    c.text,
-                    group.name.clone(),
-                )))
-                .child(kit::text::one_line(Type::Small, c.muted, numbers)),
-        )
-        .when(!status.is_empty(), |row| {
-            row.child(kit::text(Type::Small, c.muted, status.clone()))
+        .child(heading)
+        .children(below)
+        .when(heading_fit.line.is_none(), |row| {
+            row.child(kit::text(Type::Small, c.muted, totals_text.clone()))
         })
-        .child(kit::text(Type::Small, c.muted, members.join(", ")))
-        .children(
-            group
-                .problem
-                .clone()
-                .map(|problem| kit::text(Type::Small, c.result.warning, problem)),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(theme::XS)
-                .child(kit::text(Type::Small, c.muted, "Initiative"))
-                .child(
-                    div().key_context("RunField").w(px(72.0)).child(
-                        kit::TextField::new(
-                            ElementId::Name(format!("run-arrival-total-{id}").into()),
-                            total,
-                        )
-                        .placeholder("Roll")
-                        .name(format!("Initiative total for {}", group.name))
-                        .on_change(cx.listener(
-                            move |root: &mut SplatRoot, words: &str, _, cx| {
-                                if let Some(run) = root.app.encounters.run_mut() {
-                                    run.group_totals.insert(id, words.to_owned());
-                                    run.totals_revision += 1;
-                                }
-                                cx.notify();
-                            },
-                        )),
-                    ),
-                )
-                .child(
-                    kit::Button::secondary(
-                        ElementId::Name(format!("run-arrival-add-{id}").into()),
-                        "Add",
-                    )
-                    .icon(icons::ADD)
-                    .name(format!("Add {}", group.name))
-                    .density(Density::Read)
-                    .blocked(blocked.clone())
-                    .on_click(on_run(cx, move |run| run.add_group_from_panel(id))),
-                ),
-        )
-        .children(blocked.map(|why| kit::text(Type::Small, c.muted, why)))
+        .child(controls);
+    // The group's faults, each with its repair; `Cannot join` before them (`member_fault_row`).
+    if let Some(problem) = group.problem.clone() {
+        row = row
+            .child(kit::text(Type::Small, c.muted, "Cannot join"))
+            .child(kit::text(Type::Small, c.result.warning, problem));
+    }
+    row
 }
 
 /// Find or make up a creature (`add_creature_form`).

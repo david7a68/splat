@@ -24,7 +24,7 @@ mod strip;
 #[cfg(test)]
 mod tests;
 
-use crate::encounter_run::{Command, Phase, Run};
+use crate::encounter_run::{Command, Phase, Run, view};
 use crate::gui::{SplatRoot, bridge, kit, theme};
 use crate::{Page, design};
 use gpui::{
@@ -42,6 +42,11 @@ pub struct State {
     focus: Option<FocusHandle>,
     /// The page's width in the last frame, so the next frame's facts use the room it had.
     width: Option<Pixels>,
+    /// The live roster's scroll, kept so the selected row can be brought into view and the
+    /// overflow line can say what is out of it.
+    roster_scroll: gpui::ScrollHandle,
+    /// The window height the roster was last laid out for: a new one scrolls to the selection.
+    roster_room: Option<Pixels>,
 }
 
 /// Once, when the root is built.
@@ -265,6 +270,25 @@ pub(super) fn on_panel_drag(
             .insert(side.id().to_owned(), f32::from(width));
         cx.notify();
     })
+}
+
+/// Before a phase draws its panel: Arrivals' kept fight words (`arrival_words`) and its
+/// footer's lines (`arrival_lines`), which the run works out and keeps as it reads them.
+fn arrivals_prepare(root: &mut SplatRoot) -> Vec<crate::design::outcome::plain::PlainLine<view::ArrivalPress>> {
+    let Some(run) = root
+        .app
+        .encounters
+        .run_mut()
+        .filter(|run| run.panel == crate::encounter_run::Panel::Groups && !run.hide_panel)
+    else {
+        return Vec::new();
+    };
+    run.keep_offered_lines();
+    let _ = run.arrival_words();
+    let frame = design::outcome::PaneFrame::plain();
+    let mut messages = design::outcome::Messages::new(&frame, ("arrival_footer", run.id()), 0.0);
+    run.arrival_lines(&mut messages, &frame);
+    messages.into_plain()
 }
 
 /// A click handler that acts on the run, then draws again.

@@ -45,7 +45,7 @@ const OUTCOME_FIELD: design::FieldName = crate::field_id!("run_outcome");
 const DM_NOTE_FIELD: design::FieldName = crate::field_id!("run_dm_note");
 pub const READ_ALOUD: &str = "Read-aloud and notes";
 /// FI10: Arrivals says what the fight becomes when a group joins.
-pub(crate) const FIGHT_AFTER: &str = "Fight after: ";
+pub const FIGHT_AFTER: &str = "Fight after: ";
 /// Two lines of controls in a frame.
 pub const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
 /// The dock's width from which Damage has its key hint, and Temp HP and Roll their full forms.
@@ -58,14 +58,14 @@ const DOCK_NAME_LINES: usize = 2;
 const FOOTER_HEIGHT: f32 = 28.0 + 7.0;
 const GUTTER: f32 = design::M;
 /// Room for the note under a long roster, past the scroll area's clip margin.
-const OVERFLOW_LINE: f32 = 22.0;
+pub const OVERFLOW_LINE: f32 = 22.0;
 /// Kept free under a list that fits, for a message of up to two lines.
-const MESSAGE_ROOM: f32 = 44.0;
+pub const MESSAGE_ROOM: f32 = 44.0;
 /// A message's height when the list needs the room.
 const MESSAGE_LINE: f32 = 28.0;
-const SCROLL_BAR: f32 = 12.0;
+pub const SCROLL_BAR: f32 = 12.0;
 /// A name-only row when the list has no other way to fit. Still a 24 px target and more.
-const TIGHT_ROW: f32 = 25.0;
+pub const TIGHT_ROW: f32 = 25.0;
 /// The name column a row needs, in units of its name size, to keep a state column too.
 const NAME_ROOM: f32 = 8.0;
 /// A long name wraps to at most this many lines; the last one ends in `…`.
@@ -403,7 +403,7 @@ fn arrival_total(text: &str) -> Result<Option<i64>, &'static str> {
 
 /// Every smallest `Fight after: …` an Arrivals heading can show: each difficulty word and
 /// each reason. The heading reserves the widest of them (point 3 of the fourth review).
-const WIDEST_ANSWERS: [&str; 6] = [
+pub const WIDEST_ANSWERS: [&str; 6] = [
     "Fight after: Low",
     "Fight after: Moderate",
     "Fight after: High",
@@ -417,13 +417,13 @@ const WIDEST_ANSWERS: [&str; 6] = [
 /// round 1`, `For …`, `Changed`) has ONE place in every group, its member line (FB12, AM8), so
 /// no heading gives a fact of its line to a status and every heading gives way in one order.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct HeadingSplit {
+pub struct HeadingSplit {
     /// The title's room.
-    title: f32,
+    pub title: f32,
     /// The difficulty line's room.
-    room: f32,
+    pub room: f32,
     /// The line has its own line under the heading.
-    below: bool,
+    pub below: bool,
 }
 
 /// `whole` is the heading's width, `title` the whole title's, `floor` its first word with `…`
@@ -433,7 +433,7 @@ struct HeadingSplit {
 /// never below `floor`. Where even `floor` and the answer do not fit together (the rule for the
 /// boundary), the answer takes its own line under the heading at the whole width, and the title
 /// keeps the heading.
-fn heading_split(whole: f32, title: f32, floor: f32, widest: f32) -> HeadingSplit {
+pub fn heading_split(whole: f32, title: f32, floor: f32, widest: f32) -> HeadingSplit {
     if whole < floor + design::L + widest {
         return HeadingSplit {
             title: title.min(whole),
@@ -447,6 +447,28 @@ fn heading_split(whole: f32, title: f32, floor: f32, widest: f32) -> HeadingSpli
         room: whole - title - design::L,
         below: false,
     }
+}
+
+/// An Arrivals heading, fitted for a view that measures its own words (`Run::arrival_heading`).
+pub struct ArrivalHeading {
+    /// How the title and the line share the heading.
+    pub split: HeadingSplit,
+    /// The `Fight after: …` line at its room, or none (the group's totals show instead).
+    pub line: Option<ArrivalLine>,
+    /// The group's own facts: `Enemies · 3 members · XP 150`.
+    pub totals: String,
+    /// The line's description, for its accessible name and hover.
+    pub described: Option<String>,
+    /// The heading's hover: the group's totals, its notes, the join rule and the budget.
+    pub hover: String,
+}
+
+/// A fitted difficulty line: the muted words before the form, then the form's parts (the word
+/// in the text colour); `wrap` when the protected answer is wider than its room and wraps.
+pub struct ArrivalLine {
+    pub lead: String,
+    pub form: Vec<(String, bool)>,
+    pub wrap: bool,
 }
 
 /// The words of a blocked Add whose group would roll with no bonus (R35: the same value gives
@@ -488,7 +510,7 @@ impl<'a> AddWaits<'a> {
 
 /// A group whose members' changes make another creature says `Changed`, with its muted pencil,
 /// after its members (FJ5). The no-break space keeps the two on one line.
-fn changed_mark(group: &super::RunGroup) -> Option<String> {
+pub fn changed_mark(group: &super::RunGroup) -> Option<String> {
     group
         .members
         .iter()
@@ -496,7 +518,7 @@ fn changed_mark(group: &super::RunGroup) -> Option<String> {
         .then(|| format!("{}\u{a0}Changed", icons::CHANGED))
 }
 
-fn arrival_add_word(group: &super::RunGroup) -> String {
+pub fn arrival_add_word(group: &super::RunGroup) -> String {
     if group.warnings.is_empty() {
         "Add".to_owned()
     } else {
@@ -2250,8 +2272,33 @@ impl Run {
             .filter(|(_, end, _)| *end > bottom + 1.0)
             .map(|(.., index)| *index)
             .collect();
-        if above.is_empty() && below.is_empty() {
+        let Some(text) = self.overflow_words(&above, &below) else {
             return;
+        };
+        let (rect, _) = ui.allocate_exact_size(
+            vec2(ui.available_width(), OVERFLOW_LINE),
+            egui::Sense::hover(),
+        );
+        ui.painter().rect_filled(rect, 0.0, colors().page);
+        ui.painter().hline(
+            rect.x_range(),
+            rect.top(),
+            Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
+        );
+        ui.painter().text(
+            rect.left_center(),
+            Align2::LEFT_CENTER,
+            text,
+            Type::Small.font(ui),
+            colors().muted,
+        );
+    }
+
+    /// What a long roster's line under it says (both views): how many rows are out of view
+    /// above and below, and what needs attention there. None when every row is in view.
+    pub fn overflow_words(&self, above: &[usize], below: &[usize]) -> Option<String> {
+        if above.is_empty() && below.is_empty() {
+            return None;
         }
         let side = |word: &str, rows: &[usize]| -> Option<String> {
             if rows.is_empty() {
@@ -2291,28 +2338,13 @@ impl Run {
             }
             Some(text)
         };
-        let text = [side("above", &above), side("below", &below)]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join(" · ");
-        let (rect, _) = ui.allocate_exact_size(
-            vec2(ui.available_width(), OVERFLOW_LINE),
-            egui::Sense::hover(),
-        );
-        ui.painter().rect_filled(rect, 0.0, colors().page);
-        ui.painter().hline(
-            rect.x_range(),
-            rect.top(),
-            Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
-        );
-        ui.painter().text(
-            rect.left_center(),
-            Align2::LEFT_CENTER,
-            text,
-            Type::Small.font(ui),
-            colors().muted,
-        );
+        Some(
+            [side("above", above), side("below", below)]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join(" · "),
+        )
     }
 
     pub fn open_conditions_tab(&mut self) {
@@ -4516,6 +4548,95 @@ impl Run {
         }
 
         (add, blocks)
+    }
+
+    /// An Arrivals heading for a view that measures its own words (`group_row`'s rule): how the
+    /// title and the `Fight after: …` line share `block` (`heading_split`), the line's words at
+    /// its room (`Line::fit_or_wrap`; `None` with no form, when the group's totals show
+    /// instead), the line's description and the heading's hover. `small` and `strong` measure
+    /// words in those types. Reads the kept `arrival_words`; call `arrival_words` first.
+    pub fn arrival_heading(
+        &self,
+        group: &super::RunGroup,
+        block: f32,
+        small: impl Fn(&str) -> f32,
+        strong: impl Fn(&str) -> f32,
+    ) -> ArrivalHeading {
+        let name = &group.name;
+        let rating = self
+            .arrival_words
+            .as_ref()
+            .and_then(|(_, words)| words.get(&group.id))
+            .cloned();
+        let (rating, adds) = rating.map_or((None, 0), |(rating, adds)| (Some(rating), adds));
+        let no_form = crate::difficulty::Difficulty::default();
+        let (side, members, worth) = (
+            style::human_label(&group.side),
+            group.count_label(),
+            group.xp_label(),
+        );
+        let line = crate::difficulty::Line::fight_after(
+            rating.as_ref().unwrap_or(&no_form),
+            crate::difficulty::FightAfter {
+                side: &side,
+                members: &members,
+                worth: &worth,
+            },
+        );
+        let heading_width = strong(&format!("{} {name}", icons::DRAG));
+        let first_word = name.split_whitespace().next().unwrap_or(name);
+        let floor = heading_width.min(strong(&format!("{} {first_word}…", icons::DRAG)));
+        let shortest = line
+            .shortest()
+            .map_or(0.0, |shortest| small(&shortest.text()));
+        let widest = WIDEST_ANSWERS
+            .iter()
+            .map(|answer| small(answer))
+            .fold(shortest, f32::max);
+        let split = heading_split(block, heading_width, floor, widest);
+        let fitted = line
+            .fit_or_wrap(|text| small(text) <= split.room)
+            .map(|fitted| ArrivalLine {
+                lead: fitted.lead,
+                form: fitted.form,
+                wrap: fitted.wrap,
+            });
+        let totals_text = group.facts(true);
+        let shown = rating.as_ref().and_then(|fight| fight.rating.as_ref());
+        let described = match (shown, rating.as_ref().and_then(|f| f.missing.as_ref())) {
+            (Some(rating), _) => Some(format!(
+                "{totals_text}. Adds {} XP. {FIGHT_AFTER}{}.",
+                crate::encounter_run::grouped_number(adds),
+                rating.form(true)
+            )),
+            (None, Some(missing)) => Some(format!(
+                "{totals_text}. {FIGHT_AFTER}{}.",
+                missing
+                    .words()
+                    .unwrap_or_else(|| missing.short().to_owned())
+            )),
+            (None, None) => None,
+        };
+        let changed = changed_mark(group).is_some();
+        let context = group
+            .encounter_name
+            .as_ref()
+            .filter(|_| group.encounter != self.source)
+            .map_or_else(String::new, |name| format!("For {name}. "));
+        let hover = format!(
+            "{name}. {totals_text}.{} {context}{} {}{}",
+            if changed { " Changed." } else { "" },
+            group.notes.trim(),
+            self.initiative.grouping.arrival_rule(),
+            shown.map_or_else(String::new, |rating| format!("\n{}", rating.budget_line()))
+        );
+        ArrivalHeading {
+            split,
+            line: fitted,
+            totals: totals_text,
+            described,
+            hover,
+        }
     }
 
     /// The same step for the button and for a drop: the total typed beside it, or a roll.
@@ -7796,9 +7917,94 @@ enum BonusFit {
     None,
 }
 
+/// A run row's fixed columns (both views): from the left, the turn bar and the initiative, the
+/// side's mark, the picture, the name, AC, temporary HP, HP and the state words.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RowColumns {
+    /// The initiative column's right edge, from the row's left.
+    pub initiative_right: f32,
+    /// The gap after the initiative.
+    pub gap: f32,
+    /// The picture's column.
+    pub picture: f32,
+    /// Where the name, and the second line under it, start.
+    pub name_left: f32,
+    /// The name's column: near its HP in a wide window, unless a name in the list needs more.
+    pub name_width: f32,
+    pub ac_width: f32,
+    pub temp_width: f32,
+    pub hp_width: f32,
+    /// The state words' column (none when `inline_state`).
+    pub state_width: f32,
+    /// No room for a state column: the state words open the second line.
+    pub inline_state: bool,
+    pub ac_right: f32,
+    pub temp_right: f32,
+    pub hp_right: f32,
+    /// How far the HP bar starts after the temporary HP column's edge, so the second line
+    /// keeps the width the turn word took.
+    pub bar_inset: f32,
+}
+
+/// The columns of every row of a roster `width` wide at `scale`. `narrow` rows (a list that
+/// compresses, or the compact scale) put `TURN` on the number's line and give the picture up
+/// first. `longest_name` is the list's widest name at the name's size; `state_width` the widest
+/// state word with its gap.
+pub fn row_columns(
+    scale: RunScale,
+    narrow: bool,
+    width: f32,
+    longest_name: f32,
+    state_width: f32,
+) -> RowColumns {
+    // The current-row bar, the gap after it, and room for the word `TURN` at this size. In
+    // narrow columns the word can sit on the number's line, so that a row's height never
+    // depends on whose turn it is.
+    let word = scale.mark * 3.2;
+    let initiative_right = 6.0 + design::XS + if narrow { word + scale.stat } else { word };
+    let gap = if narrow { 6.0 } else { 12.0 };
+    // Its bar starts later, still under the digits, so its second line has the width that
+    // the turn word took and a condition does not wrap again.
+    let bar_inset = if narrow { 8.0 } else { 0.0 };
+    // Compressed rows have a roster to fit, so the picture gives up what it can.
+    let picture = if narrow {
+        scale.name * 1.25
+    } else {
+        (scale.row - 10.0).min(scale.name * 1.75)
+    };
+    let name_left = initiative_right + gap + scale.name * 0.7 + picture + PICTURE_GAP;
+    let hp_width = scale.hp * 1.9 + scale.hp_max * 2.0 + 4.0;
+    let temp_width = scale.stat * 2.6 + 12.0;
+    let ac_width = scale.stat * 1.5 + 22.0;
+    let numbers = name_left + ac_width + temp_width + hp_width + design::S;
+    let inline_state = width - numbers - state_width < scale.name * NAME_ROOM;
+    let name_room = (width - numbers - if inline_state { 0.0 } else { state_width }).max(90.0);
+    // Near its HP in a wide window, unless a name in this list needs more.
+    let name_width = name_room.min((scale.name * 12.5).max(longest_name));
+    let ac_right = name_left + name_width + ac_width;
+    let temp_right = ac_right + temp_width;
+    let hp_right = temp_right + hp_width;
+    RowColumns {
+        initiative_right,
+        gap,
+        picture,
+        name_left,
+        name_width,
+        ac_width,
+        temp_width,
+        hp_width,
+        state_width,
+        inline_state,
+        ac_right,
+        temp_right,
+        hp_right,
+        bar_inset,
+    }
+}
+
 /// The height that makes these rows, none shorter than it is now, fill `room`, up to `cap`.
 /// Rows taller than that keep their own height. Zero if the rows already fill `room`.
-fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
+pub fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
     let mut sorted = heights.to_vec();
     sorted.sort_by(f32::total_cmp);
     let mut rest = room;
@@ -7817,7 +8023,7 @@ fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
 }
 
 /// The fixed columns of a run row, and its second line, which grows rather than cuts.
-const PICTURE_GAP: f32 = 6.0;
+pub const PICTURE_GAP: f32 = 6.0;
 
 /// Each row's finished layout, by its whole input: `RowLayout::fitted`. A layout is found
 /// only for an input equal to its own, field by field (never by a hash of it alone), and the
@@ -8547,23 +8753,6 @@ impl RowLayout {
         // The smallest scale has one set of columns, compressed or not, so that a list that
         // starts to compress does not move its names sideways.
         let narrow = fit != RowFit::Natural || scale.row <= design::RUN_COMPACT.row;
-        // The current-row bar, the gap after it, and room for the word `TURN` at this size. In
-        // narrow columns the word can sit on the number's line, so that a row's height never
-        // depends on whose turn it is.
-        let word = scale.mark * 3.2;
-        let initiative_right = 6.0 + design::XS + if narrow { word + scale.stat } else { word };
-        let gap = if narrow { 6.0 } else { 12.0 };
-        // Its bar starts later, still under the digits, so its second line has the width that
-        // the turn word took and a condition does not wrap again.
-        let mut bar_inset = if narrow { 8.0 } else { 0.0 };
-        // Compressed rows have a roster to fit, so the picture gives up what it can.
-        let picture = if narrow {
-            scale.name * 1.25
-        } else {
-            (scale.row - 10.0).min(scale.name * 1.75)
-        };
-        let name_left = initiative_right + gap + scale.name * 0.7 + picture + PICTURE_GAP;
-        let hp_width = scale.hp * 1.9 + scale.hp_max * 2.0 + 4.0;
         let state_font = Type::Heading.sized(ui, scale.mark.max(12.0));
         let state_width = [
             SyncState::FirstRead,
@@ -8578,16 +8767,19 @@ impl RowLayout {
                 + design::S
         })
         .fold((scale.mark * 8.5).clamp(84.0, 118.0), f32::max);
-        let temp_width = scale.stat * 2.6 + 12.0;
-        let ac_width = scale.stat * 1.5 + 22.0;
-        let numbers = name_left + ac_width + temp_width + hp_width + design::S;
-        let inline_state = width - numbers - state_width < scale.name * NAME_ROOM;
-        let name_room = (width - numbers - if inline_state { 0.0 } else { state_width }).max(90.0);
-        // Near its HP in a wide window, unless a name in this list needs more.
-        let name_width = name_room.min((scale.name * 12.5).max(longest_name));
-        let ac_right = name_left + name_width + ac_width;
-        let temp_right = ac_right + temp_width;
-        let hp_right = temp_right + hp_width;
+        let RowColumns {
+            initiative_right,
+            picture,
+            name_left,
+            name_width,
+            inline_state,
+            ac_right,
+            temp_right,
+            hp_right,
+            bar_inset,
+            ..
+        } = row_columns(scale, narrow, width, longest_name, state_width);
+        let mut bar_inset = bar_inset;
 
         let mut job = egui::text::LayoutJob::default();
         // The line wraps before the HP column, so that it never runs over the HP bar.

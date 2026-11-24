@@ -10,7 +10,7 @@ use gpui::{
     prelude::*, px,
 };
 use splat::content::loot::Loot;
-use theme::{Density, RunScale, Type, colors};
+use theme::{Density, Type, colors};
 
 /// The Ended phase.
 pub(super) fn render(
@@ -39,11 +39,15 @@ pub(super) fn render(
     } else {
         room - side - theme::M
     };
-    let scale = RunScale::fit(
+    let order = run.state.order.clone();
+    let plan = roster::plan(
+        run,
+        &order,
+        f32::from(rows_width - theme::S - theme::SCROLL_BAR_WIDTH),
         f32::from(height) - 160.0,
-        f32::from(rows_width) - f32::from(theme::S),
-        run.state.order.len(),
+        window,
     );
+    let scale = plan.scale;
     let title = div()
         .flex()
         .flex_col()
@@ -73,18 +77,17 @@ pub(super) fn render(
         .child(save_status(run))
         .children(undo_or_continue(run, cx))
         .child(close);
-    let rows: Vec<AnyElement> = run
-        .state
-        .order
-        .clone()
-        .into_iter()
-        .map(|index| {
+    let rows: Vec<AnyElement> = order
+        .iter()
+        .enumerate()
+        .map(|(at, &index)| {
             roster::row(
                 root,
                 run,
                 index,
                 roster::TurnMark::None,
-                scale,
+                &plan,
+                at,
                 roster::Use::Final,
                 cx,
             )

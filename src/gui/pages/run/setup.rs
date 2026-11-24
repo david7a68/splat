@@ -34,6 +34,7 @@ pub(super) fn render(
         }
     }
     let side = super::side_width(root, Side::Setup, room, window_width);
+    let arrivals = super::arrivals_prepare(root);
     let Some(run) = root.app.encounters.run() else {
         return div().into_any_element();
     };
@@ -57,7 +58,14 @@ pub(super) fn render(
                 .min_h_0()
                 .flex()
                 .flex_col()
-                .child(kit::scroll_column("run-setup-rows", rows(run, cx)))
+                .child(
+                    panel::group_drop_zone(
+                        div().flex().flex_col().flex_1().min_h_0(),
+                        "run-setup-drop",
+                        cx,
+                    )
+                    .child(kit::scroll_column("run-setup-rows", rows(run, cx))),
+                )
                 .children(message_footer(run, cx)),
         )
         .child(kit::rule())
@@ -82,7 +90,7 @@ pub(super) fn render(
     if !run.hide_panel {
         page = page
             .child(super::splitter(Side::Setup, cx))
-            .child(panel::render(root, run, side, window, cx));
+            .child(panel::render(root, run, side, arrivals, window, cx));
     }
     page.into_any_element()
 }
@@ -127,7 +135,8 @@ fn header(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
             .icon(icons::DOWN)
             .name("Roll NPC initiative another way")
             .density(Density::Glance),
-    );
+    )
+    .heading("This roll only");
     for mode in run.roll_choices() {
         modes = modes.item(
             kit::MenuItem::new(mode.label())

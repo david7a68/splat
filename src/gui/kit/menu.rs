@@ -293,6 +293,7 @@ fn items(menu: &ElementId, items: Vec<MenuItem>) -> Div {
 pub struct MenuButton {
     id: ElementId,
     trigger: super::Button,
+    heading: Option<SharedString>,
     items: Vec<MenuItem>,
 }
 
@@ -302,8 +303,15 @@ impl MenuButton {
         Self {
             id: id.into(),
             trigger,
+            heading: None,
             items: Vec::new(),
         }
+    }
+
+    /// Muted words above the items that say what they apply to (`This roll only`).
+    pub fn heading(mut self, words: impl Into<SharedString>) -> Self {
+        self.heading = Some(words.into());
+        self
     }
 
     pub fn item(mut self, item: MenuItem) -> Self {
@@ -319,8 +327,24 @@ impl RenderOnce for MenuButton {
         let trigger = self
             .trigger
             .on_click(move |event, window, cx| toggle(&id, event, window, cx));
+        let heading = self.heading.map(|words| {
+            div()
+                .px(S)
+                .py(XS)
+                .ty(Type::Small)
+                .text_color(colors().muted)
+                .child(words)
+        });
         div().flex().flex_col().child(trigger).when(open, |menu| {
-            menu.child(layer(&self.id, None, items(&self.id, self.items)))
+            menu.child(layer(
+                &self.id,
+                None,
+                div()
+                    .flex()
+                    .flex_col()
+                    .children(heading)
+                    .child(items(&self.id, self.items)),
+            ))
         })
     }
 }
