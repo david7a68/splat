@@ -200,6 +200,10 @@ Icons: `gui::icons::*` has the design system's names (`icons::RUN`, `icons::WARN
 | Tooltip | `.with_tooltip(words)` on an element with an id (`WithTooltip`) | Hints and blocked reasons |
 | Target | `kit::target(element, name)` | Name your own pressable element for the harness |
 
+The kit gallery (`src/gui/gallery.rs`, tests only) shows every part on one page:
+`artifacts/screenshots/gpui/gpui-kit__01-gallery__1200x800.png`, `__02-menu`, `__03-dialog`. A
+test sets `root.gallery = Some(Gallery::default())` to show it in place of the page.
+
 Menus, drop-downs and popovers keep which one is open in a GPUI global (`kit::menu`): no open flag
 in your state. `kit::menu::any_open(cx)`, `open_popup(id, window, cx)` and `close_open_popup`
 exist for keys.
@@ -239,9 +243,10 @@ fn library_browse() {
 
 ### GPUI gotchas found in wave 1
 
-- gpui turns on serde_json's `preserve_order`, so a `serde_json::Map` keeps insertion order instead
-  of sorting. Anything that hashed or compared serialized JSON by key order must sort itself
-  (`content::contracts::fingerprint` now does).
+- gpui turns on serde_json's `preserve_order` for the whole build, so a `serde_json::Map` keeps
+  insertion order instead of sorting its keys. Code that iterates a map, or hashes its serialized
+  bytes, and needs an order must sort itself (`content::contracts::fingerprint` and combat sync's
+  currency writes now do). Map equality is not affected.
 - `ElementId::NamedChild` takes an `Arc<ElementId>`. Tuple ids exist for `(&str, u32/u64/usize…)`,
   not `(&str, &str)`; use `ElementId::Name(format!(..).into())`.
 - `anchored()` starts at its parent's origin, not where it sits in a flex column: put it in a
@@ -261,6 +266,7 @@ fn library_browse() {
 - The touchpad speed is chosen and saved, but GPUI has no hook to scale scroll events; GPUI's own
   touchpad scrolling applies.
 - The rail is not draggable and its width is not saved (136 px, 188 px from a 1400 px window).
-- Dialogs take the keyboard when they open but do not keep Tab inside them.
+- Dialogs ask for the keyboard when they open but do not keep Tab inside them; Escape reaches them
+  through the root (`kit::dialog::escape_open_dialog`) wherever the keyboard is.
 - A kit menu may reach past its pane's edge (egui keeps it inside the pane, one lane clear).
 - `kit::markdown` is basic: no dice links, note links, wide-table rules or history.
