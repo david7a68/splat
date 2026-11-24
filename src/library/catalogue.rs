@@ -15,11 +15,8 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue},
     design::{
-        self, Density, Tone, Type, colors, icons,
-        outcome::{
-            BodyFault, Choice, FaultMessage, MessageChoice, Messages, Notice, Repair, Sentence,
-            UndoStep,
-        },
+        self, Tone, colors, icons,
+        outcome::{Choice, FaultMessage, MessageChoice, Messages, Notice, Sentence, UndoStep},
     },
     matching::{Rank, Typed, with_other},
     persistence::{Campaign, Module},
@@ -66,39 +63,6 @@ fn fault_here(fault: &FileFault) -> String {
     }
 }
 
-/// Draws `add`, a read fault's message, with its words at the reader measure (round 25 FB3, SB1:
-/// the recovery steps are prose): the room is the measure and the words' start after the bar and
-/// the icon (`design::message_choice_row`'s inset).
-pub fn at_reader_measure<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let inset =
-        design::S + 1.0 + design::number_width(ui, icons::ERROR, &Type::Body.font(ui)) + design::XS;
-    ui.scope(|ui| {
-        ui.set_max_width(ui.available_width().min(design::READER_MEASURE + inset));
-        add(ui)
-    })
-    .inner
-}
-
-/// A file the reader cannot read: what is wrong and how to recover, with `Try again`, then its
-/// Technical details (M20: a typed body fault).
-#[allow(
-    clippy::disallowed_methods,
-    reason = "a read fault in the reader’s body, with its repair (ruling M20)"
-)]
-pub fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
-    let again = at_reader_measure(ui, |ui| {
-        BodyFault::new(&LibraryFault::Unread(fault, false))
-            .repair(Repair::new("Try again", ()))
-            .show(ui)
-            .is_some()
-    });
-    design::gap(ui, design::Gap::S);
-    design::quiet_section(ui, "Technical details", |ui| {
-        ui.add(egui::Label::new(Type::Small.rich(ui, &fault.system).color(colors().muted)).wrap());
-    });
-    again
-}
-
 /// What is wrong with a repair draft now, and the line to mark. Any reason Save would refuse the
 /// draft (`refusal`, from `Loaded::draft_refusal`) is the notice, a YAML fault in its own words. A
 /// saved file whose own text does not parse has a parse fault: a draft Save would write has no
@@ -132,43 +96,6 @@ pub fn draft_repair_problem(
         None if parse_fault() => (None, line),
         None => (Some(error.clone()), line),
     }
-}
-
-/// Keep the error with its repair and consequence in both reader and source views (M20: a typed
-/// body fault). The repair is the manifest's recovery, or `Fix in Edit Markdown` in Read; in
-/// Edit Markdown with no recovery, the fault alone. Locked while `lock` holds.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "a repair draft’s fault in the reader’s body, with its repair (ruling M20)"
-)]
-pub fn repair_notice(
-    ui: &mut egui::Ui,
-    problem: &str,
-    recovery: Option<&(Module, String, bool)>,
-    lock: Option<Sentence>,
-    source: bool,
-) -> bool {
-    let locked = |repair: Repair<()>| match &lock {
-        Some(reason) => repair.blocked(reason.clone()),
-        None => repair,
-    };
-    let fault = match recovery {
-        Some((_, path, exists)) => BodyFault::new(&LibraryFault::Repair(
-            problem,
-            crate::content_workspace::manifest_fault_tone(*exists),
-        ))
-        .repair(locked(if *exists {
-            // What replacing keeps and replaces, in its help line (M8).
-            Repair::new(crate::choice!("Replace with a basic {}", path), ())
-                .help(manifest_replace_help(path))
-        } else {
-            Repair::new("Write the manifest again", ())
-        })),
-        None if source => BodyFault::new(&LibraryFault::Repair(problem, Tone::Error)),
-        None => BodyFault::new(&LibraryFault::Repair(problem, Tone::Error))
-            .repair(Repair::new("Fix in Edit Markdown", ())),
-    };
-    fault.show(ui).is_some()
 }
 
 /// Whose file a note is: its owner's kind and id. Settings check package and campaign UUIDs
@@ -835,117 +762,6 @@ thread_local! {
     pub static SCOPE_LABEL_FITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-pub fn scope_label(ui: &egui::Ui, selected: &str, budget: f32) -> String {
-    #[cfg(any(test, feature = "test-support"))]
-    SCOPE_LABEL_FITS.with(|fits| fits.set(fits.get() + 1));
-    let font = Type::Strong.font(ui);
-    let fitted = design::words_that_fit(ui, selected, &font, budget);
-    if design::number_width(ui, &fitted, &font) <= budget {
-        return fitted;
-    }
-    let mut cut = fitted.trim_end_matches('…').to_owned();
-    while !cut.is_empty() && design::number_width(ui, &format!("{cut}…"), &font) > budget {
-        cut.pop();
-    }
-    format!("{cut}…")
-}
-
-pub fn section_row(ui: &mut egui::Ui, label: &str, count: usize, selected: bool) -> egui::Response {
-    section_row_counted(ui, label, count, selected, true)
-}
-
-/// `section_row`, with its count painted or not; its accessible name always holds the count.
-pub fn section_row_counted(
-    ui: &mut egui::Ui,
-    label: &str,
-    count: usize,
-    selected: bool,
-    painted: bool,
-) -> egui::Response {
-    design::row(
-        ui,
-        Density::Read.row(),
-        selected,
-        &format!("{label}   {}", design::count(count, "", "").trim()),
-        |ui, rect| {
-            let c = colors();
-            let font = if selected { Type::Strong } else { Type::Body };
-            let galley = design::one_line(
-                ui,
-                label,
-                font.font(ui),
-                if selected { c.text } else { c.muted },
-                rect.width() - 44.0,
-            );
-            ui.painter().galley(
-                egui::pos2(
-                    rect.left() + design::S,
-                    rect.center().y - galley.size().y / 2.0,
-                ),
-                galley,
-                c.text,
-            );
-            if painted {
-                // A search with no match says `0` (`design::count` writes zero as nothing).
-                let words = match count {
-                    0 => "0".to_owned(),
-                    count => design::count(count, "", "").trim().to_owned(),
-                };
-                design::number(
-                    ui.painter(),
-                    rect.right() - design::S,
-                    rect.center().y,
-                    &words,
-                    &Type::Small.font(ui),
-                    c.muted,
-                );
-            }
-        },
-    )
-}
-
-pub fn about_row(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
-    let color = if selected {
-        colors().text
-    } else {
-        colors().muted
-    };
-    let font = if selected { Type::Strong } else { Type::Body };
-    // One line, so a warning icon never moves the rows below. The package name shortens by whole
-    // words; hover and the accessible name keep the full label.
-    let room = (ui.available_width() - design::S * 2.0).max(design::XXL);
-    let (head, name) = label
-        .split_once("About ")
-        .map_or(("", label), |(icon, name)| (icon, name));
-    // Ruling R13 (row 151): the row keeps `About`, the word that says what it opens; the name
-    // gives way, by whole words.
-    let head = format!("{head}About ");
-    let name_room = room - design::number_width(ui, &head, &font.font(ui));
-    let shown = format!(
-        "{head}{}",
-        design::words_that_fit(ui, name, &font.font(ui), name_room)
-    );
-    // The warning mark has its own tone, as on an entry row.
-    let galley = marked_line(ui, &shown, font.font(ui), color, room);
-    let shortened = shown != label || galley.elided;
-    let height = (galley.size().y + design::XS * 2.0).max(Density::Read.row());
-    let response = design::row(ui, height, selected, label, |ui, rect| {
-        ui.painter().galley(
-            egui::pos2(
-                rect.left() + design::S,
-                rect.center().y - galley.size().y / 2.0,
-            ),
-            galley,
-            color,
-        );
-    });
-    if shortened {
-        response.on_hover_text(label)
-    } else {
-        response
-    }
-}
-
 /// What the catalogue shows. The default is what the active campaign can use.
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq)]
 pub enum Scope {
@@ -955,22 +771,6 @@ pub enum Scope {
     Builtin,
     Package(Uuid),
     Campaign,
-}
-
-/// The ordered choices and their fitted labels for one catalogue and layout.
-pub struct ScopeMenu {
-    pub layout: ScopeMenuLayout,
-    pub dropdown: design::Dropdown<'static, Scope, design::popups::HasChoices>,
-}
-
-#[derive(PartialEq)]
-pub struct ScopeMenuLayout {
-    pub catalogue: design::memo::Revision,
-    pub campaign: bool,
-    pub width: f32,
-    pub font: egui::FontId,
-    pub fonts: u64,
-    pub scale: f32,
 }
 
 /// A package's About line count, in Campaign's form: `All entries chosen`, `5 of 6 entries
@@ -2414,61 +2214,6 @@ pub struct LetGo {
     pub campaign: Option<Option<Uuid>>,
 }
 
-/// `Show folder`: opens a folder in the system's file manager.
-pub fn show_folder(ui: &mut egui::Ui, folder: &Path) {
-    if design::link(ui, "Show folder").clicked() {
-        open_folder(ui, folder);
-    }
-}
-
-fn open_folder(ui: &egui::Ui, folder: &Path) {
-    {
-        ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
-            "file://{}",
-            folder
-                .to_string_lossy()
-                .bytes()
-                .map(|byte| {
-                    if byte.is_ascii_alphanumeric() || b"-._~/".contains(&byte) {
-                        (byte as char).to_string()
-                    } else {
-                        format!("%{byte:02X}")
-                    }
-                })
-                .collect::<String>()
-        )));
-    }
-}
-
-/// The file line of a draft whose file has gone from disk: the path it had, then `Show folder`
-/// for the nearest folder that is still there. No link offers the missing file.
-pub fn gone_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str) {
-    let path = root.join(relative);
-    let room = (ui.available_width()
-        - design::number_width(ui, "Show folder", &Type::Body.font(ui))
-        - design::L)
-        .max(0.0);
-    let font = Type::Small.font(ui);
-    let filename = relative.rsplit('/').next().unwrap_or(relative);
-    let shown = if design::number_width(ui, relative, &font) <= room || filename == relative {
-        relative.to_owned()
-    } else {
-        format!("…/{filename}")
-    };
-    let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
-    design::named(ui, &response, &path.display().to_string());
-    response.on_hover_text(path.display().to_string());
-    // The folder is looked for on the press, not every frame.
-    if design::link(ui, "Show folder").clicked() {
-        let folder = path
-            .ancestors()
-            .skip(1)
-            .find(|folder| folder.is_dir())
-            .unwrap_or(root);
-        open_folder(ui, folder);
-    }
-}
-
 /// The offer to change links after a rename. It belongs to the renamed entry (by its id, in
 /// its root) and shows only in that entry's reader. It carries the version of the entry's file
 /// it was made from: the root, the path and the exact text the rename saved. The offer holds
@@ -2722,52 +2467,6 @@ pub fn marked_line(
     ui.fonts_mut(|fonts| fonts.layout_job(job))
 }
 
-// Fixed height keeps the virtual scroll position independent of label length.
-pub fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> egui::Response {
-    let width = ui.available_width() - design::S * 2.0;
-    let font = if selected { Type::Strong } else { Type::Body };
-    let title = design::words_that_fit(ui, name, &font.font(ui), width);
-    // Round 25 FF5: the folder that tells two same-named packages apart comes last, as on the
-    // reader's kind line. When the line does not fit, the words before it shorten (the package
-    // name, which both rows share), never the folder.
-    let small = Type::Small.font(ui);
-    let detail = match subtitle
-        .rsplit_once(" · ")
-        .filter(|(_, folder)| folder.ends_with('/'))
-    {
-        Some((head, folder)) if design::number_width(ui, subtitle, &small) > width => {
-            let tail = format!(" · {folder}");
-            let room = width - design::number_width(ui, &tail, &small);
-            format!("{}{tail}", design::words_that_fit(ui, head, &small, room))
-        }
-        _ => design::words_that_fit(ui, subtitle, &small, width),
-    };
-    // `design::two_line_row`, with the row's warning mark in its own tone.
-    let response = design::row(
-        ui,
-        ENTRY_ROW_HEIGHT,
-        selected,
-        &format!("{title} · {detail}"),
-        |ui, rect| {
-            let c = colors();
-            let width = rect.width() - 2.0 * design::S;
-            let galley = design::one_line(ui, &title, font.font(ui), c.text, width);
-            let total = galley.size().y + Type::Small.line();
-            let top = rect.center().y - total / 2.0;
-            ui.painter()
-                .galley(egui::pos2(rect.left() + design::S, top), galley, c.text);
-            let detail = marked_line(ui, &detail, Type::Small.font(ui), c.muted, width);
-            ui.painter().galley(
-                egui::pos2(rect.left() + design::S, top + total - Type::Small.line()),
-                detail,
-                c.muted,
-            );
-        },
-    );
-    design::named(ui, &response, &format!("{name} · {subtitle}"));
-    response
-}
-
 pub fn local_module(path: &Path) -> Result<Module, String> {
     let path = path.canonicalize().map_err(|e| e.to_string())?;
     let (entries, _) = content::read_directory(&path)?;
@@ -2888,52 +2587,6 @@ pub fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> String {
     )
 }
 
-/// Consistent type and inset for entry form controls, including the editable Folder.
-pub(crate) fn form_control<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    ui.scope(|ui| {
-        ui.style_mut().override_font_id = Some(Type::Strong.font(ui));
-        ui.spacing_mut().button_padding.x = design::S;
-        add(ui)
-    })
-    .inner
-}
-
-pub fn creation_path(ui: &mut egui::Ui, root: &Path, relative: &str, destination: &str) {
-    let full = format!("Will create {}", root.join(relative).display());
-    let short = format!("Will create {destination}/{relative}");
-    let text = design::words_that_fit(ui, &short, &Type::Small.font(ui), ui.available_width());
-    let response = ui.label(Type::Small.rich(ui, text).color(colors().muted));
-    design::named(ui, &response, &full);
-    response.on_hover_text(full);
-}
-
-/// A file line for a file that moved on disk under a draft: the new path, `moved from <folder>/`,
-/// then the file's links, so no link splits the statement about the path. The path gives way
-/// first: it ends in `…` when the line is short, and its hover and accessible name keep it whole.
-pub fn moved_file_parts(
-    ui: &mut egui::Ui,
-    root: &Path,
-    relative: &str,
-    from: &str,
-    obsidian: bool,
-) {
-    let path = root.join(relative);
-    let font = Type::Small.font(ui);
-    let gap = ui.spacing().item_spacing.x;
-    let budget = (ui.available_width()
-        - crate::world::entry_file_links_width(ui, obsidian)
-        - design::number_width(ui, from, &font)
-        - 2.0 * gap
-        - design::L)
-        .max(design::XXL);
-    let shown = design::words_that_fit(ui, relative, &font, budget);
-    let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
-    design::named(ui, &response, &path.display().to_string());
-    response.on_hover_text(path.display().to_string());
-    ui.label(Type::Small.rich(ui, from).color(colors().muted));
-    crate::world::entry_file_links(ui, &path, obsidian);
-}
-
 /// Existing folders, with an optional kind folder as the first suggestion.
 pub fn kind_folder(kind: &str) -> &'static str {
     match kind {
@@ -2949,43 +2602,6 @@ pub fn kind_folder(kind: &str) -> &'static str {
 thread_local! {
     /// How many folder reads `visit_folders` made on this thread, for the tests' idle bound.
     pub static FOLDER_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-/// A folder field's suggestions: each visible subfolder of `root`, and the kind's folder. The
-/// open suggestions menu `menu` owns them for one session: they are read from disk when it
-/// opens (`opening`, the press on its button while it is closed) and kept only while it stays
-/// open from one pass to the next for the same root and kind. A close (choosing a folder, a
-/// click outside), a form that was not drawn, or another root or kind ends the session, so the
-/// next open reads again and shows a folder made in the meantime. A draw with the menu closed
-/// reads nothing.
-pub fn folder_suggestions(
-    ctx: &egui::Context,
-    menu: egui::Id,
-    (open, opening): (bool, bool),
-    root: &Path,
-    kind: Option<&str>,
-) -> std::sync::Arc<Vec<String>> {
-    type Session = (u64, PathBuf, Option<String>, std::sync::Arc<Vec<String>>);
-    let key = menu.with("folder_suggestions");
-    let pass = ctx.cumulative_pass_nr();
-    if !open && !opening {
-        ctx.data_mut(|data| data.remove::<Session>(key));
-        return std::sync::Arc::default();
-    }
-    let kind = kind.map(str::to_owned);
-    let kept = ctx
-        .data(|data| data.get_temp::<Session>(key))
-        .filter(|(at, of, by, _)| {
-            open && !opening && (*at + 1 == pass || *at == pass) && of == root && *by == kind
-        });
-    let folders = match kept {
-        Some((.., folders)) => folders,
-        None => std::sync::Arc::new(folder_choices(root, kind.as_deref())),
-    };
-    ctx.data_mut(|data| {
-        data.insert_temp(key, (pass, root.to_path_buf(), kind, folders.clone()));
-    });
-    folders
 }
 
 /// Every folder under `root` (no hidden ones) and `kind`'s own folder, sorted, each once: the
@@ -3017,131 +2633,6 @@ fn visit_folders(root: &Path, path: &Path, folders: &mut Vec<String>) {
             visit_folders(root, &entry.path(), folders);
         }
     }
-}
-
-pub fn folder_field(
-    ui: &mut egui::Ui,
-    id: design::FieldId,
-    label: &str,
-    value: &mut String,
-    root: &Path,
-    kind: Option<&str>,
-) {
-    let query = value.to_lowercase();
-    design::field(
-        ui,
-        label,
-        Some("Type a new folder, or choose one. A new folder is made with the file."),
-        None,
-        |ui| {
-            form_control(ui, |ui| {
-                let frame = egui::Frame::new()
-                    .fill(colors().well)
-                    .stroke(egui::Stroke::new(
-                        design::HAIRLINE_WIDTH,
-                        colors().field_border,
-                    ))
-                    .corner_radius(design::RADIUS_CONTROL as u8)
-                    .inner_margin(egui::Margin::symmetric(design::S as i8, 0))
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            let width =
-                                (ui.available_width() - design::XL - ui.spacing().item_spacing.x)
-                                    .max(design::XXL);
-                            let response = design::Dropdown::editable_value(
-                                ui,
-                                id,
-                                value,
-                                "Main folder",
-                                width,
-                            );
-                            design::named(ui, &response, label);
-                            let typing = response.has_focus();
-                            let (rect, response) = ui.allocate_exact_size(
-                                egui::vec2(design::XL, design::XL),
-                                egui::Sense::click(),
-                            );
-                            let icon = egui::Align2::RIGHT_CENTER.align_size_within_rect(
-                                egui::Vec2::splat(ui.spacing().icon_width),
-                                rect,
-                            );
-                            design::combo_icon(
-                                ui,
-                                icon,
-                                ui.style().interact(&response),
-                                egui::Popup::is_id_open(
-                                    ui.ctx(),
-                                    egui::Popup::default_response_id(&response),
-                                ),
-                            );
-                            design::named(ui, &response, &format!("Suggestions for {label}"));
-                            let menu = egui::Popup::default_response_id(&response);
-                            let open = egui::Popup::is_id_open(ui.ctx(), menu);
-                            let folders = folder_suggestions(
-                                ui.ctx(),
-                                menu,
-                                (open, response.clicked() && !open),
-                                root,
-                                kind,
-                            );
-                            design::menu_popup(&*ui, &response).show(|ui| {
-                                if design::extras::choice_wrapped(
-                                    ui,
-                                    value.is_empty(),
-                                    "Main folder",
-                                    None,
-                                )
-                                .clicked()
-                                {
-                                    value.clear();
-                                    ui.close();
-                                }
-                                for folder in folders
-                                    .iter()
-                                    .filter(|folder| folder.to_lowercase().contains(&query))
-                                {
-                                    if design::extras::choice_wrapped(
-                                        ui,
-                                        value == folder,
-                                        folder,
-                                        None,
-                                    )
-                                    .clicked()
-                                    {
-                                        *value = folder.clone();
-                                        ui.close();
-                                    }
-                                }
-                            });
-                            typing
-                        })
-                        .inner
-                    });
-                // Round 25 FE1: the caret in the field shows the focus ring round the whole
-                // field, as `text_field` does. The suggestions button keeps its own ring.
-                if frame.inner {
-                    design::focus_ring(ui, frame.response.rect);
-                }
-            });
-        },
-    );
-}
-
-/// `Choose for this campaign` and its help, which `help` gives for the box's state after this
-/// frame's click.
-pub fn use_checkbox(
-    ui: &mut egui::Ui,
-    not_used: &mut bool,
-    help: impl FnOnce(bool) -> &'static str,
-) {
-    let mut enabled = !*not_used;
-    ui.checkbox(&mut enabled, "Choose for this campaign");
-    *not_used = !enabled;
-    // Help keeps the reader measure (round 25 family).
-    design::help(ui, help(enabled));
-    // Round 27 FB9, FD8: `L` after the help, as after a field, so the help stays with its
-    // checkbox and does not read as help for the next field.
-    design::gap_to_next(ui, design::Gap::L);
 }
 
 pub const PACKAGE_FOLDER: design::FieldId =

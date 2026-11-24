@@ -715,47 +715,6 @@ mod reading_tests {
     use super::*;
     use crate::design;
 
-    #[test]
-    fn builtin_item_body_has_no_collapsing_header_before_prose() {
-        let loaded = crate::library::load(None).unwrap();
-        let mut checked = 0;
-        for entry in loaded
-            .notes
-            .iter()
-            .filter_map(|note| note.entry.as_ref())
-            .filter(|entry| entry.fields.contains_key("splat_item"))
-        {
-            let ctx = eframe::egui::Context::default();
-            design::theme::install(&ctx);
-            ctx.enable_accesskit();
-            let sections = reading_sections(&entry.body, &entry.name);
-            let output = ctx.run(Default::default(), |ctx| {
-                eframe::egui::CentralPanel::default().show(ctx, |ui| {
-                    crate::library::reader::show(
-                        ui,
-                        Some(entry),
-                        &sections,
-                        true,
-                        false,
-                        true,
-                        false,
-                    );
-                });
-            });
-            let update = output.platform_output.accesskit_update.unwrap();
-            assert!(
-                !update
-                    .nodes
-                    .iter()
-                    .any(|(_, node)| node.is_expanded().is_some()),
-                "{} puts a disclosure in its body",
-                entry.name
-            );
-            checked += 1;
-        }
-        assert!(checked > 100);
-    }
-
     /// The `## Source text` of every built-in note that the reader shows.
     fn corpus() -> Vec<(String, String)> {
         fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
@@ -791,62 +750,6 @@ mod reading_tests {
             notes.len()
         );
         notes
-    }
-
-    #[test]
-    fn every_builtin_subclass_has_one_gap_before_its_first_visible_block() {
-        let loaded = crate::library::load(None).unwrap();
-        let mut count = 0;
-        for entry in loaded
-            .notes
-            .iter()
-            .filter_map(|n| n.entry.as_ref())
-            .filter(|e| category(e) == "subclass")
-        {
-            let sections = reading_sections(&entry.body, &entry.name);
-            let source = sections.iter().find(|s| s.title == "Source text").unwrap();
-            let prose = overview_markdown(source.body);
-            let first_y = |reader: bool| {
-                let ctx = eframe::egui::Context::default();
-                crate::design::theme::install(&ctx);
-                let output = ctx.run(Default::default(), |ctx| {
-                    eframe::egui::CentralPanel::default().show(ctx, |ui| {
-                        if reader {
-                            crate::library::reader::show(
-                                ui,
-                                Some(entry),
-                                std::slice::from_ref(source),
-                                true,
-                                false,
-                                true,
-                                false,
-                            );
-                        } else {
-                            design::gap(ui, design::Gap::L);
-                            design::reader::source_prose(ui, &prose);
-                        }
-                    });
-                });
-                output
-                    .shapes
-                    .iter()
-                    .filter_map(|s| match &s.shape {
-                        eframe::egui::Shape::Text(t) if !t.galley.job.text.trim().is_empty() => {
-                            Some(t.pos.y)
-                        }
-                        _ => None,
-                    })
-                    .min_by(f32::total_cmp)
-                    .unwrap()
-            };
-            assert!(
-                (first_y(true) - first_y(false)).abs() < 1.0,
-                "{} adds space for hidden content",
-                entry.name
-            );
-            count += 1;
-        }
-        assert!(count > 0);
     }
 
     fn letters(text: &str) -> String {

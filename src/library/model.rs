@@ -1,8 +1,6 @@
-//! The Library page as data and acts, for a UI that draws it itself (the GPUI port,
-//! `docs/gpui-port.md`). The egui page (`Library::show`) shares the list's logic with it
-//! (`begin`, `section_counts`, `find_matches`, `row_subtitle`, `list_empty_words`); the reader's
-//! data here follows `Library::editor_pane` step by step, and its footer lines are the same typed
-//! lines (`design::outcome::plain`). The cleanup wave deletes the egui page and keeps this.
+//! The Library page as data and acts, for the GPUI page that draws it
+//! (`gui::pages::library`): the header, the list's work (after `Library::begin`), the reader
+//! pane's data and its footer's typed lines (`design::outcome::plain`), and the forms.
 pub use super::presentation::Section;
 use super::*;
 use crate::design::outcome::Fault as _;
@@ -705,13 +703,6 @@ impl Library {
                 .map_or(0, |(_, n)| *n)
         };
         let searching = !self.search.trim().is_empty();
-        if self
-            .kept
-            .scope_notice()
-            .is_some_and(|(_, widened)| *widened != scope || searching)
-        {
-            let _ = self.kept.take_scope_notice();
-        }
         let about_open = self.selected.is_some_and(|at| {
             loaded.notes[at].is_manifest()
                 && matches!(scope, Scope::Package(id) if loaded.notes[at].owner.is_package(id))
@@ -912,6 +903,8 @@ impl Library {
             {
                 return Some(row);
             }
+            #[cfg(test)]
+            super::ROW_SEARCHES.with(|searches| searches.set(searches.get() + 1));
             let row = matches.iter().position(|i| *i == selected);
             self.selected_row = row;
             row
@@ -2307,8 +2300,6 @@ pub(super) struct ReaderPrep {
     pub duplicate_indices: Vec<usize>,
     /// The file stopped reading under the draft.
     pub stopped_reading: bool,
-    /// The package's About (its manifest) is open.
-    pub about: bool,
     pub owner_fault: Option<FaultStatus>,
     pub owner_name: String,
     pub package_word: String,
@@ -2588,7 +2579,6 @@ impl Library {
             conflict,
             duplicate_indices,
             stopped_reading,
-            about,
             owner_fault,
             owner_name,
             package_word,
