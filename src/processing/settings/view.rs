@@ -145,7 +145,6 @@ impl ProcessingSettings {
         self.config.speech_url = url.to_owned();
         self.config.speech_model = model.to_owned();
         self.persist();
-        self.reveal_problem = true;
     }
 
     /// The DM chose a transcript and summary service.
@@ -164,7 +163,6 @@ impl ProcessingSettings {
         self.config.llm_url = url.to_owned();
         self.config.llm_model = model.to_owned();
         self.persist();
-        self.reveal_problem = true;
     }
 
     /// The transcript service is the Codex command (no address, no key).
