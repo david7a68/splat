@@ -92,7 +92,7 @@ const SLOT_DIGITS: usize = 3;
 /// The text a value's slot is measured on: its digits and its goal's, at least
 /// `SLOT_DIGITS`, as zeros. The digits are tabular, so every value up to that many digits
 /// fits the slot exactly.
-fn value_slot(value: i64, goal: Option<i64>) -> String {
+pub fn value_slot(value: i64, goal: Option<i64>) -> String {
     let digits = |n: i64| n.unsigned_abs().to_string().len();
     let wide = digits(value).max(goal.map_or(0, digits)).max(SLOT_DIGITS);
     let sign = if value < 0 { "-" } else { "" };
@@ -216,14 +216,14 @@ impl ViewState {
 }
 
 /// A proposed change of a Due row, by its notice and its own key (`ChangeKey`).
-type Tick = (NoticeRef, ChangeKey);
+pub type Tick = (NoticeRef, ChangeKey);
 
 /// A mark's change by its own identity, not its place in the mark (Astra's P2 on PR 897): the
 /// tracker it changes, its line, what it does there (its `add` and `set`), and which of the
 /// mark's changes that are the same in all of these it is (Astra's P2 on PR 904). A change that
 /// leaves the mark before it moves no other change's key, also on the same line: its check box
 /// keeps its id (and its focus), and the DM's untick stays with its change.
-type ChangeKey = (String, Option<String>, String, usize);
+pub type ChangeKey = (String, Option<String>, String, usize);
 
 /// Each change's key, in the mark's order (`ChangeKey`).
 fn change_keys(notice: &super::Notice, mark: Says<'_>) -> Vec<ChangeKey> {
@@ -249,7 +249,8 @@ pub(crate) const DAY_MARKS_WAIT: Sentence =
     crate::sentence!("No day mark shows until the Timeline is read.");
 
 /// One act the DM asked for in this frame.
-pub(crate) enum Act {
+#[derive(Clone)]
+pub enum Act {
     Press {
         key: String,
         instance: Option<String>,
@@ -287,6 +288,103 @@ impl Trackers {
         }
     }
 
+    /// An act pressed in a view drawn by another UI (the GPUI port): the shell applies it as it
+    /// applies an egui press (`apply_pressed`), after it has read the day count again.
+    pub fn press_in_view(&mut self, act: Act) {
+        self.view.pressed = Some(act);
+    }
+
+    /// The typed amount while its field is open: the tracker, its line, the action's label and
+    /// the words so far.
+    pub fn asking(&self) -> Option<(&str, Option<&str>, &str, &str)> {
+        self.view
+            .asking
+            .as_ref()
+            .map(|(key, instance, label, typed)| {
+                (key.as_str(), instance.as_deref(), label.as_str(), typed.as_str())
+            })
+    }
+
+    /// An action that asks for an amount was pressed: its field opens in its place, with focus.
+    pub fn ask(&mut self, key: &str, instance: Option<&str>, label: &str) {
+        self.view.asking = Some((
+            key.to_owned(),
+            instance.map(str::to_owned),
+            label.to_owned(),
+            String::new(),
+        ));
+        self.view.focus_asking = true;
+    }
+
+    /// The words typed in the open amount field.
+    pub fn set_typed(&mut self, words: &str) {
+        if let Some((_, _, _, typed)) = self.view.asking.as_mut() {
+            words.clone_into(typed);
+        }
+    }
+
+    /// Whether the amount field takes focus in this frame (once).
+    pub fn take_focus_asking(&mut self) -> bool {
+        std::mem::take(&mut self.view.focus_asking)
+    }
+
+    /// The amount field closes: Enter presses its action (`at`, its place in `quick`) with the
+    /// typed number (a number that does not read presses nothing), Escape and focus elsewhere
+    /// press nothing.
+    pub fn end_asking(&mut self, enter: bool, at: usize) {
+        let Some((key, instance, label, typed)) = self.view.asking.take() else {
+            return;
+        };
+        if !enter {
+            return;
+        }
+        let Some(amount) = crate::design::parse_signed(&typed) else {
+            return;
+        };
+        self.view.pressed = Some(Act::Press {
+            key,
+            instance,
+            label,
+            at,
+            asked: Some(amount),
+        });
+    }
+
+    /// Whether a proposed change of a Due row is ticked (the default) or the DM unticked it.
+    pub fn ticked(&self, tick: &Tick) -> bool {
+        !self.view.unticked.contains(tick)
+    }
+
+    /// Tick or untick a proposed change of a Due row.
+    pub fn set_ticked(&mut self, tick: &Tick, on: bool) {
+        if on {
+            self.view.unticked.remove(tick);
+        } else {
+            self.view.unticked.insert(tick.clone());
+        }
+    }
+
+    /// The trackers' revision: it moves on at each settle, so a view keeps what it worked out
+    /// from the values and definitions until it moves.
+    pub fn revision(&self) -> crate::design::memo::Revision {
+        self.revision.revision()
+    }
+
+    /// The problems list, each with the house rule note it belongs to.
+    pub fn problems(&self) -> &[(Option<uuid::Uuid>, String)] {
+        &self.problems
+    }
+
+    /// `Trackers.md` of the campaign, while one is open.
+    pub fn ledger_path(&self) -> Option<std::path::PathBuf> {
+        self.path()
+    }
+
+    /// `Try again` on a ledger that cannot be read: read it again now.
+    pub fn read_again(&mut self) {
+        self.view.pressed = Some(Act::ReadAgain);
+    }
+
     /// `Done` pressed on this row, as a click in the view leaves it for the shell.
     #[cfg(feature = "test-support")]
     pub fn press_done_in_view(&mut self, notice: &super::Notice, ticked: Vec<bool>) {
@@ -296,7 +394,7 @@ impl Trackers {
 
 /// What the DM can press in the view's footer and in its placeholder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TrackerPress {
+pub enum TrackerPress {
     /// `Undo: <label>`: the newest act of the session being played.
     UndoAct,
     AddToTimeline,
@@ -534,17 +632,17 @@ pub(super) fn due_parts_made() -> usize {
 
 /// A Due row's parts, as `design::NoticeRow` lays them: its words, each roll's label with why
 /// it is blocked, the rolls' results, and each proposed change's words.
-struct DueParts {
-    words: String,
-    rolls: Vec<(String, Option<&'static str>)>,
-    results: Option<String>,
-    checks: Vec<String>,
+pub struct DueParts {
+    pub words: String,
+    pub rolls: Vec<(String, Option<&'static str>)>,
+    pub results: Option<String>,
+    pub checks: Vec<String>,
     /// The notice's short name (the row's menu's), `Done`'s label and its accessible name.
-    short: String,
-    finish: String,
-    done_name: String,
+    pub short: String,
+    pub finish: String,
+    pub done_name: String,
     /// Each check's place in the DM's unticked set: its notice and its change's own key.
-    ticks: Vec<Tick>,
+    pub ticks: Vec<Tick>,
     /// The words each roll and `Done` paint, laid before paint in their places (Astra's P2 on
     /// PR 897): a quiet frame lays no action's words.
     roll_words: Vec<Option<design::LaidAction>>,
@@ -554,7 +652,7 @@ struct DueParts {
 /// Why a roll is blocked: each name of its table has its roll.
 const EACH_ROLLED: &str = "Each name has its roll.";
 
-fn due_parts(rules: &Rules, notice: &super::Notice, mark: Says<'_>) -> DueParts {
+pub fn due_parts(rules: &Rules, notice: &super::Notice, mark: Says<'_>) -> DueParts {
     let rolls = mark
         .tables
         .iter()
@@ -911,54 +1009,18 @@ fn lay_tracker(
     TRACKERS_LAID.with(|laid| laid.set(laid.get() + 1));
     let indented = !def.per.is_empty();
     let indent = if indented { design::L } else { 0.0 };
-    let repeat = def.repeat.as_ref();
-    let (mut word_seen, mut said) = (false, false);
-    let instances = def.instances();
-    let count = instances.len();
+    let words = line_words(rules, state, key, def);
+    let count = words.len();
     let mut lines = Vec::with_capacity(count);
-    for (line, &instance) in instances.iter().enumerate() {
-        // The line by its own identity: its instance, and how many lines before it have the same
-        // one (`per` can name a line twice).
-        let twin = instances[..line].iter().filter(|&&i| i == instance).count();
-        // The first line of a repeated name keeps its fields; a later one leaves them out.
-        let repeated_line = match repeat {
-            Some(super::Repeat::Line { word, .. }) if instance == Some(word.as_str()) => {
-                std::mem::replace(&mut word_seen, true)
-            }
-            _ => false,
-        };
-        let left_out = |at: usize| match repeat {
-            Some(super::Repeat::Line { asking, .. }) => repeated_line && asking.contains(&at),
-            Some(super::Repeat::Label { label, keep }) => {
-                at != *keep && def.quick[at].label == *label
-            }
-            None => false,
-        };
-        let leaves_out = match repeat {
-            Some(super::Repeat::Line { .. }) => repeated_line,
-            Some(super::Repeat::Label { .. }) => true,
-            None => false,
-        };
-        let fault = repeat
-            .filter(|_| leaves_out && !said)
-            .map(|repeat| TrackerFault::Problem(super::repeat_words(repeat)));
-        said |= fault.is_some();
-        let named: Vec<(usize, String)> = (0..def.quick.len())
-            .filter(|at| !left_out(*at))
-            .map(|at| {
-                let label = &def.quick[at].label;
-                let named = match instance {
-                    Some(name) => format!("{label}: {name}"),
-                    None => label.clone(),
-                };
-                (at, named)
-            })
-            .collect();
-        let name = instance.unwrap_or(&def.name).to_owned();
-        let value = match def.goal {
-            Some(goal) => format!("{} / {goal}", state.value(rules, key, instance)),
-            None => state.value(rules, key, instance).to_string(),
-        };
+    for (line, words) in words.into_iter().enumerate() {
+        let LineWords {
+            name,
+            value,
+            actions: named,
+            instance,
+            twin,
+            fault,
+        } = words;
         let fitted = fit_name(ui, view, columns.revision, &name, columns.name - indent);
         // Each action by its own identity (Astra's P2 on PR 904): the tracker, the line's instance
         // and the action's label, with how many actions of the same label come before it. A rules
@@ -966,7 +1028,7 @@ fn lay_tracker(
         let actions: Vec<design::LineAction> = named
             .iter()
             .map(|(at, _)| design::LineAction {
-                key: action_key(key, (instance, twin), &def.quick, *at),
+                key: action_key(key, (instance.as_deref(), twin), &def.quick, *at),
                 width: quick_action(&def.quick[*at].label).natural_width(ui),
             })
             .collect();
@@ -975,7 +1037,7 @@ fn lay_tracker(
             .map(|fault| design::outcome::row_fault_height(ui, fault, width))
             .collect();
         let laid = design::ActionLine {
-            key: egui::Id::new(("trackers_line", key, instance, twin)),
+            key: egui::Id::new(("trackers_line", key, instance.as_deref(), twin)),
             heading: heading
                 .filter(|_| line == 0)
                 .map(|first| design::LineHeading {
@@ -1012,15 +1074,95 @@ fn lay_tracker(
             .collect();
         lines.push((
             LineParts {
-                name,
+                name: name.clone(),
                 fitted,
                 value,
                 shown,
-                place: (key.to_owned(), instance.map(str::to_owned)),
+                place: (key.to_owned(), instance),
                 fault,
             },
             laid,
         ));
+    }
+    lines
+}
+
+/// One line of a tracker as words, before any layout: its name (the instance's, or the
+/// tracker's), its value (with its goal), the actions it shows (by their place in `quick`, each
+/// with its accessible name, `Pay: Ann` on an instance's line), its instance with how many lines
+/// before it have the same one, and, of two amount fields with one owner (`Repeat`), the fault
+/// the line that leaves one out says under it, once for the tracker.
+pub struct LineWords {
+    pub name: String,
+    pub value: String,
+    pub actions: Vec<(usize, String)>,
+    pub instance: Option<String>,
+    pub twin: usize,
+    pub fault: Option<TrackerFault>,
+}
+
+/// Each line of a tracker as words (`LineWords`), in its order: one line, or one for each
+/// instance. The egui view lays them out; another UI draws them.
+pub fn line_words(
+    rules: &Rules,
+    state: &State,
+    key: &str,
+    def: &super::Definition,
+) -> Vec<LineWords> {
+    let repeat = def.repeat.as_ref();
+    let (mut word_seen, mut said) = (false, false);
+    let instances = def.instances();
+    let mut lines = Vec::with_capacity(instances.len());
+    for (line, &instance) in instances.iter().enumerate() {
+        // The line by its own identity: its instance, and how many lines before it have the same
+        // one (`per` can name a line twice).
+        let twin = instances[..line].iter().filter(|&&i| i == instance).count();
+        // The first line of a repeated name keeps its fields; a later one leaves them out.
+        let repeated_line = match repeat {
+            Some(super::Repeat::Line { word, .. }) if instance == Some(word.as_str()) => {
+                std::mem::replace(&mut word_seen, true)
+            }
+            _ => false,
+        };
+        let left_out = |at: usize| match repeat {
+            Some(super::Repeat::Line { asking, .. }) => repeated_line && asking.contains(&at),
+            Some(super::Repeat::Label { label, keep }) => {
+                at != *keep && def.quick[at].label == *label
+            }
+            None => false,
+        };
+        let leaves_out = match repeat {
+            Some(super::Repeat::Line { .. }) => repeated_line,
+            Some(super::Repeat::Label { .. }) => true,
+            None => false,
+        };
+        let fault = repeat
+            .filter(|_| leaves_out && !said)
+            .map(|repeat| TrackerFault::Problem(super::repeat_words(repeat)));
+        said |= fault.is_some();
+        let actions: Vec<(usize, String)> = (0..def.quick.len())
+            .filter(|at| !left_out(*at))
+            .map(|at| {
+                let label = &def.quick[at].label;
+                let named = match instance {
+                    Some(name) => format!("{label}: {name}"),
+                    None => label.clone(),
+                };
+                (at, named)
+            })
+            .collect();
+        let value = match def.goal {
+            Some(goal) => format!("{} / {goal}", state.value(rules, key, instance)),
+            None => state.value(rules, key, instance).to_string(),
+        };
+        lines.push(LineWords {
+            name: instance.unwrap_or(&def.name).to_owned(),
+            value,
+            actions,
+            instance: instance.map(str::to_owned),
+            twin,
+            fault,
+        });
     }
     lines
 }
@@ -1308,7 +1450,7 @@ fn amount_field(
 /// then the last act of the session being played with `Undo: <label>` and `Add to Timeline`, or,
 /// after `Add to Timeline`, `Added to the Timeline.` with `Undo add`. Nothing shows while
 /// `Trackers.md` cannot be read.
-fn messages<'f>(
+pub fn messages<'f>(
     frame: &'f PaneFrame,
     trackers: &Trackers,
     width: f32,
@@ -1366,7 +1508,7 @@ fn messages<'f>(
 }
 
 /// The act a footer press asks for, from the view's state in this frame.
-fn footer_press(trackers: &Trackers, pressed: Option<TrackerPress>, act: &mut Option<Act>) {
+pub fn footer_press(trackers: &Trackers, pressed: Option<TrackerPress>, act: &mut Option<Act>) {
     let entries = trackers.newest();
     let first = entries.first();
     let added = first.and_then(|first| {

@@ -372,7 +372,13 @@ impl SplatRoot {
             return;
         }
         let view_takes_escape = if app.lookup.on_trackers() {
-            app.trackers.takes_escape()
+            // Escape ends a typed amount, not Lookup (egui: the field loses focus).
+            if app.trackers.takes_escape() {
+                app.trackers.end_asking(false, 0);
+                cx.notify();
+                return;
+            }
+            false
         } else {
             app.lookup.reader.takes_escape()
         };

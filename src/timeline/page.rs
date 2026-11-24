@@ -39,7 +39,7 @@ const SESSION_FILTER: design::FieldId =
     crate::field_id!("timeline_session_filter").once(design::Once::PageSearch);
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
-enum Filter {
+pub enum Filter {
     #[default]
     All,
     Days,
@@ -48,6 +48,16 @@ enum Filter {
     Travel,
     Events,
 }
+
+/// The filter tabs, in their order, with their words.
+pub const FILTERS: [(Filter, &str); 6] = [
+    (Filter::All, "All"),
+    (Filter::Days, "Days"),
+    (Filter::Encounters, "Fights"),
+    (Filter::Rests, "Rests"),
+    (Filter::Travel, "Travel"),
+    (Filter::Events, "Major events"),
+];
 
 impl Filter {
     fn includes(self, kind: Kind) -> bool {
@@ -66,16 +76,16 @@ impl Filter {
 /// filters: the days the file wrote with another number, each event's day, the rows that pass
 /// the filters, each road fight's day on its journey (round 27 FE10), and the clock now. Made
 /// once per change of the book's revision or of the filters (`TimelinePage::view`).
-struct ListView {
-    flagged: std::collections::HashMap<String, u32>,
-    days: Vec<u32>,
-    rows: Vec<usize>,
-    road: std::collections::HashMap<String, String>,
-    now: Option<u64>,
+pub struct ListView {
+    pub flagged: std::collections::HashMap<String, u32>,
+    pub days: Vec<u32>,
+    pub rows: Vec<usize>,
+    pub road: std::collections::HashMap<String, String>,
+    pub now: Option<u64>,
 }
 
 /// The filters as one value with a revision, so the list view's `Memo` can key by them.
-struct FilterKey(design::memo::Revised<(Filter, String, Option<Uuid>)>);
+pub struct FilterKey(design::memo::Revised<(Filter, String, Option<Uuid>)>);
 
 impl Default for FilterKey {
     fn default() -> Self {
@@ -175,45 +185,45 @@ pub use super::SessionLink;
 #[derive(Default)]
 pub struct TimelinePage {
     /// The filters, with a revision.
-    filters: FilterKey,
+    pub filters: FilterKey,
     /// The list view, by the book's revision and the filters' (`ListView`).
-    view: design::memo::Memo<
+    pub view: design::memo::Memo<
         (design::memo::Revision, design::memo::Revision),
         std::sync::Arc<ListView>,
     >,
-    filter: Filter,
-    search: String,
-    session: Option<Uuid>,
-    selected: Option<String>,
-    copied: Option<(String, Instant)>,
-    focus_title: bool,
+    pub filter: Filter,
+    pub search: String,
+    pub session: Option<Uuid>,
+    pub selected: Option<String>,
+    pub copied: Option<(String, Instant)>,
+    pub focus_title: bool,
     /// A modal is open over the app (the app's one test, `modal_open`): Ctrl+S waits for it.
     pub modal: bool,
     /// The open event's form opens at its top in the next draw: another event, a link, the page
     /// opened again. Never a filter or a search, which change only the list.
-    reset_detail: bool,
-    scroll_to: Option<usize>,
+    pub reset_detail: bool,
+    pub scroll_to: Option<usize>,
     /// An event just added with the buttons, with one step of undo.
-    added: design::Results<super::TimelineFile, JustAdded>,
+    pub added: design::Results<super::TimelineFile, JustAdded>,
     /// Its footer line, kept as data across frames (ruling L9): made again only when the store,
     /// the book or the saved-run facts changed.
-    added_view: design::results::Retained<super::TimelineFile, ListAct, AddedInputs>,
+    pub added_view: design::results::Retained<super::TimelineFile, ListAct, AddedInputs>,
     /// The book's revision at the last check that the Add result's event is still there.
-    added_seen: Option<design::memo::Revision>,
+    pub added_seen: Option<design::memo::Revision>,
     /// The list opens where the story is now, at its end.
-    opened: bool,
+    pub opened: bool,
     /// One column: the detail hides the list, so the open event's results end its form.
-    narrow: bool,
+    pub narrow: bool,
     /// The run open now, whose event must stay while it runs.
     pub open_run: Option<Uuid>,
     /// Saved runs from the same campaign snapshot used by the Session plan, and the revision of
     /// their facts (`Encounters::saved_runs_revision`): `set_saved_runs`.
-    saved_runs: Vec<crate::encounter_run::SavedRunInfo>,
-    saved_runs_revision: Option<design::memo::Revision>,
+    pub saved_runs: Vec<crate::encounter_run::SavedRunInfo>,
+    pub saved_runs_revision: Option<design::memo::Revision>,
     /// The DM followed an open fight's status back to the run.
     pub wants_back_to_run: bool,
     /// Filters and the selection belong to one campaign.
-    campaign: Option<Uuid>,
+    pub campaign: Option<Uuid>,
     /// The DM asked to open this session's page.
     pub open_session: Option<Uuid>,
     /// The DM chose where new events go.
@@ -230,15 +240,25 @@ pub struct TimelinePage {
     pub tables: Option<std::sync::Arc<splat_campaign::loot::Sources>>,
     /// Row 123: the campaign's fights and groups by name, for a check result's plan offer.
     pub plan_names: PlanNames,
-    focus_length: bool,
+    pub focus_length: bool,
     /// Round 29 G142: a roll was made in this journey (its id) at this check (its offset): the
     /// journey's next draw scrolls least so that the check's result and its offer lines are in
     /// view, once. Another selection, another journey's draw or a reopened page drops it.
-    reveal_checks: Option<(String, u64)>,
+    pub reveal_checks: Option<(String, u64)>,
     /// What the DM typed in a journey's checks, and each journey's last result with its Undo.
-    checks: checks::State,
-    checks_done: checks::Results,
+    pub checks: checks::State,
+    pub checks_done: checks::Results,
 }
+
+/// The Timeline page's Add strip: every kind, fights first.
+pub const ADD_KINDS: [Kind; 6] = [
+    Kind::Encounter,
+    Kind::Day,
+    Kind::LongRest,
+    Kind::ShortRest,
+    Kind::Travel,
+    Kind::Event,
+];
 
 /// One button for each of these kinds of event. Returns the new event's ID.
 pub fn quick_add(
@@ -298,7 +318,7 @@ pub fn quick_add_with(
 
 /// What the DM chose in the Timeline list's message footer, done after the footer is drawn.
 #[derive(Clone, Debug, PartialEq)]
-enum ListAct {
+pub enum ListAct {
     UndoLinks,
     UpdateLinks,
     UndoRuling,
@@ -393,7 +413,7 @@ impl Fault for FileFault {
     clippy::disallowed_methods,
     reason = "words of a file, of the system or of the events, as text (design::results::STAGED_ALLOWS)"
 )]
-fn as_sentence(words: &str) -> Sentence {
+pub fn as_sentence(words: &str) -> Sentence {
     Sentence::outside(words).unwrap_or(crate::sentence!("Something changed."))
 }
 
@@ -733,7 +753,7 @@ impl TimelinePage {
 
     /// Open `selected`: another event than the Add result's ends that result at once, so it
     /// cannot undo the wrong event.
-    fn select(&mut self, selected: Option<String>) {
+    pub fn select(&mut self, selected: Option<String>) {
         self.selected = selected;
         self.end_add_of_other_selection();
     }
@@ -750,7 +770,7 @@ impl TimelinePage {
     /// the book that lost its event ends it, checked only when the book's revision changed (an
     /// unreadable book keeps the events it had, so its Add stands until its life ends; a book
     /// of another file is another owner, so its Add shows no more); another selection ends it.
-    fn settle_added(&mut self, ctx: &egui::Context, book: &Book) {
+    pub fn settle_added(&mut self, ctx: &egui::Context, book: &Book) {
         self.added.expire(ctx);
         let revision = book.revision();
         if self.added_seen != Some(revision) {
@@ -765,7 +785,7 @@ impl TimelinePage {
 
     /// The list view for this frame: worked out again only when the book or the filters
     /// changed. The filters' value is compared, not copied, on a frame with no change.
-    fn view(&mut self, book: &Book) -> std::sync::Arc<ListView> {
+    pub fn view(&mut self, book: &Book) -> std::sync::Arc<ListView> {
         let (filter, search, session) = &*self.filters.0;
         if *filter != self.filter || *search != self.search || *session != self.session {
             self.filters
@@ -824,18 +844,7 @@ impl TimelinePage {
         room: egui::Rect,
     ) {
         let tabs = |ui: &mut egui::Ui, filter: &mut Filter| {
-            design::segmented(
-                ui,
-                filter,
-                &[
-                    (Filter::All, "All"),
-                    (Filter::Days, "Days"),
-                    (Filter::Encounters, "Fights"),
-                    (Filter::Rests, "Rests"),
-                    (Filter::Travel, "Travel"),
-                    (Filter::Events, "Major events"),
-                ],
-            );
+            design::segmented(ui, filter, &FILTERS);
         };
         let wide = ui.available_width() >= FILTERS_ON_ONE_ROW_FROM;
         if !wide {
@@ -885,17 +894,16 @@ impl TimelinePage {
         self.checks_done.clear();
     }
 
-    fn row(
-        &mut self,
-        ui: &mut egui::Ui,
+    /// A row's words: its title, its second line with each status part's span and tint, the
+    /// flag of a day heading written out of order, and its accessible name.
+    pub fn row_words(
+        &self,
         event: &Event,
         day: u32,
         session: Option<&str>,
         written_as: Option<u32>,
         on_road: Option<&str>,
-    ) {
-        let c = colors();
-        let selected = self.selected.as_deref() == Some(event.id.as_str());
+    ) -> RowWords {
         let title = event.label(day);
         let open = event.run.is_some() && event.run == self.open_run;
         let summary = super::played_fight_summary(event, open);
@@ -927,7 +935,7 @@ impl TimelinePage {
                 detail.push_str(" · ");
             }
             let status = long_rest_status(event.restores);
-            ruling = Some((detail.len(), status.color));
+            ruling = Some((detail.len(), RowTint::Ruling(event.restores)));
             detail.push_str(&format!("{} {}", status.icon, status.word));
         }
         // Round 26 FG4, FD7: a length the clock cannot count is a warning part, in its colour.
@@ -936,10 +944,10 @@ impl TimelinePage {
         if let Some(warning) = &warning
             && let Some(start) = detail.find(warning.as_str())
         {
-            spans.push((start..start + warning.len(), c.result.warning));
+            spans.push((start..start + warning.len(), RowTint::Warning));
         }
-        if let Some((start, color)) = ruling {
-            spans.push((start..detail.len(), color));
+        if let Some((start, tint)) = ruling {
+            spans.push((start..detail.len(), tint));
         }
         // A day heading written out of order keeps its Day icon and says what it was written as.
         let flag = written_as.map(|day| format!("Written as Day {day}"));
@@ -951,6 +959,43 @@ impl TimelinePage {
         if let Some(flag) = &flag {
             name.push_str(&format!(" · {flag}"));
         }
+        RowWords {
+            title,
+            detail,
+            spans,
+            flag,
+            name,
+            open,
+            summary,
+            warning: warning.is_some(),
+        }
+    }
+
+    fn row(
+        &mut self,
+        ui: &mut egui::Ui,
+        event: &Event,
+        day: u32,
+        session: Option<&str>,
+        written_as: Option<u32>,
+        on_road: Option<&str>,
+    ) {
+        let c = colors();
+        let selected = self.selected.as_deref() == Some(event.id.as_str());
+        let RowWords {
+            title,
+            detail,
+            spans,
+            flag,
+            name,
+            open,
+            summary,
+            warning,
+        } = self.row_words(event, day, session, written_as, on_road);
+        let spans: Vec<(std::ops::Range<usize>, egui::Color32)> = spans
+            .into_iter()
+            .map(|(range, tint)| (range, tint.color()))
+            .collect();
         let response = design::row(ui, ROW, selected, &name, |ui, rect| {
             let painter = ui.painter();
             let spine = rect.left() + SPINE;
@@ -1067,7 +1112,7 @@ impl TimelinePage {
                 },
             );
         }
-        let response = if warning.is_some() {
+        let response = if warning {
             response.on_hover_text(format!(
                 "{}. {}",
                 super::TIME_NOT_COUNTED,
@@ -1085,9 +1130,35 @@ impl TimelinePage {
 
     /// Locations the typed place could be, or a link to the one it is. The place stays text.
     fn place_help(&mut self, ui: &mut egui::Ui, event: &mut Event) -> bool {
-        let typed = event.place.trim().to_lowercase();
+        match self.place_help_of(&event.place) {
+            PlaceHelp::None => false,
+            PlaceHelp::Exact(id, name) => {
+                if design::link(ui, &format!("Read {name}")).clicked() {
+                    self.open_place = Some(id);
+                }
+                false
+            }
+            PlaceHelp::Close(close) => {
+                let mut changed = false;
+                ui.horizontal_wrapped(|ui| {
+                    for name in close {
+                        if design::link(ui, &name).clicked() {
+                            event.place = name;
+                            changed = true;
+                        }
+                    }
+                });
+                changed
+            }
+        }
+    }
+
+    /// What the typed place could be: the one location it names (its first name), or up to five
+    /// names that contain it. The place stays text.
+    pub fn place_help_of(&self, place: &str) -> PlaceHelp {
+        let typed = place.trim().to_lowercase();
         if typed.is_empty() {
-            return false;
+            return PlaceHelp::None;
         }
         let exact: Vec<_> = self
             .places
@@ -1095,12 +1166,9 @@ impl TimelinePage {
             .filter(|(_, names)| names.iter().any(|name| name.to_lowercase() == typed))
             .collect();
         if let [(id, names)] = exact.as_slice() {
-            if design::link(ui, &format!("Read {}", names[0])).clicked() {
-                self.open_place = Some(*id);
-            }
-            return false;
+            return PlaceHelp::Exact(*id, names[0].clone());
         }
-        let close: Vec<_> = self
+        let close: Vec<String> = self
             .places
             .iter()
             .filter_map(|(_, names)| {
@@ -1109,20 +1177,69 @@ impl TimelinePage {
                     .find(|name| name.to_lowercase().contains(&typed))
             })
             .take(5)
+            .cloned()
             .collect();
         if close.is_empty() {
-            return false;
+            PlaceHelp::None
+        } else {
+            PlaceHelp::Close(close)
         }
-        let mut changed = false;
-        ui.horizontal_wrapped(|ui| {
-            for name in close {
-                if design::link(ui, name).clicked() {
-                    event.place = name.clone();
-                    changed = true;
-                }
-            }
-        });
-        changed
+    }
+
+    /// The header's words after `Timeline`: the count of events (and how many show while a filter
+    /// or a search hides some) and the clock, once a day sets it.
+    pub fn header_context(&mut self, book: &Book) -> String {
+        if book.events.is_empty() {
+            return String::new();
+        }
+        // The clock shows once a day sets it; before that, there is nothing to name.
+        let view = self.view(book);
+        let now = view
+            .now
+            .map_or_else(String::new, |now| format!(" · Now: {}", clock_words(now)));
+        format!(
+            "{}{now}",
+            if self.filtered() {
+                let shown = view.rows.len();
+                format!(
+                    "{} of {}",
+                    if shown == 0 {
+                        "0".into()
+                    } else {
+                        design::count(shown, "", "")
+                    },
+                    design::count(book.events.len(), "event", "events")
+                )
+            } else {
+                design::count(book.events.len(), "event", "events")
+            },
+        )
+    }
+
+    /// Whether a filter, a search or a session hides some events.
+    pub fn filtered(&self) -> bool {
+        self.filter != Filter::All || !self.search.trim().is_empty() || self.session.is_some()
+    }
+
+    /// `Show all events`: the filters, the search and the session filter clear.
+    pub fn show_all(&mut self) {
+        self.search.clear();
+        self.filter = Filter::All;
+        self.session = None;
+    }
+
+    /// An event the DM just added (with the buttons or `Start with day 1`): it opens, its Title
+    /// takes the keyboard, and its result keeps its Undo for `UNDO_ADD_FOR`.
+    pub fn record_added(&mut self, id: String, book: &Book, ctx: &egui::Context) {
+        self.reveal(&id, book);
+        self.focus_title = true;
+        self.added.record_timed(
+            JustAdded {
+                file: book.file(),
+                id,
+            },
+            ctx,
+        );
     }
 
     /// Round 26: the list column's results, reasons and notices sit in its message footer, so a
@@ -1155,68 +1272,85 @@ impl TimelinePage {
         let offer = open.and_then(|id| notes.event_link_offer(book, id));
         let frame = PaneFrame::new(ui);
         let messages = match footer {
-            PaneFooter::Page(_) => {
-                self.list_messages(&frame, ui, book, notes, open, offer.as_ref())
-            }
+            PaneFooter::Page(_) => self.list_messages(
+                &frame,
+                ui.available_width(),
+                book,
+                notes,
+                open,
+                offer.as_ref(),
+            ),
             PaneFooter::Empty => {
                 Messages::new(&frame, "timeline_detail_footer", ui.available_width())
             }
         };
         let paned = messages.pane_content(ui, scroll, |ui| body(self, ui, book, notes));
         if let Some(press) = paned.pressed {
-            match press.id {
-                ListAct::UndoLinks => {
-                    if let Some(ticket) = press.ticket {
-                        notes.undo_event_link_update(ticket);
-                    }
-                }
-                ListAct::UpdateLinks => {
-                    if let Some(offer) = offer {
-                        notes.accept_event_link_offer(offer, book);
-                    }
-                }
-                ListAct::UndoRuling => {
-                    if let Some(ticket) = press.ticket {
-                        book.undo_restores(ticket);
-                        self.added.owner_changed(&book.file());
-                    }
-                }
-                ListAct::UndoRemove => {
-                    if let Some(ticket) = press.ticket {
-                        book.undo_remove(ticket);
-                    }
-                }
-                ListAct::UndoAdd => {
-                    if let Some(ticket) = press.ticket
-                        && let Ok((added, ())) = self.added.undo_by(ticket, |_| Ok::<(), ()>(()))
-                    {
-                        book.undo_add(&added.id);
-                        self.select(None);
-                    }
-                }
-                ListAct::UndoPlanLine => {
-                    // Row 123: a refused Undo stays on its entry, which both readers show.
-                    if let Some(ticket) = press.ticket {
-                        notes.undo_plan_line(ticket);
-                    }
-                }
-                ListAct::File(act) => file_act(book, act, press.ticket),
-            }
+            self.footer_act(press, book, notes, offer);
         }
         paned.body
     }
 
-    /// The Timeline page's footer messages for this frame (`list_pane`).
-    fn list_messages<'f>(
+    /// What the DM chose in the list's message footer, done after the footer is drawn: an Undo
+    /// acts on the entry its ticket names.
+    pub fn footer_act(
+        &mut self,
+        press: design::outcome::Press<ListAct>,
+        book: &mut Book,
+        notes: &mut crate::sessions::page::Sessions,
+        offer: Option<crate::sessions::page::LinkOffer>,
+    ) {
+        match press.id {
+            ListAct::UndoLinks => {
+                if let Some(ticket) = press.ticket {
+                    notes.undo_event_link_update(ticket);
+                }
+            }
+            ListAct::UpdateLinks => {
+                if let Some(offer) = offer {
+                    notes.accept_event_link_offer(offer, book);
+                }
+            }
+            ListAct::UndoRuling => {
+                if let Some(ticket) = press.ticket {
+                    book.undo_restores(ticket);
+                    self.added.owner_changed(&book.file());
+                }
+            }
+            ListAct::UndoRemove => {
+                if let Some(ticket) = press.ticket {
+                    book.undo_remove(ticket);
+                }
+            }
+            ListAct::UndoAdd => {
+                if let Some(ticket) = press.ticket
+                    && let Ok((added, ())) = self.added.undo_by(ticket, |_| Ok::<(), ()>(()))
+                {
+                    book.undo_add(&added.id);
+                    self.select(None);
+                }
+            }
+            ListAct::UndoPlanLine => {
+                // Row 123: a refused Undo stays on its entry, which both readers show.
+                if let Some(ticket) = press.ticket {
+                    notes.undo_plan_line(ticket);
+                }
+            }
+            ListAct::File(act) => file_act(book, act, press.ticket),
+        }
+    }
+
+    /// The Timeline page's footer messages for this frame (`list_pane`), `width` wide.
+    pub fn list_messages<'f>(
         &mut self,
         frame: &'f PaneFrame,
-        ui: &egui::Ui,
+        width: f32,
         book: &Book,
         notes: &mut crate::sessions::page::Sessions,
         open: Option<&str>,
         offer: Option<&crate::sessions::page::LinkOffer>,
     ) -> Messages<'f, ListAct> {
-        let mut messages = Messages::new(frame, "timeline_list_footer", ui.available_width());
+        let mut messages = Messages::new(frame, "timeline_list_footer", width);
         if let Some(line) = notes.event_link_line(frame, ListAct::UndoLinks) {
             messages.kept(line);
         }
@@ -1309,9 +1443,7 @@ impl TimelinePage {
                     "Clear the search and filters to see the whole timeline.",
                     |ui| {
                         if design::link(ui, "Show all events").clicked() {
-                            self.search.clear();
-                            self.filter = Filter::All;
-                            self.session = None;
+                            self.show_all();
                         }
                     },
                 );
@@ -1375,10 +1507,6 @@ impl TimelinePage {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn detail(
         &mut self,
         ui: &mut egui::Ui,
@@ -1429,17 +1557,7 @@ impl TimelinePage {
         let id = book.events[index].id.clone();
         let days = day_numbers(&book.events);
         let link = reference(&book.events[index], days[index]);
-        let unsaved = book.event_unsaved(&id);
-        let blocked = book
-            .unreadable
-            .as_deref()
-            .or(book.error.as_deref())
-            .or(if book.conflict {
-                Some("Changed on disk. Choose what to keep above.")
-            } else {
-                None
-            })
-            .map(str::to_owned);
+        let blocked = saving_blocked(book);
         let mut changed = false;
         let mut removed = false;
         let mut placed: Option<Option<String>> = None;
@@ -1449,24 +1567,7 @@ impl TimelinePage {
         let mut undo_checks = false;
         let mut length_taken = checks::Taken::Nothing;
         self.checks_done.follow(book);
-        let labels: Vec<String> = book
-            .events
-            .iter()
-            .zip(&days)
-            .map(|(event, day)| {
-                let session = event
-                    .session
-                    .and_then(|id| sessions.iter().find(|session| session.id == id));
-                let mut label = event.label(*day);
-                if event.kind != Kind::Day && *day > 0 {
-                    label.push_str(&format!(" · Day {day}"));
-                }
-                if let Some(session) = session {
-                    label.push_str(&format!(" · {}", short_session(&session.label)));
-                }
-                label
-            })
-            .collect();
+        let labels = event_labels(book, &days, sessions);
         let ids: Vec<String> = book.events.iter().map(|event| event.id.clone()).collect();
         let starts = clock(&book.events)[index];
         self.copied = self
@@ -1482,35 +1583,8 @@ impl TimelinePage {
         // M0558 (M-P0.26): the header is a title line: the kind before the title (its icon alone
         // for a day or an untitled event, named by its word), Copy link, the save status in the
         // room of the widest of its four words, and the `⋯` menu at the line's right end.
-        let saving = [
-            Status {
-                icon: icons::OK,
-                word: "Saved",
-                color: c.document.clean,
-            },
-            Status {
-                icon: icons::BUSY,
-                word: "Saving…",
-                color: c.muted,
-            },
-            Status {
-                icon: icons::WARN,
-                word: "Unsaved",
-                color: c.document.external,
-            },
-            Status {
-                icon: icons::WARN,
-                word: "Saving blocked",
-                color: c.document.external,
-            },
-        ];
-        let now = if blocked.is_some() {
-            saving[if unsaved { 2 } else { 3 }]
-        } else if unsaved {
-            saving[1]
-        } else {
-            saving[0]
-        };
+        let saving = saving_states();
+        let now = saving[saving_now(book, &id)];
         let copied = self
             .copied
             .as_ref()
@@ -1868,6 +1942,53 @@ impl TimelinePage {
                 },
             );
         });
+        self.apply_detail(
+            book,
+            notes,
+            sessions,
+            &id,
+            DetailActs {
+                changed,
+                removed,
+                placed,
+                checks: checks_act,
+                undo_checks,
+                ruling,
+                length_taken,
+            },
+        );
+    }
+
+    /// What the open event's form did in one frame, applied after it drew: the edit, the
+    /// length its field gave the event, a journey's checks act, its Undo, the rest ruling, the
+    /// new place, and Remove.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
+    pub fn apply_detail(
+        &mut self,
+        book: &mut Book,
+        notes: &mut crate::sessions::page::Sessions,
+        sessions: &[SessionLink],
+        id: &str,
+        acts: DetailActs,
+    ) {
+        let DetailActs {
+            changed,
+            removed,
+            placed,
+            checks: checks_act,
+            undo_checks,
+            ruling,
+            length_taken,
+        } = acts;
+        let id = id.to_owned();
+        let Some(index) = book.events.iter().position(|event| event.id == id) else {
+            return;
+        };
+        let sources = self.tables.clone();
+        let tables = sources.as_ref().map_or(&[][..], |sources| &sources.tables);
         if changed {
             book.touch();
         }
@@ -1958,35 +2079,7 @@ impl TimelinePage {
         }
         // M0562: the header is the shared title line: the title, then the count of events (and
         // how many show) and the clock, once a day sets it.
-        let context = if book.events.is_empty() {
-            String::new()
-        } else {
-            // The clock shows once a day sets it; before that, there is nothing to name.
-            let view = self.view(book);
-            let now = view
-                .now
-                .map_or_else(String::new, |now| format!(" · Now: {}", clock_words(now)));
-            format!(
-                "{}{now}",
-                if self.filter != Filter::All
-                    || !self.search.trim().is_empty()
-                    || self.session.is_some()
-                {
-                    let shown = view.rows.len();
-                    format!(
-                        "{} of {}",
-                        if shown == 0 {
-                            "0".into()
-                        } else {
-                            design::count(shown, "", "")
-                        },
-                        design::count(book.events.len(), "event", "events")
-                    )
-                } else {
-                    design::count(book.events.len(), "event", "events")
-                },
-            )
-        };
+        let context = self.header_context(book);
         let _ = design::TitleLine::new("Timeline")
             .context((!context.is_empty()).then_some(context.as_str()))
             .page()
@@ -2005,25 +2098,10 @@ impl TimelinePage {
                 ui,
                 book,
                 current,
-                &[
-                    Kind::Encounter,
-                    Kind::Day,
-                    Kind::LongRest,
-                    Kind::ShortRest,
-                    Kind::Travel,
-                    Kind::Event,
-                ],
+                &ADD_KINDS,
                 |_| {},
             ) {
-                self.reveal(&id, book);
-                self.focus_title = true;
-                self.added.record_timed(
-                    JustAdded {
-                        file: book.file(),
-                        id,
-                    },
-                    ui.ctx(),
-                );
+                self.record_added(id, book, ui.ctx());
             }
             if let Some(words) = self.dated.clone() {
                 self.play_current |= dated_notice(ui, &words);
@@ -2052,15 +2130,7 @@ impl TimelinePage {
             });
                 if first {
                     let id = book.add(Kind::Day, current);
-                    self.reveal(&id, book);
-                    self.focus_title = true;
-                    self.added.record_timed(
-                        JustAdded {
-                            file: book.file(),
-                            id,
-                        },
-                        ui.ctx(),
-                    );
+                    self.record_added(id, book, ui.ctx());
                 }
                 return;
             }
@@ -2190,8 +2260,161 @@ impl TimelinePage {
     }
 }
 
+/// What the open event's form did in one frame (`TimelinePage::apply_detail`).
+pub struct DetailActs {
+    /// A field changed the event.
+    pub changed: bool,
+    /// `Remove` in the header's menu.
+    pub removed: bool,
+    /// `Place after`: the event it goes after (`None`: the start).
+    pub placed: Option<Option<String>>,
+    /// An act of a journey's checks.
+    pub checks: Option<checks::Act>,
+    /// The Undo of the journey's last checks act.
+    pub undo_checks: bool,
+    /// The rest ruling's action.
+    pub ruling: Option<RestRulingAction>,
+    /// What **How long** gave the event (a journey with checks takes it on Enter or focus loss).
+    pub length_taken: checks::Taken,
+}
+
+impl Default for DetailActs {
+    fn default() -> Self {
+        Self {
+            changed: false,
+            removed: false,
+            placed: None,
+            checks: None,
+            undo_checks: false,
+            ruling: None,
+            length_taken: checks::Taken::Nothing,
+        }
+    }
+}
+
+/// Why the open event cannot save now: the file cannot be read, a save failed, or it changed on
+/// disk under the draft.
+pub fn saving_blocked(book: &Book) -> Option<String> {
+    book.unreadable
+        .as_deref()
+        .or(book.error.as_deref())
+        .or(if book.conflict {
+            Some("Changed on disk. Choose what to keep above.")
+        } else {
+            None
+        })
+        .map(str::to_owned)
+}
+
+/// The open event's save state's four words, in the room of the widest: Saved, Saving…,
+/// Unsaved and Saving blocked.
+pub fn saving_states() -> [Status<'static>; 4] {
+    let c = colors();
+    [
+        Status {
+            icon: icons::OK,
+            word: "Saved",
+            color: c.document.clean,
+        },
+        Status {
+            icon: icons::BUSY,
+            word: "Saving…",
+            color: c.muted,
+        },
+        Status {
+            icon: icons::WARN,
+            word: "Unsaved",
+            color: c.document.external,
+        },
+        Status {
+            icon: icons::WARN,
+            word: "Saving blocked",
+            color: c.document.external,
+        },
+    ]
+}
+
+/// Which of `saving_states` the event `id` is in now.
+pub fn saving_now(book: &Book, id: &str) -> usize {
+    let unsaved = book.event_unsaved(id);
+    if saving_blocked(book).is_some() {
+        if unsaved { 2 } else { 3 }
+    } else if unsaved {
+        1
+    } else {
+        0
+    }
+}
+
+/// Each event's name in `Place after`: its label, its day and its session's number.
+pub fn event_labels(book: &Book, days: &[u32], sessions: &[SessionLink]) -> Vec<String> {
+    book.events
+        .iter()
+        .zip(days)
+        .map(|(event, day)| {
+            let session = event
+                .session
+                .and_then(|id| sessions.iter().find(|session| session.id == id));
+            let mut label = event.label(*day);
+            if event.kind != Kind::Day && *day > 0 {
+                label.push_str(&format!(" · Day {day}"));
+            }
+            if let Some(session) = session {
+                label.push_str(&format!(" · {}", short_session(&session.label)));
+            }
+            label
+        })
+        .collect()
+}
+
+/// What the typed place of an event could be (`TimelinePage::place_help_of`).
+pub enum PlaceHelp {
+    None,
+    /// The one location it names, by its first name: a link reads it.
+    Exact(Uuid, String),
+    /// Up to five names that contain it: a link puts one in the field.
+    Close(Vec<String>),
+}
+
+/// A row's words (`TimelinePage::row_words`).
+pub struct RowWords {
+    pub title: String,
+    /// The second line; empty when the row has none.
+    pub detail: String,
+    /// Byte ranges of `detail` with their own tint, in order.
+    pub spans: Vec<(std::ops::Range<usize>, RowTint)>,
+    /// `Written as Day 5`, after a day heading written out of order.
+    pub flag: Option<String>,
+    /// The row's accessible name: its title and its second line.
+    pub name: String,
+    /// The run of this fight is open: its result is a link back to the run.
+    pub open: bool,
+    /// The played fight's result and last round (the open run's link words).
+    pub summary: String,
+    /// The length cannot be counted: the row's hover says how to write it.
+    pub warning: bool,
+}
+
+/// A status part's tint on a row's second line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowTint {
+    /// A length the clock cannot count.
+    Warning,
+    /// A long rest's ruling: everyone at full, or not.
+    Ruling(bool),
+}
+
+impl RowTint {
+    fn color(self) -> egui::Color32 {
+        match self {
+            Self::Warning => colors().result.warning,
+            Self::Ruling(restores) => long_rest_status(restores).color,
+        }
+    }
+}
+
 /// The session's number alone. The row's own title is the event's.
-fn short_session(label: &str) -> &str {
+pub fn short_session(label: &str) -> &str {
     label.split(':').next().unwrap_or(label)
 }
 
@@ -2277,7 +2500,7 @@ enum PaneFooter<'a> {
 const COPY_LINK: design::Word = crate::word!("Copy link");
 const COPIED: design::Word = crate::word!("Copied");
 
-fn header_kind(event: &Event) -> String {
+pub fn header_kind(event: &Event) -> String {
     if event.kind == Kind::Day || event.own_title().is_none() {
         kind_icon(event.kind).to_owned()
     } else {

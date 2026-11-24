@@ -302,6 +302,11 @@ impl RenderOnce for Button {
             button = button.opacity(DISABLED_OPACITY);
         }
         let button = target(button, self.label.clone());
+        // A name that says more than the words (`Add Long rest`) finds it too.
+        let button = match self.name.clone().filter(|name| *name != self.label) {
+            Some(name) => target(button, name),
+            None => button,
+        };
         target(button, element_name(&self.id))
     }
 }
