@@ -26,6 +26,11 @@ pub struct Link {
     on_click: Option<OnClick>,
 }
 
+/// `link(id, "Show file").on_click(…)`: the same as `Link::new`.
+pub fn link(id: impl Into<ElementId>, words: impl Into<SharedString>) -> Link {
+    Link::new(id, words)
+}
+
 impl Link {
     pub fn new(id: impl Into<ElementId>, words: impl Into<SharedString>) -> Self {
         Self {
@@ -82,6 +87,7 @@ impl RenderOnce for Link {
             .underline()
             .whitespace_nowrap()
             .cursor_pointer()
+            .hover(|s| s.bg(c.hover))
             .focusable()
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(name)

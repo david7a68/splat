@@ -485,11 +485,19 @@ impl RenderOnce for Dropdown {
 }
 
 /// Any content in a raised layer under a trigger (a form that opens from a button, a picker).
+/// `Popover::on_status` opens it from a status link instead (a count of faults whose list opens
+/// under it).
 #[derive(IntoElement)]
 pub struct Popover {
     id: ElementId,
-    trigger: super::Button,
+    trigger: Trigger,
     content: AnyElement,
+}
+
+/// What a popover opens from.
+enum Trigger {
+    Button(super::Button),
+    Status(super::status::StatusLink),
 }
 
 impl Popover {
@@ -500,7 +508,21 @@ impl Popover {
     ) -> Self {
         Self {
             id: id.into(),
-            trigger,
+            trigger: Trigger::Button(trigger),
+            content: content.into_any_element(),
+        }
+    }
+
+    /// A popover under a status link (`kit::status_link`); its own `on_click` is replaced by the
+    /// toggle.
+    pub fn on_status(
+        id: impl Into<ElementId>,
+        trigger: super::status::StatusLink,
+        content: impl IntoElement,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            trigger: Trigger::Status(trigger),
             content: content.into_any_element(),
         }
     }
@@ -510,9 +532,13 @@ impl RenderOnce for Popover {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let open = is_open(&self.id, cx);
         let id = self.id.clone();
-        let trigger = self
-            .trigger
-            .on_click(move |event, window, cx| toggle(&id, event, window, cx));
+        let toggle = move |event: &ClickEvent, window: &mut Window, cx: &mut App| {
+            toggle(&id, event, window, cx)
+        };
+        let trigger = match self.trigger {
+            Trigger::Button(button) => button.on_click(toggle).into_any_element(),
+            Trigger::Status(link) => link.on_click(toggle).into_any_element(),
+        };
         div()
             .flex()
             .flex_col()

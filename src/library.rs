@@ -1,6 +1,8 @@
 //! The Library page and its authoring state.
 #[path = "library/kept.rs"]
 mod kept;
+#[path = "library/model.rs"]
+pub mod model;
 use crate::{
     campaigns::Campaigns,
     content_workspace::CampaignDocument,
@@ -1779,26 +1781,26 @@ impl Library {
             design::DraftBlocks::EntryInPackage
         }
     }
-    pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
+    /// The start of every Library frame, before anything draws (both UIs): the New entry form's
+    /// error ends with the form; the repair guidance and Remove's Undo end with their owners;
+    /// a load starts, or its result arrives; an edit or a repair another page asked for opens.
+    pub fn begin(&mut self, ctx: &egui::Context, campaigns: &mut Campaigns) {
         // The New entry form's error ends with the form, however it closed.
         if !self.new_form {
             self.new_error = None;
         }
         self.end_repair_on_owner_change();
         self.end_remove_on_selection();
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("library"))
-        });
         let key = load_key(campaigns);
         if self.load_key.is_none() && self.loaded.is_some() {
             self.load_key = Some(key.clone());
         }
         let changed = self.load_key.as_ref().is_some_and(|known| *known != key);
         if self.loaded.is_none() && self.pending.is_none() && self.error.is_none() {
-            self.start_load(ui.ctx(), campaigns);
+            self.start_load(ctx, campaigns);
         } else if (changed || self.stale) && !self.dirty() && self.pending.is_none() {
             self.stale = false;
-            self.start_load(ui.ctx(), campaigns);
+            self.start_load(ctx, campaigns);
         }
         if let Some(rx) = &self.pending {
             match rx.try_recv() {
@@ -1890,6 +1892,13 @@ impl Library {
             self.source = true;
             self.focus_repair = true;
         }
+    }
+
+    pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("library"))
+        });
+        self.begin(ui.ctx(), campaigns);
         let dirty = self.dirty();
         let locked = self.draft_reason().or(self
             .pending
@@ -2108,24 +2117,7 @@ impl Library {
             .as_ref()
             .is_none_or(|(known, _)| *known != scope)
         {
-            let notes = &loaded.notes;
-            let counts = Section::GROUPS
-                .iter()
-                .flat_map(|(_, sections)| sections.iter())
-                .map(|&section| {
-                    (
-                        section,
-                        notes
-                            .iter()
-                            .filter(|n| {
-                                loaded.in_scope(n, scope)
-                                    && (section == Section::All || n.section() == section)
-                            })
-                            .count(),
-                    )
-                })
-                .collect();
-            self.scope_counts = Some((scope, counts));
+            self.scope_counts = Some((scope, model::section_counts(loaded, scope)));
         }
         let count_of = |section: Section, counts: &Vec<(Section, usize)>| {
             counts
@@ -2373,48 +2365,13 @@ impl Library {
             self.matched_filter = self.filter.clone();
             self.reveal_row |= self.matches_scope != Some(scope);
             self.matches_scope = Some(scope);
-            let parsed = Query::parse(&query);
-            let typed = Typed::new(&parsed.words);
-            let facets = loaded.facets();
-            let mut found: Vec<(Rank, usize)> = loaded
-                .notes
-                .iter()
-                .enumerate()
-                .filter(|(i, n)| {
-                    loaded.in_scope(n, scope)
-                        && (!filtering
-                            || facets[*i].as_ref().is_some_and(|f| self.filter.matches(f)))
-                        && (!query.is_empty()
-                            || self.section != Section::Unreadable
-                            || self
-                                .unreadable_kind
-                                .is_none_or(|kind| n.unreadable_kind() == kind))
-                })
-                .filter_map(|(i, n)| {
-                    n.search_rank(self.section, &parsed, &typed, facets[i].as_ref())
-                        .map(|rank| (rank, i))
-                })
-                .collect();
-            if !parsed.words.is_empty() {
-                // Best first: the exact name, then a prefix, then a whole word, then each word in
-                // any order (a creature's whole word and a word that only holds the search are one
-                // tier, M3). A path, section or fact match comes next, and a typo comes last. The
-                // sort is stable, so the list's order (by name) stays inside each rank and origin.
-                found.sort_by_key(|&(rank, i)| {
-                    (
-                        rank,
-                        crate::lookup::entry_origin(
-                            loaded.notes[i].entry.as_ref(),
-                            matches!(loaded.notes[i].owner, Owner::Campaign(_)),
-                        ),
-                    )
-                });
-            }
-            self.typo_from = found
-                .iter()
-                .position(|(rank, _)| rank.typo)
-                .unwrap_or(found.len());
-            let found = found.into_iter().map(|(_, i)| i).collect();
+            let (found, typo_from) = model::find_matches(
+                loaded,
+                (scope, self.section, self.unreadable_kind),
+                &query,
+                &self.filter,
+            );
+            self.typo_from = typo_from;
             self.matches = Some((self.section, query.clone(), found));
         }
         let matches = &self.matches.as_ref().unwrap().2;
@@ -5137,7 +5094,7 @@ impl Library {
         }
         if !duplicate_indices.is_empty() {
             messages.outcome(duplicate_notice(
-                ui,
+                ui.ctx(),
                 self.loaded.as_ref().unwrap(),
                 note,
                 &duplicate_indices,
@@ -9716,7 +9673,7 @@ mod tests {
                     let frame = PaneFrame::new(ui);
                     let mut messages = Messages::<LibraryPress>::new(&frame, "duplicates", 600.0);
                     messages.outcome(duplicate_notice(
-                        ui,
+                        ui.ctx(),
                         &loaded,
                         &loaded.notes[0],
                         &[0, 2],

@@ -29,13 +29,14 @@ pub mod tabs;
 pub mod text;
 pub mod title;
 pub mod tooltip;
+pub mod virtual_list;
 
 pub use button::{Button, IconButton};
 pub use checkbox::{Checkbox, Switch};
 pub use dialog::Dialog;
 pub use empty::empty_state;
 pub use field::{TextEditor, TextField, field, help};
-pub use link::Link;
+pub use link::{Link, link};
 pub use list::{Row, two_line_row};
 pub use markdown::markdown;
 pub use menu::{Dropdown, MenuButton, MenuItem, Popover};
@@ -48,6 +49,7 @@ pub use tabs::Segmented;
 pub use text::{Heading, gap, heading, icon, label, rule, text};
 pub use title::page_header;
 pub use tooltip::WithTooltip;
+pub use virtual_list::virtual_column;
 
 use gpui::{IntoElement, ParentElement, SharedString};
 
