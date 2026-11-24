@@ -11,7 +11,7 @@ pub(crate) mod checks;
 pub(crate) mod detail;
 pub(crate) mod list;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use crate::design::outcome::{Choice, FaultMessage, MessageChoice, Notice, PaneFrame};
 use crate::gui::theme::{

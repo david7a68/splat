@@ -2885,6 +2885,11 @@ pub struct JourneyPlan {
 }
 
 impl JourneyPlan {
+    /// The plan as names: those the campaign can plan, and those with a row still to come.
+    pub(super) fn of(known: Vec<String>, coming: Vec<String>) -> Self {
+        Self { known, coming }
+    }
+
     /// What `checks::View::planned` asks, by the plan's own rule (`offer_state`).
     pub fn get(&self, name: &str) -> Option<bool> {
         offer_state(
@@ -3232,13 +3237,13 @@ enum TravelUndo {
 /// its Undo, and the plan line's Undo. The length being typed is the Timeline book's.
 #[derive(Default)]
 pub(super) struct Travel {
-    block: checks::State,
+    pub(super) block: checks::State,
     /// The open journey's start on the clock, while the Timeline is as it was: its count of
     /// changes, the event, its place in the list, and the minute.
     start: Option<(u64, String, Option<usize>, Option<u64>)>,
-    focus_length: bool,
+    pub(super) focus_length: bool,
     /// Each journey's last Timeline act, by its event. Leaving the page ends them.
-    done: checks::Results,
+    pub(super) done: checks::Results,
     /// `Plan “<name>”`: the journey, the name and the check it was clicked on, and the note's
     /// Undo, with its order and the refusal of its last Undo. It lasts while the note's words are
     /// what the act left, as every note act's Undo does; a page change keeps it. The one store
@@ -3921,7 +3926,11 @@ impl Sessions {
     /// The open journey's start on the clock, worked out again only when the Timeline changed
     /// or another journey opened.
     /// Also the open event's place in the list, for `checks::settle_length`.
-    fn journey_start(&mut self, book: &Book, open: Option<&str>) -> (Option<usize>, Option<u64>) {
+    pub(super) fn journey_start(
+        &mut self,
+        book: &Book,
+        open: Option<&str>,
+    ) -> (Option<usize>, Option<u64>) {
         let Some(open) = open else {
             return (None, None);
         };

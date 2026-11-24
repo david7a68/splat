@@ -1483,6 +1483,21 @@ pub struct EventDetails {
     pub fight: Option<String>,
     /// A long rest's ruling can be set here.
     pub rest: Option<bool>,
+    /// A journey: its encounter checks come first, under its row (`travel_block`).
+    pub journey: bool,
+}
+
+/// The open journey's checks block in the plan (`Sessions::travel_block`): where it starts on the
+/// clock, **How long** as the DM typed it with its help, whether that field takes the keyboard,
+/// and what a check result can offer to this session's plan.
+pub struct TravelView {
+    pub id: String,
+    pub index: usize,
+    pub start: Option<u64>,
+    pub length: String,
+    pub help: Option<String>,
+    pub focus_length: bool,
+    pub plan: super::plan::JourneyPlan,
 }
 
 pub struct FightRow {
@@ -1585,6 +1600,10 @@ pub enum PlanAct {
     EventPlace(String, String),
     RestRuling(String, bool),
     RollForEncounters(String),
+    /// An act in an open journey's checks block (`travel_act`).
+    Travel(String, crate::timeline::checks::Act),
+    /// `Undo` of the journey's last checks result (`travel.done.undo`).
+    TravelUndo(String),
 }
 
 impl Sessions {
@@ -1644,6 +1663,7 @@ impl Sessions {
                     .run
                     .map(|_| crate::timeline::played_fight_summary(event, running)),
                 rest: (event.kind == crate::timeline::Kind::LongRest).then_some(event.restores),
+                journey: event.run.is_none() && crate::timeline::checks::shown(event),
             });
             rows.push(PlanRow::Event(EventRow {
                 id: event.id.clone(),
@@ -1833,6 +1853,73 @@ impl Sessions {
         }
     }
 
+    /// The open journey's checks block, before it draws: the length that settled, the start on
+    /// the clock, and the results that still hold (`plan_pane`'s steps before its rows). `None`
+    /// when the open row is not a journey of this plan.
+    pub fn gv_travel(
+        &mut self,
+        book: &mut Book,
+        plan: &Plan<'_>,
+        index: Option<&crate::lookup::ContentIndex>,
+    ) -> Option<TravelView> {
+        let open = self.open_event.clone()?;
+        let (open_at, _) = self.journey_start(book, Some(&open));
+        crate::timeline::checks::settle_length(book, open_at);
+        let (at, start) = self.journey_start(book, Some(&open));
+        self.travel.done.follow(book);
+        let at = at?;
+        let event = &book.events[at];
+        if event.run.is_some()
+            || !crate::timeline::checks::shown(event)
+            || !event.is_in(self.selected)
+        {
+            return None;
+        }
+        let length = book.length.words(event);
+        let help = crate::timeline::checks::span(start, &length).or_else(|| {
+            crate::timeline::read_duration(&length)
+                .is_none()
+                .then(|| crate::timeline::LENGTH_HELP.to_owned())
+        });
+        let projection = self.plan_projection(book, self.selected, plan, index);
+        let known = plan
+            .fights
+            .iter()
+            .map(|fight| fight.name.clone())
+            .chain(plan.groups.iter().map(|group| group.name.clone()))
+            .collect();
+        let coming = projection
+            .planned
+            .iter()
+            .map(|&at| plan.fights[at].name.clone())
+            .chain(
+                projection
+                    .planned_groups
+                    .iter()
+                    .map(|&at| plan.groups[at].name.clone()),
+            )
+            .collect();
+        Some(TravelView {
+            id: open,
+            index: at,
+            start,
+            length,
+            help,
+            focus_length: std::mem::take(&mut self.travel.focus_length),
+            plan: super::plan::JourneyPlan::of(known, coming),
+        })
+    }
+
+    /// The open journey's checks block: what the DM typed and its last fault.
+    pub fn gv_travel_block(&mut self) -> &mut crate::timeline::checks::State {
+        &mut self.travel.block
+    }
+
+    /// The journey's last checks result, with its Undo.
+    pub fn gv_travel_done(&self, id: &str) -> Option<&crate::timeline::checks::Done> {
+        self.travel.done.get(id)
+    }
+
     /// The DM's act in the plan's rows or Add strip.
     pub fn gv_plan_act(
         &mut self,
@@ -2001,6 +2088,11 @@ impl Sessions {
                 crate::timeline::page::RestRulingAction::Set(restores).apply(book, &id);
                 self.end_plan_add();
             }
+            PlanAct::Travel(id, act) => {
+                self.row_reveal = Some((id.clone(), 0, ctx.cumulative_pass_nr()));
+                self.travel_act(book, session, &id, act, plan);
+            }
+            PlanAct::TravelUndo(id) => self.travel.done.undo(&id, book),
             PlanAct::RollForEncounters(id) => {
                 self.row_reveal = Some((id.clone(), 0, ctx.cumulative_pass_nr()));
                 self.travel_act(

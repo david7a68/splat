@@ -409,6 +409,12 @@ fn notes_view(
         .into_any_element()
 }
 
+/// An act of the session plan from outside its rows: an open journey's checks block, which the
+/// Timeline's view draws for the plan (`timeline::checks::Host::Plan`).
+pub(crate) fn travel_act(root: &mut SplatRoot, act: crate::sessions::page::gpui_facade::PlanAct) {
+    plan::act(root, act);
+}
+
 /// The note in the side panel beside another page (`Sessions::notes_panel`).
 pub(crate) fn render_notes_panel(
     root: &mut SplatRoot,

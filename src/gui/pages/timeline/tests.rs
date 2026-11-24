@@ -6,7 +6,8 @@ use crate::visual_tests::fixture::Seed;
 use gpui::{px, size};
 use std::fs;
 
-const ROAD: &str = "# Road\n\n## On the road\n\n<!-- splat:rolls key=road dice=1d20 per=day -->\n\n| d20 | On the road |\n| --- | --- |\n| 1-14 | Nothing stirs. |\n| 15-17 | [[Bridge Ambush]] waits by the old quarry gate, where the road narrows between walls of loose stone. |\n| 18-20 | A toll gang blocks the way: [[Shrine of Cinders]]. |\n";
+/// A road table: a Bridge Ambush on 15-17, a toll gang (Shrine of Cinders) on 18-20.
+pub(crate) const ROAD: &str = "# Road\n\n## On the road\n\n<!-- splat:rolls key=road dice=1d20 per=day -->\n\n| d20 | On the road |\n| --- | --- |\n| 1-14 | Nothing stirs. |\n| 15-17 | [[Bridge Ambush]] waits by the old quarry gate, where the road narrows between walls of loose stone. |\n| 18-20 | A toll gang blocks the way: [[Shrine of Cinders]]. |\n";
 
 fn events(shell: &mut Shell) -> Vec<crate::timeline::Event> {
     shell.read(|root| root.app.timeline.events.clone())

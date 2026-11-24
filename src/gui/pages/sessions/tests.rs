@@ -470,3 +470,96 @@ fn slash_menu_in_the_note() {
         );
     }
 }
+
+/// The event `id` as the Timeline holds it.
+fn event_of(root: &crate::gui::SplatRoot, id: &str) -> crate::timeline::Event {
+    root.app
+        .timeline
+        .events
+        .iter()
+        .find(|event| event.id == id)
+        .cloned()
+        .expect("the event")
+}
+
+/// The events of the selected session's plan, as the Timeline holds them.
+fn timeline_events(shell: &mut Shell) -> Vec<crate::timeline::Event> {
+    shell.read(|root| root.app.timeline.events.clone())
+}
+
+/// Gap 1 of the port (egui `travel_block`): an open Travel row of the plan shows its encounter
+/// checks under it, as the Timeline does: `Roll for encounters` from the row's menu, How long
+/// with its range, a roll and its result with Undo, a typed roll, and a result's
+/// `Plan “<name>”`, which adds the fight to tonight's plan.
+#[test]
+fn travel_checks_in_the_plan() {
+    let mut shell = Shell::new("travel-checks-plan", Seed::World);
+    shell.update(|root, _, _| {
+        let campaign = root.app.campaigns.active_campaign().unwrap();
+        std::fs::write(
+            campaign.path.join("Road.md"),
+            crate::gui::pages::timeline::tests::ROAD,
+        )
+        .unwrap();
+        root.app.lookup.refresh();
+    });
+    crate::gui::pages::trackers::tests::read_content_again(&mut shell);
+    wait_for_fights(&mut shell);
+    shell.click("Session");
+    new_session(&mut shell, "The Crossing");
+    shell.click("id:plan-add-more-button");
+    shell.click("Day");
+    shell.click("id:plan-add-more-button");
+    shell.click("Travel");
+    let journey = timeline_events(&mut shell).last().unwrap().id.clone();
+    let event = |shell: &mut Shell| {
+        timeline_events(shell)
+            .into_iter()
+            .find(|event| event.id == journey)
+            .unwrap()
+    };
+    assert!(
+        shell.bounds("Enter a roll for Day 1").is_none(),
+        "a Travel row shows no checks until the DM asks"
+    );
+    shell.click("More actions for Travel");
+    shell.click("Roll for encounters");
+    assert!(event(&mut shell).checks_table.is_some(), "the block shows");
+    // How long has the keyboard while the journey has no length.
+    shell.type_text("2");
+    assert_eq!(
+        shell.read(|root| root.app.timeline.length.words(&event_of(root, &journey))),
+        "2",
+        "How long takes the keyboard"
+    );
+    if event(&mut shell).checks_table.as_deref() == Some("") {
+        shell.click(&format!("id:plan-checks-{journey}-table-button"));
+        shell.click("On the road");
+    }
+    assert_eq!(event(&mut shell).checks_table.as_deref(), Some("road"));
+    // The journey takes its length on Enter, and the block has a line a day.
+    shell.click("How long");
+    shell.press("end");
+    shell.type_text(" days");
+    shell.press("enter");
+    assert_eq!(event(&mut shell).duration, "2 days");
+    assert!(shell.bounds("Enter a roll for Day 2").is_some(), "a line for each day");
+    // A roll, its result with Undo, and the Undo.
+    shell.click(&format!("id:plan-checks-{journey}-roll-0"));
+    assert_eq!(event(&mut shell).checks.len(), 1, "one check rolled");
+    assert!(shell.bounds("Undo roll 1 travel check").is_some());
+    shell.capture("travel-checks__01-travel-checks-rolled__1200x800");
+    shell.click("Undo roll 1 travel check");
+    assert!(event(&mut shell).checks.is_empty(), "Undo takes the roll back");
+    // A player's roll, typed: the toll gang, which the plan can take.
+    shell.click("Enter a roll for Day 2");
+    shell.type_text("19");
+    shell.press("enter");
+    assert_eq!(event(&mut shell).checks.len(), 1, "the typed roll is a result");
+    shell.click("Plan “Shrine of Cinders”");
+    assert!(
+        note_words(&mut shell).contains("[[Shrine of Cinders]]"),
+        "the plan line is in the note"
+    );
+    shell.capture("travel-checks-plan__04-plan-answer-in-session-plan__1200x800");
+}

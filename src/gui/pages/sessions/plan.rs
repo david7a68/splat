@@ -21,7 +21,7 @@ fn id(words: impl std::fmt::Display) -> ElementId {
 }
 
 /// Do a plan act through the page's state.
-fn act(root: &mut SplatRoot, act: PlanAct) {
+pub(super) fn act(root: &mut SplatRoot, act: PlanAct) {
     let ctx = root.bridge.ctx().clone();
     let index = root.app.lookup.index();
     with_plan(&mut root.app, |sessions, _, book, plan| {
@@ -68,6 +68,7 @@ pub(super) fn render(
         });
     });
     let footer = footer::lines("plan-footer", lines, on_press, cx);
+    let travel = travel_block(root, window, cx);
     let body: AnyElement = if editing_group {
         // The group being assembled takes the plan's place: the Encounters page's group editor.
         kit::Message::new(
@@ -76,7 +77,7 @@ pub(super) fn render(
         )
         .into_any_element()
     } else {
-        body(view, window, cx)
+        body(view, travel, window, cx)
     };
     let c = colors();
     div()
@@ -99,7 +100,12 @@ pub(super) fn render(
         .into_any_element()
 }
 
-fn body(view: PlanView, window: &mut Window, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn body(
+    view: PlanView,
+    mut travel: Option<(String, AnyElement)>,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let heading = kit::label(view.heading, view.count);
     let strip = add_strip(&view, cx);
     let primary_free = std::cell::Cell::new(view.primary_free);
@@ -107,7 +113,12 @@ fn body(view: PlanView, window: &mut Window, cx: &mut Context<SplatRoot>) -> Any
     let any = !view.rows.is_empty();
     for (at, row) in view.rows.into_iter().enumerate() {
         rows.push(match row {
-            PlanRow::Event(row) => event_row(at, row, &primary_free, window, cx),
+            PlanRow::Event(row) => {
+                let checks = travel
+                    .take_if(|(journey, _)| *journey == row.id)
+                    .map(|(_, block)| block);
+                event_row(at, row, checks, &primary_free, window, cx)
+            }
             PlanRow::Fight(row) => fight_row(row, &primary_free, &view.fight_blocked, cx),
             PlanRow::Group(row) => group_row(row, &view.group_blocked, cx),
             PlanRow::Scene(row) => scene_row(row, &view.fight_blocked, cx),
@@ -354,6 +365,7 @@ fn primary_or_secondary(
 fn event_row(
     at: usize,
     row: EventRow,
+    checks: Option<AnyElement>,
     primary_free: &std::cell::Cell<bool>,
     window: &mut Window,
     cx: &mut Context<SplatRoot>,
@@ -492,21 +504,76 @@ fn event_row(
         );
         actions.push(row_menu(&label, items));
     }
-    let details = details.map(|details| event_details(at, &event, details, window, cx));
+    let details = details.map(|details| event_details(at, &event, details, checks, window, cx));
     row_frame(Some(lead), title, Some(second), actions, details)
 }
 
+/// The open journey's checks block (`travel_block`): **How long** with its range or help, then
+/// the Timeline's checks view in the plan's hands (`timeline::checks::Host::Plan`). `None`
+/// when the open row is not a journey.
+fn travel_block(
+    root: &mut SplatRoot,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> Option<(String, AnyElement)> {
+    use crate::gui::pages::timeline::checks::{Host, render_in};
+    let index = root.app.lookup.index();
+    let view = with_plan(&mut root.app, |sessions, _, book, plan| {
+        sessions.gv_travel(book, plan, index.as_deref())
+    })
+    .flatten()?;
+    let tables = index
+        .map(|index| index.loot_sources().tables.clone())
+        .unwrap_or_default();
+    let (typed, commit, blur) = (view.id.clone(), view.id.clone(), view.id.clone());
+    let length = kit::TextField::new(id(format!("plan-travel-length-{}", view.id)), view.length.clone())
+        .name("How long")
+        .focus(view.focus_length)
+        .on_change(cx.listener(move |root, words: &str, _, cx| {
+            let book = &mut root.app.timeline;
+            if let Some(event) = book.events.iter().find(|e| e.id == typed).cloned() {
+                book.length.type_words(&event, words);
+            }
+            cx.notify();
+        }))
+        .on_enter(crate::gui::pages::trackers::act(cx, move |root| {
+            crate::timeline::checks::commit_length(&mut root.app.timeline, &commit);
+        }))
+        .on_blur(crate::gui::pages::trackers::act(cx, move |root| {
+            crate::timeline::checks::commit_length(&mut root.app.timeline, &blur);
+        }));
+    let block = render_in(
+        root,
+        Host::Plan,
+        &view.id,
+        view.index,
+        (&view.length, view.start),
+        (&tables, &|name: &str| view.plan.get(name)),
+        window,
+        cx,
+    );
+    let element = div()
+        .flex()
+        .flex_col()
+        .pt(XS)
+        .child(kit::field("How long", view.help.map(Into::into), None, length))
+        .child(block)
+        .into_any_element();
+    Some((view.id, element))
+}
+
 /// The open event's fields: Title and Notes (or a played fight's lines and Where), a long
-/// rest's ruling, and `Timeline`.
+/// rest's ruling, and `Timeline`. A journey's checks come first, under its row.
 fn event_details(
     _at: usize,
     event: &str,
     details: crate::sessions::page::gpui_facade::EventDetails,
+    checks: Option<AnyElement>,
     _window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
-    let mut column = div().flex().flex_col().gap(XS);
+    let mut column = div().flex().flex_col().gap(XS).children(checks);
     if let Some(fight) = details.fight {
         column = column.child(kit::text(Type::Small, c.muted, fight));
         let place = {
