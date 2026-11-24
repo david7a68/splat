@@ -27,9 +27,6 @@ actions!(
 /// This area's GPUI-only state, kept in `root.pages.lookup`.
 #[derive(Default)]
 pub struct State {
-    /// The panel was open in the last frame: when it closes, its field's keyboard goes back to
-    /// the root.
-    was_open: bool,
     /// The reader's scroll and its heading jump.
     pub(crate) jump: crate::gui::pages::world::reader::Jump,
     /// The panel's keyboard place, so Back by key knows whether the keyboard is in Lookup.
@@ -102,14 +99,9 @@ fn step(root: &mut SplatRoot, step: Step, window: &mut Window, cx: &mut Context<
 
 /// Once per frame, before anything draws: the found notes are read again when the panel opens
 /// (`Lookup::wants_written`).
-pub(crate) fn poll(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) {
+pub(crate) fn poll(root: &mut SplatRoot, _: &mut Window, _: &mut Context<SplatRoot>) {
     // A press on a result row, or Lookup closing under its field, leaves nothing with the
-    // keyboard: the root takes it back, so Escape, Ctrl+K and the page's keys still reach it.
-    let open = root.app.lookup.open;
-    if window.focused(cx).is_none() || (root.pages.lookup.was_open && !open) {
-        window.focus(&root.focus, cx);
-    }
-    root.pages.lookup.was_open = open;
+    // keyboard: the root takes it back in that draw (`SplatRoot::watch_keys`).
     let app = &mut root.app;
     if app.lookup.open && app.lookup.wants_written() {
         let written = app.sessions.written(&app.timeline);

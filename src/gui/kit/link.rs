@@ -102,11 +102,19 @@ impl RenderOnce for Link {
             .tab_stop(true)
             .role(gpui::Role::Link)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
-            .aria_label(name.clone())
-            .child(self.words.clone());
-        if !self.wrap {
-            link = link.flex_none().whitespace_nowrap();
-        }
+            .aria_label(name.clone());
+        link = if self.wrap {
+            // GPUI measures a text's smallest width as its whole line, so in a row a wrapped
+            // link's words would never give way: the link and its words may shrink to the room
+            // left beside the row's other parts, and the words wrap there.
+            link.min_w_0()
+                .flex_shrink_1()
+                .child(div().min_w_0().child(self.words.clone()))
+        } else {
+            link.flex_none()
+                .whitespace_nowrap()
+                .child(self.words.clone())
+        };
         if let Some(hint) = self.hint {
             link = link.tooltip(tip(hint));
         }

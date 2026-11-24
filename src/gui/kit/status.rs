@@ -4,7 +4,7 @@ use super::{OnClick, button::element_name, target, tooltip::tip};
 use crate::gui::theme::{FOCUS_WIDTH, MIN_TARGET, RADIUS_CONTROL, Type, TypeExt, XS, colors};
 use gpui::{
     App, ClickEvent, Div, ElementId, Hsla, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::*,
 };
 use std::rc::Rc;
 
@@ -51,6 +51,11 @@ impl Status {
 /// The icon and the word in `Small` type and the status colour. Wrapped lines start at the word,
 /// never under the icon.
 pub fn status(status: &Status) -> Div {
+    status_line(status, false)
+}
+
+/// The status, its word underlined when it is a link's (`StatusLink`).
+fn status_line(status: &Status, underlined: bool) -> Div {
     div()
         .flex()
         .flex_row()
@@ -64,7 +69,13 @@ pub fn status(status: &Status) -> Div {
                 .text_color(status.icon_color.unwrap_or(status.color))
                 .child(status.icon.clone()),
         )
-        .child(div().ty(Type::Small).min_w_0().child(status.word.clone()))
+        .child(
+            div()
+                .ty(Type::Small)
+                .min_w_0()
+                .when(underlined, |word| word.underline())
+                .child(status.word.clone()),
+        )
 }
 
 /// A status that opens where the DM can act on it: the status with a hover fill, a 24 px target
@@ -124,7 +135,9 @@ impl RenderOnce for StatusLink {
                     .clone()
                     .unwrap_or_else(|| self.status.word.clone()),
             )
-            .child(status(&self.status));
+            // Its word is underlined, as every link's is, so the DM sees that it opens
+            // something (`design::status_link`).
+            .child(status_line(&self.status, true));
         if let Some(hint) = self.hint {
             link = link.tooltip(tip(hint));
         }
