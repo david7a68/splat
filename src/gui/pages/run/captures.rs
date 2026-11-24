@@ -490,6 +490,13 @@ fn run_add_creature() {
 
     shell.click("id:run-creature-Wolf");
     assert!(with_run(&mut shell, |run| run.ad_hoc.picked.is_some()));
+    // The chosen Wolf's HP shows in the field (a field keeps its first placeholder, so the
+    // new one is a new field).
+    assert!(
+        has_target(&mut shell, "id:run-creature-hp-11"),
+        "HP shows the Wolf's 11: {:?}",
+        kit::probe::names()
+    );
     shell.click("New creature count");
     shell.type_text("2");
     shell.capture("run-add-creature__08-arrivals-found-chosen__1200x800");
@@ -666,7 +673,7 @@ fn run_edge_states() {
     let new_path = with_run(&mut shell, |run| {
         run.path().map(std::path::Path::to_path_buf)
     })
-    .expect("the new run's file");
+    .expect("the new run’s file");
     assert!(
         new_path != path && new_path.exists(),
         "Save as a new run saves beside the changed file: {new_path:?}"
@@ -1012,7 +1019,7 @@ fn run_large_roster() {
     let made = || super::roster::PLANS_MADE.with(std::cell::Cell::get);
     let before = made();
     let many = shell.frame_cost(10);
-    assert_eq!(made(), before, "still frames reuse the roster's plan");
+    assert_eq!(made(), before, "still frames reuse the roster’s plan");
     let first = with_run(&mut shell, |run| run.state.order[0]);
     on_run(&mut shell, |run| {
         run.run_command(Command::Condition(first, "Prone".into()))
@@ -1103,6 +1110,23 @@ fn ready_with_one_absent(shell: &mut Shell) {
 fn run_absent_player() {
     let mut shell = Shell::new("run-absent-player", Seed::Campaign);
     ready_with_one_absent(&mut shell);
+    // An initiative field shows a whole total: its frame and padding leave room for `-12`
+    // and the caret (a narrower field scrolled to its last digit).
+    let fits_total = |shell: &mut Shell, field: &str| {
+        let frame = shell
+            .bounds(field)
+            .expect("the initiative field")
+            .size
+            .width;
+        let total = shell.update(|_, window, _| {
+            crate::gui::kit::measure::width(window, crate::gui::theme::Type::Body, "-12")
+        });
+        assert!(
+            frame - px(34.0) >= total,
+            "{field} is {frame:?} wide for a total of {total:?}"
+        );
+    };
+    fits_total(&mut shell, "Initiative for Kestrel Dunmoor");
     shell.capture("run-absent-player__01-ready-with-one-absent__1200x800");
 
     shell.click("Begin combat");
@@ -1124,6 +1148,7 @@ fn run_absent_player() {
 
     shell.click(&format!("No initiative for {ABSENT}"));
     assert_eq!(with_run(&mut shell, |run| run.live_initiative), Some(at));
+    fits_total(&mut shell, &format!("Initiative for {ABSENT}"));
     shell.capture("run-absent-player__04-initiative-field-in-row__1200x800");
 
     // The field has the keyboard: the typed total and Enter set it.
@@ -1214,7 +1239,7 @@ fn run_roster_conflict() {
     shell.update(|root, _, _| root.app.encounters.simulate_sheet_update(LONG_MESSAGE));
     assert!(row_text(&mut shell, LOADED_ROW).contains("Restrained"));
     // The sheet's notice keeps one line: a shorter form of its changes, the Log the whole.
-    let whole = with_run(&mut shell, |run| run.notice.clone()).expect("the sheet's notice");
+    let whole = with_run(&mut shell, |run| run.notice.clone()).expect("the sheet’s notice");
     let words = shell.bounds(&whole).expect("the notice under the roster");
     assert!(
         words.size.height < crate::gui::theme::Type::Small.line() * 1.5,
@@ -1266,7 +1291,7 @@ fn encounters_ready(shell: &mut Shell) {
     }
     assert!(
         shell.read(|root| root.app.encounters.loaded() && !root.app.encounters.busy()),
-        "the campaign's encounters are read"
+        "the campaign’s encounters are read"
     );
 }
 
@@ -1401,7 +1426,7 @@ fn roll_table_author() {
     shell.press("enter");
     assert!(
         has_target(&mut shell, "Roll 1d6"),
-        "Lookup's table rolls too"
+        "Lookup’s table rolls too"
     );
     shell.capture("roll-table-author__04-authored-table-in-lookup__1200x800");
 }

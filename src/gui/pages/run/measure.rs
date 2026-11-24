@@ -34,6 +34,34 @@ pub(super) fn width_at(window: &Window, ty: Type, size: Option<Pixels>, words: &
         .width
 }
 
+/// The width of an icon glyph (`gui::icons`) at `ty`'s size, in the icon font it is drawn in.
+pub(super) fn icon_width(window: &Window, ty: Type, glyph: &str) -> Pixels {
+    let font = Font {
+        family: SharedString::new_static(crate::gui::theme::family::ICONS),
+        features: FontFeatures::default(),
+        fallbacks: None,
+        weight: gpui::FontWeight::NORMAL,
+        style: gpui::FontStyle::Normal,
+    };
+    let run = TextRun {
+        len: glyph.len(),
+        font,
+        color: gpui::black(),
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    };
+    window
+        .text_system()
+        .shape_line(
+            SharedString::from(glyph.to_owned()),
+            ty.size(),
+            &[run],
+            None,
+        )
+        .width
+}
+
 /// The width of `words` in `ty`, on one line.
 pub(super) fn width(window: &Window, ty: Type, words: &str) -> Pixels {
     width_at(window, ty, None, words)

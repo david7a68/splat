@@ -1649,7 +1649,14 @@ fn group_row(
     let blocked = run.add_waits_words(group);
     let total = run.group_totals.get(&id).cloned().unwrap_or_default();
     let small = |words: &str| super::measure::width(window, Type::Small, words);
-    let strong = |words: &str| super::measure::width(window, Type::Strong, words);
+    // A title leads with the drag glyph, which is drawn in the icon font: it is measured there.
+    let strong = |words: &str| match words.strip_prefix(icons::DRAG) {
+        Some(rest) => {
+            super::measure::icon_width(window, Type::Strong, icons::DRAG)
+                + super::measure::width(window, Type::Strong, rest)
+        }
+        None => super::measure::width(window, Type::Strong, words),
+    };
     // The fight after the group joins, by the run's kept words (`arrival_words`).
     let heading_fit = run.arrival_heading(
         group,
