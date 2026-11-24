@@ -183,7 +183,8 @@ fn add_strip(view: &PlanView, cx: &mut Context<SplatRoot>) -> AnyElement {
         .on_click(on(cx, PlanAct::Add(Kind::LongRest)));
     let mut more = kit::MenuButton::new(
         "plan-add-more",
-        kit::Button::quiet("plan-add-more-button", "⋯")
+        kit::Button::quiet("plan-add-more-button", "")
+            .icon(icons::EXPAND)
             .name("More to add")
             .density(Density::Read),
     );
@@ -277,11 +278,44 @@ fn row_frame(
 }
 
 /// A row's title as a link that opens or reads it.
-fn title_link(id_words: String, words: String, click: impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) + 'static) -> AnyElement {
-    kit::Button::quiet(id(id_words), words)
-        .plain()
+fn title_link(
+    id_words: String,
+    words: String,
+    click: impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) + 'static,
+) -> AnyElement {
+    kit::Link::new(id(id_words), words)
         .on_click(click)
         .into_any_element()
+}
+
+/// A scene's words: its links underlined (each opens its entry in Lookup), the rest plain.
+fn scene_words(line: usize, words: &str, cx: &mut Context<SplatRoot>) -> AnyElement {
+    let c = colors();
+    let mut row = div().flex().flex_row().flex_wrap().items_center().gap_x(XS);
+    let mut rest = words;
+    let mut at = 0;
+    while let Some(start) = rest.find("[[") {
+        let Some(end) = rest[start..].find("]]") else {
+            break;
+        };
+        let before = &rest[..start];
+        if !before.trim().is_empty() {
+            row = row.child(kit::text(Type::Body, c.text, before.trim().to_owned()));
+        }
+        let inner = &rest[start + 2..start + end];
+        let (target, shown) = inner.split_once('|').unwrap_or((inner, inner));
+        let target = target.split('#').next().unwrap_or(target).to_owned();
+        row = row.child(
+            kit::Link::new(id(format!("plan-scene-link-{line}-{at}")), shown.to_owned())
+                .on_click(on(cx, PlanAct::ReadEncounter(target))),
+        );
+        at += 1;
+        rest = &rest[start + end + 2..];
+    }
+    if !rest.trim().is_empty() {
+        row = row.child(kit::text(Type::Body, c.text, rest.trim().to_owned()));
+    }
+    row.into_any_element()
 }
 
 fn small(words: impl Into<SharedString>) -> AnyElement {
@@ -296,7 +330,8 @@ fn in_notes() -> AnyElement {
 fn row_menu(name: &str, items: Vec<kit::MenuItem>) -> AnyElement {
     let mut menu = kit::MenuButton::new(
         id(format!("plan-menu-{name}")),
-        kit::Button::quiet(id(format!("plan-menu-button-{name}")), "⋯")
+        kit::Button::quiet(id(format!("plan-menu-button-{name}")), "")
+            .icon(icons::EXPAND)
             .name(format!("More actions for {name}"))
             .density(Density::Read),
     );
@@ -702,7 +737,7 @@ fn scene_row(row: SceneRow, blocked: &Option<String>, cx: &mut Context<SplatRoot
     )
     .on_click(on(cx, PlanAct::SceneTick(line)))
     .into_any_element();
-    let title = kit::text(Type::Body, c.text, plain.clone()).into_any_element();
+    let title = scene_words(line, &words, cx);
     let second = if let Some(detail) = detail {
         Some(small(detail))
     } else if not_found {

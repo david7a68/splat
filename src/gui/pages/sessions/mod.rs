@@ -44,8 +44,8 @@ pub struct State {
     /// The note editor's last words as the editor sent them, by session, so a change the
     /// program made (a load, an act) replaces the editor's words and the DM's typing never does.
     pub(super) note: note::State,
-    /// The templates view's editors.
-    pub(super) templates: templates::State,
+    /// The New template form just opened: its name field takes the keyboard once.
+    pub(super) focus_template_name: bool,
 }
 
 /// Once, when the root is built.
@@ -201,6 +201,7 @@ fn header(
                 .icon(icons::ADD)
                 .on_click(cx.listener(|root, _, _, cx| {
                     root.app.sessions.gv_new_template();
+                    root.pages.sessions.focus_template_name = true;
                     cx.notify();
                 }))
                 .into_any_element(),

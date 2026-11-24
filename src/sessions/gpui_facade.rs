@@ -2014,3 +2014,892 @@ impl Sessions {
         }
     }
 }
+
+/// What a recording row offers, as the egui row lays it (`recording_row`).
+pub struct RecordingRow {
+    pub path: PathBuf,
+    pub title: String,
+    pub name: String,
+    /// `1 s · 0 MB`, or `Audio removed`.
+    pub size: String,
+    /// Its state; `None` while it is processed (then `processing` says how far).
+    pub status: Option<super::RecordingStatus>,
+    pub processing: Option<Processing>,
+    /// The live recording's lines: its time and what it hears, in the state's colour.
+    pub live_line: Option<(String, String)>,
+    /// Sentences under the status, muted, with a hover (what the recorder said).
+    pub sentences: Vec<(String, Option<String>)>,
+    /// The texts it has: Summary, Clean transcript, What the check changed, Raw transcript.
+    pub views: Vec<(u8, &'static str)>,
+    /// Its menu: `Process again…` (with why it waits), and `Delete…` (with why it waits).
+    pub process_again: Option<Option<&'static str>>,
+    pub delete_blocked: Option<&'static str>,
+    /// Its actions, in order.
+    pub actions: Vec<RecordingChoice>,
+    /// The reason Process waits, as a link that opens Settings (`true`: to save a speech key).
+    pub reason_link: Option<(String, bool)>,
+    /// What Process sends where (help under the row).
+    pub destination: Option<String>,
+    /// `Process again`'s confirmation.
+    pub confirm_again: Option<String>,
+    /// The events an LLM marked in it.
+    pub markers: Vec<MarkerRow>,
+}
+
+pub struct Processing {
+    pub words: String,
+    pub cancelling: bool,
+}
+
+pub struct RecordingChoice {
+    pub words: &'static str,
+    pub kind: plain::Kind,
+    pub blocked: Option<String>,
+    pub hover: Option<String>,
+    pub act: RecordingAct,
+}
+
+pub struct MarkerRow {
+    pub index: usize,
+    pub icon: &'static str,
+    pub title: String,
+    /// Its time, a link into the clean transcript (when there is one).
+    pub at: Option<String>,
+    pub facts: String,
+    pub placement: String,
+    /// On the timeline: the event's id.
+    pub added: Option<String>,
+}
+
+/// What the DM did in the Recordings tab.
+#[derive(Clone, Debug)]
+pub enum RecordingAct {
+    ProcessAgain,
+    Delete,
+    Stop,
+    RecordAgain,
+    ChooseInput,
+    CheckInput,
+    Process,
+    OpenSettings(bool),
+    Read(u8),
+    AgainNotNow,
+    AgainReplace,
+    Cancel,
+    AddMarker(usize),
+    ReadMarker(usize),
+    OpenEvent(String),
+}
+
+/// The text of a recording being read (`reading_view`).
+pub struct ReadingView {
+    pub name: String,
+    /// The texts it has, and the one shown.
+    pub views: Vec<(u8, &'static str)>,
+    pub made: u8,
+    /// A summary's `Add to notes`, or `In notes`.
+    pub add_to_notes: Option<bool>,
+    pub short_of: Option<(u64, u64)>,
+    pub draft_note: bool,
+    pub part: usize,
+    pub times: Vec<String>,
+    pub body: String,
+}
+
+fn made_of(index: u8) -> super::Made {
+    match index {
+        0 => super::Made::Summary,
+        1 => super::Made::Marked,
+        2 => super::Made::Review,
+        _ => super::Made::Transcript,
+    }
+}
+
+fn made_index(made: super::Made) -> u8 {
+    match made {
+        super::Made::Summary => 0,
+        super::Made::Marked => 1,
+        super::Made::Review => 2,
+        super::Made::Transcript => 3,
+    }
+}
+
+impl Sessions {
+    /// The Recordings tab's empty state: its words, and whether `Open Settings` follows.
+    pub fn gv_recordings_empty(&self, settings: &ProcessingSettings) -> Option<(String, bool)> {
+        if !self.recordings.is_empty() {
+            return None;
+        }
+        let here = self
+            .live
+            .as_ref()
+            .is_some_and(|live| Some(live.session) == self.selected);
+        let reason = self.record_blocked(settings);
+        let elsewhere = self.live.as_ref().map(|live| live.label.clone());
+        let words = if here {
+            "The recorder is starting. Its file appears here in a moment.".to_owned()
+        } else if let Some(label) = elsewhere {
+            format!("No recordings of this session. “{label}” is recording now.")
+        } else if let Some(reason) = &reason {
+            format!("No recordings of this session. {reason}")
+        } else {
+            "No recordings of this session. Select Record above to make one.".to_owned()
+        };
+        Some((words, !here && self.live.is_none() && reason.is_some()))
+    }
+
+    pub fn gv_open_settings(&mut self) {
+        self.wants_processing_settings = true;
+    }
+
+    pub fn gv_reading(&self) -> bool {
+        self.reading.is_some()
+    }
+
+    /// The Recordings tab's rows (`recordings_tab`, `recording_row`, `markers`).
+    pub fn gv_recording_rows(
+        &mut self,
+        settings: &ProcessingSettings,
+        book: &Book,
+    ) -> Vec<RecordingRow> {
+        use crate::recording::Health;
+        use plain::Kind;
+        if self.processed_notice_read_here() {
+            self.end_notice();
+        }
+        let c = crate::design::colors();
+        let banner_primary = self.banner_has_primary(settings, self.run_open);
+        let recordings = self.recordings.clone();
+        let recovery = self.recording_recovery_row();
+        let destination_at = recordings.iter().position(|recording| {
+            !recording.summary
+                && recording.path.exists()
+                && self.job.is_none()
+                && settings.problem().is_none()
+                && self
+                    .live
+                    .as_ref()
+                    .is_none_or(|live| live.recorder.path() != recording.path)
+        });
+        let primary_at = recovery.or(destination_at);
+        let record_again_at = self.record_again_row();
+        let days = crate::timeline::day_numbers(&book.events);
+        recordings
+            .iter()
+            .enumerate()
+            .map(|(index, recording)| {
+                let primary =
+                    primary_at == Some(index) && !self.confirm_record && !banner_primary;
+                let record_again_here = record_again_at == Some(index);
+                let live = self
+                    .live
+                    .as_ref()
+                    .is_some_and(|live| live.recorder.path() == recording.path);
+                let length = recording.seconds.map_or_else(
+                    || {
+                        if recording.path.exists() {
+                            "Unknown length"
+                        } else {
+                            "Audio removed"
+                        }
+                        .to_owned()
+                    },
+                    super::spoken_length,
+                );
+                let size = if live {
+                    super::megabytes(recording.bytes)
+                } else if !recording.path.exists() {
+                    "Audio removed".to_owned()
+                } else {
+                    format!("{length} · {}", super::megabytes(recording.bytes))
+                };
+                let job_here = self
+                    .job
+                    .as_ref()
+                    .is_some_and(|(job, _)| job.recording == recording.path);
+                let stored = &recording.status;
+                let missing_input = settings.input_missing()
+                    || stored.as_ref().is_some_and(|words| {
+                        words.to_lowercase().contains(super::MISSING_INPUT_ERROR)
+                    });
+                let one = |icon, word, color| {
+                    super::RecordingStatus::one(crate::design::Status { icon, word, color })
+                };
+                let status = if live {
+                    self.recording_status()
+                        .unwrap_or_else(super::RecordingStatus::live)
+                } else if let Some(words) = stored.as_deref() {
+                    let state = if words.starts_with("Failed") {
+                        "Failed"
+                    } else if words.starts_with("Processing cancelled") {
+                        "Cancelled"
+                    } else {
+                        "Stopped"
+                    };
+                    if state == "Cancelled" {
+                        one(crate::design::icons::WARN, state, c.result.warning)
+                    } else {
+                        one(crate::design::icons::ERROR, state, c.result.error)
+                    }
+                } else if recording.warning.is_some() {
+                    super::RecordingStatus::one(super::processed_warning())
+                } else if recording.summary {
+                    super::RecordingStatus::one(super::processed_clean())
+                } else if recording.transcript {
+                    one(crate::design::icons::DRAFT, "Partly processed", c.muted)
+                } else {
+                    one(crate::design::icons::DOCUMENT, "Not processed", c.muted)
+                };
+                let processing = job_here.then(|| {
+                    let (job, _) = self.job.as_ref().expect("the job here");
+                    Processing {
+                        words: format!("Processing · {}", job.progress.words()),
+                        cancelling: job.cancelling(),
+                    }
+                });
+                let health = self.live.as_ref().map(|live| live.recorder.health().clone());
+                let stalled = live
+                    && matches!(health, Some(Health::Stalled | Health::Stopped(_)));
+                let silent = live && matches!(health, Some(Health::Silent));
+                let mut sentences = Vec::new();
+                let mut live_line = None;
+                if let Some(rec) = self.live.as_ref().filter(|_| live) {
+                    let time = super::clock(rec.recorder.seconds());
+                    if silent {
+                        sentences.push((
+                            format!("{time} recorded · Silent for over a minute"),
+                            None,
+                        ));
+                    } else if !stalled {
+                        let sound = if *rec.recorder.health() == Health::Starting {
+                            "Waiting for sound"
+                        } else if rec.recorder.heard_just_now() {
+                            "Hearing sound"
+                        } else {
+                            "Quiet"
+                        };
+                        live_line = Some((time, format!(" recorded · {sound}")));
+                    } else {
+                        sentences.push((
+                            format!(
+                                "Stopped saving after {}. What was saved is kept. Record again starts a new file.",
+                                super::spoken_length(rec.recorder.seconds())
+                            ),
+                            None,
+                        ));
+                    }
+                }
+                if let Some(words) = stored.as_ref().filter(|_| !live && !job_here) {
+                    let hover = words
+                        .strip_prefix("Stopped by itself:")
+                        .filter(|said| super::plain_recorder_words(said).is_some())
+                        .map(super::recorder_said);
+                    sentences.push((super::recording_detail(words, missing_input), hover));
+                }
+                if let Some(warning) = recording.warning.as_ref().filter(|_| !live && !job_here) {
+                    sentences.push((warning.clone(), None));
+                }
+                let views = [
+                    (super::Made::Summary, recording.summary),
+                    (super::Made::Marked, recording.marked),
+                    (
+                        super::Made::Review,
+                        recording.review && !recording.check_missing(),
+                    ),
+                    (super::Made::Transcript, recording.transcript),
+                ]
+                .into_iter()
+                .filter_map(|(made, exists)| exists.then_some((made_index(made), made.word())))
+                .collect();
+                let process_again = recording.summary.then_some(if !recording.path.exists() {
+                    Some("Audio removed. Restore the WAV file to process it.")
+                } else if live {
+                    Some("Stop recording first.")
+                } else if self.job.is_some() {
+                    Some("Wait for processing to finish.")
+                } else {
+                    None
+                });
+                let busy = live || job_here;
+                let stopped_by_itself = stored
+                    .as_ref()
+                    .is_some_and(|words| words.starts_with("Stopped by itself:"));
+                let mut actions = Vec::new();
+                let mut reason_link = None;
+                if !live && !job_here && stopped_by_itself {
+                    if missing_input && record_again_here {
+                        actions.push(RecordingChoice {
+                            words: "Choose an input",
+                            kind: if primary && !self.run_open {
+                                Kind::Primary
+                            } else {
+                                Kind::Safe
+                            },
+                            blocked: None,
+                            hover: None,
+                            act: RecordingAct::ChooseInput,
+                        });
+                    }
+                    if record_again_here {
+                        let busy = self.live.is_some() || self.job.is_some();
+                        actions.push(RecordingChoice {
+                            words: "Record again",
+                            kind: if primary && !self.run_open && !missing_input && !busy {
+                                Kind::Primary
+                            } else {
+                                Kind::Safe
+                            },
+                            blocked: busy.then(|| {
+                                "Stop recording or wait for processing to finish.".to_owned()
+                            }),
+                            hover: None,
+                            act: RecordingAct::RecordAgain,
+                        });
+                    }
+                }
+                if live {
+                    actions.push(RecordingChoice {
+                        words: "Stop recording",
+                        kind: Kind::Safe,
+                        blocked: None,
+                        hover: None,
+                        act: RecordingAct::Stop,
+                    });
+                    if stalled && record_again_here {
+                        actions.push(RecordingChoice {
+                            words: "Record again",
+                            kind: if self.run_open || !primary {
+                                Kind::Safe
+                            } else {
+                                Kind::Primary
+                            },
+                            blocked: None,
+                            hover: None,
+                            act: RecordingAct::RecordAgain,
+                        });
+                    }
+                    if silent {
+                        actions.push(RecordingChoice {
+                            words: "Check the input in Settings",
+                            kind: Kind::Link,
+                            blocked: None,
+                            hover: None,
+                            act: RecordingAct::CheckInput,
+                        });
+                    }
+                }
+                let reason = if !recording.path.exists() {
+                    Some("Audio removed. Restore the WAV file to process it.".to_owned())
+                } else if live {
+                    Some("Stop recording first.".to_owned())
+                } else if self.job.is_some() {
+                    Some("One recording is processed at a time.".to_owned())
+                } else {
+                    settings.problem()
+                };
+                if !job_here && !recording.summary {
+                    let label = if recording.transcript
+                        || recording.status.as_ref().is_some_and(|words| {
+                            words.starts_with("Failed") || words.starts_with("Processing cancelled")
+                        }) {
+                        "Continue processing"
+                    } else {
+                        "Process"
+                    };
+                    let quiet = self.run_open
+                        || !primary
+                        || stalled
+                        || stopped_by_itself
+                        || reason.is_some();
+                    actions.push(RecordingChoice {
+                        words: label,
+                        kind: if quiet { Kind::Safe } else { Kind::Primary },
+                        blocked: reason.clone(),
+                        hover: Some(super::recording_destination(settings, recording)),
+                        act: RecordingAct::Process,
+                    });
+                    if let Some(reason) = reason.as_ref().filter(|_| !live && self.job.is_none()) {
+                        let speech = crate::processing::host(&settings.config.speech_url);
+                        let key = reason.starts_with("Save an API key for this speech service");
+                        let named = if key {
+                            format!(
+                                "Save an {} key in Settings",
+                                if speech == "api.openai.com" {
+                                    "OpenAI"
+                                } else {
+                                    &speech
+                                }
+                            )
+                        } else {
+                            reason.clone()
+                        };
+                        reason_link = Some((named, key));
+                    }
+                }
+                let destination = (destination_at == Some(index))
+                    .then(|| super::recording_destination(settings, recording));
+                let confirm_again = (self.confirm_again.as_deref() == Some(recording.path.as_path()))
+                    .then(|| {
+                        format!(
+                            "This sends the raw transcript, this session’s name, notes and events to {} twice. The audio is not sent again. It replaces the summary, the clean transcript and what the check changed. Events you added stay on the timeline.",
+                            super::processing_llm(settings)
+                        )
+                    });
+                let markers = recording
+                    .markers
+                    .iter()
+                    .enumerate()
+                    .map(|(index, marker)| {
+                        let title = if marker.title.is_empty() {
+                            marker.kind.word().to_owned()
+                        } else {
+                            marker.title.clone()
+                        };
+                        let key = marker.key(&recording.name);
+                        let added = book.event_of_marker(&key).map(|event| event.id.clone());
+                        let mut facts = vec![marker.kind.word()];
+                        for fact in [&marker.duration, &marker.place] {
+                            if !fact.is_empty() {
+                                facts.push(fact);
+                            }
+                        }
+                        let placement = added.as_ref().map_or_else(String::new, |id| {
+                            let at = book.events.iter().position(|event| event.id == *id);
+                            let before = at.and_then(|at| at.checked_sub(1));
+                            before.map_or_else(
+                                || "First on the timeline".to_owned(),
+                                |before| {
+                                    format!("After {}", book.events[before].label(days[before]))
+                                },
+                            )
+                        });
+                        MarkerRow {
+                            index,
+                            icon: crate::timeline::kind_icon(marker.kind),
+                            title,
+                            at: (!marker.at.is_empty() && recording.marked)
+                                .then(|| marker.at.clone()),
+                            facts: facts.join(" · "),
+                            placement,
+                            added,
+                        }
+                    })
+                    .collect();
+                RecordingRow {
+                    path: recording.path.clone(),
+                    title: recording.title.clone(),
+                    name: recording.name.clone(),
+                    size,
+                    status: (!job_here).then_some(status),
+                    processing,
+                    live_line,
+                    sentences,
+                    views,
+                    process_again,
+                    delete_blocked: busy.then_some("This recording is in use."),
+                    actions,
+                    reason_link,
+                    destination,
+                    confirm_again,
+                    markers,
+                }
+            })
+            .collect()
+    }
+
+    /// A press in a recording's row (`recording_row`, `markers`).
+    pub fn gv_recording_act(
+        &mut self,
+        path: &std::path::Path,
+        act: RecordingAct,
+        settings: &ProcessingSettings,
+        book: &mut Book,
+        ctx: &egui::Context,
+    ) {
+        let Some(recording) = self
+            .recordings
+            .iter()
+            .find(|recording| recording.path == path)
+            .cloned()
+        else {
+            return;
+        };
+        let session = self.selected;
+        match act {
+            RecordingAct::ProcessAgain => self.confirm_again = Some(recording.path.clone()),
+            RecordingAct::Delete => self.confirm_delete = Some(recording.path.clone()),
+            RecordingAct::Stop => self.finish_recording(ctx),
+            RecordingAct::RecordAgain => {
+                if let Some(session) = session {
+                    let stalled = self.live.as_ref().is_some_and(|live| {
+                        live.recorder.path() == recording.path
+                            && matches!(
+                                live.recorder.health(),
+                                crate::recording::Health::Stalled
+                                    | crate::recording::Health::Stopped(_)
+                            )
+                    });
+                    if stalled {
+                        self.finish_recording(ctx);
+                    }
+                    if let Err(error) = self.start_recording(settings, session) {
+                        self.say(crate::design::Tone::Error, error, None);
+                    }
+                }
+            }
+            RecordingAct::ChooseInput => self.wants_recording_input = true,
+            RecordingAct::CheckInput => self.wants_processing_settings = true,
+            RecordingAct::Process | RecordingAct::AgainReplace => {
+                self.confirm_again = None;
+                self.start_processing(ctx, &recording.path, settings, book);
+            }
+            RecordingAct::OpenSettings(key) => {
+                self.wants_processing_settings = true;
+                self.wants_speech_key = key;
+            }
+            RecordingAct::Read(made) => self.open_reading(&recording, made_of(made), None, None),
+            RecordingAct::AgainNotNow => self.confirm_again = None,
+            RecordingAct::Cancel => {
+                if let Some((job, _)) = &self.job {
+                    job.cancel();
+                }
+            }
+            RecordingAct::AddMarker(index) => {
+                if book.unreadable.is_some() {
+                    return;
+                }
+                if let Some(marker) = recording.markers.get(index) {
+                    let key = marker.key(&recording.name);
+                    let id = book.add_marker(marker, &key, session);
+                    book.save();
+                    let title = if marker.title.is_empty() {
+                        marker.kind.word()
+                    } else {
+                        marker.title.as_str()
+                    };
+                    self.markers.record(super::kept::MarkerAdd {
+                        owner: super::kept::OfSession {
+                            root: self.folder.clone().unwrap_or_default(),
+                            session,
+                        },
+                        id,
+                        title: title.to_owned(),
+                    });
+                }
+            }
+            RecordingAct::ReadMarker(index) => {
+                if let Some(marker) = recording.markers.get(index) {
+                    let key = marker.key(&recording.name);
+                    self.open_reading(
+                        &recording,
+                        super::Made::Marked,
+                        Some(&marker.at.clone()),
+                        Some((marker.clone(), key)),
+                    );
+                }
+            }
+            RecordingAct::OpenEvent(id) => self.wants_event = Some(id),
+        }
+    }
+
+    /// The recording text being read (`reading_view`).
+    pub fn gv_reading_view(&mut self) -> Option<ReadingView> {
+        let in_notes = self
+            .draft
+            .as_ref()
+            .map_or(String::new(), |draft| draft.body.as_str().to_owned());
+        let recordings = self.recordings.clone();
+        let reading = self.reading.as_mut()?;
+        let path = reading.recording.clone();
+        let views = [
+            super::Made::Summary,
+            super::Made::Marked,
+            super::Made::Review,
+            super::Made::Transcript,
+        ]
+        .into_iter()
+        .filter(|made| {
+            made.path(&path).exists()
+                && (*made != super::Made::Review
+                    || recordings
+                        .iter()
+                        .find(|recording| recording.path == path)
+                        .is_none_or(|recording| !recording.check_missing()))
+        })
+        .map(|made| (made_index(made), made.word()))
+        .collect();
+        if reading
+            .shown
+            .as_ref()
+            .is_none_or(|shown| shown.part != reading.part)
+        {
+            reading.shown = Some(super::ShownPart::of(reading));
+        }
+        let add_to_notes = (reading.made == super::Made::Summary).then(|| {
+            let summary = crate::sessions::nested_in_note(reading.parts[0].1.trim());
+            in_notes.contains(summary.trim())
+        });
+        Some(ReadingView {
+            name: reading.name.clone(),
+            views,
+            made: made_index(reading.made),
+            add_to_notes,
+            short_of: reading.short_of,
+            draft_note: matches!(
+                reading.made,
+                super::Made::Summary | super::Made::Marked | super::Made::Review
+            ),
+            part: reading.part,
+            times: reading.parts.iter().map(|(time, _)| time.clone()).collect(),
+            body: reading
+                .shown
+                .as_ref()
+                .map(|shown| shown.body.clone())
+                .unwrap_or_default(),
+        })
+    }
+
+    /// `Back to recordings`.
+    pub fn gv_close_reading(&mut self) {
+        self.reading = None;
+    }
+
+    /// Another text of the same recording.
+    pub fn gv_read_made(&mut self, made: u8) {
+        let Some(path) = self.reading.as_ref().map(|reading| reading.recording.clone()) else {
+            return;
+        };
+        if let Some(recording) = self
+            .recordings
+            .iter()
+            .find(|recording| recording.path == path)
+            .cloned()
+        {
+            self.open_reading(&recording, made_of(made), None, None);
+        }
+    }
+
+    /// Earlier, Later, or a time.
+    pub fn gv_read_part(&mut self, part: usize) {
+        if let Some(reading) = &mut self.reading
+            && part < reading.parts.len()
+        {
+            reading.part = part;
+        }
+    }
+
+    /// A summary's `Add to notes`.
+    pub fn gv_summary_to_notes(&mut self, ctx: &egui::Context) {
+        let Some(summary) = self
+            .reading
+            .as_ref()
+            .filter(|reading| reading.made == super::Made::Summary)
+            .map(|reading| crate::sessions::nested_in_note(reading.parts[0].1.trim()))
+        else {
+            return;
+        };
+        let _ = self.add_to_note(ctx, &summary);
+    }
+
+    /// The delete dialog's recording, while it is open.
+    pub fn gv_confirm_delete(&self) -> Option<String> {
+        self.confirm_delete
+            .as_deref()
+            .map(crate::sessions::recording_title)
+    }
+
+    /// `Keep the recording`.
+    pub fn gv_keep_recording(&mut self) {
+        self.confirm_delete = None;
+    }
+
+    /// `Delete recording` (`delete_dialog`).
+    pub fn gv_delete_recording(&mut self) {
+        let Some(path) = self.confirm_delete.take() else {
+            return;
+        };
+        self.reading = None;
+        if self.processed_recording.as_deref() == Some(path.as_path()) {
+            self.processed_session = None;
+            self.processed_recording = None;
+            self.job_done = false;
+            self.job_warned = false;
+        }
+        let (tone, words) = match crate::sessions::delete_recording(&path) {
+            Ok(()) => (crate::design::Tone::Success, "Recording deleted.".to_owned()),
+            Err(error) => (crate::design::Tone::Error, error),
+        };
+        self.say(tone, words, None);
+        self.refresh_recordings();
+    }
+}
+
+/// One row of the templates list.
+pub struct TemplateRow {
+    pub name: String,
+    /// `Campaign` or `Built-in`.
+    pub kind: &'static str,
+    pub selected: bool,
+}
+
+/// The shown template, as its editor draws it (`template_editor`).
+pub struct TemplateView {
+    pub name: String,
+    /// A campaign template: its file, its draft's words and state, and its menu's word
+    /// (`Delete`, or `Go back to built-in`).
+    pub file: Option<(PathBuf, String, DraftState, &'static str)>,
+    /// A built-in template: its words, read-only, with `Customize`.
+    pub built_in: Option<String>,
+}
+
+impl Sessions {
+    pub fn gv_template_rows(&self) -> Vec<TemplateRow> {
+        self.templates
+            .iter()
+            .map(|template| TemplateRow {
+                name: template.name.clone(),
+                kind: if template.path.is_some() {
+                    "Campaign"
+                } else {
+                    "Built-in"
+                },
+                selected: self.new_template.is_none()
+                    && self.template.as_deref() == Some(template.name.as_str()),
+            })
+            .collect()
+    }
+
+    pub fn gv_templates_list_only(&self) -> bool {
+        self.templates_list_only
+    }
+
+    pub fn gv_set_templates_list_only(&mut self, only: bool) {
+        self.templates_list_only = only;
+    }
+
+    /// A press on a template's row.
+    pub fn gv_choose_template(&mut self, name: &str) {
+        self.templates_list_only = false;
+        self.new_template = None;
+        self.select_template(name);
+    }
+
+    /// The shown template, choosing the first when none is (`templates_view`).
+    pub fn gv_template(&mut self) -> Option<TemplateView> {
+        if self.template.is_none()
+            && let Some(first) = self.templates.first().map(|t| t.name.clone())
+        {
+            self.select_template(&first);
+        }
+        let index = self
+            .template
+            .as_ref()
+            .and_then(|name| self.templates.iter().position(|t| &t.name == name))?;
+        let template = &self.templates[index];
+        let built_in = crate::sessions::BUILT_IN_TEMPLATES
+            .iter()
+            .any(|(other, _)| *other == template.name);
+        Some(TemplateView {
+            name: template.name.clone(),
+            file: template.path.clone().zip(self.template_draft.as_ref()).map(
+                |(path, draft)| {
+                    (
+                        path,
+                        draft.body.as_str().to_owned(),
+                        draft.state.clone(),
+                        if built_in {
+                            "Go back to built-in"
+                        } else {
+                            "Delete"
+                        },
+                    )
+                },
+            ),
+            built_in: template
+                .path
+                .is_none()
+                .then(|| template.body.clone()),
+        })
+    }
+
+    /// The template's state, as its title line says it (`draft_status`).
+    pub fn gv_template_status(state: &DraftState) -> crate::design::Status<'static> {
+        Self::draft_status(state)
+    }
+
+    /// The DM's edit of the template's words.
+    pub fn gv_template_edited(&mut self, words: &str) {
+        if let Some(draft) = &mut self.template_draft
+            && !draft.body.same_words(words)
+        {
+            let _ = draft.body.replace(words.to_owned());
+            draft.edited();
+            self.deleted_templates.owner_changed(&super::kept::Page {
+                root: self.folder.clone().unwrap_or_default(),
+            });
+        }
+    }
+
+    /// Ctrl+S in the template.
+    pub fn gv_save_template(&mut self) {
+        if !self.modal
+            && let Some(draft) = &mut self.template_draft
+        {
+            draft.save();
+        }
+    }
+
+    /// `Customize`, `Delete` or `Go back to built-in` of the shown template.
+    pub fn gv_customize_template(&mut self) {
+        if let Some(index) = self
+            .template
+            .as_ref()
+            .and_then(|name| self.templates.iter().position(|t| &t.name == name))
+        {
+            self.customize_template(index);
+        }
+    }
+
+    pub fn gv_delete_template(&mut self) {
+        if let Some(index) = self
+            .template
+            .as_ref()
+            .and_then(|name| self.templates.iter().position(|t| &t.name == name))
+        {
+            self.delete_template(index);
+        }
+    }
+
+    /// The New template form's name, while it is open.
+    pub fn gv_new_template_name(&self) -> Option<&str> {
+        self.new_template.as_deref()
+    }
+
+    pub fn gv_set_new_template_name(&mut self, name: &str) {
+        if let Some(words) = &mut self.new_template {
+            name.clone_into(words);
+        }
+    }
+
+    /// The New template form's Create.
+    pub fn gv_create_template(&mut self) {
+        let Some(name) = self.new_template.clone() else {
+            return;
+        };
+        if !name.trim().is_empty() && self.create_new_template(&name) {
+            self.new_template = None;
+        }
+    }
+
+    pub fn gv_cancel_new_template(&mut self) {
+        self.new_template = None;
+        self.template_error = None;
+    }
+
+    /// The templates list's footer (`list_messages`): a deleted template's Undo.
+    pub fn gv_template_list_footer(&self) -> Vec<FooterLine> {
+        let frame = PaneFrame::headless();
+        let messages = self.list_messages(&frame, "gpui_template_list_footer", 0.0);
+        footer(messages)
+    }
+}

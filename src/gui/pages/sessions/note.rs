@@ -4,7 +4,7 @@
 //! The editor keeps one GPUI state per session and place (page or panel), so its caret and its
 //! typing history are that note's.
 use super::with_plan;
-use crate::gui::{SplatRoot, icons, kit, theme};
+use crate::gui::{SplatRoot, kit, theme};
 use gpui::{
     AnyElement, App, Context, ElementId, InteractiveElement, IntoElement, KeyBinding,
     ParentElement, SharedString, Styled, Window, actions, div, prelude::*,
@@ -139,10 +139,7 @@ fn read(root: &mut SplatRoot, beside: bool, cx: &mut Context<SplatRoot>) -> AnyE
                 .gap(S)
                 .child(kit::text(Type::Small, c.muted, "Nothing written yet."))
                 .child(
-                    kit::Button::quiet("note-read-write", "Write")
-                        .icon(icons::EDIT)
-                        .plain()
-                        .on_click(cx.listener(|root, _, _, cx| {
+                    kit::Link::new("note-read-write", "Write").on_click(cx.listener(|root, _, _, cx| {
                             root.app.sessions.gv_write();
                             cx.notify();
                         })),
@@ -201,11 +198,11 @@ fn parts(
                             .gap(S)
                             .child(kit::text(Type::Small, c.muted, "From"))
                             .child(
-                                kit::Button::quiet(
+                                kit::Link::new(
                                     ElementId::Name(format!("{id}-from").into()),
                                     label,
                                 )
-                                .plain()
+                                .ty(Type::Small)
                                 .on_click(cx.listener(move |root, _, _, cx| {
                                     root.app.sessions.gv_open_session(from);
                                     cx.notify();

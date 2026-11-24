@@ -388,8 +388,7 @@ fn last_time(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Option<AnyEle
         sessions.gv_last_time(book, plan)
     })??;
     let id = last.id;
-    let link = kit::Button::quiet("last-time-link", last.label.clone())
-        .plain()
+    let link = kit::Link::new("last-time-link", last.label.clone())
         .hint(last.full.clone())
         .on_click(cx.listener(move |root, _, _, cx| {
             root.app.sessions.gv_open_session(id);

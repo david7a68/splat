@@ -7932,20 +7932,73 @@ impl Sessions {
         }
         // A press is judged on the name after this frame's typing.
         let create = shown.create && !name.trim().is_empty();
-        if create && let Some(folder) = &self.folder {
-            let body = "# Session {{number}}: {{title}}\n\n";
-            match create_template(folder, &name, body) {
-                Ok(template) => {
-                    keep = false;
-                    self.template_error = None;
-                    self.refresh();
-                    self.select_template(&template.name);
-                }
-                Err(error) => self.template_error = Some(error),
-            }
+        if create && self.create_new_template(&name) {
+            keep = false;
         }
         if keep {
             self.new_template = Some(name);
+        }
+    }
+
+    /// The New template form's Create: a template that starts with the title line only.
+    /// Returns whether it was made (both UIs).
+    fn create_new_template(&mut self, name: &str) -> bool {
+        let Some(folder) = &self.folder else {
+            return false;
+        };
+        let body = "# Session {{number}}: {{title}}\n\n";
+        match create_template(folder, name, body) {
+            Ok(template) => {
+                self.template_error = None;
+                self.refresh();
+                self.select_template(&template.name);
+                true
+            }
+            Err(error) => {
+                self.template_error = Some(error);
+                false
+            }
+        }
+    }
+
+    /// `Customize` of a built-in template: a copy in the folder to edit (both UIs).
+    fn customize_template(&mut self, index: usize) {
+        let Some(folder) = &self.folder else {
+            return;
+        };
+        let name = self.templates[index].name.clone();
+        match create_template(folder, &name, &self.templates[index].body) {
+            Ok(created) => {
+                self.refresh();
+                self.select_template(&created.name);
+            }
+            Err(error) => self.template_error = Some(error),
+        }
+    }
+
+    /// `Delete` (or `Go back to built-in`) of a campaign template, with `Undo delete` (both UIs).
+    fn delete_template(&mut self, index: usize) {
+        let Some(path) = self.templates[index].path.clone() else {
+            return;
+        };
+        let name = self.templates[index].name.clone();
+        match super::remove_file(&path) {
+            Ok(()) => {
+                let body = self.template_draft.take().map_or_else(
+                    || self.templates[index].body.as_str().to_owned(),
+                    |draft| draft.body.into_string(),
+                );
+                self.deleted_templates.record(kept::DeletedTemplate {
+                    page: kept::Page {
+                        root: self.folder.clone().unwrap_or_default(),
+                    },
+                    name,
+                    body,
+                });
+                self.template = None;
+                self.refresh();
+            }
+            Err(error) => self.template_error = Some(super::not_deleted(&path, &error)),
         }
     }
 
@@ -8017,35 +8070,12 @@ impl Sessions {
                 .state(read_only, &[read_only]);
         }
         let customize = line.show(ui).clicked(CUSTOMIZE);
-        if customize && let Some(folder) = &self.folder {
-            match create_template(folder, &name, &self.templates[index].body) {
-                Ok(created) => {
-                    self.refresh();
-                    self.select_template(&created.name);
-                }
-                Err(error) => self.template_error = Some(error),
-            }
+        if customize {
+            self.customize_template(index);
             return;
         }
-        if delete && let Some(path) = &path {
-            match super::remove_file(path) {
-                Ok(()) => {
-                    let body = self.template_draft.take().map_or_else(
-                        || self.templates[index].body.as_str().to_owned(),
-                        |draft| draft.body.into_string(),
-                    );
-                    self.deleted_templates.record(kept::DeletedTemplate {
-                        page: kept::Page {
-                            root: self.folder.clone().unwrap_or_default(),
-                        },
-                        name: name.clone(),
-                        body,
-                    });
-                    self.template = None;
-                    self.refresh();
-                }
-                Err(error) => self.template_error = Some(super::not_deleted(path, &error)),
-            }
+        if delete {
+            self.delete_template(index);
             return;
         }
         // Ctrl+S is taken before the field and saves after it (issue #513), so words typed in
