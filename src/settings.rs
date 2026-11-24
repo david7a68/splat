@@ -8,7 +8,7 @@ use std::{
     sync::mpsc,
     time::{Duration, Instant},
 };
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroize;
 
 /// The account's warning, a typed notice in the account column: a sign-in the desktop keyring
 /// did not save asks to connect again (true when the DM chooses it); any other is the keyring's
@@ -649,11 +649,7 @@ impl Settings {
             let row = ui
                 .horizontal(|ui| {
                     ui.set_max_width(cookie_width);
-                    let reason = self
-                        .cookie_input
-                        .trim()
-                        .is_empty()
-                        .then_some("Paste your sign-in cookie first.");
+                    let reason = self.connect_reason();
                     // Round 27 FA1: the reason slot left of Connect holds a failed Connect's cause
                     // while Connect is open. It lives until the next Connect, Disconnect or a working
                     // sign-in, as before; while the cookie field is empty, the slot names that step.
@@ -697,15 +693,7 @@ impl Settings {
                         })
                         .inner;
                     if clicked {
-                        self.sign_in_again = false;
-                        let cookie = Zeroizing::new(self.cookie_input.trim().to_owned());
-                        self.send(
-                            crate::credentials::Action::Connect {
-                                cookie,
-                                remember: self.remember,
-                            },
-                            ui.ctx(),
-                        );
+                        self.connect(ui.ctx());
                         // M0279 (M-P0.32): the reply comes later. A failure shows the kept cookie,
                         // the cause beside Connect and Connect together, by the least scroll; the
                         // cause can wrap, so the target is the field to the row's end.
@@ -756,6 +744,8 @@ impl Settings {
         }
     }
 }
+
+mod view;
 
 #[cfg(test)]
 mod tests {

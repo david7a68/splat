@@ -11,6 +11,20 @@ pub fn page_header(
     context: Option<SharedString>,
     actions: Vec<AnyElement>,
 ) -> Div {
+    let context = context.map(|context| {
+        super::text::text(Type::Small, colors().muted, context)
+            .truncate()
+            .into_any_element()
+    });
+    page_header_with(title, context, actions)
+}
+
+/// `page_header` with a context that is an element (a `kit::status`: its icon, word and colour).
+pub fn page_header_with(
+    title: impl Into<SharedString>,
+    context: Option<AnyElement>,
+    actions: Vec<AnyElement>,
+) -> Div {
     let c = colors();
     let mut heading = div()
         .flex()
@@ -20,7 +34,7 @@ pub fn page_header(
         .flex_none()
         .child(super::text::text(Type::Title, c.text, title).whitespace_nowrap());
     if let Some(context) = context {
-        heading = heading.child(super::text::text(Type::Small, c.muted, context).truncate());
+        heading = heading.child(div().min_w_0().child(context));
     }
     div()
         .flex()

@@ -1,4 +1,10 @@
-//! Lookup, the search panel beside any page (egui: `src/lookup.rs`).
+//! Lookup, the search panel beside any page (egui: `src/lookup.rs`). Ctrl+K opens and closes it;
+//! Escape closes it (the shell's `Dismiss`). Its acts are `Lookup`'s own (`lookup::view`).
+mod entry;
+mod panel;
+#[cfg(test)]
+mod tests;
+
 use crate::gui::SplatRoot;
 use gpui::{AnyElement, Context, Window};
 
@@ -9,8 +15,15 @@ pub struct State {}
 /// Once, when the root is built.
 pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Context<SplatRoot>) {}
 
-/// Once per frame, before anything draws.
-pub(crate) fn poll(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Context<SplatRoot>) {}
+/// Once per frame, before anything draws: the found notes are read again when the panel opens
+/// (`Lookup::wants_written`, as the egui shell passes them in).
+pub(crate) fn poll(root: &mut SplatRoot, _window: &mut Window, _cx: &mut Context<SplatRoot>) {
+    let app = &mut root.app;
+    if app.lookup.open && app.lookup.wants_written() {
+        let written = app.sessions.written(&app.timeline);
+        app.lookup.set_written(written);
+    }
+}
 
 /// Lookup's panel while `root.app.lookup.open` (`Lookup::show`). The shell gives it the side
 /// panel's width; Trackers is a view of it (`super::trackers::render_view`).
@@ -22,5 +35,5 @@ pub(crate) fn render_panel(
     if root.app.lookup.on_trackers() {
         return super::trackers::render_view(root, window, cx);
     }
-    super::placeholder("", "Lookup")
+    panel::render(root, window, cx)
 }

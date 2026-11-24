@@ -5770,6 +5770,9 @@ pub fn chosen_count(chosen: usize, total: usize, unit: &str) -> String {
     }
 }
 
+/// Footer lines as plain data, for the GPUI app (`src/gui/`).
+pub mod plain;
+
 #[cfg(test)]
 mod tests {
     use super::*;

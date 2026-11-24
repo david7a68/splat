@@ -104,6 +104,7 @@ pub struct TextField {
     masked: bool,
     disabled: bool,
     width: Option<gpui::Pixels>,
+    focus: bool,
     on_change: Option<OnChange>,
     on_enter: Option<super::OnAct>,
 }
@@ -118,6 +119,7 @@ impl TextField {
             masked: false,
             disabled: false,
             width: None,
+            focus: false,
             on_change: None,
             on_enter: None,
         }
@@ -153,6 +155,13 @@ impl TextField {
         self
     }
 
+    /// Take the keyboard in this frame (a form that opens with its first field focused). Give
+    /// it once, from a flag the caller takes (`Campaigns::take_focus_name`).
+    pub fn focus(mut self, focus: bool) -> Self {
+        self.focus = focus;
+        self
+    }
+
     /// The DM's edit: the field's whole words after it. Fits `cx.listener(|root, words: &str, ..|)`.
     pub fn on_change(mut self, handler: impl Fn(&str, &mut Window, &mut App) + 'static) -> Self {
         self.on_change = Some(Rc::new(handler));
@@ -182,6 +191,10 @@ impl RenderOnce for TextField {
         state.update(cx, |state, cx| state.follow(&value, on_change, window, cx));
         let input = state.read(cx).input.clone();
         input.update(cx, |input, cx| input.set_disabled(self.disabled, cx));
+        if self.focus {
+            let handle = input.read(cx).focus_handle(cx);
+            window.focus(&handle, cx);
+        }
         let focused = input.read(cx).focus_handle(cx).is_focused(window);
         let name = self
             .name

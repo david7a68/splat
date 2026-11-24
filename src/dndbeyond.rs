@@ -597,27 +597,7 @@ impl DndBeyond {
             }
         });
         if selected != current {
-            match local.link(selected.clone()) {
-                Ok(()) => {
-                    self.requested_visible_link = None;
-                    self.message.record(LinkSaved(campaign.id));
-                    self.error = None;
-                    if let Some(remote) = self
-                        .campaigns
-                        .iter()
-                        .find(|c| Some(&c.id) == selected.as_ref())
-                        && let Err(error) =
-                            local.cache_remote_name(campaign.id, &remote.id, &remote.name)
-                    {
-                        self.error = Some(error);
-                    }
-                }
-                // A failed attempt is the newest answer: the older success ends.
-                Err(error) => {
-                    self.error = Some(error);
-                    self.end_link_result();
-                }
-            }
+            self.choose_link(local, selected);
         }
         if let Some(id) = &current {
             ui.horizontal_wrapped(|ui| {
@@ -641,6 +621,9 @@ impl DndBeyond {
         }
     }
 }
+
+#[path = "dndbeyond/view.rs"]
+pub mod view;
 
 #[cfg(test)]
 mod tests {
