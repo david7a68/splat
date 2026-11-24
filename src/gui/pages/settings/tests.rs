@@ -230,7 +230,7 @@ fn signed_in_remote_list_and_link() {
             .dndbeyond
             .remotes()
             .find(|remote| remote.name == "The Emberfall Marches")
-            .is_some_and(|remote| root.app.campaigns.is_added(&remote.id))),
+            .is_some_and(|remote| root.app.campaigns.is_added(remote.id))),
         "The Emberfall Marches is listed and added"
     );
     assert!(
