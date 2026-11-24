@@ -820,6 +820,18 @@ fn run_lookup() {
     shell.capture("run-lookup__07-spell-from-stat-block__1200x800");
 
     shell.press("alt-left");
+    let shown = shell.read(|root| {
+        let crate::lookup::panel_view::Showing::Entry(at) = root.app.lookup.showing() else {
+            return None;
+        };
+        let index = root.app.lookup.index()?;
+        Some(index.items.get(at)?.entry.name.clone())
+    });
+    assert_eq!(
+        shown.as_deref(),
+        Some("Captain Varra"),
+        "Alt+Left goes back in Lookup"
+    );
     shell.capture("run-lookup__08-lookup-back-by-key__1200x800");
 
     let mut shell = small("run-lookup", Seed::Campaign);

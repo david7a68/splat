@@ -371,6 +371,22 @@ impl Shell {
         self.settle();
     }
 
+    /// Put words into the focused field in one input, as a paste or an input method gives them:
+    /// the field changes once, not once per character.
+    pub(crate) fn insert_text(&mut self, words: &str) {
+        let keystroke = Keystroke {
+            modifiers: Modifiers::default(),
+            key: words.to_owned(),
+            key_char: Some(words.to_owned()),
+        };
+        self.cx
+            .update_window(self.window, |_, window, cx| {
+                window.dispatch_keystroke(keystroke, cx);
+            })
+            .expect("the window");
+        self.settle();
+    }
+
     /// Render the window and write it to `artifacts/screenshots/gpui/<name>.png`.
     pub(crate) fn capture(&mut self, name: &str) -> PathBuf {
         self.settle();

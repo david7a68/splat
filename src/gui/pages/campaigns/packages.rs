@@ -537,6 +537,7 @@ fn lists(
                 .gap(XS)
                 .child(
                     Checkbox::new(id("content-use", module), "", checked)
+                        .name(format!("Use {}", row.name))
                         .mixed(mixed)
                         .on_click(cx.listener(move |root, _, _, cx| {
                             root.app
@@ -738,7 +739,8 @@ fn package_column(
                 .map(|at| {
                     let row = &rows[at];
                     let (entry, checked) = (row.id, row.checked);
-                    let mut check = Checkbox::new(id("content-entry", entry), "", checked);
+                    let mut check = Checkbox::new(id("content-entry", entry), "", checked)
+                        .name(format!("Use {}", row.name));
                     if let Some(reason) = &row.locked {
                         check = check.blocked(Some(reason.clone()));
                     } else {

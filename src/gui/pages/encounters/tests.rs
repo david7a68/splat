@@ -7,8 +7,9 @@ use gpui::{px, size};
 
 /// The page after its campaign is read (the read runs on a thread of its own): each read in
 /// flight is waited for on its own result, never a clock, and the frames after it take it.
-/// A taken read can start another (new content), so this waits until none is in flight.
-fn ready(shell: &mut Shell) {
+/// A taken read can start another (new content), so this waits until none is in flight. Other
+/// areas' captures over the Encounters page wait on it too.
+pub(crate) fn ready(shell: &mut Shell) {
     shell.update(|root, _, cx| root.show_page(Page::Encounters, cx));
     for _ in 0..10 {
         if !shell.read(|root| root.app.encounters.busy()) {
@@ -63,7 +64,17 @@ fn encounter_list() {
 fn history_opens_a_run_in_place() {
     let mut shell = Shell::new("encounter-history", Seed::History);
     ready(&mut shell);
+    // History starts closed; its heading opens it.
+    assert!(
+        shell
+            .read(|_| crate::gui::kit::probe::names())
+            .iter()
+            .all(|name| !name.starts_with("id:history-open:")),
+        "History starts closed"
+    );
     shell.capture("encounter-history__01-encounters-with-history__1200x800");
+    shell.click("History section");
+    shell.capture("encounter-history__02-history-open__1200x800");
     let open = shell
         .read(|_| crate::gui::kit::probe::names())
         .into_iter()
@@ -72,7 +83,6 @@ fn history_opens_a_run_in_place() {
     shell.click(&open);
     assert!(shell.bounds("Final state").is_some() || shell.bounds("Continue fight").is_some());
     assert!(shell.read(|root| root.app.encounters.history_open()));
-    shell.capture("encounter-history__02-history-open__1200x800");
     shell.click(&open);
     assert!(!shell.read(|root| root.app.encounters.history_open()));
 }
@@ -96,11 +106,15 @@ fn roster_len(shell: &mut Shell) -> usize {
     })
 }
 
-/// New encounter: name it, find a creature, add it, save with the button, and go back.
+/// New encounter: name it, find a creature, add it twice (Add, then Enter), type over the
+/// search for a second creature, save with the button, and go back. With the paused run
+/// resumed, the new encounter's Ready row menu removes it; a turn taken between the removal and
+/// its Undo stays, and the Undo brings the encounter back (the egui scenario's one flow).
 #[test]
-fn a_new_encounter_is_built_and_saved() {
+fn a_new_encounter_is_built_saved_and_removed() {
     let mut shell = Shell::new("encounter-build", Seed::Campaign);
     ready(&mut shell);
+    let before_saved = shell.read(|root| root.app.encounters.saved_names());
     shell.click("New encounter");
     assert!(shell.read(|root| root.app.encounters.editor_open()));
     shell.type_text("Ashfall Crossing");
@@ -111,6 +125,16 @@ fn a_new_encounter_is_built_and_saved() {
     shell.capture("encounter-build__02-new-encounter__1200x800");
     shell.click("Find a creature or party member");
     shell.type_text("wolf");
+    // Each result's facts are whole: Add starts `L` after the widest of them, here Cinder
+    // Wolf's package, never over it.
+    let source = shell
+        .bounds("Ashen Marches")
+        .expect("Cinder Wolf's package");
+    let add = shell.bounds("Add Cinder Wolf").expect("Cinder Wolf's Add");
+    assert!(
+        add.left() >= source.right() + crate::gui::theme::L - px(0.5),
+        "Add at {add:?} is clear of the package at {source:?}"
+    );
     shell.capture("encounter-build__03-find-creature__1200x800");
     let before = roster_len(&mut shell);
     let add = first_target(&mut shell, "id:add:");
@@ -128,8 +152,18 @@ fn a_new_encounter_is_built_and_saved() {
         before + 2,
         "Enter adds the best match"
     );
-    // A new encounter starts with the party, so Add participants says so.
+    // The search keeps the keyboard with its words selected: typing replaces them.
+    shell.type_text("cultist");
+    let add = first_target(&mut shell, "id:add:");
+    shell.click(&add);
     let names = shell.read(|root| root.app.encounters.roster_names().unwrap_or_default());
+    assert_eq!(names.len(), before + 3, "{names:?}");
+    assert_eq!(
+        names.last().map(String::as_str),
+        Some("Cultist"),
+        "the typed words replaced the selected search: {names:?}"
+    );
+    // A new encounter starts with the party, so Add participants says so.
     assert!(
         names.iter().any(|name| name == "Brannoch Vale"),
         "{names:?}"
@@ -148,15 +182,42 @@ fn a_new_encounter_is_built_and_saved() {
     shell.capture("encounter-build__05-saved__1200x800");
     shell.click("id:encounter-back");
     assert!(!shell.read(|root| root.app.encounters.editor_open()));
+    ready(&mut shell);
+    let saved = shell.read(|root| root.app.encounters.saved_names());
     assert!(
-        shell.bounds("Ashfall Crossing").is_some()
-            || shell.read(|root| {
-                root.app
-                    .encounters
-                    .saved_names()
-                    .iter()
-                    .any(|name| name == "Ashfall Crossing")
-            })
+        saved.iter().any(|name| name == "Ashfall Crossing"),
+        "{saved:?}"
+    );
+    assert_eq!(saved.len(), before_saved.len() + 1);
+    // The paused run resumed, then back to the list: the new encounter's Ready row menu.
+    shell.click("Resume");
+    assert!(shell.read(|root| root.app.encounters.run().is_some()));
+    ready(&mut shell);
+    let menu = first_target(&mut shell, "id:menu:Encounters/Ashfall Crossing");
+    shell.click(&menu);
+    shell.capture("encounter-build__13-encounter-menu-remove__1200x800");
+    shell.click("Remove");
+    let after = shell.read(|root| root.app.encounters.saved_names());
+    assert!(
+        !after.iter().any(|name| name == "Ashfall Crossing"),
+        "Remove takes the new encounter away: {after:?}"
+    );
+    assert_eq!(after.len() + 1, saved.len(), "only that encounter goes");
+    shell.capture("encounter-build__14-encounter-removed__1200x800");
+    // A turn between the removal and its Undo stays.
+    shell.update(|root, _, cx| root.show_page(Page::Run, cx));
+    let turn = shell.read(|root| root.app.encounters.run().unwrap().strip().current);
+    shell.click("Next turn");
+    let next = shell.read(|root| root.app.encounters.run().unwrap().strip().current);
+    assert_ne!(next, turn, "Next turn moves the turn");
+    ready(&mut shell);
+    let undo = first_target(&mut shell, "Undo ");
+    shell.click(&undo);
+    assert_eq!(shell.read(|root| root.app.encounters.saved_names()), saved);
+    assert_eq!(
+        shell.read(|root| root.app.encounters.run().unwrap().strip().current),
+        next,
+        "Undo remove encounter leaves the turn taken between"
     );
 }
 
@@ -196,8 +257,19 @@ fn the_roster_menu_ctrl_s_and_discard_with_undo() {
     shell.click(&undo);
     let again = shell.read(|root| root.app.encounters.roster_names().unwrap_or_default());
     assert_eq!(again[0], names[1], "Undo discard brings back the draft");
-    // Ctrl+S saves it.
+    // Ctrl+S waits while a menu is open over the editor: nothing saves beneath it.
     assert!(shell.read(|root| root.app.encounters.encounter_dirty()));
+    let menu = first_target(&mut shell, "id:roster-menu:");
+    shell.click(&menu);
+    assert!(shell.update(|_, _, cx| crate::gui::kit::menu::any_open(cx)));
+    shell.press("ctrl-s");
+    assert!(
+        shell.read(|root| root.app.encounters.encounter_dirty()),
+        "Ctrl+S under an open menu saves nothing"
+    );
+    shell.press("escape");
+    assert!(!shell.update(|_, _, cx| crate::gui::kit::menu::any_open(cx)));
+    // Ctrl+S saves it.
     shell.press("ctrl-s");
     assert!(
         !shell.read(|root| root.app.encounters.encounter_dirty()),
@@ -205,44 +277,36 @@ fn the_roster_menu_ctrl_s_and_discard_with_undo() {
     );
 }
 
-/// A Ready row's menu removes the encounter; the footer's Undo brings it back.
-#[test]
-fn remove_an_encounter_and_undo() {
-    let mut shell = Shell::new("encounter-build", Seed::Campaign);
-    ready(&mut shell);
-    let before = shell.read(|root| root.app.encounters.saved_names());
-    shell.settle();
-    let ready_menu = crate::gui::kit::probe::names()
-        .into_iter()
-        .find(|name| name.starts_with("id:menu:Encounters/") && name.ends_with("-button"))
-        .expect("a Ready row's menu");
-    shell.click(&ready_menu);
-    shell.capture("encounter-build__13-encounter-menu-remove__1200x800");
-    shell.click("Remove");
-    let after = shell.read(|root| root.app.encounters.saved_names());
-    assert_eq!(
-        after.len() + 1,
-        before.len(),
-        "Remove takes the encounter away"
-    );
-    shell.capture("encounter-build__14-encounter-removed__1200x800");
-    let undo = first_target(&mut shell, "Undo ");
-    shell.click(&undo);
-    assert_eq!(shell.read(|root| root.app.encounters.saved_names()), before);
-}
-
-/// A saved group opens from the list; a member's count changes; a member's removal has an Undo
-/// in the footer; Save group writes it; Back returns to the list.
+/// A saved group (Rival Team, as the egui scenario) opens from the list with its member's
+/// changes in one summary; a member's count changes; a member's removal has an Undo in the
+/// footer; Save group writes it; Back returns to the list.
 #[test]
 fn a_group_is_edited_and_saved() {
     let mut shell = Shell::new("encounter-groups", Seed::Groups);
     ready(&mut shell);
+    // Groups starts closed, as egui's sections; its heading opens it.
+    shell.settle();
+    assert!(
+        crate::gui::kit::probe::names()
+            .iter()
+            .all(|name| !name.starts_with("id:edit-group:")),
+        "Groups starts closed"
+    );
+    shell.click("Groups section");
+    // The content issue is a closed warning disclosure, as egui's count.
+    assert!(shell.bounds("1 content issue to repair").is_some());
+    assert!(!shell.read(|root| root.pages.encounters.issues_open));
     shell.capture("encounter-groups__01-groups-in-the-list__1200x800");
-    let edit = first_target(&mut shell, "id:edit-group:");
-    shell.click(&edit);
+    shell.click("1 content issue to repair");
+    assert!(shell.read(|root| root.pages.encounters.issues_open));
+    open_group(&mut shell, "Rival Team");
     assert_eq!(
         shell.read(|root| root.app.encounters.group_open()),
         Some(false)
+    );
+    assert!(
+        shell.bounds("Changed · 1 to add by hand").is_some(),
+        "a member's changes stay in one summary until their editor opens"
     );
     shell.capture("encounter-groups__02-group-editor__1200x800");
     let members = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
@@ -274,7 +338,6 @@ fn a_group_is_edited_and_saved() {
         Some(false),
         "saved"
     );
-    shell.capture("encounter-groups__09-group-saved__1200x800");
     shell.click("id:group-back");
     assert_eq!(shell.read(|root| root.app.encounters.group_open()), None);
 }
@@ -285,7 +348,7 @@ fn a_new_group_needs_a_creature() {
     let mut shell = Shell::new("encounter-groups", Seed::Groups);
     ready(&mut shell);
     shell.click("New group");
-    shell.type_text("Ash Hounds");
+    shell.type_text("Ash Pack");
     assert!(
         shell.bounds("Save group").is_some(),
         "the group editor is open"
@@ -303,13 +366,12 @@ fn a_new_group_needs_a_creature() {
     );
     shell.click("Find a creature");
     shell.type_text("wolf");
-    let add = first_target(&mut shell, "id:add:");
-    shell.click(&add);
+    shell.capture("encounter-groups__08-group-find-creature__1200x800");
+    shell.click("Add Wolf");
     assert_eq!(
         shell.read(|root| root.app.encounters.group_members().map(|m| m.len())),
         Some(1)
     );
-    shell.capture("encounter-groups__08-group-find-creature__1200x800");
     shell.press("ctrl-s");
     let lines: Vec<String> = shell.update(|root, _, _| {
         let root_path = root.app.campaigns.active_campaign().unwrap().path;
@@ -325,6 +387,7 @@ fn a_new_group_needs_a_creature() {
         Some(false),
         "Ctrl+S saves: {lines:?}"
     );
+    shell.capture("encounter-groups__09-group-saved__1200x800");
 }
 
 /// Both editors at the smallest window.
@@ -335,11 +398,19 @@ fn the_editors_at_the_smallest_window() {
     let edit = first_target(&mut shell, "id:edit:Encounters/");
     shell.click(&edit);
     assert!(shell.read(|root| root.app.encounters.editor_open()));
+    // Too narrow for the facts and Add side by side: each Add is on its own line under its
+    // result's facts, never over them.
+    let name = shell.bounds("Adult Black Dragon").expect("a result's name");
+    let add = shell.bounds("Add Adult Black Dragon").expect("its Add");
+    assert!(
+        add.top()
+            >= name.bottom() + shell.read(|_| crate::gui::theme::Type::Small.line()) - px(0.5),
+        "Add at {add:?} is under the facts of the name at {name:?}"
+    );
     shell.capture("encounter-build__09-saved-roster__960x640");
     let mut shell = small("encounter-groups", Seed::Groups);
     ready(&mut shell);
-    let edit = first_target(&mut shell, "id:edit-group:");
-    shell.click(&edit);
+    open_group(&mut shell, "Rival Team");
     assert_eq!(
         shell.read(|root| root.app.encounters.group_open()),
         Some(false)
@@ -371,6 +442,9 @@ fn open_encounter(shell: &mut Shell, name: &str) {
 
 /// Open the saved group named `name` from the list's Groups.
 fn open_group(shell: &mut Shell, name: &str) {
+    if !shell.read(|root| root.pages.encounters.groups_open) {
+        shell.click("Groups section");
+    }
     let edit = first_target(shell, &format!("id:edit-group:Encounter Groups/{name}"));
     shell.click(&edit);
     assert!(shell.read(|root| root.app.encounters.group_open().is_some()));
@@ -509,6 +583,12 @@ fn a_members_changes_and_its_replacement() {
     assert!(shell.bounds("Maximum HP: how it changes").is_none());
     shell.click("id:group-back");
     open_group(&mut shell, "Lost");
+    // The member whose change cannot stand shows the change under its fault.
+    let change = first_target(&mut shell, "Maximum HP: ");
+    assert!(
+        change.contains("−28"),
+        "the change under the fault: {change}"
+    );
     let members = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
     let replace = first_target(&mut shell, "Replace ");
     shell.click(&replace);
@@ -617,6 +697,13 @@ fn the_encounters_loot_list() {
     // The loot ends the roster's column: a tall window shows it and its suggestions whole.
     let mut shell = Shell::with_size("run-loot", Seed::Loot, size(px(1200.0), px(1400.0)));
     ready(&mut shell);
+    // The suggestions read Lookup's index, built in the background: wait on its own result
+    // (under a loaded machine the typed words came before it, and no table was offered).
+    reads_done(&mut shell);
+    assert!(
+        shell.read(|root| splat_encounters_ui::loot_editor::sources(&root.ctx).is_some()),
+        "the loot sources are read"
+    );
     open_encounter(&mut shell, crate::fixtures::RUN);
     let loot = |shell: &mut Shell| {
         shell.update(|root, _, cx| {
@@ -873,13 +960,37 @@ fn the_editor_says_the_rosters_difficulty() {
     let tyrant = creature("Cinder Tyrant", Some("10"));
     let nameless = creature("Nameless Thing", None);
     encounter("Mill Road", true, &[tyrant, cultist, cultist]);
+    // The scenario's Above High case: two tyrants and no party.
+    encounter("Court of Cinders", false, &[tyrant, tyrant]);
     encounter("Nameless Visitor", true, &[nameless]);
     reload(&mut shell);
+    for name in [
+        "Court of Cinders",
+        "Mill Road",
+        "Nameless Visitor",
+        "Shrine of Cinders",
+    ] {
+        first_target(&mut shell, &format!("id:edit:Encounters/{name}"));
+    }
     shell.capture("encounter-difficulty__01-ready-to-run__1200x800");
     open_encounter(&mut shell, "Mill Road");
     let words = roster_difficulty(&mut shell);
     assert!(words.contains("High"), "the roster says High: {words}");
     shell.capture("encounter-difficulty__03-editor-high__1200x800");
+    // One more Ember Cultist takes the fight past High: the line follows the draft at once.
+    shell.click("Find a creature or party member");
+    shell.type_text("ember cultist");
+    shell.click("Add Ember Cultist");
+    let words = roster_difficulty(&mut shell);
+    assert!(
+        words.contains("Above High"),
+        "the draft is Above High: {words}"
+    );
+    shell.click("Discard");
+    shell.click("id:encounter-back");
+    open_encounter(&mut shell, "Court of Cinders");
+    let words = roster_difficulty(&mut shell);
+    assert!(words.contains("Above High"), "Court of Cinders: {words}");
     shell.click("id:encounter-back");
     open_encounter(&mut shell, "Nameless Visitor");
     let words = roster_difficulty(&mut shell);
@@ -920,6 +1031,10 @@ fn an_npc_is_found_and_added_by_its_name() {
     shell.type_text("Rook's ambush");
     shell.click("Find a creature or party member");
     shell.type_text("Rook Ambry");
+    assert!(
+        shell.bounds("NPC · as Guard").is_some(),
+        "the result says it is an NPC and whose stat block it uses"
+    );
     shell.capture("npc-in-encounter__01-npc-result__1200x800");
     shell.click("Add Rook Ambry");
     let names = shell.read(|root| root.app.encounters.roster_names().unwrap_or_default());
@@ -932,6 +1047,49 @@ fn an_npc_is_found_and_added_by_its_name() {
         "the NPC on the roster says In roster"
     );
     shell.capture("npc-in-encounter__02-npc-in-roster__1200x800");
+
+    // FF8: a copy of the note claims the same identity. The search says so with each file's
+    // repair; `Make Rook copy.md a separate note` gives the copy its own identity, and the
+    // editor's footer keeps the result with its Undo, which writes the copy back.
+    let copy = campaign.path.join("NPCs/Rook copy.md");
+    std::fs::write(&copy, &text).unwrap();
+    shell.click("Save encounter");
+    shell.click("id:encounter-back");
+    reload(&mut shell);
+    reads_done(&mut shell);
+    shell.click("New encounter");
+    shell.click("Find a creature or party member");
+    shell.type_text("Rook");
+    reads_done(&mut shell);
+    let repair = first_target(&mut shell, "Make Rook copy.md a separate note");
+    shell.click(&repair);
+    let separated = std::fs::read_to_string(&copy).unwrap();
+    assert_ne!(separated, text, "the copy has an identity of its own");
+    let footer = |shell: &mut Shell| {
+        shell.update(|root, _, _| {
+            let path = root.app.campaigns.active_campaign().unwrap().path;
+            root.app
+                .encounters
+                .editor_footer(&path)
+                .into_iter()
+                .map(|line| line.words)
+                .collect::<Vec<_>>()
+        })
+    };
+    assert!(
+        footer(&mut shell)
+            .iter()
+            .any(|words| words == "Rook copy.md is now a separate note."),
+        "{:?}",
+        footer(&mut shell)
+    );
+    let undo = first_target(&mut shell, "Undo separate Rook copy.md");
+    shell.click(&undo);
+    assert_eq!(
+        std::fs::read_to_string(&copy).unwrap(),
+        text,
+        "Undo writes the copy back"
+    );
 }
 
 /// No creature matches as typed, but a package the campaign does not use has one: the search

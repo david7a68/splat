@@ -425,6 +425,9 @@ fn entry(
         .name("Markdown editor")
         .mono()
         .fill()
+        // A built-in entry's source reads and copies, but takes no typing (egui's
+        // `interactive(editable)`).
+        .read_only(!editable)
         .on_change(cx.listener(move |root, words: &str, _, cx| {
             if editable {
                 root.app.library.edit_draft(words);

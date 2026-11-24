@@ -3514,6 +3514,97 @@ mod tests {
         assert!(!note.exists(), "nothing was written");
     }
 
+    /// Review 2 of PR 347 (P2-2), from the egui editor test: an encounter's group changes
+    /// outside Splat while it has a member result, and another group of the encounter has its
+    /// own. `Reload and lose my draft` reads the group again (`*self = GroupDraft::open(…)`):
+    /// its old result ends at the next `poll`; the other group's result stays. Twenty rounds
+    /// leave no entry behind: the store holds the kept group's one result and nothing else.
+    #[test]
+    fn a_group_read_again_from_disk_ends_its_old_member_result() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let mut draft = encounter_with_a_group(scout);
+        draft.save(&campaign, &[]).unwrap();
+        let mut other = GroupDraft::for_encounter(draft.id);
+        other.name = "Others".into();
+        draft.groups.push(other);
+        draft.groups_read = true;
+        let note = dir.path().join(draft.groups[0].path());
+        let mut page = Encounters {
+            active: Some(campaign.clone()),
+            draft: Some(draft),
+            snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
+            ..Default::default()
+        };
+        let ctx = StateContext::new();
+        let campaigns = crate::campaigns::Campaigns::default();
+        let owner = |draft| super::super::MemberOwner {
+            root: campaign.path.clone(),
+            draft,
+        };
+        let has = |page: &Encounters, draft| page.member_results.get(&owner(draft)).is_some();
+        for round in 0..20 {
+            // Each group removes a member, as the member list does: the data, then the mark.
+            let draft = page.draft.as_mut().unwrap();
+            for group in &mut draft.groups {
+                if group.setup.members.is_empty() {
+                    group.add(scout);
+                }
+                let member = group.setup.members.remove(0);
+                group.member_new = Some(MemberUndo::Removed {
+                    index: 0,
+                    member,
+                    name: "Scout".into(),
+                });
+                group.touch();
+            }
+            let (gone, kept) = (draft.groups[0].results_key(), draft.groups[1].results_key());
+            page.record_member_results();
+            page.poll(&ctx, &campaigns);
+            assert!(has(&page, gone) && has(&page, kept), "both recorded");
+            // The group's file changes outside Splat: Save refuses, and the conflict offers
+            // `Reload and lose my draft`.
+            let outside = format!(
+                "{}\nFrom outside, round {round}.\n",
+                fs::read_to_string(&note).unwrap()
+            );
+            fs::write(&note, &outside).unwrap();
+            let draft = page.draft.as_mut().unwrap();
+            assert!(
+                draft.save(&campaign, &[]).is_err(),
+                "the change blocks Save"
+            );
+            assert_eq!(
+                page.encounter_disk().map(|view| view.lose),
+                Some("Reload and lose my draft".to_owned())
+            );
+            page.encounter_disk_choice(&ctx, &campaign, &[], false);
+            page.poll(&ctx, &campaigns);
+            let draft = page.draft.as_ref().unwrap();
+            assert_ne!(
+                draft.groups[0].results_key(),
+                gone,
+                "the group was read again"
+            );
+            assert_eq!(
+                fs::read_to_string(&note).unwrap(),
+                outside,
+                "nothing was written"
+            );
+            assert!(
+                !has(&page, gone),
+                "the group read again from disk ends its old result"
+            );
+            assert!(has(&page, kept), "another group's result stays");
+            assert_eq!(
+                page.member_results.newest_first(&campaign.path).count(),
+                1,
+                "round {round}: no entry builds up"
+            );
+        }
+    }
+
     #[test]
     fn integrity_d8_a_copied_group_keeps_both_files_and_offers_comparison() {
         let dir = tempfile::tempdir().unwrap();

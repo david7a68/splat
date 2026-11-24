@@ -49,6 +49,40 @@ pub(super) fn render(
             result = result.with_tooltip(path.display().to_string());
         }
         frame = frame.child(result);
+        // Safe first, the commit last: Close, Copy another, Edit the copy, then Add to.
+        frame = frame
+            .action(
+                kit::Button::quiet("copy-close", "Close").on_click(cx.listener(
+                    |root, _, _, cx| {
+                        let ctx = root.ctx.clone();
+                        root.app.follow_copy_dialog(&ctx, false);
+                        cx.notify();
+                    },
+                )),
+            )
+            .action(
+                kit::Button::secondary("copy-another", "Copy another").on_click(cx.listener(
+                    |root, _, _, cx| {
+                        if let Some(dialog) = &mut root.app.copy_dialog {
+                            dialog.copy_another();
+                        }
+                        cx.notify();
+                    },
+                )),
+            );
+        let edit = if add_to.is_some() {
+            kit::Button::secondary("copy-edit", "Edit the copy")
+        } else {
+            kit::Button::primary("copy-edit", "Edit the copy")
+        };
+        frame = frame.action(edit.on_click(cx.listener(|root, _, _, cx| {
+            if let Some(dialog) = &mut root.app.copy_dialog {
+                dialog.edit_the_copy();
+            }
+            let ctx = root.ctx.clone();
+            root.app.follow_copy_dialog(&ctx, false);
+            cx.notify();
+        })));
         if let Some(draft) = add_to {
             frame = frame.action(
                 kit::Button::primary("copy-add-to-draft", format!("Add to {draft}")).on_click(
@@ -63,39 +97,6 @@ pub(super) fn render(
                 ),
             );
         }
-        let edit = if add_to.is_some() {
-            kit::Button::secondary("copy-edit", "Edit the copy")
-        } else {
-            kit::Button::primary("copy-edit", "Edit the copy")
-        };
-        frame = frame
-            .action(edit.on_click(cx.listener(|root, _, _, cx| {
-                if let Some(dialog) = &mut root.app.copy_dialog {
-                    dialog.edit_the_copy();
-                }
-                let ctx = root.ctx.clone();
-                root.app.follow_copy_dialog(&ctx, false);
-                cx.notify();
-            })))
-            .action(
-                kit::Button::secondary("copy-another", "Copy another").on_click(cx.listener(
-                    |root, _, _, cx| {
-                        if let Some(dialog) = &mut root.app.copy_dialog {
-                            dialog.copy_another();
-                        }
-                        cx.notify();
-                    },
-                )),
-            )
-            .action(
-                kit::Button::quiet("copy-close", "Close").on_click(cx.listener(
-                    |root, _, _, cx| {
-                        let ctx = root.ctx.clone();
-                        root.app.follow_copy_dialog(&ctx, false);
-                        cx.notify();
-                    },
-                )),
-            );
         // The result's refresh, after the dialog draws.
         follow(root);
         return frame.into_any_element();
@@ -143,13 +144,15 @@ pub(super) fn render(
             cx.notify();
         })),
     ));
-    let _ = dialog.take_focus_name();
+    // The dialog opens with the copy's name selected, so typing replaces it.
+    let focus_name = dialog.take_focus_name();
     frame = frame.child(kit::field(
         "Copy name",
         None,
         None,
         kit::TextField::new("copy-name", dialog.name().to_owned())
             .name("Copy name")
+            .focus_selected(focus_name)
             .on_change(cx.listener(|root, words: &str, _, cx| {
                 if let Some(dialog) = &mut root.app.copy_dialog {
                     dialog.set_name(words);
@@ -313,7 +316,7 @@ pub(super) fn render(
         follow(root);
         cx.notify();
     }));
-    frame.action(create).action(cancel).into_any_element()
+    frame.action(cancel).action(create).into_any_element()
 }
 
 /// What the dialog asked of the app (a refresh after a copy) after it draws.
