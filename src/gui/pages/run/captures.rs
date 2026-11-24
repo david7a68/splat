@@ -206,6 +206,13 @@ fn rolls_tiles(shell: &mut Shell) {
 fn run_rolls() {
     let mut shell = Shell::new("run-rolls", Seed::Campaign);
     rolls_tiles(&mut shell);
+    // A tile alone on its line takes the line, as egui's `tile_lines` did.
+    let bite = target_starting(&mut shell, "Bite");
+    let width = shell.bounds(&bite).expect("the Bite tile").size.width;
+    assert!(
+        f32::from(width) > crate::rolls::plain::TILE_WIDTH + 40.0,
+        "the lone Bite tile fills its line: {width:?}"
+    );
     shell.capture("run-rolls__01-tiles-in-the-stat-block__1200x800");
 
     click_starting(&mut shell, "Bite");
@@ -224,6 +231,36 @@ fn run_rolls() {
     );
     shell.capture("run-rolls__03-attack-rolled__1200x800");
     shell.press("enter");
+    // As in the egui scenario: a second attack and its damage, then Escape stops the action.
+    shell.click(TARGET);
+    shell.press("enter");
+    shell.press("escape");
+    assert!(with_run(&mut shell, |run| run.armed.is_none()));
+    shell.click(ATTACKER);
+    // Bite armed with advantage, as the tile's press with Shift held arms it (egui's tile
+    // menu, `Roll with advantage`; the GPUI tile has no menu yet).
+    shell.update(|root, _, cx| {
+        let run = root.app.encounters.run().expect("an open run");
+        let row = run.panel_row();
+        let bite = run
+            .chips(row)
+            .into_iter()
+            .find(|chip| {
+                chip.label.starts_with("Bite")
+                    && matches!(chip.link, splat::content::dice_text::RollLink::D20 { .. })
+            })
+            .expect("the Bite attack");
+        // The tile's mouse-up makes the row the roller, then its press asks.
+        crate::rolls::set_roller(&root.ctx, Some(row));
+        crate::rolls::plain::ask_pressed_at(&root.ctx, &bite.link, None, true, false);
+        cx.notify();
+    });
+    shell.settle();
+    assert_eq!(
+        with_run(&mut shell, |run| run.armed.as_ref().map(|armed| armed.mode)),
+        Some(crate::rolls::Mode::Advantage),
+        "Bite is armed with advantage"
+    );
 
     // The row menu, with Bite armed (a right-click on the row opens it).
     let target = index(&mut shell, TARGET);
