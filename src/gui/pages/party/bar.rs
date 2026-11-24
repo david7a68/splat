@@ -10,7 +10,7 @@ use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, Pixels, SharedString, Styled,
     Window, div, prelude::*, px,
 };
-use splat_party::party_bar::Glance;
+use splat_party::party_bar::{self, Glance, Measured, Names, Step};
 
 const PORTRAIT: Pixels = px(24.0);
 
@@ -69,73 +69,62 @@ fn facts(glance: &Glance) -> Vec<String> {
     ]
 }
 
-/// One way to draw the bar, from the fullest down (`party_bar::steps`).
-#[derive(Clone, Copy)]
-struct Step {
-    shown: usize,
-    portrait: bool,
-    initial: bool,
-    state_word: bool,
-}
-
-fn steps(most: usize) -> Vec<Step> {
-    let step = |shown, portrait, initial, state_word| Step {
-        shown,
-        portrait,
-        initial,
-        state_word,
-    };
-    let mut steps: Vec<Step> = (most.min(1)..=most)
-        .rev()
-        .map(|shown| step(shown, true, false, true))
-        .collect();
-    steps.extend([
-        step(most.min(1), false, false, true),
-        step(0, false, false, true),
-        step(0, false, true, true),
-        step(0, false, true, false),
-    ]);
-    steps
-}
-
-/// The width of a run of `Small` words, by the type's average letter.
-fn small_width(words: &str) -> Pixels {
-    Type::Small.size() * 0.56 * words.chars().count() as f32
-}
-
-/// An item's width at a step.
-fn width(glance: &Glance, step: Step) -> Pixels {
+/// A first name, or its initial (`B.`) when even first names do not fit.
+fn name_words(glance: &Glance, initial: bool) -> String {
     let first = glance.name.split_whitespace().next().unwrap_or_default();
-    let name = if step.initial {
-        format!("{}.", first.chars().next().unwrap_or(' '))
+    if initial {
+        first
+            .chars()
+            .next()
+            .map(|letter| format!("{letter}."))
+            .unwrap_or_default()
     } else {
         first.to_owned()
-    };
-    let hp = Type::Numeral.size() * 0.62 * known(glance.hp).len() as f32
-        + Type::Small.size() * 0.62 * 4.0;
-    let mut total = XS + small_width(&name) + S + hp + XS;
-    if step.portrait {
-        total += PORTRAIT + XS;
     }
-    if glance.temp > 0 {
-        total += XS + small_width(&format!("+{}", glance.temp)) + px(14.0);
-    }
-    if let Some((_, word, _)) = kit::hp::word(glance.hp, glance.max_hp) {
-        total += S
-            + px(14.0)
-            + if step.state_word {
-                small_width(word)
-            } else {
-                px(0.0)
-            };
-    }
-    for (label, value) in stats(glance).into_iter().take(step.shown) {
-        total += S + small_width(&format!("{label} {}", known(value)));
-    }
-    total
 }
 
-/// The bar.
+/// The width of the HP readout (`kit::hp::readout` at `Numeral` over `Small`): the current HP,
+/// then the maximum's slot, at least three digits and the slash.
+fn hp_width(window: &Window, glance: &Glance) -> Pixels {
+    let max = known(glance.max_hp);
+    let slot = Type::Small.size() * 0.62 * (3.max(max.len()) as f32 + 1.0);
+    kit::measure::width(window, Type::Numeral, &known(glance.hp))
+        + slot.max(kit::measure::width(
+            window,
+            Type::Small,
+            &splat_party::combat_sync::fraction("", &max),
+        ))
+}
+
+/// A stat as it reads: its label, a space, its value.
+fn stat_words(label: &str, value: Option<i64>) -> String {
+    format!("{label} {}", known(value))
+}
+
+/// One member's parts, measured in the bar's type (`party_bar::Item::measure`).
+fn measure(window: &Window, glance: &Glance) -> Measured {
+    let small = |words: &str| f32::from(kit::measure::width(window, Type::Small, words));
+    let first = glance.name.split_whitespace().next().unwrap_or_default();
+    let state = kit::hp::word(glance.hp, glance.max_hp);
+    let icon = |glyph: &str| f32::from(kit::measure::icon_width(window, Type::Small, glyph));
+    Measured {
+        first: (!first.is_empty()).then(|| small(first)),
+        initial: (!first.is_empty()).then(|| small(&name_words(glance, true))),
+        hp: f32::from(hp_width(window, glance)),
+        temp: (glance.temp > 0)
+            .then(|| icon(icons::TEMP_HP) + f32::from(XS) + small(&format!("+{}", glance.temp))),
+        full_word: state.map(|(glyph, word, _)| icon(glyph) + f32::from(XS) + small(word)),
+        icon_word: state.map(|(glyph, _, _)| icon(glyph)),
+        stats: stats(glance)
+            .into_iter()
+            .map(|(label, value)| small(&stat_words(label, value)))
+            .collect(),
+    }
+}
+
+/// The bar: each member measured by GPUI's text layout and fitted as egui's bar is
+/// (`party_bar::fit`). While a fight is open, the bar holds its level and its item widths until
+/// the fight ends, so nothing moves back as HP changes.
 pub(super) fn render(
     root: &mut SplatRoot,
     window: &mut Window,
@@ -150,47 +139,56 @@ pub(super) fn render(
         .unwrap_or_default();
     let glances = app.party.glances(&run);
     let source = app.party.glance_source(!run.is_empty());
+    // While a fight is open, the bar holds its level until the fight ends.
+    let fight = app
+        .encounters
+        .run()
+        .filter(|run| !run.ended())
+        .map(crate::encounter_run::Run::id);
     let inert = app.copy_dialog.is_some() || app.confirm_close;
-    let room = window.viewport_size().width
-        - crate::gui::theme::RAIL_WIDTH
-        - M * 2.0
-        - small_width("PARTY")
+    let bar_width = window.viewport_size().width - crate::gui::rail::width(root, window) - M * 2.0;
+    let room = bar_width
+        - kit::measure::width(window, Type::Label, "PARTY")
         - L
         - Density::Read.control()
         - S;
     let gap = M;
-    let most = glances.iter().map(|g| stats(g).len()).max().unwrap_or(0);
-    let all = steps(most);
-    let needed = |step: Step| {
-        glances.iter().map(|g| width(g, step)).sum::<Pixels>()
-            + gap * glances.len().saturating_sub(1) as f32
-    };
-    let step = all
-        .iter()
-        .copied()
-        .find(|step| needed(*step) <= room)
-        .unwrap_or(*all.last().expect("a step"));
-    // The items that fit whole, from the first; `N more` names the rest.
-    let mut used = px(0.0);
-    let mut kept = 0;
-    for (at, glance) in glances.iter().enumerate() {
-        let next = used + width(glance, step) + if at > 0 { gap } else { px(0.0) };
-        let hidden = glances.len() - at - 1;
-        let more = if hidden > 0 {
-            gap + small_width(&format!("{hidden} more")) + XS * 2.0
-        } else {
+    let more_width =
+        |hidden: usize| kit::measure::width(window, Type::Small, &format!("{hidden} more"));
+    let measured: Vec<Measured> = glances.iter().map(|g| measure(window, g)).collect();
+    let fitted = party_bar::fit(
+        &measured,
+        party_bar::Room {
+            room: f32::from(room),
+            gap: f32::from(gap),
+            bar_width: f32::from(bar_width),
+            fight,
+            party: glances.iter().map(|glance| glance.id.clone()).collect(),
+        },
+        |hidden| f32::from(more_width(hidden)),
+        root.pages.party.bar_hold.as_ref(),
+    );
+    root.pages.party.bar_hold = fitted.hold.clone();
+    let (step, kept) = (fitted.step, fitted.kept);
+    // The source is measured by itself, after the items are fitted: it shows whenever the room
+    // they leave holds it, in full or else in its short form. It never takes room from an item.
+    let hidden_count = glances.len() - kept;
+    let used = px(fitted.widths[..kept].iter().sum::<f32>())
+        + gap * kept.saturating_sub(1) as f32
+        + if hidden_count == 0 {
             px(0.0)
+        } else {
+            gap + more_width(hidden_count) + XS * 2.0
         };
-        if next + more > room {
-            break;
-        }
-        used = next;
-        kept += 1;
-    }
     let free = room - used - L;
+    let source_width = |words: &str| {
+        kit::measure::icon_width(window, Type::Small, source.icon)
+            + XS
+            + kit::measure::width(window, Type::Small, words)
+    };
     let shown_source = [source.word.as_str(), source.short]
         .into_iter()
-        .find(|words| small_width(words) + px(14.0) <= free)
+        .find(|words| source_width(words) <= free)
         .map(str::to_owned);
     let mut items = div()
         .flex()
@@ -200,8 +198,8 @@ pub(super) fn render(
         .flex_1()
         .min_w_0()
         .overflow_hidden();
-    for (at, glance) in glances.iter().take(kept).enumerate() {
-        items = items.child(item(glance, step, at, &source.word, cx));
+    for (at, (glance, width)) in glances.iter().zip(&fitted.widths).take(kept).enumerate() {
+        items = items.child(item(glance, step, px(*width), at, &source.word, window, cx));
     }
     let hidden: Vec<&Glance> = glances.iter().skip(kept).collect();
     if !hidden.is_empty() {
@@ -213,6 +211,7 @@ pub(super) fn render(
         items = items.child(
             div()
                 .id("party-bar-more")
+                .flex_none()
                 .px(XS)
                 .child(kit::text(
                     Type::Small,
@@ -271,21 +270,14 @@ pub(super) fn render(
 fn item(
     glance: &Glance,
     step: Step,
+    width: Pixels,
     at: usize,
     source: &str,
+    window: &Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
-    let first = glance.name.split_whitespace().next().unwrap_or_default();
-    let name = if step.initial {
-        first
-            .chars()
-            .next()
-            .map(|letter| format!("{letter}."))
-            .unwrap_or_default()
-    } else {
-        first.to_owned()
-    };
+    let name = name_words(glance, step.names == Names::Initial);
     let mut facts = facts(glance);
     facts.push(source.to_owned());
     let label = format!("{} · {}", glance.name, facts.join(" · "));
@@ -295,8 +287,10 @@ fn item(
         ))))
         .flex()
         .flex_row()
+        .flex_none()
         .items_center()
-        .gap(XS)
+        .w(width)
+        .overflow_hidden()
         .h(Density::Read.row())
         .px(XS)
         .rounded(crate::gui::theme::RADIUS_CONTROL)
@@ -304,17 +298,27 @@ fn item(
         .hover(|row| row.bg(c.hover))
         .aria_label(label.clone());
     if step.portrait {
-        row = row.child(kit::portrait(
+        row = row.child(div().mr(XS).child(kit::portrait(
             glance.portrait.as_deref(),
             &glance.name,
             PORTRAIT,
-        ));
+        )));
     }
-    row = row.child(div().pr(XS).child(kit::text(Type::Small, c.text, name)));
+    if !name.is_empty() {
+        row = row.child(
+            div()
+                .flex_none()
+                .mr(S)
+                .child(kit::text(Type::Small, c.text, name)),
+        );
+    }
+    let hp = hp_width(window, glance);
     row = row.child(
         div()
             .flex()
             .flex_col()
+            .flex_none()
+            .w(hp)
             .gap(px(2.0))
             .child(kit::hp::readout(
                 glance.hp,
@@ -322,22 +326,18 @@ fn item(
                 Type::Numeral,
                 Type::Small,
             ))
-            .child(kit::hp::bar(
-                glance.hp,
-                glance.max_hp,
-                glance.temp,
-                px(48.0),
-            )),
+            .child(kit::hp::bar(glance.hp, glance.max_hp, glance.temp, hp)),
     );
     if glance.temp > 0 {
-        row = row.child(kit::hp::temp(glance.temp, Type::Small));
+        row = row.child(div().ml(XS).child(kit::hp::temp(glance.temp, Type::Small)));
     }
     if let Some((icon, word, color)) = kit::hp::word(glance.hp, glance.max_hp) {
         row = row.child(
             div()
-                .pl(XS)
+                .ml(S)
                 .flex()
                 .flex_row()
+                .flex_none()
                 .items_center()
                 .gap(XS)
                 .child(
@@ -352,14 +352,23 @@ fn item(
         );
     }
     for (label, value) in stats(glance).into_iter().take(step.shown) {
+        // One run of words, as it was measured: its muted label, a space, its value.
         row = row.child(
             div()
-                .pl(XS)
-                .flex()
-                .flex_row()
-                .gap(px(3.0))
-                .child(kit::text(Type::Small, c.muted, label))
-                .child(kit::text(Type::Small, c.text, known(value))),
+                .ml(S)
+                .flex_none()
+                .whitespace_nowrap()
+                .ty(Type::Small)
+                .text_color(c.text)
+                .child(
+                    gpui::StyledText::new(stat_words(label, value)).with_highlights([(
+                        0..label.len(),
+                        gpui::HighlightStyle {
+                            color: Some(c.muted),
+                            ..Default::default()
+                        },
+                    )]),
+                ),
         );
     }
     let id = glance.id.clone();

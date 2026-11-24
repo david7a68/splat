@@ -77,7 +77,7 @@ pub(super) fn render(
     if !run.hide_panel {
         page = page
             .child(div().w(theme::M).flex_none())
-            .child(panel::render(root, run, side, cx));
+            .child(panel::render(root, run, side, window, cx));
     }
     page.into_any_element()
 }
