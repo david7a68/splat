@@ -18,6 +18,7 @@ pub(super) fn render(
     root: &SplatRoot,
     run: &Run,
     width: Pixels,
+    window: &gpui::Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
@@ -72,7 +73,7 @@ pub(super) fn render(
         Panel::Conditions => body.child(conditions(run, index, cx)),
         Panel::Record => body
             .children(changes_block(p))
-            .child(record(run, index, cx)),
+            .child(record(run, index, window, cx)),
         Panel::Log => body.child(log(run)),
         Panel::Encounter => body.child(prep(run, cx)),
         Panel::Keys => body.child(keys(run)),
@@ -447,49 +448,11 @@ fn reference(root: &SplatRoot, run: &Run, index: usize, cx: &mut Context<SplatRo
             ]))
             .into_any_element();
     }
+    // A linked character shows the same sheet as the Party page, with its age.
     if let Some(record) = run.sheet.clone().filter(|_| run.sheet_for == Some(index)) {
-        let freshness = crate::party::freshness(&record, run.connected);
-        let ready = run.syncs.get(&index).is_some_and(|sync| sync.ready());
-        let (word, age) = if ready {
-            ("Connected".to_owned(), String::new())
-        } else {
-            let (word, age) = freshness
-                .word
-                .split_once(" · ")
-                .unwrap_or((&freshness.word, ""));
-            (word.to_owned(), age.to_owned())
-        };
-        let facts = if ready {
-            " · Sync reads this sheet · HP from this run".to_owned()
-        } else {
-            format!(" · {age} · HP from this run")
-        };
-        column = column
-            .children(changes_block(p))
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(theme::XS)
-                    .child(kit::status(&kit::Status::new(
-                        freshness.icon,
-                        word,
-                        bridge::color(freshness.color),
-                    )))
-                    .child(kit::text(Type::Small, c.muted, facts)),
-            )
-            .child(vitals(&[
-                ("ARMOR CLASS", display(p.armor_class)),
-                (
-                    "HIT POINTS",
-                    splat_party::combat_sync::fraction(display(p.hp), display(p.max_hp)),
-                ),
-                ("INITIATIVE", display(p.initiative)),
-            ]))
-            .child(tiles(run, index, cx));
-        return column.into_any_element();
+        return column
+            .child(sheet(root, run, index, &record, cx))
+            .into_any_element();
     }
     // A stat block whose file changed, went or cannot be read since the run copied it.
     let mut notice = None;
@@ -564,10 +527,153 @@ fn reference(root: &SplatRoot, run: &Run, index: usize, cx: &mut Context<SplatRo
     column.into_any_element()
 }
 
+/// A linked character's Sheet tab (`reference_tab`): what the run changed, the sheet's age and
+/// where its values come from beside its portrait, then the Party page's sheet pages
+/// (`party::sheet::page_body`), whose numbers roll for this row and whose attacks are the run's
+/// own tiles.
+fn sheet(
+    root: &SplatRoot,
+    run: &Run,
+    index: usize,
+    record: &splat::character::EntitySnapshot,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    use crate::gui::pages::party::sheet::{Reader, page_body};
+    let c = colors();
+    let p = &run.state.participants[index];
+    let live = splat_party::party::LiveValues {
+        hp: p.hp,
+        max_hp: p.max_hp,
+        temporary_hp: p.temporary_hp,
+        conditions: p.conditions.clone(),
+        death_saves: splat::character::DeathSaves {
+            successes: u64::from(p.successes),
+            failures: u64::from(p.failures),
+        },
+        death_saves_shown: p.shows_death_saves(),
+    };
+    let mut column = div().flex().flex_col().gap(theme::XS).w_full();
+    // The death saves are above, below the tabs; the status follows.
+    if p.shows_death_saves() {
+        column = column.child(kit::gap(theme::L));
+    }
+    column = column.children(changes_block(p));
+    let freshness = crate::party::freshness(record, run.connected);
+    // The sheet is older than what the DM just set here, so say which is which. While sync
+    // reads this sheet, the copy's age says nothing about these values.
+    let ready = run.syncs.get(&index).is_some_and(|sync| sync.ready());
+    let (word, age) = if ready {
+        ("Connected".to_owned(), String::new())
+    } else {
+        let (word, age) = freshness
+            .word
+            .split_once(" · ")
+            .unwrap_or((&freshness.word, ""));
+        (word.to_owned(), age.to_owned())
+    };
+    let facts = if ready {
+        " · Sync reads this sheet · HP from this run".to_owned()
+    } else {
+        format!(" · {age} · HP from this run")
+    };
+    // Beside an open conflict, green words would say the opposite of what matters.
+    if !run
+        .syncs
+        .get(&index)
+        .is_some_and(|sync| sync.state() == SyncState::Conflict)
+    {
+        let art = run.row_art(root.bridge.ctx(), p);
+        column = column.child(
+            div()
+                .flex()
+                .flex_row()
+                .items_start()
+                .gap(theme::S)
+                .children(art.map(|path| {
+                    kit::portrait(
+                        Some(path.as_path()),
+                        &record.definition.splat_name,
+                        theme::XXL,
+                    )
+                }))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .flex_wrap()
+                        .flex_1()
+                        .min_w_0()
+                        .items_center()
+                        .child(kit::status(&kit::Status::new(
+                            freshness.icon,
+                            word,
+                            bridge::color(freshness.color),
+                        )))
+                        .child(kit::text(Type::Small, c.muted, facts)),
+                ),
+        );
+    }
+    // A sheet with no spells has no Spells page.
+    let spells = crate::party::has_spells(record);
+    let pages: Vec<(usize, &'static str)> = crate::party::SHEET_PAGES
+        .iter()
+        .copied()
+        .filter(|(page, _)| *page != 2 || spells)
+        .collect();
+    let page = if !spells && run.sheet_page == 2 {
+        0
+    } else {
+        run.sheet_page
+    };
+    let chosen = pages.iter().position(|(at, _)| *at == page).unwrap_or(0);
+    let numbers: Vec<usize> = pages.iter().map(|(at, _)| *at).collect();
+    column = column
+        .child(
+            kit::Segmented::new(
+                "run-sheet-pages",
+                pages.iter().map(|(_, words)| *words).collect::<Vec<_>>(),
+                chosen,
+            )
+            .on_select(cx.listener(move |root: &mut SplatRoot, at: &usize, _, cx| {
+                if let Some(run) = root.app.encounters.run_mut()
+                    && let Some(page) = numbers.get(*at)
+                {
+                    run.sheet_page = *page;
+                }
+                cx.notify();
+            })),
+        )
+        .child(kit::rule());
+    let reader = Reader {
+        key: "run",
+        search: String::new(),
+        roller: Some(index),
+        actions: (page == 1).then(|| tile_list(run, index, cx)),
+    };
+    column
+        .child(page_body(root, record, page, Some(&live), reader, cx))
+        .into_any_element()
+}
+
 /// The participant's actions as tiles: a press arms an attack, a save or damage, or rolls a
 /// check at once; Ctrl+1 to 9 arm them too. Under the armed tile: what to do next and its
 /// actions (`rolls::tiles`, `armed_view`).
 fn tiles(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
+    if run.chips(index).is_empty() {
+        return div().into_any_element();
+    }
+    div()
+        .flex()
+        .flex_col()
+        .pt(theme::S)
+        .child(kit::heading(kit::Heading::Section("Actions"), true))
+        .child(tile_list(run, index, cx))
+        .into_any_element()
+}
+
+/// The tiles themselves, with the armed one's line under it: under `Actions` in a stat block,
+/// and under `Attacks` on a linked sheet's Actions page.
+fn tile_list(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
     let c = colors();
     let chips = run.chips(index);
     if chips.is_empty() {
@@ -575,12 +681,7 @@ fn tiles(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
     }
     let armed = run.armed_view().filter(|_| run.panel_row() == index);
     let name = run.state.participants[index].name.clone();
-    let mut column = div()
-        .flex()
-        .flex_col()
-        .gap(theme::XS)
-        .pt(theme::S)
-        .child(kit::heading(kit::Heading::Section("Actions"), true));
+    let mut column = div().flex().flex_col().gap(theme::XS);
     for (at, chip) in chips.into_iter().enumerate() {
         let (detail, facts) = rolls::tile_words(&chip);
         let marked = armed.as_ref().is_some_and(|view| {
@@ -938,7 +1039,12 @@ fn conditions(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElemen
 }
 
 /// The Correct tab (`record_tab`): HP, initiative, the DM's notes and the sheet's sync.
-fn record(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn record(
+    run: &Run,
+    index: usize,
+    window: &gpui::Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let p = &run.state.participants[index];
     let sheet_decides = run.syncs.get(&index).is_some_and(|sync| sync.ready());
@@ -1136,7 +1242,7 @@ fn record(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
                 },
                 false,
             ))
-            .child(sync_settings(run, index, cx));
+            .child(sync_settings(run, index, window, cx));
     }
     column.into_any_element()
 }
@@ -1183,16 +1289,24 @@ fn number_row(
         )
 }
 
-/// A sheet's sync in Correct (`CombatSync::show`): its switch, Check now and its state. The
-/// sheet's own values (HP, rests, slots, purse) are edited on the Party page.
-fn sync_settings(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
-    let c = colors();
+/// A sheet's sync in Correct (`CombatSync::show`): the same sync editor as the Party page's
+/// sheet (`party::sync_editor`), for this row's sync. Without a connection, the box waits for
+/// one and `Connect to sync` leads to it.
+fn sync_settings(
+    run: &Run,
+    index: usize,
+    window: &gpui::Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    use crate::gui::pages::party::sync_editor;
     let connected = run.connected || run.simulate_connection;
     let sync = run.syncs.get(&index);
-    let enabled = sync.is_some_and(|sync| sync.enabled);
-    let mut column = div().flex().flex_col().gap(theme::XS);
     if !connected {
-        return column
+        let enabled = sync.is_some_and(|sync| sync.enabled);
+        return div()
+            .flex()
+            .flex_col()
+            .gap(theme::XS)
             .child(
                 kit::Checkbox::new(
                     "run-sync-sheet",
@@ -1202,96 +1316,12 @@ fn sync_settings(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyEle
                 .blocked(Some("Connect to sync.")),
             )
             .child(
-                kit::Button::quiet("run-sync-connect", "Connect to sync")
-                    .plain()
-                    .line_start()
-                    .density(Density::Read)
+                kit::Link::new("run-sync-connect", "Connect to sync")
                     .on_click(on_run(cx, |run| run.wants_sign_in = true)),
             )
             .into_any_element();
     }
-    column = column
-        .child(
-            kit::Checkbox::new("run-sync-sheet", "Sync this sheet with D&D Beyond", enabled)
-                .on_click(on_run(cx, move |run| {
-                    let sync = run.syncs.entry(index).or_default();
-                    if sync.enabled {
-                        sync.stop();
-                    } else {
-                        sync.start();
-                    }
-                    run.dirty = true;
-                })),
-        )
-        .child(kit::help(
-            "During a fight, Sync party in the run turns sync on for the whole party.",
-        ));
-    let Some(sync) = sync.filter(|sync| sync.enabled) else {
-        if let Some(error) = sync.and_then(|sync| sync.error.clone()) {
-            column = column.child(kit::text(Type::Small, c.result.error, error));
-        }
-        return column
-            .child(kit::help(
-                "Enable to read the live sheet. Edits made here will then update D&D Beyond.",
-            ))
-            .into_any_element();
-    };
-    column = column.child(kit::help("Splat checks the sheet every 15 seconds."));
-    if sync.busy() {
-        column = column.child(kit::text(Type::Small, c.muted, "Checking character…"));
-    }
-    if let Some(error) = &sync.error {
-        column = column.child(kit::text(Type::Small, c.result.error, error.clone()));
-    }
-    column = column.child(
-        div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(theme::S)
-            .child(
-                kit::Button::secondary("run-sync-check-now", "Check now")
-                    .density(Density::Read)
-                    .blocked(sync.busy().then_some("Wait for the current sheet read."))
-                    .on_click(on_run(cx, move |run| {
-                        if let Some(sync) = run.syncs.get_mut(&index) {
-                            sync.check_now();
-                        }
-                    })),
-            )
-            .child(kit::text(
-                Type::Small,
-                c.muted,
-                if sync.dirty() {
-                    "Local changes pending"
-                } else if sync.has_remote() {
-                    "Values match the last read"
-                } else {
-                    ""
-                },
-            )),
-    );
-    if sync.state() == SyncState::Conflict {
-        column = column.child(conflicts(index, None, sync, cx));
-    }
-    if !sync.has_remote() {
-        column = column.child(kit::text(
-            Type::Small,
-            c.muted,
-            "If the first sheet read does not come, check the connection in Settings.",
-        ));
-    } else if sync.remote_writable() != Some(true) {
-        column = column.child(kit::text(
-            Type::Small,
-            c.sync.read_only,
-            "Read only: D&D Beyond reports that this sign-in cannot edit this character. Nothing here can change.",
-        ));
-    }
-    column
-        .child(kit::help(
-            "Concentration, custom effects, initiative and DM notes stay in Splat. D&D Beyond has no place for them.",
-        ))
-        .into_any_element()
+    sync_editor::panel(sync_editor::Host::Run(index), sync, window, cx)
 }
 
 /// The Log tab, newest first (`log_lines`).

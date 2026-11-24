@@ -330,6 +330,7 @@ pub struct IconButton {
     name: SharedString,
     hint: Option<SharedString>,
     on: Option<bool>,
+    disabled: bool,
     on_click: Option<OnClick>,
 }
 
@@ -345,8 +346,16 @@ impl IconButton {
             name: name.into(),
             hint: None,
             on: None,
+            disabled: false,
             on_click: None,
         }
+    }
+
+    /// Shown but not pressable (a stepper's − at its lowest value), as egui's disabled icon
+    /// button: drawn at the disabled opacity, its press ignored. Its hover words stay.
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
     }
 
     /// Hover words that say more than the name (its key).
@@ -387,15 +396,20 @@ impl RenderOnce for IconButton {
             .icon_font(Type::Heading)
             .text_color(if on { c.text } else { c.muted })
             .when(on, |s| s.bg(c.selected))
-            .cursor_pointer()
-            .hover(|s| s.bg(c.hover).text_color(c.text))
             .focusable()
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(self.name.clone())
             .tooltip(tip(hint))
             .child(SharedString::new_static(self.icon));
-        if let Some(on_click) = self.on_click {
-            button = button.on_click(move |event, window, cx| on_click(event, window, cx));
+        if self.disabled {
+            button = button.opacity(DISABLED_OPACITY);
+        } else {
+            button = button
+                .cursor_pointer()
+                .hover(|s| s.bg(c.hover).text_color(c.text));
+            if let Some(on_click) = self.on_click {
+                button = button.on_click(move |event, window, cx| on_click(event, window, cx));
+            }
         }
         let button = target(button, self.name.clone());
         target(button, element_name(&self.id))

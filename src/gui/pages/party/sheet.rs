@@ -1,7 +1,7 @@
 //! A character's sheet (egui: `Party::sheet_view`, `splat_party::party::sheet_page`, `overview`,
 //! `details`, `background`): its name and kind line, the page tabs, the Combat sync section, and
 //! the page. The Run page's side panel can show the same pages (`page`).
-use crate::gui::kit::{self, Button, Checkbox, Link, Message, Section, Segmented, TextField, Tone};
+use crate::gui::kit::{self, Link, Message, Section, Segmented, TextField, Tone};
 use crate::gui::theme::{
     Density, L, LIST_MEASURE, M, READER_MEASURE, S, Type, TypeExt, XS, colors,
 };
@@ -10,6 +10,7 @@ use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
     prelude::*, px,
 };
+use splat::content::dice_text::{D20, RollLink};
 use splat_character::character::{ABILITIES, EntitySnapshot};
 use splat_party::party::{
     BACKGROUND_PAGE, LiveValues, SHEET_PAGES, SHEET_PORTRAIT, array, calendar_time,
@@ -27,7 +28,7 @@ fn id(words: String) -> ElementId {
 pub(super) fn view(
     root: &mut SplatRoot,
     connected: bool,
-    _: &mut Window,
+    window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
@@ -48,7 +49,7 @@ pub(super) fn view(
     let Some(record) = record else {
         let mut body = div().flex().flex_col();
         if connected {
-            body = body.child(sync_section(root, cx));
+            body = body.child(sync_section(root, window, cx));
         }
         if !root.app.party.reader.loading() {
             body = body.child(kit::text(
@@ -137,7 +138,7 @@ pub(super) fn view(
     }
     let mut body = div().flex().flex_col().pr(M).pb(L);
     if connected {
-        body = body.child(sync_section(root, cx));
+        body = body.child(sync_section(root, window, cx));
     }
     let live = root
         .app
@@ -151,8 +152,17 @@ pub(super) fn view(
             death_saves_shown: false,
             conditions: splat_party::party::sheet_labels(&record),
         });
-    body = body.child(page_body(root, &record, page, live.as_ref(), "party", cx));
+    let reader = Reader {
+        key: "party",
+        search: root.pages.party.search.clone(),
+        roller: None,
+        actions: None,
+    };
+    body = body.child(page_body(root, &record, page, live.as_ref(), reader, cx));
     if page == 0 {
+        if root.pages.party.open.contains(TECHNICAL) {
+            review(root, &record);
+        }
         body = body.child(kit::gap(M)).child(technical(root, &record, cx));
     }
     let mut pane = kit::Pane::new(("party-sheet-page", page))
@@ -184,152 +194,55 @@ fn sync_footer(root: &SplatRoot, connected: bool, cx: &mut Context<SplatRoot>) -
     )
 }
 
-/// `Combat sync · On`: a caret section whose title says the sync state while it is closed.
-fn sync_section(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
-    let c = colors();
+/// `Combat sync · On`: a caret section whose title says the sync state while it is closed. Its
+/// body is the sync editor (`sync_editor::panel`), as the run's Correct tab shows it too.
+fn sync_section(root: &mut SplatRoot, window: &Window, cx: &mut Context<SplatRoot>) -> AnyElement {
     if std::mem::take(&mut root.app.party.wants_combat_sync) {
         root.pages.party.sync_open = true;
     }
     let combat = &root.app.party.combat;
-    let (icon, state, color) = if !combat.enabled {
-        (icons::SYNC_OFF, "Off", c.text)
+    // Until the first read, `On` would say more than Splat knows: the heading says it waits.
+    let state = if !combat.enabled {
+        "Off"
     } else if combat.state() == splat_party::combat_sync::SyncState::FirstRead {
-        (
-            icons::BUSY,
-            "Waiting for the first sheet read",
-            c.sync.first_read,
-        )
+        "Waiting for the first sheet read"
     } else {
-        (icons::ONLINE, "On", c.text)
+        "On"
     };
     let open = root.pages.party.sync_open;
+    // One id for every state, so the panel stays open when the DM ticks its box.
     let mut section = Section::new("combat_sync_header", format!("Combat sync · {state}"), open)
         .on_toggle(cx.listener(|root, open: &bool, _, cx| {
             root.pages.party.sync_open = *open;
             cx.notify();
         }));
-    let _ = (icon, color);
     if open {
-        let combat = &root.app.party.combat;
-        section = section.child(
-            Checkbox::new(
-                "combat-sync-enabled",
-                "Sync this sheet with D&D Beyond",
-                combat.enabled,
+        section = section
+            .child(
+                // The sheet's scroll bar floats over its right edge: the panel keeps clear of it.
+                div().pr(L).child(super::sync_editor::panel(
+                    super::sync_editor::Host::Party,
+                    Some(&root.app.party.combat),
+                    window,
+                    cx,
+                )),
             )
-            .on_click(cx.listener(|root, _, _, cx| {
-                let enabled = !root.app.party.combat.enabled;
-                root.app.party.combat.set_enabled(enabled);
-                cx.notify();
-            })),
-        );
-        section = section.child(kit::help(
-            "During a fight, Sync party in the run turns sync on for the whole party.",
-        ));
-        if !combat.enabled {
-            if let Some(error) = &combat.error {
-                section = section.child(kit::text(Type::Body, c.result.error, error.clone()));
-            }
-            section = section.child(kit::help(
-                "Enable to read the live sheet. Edits made here will then update D&D Beyond.",
-            ));
-        } else {
-            section = section.child(kit::help("Splat checks the sheet every 15 seconds."));
-            if combat.busy() {
-                section = section.child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .gap(S)
-                        .child(kit::icon(icons::BUSY, Type::Body, c.connection.busy))
-                        .child(kit::text(Type::Body, c.text, "Checking character…")),
-                );
-            }
-            if let Some(error) = &combat.error {
-                section = section.child(kit::text(Type::Body, c.result.error, error.clone()));
-            }
-            let state = if combat.dirty() {
-                Some("Local changes pending")
-            } else if combat.has_remote() {
-                Some("Values match the last read")
-            } else {
-                None
-            };
-            section = section.child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(S)
-                    .child(
-                        Button::secondary("combat-check-now", "Check now")
-                            .density(Density::Read)
-                            .blocked(combat.busy().then_some("Wait for the current sheet read."))
-                            .on_click(cx.listener(|root, _, _, cx| {
-                                root.app.party.combat.check_now();
-                                cx.notify();
-                            })),
-                    )
-                    .children(state.map(|words| kit::text(Type::Body, c.text, words))),
-            );
-            match combat.remote_writable() {
-                None => {
-                    section = section.child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .flex_wrap()
-                            .items_center()
-                            .max_w(READER_MEASURE)
-                            .child(kit::text(
-                                Type::Small,
-                                c.muted,
-                                "If the first sheet read does not come, check the connection in ",
-                            ))
-                            .child(
-                                Link::new("combat-sync-settings", "Settings")
-                                    .small()
-                                    .on_click(cx.listener(|root, _, _, cx| {
-                                        root.app.settings.focus_sign_in();
-                                        root.app.settings_tab = crate::SettingsTab::Account;
-                                        root.show_page(crate::Page::Settings, cx);
-                                    })),
-                            )
-                            .child(kit::text(Type::Small, c.muted, ".")),
-                    );
-                }
-                Some(writable) => {
-                    let (icon, color, words) = if writable {
-                        (
-                            icons::EDIT,
-                            c.accent,
-                            "Values with − and + are editable. Splat sends a change to D&D Beyond half a second after you stop, then reads the sheet to confirm it.",
-                        )
-                    } else {
-                        (
-                            icons::READ_ONLY,
-                            c.sync.read_only,
-                            "Read only: D&D Beyond reports that this sign-in cannot edit this character. Nothing here can change.",
-                        )
-                    };
-                    section = section.child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_start()
-                            .gap(XS)
-                            .child(kit::icon(icon, Type::Small, color))
-                            .child(kit::help(words)),
-                    );
-                    section = section.child(kit::help(
-                        "Concentration, custom effects, initiative and DM notes stay in Splat. D&D Beyond has no place for them.",
-                    ));
-                }
-            }
-        }
-        section = section.child(kit::rule());
+            .child(kit::gap(S))
+            .child(kit::rule());
     }
     section.into_any_element()
+}
+
+/// Who reads a sheet's page: the Party page, or the run's Sheet tab.
+pub(crate) struct Reader {
+    /// Keeps one host's open entries apart from another's (`party`, `run`).
+    pub key: &'static str,
+    /// `Filter this page`'s words.
+    pub search: String,
+    /// The run's row whose numbers roll for it, or `None`: a press is then a preview.
+    pub roller: Option<usize>,
+    /// The run's own action tiles, in place of the sheet's attacks: in a run they arm.
+    pub actions: Option<AnyElement>,
 }
 
 /// One page of a sheet. `key` keeps one host's open entries apart from another's.
@@ -338,13 +251,13 @@ pub(crate) fn page_body(
     record: &EntitySnapshot,
     page: usize,
     live: Option<&LiveValues>,
-    key: &str,
+    reader: Reader,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     match page {
-        0 => overview(record, live),
-        BACKGROUND_PAGE => background(root, record, key, cx),
-        _ => details(root, record, page, key, cx),
+        0 => overview(record, live, &reader),
+        BACKGROUND_PAGE => background(root, record, reader.key, cx),
+        _ => details(root, record, page, reader, cx),
     }
 }
 
@@ -409,28 +322,59 @@ fn columns(items: Vec<AnyElement>) -> AnyElement {
         .into_any_element()
 }
 
-/// A bonus in the numeral type, then its words.
-fn bonus_line(bonus: String, words: impl Into<SharedString>, marks: Option<String>) -> AnyElement {
+/// A bonus in the numeral type that rolls (or a dash), then its words.
+fn bonus_line(
+    bonus: AnyElement,
+    words: impl Into<SharedString>,
+    marks: Option<String>,
+) -> AnyElement {
     let c = colors();
     div()
         .flex()
         .flex_row()
-        .items_baseline()
+        .items_center()
         .gap(S)
         .min_h(px(24.0))
-        .child(
-            div()
-                .min_w(px(24.0))
-                .ty(Type::Numeral)
-                .text_color(c.accent)
-                .child(bonus),
-        )
+        .child(bonus)
         .child(kit::text(Type::Body, c.text, words))
         .children(marks.map(|marks| kit::text(Type::Small, c.muted, marks)))
         .into_any_element()
 }
 
-fn overview(record: &EntitySnapshot, live: Option<&LiveValues>) -> AnyElement {
+/// A d20 roll for an ability, a save or a skill, named in book case (egui `sheets::d20`).
+fn d20(what: D20, bonus: i64, name: &str) -> RollLink {
+    RollLink::d20(what, bonus, crate::design::reader::human_label(name))
+}
+
+/// A bonus that rolls for the sheet's character (egui `numeral_link`), or a dash when the sheet
+/// has none.
+fn numeral(
+    id: String,
+    bonus: Option<i64>,
+    record: &EntitySnapshot,
+    reader: &Reader,
+    link: impl FnOnce(i64) -> RollLink,
+) -> AnyElement {
+    match bonus {
+        Some(bonus) => kit::RollNumber::new(
+            ElementId::Name(SharedString::from(format!("{}-{id}", reader.key))),
+            crate::design::signed(bonus),
+            Type::Numeral,
+            link(bonus),
+        )
+        .entry(record.definition.splat_name.clone())
+        .roller(reader.roller)
+        .into_any_element(),
+        None => div()
+            .min_w(px(24.0))
+            .ty(Type::Numeral)
+            .text_color(colors().text)
+            .child("—")
+            .into_any_element(),
+    }
+}
+
+fn overview(record: &EntitySnapshot, live: Option<&LiveValues>, reader: &Reader) -> AnyElement {
     let c = colors();
     let mut column = div().flex().flex_col().max_w(LIST_MEASURE);
     let (hp, max, temp) = live.map_or_else(
@@ -469,16 +413,31 @@ fn overview(record: &EntitySnapshot, live: Option<&LiveValues>) -> AnyElement {
                 &format!("{}{}", ability[..1].to_uppercase(), &ability[1..3]),
                 val(record, ability),
             );
-            let value = signed(record, &format!("{ability}_modifier"));
-            let c = colors();
-            div()
-                .flex()
-                .flex_col()
-                .w(TILE_WIDTH)
-                .min_h(px(44.0))
-                .child(kit::text::one_line(Type::Small, c.muted, label))
-                .child(kit::text(Type::NumeralLarge, c.accent, value))
-                .into_any_element()
+            let key = format!("{ability}_modifier");
+            let value = signed(record, &key);
+            match record.stat(&key) {
+                Some(bonus) => div()
+                    .w(TILE_WIDTH)
+                    .min_h(px(44.0))
+                    .child(kit::fact::roll_tile(
+                        &label,
+                        div().flex().child(
+                            kit::RollNumber::new(
+                                ElementId::Name(SharedString::from(format!(
+                                    "{}-check-{ability}",
+                                    reader.key
+                                ))),
+                                value,
+                                Type::NumeralLarge,
+                                d20(D20::Check, bonus, ability),
+                            )
+                            .entry(record.definition.splat_name.clone())
+                            .roller(reader.roller),
+                        ),
+                    ))
+                    .into_any_element(),
+                None => tile(label, value),
+            }
         })
         .collect();
     column = column
@@ -509,9 +468,13 @@ fn overview(record: &EntitySnapshot, live: Option<&LiveValues>) -> AnyElement {
             let mut name = ability.to_string();
             name[..1].make_ascii_uppercase();
             bonus_line(
-                record
-                    .stat(&format!("{ability}_save"))
-                    .map_or_else(|| "—".to_owned(), crate::design::signed),
+                numeral(
+                    format!("save-{ability}"),
+                    record.stat(&format!("{ability}_save")),
+                    record,
+                    reader,
+                    |bonus| d20(D20::Save, bonus, ability),
+                ),
                 name,
                 None,
             )
@@ -539,9 +502,13 @@ fn overview(record: &EntitySnapshot, live: Option<&LiveValues>) -> AnyElement {
                 marks.push("Disadvantage");
             }
             bonus_line(
-                record
-                    .stat(&skill.stat)
-                    .map_or_else(|| "—".to_owned(), crate::design::signed),
+                numeral(
+                    format!("skill-{at}"),
+                    record.stat(&skill.stat),
+                    record,
+                    reader,
+                    |bonus| d20(D20::Skill, bonus, &skill.name),
+                ),
                 skill.name.clone(),
                 (!marks.is_empty()).then(|| marks.join(" · ")),
             )
@@ -802,31 +769,23 @@ fn details(
     root: &SplatRoot,
     record: &EntitySnapshot,
     page: usize,
-    key: &str,
+    reader: Reader,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
-    let search = root.pages.party.search.to_lowercase();
+    let key = reader.key;
+    let search = reader.search.to_lowercase();
     let mut column = div().flex().flex_col().max_w(LIST_MEASURE);
     match page {
         1 => {
-            let attacks: Vec<_> = splat_party::party::sheet_chips(record)
-                .into_iter()
-                .filter(|chip| chip.label.to_lowercase().contains(&search))
-                .collect();
             column = column.child(section("Attacks", record.character.attacks.len(), true));
-            for chip in attacks {
-                column = column.child(
-                    div()
-                        .px(S)
-                        .py(XS)
-                        .mb(XS)
-                        .rounded(crate::gui::theme::RADIUS_CONTROL)
-                        .border(crate::gui::theme::HAIRLINE_WIDTH)
-                        .border_color(c.hairline)
-                        .child(kit::text(Type::Body, c.text, chip.label.clone())),
-                );
-            }
+            // Each attack is an action tile: in a run it arms (the run's own tiles), elsewhere
+            // it previews. A tile keeps its number in the whole list while a search hides
+            // others.
+            column = column.child(match reader.actions {
+                Some(actions) => actions,
+                None => attack_tiles(record, &search, key, cx),
+            });
         }
         2 => {
             column = column.child(section("Spellcasting", 0, true)).child(kit::help(
@@ -989,8 +948,104 @@ fn details(
     column.into_any_element()
 }
 
-/// `Technical details`: the record behind the sheet (`source_and_parity`).
+/// The open-state key of `Technical details`.
+const TECHNICAL: &str = "party-technical";
+
+/// The sheet's campaign content entry and its character check, made once for each content
+/// version (egui `PartyPage::content_entry`, `character_review`): the page draws every frame.
+pub(crate) struct Checked {
+    hash: String,
+    entry: Result<splat_content::content::Entry, String>,
+    review: Option<Result<splat_character::character::check::Review, String>>,
+}
+
+/// Make the check of this sheet's content version, when it is not made yet.
+fn review(root: &mut SplatRoot, record: &EntitySnapshot) {
+    if root
+        .pages
+        .party
+        .checked
+        .as_ref()
+        .is_some_and(|checked| checked.hash == record.source.content_hash)
+    {
+        return;
+    }
+    let entry = record.entry();
+    let review = entry
+        .as_ref()
+        .ok()
+        .map(|entry| splat_character::character::check::review(record, entry));
+    root.pages.party.checked = Some(Checked {
+        hash: record.source.content_hash.clone(),
+        entry,
+        review,
+    });
+}
+
+/// The attacks as action tiles that preview their roll, with the last preview's result under
+/// them (egui `rolls::tiles` outside a run).
+fn attack_tiles(
+    record: &EntitySnapshot,
+    search: &str,
+    key: &str,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    use crate::gui::pages::reader::entry::tiles;
+    let Some(ctx) = cx
+        .try_global::<kit::markdown::Host>()
+        .map(|host| host.0.clone())
+    else {
+        return div().into_any_element();
+    };
+    let name = &record.definition.splat_name;
+    let chips: Vec<(Option<usize>, crate::rolls::Chip)> = splat_party::party::sheet_chips(record)
+        .into_iter()
+        .enumerate()
+        .filter(|(_, chip)| chip.label.to_lowercase().contains(search))
+        .map(|(place, chip)| (Some(place), chip))
+        .collect();
+    let views = crate::rolls::plain::roll_tiles(&ctx, name, &chips);
+    let presses = views
+        .into_iter()
+        .zip(chips.iter())
+        .map(|(view, (_, chip))| {
+            (
+                view,
+                tiles::Press::Roll {
+                    link: chip.link.clone(),
+                    occurrence: chip.spell_occurrence,
+                },
+            )
+        })
+        .collect();
+    let shown: Vec<_> = chips.into_iter().map(|(_, chip)| chip).collect();
+    tiles::tile_row(
+        &id(format!("{key}-attack-tiles")),
+        Some(&ctx),
+        name,
+        presses,
+        &shown,
+        None,
+    )
+}
+
+/// A quiet section of the technical details, kept open under `key`, whose body is `lines`.
+fn quiet_lines(
+    root: &SplatRoot,
+    key: &str,
+    title: &str,
+    lines: Vec<AnyElement>,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    quiet(root, format!("party-tech-{key}"), title, cx, move || lines)
+}
+
+/// `Technical details`: the record behind the sheet (`source_and_parity`): its source notes, the
+/// optional character rules, the character check, the campaign content counts and what the
+/// import left, when the sheet was fetched, and its files.
 fn technical(root: &SplatRoot, record: &EntitySnapshot, cx: &mut Context<SplatRoot>) -> AnyElement {
+    use splat_party_page::technical as words;
+    let c = colors();
     let record = record.clone();
     let campaign = root
         .app
@@ -999,6 +1054,64 @@ fn technical(root: &SplatRoot, record: &EntitySnapshot, cx: &mut Context<SplatRo
         .campaign_path()
         .map(std::path::Path::to_path_buf);
     let scope = root.app.party.reader.local_scope();
+    // The content's parts, each made only while the section is open.
+    let mut content: Vec<AnyElement> = Vec::new();
+    if root.pages.party.open.contains(TECHNICAL)
+        && let Some(Checked {
+            entry: Ok(entry),
+            review,
+            ..
+        }) = root
+            .pages
+            .party
+            .checked
+            .as_ref()
+            .filter(|checked| checked.hash == record.source.content_hash)
+    {
+        if let Some(options) = words::options(entry) {
+            let mut lines: Vec<AnyElement> = options
+                .into_iter()
+                .map(|line| kit::text(Type::Body, c.text, line).into_any_element())
+                .collect();
+            lines.push(kit::help(words::OPTIONS_HELP).into_any_element());
+            content.push(quiet_lines(
+                root,
+                "options",
+                "Optional character rules",
+                lines,
+                cx,
+            ));
+        }
+        if let Some(review) = review {
+            let lines = words::check(review)
+                .into_iter()
+                .map(|line| match line {
+                    words::CheckLine::Title(title) => {
+                        kit::text(Type::Strong, c.text, title).into_any_element()
+                    }
+                    words::CheckLine::Words(words) => kit::text(Type::Body, c.text, words)
+                        .max_w(READER_MEASURE)
+                        .into_any_element(),
+                })
+                .collect();
+            content.push(quiet_lines(root, "check", "Character check", lines, cx));
+        }
+        content.push(kit::help(words::content_counts(entry)).into_any_element());
+        if let Some(import) = words::import(entry) {
+            content.push(kit::help(import.summary).into_any_element());
+            for (at, (title, reasons)) in import.lists.into_iter().enumerate() {
+                let lines = reasons
+                    .into_iter()
+                    .map(|reason| {
+                        kit::text(Type::Body, c.text, reason)
+                            .max_w(READER_MEASURE)
+                            .into_any_element()
+                    })
+                    .collect();
+                content.push(quiet_lines(root, &format!("import-{at}"), title, lines, cx));
+            }
+        }
+    }
     let files_open = root.pages.party.open.contains("party-file-details");
     let files = kit::QuietSection::new("party-file-details", "File details")
         .open(files_open)
@@ -1043,38 +1156,35 @@ fn technical(root: &SplatRoot, record: &EntitySnapshot, cx: &mut Context<SplatRo
     } else {
         files
     };
-    quiet(
-        root,
-        "party-technical".into(),
-        "Technical details",
-        cx,
-        move || {
-            let mut body: Vec<AnyElement> =
-                vec![kit::help("D&D Beyond supplies these totals.").into_any_element()];
-            for message in record.coverage.iter().skip(2) {
-                body.push(kit::help(message.clone()).into_any_element());
-            }
+    quiet(root, TECHNICAL.into(), "Technical details", cx, move || {
+        let mut body: Vec<AnyElement> =
+            vec![kit::help("D&D Beyond supplies these totals.").into_any_element()];
+        // The first two source notes repeat the totals sentence and internal schema details.
+        // Keep later notices, such as two services returning different names.
+        for message in record.coverage.iter().skip(2) {
+            body.push(kit::help(message.clone()).into_any_element());
+        }
+        body.extend(content);
+        body.push(
+            kit::help(format!(
+                "Fetched {} UTC. Source details {} UTC.",
+                calendar_time(record.source.fetched_at),
+                calendar_time(record.source.raw_fetched_at),
+            ))
+            .into_any_element(),
+        );
+        if let Some(modified) = &record.source.source_modified {
             body.push(
-                kit::help(format!(
-                    "Fetched {} UTC. Source details {} UTC.",
-                    calendar_time(record.source.fetched_at),
-                    calendar_time(record.source.raw_fetched_at),
-                ))
-                .into_any_element(),
+                kit::help(format!("Beyond source modification: {modified}")).into_any_element(),
             );
-            if let Some(modified) = &record.source.source_modified {
-                body.push(
-                    kit::help(format!("Beyond source modification: {modified}")).into_any_element(),
-                );
-            }
-            body.push(
+        }
+        body.push(
             kit::help(
                 "D&D Beyond can take time to show a change in every service. Splat checks again for delayed changes.",
             )
             .into_any_element(),
         );
-            body.push(files.into_any_element());
-            body
-        },
-    )
+        body.push(files.into_any_element());
+        body
+    })
 }

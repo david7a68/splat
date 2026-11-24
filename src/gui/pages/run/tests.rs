@@ -295,3 +295,166 @@ fn run_loot() {
     );
     shell.capture("run-loot__03-loot-rolled__1200x800");
 }
+
+/// The fixture's saved run, signed in, with the party's sheets read.
+fn signed_in_run(shell: &mut Shell) {
+    shell.update(|root, _, _| {
+        root.app
+            .settings
+            .simulate(crate::settings::Account::Connected);
+    });
+    open_saved(shell, RUN);
+    for _ in 0..400 {
+        if shell.read(|root| {
+            !root.app.party.reader.loading() && !root.app.party.reader.sheets.is_empty()
+        }) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+fn sync_of(shell: &mut Shell, name: &str) -> Option<splat_party::combat_sync::SyncState> {
+    shell.read(|root| {
+        let run = root.app.encounters.run()?;
+        let at = run.state.participants.iter().position(|p| p.name == name)?;
+        run.syncs.get(&at).map(|sync| sync.state())
+    })
+}
+
+/// Every sync state on the roster, and a linked row whose sync is off (egui `run-sync-states`).
+#[test]
+fn run_sync_states() {
+    use splat_party::combat_sync::SyncState;
+    let mut shell = Shell::new("run-sync-states", Seed::Campaign);
+    signed_in_run(&mut shell);
+    shell.update(|root, _, _| {
+        for (name, state) in [
+            ("Brannoch Vale", SyncState::Conflict),
+            ("Iselle Marrowind", SyncState::Matching),
+            ("Kestrel Dunmoor", SyncState::Pending),
+            ("Oren Thistlewick", SyncState::ReadOnly),
+            ("Sable Harrowgate", SyncState::Error),
+        ] {
+            root.app.encounters.simulate_sync_state(name, state);
+        }
+    });
+    shell.capture("run-sync-states__01-every-sync-state__1200x800");
+    shell.update(|root, _, _| {
+        root.app
+            .encounters
+            .simulate_sync_state("Sable Harrowgate", SyncState::Off);
+    });
+    shell.click("Sable Harrowgate");
+    shell.capture("run-sync-states__02-linked-row-sync-off__1200x800");
+}
+
+/// A conflict on a row, its choices in the panel, and Use D&D Beyond values settling it (egui
+/// `run-sync-conflict`).
+#[test]
+fn run_sync_conflict() {
+    use splat_party::combat_sync::SyncState;
+    let mut shell = Shell::new("run-sync-conflict", Seed::Campaign);
+    signed_in_run(&mut shell);
+    shell.capture("run-sync-conflict__01-run-before-conflict__1200x800");
+    shell.update(|root, _, _| {
+        root.app.encounters.simulate_sync_conflict("Brannoch Vale");
+    });
+    shell.capture("run-sync-conflict__02-conflict-with-nothing-expanded__1200x800");
+    shell.click("Brannoch Vale");
+    assert_eq!(
+        sync_of(&mut shell, "Brannoch Vale"),
+        Some(SyncState::Conflict)
+    );
+    shell.capture("run-sync-conflict__05-conflict-panel__1200x800");
+    shell.click("Use D&D Beyond values");
+    assert_ne!(
+        sync_of(&mut shell, "Brannoch Vale"),
+        Some(SyncState::Conflict)
+    );
+    shell.capture("run-sync-conflict__06-conflict-resolved__1200x800");
+    // The same panel at 960x640.
+    let mut small = Shell::with_size(
+        "run-sync-conflict",
+        Seed::Campaign,
+        size(px(960.0), px(640.0)),
+    );
+    signed_in_run(&mut small);
+    small.update(|root, _, _| {
+        root.app.encounters.simulate_sync_conflict("Brannoch Vale");
+    });
+    small.click("Brannoch Vale");
+    small.capture("run-sync-conflict__05-conflict-panel__960x640");
+}
+
+/// Correct holds the same sync editor as the Party page: a press on − changes the sheet's HP in
+/// the sync, the run takes it into the participant, and the Sheet tab shows the party sheet's
+/// pages, whose numbers roll for this row.
+#[test]
+fn run_correct_sync_editor() {
+    use splat_party::combat_sync::SyncState;
+    let mut shell = Shell::with_size(
+        "run-sync-states",
+        Seed::Campaign,
+        size(px(1200.0), px(1600.0)),
+    );
+    signed_in_run(&mut shell);
+    shell.update(|root, _, _| {
+        root.app.encounters.simulate_connection();
+        root.app
+            .encounters
+            .simulate_sync_state("Iselle Marrowind", SyncState::Matching);
+    });
+    shell.click("Iselle Marrowind");
+    shell.click("Correct");
+    assert_eq!(
+        shell.read(|root| root.app.encounters.run().unwrap().panel),
+        Panel::Record
+    );
+    assert!(shell.bounds("Values with − and + are editable. Splat sends a change to D&D Beyond half a second after you stop, then reads the sheet to confirm it.").is_some()
+        || shell.bounds("Decrease Current HP").is_some());
+    let before = participant(&mut shell, "Iselle Marrowind").hp.expect("HP");
+    shell.click("Decrease Current HP");
+    let removed = shell.read(|root| {
+        let run = root.app.encounters.run().unwrap();
+        let at = run
+            .state
+            .participants
+            .iter()
+            .position(|p| p.name == "Iselle Marrowind")
+            .unwrap();
+        run.syncs[&at].values()["hp"]["removedHitPoints"].clone()
+    });
+    let max = participant(&mut shell, "Iselle Marrowind")
+        .max_hp
+        .expect("max HP");
+    assert_eq!(removed, max - before + 1, "the sync holds the new HP");
+    assert_eq!(
+        participant(&mut shell, "Iselle Marrowind").hp,
+        Some(before - 1),
+        "the run takes the sheet's new HP"
+    );
+    shell.capture("run-sync-states__05-correct-sync-editor__1200x1600");
+    // The Sheet tab: the party sheet's pages.
+    shell.click("Sheet");
+    assert!(
+        shell.bounds("id:run-sheet-pages-Overview").is_some(),
+        "the sheet's page tabs"
+    );
+    shell.capture("party-from-run__02-sheet-beside-run__1200x1600");
+    let check = shell.read(|root| {
+        let run = root.app.encounters.run().unwrap();
+        run.sheet
+            .as_ref()
+            .and_then(|sheet| sheet.stat("strength_modifier"))
+    });
+    let check = check.expect("a sheet with a strength modifier");
+    let log = shell.read(|root| root.app.encounters.run().unwrap().state.log.len());
+    shell.click(&format!("Strength {}", crate::design::signed(check)));
+    assert_eq!(
+        shell.read(|root| root.app.encounters.run().unwrap().state.log.len()),
+        log + 1,
+        "the check rolls for this row, into the run's Log"
+    );
+}

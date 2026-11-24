@@ -7,4 +7,4 @@ use splat_party::{combat_sync, party_sync};
 #[path = "../../party.rs"]
 mod page;
 pub use page::{PartyHeader, PartyPage, PartyPress, tonight_words};
-pub use page::{class_line, classes_and_level, compare_values, most_recent_sheet};
+pub use page::{class_line, classes_and_level, compare_values, most_recent_sheet, technical};

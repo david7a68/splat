@@ -3,6 +3,7 @@
 mod bar;
 mod list;
 pub(crate) mod sheet;
+pub(crate) mod sync_editor;
 #[cfg(test)]
 mod tests;
 
@@ -23,6 +24,10 @@ pub struct State {
     pub(crate) sync_open: bool,
     /// The open caret sections and entries of the sheet, by key.
     pub(crate) open: std::collections::HashSet<String>,
+    /// The sheet's content entry and character check, for Technical details.
+    pub(crate) checked: Option<sheet::Checked>,
+    /// What the party bar holds through a fight (`party_bar::Hold`).
+    pub(crate) bar_hold: Option<splat_party::party_bar::Hold>,
 }
 
 /// Once, when the root is built.
