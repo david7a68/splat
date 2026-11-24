@@ -110,3 +110,86 @@ fn rules_and_runs_discard_and_undo() {
         format!("{saved} 2")
     );
 }
+
+/// Wait for the Packages tab's load (it reads on a thread).
+fn content_loaded(shell: &mut Shell) {
+    for _ in 0..200 {
+        if shell.read(|root| !root.app.campaign_content.loading()) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    shell.settle();
+}
+
+/// An invalid note in the campaign (egui `campaign-content` 11-14): its message offers Repair,
+/// which opens the note's editor and save row; Discard brings the file's text back with an
+/// Undo, and a draft Save accepts saves with Ctrl+S, after which the page reads the campaign
+/// again and the repair ends.
+#[test]
+fn packages_repair_an_invalid_note() {
+    const BROKEN: &str = "Notes/Broken.md";
+    let mut shell = campaign("campaign-content-repair");
+    content_loaded(&mut shell);
+    let active = shell.read(|root| root.app.campaigns.active_campaign().expect("a campaign"));
+    std::fs::create_dir_all(active.path.join("Notes")).unwrap();
+    std::fs::write(
+        active.path.join(BROKEN),
+        "---\nsplat_schema: 2\nsplat_id: [\n---\n",
+    )
+    .unwrap();
+    shell.click("Reload from disk");
+    content_loaded(&mut shell);
+    let open = |shell: &mut Shell| {
+        shell.read(|root| {
+            let open = root.pages.campaigns.repairs_open.clone();
+            root.app
+                .campaign_content
+                .repair_rows(&|path| open.contains(path))
+        })
+    };
+    let rows = open(&mut shell);
+    assert_eq!(rows.len(), 1, "the invalid note is in repair");
+    assert!(rows[0].words.starts_with("Notes/Broken.md cannot be read."));
+    assert!(shell.bounds("Save repaired note").is_none(), "closed, no editor");
+    shell.capture("campaign-content__11-repair-needed__1200x800");
+    shell.click("Repair");
+    assert!(shell.bounds("Save repaired note").is_some(), "Repair opens the editor");
+    assert!(shell.bounds("Close repair").is_some());
+    shell.capture("campaign-content__12-repair-open__1200x800");
+    // A draft Save accepts: Unsaved, Save is the primary.
+    let valid = crate::library::note_text("Broken", "rule", None);
+    let edit = |shell: &mut Shell, words: String| {
+        shell.update(move |root, _, _| {
+            let active = root.app.campaigns.active_campaign().expect("a campaign");
+            root.app
+                .campaign_content
+                .edit_repair(&active, BROKEN, &words);
+        });
+    };
+    edit(&mut shell, valid.clone());
+    assert_eq!(open(&mut shell)[0].draft, valid);
+    shell.capture("campaign-content__13-repair-dirty__1200x800");
+    // Discard: the file's text comes back, with its Undo in the footer.
+    shell.click("Discard");
+    assert!(open(&mut shell)[0].draft.contains("splat_id: ["));
+    assert!(
+        shell.bounds("Undo discard of Broken.md").is_some(),
+        "{:?}",
+        crate::gui::kit::probe::names()
+            .into_iter()
+            .filter(|name| name.contains("Undo"))
+            .collect::<Vec<_>>()
+    );
+    shell.click("Undo discard of Broken.md");
+    assert_eq!(open(&mut shell)[0].draft, valid, "Undo gives the draft back");
+    // Ctrl+S saves the repair; the page reads the campaign again and the repair ends.
+    shell.press("ctrl-s");
+    content_loaded(&mut shell);
+    assert_eq!(
+        std::fs::read_to_string(active.path.join(BROKEN)).unwrap(),
+        valid
+    );
+    assert!(open(&mut shell).is_empty(), "the repaired note reads again");
+}

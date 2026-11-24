@@ -7,8 +7,8 @@ use crate::gui::pages::settings;
 use crate::gui::theme::{Density, L, LIST_MEASURE, M, S, Type, XS, colors};
 use crate::gui::{SplatRoot, icons};
 use gpui::{
-    AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
-    px,
+    AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, SharedString,
+    Styled, Window, div, prelude::*, px,
 };
 
 fn id(prefix: &str, uuid: uuid::Uuid) -> ElementId {
@@ -17,7 +17,7 @@ fn id(prefix: &str, uuid: uuid::Uuid) -> ElementId {
 
 pub(super) fn render(
     root: &mut SplatRoot,
-    _: &mut Window,
+    window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
@@ -103,12 +103,7 @@ pub(super) fn render(
             column = column.child(Message::new(Tone::Error, words));
         }
     }
-    for path in root.app.campaign_content.repair_paths() {
-        column = column.child(Message::new(
-            Tone::Warning,
-            format!("{path} needs a repair before the packages can change."),
-        ));
-    }
+    column = column.children(repairs(root, &active, cx));
     if !active.path.exists() {
         let folder = active.clone();
         column = column.child(
@@ -143,7 +138,202 @@ pub(super) fn render(
     for line in footer {
         pane = pane.footer(line);
     }
-    pane.into_any_element()
+    // Ctrl+S saves the open repair that can save, else the package choices (`save_shortcut`).
+    // The tab takes the keyboard while nothing else holds it, so the key reaches it.
+    let focus = root
+        .pages
+        .campaigns
+        .focus
+        .get_or_insert_with(|| cx.focus_handle())
+        .clone();
+    let unheld = window.focused(cx).is_none() || root.focus.is_focused(window);
+    if unheld && !root.modal_open(cx) {
+        window.focus(&focus, cx);
+    }
+    let save_active = active.clone();
+    gpui::div()
+        .id("campaign-content-keys")
+        .key_context("CampaignPackages")
+        .track_focus(&focus)
+        .size_full()
+        .on_action(cx.listener(move |root, _: &super::Save, _, cx| {
+            if root.modal_open(cx) {
+                return;
+            }
+            save_key(root, &save_active);
+            cx.notify();
+        }))
+        .child(pane)
+        .into_any_element()
+}
+
+/// Ctrl+S on Packages: the first open repair whose Save can write, else `Save selections`
+/// while no repair stands (`save_shortcut`, `save_key`).
+fn save_key(root: &mut SplatRoot, active: &crate::persistence::Campaign) {
+    let open = root.pages.campaigns.repairs_open.clone();
+    let open_of = |path: &str| open.contains(path);
+    let content = &root.app.campaign_content;
+    let owner = content.repair_owner(&open_of);
+    let repair = content
+        .repair_rows(&open_of)
+        .into_iter()
+        .filter(|row| row.open)
+        .map(|row| row.path)
+        .find(|path| {
+            content
+                .repair_state(path, owner.as_deref())
+                .is_some_and(|state| state.can_save())
+        });
+    let crate::gui::SplatRoot { app, bridge, .. } = root;
+    match repair {
+        Some(path) => app
+            .campaign_content
+            .save_repair(bridge.ctx(), &app.campaigns, active, &path),
+        None if app.campaign_content.repair_paths().is_empty()
+            && app
+                .campaign_content
+                .save_bar()
+                .is_some_and(|bar| bar.dirty) =>
+        {
+            app.campaign_content.save_now()
+        }
+        None => {}
+    }
+}
+
+/// The invalid notes in repair (`repair_section`): each one's message with `Repair` (or
+/// `Close repair`), and under an open one its editor and save row.
+fn repairs(
+    root: &mut SplatRoot,
+    active: &crate::persistence::Campaign,
+    cx: &mut Context<SplatRoot>,
+) -> Option<AnyElement> {
+    let c = colors();
+    let open = root.pages.campaigns.repairs_open.clone();
+    let open_of = |path: &str| open.contains(path);
+    let rows = root.app.campaign_content.repair_rows(&open_of);
+    if rows.is_empty() {
+        return None;
+    }
+    let owner = root.app.campaign_content.repair_owner(&open_of);
+    let mut column = div().flex().flex_col().w_full().max_w(LIST_MEASURE);
+    for (at, row) in rows.into_iter().enumerate() {
+        let toggle_path = row.path.clone();
+        column = column.child(
+            div().pb(S).child(
+                Message::new(Tone::Error, row.words.clone()).action(
+                    Button::secondary(
+                        ("content-repair-toggle", at),
+                        if row.open { "Close repair" } else { "Repair" },
+                    )
+                    .density(Density::Read)
+                    .on_click(cx.listener(move |root, _, _, cx| {
+                        let open = &mut root.pages.campaigns.repairs_open;
+                        if !open.remove(&toggle_path) {
+                            open.insert(toggle_path.clone());
+                        }
+                        cx.notify();
+                    })),
+                ),
+            ),
+        );
+        if !row.open {
+            continue;
+        }
+        let Some(state) = root
+            .app
+            .campaign_content
+            .repair_state(&row.path, owner.as_deref())
+        else {
+            continue;
+        };
+        let word = crate::gui::bridge::status(&state.status());
+        let discard = state.discard_shown();
+        let lock = state.lock_reason();
+        let blocked = state.save_blocked().map(str::to_owned);
+        let primary = state.save_weight() == crate::design::save_row::SaveWeight::Primary;
+        drop(state);
+        let (edit_path, save_path, discard_path) =
+            (row.path.clone(), row.path.clone(), row.path.clone());
+        let (edit_active, save_active, discard_active) =
+            (active.clone(), active.clone(), active.clone());
+        column = column
+            .child(kit::heading(
+                kit::Heading::Group {
+                    title: "Repair",
+                    count: 0,
+                },
+                true,
+            ))
+            .child(
+                div().h(px(320.0)).child(
+                    kit::TextEditor::new(
+                        ElementId::Name(SharedString::from(format!(
+                            "content-repair-editor-{}",
+                            row.path
+                        ))),
+                        row.draft.clone(),
+                    )
+                    .name(crate::world::repair::editor_name(&row.path))
+                    .mono()
+                    .fill()
+                    .on_change(cx.listener(move |root, words: &str, _, cx| {
+                        root.app
+                            .campaign_content
+                            .edit_repair(&edit_active, &edit_path, words);
+                        cx.notify();
+                    })),
+                ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(S)
+                    .py(XS)
+                    .child(kit::status(&word))
+                    .when(discard, |line| {
+                        line.child(
+                            Button::quiet(("content-repair-discard", at), "Discard")
+                                .density(Density::Read)
+                                .on_click(cx.listener(move |root, _, _, cx| {
+                                    root.app
+                                        .campaign_content
+                                        .discard_repair(&discard_active, &discard_path);
+                                    cx.notify();
+                                })),
+                        )
+                    })
+                    .children(lock.map(|lock| kit::text(Type::Small, c.muted, lock)))
+                    .child(div().flex_1())
+                    .child(
+                        if primary {
+                            Button::primary(("content-repair-save", at), "Save repaired note")
+                        } else {
+                            Button::secondary(("content-repair-save", at), "Save repaired note")
+                        }
+                        .density(Density::Read)
+                        .key("Ctrl+S")
+                        .blocked(blocked)
+                        .on_click(cx.listener(move |root, _, _, cx| {
+                            let crate::gui::SplatRoot { app, bridge, .. } = root;
+                            app.campaign_content.save_repair(
+                                bridge.ctx(),
+                                &app.campaigns,
+                                &save_active,
+                                &save_path,
+                            );
+                            cx.notify();
+                        })),
+                    ),
+            );
+    }
+    if !open.is_empty() {
+        column = column.child(kit::gap(L));
+    }
+    Some(column.into_any_element())
 }
 
 /// The save row: the choices' state and Discard, Reload from disk, why Save waits, and
@@ -209,7 +399,11 @@ fn save_bar(
         .clone()
         .or((!bar.dirty).then(|| "No changes to save.".to_owned()));
     row = row.child(div().flex_1()).child(
-        Button::primary("content-save", "Save selections")
+        if bar.primary {
+            Button::primary("content-save", "Save selections")
+        } else {
+            Button::secondary("content-save", "Save selections")
+        }
             .density(Density::Read)
             .key("Ctrl+S")
             .blocked(blocked)

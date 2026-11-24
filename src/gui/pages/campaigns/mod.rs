@@ -7,7 +7,15 @@ mod run_settings;
 mod tests;
 
 use crate::gui::SplatRoot;
-use gpui::{AnyElement, Context, Window};
+use gpui::{AnyElement, Context, KeyBinding, Window, actions};
+
+actions!(
+    campaigns,
+    [
+        /// Ctrl+S on Packages: the open repair's Save, else `Save selections`.
+        Save,
+    ]
+);
 
 /// This area's GPUI-only state, kept in `root.pages.campaigns`.
 #[derive(Default)]
@@ -18,10 +26,15 @@ pub struct State {
     pub(crate) issues_open: bool,
     /// The repairs whose editor is open, by their files.
     pub(crate) repairs_open: std::collections::BTreeSet<String>,
+    /// Packages' keyboard focus, so Ctrl+S reaches the tab while nothing else holds the
+    /// keyboard.
+    pub(crate) focus: Option<gpui::FocusHandle>,
 }
 
 /// Once, when the root is built.
-pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Context<SplatRoot>) {}
+pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
+    cx.bind_keys([KeyBinding::new("ctrl-s", Save, Some("CampaignPackages"))]);
+}
 
 /// Once per frame, before anything draws.
 pub(crate) fn poll(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Context<SplatRoot>) {}
