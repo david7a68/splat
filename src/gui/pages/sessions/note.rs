@@ -151,9 +151,7 @@ pub(super) fn editor(
         }
     }
     let focused = handle.focused(window, cx);
-    let elsewhere = window
-        .focused(cx)
-        .is_some_and(|other| other != root.focus);
+    let elsewhere = window.focused(cx).is_some_and(|other| other != root.focus);
     root.app
         .sessions
         .gv_note_has_focus(in_panel, focused, elsewhere);

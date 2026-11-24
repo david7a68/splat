@@ -15,11 +15,11 @@ use crate::gui::icons;
 use crate::gui::theme::{
     Density, FOCUS_WIDTH, RADIUS_CONTROL, S, SCROLL_BAR_WIDTH, Type, TypeExt, XS, colors,
 };
-use gpui_component::scroll::ScrollableElement as _;
 use gpui::{
     AnyElement, App, ElementId, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
     Window, div, prelude::*, px,
 };
+use gpui_component::scroll::ScrollableElement as _;
 use splat_content::content::creature_filter::{Facet, Filter, challenge_value};
 use splat_content_ui::creature_filter::{
     chips, choose_bound, facet_word, filter_word, range_words,
@@ -137,11 +137,13 @@ impl RenderOnce for FilterBar {
         }
         if filter.challenge != (None, None) {
             bar = bar.child(
-                chip(child(&self.id, "chip:challenge"), &range_words(filter.challenge)).on_click(
-                    press(filter, &self.on_change, |filter| {
-                        filter.challenge = (None, None);
-                    }),
-                ),
+                chip(
+                    child(&self.id, "chip:challenge"),
+                    &range_words(filter.challenge),
+                )
+                .on_click(press(filter, &self.on_change, |filter| {
+                    filter.challenge = (None, None);
+                })),
             );
         }
         if count > 1 {
@@ -185,43 +187,42 @@ fn menu(
         let here = opened.contains(&facet);
         let toggle = open.clone();
         let word: SharedString = facet_word(filter, facet).into();
-        let row = div()
-            .id(child(id, format!("fact:{}", facet.label())))
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_between()
-            .h(Density::Read.control())
-            .px(S)
-            .rounded(RADIUS_CONTROL)
-            .when(here, |row| row.bg(c.selected))
-            .hover(|row| row.bg(c.hover))
-            .cursor_pointer()
-            .focusable()
-            .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
-            .aria_label(word.clone())
-            .aria_expanded(here)
-            .child(div().ty(Type::Strong).text_color(c.text).child(word.clone()))
-            .child(
-                div()
-                    .icon_font(Type::Body)
-                    .text_color(c.muted)
-                    .child(SharedString::new_static(if here {
-                        icons::DOWN
-                    } else {
-                        icons::NEXT
-                    })),
-            )
-            .on_click(move |_, window, cx| {
-                toggle.update(cx, |open, _| {
-                    if let Some(at) = open.iter().position(|f| *f == facet) {
-                        open.remove(at);
-                    } else {
-                        open.push(facet);
-                    }
+        let row =
+            div()
+                .id(child(id, format!("fact:{}", facet.label())))
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .h(Density::Read.control())
+                .px(S)
+                .rounded(RADIUS_CONTROL)
+                .when(here, |row| row.bg(c.selected))
+                .hover(|row| row.bg(c.hover))
+                .cursor_pointer()
+                .focusable()
+                .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
+                .aria_label(word.clone())
+                .aria_expanded(here)
+                .child(
+                    div()
+                        .ty(Type::Strong)
+                        .text_color(c.text)
+                        .child(word.clone()),
+                )
+                .child(div().icon_font(Type::Body).text_color(c.muted).child(
+                    SharedString::new_static(if here { icons::DOWN } else { icons::NEXT }),
+                ))
+                .on_click(move |_, window, cx| {
+                    toggle.update(cx, |open, _| {
+                        if let Some(at) = open.iter().position(|f| *f == facet) {
+                            open.remove(at);
+                        } else {
+                            open.push(facet);
+                        }
+                    });
+                    window.refresh();
                 });
-                window.refresh();
-            });
         let row = target(row, word);
         rows = rows.child(target(
             row,

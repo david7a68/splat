@@ -64,12 +64,7 @@ pub(super) fn render(
         } else {
             Vec::new()
         };
-        let footer = footer::lines(
-            "plan-footer",
-            lines,
-            super::session::on_session_press(),
-            cx,
-        );
+        let footer = footer::lines("plan-footer", lines, super::session::on_session_press(), cx);
         let editor = crate::gui::pages::encounters::render_group_in_plan(root, window, cx);
         return pane(editor, footer);
     }
@@ -266,7 +261,10 @@ fn add_menu(
     let menu_id = id(menu.id);
     // The search takes the keyboard once, as the menu opens.
     let open = kit::menu::is_open(&menu_id, cx);
-    let was_open = std::mem::replace(&mut root.pages.sessions.add_menu_open[usize::from(group)], open);
+    let was_open = std::mem::replace(
+        &mut root.pages.sessions.add_menu_open[usize::from(group)],
+        open,
+    );
     let trigger = kit::Button::quiet(id(format!("{}-button", menu.id)), menu.word)
         .icon(menu.icon)
         .name(menu.name)
@@ -297,9 +295,8 @@ fn add_menu(
             })),
     );
     if let Some(note) = blocked {
-        content = content.child(
-            kit::text(Type::Small, c.muted, note.clone()).pl(S + theme::ICON_SLOT),
-        );
+        content =
+            content.child(kit::text(Type::Small, c.muted, note.clone()).pl(S + theme::ICON_SLOT));
     }
     if let Some(words) = search {
         content = content.child(

@@ -506,7 +506,10 @@ fn plan_fight_picker_search() {
     shell.press("escape");
     more_fights(&mut shell, 9);
     shell.click("id:plan-add-fight-button");
-    assert!(shell.bounds("Find a fight").is_some(), "eleven fights get a search");
+    assert!(
+        shell.bounds("Find a fight").is_some(),
+        "eleven fights get a search"
+    );
     shell.type_text("fight 7");
     assert!(shell.bounds("Plan Fight 7").is_some());
     assert!(shell.bounds("Plan Fight 1").is_none());
@@ -544,7 +547,10 @@ fn plan_group_assembly() {
     // Discard closes it; the plan's footer has its Undo, which opens it again.
     shell.click("Discard");
     assert!(!shell.read(|root| root.app.encounters.group_open_in_plan()));
-    assert!(shell.bounds("Back to the plan").is_none(), "the plan is back");
+    assert!(
+        shell.bounds("Back to the plan").is_none(),
+        "the plan is back"
+    );
     shell.click("Undo discard of Ash Pack");
     assert!(shell.read(|root| root.app.encounters.group_open_in_plan()));
 

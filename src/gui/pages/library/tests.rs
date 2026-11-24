@@ -395,7 +395,10 @@ fn creature_filter() {
     shell.capture("creature-filter__00-menu-open__1200x800");
     // Filter again closes the menu.
     shell.click("Filter creatures");
-    assert!(shell.bounds("Filter Habitat: Underdark").is_none(), "the menu closed");
+    assert!(
+        shell.bounds("Filter Habitat: Underdark").is_none(),
+        "the menu closed"
+    );
     assert!(shell.bounds("Remove filter Habitat: Underdark").is_some());
     assert!(shell.bounds("Remove filter Type: Aberration").is_some());
     assert!(shell.bounds("Clear filters").is_some(), "two values chosen");
@@ -408,7 +411,10 @@ fn creature_filter() {
     assert!(shell.bounds("Remove filter Type: Aberration").is_none());
     assert!(shell.bounds("Clear filters").is_none(), "one value chosen");
     let underdark = list_heading(&mut shell).1;
-    assert!(underdark > 9, "more Underdark creatures than aberrations: {underdark}");
+    assert!(
+        underdark > 9,
+        "more Underdark creatures than aberrations: {underdark}"
+    );
     shell.click("Remove filter Habitat: Underdark");
     assert_eq!(list_heading(&mut shell), (None, 336));
 

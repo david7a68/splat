@@ -449,9 +449,11 @@ impl Library {
         &self,
     ) -> std::collections::BTreeMap<splat::content::creature_filter::Facet, Vec<(String, usize)>>
     {
-        self.loaded.as_ref().map_or_else(Default::default, |loaded| {
-            splat::content::creature_filter::choices(scope_facets(loaded, self.scope))
-        })
+        self.loaded
+            .as_ref()
+            .map_or_else(Default::default, |loaded| {
+                splat::content::creature_filter::choices(scope_facets(loaded, self.scope))
+            })
     }
 
     pub fn scope(&self) -> Scope {
