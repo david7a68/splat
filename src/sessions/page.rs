@@ -43,6 +43,9 @@ mod carry;
 mod kept;
 #[path = "plan.rs"]
 mod plan;
+/// What the GPUI view reads and does (`src/gui/pages/sessions/`, `docs/gpui-port.md`).
+#[path = "gpui_facade.rs"]
+pub mod gpui_facade;
 #[cfg(any(test, feature = "test-support"))]
 pub use plan::scene_fit_counts;
 
@@ -1732,13 +1735,29 @@ enum AlertAct {
 
 /// A choice of a draft's warning (`draft_warning`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum DraftAct {
+pub enum DraftAct {
     Overwrite,
     Reload,
     SaveAgain,
     SaveMoved,
     Discard,
     Save,
+}
+
+/// What a press of the draft's warning does (both UIs).
+fn apply_draft_act(draft: &mut Draft, act: &DraftAct) {
+    match act {
+        DraftAct::Overwrite => draft.overwrite(),
+        DraftAct::Reload => {
+            if draft.reload_keeping_undo().is_err() {
+                draft.state = DraftState::Missing;
+            }
+        }
+        DraftAct::SaveAgain => draft.save_again(),
+        DraftAct::SaveMoved => draft.save_moved(),
+        DraftAct::Discard => draft.discard(),
+        DraftAct::Save => draft.save(),
+    }
 }
 
 /// A missing note's words. A known new place says why it is offered; with none, the file is
@@ -4009,61 +4028,36 @@ impl Sessions {
     }
 
     fn record_control(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
-        // Stop is here whichever session is open. It can be urgent, if a player asks.
-        if self.live.as_ref().is_some_and(|live| {
-            matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_))
-        }) {
-            return;
-        }
-        if let Some(live) = &self.live {
-            if self.tab == Tab::Recordings
-                && self.reading.is_none()
-                && self.selected == Some(live.session)
-                && !self.recordings.is_empty()
-            {
-                return;
+        // Stop is here whichever session is open. It can be urgent, if a player asks. The
+        // state is the one both UIs draw (`gv_record_control`).
+        match self.gv_record_control(settings) {
+            gpui_facade::RecordControl::None => {}
+            gpui_facade::RecordControl::Stop { name } => {
+                if Action::secondary("Stop recording")
+                    .icon(icons::STOP_RECORDING)
+                    .name(&name)
+                    .hint(&name)
+                    .show(ui)
+                    .clicked()
+                {
+                    self.finish_recording(ui.ctx());
+                }
             }
-            let name = if Some(live.session) == self.selected {
-                "Stop recording".to_owned()
-            } else {
-                format!("Stop recording of {}", live.label)
-            };
-            if Action::secondary("Stop recording")
-                .icon(icons::STOP_RECORDING)
-                .name(&name)
-                .hint(&name)
-                .show(ui)
-                .clicked()
-            {
-                self.finish_recording(ui.ctx());
+            gpui_facade::RecordControl::Record { blocked: reason } => {
+                if Action::secondary("Record")
+                    .icon(icons::RECORD)
+                    .name("Record this session")
+                    .blocked(reason.as_deref())
+                    .show(ui)
+                    .clicked()
+                {
+                    self.confirm_record = true;
+                }
+                if let Some(reason) = reason {
+                    ui.label(Type::Small.rich(ui, reason).color(colors().muted));
+                    design::gap(ui, design::Gap::L);
+                }
             }
-            return;
-        }
-        if self.confirm_record
-            || (self.tab == Tab::Recordings
-                && self.reading.is_none()
-                && self.recordings.iter().any(|recording| {
-                    recording
-                        .status
-                        .as_deref()
-                        .is_some_and(|words| words.starts_with("Stopped by itself:"))
-                }))
-        {
-            return;
-        }
-        let reason = self.record_blocked(settings);
-        if Action::secondary("Record")
-            .icon(icons::RECORD)
-            .name("Record this session")
-            .blocked(reason.as_deref())
-            .show(ui)
-            .clicked()
-        {
-            self.confirm_record = true;
-        }
-        if let Some(reason) = reason {
-            ui.label(Type::Small.rich(ui, reason).color(colors().muted));
-            design::gap(ui, design::Gap::L);
         }
     }
 
@@ -4466,17 +4460,8 @@ impl Sessions {
             }
             _ => None,
         };
-        match pressed {
-            Some(DraftAct::Overwrite) => draft.overwrite(),
-            Some(DraftAct::Reload) if draft.reload_keeping_undo().is_err() => {
-                draft.state = DraftState::Missing;
-            }
-            Some(DraftAct::SaveAgain) => draft.save_again(),
-            Some(DraftAct::SaveMoved) => draft.save_moved(),
-            Some(DraftAct::Discard) => draft.discard(),
-            Some(DraftAct::Save) => draft.save(),
-            // A reload that worked left the draft as the file is.
-            Some(DraftAct::Reload) | None => {}
+        if let Some(act) = &pressed {
+            apply_draft_act(draft, act);
         }
         pressed
     }
@@ -4608,41 +4593,50 @@ impl Sessions {
             let fault = PageFault::Failed(notice_sentence(error));
             let _ = BodyMessage::<()>::from(FaultMessage::new(&fault)).show(ui);
         }
+        if shown.cancel {
+            return;
+        }
+        if shown.create {
+            self.form = self.press_create(form);
+        } else {
+            self.form = Some(form);
+        }
+    }
+
+    /// The form's Create (or Save details): made when nothing blocks it, else the form stays
+    /// with its reason or its fault. Returns the form that stays open. Both UIs call it.
+    fn press_create(&mut self, mut form: Form) -> Option<Form> {
         // A press reads the templates as the folder holds them now: one changed or removed
         // outside Splat since the form opened is never made from the listing's copy. The press
         // is judged on that and on the form after this frame's typing; a refused press leaves
         // the reason on the kept line.
-        if shown.create
-            && form.editing.is_none()
+        if form.editing.is_none()
             && let Some(folder) = &self.folder
         {
             self.templates = list_templates(folder);
         }
-        let done = shown.create && form_reason(&form, &self.templates).is_none();
-        if shown.cancel {
-            return;
+        if form_reason(&form, &self.templates).is_some() {
+            return Some(form);
         }
-        if done {
-            match self.submit_form(&form) {
-                Ok(id) => {
-                    self.refresh();
-                    self.select(Some(id));
-                    if form.editing.is_none() {
-                        self.say_where_the_run_stays(id);
-                    }
-                    self.write_in_note();
-                    // A new session is for typing in, under What happened.
-                    self.focus_notes = form.editing.is_none();
-                    return;
+        match self.submit_form(&form) {
+            Ok(id) => {
+                self.refresh();
+                self.select(Some(id));
+                if form.editing.is_none() {
+                    self.say_where_the_run_stays(id);
                 }
-                Err(error) => {
-                    form.error = Some(error);
-                    // The act failed and the form stays: the keyboard goes back to it.
-                    self.focus_form_title = true;
-                }
+                self.write_in_note();
+                // A new session is for typing in, under What happened.
+                self.focus_notes = form.editing.is_none();
+                None
+            }
+            Err(error) => {
+                form.error = Some(error);
+                // The act failed and the form stays: the keyboard goes back to it.
+                self.focus_form_title = true;
+                Some(form)
             }
         }
-        self.form = Some(form);
     }
 
     /// The warning about an old session has gone, and the open run's event has not moved.
@@ -5435,49 +5429,62 @@ impl Sessions {
                 // Round 26: the panel's notice and its draft's result sit in its message footer,
                 // so the note the DM types in never moves when one comes or goes. The editor
                 // fills its room (lead, P2).
-                let today = self.today();
-                let dated = self
-                    .selected
-                    .and_then(|id| self.notes.iter().find(|note| note.id == id))
-                    .filter(|note| note.date.as_str() < today.as_str())
-                    .map(|note| note.date.clone());
                 let frame = PaneFrame::new(ui);
-                let mut messages =
-                    Messages::new(&frame, "notes_panel_footer", ui.available_width());
-                if let Some(draft) = &self.draft {
-                    let name = self.note_name().unwrap_or_default();
-                    add_dropped(&frame, &mut messages, draft, &name, &self.dropped);
-                }
-                if let Some(date) = dated {
-                    messages.outcome(
-                        NotTonight::notice(crate::sentence!(
-                            "This session is dated {}. Play it tonight, or start a new one.",
-                            date
-                        ))
-                        .choice(Choice::new(
-                            MessageChoice::Choice("Play it tonight"),
-                            SessionAct::PlayTonight,
-                        ))
-                        .choice(Choice::new(
-                            MessageChoice::Choice("New session"),
-                            SessionAct::NewSession,
-                        )),
-                    );
-                }
-let paned = messages.pane_editor(ui, |ui, region| {
+                let messages = self.panel_messages(&frame, ui.available_width());
+                let paned = messages.pane_editor(ui, |ui, region| {
                     self.note_editor(ui, true, Some(region));
                 });
-                match paned.pressed.map(|press| press.id) {
-                    Some(SessionAct::UndoDrop) => {
-                        if let Some(draft) = &mut self.draft {
-                            draft.undo_dropped();
-                        }
-                    }
-                    Some(SessionAct::PlayTonight) => self.play_this_one(),
-                    Some(SessionAct::NewSession) => self.start_new_session(),
-                    _ => {}
+                if let Some(press) = paned.pressed {
+                    self.panel_press(press.id);
                 }
             });
+    }
+
+    /// The Notes panel's footer: the draft's dropped words with their Undo, and, for a session
+    /// dated before today, `Play it tonight` and `New session` (both UIs).
+    fn panel_messages<'f>(&mut self, frame: &'f PaneFrame, width: f32) -> Messages<'f, SessionAct> {
+        let today = self.today();
+        let dated = self
+            .selected
+            .and_then(|id| self.notes.iter().find(|note| note.id == id))
+            .filter(|note| note.date.as_str() < today.as_str())
+            .map(|note| note.date.clone());
+        let mut messages = Messages::new(frame, "notes_panel_footer", width);
+        if let Some(draft) = &self.draft {
+            let name = self.note_name().unwrap_or_default();
+            add_dropped(frame, &mut messages, draft, &name, &self.dropped);
+        }
+        if let Some(date) = dated {
+            messages.outcome(
+                NotTonight::notice(crate::sentence!(
+                    "This session is dated {}. Play it tonight, or start a new one.",
+                    date
+                ))
+                .choice(Choice::new(
+                    MessageChoice::Choice("Play it tonight"),
+                    SessionAct::PlayTonight,
+                ))
+                .choice(Choice::new(
+                    MessageChoice::Choice("New session"),
+                    SessionAct::NewSession,
+                )),
+            );
+        }
+        messages
+    }
+
+    /// A press in the Notes panel's footer (both UIs).
+    fn panel_press(&mut self, act: SessionAct) {
+        match act {
+            SessionAct::UndoDrop => {
+                if let Some(draft) = &mut self.draft {
+                    draft.undo_dropped();
+                }
+            }
+            SessionAct::PlayTonight => self.play_this_one(),
+            SessionAct::NewSession => self.start_new_session(),
+            _ => {}
+        }
     }
 
     fn note_body(&self) -> String {
@@ -5763,9 +5770,16 @@ let paned = messages.pane_editor(ui, |ui, region| {
 
     /// What the session before this one left: where the DM picks up the thread.
     fn last_time_block(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>) {
-        let Some(selected) = self.selected else {
+        let Some(selected) = self.see_last_time(book, plan) else {
             return;
         };
+        self.last_time_line(ui, selected, plan, book);
+    }
+
+    /// Read what the session before the selected one left, once for each selection. Returns
+    /// the selected session. Both UIs call it before they draw the Last time line.
+    fn see_last_time(&mut self, book: &Book, plan: &Plan<'_>) -> Option<Uuid> {
+        let selected = self.selected?;
         if self.last_time.as_ref().map(|(id, _)| *id) != Some(selected) {
             let previous = self
                 .notes
@@ -5804,7 +5818,7 @@ let paned = messages.pane_editor(ui, |ui, region| {
             });
             self.last_time = Some((selected, found));
         }
-        self.last_time_line(ui, selected, plan, book);
+        Some(selected)
     }
 
     #[allow(

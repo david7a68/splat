@@ -17,6 +17,7 @@ pub struct Row {
     name: SharedString,
     height: Pixels,
     selected: bool,
+    grows: bool,
     children: Vec<AnyElement>,
     on_click: Option<OnClick>,
 }
@@ -28,6 +29,7 @@ impl Row {
             name: name.into(),
             height: Density::Scan.row(),
             selected: false,
+            grows: false,
             children: Vec::new(),
             on_click: None,
         }
@@ -36,6 +38,12 @@ impl Row {
     /// Its height (default a `Scan` row). Use `Density::row()` or a run scale's row.
     pub fn height(mut self, height: Pixels) -> Self {
         self.height = height;
+        self
+    }
+
+    /// Its height follows its content (a title that wraps), at least `height`.
+    pub fn grows(mut self) -> Self {
+        self.grows = true;
         self
     }
 
@@ -68,7 +76,8 @@ impl RenderOnce for Row {
             .flex_row()
             .items_center()
             .w_full()
-            .h(self.height)
+            .when(!self.grows, |row| row.h(self.height))
+            .when(self.grows, |row| row.min_h(self.height))
             .flex_none()
             .px(S)
             .gap(S)

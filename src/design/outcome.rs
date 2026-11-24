@@ -5770,6 +5770,140 @@ pub fn chosen_count(chosen: usize, total: usize, unit: &str) -> String {
     }
 }
 
+/// The GPUI port (`docs/gpui-port.md`): a footer's lines as plain data, so a GPUI page draws the
+/// same messages, in the same order, with the same presses, as the egui footer does.
+pub mod plain {
+    use super::{Messages, MessageChoice, Press, Ticket, Tone, holding};
+
+    /// How a choice looks.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum Kind {
+        Safe,
+        Primary,
+        Lose,
+        Link,
+        /// The close icon.
+        Dismiss,
+    }
+
+    /// One control of a line: its whole words, its look, its lock's reason, and its press.
+    pub struct Choice<A> {
+        pub words: String,
+        pub kind: Kind,
+        pub blocked: Option<String>,
+        pub hover: Option<String>,
+        pub press: Press<A>,
+    }
+
+    /// One footer line: its tone, its words, the file it is about, its help, its Undo and its
+    /// choices (safe first).
+    pub struct Line<A> {
+        pub tone: Tone,
+        pub words: String,
+        pub hover: Option<String>,
+        pub file: Option<String>,
+        pub help: Vec<String>,
+        pub undo: Option<Choice<A>>,
+        pub choices: Vec<Choice<A>>,
+    }
+
+    impl super::PaneFrame {
+        /// The token for a pane that a GPUI page draws (no egui `Ui`).
+        pub fn headless() -> Self {
+            Self {
+                _not_static: std::marker::PhantomData,
+            }
+        }
+    }
+
+    impl<A: Clone + 'static> Messages<'_, A> {
+        /// The footer's lines in its order (`TypedFooter::measure`'s: rank, then newest first).
+        pub fn into_plain(self) -> Vec<Line<A>> {
+            let (_, _) = (self.id, self.width);
+            let newest = self.newest;
+            let mut lines = self.lines;
+            for line in &mut lines {
+                if line.refused {
+                    line.rank = super::refusal_rank(line.order.unwrap_or_default(), newest);
+                }
+            }
+            lines.sort_by_key(|line| (line.rank, line.order.map(std::cmp::Reverse)));
+            lines
+                .into_iter()
+                .map(|line| {
+                    let ticket = line.ticket;
+                    let press = |id: A| Press {
+                        id,
+                        ticket: ticket.as_ref().map(|ticket| Ticket::of(ticket.order())),
+                    };
+                    let body = line.typed.body;
+                    let undo = match (body.undo.as_ref(), line.typed.undo) {
+                        (Some(step), Some(id)) => Some(Choice {
+                            words: step.label(),
+                            kind: Kind::Safe,
+                            blocked: holding(&body.undo_lock).map(str::to_owned),
+                            hover: None,
+                            press: press(id),
+                        }),
+                        _ => None,
+                    };
+                    let choices = line
+                        .typed
+                        .choices
+                        .into_iter()
+                        .enumerate()
+                        .map(|(at, id)| {
+                            let (words, kind) = match (&body.named[at], &body.choices[at]) {
+                                (Some((kind, words)), _) => (
+                                    words.label(),
+                                    match kind {
+                                        super::ChoiceKind::Safe => Kind::Safe,
+                                        super::ChoiceKind::Lose => Kind::Lose,
+                                    },
+                                ),
+                                (None, MessageChoice::Choice(words)) => {
+                                    ((*words).to_owned(), Kind::Safe)
+                                }
+                                (None, MessageChoice::Primary(words)) => {
+                                    ((*words).to_owned(), Kind::Primary)
+                                }
+                                (None, MessageChoice::Lose(words)) => {
+                                    ((*words).to_owned(), Kind::Lose)
+                                }
+                                (None, MessageChoice::Link { word, .. }) => {
+                                    ((*word).to_owned(), Kind::Link)
+                                }
+                                (None, MessageChoice::Dismiss(_)) => {
+                                    (super::DISMISS_NAME.to_owned(), Kind::Dismiss)
+                                }
+                            };
+                            Choice {
+                                words,
+                                kind,
+                                blocked: holding(&body.locks[at]).map(str::to_owned),
+                                hover: body.hovers[at].clone(),
+                                press: press(id),
+                            }
+                        })
+                        .collect();
+                    Line {
+                        tone: body.tone,
+                        words: body.words.as_str().to_owned(),
+                        hover: body.words_hover.clone(),
+                        file: body
+                            .file
+                            .as_ref()
+                            .map(|file| file.relative.display().to_string()),
+                        help: body.help.iter().map(|help| help.as_str().to_owned()).collect(),
+                        undo,
+                        choices,
+                    }
+                })
+                .collect()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

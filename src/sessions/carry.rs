@@ -630,7 +630,7 @@ impl Sessions {
     /// has no event, no run and no live recording. Carry-over is a prep act.
     /// The events are looked through only when their number changes, at a folder scan, or when
     /// another of these inputs changes; not on a quiet frame.
-    fn preparing(&mut self, session: Uuid, book: &Book) -> bool {
+    pub(super) fn preparing(&mut self, session: Uuid, book: &Book) -> bool {
         let key = (
             session,
             self.current(),
@@ -673,7 +673,7 @@ impl Sessions {
 
     /// What `Carry over` would add now, as its hover says it, or why it is blocked. Read again
     /// only when the note's words change.
-    fn carry_offer(&mut self) -> Option<Result<String, String>> {
+    pub(super) fn carry_offer(&mut self) -> Option<Result<String, String>> {
         let revision = self.draft.as_ref().map(crate::sessions::Draft::revision)?;
         let (_, Some(last)) = self.last_time.as_mut()? else {
             return None;
@@ -781,7 +781,7 @@ impl Sessions {
 
     /// The act. It reads the last session again at the click, and writes nothing when what the
     /// line offered changed; otherwise one save of this note through `Draft::apply`.
-    fn carry_over(&mut self, session: Uuid, previous: Uuid, plan: &Plan<'_>, book: &Book) {
+    pub(super) fn carry_over(&mut self, session: Uuid, previous: Uuid, plan: &Plan<'_>, book: &Book) {
         let Some(previous) = self.notes.iter().find(|note| note.id == previous) else {
             return;
         };
@@ -1257,6 +1257,36 @@ impl Sessions {
         });
         self.carries.read = Some((key, Arc::clone(&prepared)));
         Some(prepared)
+    }
+
+    /// The prepared Read's parts as data, for the GPUI view (`show_prepared`'s order).
+    pub(super) fn read_parts(
+        prepared: &Prepared,
+        after: bool,
+    ) -> Vec<super::gpui_facade::ReadPart> {
+        use super::gpui_facade::ReadPart;
+        let chunks = if after {
+            &prepared.after
+        } else {
+            &prepared.before
+        };
+        chunks
+            .iter()
+            .filter_map(|chunk| match chunk {
+                Chunk::Words(words) => Some(ReadPart::Words(words.clone())),
+                Chunk::Embed(at) => match prepared.embeds.get(*at).map(|embed| &embed.shown) {
+                    Some(Shown::Words { from, label, words }) => Some(ReadPart::Embed {
+                        from: *from,
+                        label: label.clone(),
+                        words: words.clone(),
+                    }),
+                    Some(Shown::Gone(gone)) => Some(ReadPart::Gone(
+                        design::outcome::fault_words(gone).as_str().to_owned(),
+                    )),
+                    None => None,
+                },
+            })
+            .collect()
     }
 
     /// One part of the prepared Read: its Markdown, and each embed as its heading's words under

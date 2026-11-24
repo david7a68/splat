@@ -612,7 +612,6 @@ impl Render for SplatRoot {
             .bg(c.page)
             .children(strip)
             .children(party_bar)
-            .children(banner)
             .child(
                 div()
                     .flex()
@@ -629,7 +628,10 @@ impl Render for SplatRoot {
                             .border_color(c.hairline)
                             .child(side)
                     })),
-            );
+            )
+            // The session banner sits at the bottom, so it never moves `Next turn` under a
+            // pointer parked on it (`Sessions::banner`).
+            .children(banner);
         let dialogs = [
             self.app
                 .copy_dialog
