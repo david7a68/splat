@@ -955,3 +955,374 @@ Read the row for your class level. A slot is spent when you cast a spell of that
         shell.capture(&name);
     }
 }
+
+/// Print the harness names that start with `start` (for a failed step's message).
+fn names_starting(start: &str) -> Vec<String> {
+    crate::gui::kit::probe::names()
+        .into_iter()
+        .filter(|name| name.starts_with(start))
+        .collect()
+}
+
+/// Scenario `package-about`: the package's About page with its choice, Choose all and its Undo.
+#[test]
+fn package_about() {
+    let mut shell = Shell::new("package-about", Seed::Campaign);
+    library(&mut shell);
+    scope(&mut shell, "Ashen Marches");
+    shell.click("About Ashen Marches");
+    assert_eq!(open_name(&mut shell).as_deref(), Some("Ashen Marches"));
+    shell.capture("package-about__01-package-about__1200x800");
+    shell.click("Choose all");
+    loaded(&mut shell);
+    assert!(
+        shell.bounds("Undo package choice").is_some(),
+        "Choose all offers its Undo: {:?}",
+        names_starting("Undo")
+    );
+    shell.capture("package-about__02-package-every-entry-used__1200x800");
+    shell.click("Undo package choice");
+    loaded(&mut shell);
+    assert!(shell.bounds("Undo package choice").is_none());
+}
+
+/// Scenario `package-rename`, steps 01 to 03: an entry's reading links a spell; the spell is
+/// renamed outside Splat; its heading no longer says its name, and Use fixes it with an Undo.
+#[test]
+fn package_rename() {
+    let mut shell = Shell::new("package-rename", Seed::Campaign);
+    let package = package_folder(&mut shell);
+    let (entries, _) = splat::content::read_directory(&package).unwrap();
+    let target = entries.iter().find(|e| e.name == "Ashfall").unwrap();
+    let path = package.join("Rules/Ash Exposure.md");
+    let original = std::fs::read_to_string(&path).unwrap() + "\nSee [[Cinder Wolf]].\n";
+    let reading = serde_yaml_ng::to_value(serde_json::json!({
+        "title": "Ash Exposure",
+        "summary": "The watch knows this spell.",
+        "related": { target.id.to_string(): "Read the watch spell" }
+    }))
+    .unwrap();
+    std::fs::write(
+        &path,
+        crate::content_workspace::patch_fields(&original, &[("splat_reading", Some(reading))])
+            .unwrap(),
+    )
+    .unwrap();
+    library(&mut shell);
+    scope(&mut shell, "Ashen Marches");
+    open_row(&mut shell, "Ash Exposure · ");
+    assert!(
+        shell.bounds("Read the watch spell").is_some(),
+        "the reading's link shows: {:?}",
+        names_starting("Read")
+    );
+    shell.capture("package-rename__01-before-linked-entry-rename__1200x800");
+    let old_path = package.join(&target.path);
+    let renamed = crate::content_workspace::patch_fields(
+        &std::fs::read_to_string(&old_path).unwrap(),
+        &[("splat_name", Some("Watch Ashfall".into()))],
+    )
+    .unwrap();
+    std::fs::write(package.join("Spells/Watch Ashfall.md"), renamed).unwrap();
+    std::fs::remove_file(old_path).unwrap();
+    reload(&mut shell);
+    shell.click("Read the watch spell");
+    assert_eq!(open_name(&mut shell).as_deref(), Some("Watch Ashfall"));
+    assert!(
+        shell.bounds("Use Watch Ashfall").is_some(),
+        "the heading's fix shows: {:?}",
+        names_starting("Use")
+    );
+    shell.capture("package-rename__02-linked-entry-renamed-on-disk__1200x800");
+    shell.click("Use Watch Ashfall");
+    loaded(&mut shell);
+    assert!(
+        shell.bounds("Undo heading change").is_some(),
+        "{:?}",
+        names_starting("Undo")
+    );
+    assert!(
+        std::fs::read_to_string(package.join("Spells/Watch Ashfall.md"))
+            .unwrap()
+            .contains("# Watch Ashfall"),
+        "the heading says the new name"
+    );
+    shell.capture("package-rename__03-renamed-entry-heading-fixed__1200x800");
+}
+
+/// Scenario `package-delete-entry`, steps 01 and 02: an entry that links a package creature; the
+/// creature's file is deleted outside Splat, and the encounter that uses it says so.
+#[test]
+fn package_delete_entry() {
+    let mut shell = Shell::new("package-delete-entry", Seed::Campaign);
+    let package = package_folder(&mut shell);
+    let rules = package.join("Rules/Ash Exposure.md");
+    let text = std::fs::read_to_string(&rules).unwrap();
+    std::fs::write(&rules, format!("{text}\n\n[[Cinder Wolf]]\n")).unwrap();
+    library(&mut shell);
+    search(&mut shell, "Ash Exposure");
+    open_row(&mut shell, "Ash Exposure · ");
+    assert_eq!(open_name(&mut shell).as_deref(), Some("Ash Exposure"));
+    shell.capture("package-delete-entry__01-package-entry-before-delete__1200x800");
+    std::fs::remove_file(package.join("Creatures/Cinder Wolf.md")).unwrap();
+    shell.click("id:nav-Encounters");
+    for _ in 0..100 {
+        if shell.read(|root| root.app.encounters.loaded() && !root.app.encounters.busy()) {
+            break;
+        }
+        shell.update(|root, _, _| root.app.encounters.wait_for_load());
+        shell.wait(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    // The run's encounter opens in its editor, where the deleted creature's rows say so.
+    let edit = crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with("id:edit:"))
+        .expect("the paused run's Edit");
+    shell.click(&edit);
+    assert!(shell.read(|root| root.app.encounters.editor_open()));
+    shell.capture("package-delete-entry__02-deleted-package-entry-in-encounter__1200x800");
+}
+
+/// Scenario `package-duplicate-id`, steps 01 and 02: a copied creature file keeps its original's
+/// identity; both rows say so, and the original opens in the editor.
+#[test]
+fn package_duplicate_id() {
+    let mut shell = Shell::new("package-duplicate-id", Seed::Campaign);
+    let package = package_folder(&mut shell);
+    let before = std::fs::read_to_string(package.join("Creatures/Cinder Wolf.md")).unwrap();
+    let copy = before
+        .replace("splat_name: Cinder Wolf", "splat_name: Cinder Wolf copy")
+        .replace("max_hp: {value: 22}", "max_hp: {value: 44}")
+        .replace("HP 22 (", "HP 44 (")
+        .replace("| Hit Points | 22 (", "| Hit Points | 44 (");
+    std::fs::write(package.join("Creatures/Cinder Wolf copy.md"), copy).unwrap();
+    library(&mut shell);
+    search(&mut shell, "Cinder Wolf");
+    let rows = names_starting("Cinder Wolf");
+    assert!(
+        rows.iter()
+            .filter(|row| row.contains("Same entry in two files"))
+            .count()
+            >= 2,
+        "both rows name the duplicate: {rows:?}"
+    );
+    shell.capture("package-duplicate-id__01-duplicate-package-library-list__1200x800");
+    open_row(&mut shell, "Cinder Wolf · ");
+    shell.click("Edit Markdown");
+    assert!(shell.read(|root| root.app.library.source_open()));
+    shell.capture("package-duplicate-id__02-duplicate-original-editor__1200x800");
+}
+
+/// The open campaign's folder.
+fn campaign_folder(shell: &mut Shell) -> std::path::PathBuf {
+    shell.read(|root| {
+        root.app
+            .campaigns
+            .active_campaign()
+            .expect("a campaign")
+            .path
+    })
+}
+
+/// Scenario `package-file-changed`, step 01: a package creature read before its file changes.
+#[test]
+fn package_file_changed() {
+    let mut shell = Shell::new("package-file-changed", Seed::Campaign);
+    library(&mut shell);
+    search(&mut shell, "Cinder Wolf");
+    open_row(&mut shell, "Cinder Wolf · ");
+    assert_eq!(open_name(&mut shell).as_deref(), Some("Cinder Wolf"));
+    shell.capture("package-file-changed__01-package-before-disk-edit__1200x800");
+}
+
+/// Scenario `library-navigation`, step 01: a package rule whose reading links a campaign note,
+/// with a wiki link to a spell and one to a place that does not exist.
+#[test]
+fn library_navigation() {
+    let mut shell = Shell::new("library-navigation", Seed::Campaign);
+    let path = package_folder(&mut shell).join("Rules/Ash Exposure.md");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let target_path = "Notes/Captain Varra.md";
+    let target_text =
+        std::fs::read_to_string(campaign_folder(&mut shell).join(target_path)).unwrap();
+    let target = splat::content::Entry::parse(target_path, &target_text).unwrap();
+    let reading = serde_yaml_ng::to_value(serde_json::json!({
+        "title": "Ash Exposure",
+        "summary": "Captain Varra knows the road through the ash fields.",
+        "related": {target.id.to_string(): "Read Captain Varra"}
+    }))
+    .unwrap();
+    let text =
+        crate::content_workspace::patch_fields(&text, &[("splat_reading", Some(reading))]).unwrap();
+    let text = format!("{text}\n\n[[Ashfall|Wiki watch spell]]\n\n[[Missing place]]\n");
+    std::fs::write(&path, text).unwrap();
+    library(&mut shell);
+    scope(&mut shell, "Ashen Marches");
+    open_row(&mut shell, "Ash Exposure · ");
+    assert!(
+        shell.bounds("Read Captain Varra").is_some(),
+        "the reading links the campaign note: {:?}",
+        names_starting("Read")
+    );
+    shell.capture("library-navigation__01-homebrew-reference__1200x800");
+}
+
+/// Scenario `share-to-package`, step 01: a campaign rule that needs a campaign note, copied to
+/// the package: the dialog copies both together.
+#[test]
+fn share_to_package() {
+    let mut shell = Shell::new("share-to-package", Seed::Campaign);
+    let root = campaign_folder(&mut shell);
+    let (entries, _) = splat::content::read_directory(&root).unwrap();
+    let varra = entries
+        .iter()
+        .find(|entry| entry.name == "Captain Varra")
+        .unwrap();
+    let text = crate::library::note_text("Watch Orders", "rule", None);
+    let text = splat::content::formats::patch_model(
+        &text,
+        &[(
+            "splat_requires",
+            Some(
+                serde_yaml_ng::to_value(vec![crate::content_workspace::EntryRef::id(varra.id)])
+                    .unwrap(),
+            ),
+        )],
+    )
+    .unwrap();
+    std::fs::write(root.join("Watch Orders.md"), text).unwrap();
+    library(&mut shell);
+    scope(&mut shell, "Campaign entries");
+    search(&mut shell, "Watch Orders");
+    open_row(&mut shell, "Watch Orders · ");
+    shell.click("Copy to…");
+    wait_for_copy_plan(&mut shell);
+    shell.click("Destination");
+    shell.click("Package · Ashen Marches");
+    wait_for_copy_plan(&mut shell);
+    assert!(
+        shell.bounds("Copy both").is_some(),
+        "the dependency is copied with it: {:?}",
+        names_starting("C")
+    );
+    shell.capture("share-to-package__01-private-dependency-shared-together__1200x800");
+}
+
+/// Wait while the copy dialog works out its plan (on a thread).
+fn wait_for_copy_plan(shell: &mut Shell) {
+    for _ in 0..100 {
+        if shell.read(|root| {
+            root.app
+                .copy_dialog
+                .as_ref()
+                .is_some_and(|d| d.plan().is_some())
+        }) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+/// Scenario `book-to-package`, step 01: a built-in creature copied into the package, named and
+/// foldered.
+#[test]
+fn book_to_package() {
+    let mut shell = Shell::new("book-to-package", Seed::Campaign);
+    library(&mut shell);
+    search(&mut shell, "Aboleth");
+    open_row(&mut shell, "Aboleth · ");
+    shell.click("Copy to…");
+    wait_for_copy_plan(&mut shell);
+    shell.click("Destination");
+    shell.click("Package · Ashen Marches");
+    wait_for_copy_plan(&mut shell);
+    shell.click("Copy name");
+    shell.press("ctrl-a");
+    shell.type_text("Watch Aboleth");
+    shell.click("Folder");
+    shell.press("ctrl-a");
+    shell.type_text("Creatures");
+    wait_for_copy_plan(&mut shell);
+    assert_eq!(
+        shell.read(|root| root
+            .app
+            .copy_dialog
+            .as_ref()
+            .map(|dialog| (dialog.name().to_owned(), dialog.folder().to_owned()))),
+        Some(("Watch Aboleth".to_owned(), "Creatures".to_owned()))
+    );
+    shell.capture("book-to-package__01-book-copy-to-package__1200x800");
+}
+
+/// Scenario `package-folder-copied`, step 01: a copy of the package's folder, offered as a new
+/// package, is named as a copy and waits.
+#[test]
+fn package_folder_copied() {
+    fn copy_folder(from: &std::path::Path, to: &std::path::Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for file in std::fs::read_dir(from).unwrap() {
+            let file = file.unwrap();
+            let target = to.join(file.file_name());
+            if file.path().is_dir() {
+                copy_folder(&file.path(), &target);
+            } else {
+                std::fs::copy(file.path(), target).unwrap();
+            }
+        }
+    }
+    let mut shell = Shell::new("package-folder-copied", Seed::Campaign);
+    let original = package_folder(&mut shell);
+    let copied = original.with_file_name("ashen-marches-copy");
+    copy_folder(&original, &copied);
+    library(&mut shell);
+    shell.click("Packages");
+    shell.click("Manage packages…");
+    shell.click("Package folder");
+    shell.insert_text(&copied.to_string_lossy());
+    shell.click("Add folder");
+    assert_eq!(
+        shell.read(|root| root.app.campaigns.modules().len()),
+        1,
+        "the copy waits"
+    );
+    shell.capture("package-folder-copied__01-copied-package-names-duplicate-identity__1200x800");
+}
+
+/// Scenario `package-to-table`, steps 01 and 02: a new package made from the Library while an
+/// encounter draft is open, then a new entry in it.
+#[test]
+fn package_to_table() {
+    let mut shell = Shell::new("package-to-table", Seed::Campaign);
+    shell.click("id:nav-Encounters");
+    for _ in 0..100 {
+        if shell.read(|root| root.app.encounters.loaded() && !root.app.encounters.busy()) {
+            break;
+        }
+        shell.update(|root, _, _| root.app.encounters.wait_for_load());
+        shell.wait(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    shell.click("New encounter");
+    assert!(shell.read(|root| root.app.encounters.editor_open()));
+    library(&mut shell);
+    shell.click("Packages");
+    shell.click("Manage packages…");
+    assert!(shell.read(|root| root.app.library.forms().0));
+    shell.type_text("Copper Coast");
+    shell.capture("package-to-table__01-create-package-location__1200x800");
+    shell.click("Create package");
+    loaded(&mut shell);
+    assert!(
+        shell.read(|root| root
+            .app
+            .campaigns
+            .modules()
+            .iter()
+            .any(|module| module.name == "Copper Coast")),
+        "the package is registered"
+    );
+    shell.type_text("Copper Drake");
+    shell.capture("package-to-table__02-new-entry-used-by-default__1200x800");
+}

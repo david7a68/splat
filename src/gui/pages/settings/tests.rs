@@ -283,3 +283,37 @@ fn signed_in_remote_list_and_link() {
         "a blocked choice changes nothing"
     );
 }
+
+/// Scenario `campaign-copy-registered`, step 01: a copy of the campaign's folder, added as a
+/// campaign, is registered as a new campaign with a result that says so.
+#[test]
+fn campaign_copy_registered() {
+    const NAME: &str = "Emberfall Again";
+    let mut shell = settings("campaign-copy-registered", Seed::Campaign);
+    let active = shell.read(|root| root.app.campaigns.active_campaign().expect("a campaign"));
+    let copy = active.path.with_file_name("emberfall-copy");
+    std::fs::create_dir_all(&copy).unwrap();
+    std::fs::copy(active.path.join("Campaign.md"), copy.join("Campaign.md")).unwrap();
+    if shell.bounds("Campaign name").is_none() {
+        shell.click("Add campaign");
+    }
+    shell.click("Campaign name");
+    shell.type_text(NAME);
+    let path = copy.to_string_lossy().into_owned();
+    shell.update(|root, _, _| root.app.campaigns.set_form_path(&path));
+    shell.click("id:campaign-add");
+    assert!(
+        shell.bounds("Register as a new campaign").is_some(),
+        "a copied folder offers to register as new: {:?}",
+        crate::gui::kit::probe::names()
+            .into_iter()
+            .filter(|name| name.starts_with("Reg") || name.starts_with("id:campaign"))
+            .collect::<Vec<_>>()
+    );
+    shell.click("Register as a new campaign");
+    assert!(
+        shell.read(|root| root.app.campaigns.all().iter().any(|c| c.name == NAME)),
+        "the copy is registered"
+    );
+    shell.capture("campaign-copy-registered__01-copy-registered__1200x800");
+}
