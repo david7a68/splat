@@ -74,10 +74,18 @@ pub(super) fn render(
                     ("group-members-scroll", view.id.as_u128() as u64),
                     fields(root, GroupAt::Open, &view.fields, cx).max_w(LIST_MEASURE),
                 ));
+            let room = if narrow { content } else { add_width - M };
+            let facts = super::editor::results_facts(root, &add, room, window);
             if narrow {
                 let summary = view.summary.clone();
-                let side =
-                    add_column_with(&add, &[], choices.as_ref(), (focus_search, false, Some(&summary)), &handle, cx);
+                let side = add_column_with(
+                    &add,
+                    &[],
+                    choices.as_ref(),
+                    (focus_search, false, Some(&summary)),
+                    (&handle, facts),
+                    cx,
+                );
                 narrow_body(root, &view, members, side.into_any_element(), cx)
             } else {
                 div()
@@ -91,7 +99,7 @@ pub(super) fn render(
                             &[],
                             choices.as_ref(),
                             (focus_search, true, None),
-                            &handle,
+                            (&handle, facts),
                             cx,
                         )),
                     )

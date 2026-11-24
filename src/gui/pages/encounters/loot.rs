@@ -181,6 +181,8 @@ fn line_row(
         .gap(S)
         .min_h(Density::Read.control());
     let mut below = None;
+    // A text line's field takes the row; the others leave the room after their words.
+    let mut grows = false;
     match Loot::parse(&line) {
         Loot::Roll { times, key: table } if !editing => {
             let count = match &state.count {
@@ -299,6 +301,7 @@ fn line_row(
         _ => {
             let (k, o, s) = (key.to_owned(), owner.clone(), stored.clone());
             let one_cell = owner.one_cell();
+            grows = true;
             row = row.child(
                 div().flex_1().min_w(px(120.0)).child(
                     kit::TextField::new(
@@ -361,7 +364,7 @@ fn line_row(
             },
         ))],
     );
-    let row = row.child(div().flex_1()).child(menu);
+    let row = if grows { row } else { row.child(div().flex_1()) }.child(menu);
     let mut block = div().flex().flex_col().child(row);
     if let Some(words) = below {
         // Under the key it is about, so the row stays one line.

@@ -17,7 +17,7 @@ use eframe::egui;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
     AnyElement, Context, Div, ElementId, InteractiveElement, IntoElement, ParentElement, Pixels,
-    Styled, Window, div, px,
+    StatefulInteractiveElement, Styled, Window, div, px,
 };
 use splat_encounters_ui::encounters::model::{
     AddView, ChangesOf, EditorView, GroupAt, HeadAct, NarrowPane, OwnedAct, PartyButton,
@@ -104,15 +104,19 @@ pub(super) fn render(
                 .child(roster_column);
             let side: AnyElement = match &creature {
                 Some(creature) => super::creature::pane(creature, cx),
-                None => add_column(
-                    &add,
-                    &unused,
-                    choices.as_ref(),
-                    (focus_search, !narrow),
-                    &root.pages.encounters.results_scroll.clone(),
-                    cx,
-                )
-                .into_any_element(),
+                None => {
+                    let room = if narrow { content } else { add_width - M };
+                    let facts = results_facts(root, &add, room, window);
+                    add_column(
+                        &add,
+                        &unused,
+                        choices.as_ref(),
+                        (focus_search, !narrow),
+                        (&root.pages.encounters.results_scroll.clone(), facts),
+                        cx,
+                    )
+                    .into_any_element()
+                }
             };
             if narrow {
                 narrow_body(root, &roster, creature.is_some(), roster_pane, side, cx)
@@ -1208,10 +1212,46 @@ pub(super) fn add_column(
     unused: &[UnusedCreature],
     choices: Option<&super::filter::Choices>,
     (focus, heading): (bool, bool),
-    handle: &gpui::UniformListScrollHandle,
+    (handle, facts): (&gpui::UniformListScrollHandle, Pixels),
     cx: &mut Context<SplatRoot>,
 ) -> Div {
-    add_column_with(add, unused, choices, (focus, heading, None), handle, cx)
+    add_column_with(add, unused, choices, (focus, heading, None), (handle, facts), cx)
+}
+
+/// Where the results' action column starts (layout PR 4): `L` after the widest facts of every
+/// result, so each `Add` keeps its x as the DM scrolls. Measured once per ranking (kept in the
+/// page's state by the results' list), at most the column's room less the action.
+pub(super) fn results_facts(root: &mut SplatRoot, add: &AddView, room: Pixels, window: &mut Window) -> Pixels {
+    // The ranking's list, while the page keeps it (`add_view`), with its length.
+    let key = (Arc::as_ptr(&add.results) as usize, add.results.len());
+    let widest = match root.pages.encounters.results_facts {
+        Some((kept, width)) if kept == key => width,
+        _ => {
+            let stats = px(48.0 + 52.0 + 40.0);
+            let width = add
+                .results
+                .iter()
+                .map(|row| {
+                    let name = text_width(window, Type::Body, &row.name);
+                    let detail = match &row.unavailable {
+                        Some(why) => text_width(window, Type::Small, why) + Type::Small.size() + XS,
+                        None => {
+                            stats
+                                + row.source.as_deref().map_or(px(0.0), |source| {
+                                    XS + text_width(window, Type::Small, source)
+                                })
+                        }
+                    };
+                    name.max(detail)
+                })
+                .fold(px(0.0), Pixels::max);
+            root.pages.encounters.results_facts = Some((key, width));
+            width
+        }
+    };
+    // The action: `Add` and, beside a blocked one, `Open in World`.
+    let action = button_width(window, "Add") + S + button_width(window, "Open in World");
+    widest.min((room - L - action - crate::gui::theme::SCROLL_BAR_WIDTH).max(px(120.0)))
 }
 
 /// Add participants (or Add creatures, with the members' summary in the narrow group editor).
@@ -1220,7 +1260,7 @@ pub(super) fn add_column_with(
     unused: &[UnusedCreature],
     choices: Option<&super::filter::Choices>,
     (focus, heading, summary): (bool, bool, Option<&str>),
-    handle: &gpui::UniformListScrollHandle,
+    (handle, facts): (&gpui::UniformListScrollHandle, Pixels),
     cx: &mut Context<SplatRoot>,
 ) -> Div {
     div()
@@ -1230,13 +1270,19 @@ pub(super) fn add_column_with(
         .child(div().flex_none().child(add_head(
             add, unused, choices, focus, heading, summary, cx,
         )))
-        .child(div().flex_1().min_h_0().pt(S).child(results(add, handle, cx)))
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .pt(S)
+                .child(results(add, (handle, facts), cx)),
+        )
 }
 
 /// The search's results: a virtual list of rows with its scroll bar, or the empty state.
 pub(super) fn results(
     add: &AddView,
-    handle: &gpui::UniformListScrollHandle,
+    (handle, facts): (&gpui::UniformListScrollHandle, Pixels),
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
@@ -1288,7 +1334,7 @@ pub(super) fn results(
         cx.processor(
             move |_root: &mut SplatRoot, range: std::ops::Range<usize>, _window, cx| {
                 range
-                    .filter_map(|at| rows.get(at).map(|row| result_row(row, status, cx)))
+                    .filter_map(|at| rows.get(at).map(|row| result_row(row, (status, facts), cx)))
                     .collect::<Vec<_>>()
             },
         ),
@@ -1303,7 +1349,11 @@ pub(super) fn results(
 
 /// One result: its name (it opens the entry in Lookup) and stats, or why it cannot be added,
 /// then Add (with `Open in World` when it cannot), or `In roster`.
-fn result_row(row: &ResultRow, status: bool, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn result_row(
+    row: &ResultRow,
+    (status, facts): (bool, Pixels),
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let detail: AnyElement = match &row.unavailable {
         // The warning wraps in the two lines its row keeps; it is never cut short in one.
@@ -1366,7 +1416,6 @@ fn result_row(row: &ResultRow, status: bool, cx: &mut Context<SplatRoot>) -> Any
         }
         action.into_any_element()
     };
-    let peek = row.id;
     div()
         .id(ElementId::Name(format!("result:{}", row.id).into()))
         .flex()
@@ -1378,25 +1427,40 @@ fn result_row(row: &ResultRow, status: bool, cx: &mut Context<SplatRoot>) -> Any
             div()
                 .flex()
                 .flex_col()
-                .flex_1()
+                .flex_none()
+                .w(facts)
                 .min_w_0()
-                .child(
-                    div().flex().child(
-                        kit::Link::new(
-                            ElementId::Name(format!("result-read:{}", row.id).into()),
-                            row.name.clone(),
-                        )
-                        .hint("Read this entry in Lookup")
-                        .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                            root.app.encounters.peek = Some(peek);
-                            cx.notify();
-                        })),
-                    ),
-                )
+                .child(div().flex().child(name_link(row, cx)))
                 .child(detail),
         )
         .child(div().flex_none().child(action))
         .into_any_element()
+}
+
+/// A creature's name that opens its entry in Lookup (`creature_name_link`): its words in the
+/// text colour, underlined while the pointer is on it.
+fn name_link(row: &ResultRow, cx: &mut Context<SplatRoot>) -> impl IntoElement {
+    let c = colors();
+    let peek = row.id;
+    kit::target(
+        div()
+            .id(ElementId::Name(format!("result-read:{}", row.id).into()))
+            .flex_none()
+            .min_h(Density::Read.control() - XS)
+            .flex()
+            .items_center()
+            .cursor_pointer()
+            .ty(Type::Body)
+            .text_color(c.text)
+            .whitespace_nowrap()
+            .hover(|style| style.underline())
+            .child(row.name.clone())
+            .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+                root.app.encounters.peek = Some(peek);
+                cx.notify();
+            })),
+        row.name.clone(),
+    )
 }
 
 /// A result row's height: its two lines and its Add, with room between rows; a third line while

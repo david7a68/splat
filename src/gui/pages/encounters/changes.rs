@@ -320,7 +320,7 @@ fn stepper(
         .child(
             kit::TextField::new(id, shown)
                 .name(name.clone())
-                .width(px(72.0))
+                .width(px(56.0))
                 .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
                     let words = words.trim().trim_start_matches('+').replace('−', "-");
                     if let Ok(number) = words.parse::<i64>() {
@@ -376,7 +376,11 @@ fn conditions_block(
             .any(|(_, name)| same(c, name))
     };
     let mut column = div().flex().flex_col().gap(XS).child(grid);
-    for custom in conditions.iter().filter(|c| !official(c)) {
+    let customs: Vec<&String> = conditions.iter().filter(|c| !official(c)).collect();
+    if !customs.is_empty() {
+        column = column.child(kit::gap(S)).child(kit::label("Other effects", 0));
+    }
+    for custom in customs {
         let gone = custom.clone();
         column = column.child(
             div()
@@ -386,16 +390,21 @@ fn conditions_block(
                 .gap(S)
                 .max_w(FORM_WIDTH)
                 .min_h(Density::Read.control())
-                .child(div().flex_1().min_w_0().child(kit::text(Type::Body, c.text, custom.clone())))
                 .child(
-                    kit::Button::quiet(
-                        ElementId::Name(format!("changes-effect-remove:{custom}:{key}").into()),
-                        "Remove",
-                    )
-                    .name(format!("Remove {custom}"))
-                    .density(Density::Read)
-                    .on_click(edit(cx, of, move || ChangeEdit::RemoveCondition(gone.clone()))),
-                ),
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(kit::text(Type::Body, c.text, custom.clone())),
+                )
+                .child(super::common::row_menu(
+                    ElementId::Name(format!("changes-effect:{custom}:{key}").into()),
+                    custom,
+                    vec![kit::MenuItem::new("Remove").icon(icons::REMOVE).on_click(edit(
+                        cx,
+                        of,
+                        move || ChangeEdit::RemoveCondition(gone.clone()),
+                    ))],
+                )),
         );
     }
     let typed = root

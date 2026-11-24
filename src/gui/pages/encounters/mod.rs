@@ -46,6 +46,8 @@ pub struct State {
     pub other_effects: std::collections::HashMap<String, String>,
     /// The search results' scroll (`kit::virtual_list::uniform_column`).
     pub results_scroll: gpui::UniformListScrollHandle,
+    /// The results' facts width, by the ranking it was measured for (`editor::results_facts`).
+    pub results_facts: Option<((usize, usize), gpui::Pixels)>,
     /// Each open replacement picker's words and its `Replace all`, by its row's key.
     pub replacing: std::collections::HashMap<String, (String, bool)>,
     /// The page's own keyboard focus, so its keys (Ctrl+S) reach it when the control that had
