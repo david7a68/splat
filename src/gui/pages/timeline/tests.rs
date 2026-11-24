@@ -521,8 +521,20 @@ fn an_uncounted_length_says_why_on_hover() {
             cx,
         );
     });
+    // Before the hover delay the row shows no tooltip; after it, its words are drawn over the
+    // page, so the picture changes.
+    let before = shell.capture("timeline-uncounted__00-row-hover-before-tip__1200x800");
     shell.wait(std::time::Duration::from_secs(1));
-    crate::gui::pages::sessions::tests::capture(&mut shell, "timeline-uncounted__01-row-hover__1200x800");
+    let after = crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "timeline-uncounted__01-row-hover__1200x800",
+    );
+    let pixels = |path: &std::path::Path| image::open(path).expect("the capture").to_rgba8();
+    assert_ne!(
+        pixels(&before),
+        pixels(&after),
+        "the uncounted length says why on hover"
+    );
 }
 
 /// M0556: a long Timeline opens at its last event, whole in view, with its first out of view.
