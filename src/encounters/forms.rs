@@ -291,6 +291,125 @@ impl Encounters {
     }
 }
 
+/// A copied note the creature search finds (`duplicate_creature_results`, M0178): the fault's
+/// words, then each file's repair with what it leaves as its help line.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DuplicateRepair {
+    /// `These two files claim to be the same note.` (or `entry`).
+    pub warning: String,
+    /// Each file: its path in the campaign, its repair (`Make Rook copy.md a separate note`),
+    /// and what the repair leaves the encounters that use it with.
+    pub files: Vec<(String, String, Option<String>)>,
+}
+
+impl Encounters {
+    /// The search's repairs of copied notes: each creature or fighting World note whose name
+    /// holds the search's words and that another file claims too, once per identity. The
+    /// search says these first; while there are any, it does not say `No creatures match`.
+    pub fn duplicate_repairs(&self, ctx: &StateContext) -> Vec<DuplicateRepair> {
+        let Some(index) = ctx.get(crate::requests::LINK_INDEX) else {
+            return Vec::new();
+        };
+        if index.campaign.is_none() {
+            return Vec::new();
+        }
+        let query = self.search.to_lowercase();
+        let mut seen = std::collections::BTreeSet::new();
+        let mut repairs = Vec::new();
+        for item in &index.items {
+            if !item.entry.name.to_lowercase().contains(&query)
+                || !(item.entry.kind == "creature"
+                    || (item.entry.kind == "world" && crate::world::fights(&item.entry)))
+            {
+                continue;
+            }
+            let Some(paths) = index.duplicate_world.get(&item.entry.path) else {
+                continue;
+            };
+            let mut identity = paths.clone();
+            identity.sort();
+            if !seen.insert(identity) {
+                continue;
+            }
+            let users: Vec<String> = index
+                .items
+                .iter()
+                .filter(|other| {
+                    other.entry.kind == "encounter"
+                        && crate::library::encounter_uses_entry(&other.entry, &item.entry)
+                })
+                .map(|other| other.entry.name.clone())
+                .collect();
+            let noun = crate::world::IdentityNoun::of(&item.entry);
+            let file = |path: &str| path.rsplit('/').next().unwrap_or(path).to_owned();
+            let files = paths
+                .iter()
+                .enumerate()
+                .map(|(position, path)| {
+                    let help = paths
+                        .iter()
+                        .find(|other| *other != path)
+                        .filter(|_| !users.is_empty())
+                        .map(|remaining| {
+                            crate::world::duplicate_consequence(
+                                crate::world::KeptBy::Encounters(&users),
+                                &file(remaining),
+                                position == 0,
+                            )
+                            .as_str()
+                            .to_owned()
+                        });
+                    (
+                        path.clone(),
+                        crate::world::separate_choice(noun, &file(path)).label(),
+                        help,
+                    )
+                })
+                .collect();
+            repairs.push(DuplicateRepair {
+                warning: crate::design::outcome::Fault::cause(&crate::world::DuplicateIdentity(
+                    noun,
+                ))
+                .as_str()
+                .to_owned(),
+                files,
+            });
+        }
+        repairs
+    }
+
+    /// A copied note's repair pressed in the search: the file at `path` gets an identity of
+    /// its own. The separation goes in the page's store, newest, with its Undo (the editors'
+    /// footers show it); a failure is the reason, and the last separation stays. The shell
+    /// reads the campaign again.
+    pub fn separate_copy(&mut self, ctx: &StateContext, path: &str) {
+        let Some(active) = self.active.clone() else {
+            return;
+        };
+        match crate::world::new_identity(&active, path) {
+            Ok((change, note)) => {
+                note_identity_changed(ctx);
+                self.end_separation_failure(&active.path, path);
+                self.separations.record(Separation {
+                    owner: SeparationOwner {
+                        root: active.path.clone(),
+                        note,
+                    },
+                    change: Arc::new(IdentityChange(change)),
+                    path: path.to_owned(),
+                });
+            }
+            Err(error) => {
+                self.separation_error = Some(SeparationFailure {
+                    root: active.path.clone(),
+                    path: path.to_owned(),
+                    words: error,
+                });
+            }
+        }
+    }
+}
+
 /// Whether the search's words find a creature note with a twin file (the search's repair
 /// messages, `duplicate_creature_results`).
 fn hidden_duplicates(index: &crate::lookup::ContentIndex, query: &str) -> bool {

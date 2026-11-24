@@ -16,10 +16,15 @@ use gpui::{
     AnyElement, Context, Div, ElementId, InteractiveElement, IntoElement, ParentElement, Pixels,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
+use splat_encounters_ui::encounters::model::DuplicateRepair;
 use splat_encounters_ui::encounters::model::{
     AddView, ChangesOf, EditorView, GroupAt, HeadAct, NarrowPane, OwnedAct, PartyButton, ResultRow,
     RosterAct, RosterRow, RosterView, UnusedCreature,
 };
+
+/// What the search offers besides its results: creatures of unused packages (`Use it`) and the
+/// repairs of copied notes.
+pub(super) type Offers<'a> = (&'a [UnusedCreature], &'a [DuplicateRepair]);
 use std::sync::Arc;
 
 /// The page's creature filter, shared by the roster and a group.
@@ -85,6 +90,7 @@ pub(super) fn render(
     let filter = filter(&ctx);
     let add = root.app.encounters.add_view(filter);
     let unused = root.app.encounters.unused_creatures(&ctx);
+    let repairs = root.app.encounters.duplicate_repairs(&ctx);
     let creature = root.app.encounters.creature_view();
     let owned = root.app.encounters.owned_groups(&ctx);
     let lines = root.app.encounters.editor_footer(&active.path);
@@ -119,7 +125,7 @@ pub(super) fn render(
                     let columns = results_columns(root, &add, room, window);
                     add_column(
                         &add,
-                        &unused,
+                        (&unused, &repairs),
                         choices.as_ref(),
                         (focus_search, !narrow),
                         (&root.pages.encounters.results_scroll.clone(), columns),
@@ -1082,7 +1088,7 @@ fn roster_act(
 /// Add participants' head: its heading, the party's line, the target and the search.
 pub(super) fn add_head(
     add: &AddView,
-    unused: &[UnusedCreature],
+    (unused, repairs): Offers<'_>,
     choices: Option<&super::filter::Choices>,
     focus: bool,
     heading: bool,
@@ -1144,6 +1150,9 @@ pub(super) fn add_head(
             summary.to_owned(),
         ));
     }
+    for (at, repair) in repairs.iter().enumerate() {
+        head = head.child(duplicate_repair(at, repair, cx));
+    }
     if add.close_names {
         head = head.child(kit::text(
             Type::Small,
@@ -1175,6 +1184,43 @@ pub(super) fn add_head(
         );
     }
     head
+}
+
+/// A copied note the search found (`duplicate_creature_results`): the warning, then each
+/// file's repair, a framed button with what it leaves under it. A press gives the file an
+/// identity of its own; the editor's footer keeps the result with its Undo.
+fn duplicate_repair(at: usize, repair: &DuplicateRepair, cx: &mut Context<SplatRoot>) -> Div {
+    let mut files = div().flex().flex_col().gap(XS);
+    for (position, (path, words, help)) in repair.files.iter().enumerate() {
+        let path = path.clone();
+        files = files.child(
+            div()
+                .flex()
+                .flex_col()
+                .items_start()
+                .gap(XS)
+                .child(
+                    kit::Button::secondary(
+                        ElementId::Name(format!("separate-copy:{at}:{position}").into()),
+                        words.clone(),
+                    )
+                    .density(Density::Read)
+                    .on_click(cx.listener(
+                        move |root: &mut SplatRoot, _, _, cx| {
+                            let ctx = root.ctx.clone();
+                            root.app.encounters.separate_copy(&ctx, &path);
+                            cx.notify();
+                        },
+                    )),
+                )
+                .children(help.clone().map(kit::help)),
+        );
+    }
+    div().child(
+        kit::Message::new(kit::Tone::Warning, repair.warning.clone())
+            .small()
+            .detail(files),
+    )
 }
 
 /// The search field and the filter's words.
@@ -1223,7 +1269,7 @@ pub(super) fn search(
 /// Add participants: its head, then the results in a virtual list that fills the column.
 pub(super) fn add_column(
     add: &AddView,
-    unused: &[UnusedCreature],
+    offers: Offers<'_>,
     choices: Option<&super::filter::Choices>,
     (focus, heading): (bool, bool),
     (handle, columns): (&gpui::UniformListScrollHandle, ResultColumns),
@@ -1231,7 +1277,7 @@ pub(super) fn add_column(
 ) -> Div {
     add_column_with(
         add,
-        unused,
+        offers,
         choices,
         (focus, heading, None),
         (handle, columns),
@@ -1333,7 +1379,7 @@ pub(super) fn results_columns(
 /// Add participants (or Add creatures, with the members' summary in the narrow group editor).
 pub(super) fn add_column_with(
     add: &AddView,
-    unused: &[UnusedCreature],
+    offers: Offers<'_>,
     choices: Option<&super::filter::Choices>,
     (focus, heading, summary): (bool, bool, Option<&str>),
     (handle, columns): (&gpui::UniformListScrollHandle, ResultColumns),
@@ -1346,24 +1392,28 @@ pub(super) fn add_column_with(
         .child(
             div()
                 .flex_none()
-                .child(add_head(add, unused, choices, focus, heading, summary, cx)),
+                .child(add_head(add, offers, choices, focus, heading, summary, cx)),
         )
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .pt(S)
-                .child(results(add, (handle, columns), cx)),
-        )
+        .child(div().flex_1().min_h_0().pt(S).child(results(
+            add,
+            !offers.1.is_empty(),
+            (handle, columns),
+            cx,
+        )))
 }
 
 /// The search's results: a virtual list of rows with its scroll bar, or the empty state.
 pub(super) fn results(
     add: &AddView,
+    repairs: bool,
     (handle, columns): (&gpui::UniformListScrollHandle, ResultColumns),
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
+    // A copied note's repairs are said instead: the search found it, twice.
+    if add.results.is_empty() && repairs {
+        return div().into_any_element();
+    }
     if add.results.is_empty() {
         let words = if add.filter.is_empty() {
             "Check the spelling, or check"

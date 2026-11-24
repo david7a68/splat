@@ -70,6 +70,10 @@ pub(super) fn render(
         cx,
     );
     let handle = root.pages.encounters.results_scroll.clone();
+    let repairs = {
+        let ctx = root.ctx.clone();
+        root.app.encounters.duplicate_repairs(&ctx)
+    };
     let body: AnyElement =
         match add {
             Some(add) if !view.reading => {
@@ -85,7 +89,7 @@ pub(super) fn render(
                     let summary = view.summary.clone();
                     let side = add_column_with(
                         &add,
-                        &[],
+                        (&[], &repairs),
                         choices.as_ref(),
                         (focus_search, false, Some(&summary)),
                         (&handle, columns),
@@ -108,7 +112,7 @@ pub(super) fn render(
                         .child(div().flex_none().w(add_width).h_full().pl(M).child(
                             add_column_with(
                                 &add,
-                                &[],
+                                (&[], &repairs),
                                 choices.as_ref(),
                                 (focus_search, true, None),
                                 (&handle, columns),

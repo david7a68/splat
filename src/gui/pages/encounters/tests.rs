@@ -1047,6 +1047,49 @@ fn an_npc_is_found_and_added_by_its_name() {
         "the NPC on the roster says In roster"
     );
     shell.capture("npc-in-encounter__02-npc-in-roster__1200x800");
+
+    // FF8: a copy of the note claims the same identity. The search says so with each file's
+    // repair; `Make Rook copy.md a separate note` gives the copy its own identity, and the
+    // editor's footer keeps the result with its Undo, which writes the copy back.
+    let copy = campaign.path.join("NPCs/Rook copy.md");
+    std::fs::write(&copy, &text).unwrap();
+    shell.click("Save encounter");
+    shell.click("id:encounter-back");
+    reload(&mut shell);
+    reads_done(&mut shell);
+    shell.click("New encounter");
+    shell.click("Find a creature or party member");
+    shell.type_text("Rook");
+    reads_done(&mut shell);
+    let repair = first_target(&mut shell, "Make Rook copy.md a separate note");
+    shell.click(&repair);
+    let separated = std::fs::read_to_string(&copy).unwrap();
+    assert_ne!(separated, text, "the copy has an identity of its own");
+    let footer = |shell: &mut Shell| {
+        shell.update(|root, _, _| {
+            let path = root.app.campaigns.active_campaign().unwrap().path;
+            root.app
+                .encounters
+                .editor_footer(&path)
+                .into_iter()
+                .map(|line| line.words)
+                .collect::<Vec<_>>()
+        })
+    };
+    assert!(
+        footer(&mut shell)
+            .iter()
+            .any(|words| words == "Rook copy.md is now a separate note."),
+        "{:?}",
+        footer(&mut shell)
+    );
+    let undo = first_target(&mut shell, "Undo separate Rook copy.md");
+    shell.click(&undo);
+    assert_eq!(
+        std::fs::read_to_string(&copy).unwrap(),
+        text,
+        "Undo writes the copy back"
+    );
 }
 
 /// No creature matches as typed, but a package the campaign does not use has one: the search
