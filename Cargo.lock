@@ -8004,8 +8004,6 @@ dependencies = [
 name = "splat-trackers"
 version = "0.1.0"
 dependencies = [
- "egui",
- "egui_kittest",
  "splat-campaign",
  "splat-content",
  "splat-design",

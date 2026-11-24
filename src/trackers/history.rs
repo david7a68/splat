@@ -4,31 +4,17 @@
 //! another session's stamp has `Remove` in its menu. `Remove` takes the entry out of
 //! `Trackers.md` through `commit`, with the others of its press and the entries of each notice
 //! it raised, as Undo does, and it has one Undo, as the Timeline's removal has. The rows and the
-//! problems are worked out when the ledger or the definitions change; a folded section does no
-//! work, and an open one draws only the rows in view.
-use super::TrackerFault;
+//! problems are worked out when the ledger or the definitions change, never per frame. The GPUI
+//! reader draws them (`gui::pages::trackers::history`).
 use super::{
     NoticeRef, Rules, State, Today, Trackers, Unrecorded, label, ledger, orphaned, place_name,
     result_words, with_dependents,
 };
-use crate::design::memo::{Measure, Memos, Revision};
-use crate::design::outcome::PagePlaceholder;
 use crate::design::outcome::{FaultMessage, Messages, Said, Sentence, UndoStep, Verb};
-use crate::design::{self, Action, Density, Gap, Type, colors};
-use egui;
+use crate::design::{self};
 use ledger::{Entry, Ledger, Op, Placed};
 use std::collections::HashMap;
 use uuid::Uuid;
-
-#[cfg(feature = "test-support")]
-thread_local! {
-    /// Rows worked out by `rows`: the work that grows with the ledger.
-    pub static PREPARED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    /// Open sections drawn, and rows drawn in them.
-    pub static DRAWN: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
-    /// Rows' words fitted to their room (`history_row`).
-    pub static FITTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
 
 /// One row of a member's history: the entry as the file held it, its words, and the value it
 /// left.
@@ -104,8 +90,6 @@ pub fn rows(rules: &Rules, ledger: &Ledger, state: &State) -> HashMap<String, Ve
         if rules.def(&key).is_none() && rules.day_mark(&key).is_none() {
             continue;
         }
-        #[cfg(feature = "test-support")]
-        PREPARED.with(|n| n.set(n.get() + 1));
         let one = std::slice::from_ref(entry);
         let words = if entry.notice.is_some() {
             result_words(rules, ledger, state, one).to_string()
@@ -549,82 +533,6 @@ impl crate::design::outcome::Fault for NotSaved {
     }
 }
 
-/// The problems list and each member's folded history, in the reader of a house rule note in
-/// play. A file that cannot be read shows its name and no history or value.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "the history cannot show: a page placeholder; a member’s problem: a row fault"
-)]
-pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat_content::content::Entry) {
-    if !super::is_house_rule_note(note) || !trackers.in_play() {
-        return;
-    }
-    let id = note.id;
-    if let Some(error) = &trackers.rules.unreadable {
-        design::gap(ui, Gap::L);
-        let _ = PagePlaceholder::<crate::design::outcome::NoPress>::new(
-            &TrackerFault::NotesUnreadable(error.clone()),
-        )
-        .show(ui);
-        return;
-    }
-    if !in_play(&trackers.rules, id) {
-        return;
-    }
-    design::gap(ui, Gap::L);
-    if let Some(error) = &trackers.unreadable {
-        let _ = PagePlaceholder::<crate::design::outcome::NoPress>::new(
-            &TrackerFault::LedgerUnreadable(error.clone()),
-        )
-        .show(ui);
-        return;
-    }
-    for (_, problem) in trackers
-        .problems
-        .iter()
-        .filter(|(owner, _)| *owner == Some(id))
-    {
-        design::outcome::row_fault(ui, &TrackerFault::Problem(problem.clone()));
-    }
-    let mut pressed = None;
-    let played = trackers.played;
-    let revision = trackers.revision.revision();
-    let fits = &mut trackers.view.history_fits;
-    let rules = &trackers.rules;
-    let sections = rules
-        .trackers
-        .iter()
-        .filter(|t| t.note == id)
-        .filter_map(|t| {
-            let def = t.def.as_ref().ok()?;
-            Some((&t.key, def.name.as_str(), Some(start_words(def))))
-        })
-        .chain(
-            rules
-                .day_marks
-                .iter()
-                .filter(|m| m.note == id)
-                .filter_map(|m| Some((&m.key, m.def.as_ref().ok()?.title(), None))),
-        );
-    for (key, name, start) in sections {
-        let rows = trackers.history.get(key).map_or(&[][..], Vec::as_slice);
-        design::section_with_id(
-            ui,
-            ("tracker_history", id, key),
-            design::group_heading_text(ui, &format!("{name} history"), rows.len()),
-            |ui| {
-                if let Some(start) = start {
-                    ui.label(Type::Small.rich(ui, start).color(colors().muted));
-                }
-                rows_in_view(ui, rows, played, (fits, revision), &mut pressed);
-            },
-        );
-    }
-    if let Some(entry) = pressed {
-        trackers.remove(id, &entry);
-    }
-}
-
 /// `Start 0`, or each name's start value.
 pub fn start_words(def: &super::Definition) -> String {
     match &def.start {
@@ -640,122 +548,5 @@ pub fn start_words(def: &super::Definition) -> String {
     }
 }
 
-/// The rows, each one line of one control's height: the whole list takes its height, and only
-/// the rows inside the reader's clip are laid out and drawn, so a long history costs a frame no
-/// more than a short one.
-fn rows_in_view(
-    ui: &mut egui::Ui,
-    rows: &[Row],
-    played: Option<Uuid>,
-    (fits, revision): (&mut RowFits, Revision),
-    pressed: &mut Option<Entry>,
-) {
-    let height = Density::Read.control();
-    let gap = ui.spacing().item_spacing.y;
-    let pitch = height + gap;
-    let (area, _) = ui.allocate_exact_size(
-        egui::vec2(
-            ui.available_width(),
-            (rows.len() as f32 * pitch - gap).max(0.0),
-        ),
-        egui::Sense::hover(),
-    );
-    let seen = area.intersect(ui.clip_rect());
-    #[cfg(feature = "test-support")]
-    DRAWN.with(|n| n.set((n.get().0 + 1, n.get().1)));
-    if !seen.is_positive() {
-        return;
-    }
-    let first = ((seen.top() - area.top()) / pitch).floor().max(0.0) as usize;
-    let last = (((seen.bottom() - area.top()) / pitch).ceil() as usize).min(rows.len());
-    for (at, row) in rows.iter().enumerate().take(last).skip(first) {
-        #[cfg(feature = "test-support")]
-        DRAWN.with(|n| n.set((n.get().0, n.get().1 + 1)));
-        let rect = egui::Rect::from_min_size(
-            egui::pos2(area.left(), area.top() + at as f32 * pitch),
-            egui::vec2(area.width(), height),
-        );
-        design::register_row(ui, rect);
-        // Each row's controls are kept by its entry's ID: a menu open on a row that an edit on
-        // disk took away never opens on the row that takes its place.
-        ui.scope_builder(
-            egui::UiBuilder::new()
-                .max_rect(rect)
-                .id_salt(&row.entry.id)
-                .layout(egui::Layout::right_to_left(egui::Align::Center)),
-            |ui| {
-                let removable = row.entry.session != played;
-                history_row(ui, row, removable, (&mut *fits, revision), pressed);
-            },
-        );
-    }
-}
-
 /// Why `Remove` is off on a row of the session being played: its own Undo takes it back.
 pub const REMOVE_PLAYED: &str = "Use Undo in Trackers for a change of this session.";
-
-/// A row, laid out from its right end: its menu with `Remove` (off, with its reason painted under
-/// it, on a row of the session being played), so every row looks alike and the values stand in one column; the
-/// value it left; then its words, cut at a whole word with `…` when they do not fit (the shared
-/// `words_that_fit`), whole on hover and to assistive technology. The fit is kept by the row's
-/// entry with the trackers' revision and its measure (`ViewState::history_fits`).
-fn history_row(
-    ui: &mut egui::Ui,
-    row: &Row,
-    removable: bool,
-    (fits, revision): (&mut RowFits, Revision),
-    pressed: &mut Option<Entry>,
-) {
-    let menu = Density::Read.control();
-    design::row_menu(ui, &row.words, |ui| {
-        if Action::quiet("Remove")
-            .density(Density::Read)
-            .blocked_if(!removable, REMOVE_PLAYED)
-            .show(ui)
-            .clicked()
-        {
-            *pressed = Some(row.entry.clone());
-            ui.close();
-        }
-        // Opened by keyboard, the off `Remove` takes no focus and shows no tooltip: the reason
-        // stands under it.
-        design::choice_note(ui, false, (!removable).then_some(REMOVE_PLAYED));
-    });
-    if let Some(value) = row.value {
-        let value = value.to_string();
-        let font = Type::Numeral.font(ui);
-        let width = design::number_width(ui, &value, &font);
-        let (rect, _) = ui.allocate_exact_size(egui::vec2(width, menu), egui::Sense::hover());
-        design::number(
-            ui.painter(),
-            rect.right(),
-            rect.center().y,
-            &value,
-            &font,
-            colors().text,
-        );
-    }
-    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-        let (font, room) = (Type::Body.font(ui), ui.available_width());
-        let key = (revision, Measure::of(ui, room, &font));
-        let shown = fits.get_or(&row.entry.id, key, || {
-            #[cfg(feature = "test-support")]
-            FITTED.with(|n| n.set(n.get() + 1));
-            let words = design::words_that_fit(ui, &row.words, &font, room);
-            // A first word wider than the room is `…` alone, so nothing paints over the value.
-            if design::number_width(ui, &words, &font) > room {
-                "…".to_owned()
-            } else {
-                words
-            }
-        });
-        let response = ui.add(egui::Label::new(Type::Body.rich(ui, shown.as_str())));
-        if *shown != row.words {
-            design::named(ui, &response, &row.words);
-            response.on_hover_text(&row.words);
-        }
-    });
-}
-
-/// The history rows' words as fitted, by entry: see [`history_row`].
-pub(super) type RowFits = Memos<String, (Revision, Measure), String>;

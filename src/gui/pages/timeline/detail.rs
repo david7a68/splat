@@ -136,11 +136,7 @@ pub(crate) fn render(
             })),
     );
     // The kind before the title: its icon alone for a day or an untitled event.
-    let kind_word = if event.kind == Kind::Day || event.own_title().is_none() {
-        ""
-    } else {
-        event.kind.word()
-    };
+    let kind_word = crate::timeline::page::header_kind(event);
     let kind_icon = crate::timeline::kind_icon(event.kind);
     // The title line keeps its title, its save state and its menu on one line; Copy link takes
     // a line of its own under them when the column has no room for it there.
