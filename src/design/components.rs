@@ -249,6 +249,12 @@ impl ResultOrder {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         Self(NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
     }
+
+    /// The order `n`, for a test that needs results in a known order without a store.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn numbered(n: u64) -> Self {
+        Self(n)
+    }
 }
 
 /// The same safe-first choice for a draft whose file changed on disk.

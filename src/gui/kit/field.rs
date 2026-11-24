@@ -41,6 +41,8 @@ pub struct FieldState<S: 'static> {
     markdown: bool,
     /// Where each section heading of the source ends (its rule goes under that line).
     rules: Rc<Vec<usize>>,
+    /// The field has taken the caller's words once (`follow`).
+    shown: bool,
     _changes: Subscription,
 }
 
@@ -97,6 +99,7 @@ macro_rules! field_state {
                     on_blur: None,
                     markdown: false,
                     rules: Rc::default(),
+                    shown: false,
                     _changes: changes,
                 }
             }
@@ -113,21 +116,37 @@ macro_rules! field_state {
             }
 
             /// Take the caller's value: words the program changed replace the field's.
+            ///
+            /// `own`: the change is the field's own edit (a command typed in it took its words
+            /// out, words went in at its caret, the page added words to the open note), so the
+            /// field's Undo history stays and Ctrl+Z goes back through the change. Any other
+            /// change (a load, a reload, another object's words) ends the history, so another
+            /// object's words never come back through Ctrl+Z. A field that has shown no words yet
+            /// takes its first words with no history either way.
             fn follow(
                 &mut self,
                 value: &SharedString,
                 on_change: Option<OnChange>,
+                own: bool,
                 window: &mut Window,
                 cx: &mut Context<Self>,
             ) {
                 self.on_change = on_change;
                 if *value != self.last {
+                    let keep = own && self.shown;
                     self.last = value.clone();
+                    self.shown = true;
                     let value = value.clone();
-                    self.input
-                        .update(cx, |input, cx| input.set_value(value.clone(), window, cx));
+                    self.input.update(cx, |input, cx| {
+                        if keep {
+                            input.replace_all(value.clone(), window, cx);
+                        } else {
+                            input.set_value(value.clone(), window, cx);
+                        }
+                    });
                     self.restyle(&value, cx);
                 }
+                self.shown = true;
             }
         }
     };
@@ -285,7 +304,7 @@ impl RenderOnce for TextField {
         let on_blur = self.on_blur.clone();
         state.update(cx, |state, cx| {
             state.on_blur = on_blur;
-            state.follow(&value, on_change, window, cx)
+            state.follow(&value, on_change, false, window, cx)
         });
         let input = state.read(cx).input.clone();
         input.update(cx, |input, cx| input.set_disabled(self.disabled, cx));
@@ -303,18 +322,21 @@ impl RenderOnce for TextField {
             .name
             .clone()
             .unwrap_or_else(|| self.placeholder.clone());
-        let mut element = Input::new(&input)
-            .appearance(false)
-            .aria_label(name.clone())
-            .disabled(self.disabled);
-        if self.masked {
-            element = element.mask_toggle();
-        }
-        let enter = self.on_enter.clone();
         let (ty, height) = match self.text_type {
             Some(ty) if ty != Type::Body => (ty, Density::Scan.control()),
             _ => (Type::Body, Density::Read.control()),
         };
+        // gpui-component sets a smaller size of its own; the field's words and placeholder are
+        // the field's type, as egui's were.
+        let mut element = Input::new(&input)
+            .appearance(false)
+            .aria_label(name.clone())
+            .disabled(self.disabled)
+            .text_size(ty.size());
+        if self.masked {
+            element = element.mask_toggle();
+        }
+        let enter = self.on_enter.clone();
         let mut frame = frame(focused, height)
             .ty(ty)
             .text_color(colors().text)
@@ -358,6 +380,7 @@ pub struct TextEditor {
     handle: Option<EditorHandle>,
     ty: Option<Type>,
     markdown: bool,
+    own_write: bool,
 }
 
 /// A text editor's state that the caller keeps (`TextEditor::handle`), so the caller can read and
@@ -425,13 +448,30 @@ impl EditorHandle {
         self.1.read(cx).value()
     }
 
-    /// Show `words` now (the program changed them), before the editor draws again, so a caret
-    /// placed next lands in the new words.
+    /// Show `words` now, before the editor draws again, so a caret placed next lands in the new
+    /// words. They are the field's own edit (a command's result, words put in at the caret, the
+    /// page's words added to the open note): the DM's Undo history stays under them, and Ctrl+Z
+    /// takes the change back. For words from elsewhere (a reload, another note), use
+    /// `show_other_words`.
     pub fn show_words(&self, words: impl Into<SharedString>, window: &mut Window, cx: &mut App) {
-        let words = words.into();
+        self.show(words.into(), true, window, cx);
+    }
+
+    /// Show words that did not come from the field's own edit (a reload of an outside edit, a
+    /// discard): its Undo history ends there.
+    pub fn show_other_words(
+        &self,
+        words: impl Into<SharedString>,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.show(words.into(), false, window, cx);
+    }
+
+    fn show(&self, words: SharedString, own: bool, window: &mut Window, cx: &mut App) {
         self.0.update(cx, |state, cx| {
             let on_change = state.on_change.clone();
-            state.follow(&words, on_change, window, cx);
+            state.follow(&words, on_change, own, window, cx);
         });
     }
 }
@@ -451,7 +491,17 @@ impl TextEditor {
             handle: None,
             ty: None,
             markdown: false,
+            own_write: false,
         }
+    }
+
+    /// The value's change since the last frame, if any, is the field's own edit (the owner's
+    /// own write into the words the DM may be typing: a recording's summary, a plan's link), so
+    /// the DM's Undo history stays under it (`docs/design-system.md`, text fields). Without it a
+    /// changed value ends the history.
+    pub fn own_write(mut self, own: bool) -> Self {
+        self.own_write = own;
+        self
     }
 
     /// The words are Markdown source (a note): styled where they are typed, as the Reader sets
@@ -531,13 +581,14 @@ impl RenderOnce for TextEditor {
         let value = self.value.clone();
         let on_change = self.on_change.clone();
         let markdown = self.markdown;
+        let own_write = self.own_write;
         state.update(cx, |state, cx| {
             if markdown && !state.markdown {
                 state.markdown = true;
                 let words = state.input.read(cx).value();
                 state.restyle(&words, cx);
             }
-            state.follow(&value, on_change, window, cx)
+            state.follow(&value, on_change, own_write, window, cx)
         });
         let input = state.read(cx).input.clone();
         if self.focus {
@@ -558,10 +609,15 @@ impl RenderOnce for TextEditor {
             .items_start()
             .w_full()
             .child({
+                // The text area fills the frame's rows, so a press anywhere in the frame puts
+                // the caret in it (a frame of no fixed height gives `h_full` nothing to fill).
                 let area = Textarea::new(&input)
                     .appearance(false)
                     .aria_label(name.clone())
-                    .h_full();
+                    .h_full()
+                    .when(!self.fill, |area| {
+                        area.min_h(ty.line() * self.rows as f32 - FOCUS_WIDTH * 2.0)
+                    });
                 // gpui-component sets its own small size; a chosen type replaces it.
                 match self.ty {
                     Some(ty) => area

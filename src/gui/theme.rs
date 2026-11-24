@@ -644,6 +644,9 @@ pub fn install(cx: &mut App) {
         theme.shadow = true;
         // R43: no motion that draws the eye.
         theme.focus_ring = true;
+        // A pane whose content runs past its foot shows its bar all the time, as egui's did, so
+        // the DM sees that more is below; a pane that fits shows none.
+        theme.scrollbar_mode = gpui_component::scroll::ScrollbarMode::Always;
     });
 }
 
