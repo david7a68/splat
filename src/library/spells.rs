@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 /// One spell of a list line.
 #[derive(Clone, Debug)]
-pub(crate) struct SpellTile {
+pub struct SpellTile {
     /// `Guiding Bolt`, without the words in brackets after it.
     pub name: String,
     /// The spell's place in the links' entries.
@@ -30,7 +30,7 @@ pub(crate) struct SpellTile {
 }
 
 /// One line of a Spellcasting list: its label and its spells.
-pub(crate) struct SpellLine {
+pub struct SpellLine {
     /// `At Will`, `2/Day Each`.
     pub label: String,
     pub tiles: Vec<SpellTile>,
@@ -43,7 +43,7 @@ pub(crate) struct SpellLine {
 /// `1st level (4 slots): shield`). A line ends with `\` when another follows. A book may print
 /// the label in bold: `**At Will:** Light`. Other labels, such as `Environments: Forest`,
 /// are not lists of spells.
-pub(crate) fn list_line(line: &str) -> bool {
+pub fn list_line(line: &str) -> bool {
     let line = line.trim().trim_end_matches('\\').trim_end();
     line.split_once(':').is_some_and(|(label, spells)| {
         how_often(plain_label(label)) && !spells.trim_matches(['*', '_', ' ']).is_empty()
@@ -114,7 +114,7 @@ fn item_name(item: &str) -> (&str, Option<u32>) {
 
 /// A creature's numbers for its spells: the save DC its data gives, or else its words
 /// (`spell save DC 13`), and its bonus to hit (`+6 to hit with spell attacks`).
-pub(crate) fn caster(entry: &Entry, spellcasting: &str) -> Caster {
+pub fn caster(entry: &Entry, spellcasting: &str) -> Caster {
     let data = entry
         .fields
         .get("splat_rule")
@@ -162,7 +162,7 @@ fn dc_in(words: &str) -> Option<i64> {
 /// `Spellcasting (Snake Form Only).`, `Innate Spellcasting.`, each introducing its lists (`one
 /// of the following spells`, or a closing colon). A feature so named that casts a spell
 /// itself (`Hellfire Spellcasting (3/Day). The fiend casts Fireball ...`) is a cast line.
-pub(crate) fn spellcasting(paragraph: &str) -> bool {
+pub fn spellcasting(paragraph: &str) -> bool {
     let named = crate::design::reader::run_in_title(paragraph).is_some_and(|title| {
         title
             .split(" (")
@@ -350,7 +350,7 @@ fn item_tile(
 }
 
 /// The spells of one list line.
-pub(crate) fn line(
+pub fn line(
     line: &str,
     caster: Caster,
     references: &[Option<(usize, String)>],
@@ -377,7 +377,7 @@ pub(crate) fn line(
 /// The spells that a paragraph of its own casts by name, as list items: `Dread Command. The
 /// mummy casts Command (level 2 version), using ...` gives `Command (level 2 version)`. Not
 /// a Spellcasting paragraph, whose lists follow it.
-pub(crate) fn cast_names(paragraph: &str) -> Option<Vec<&str>> {
+pub fn cast_names(paragraph: &str) -> Option<Vec<&str>> {
     if spellcasting(paragraph) {
         return None;
     }
@@ -425,7 +425,7 @@ pub(crate) fn cast_names(paragraph: &str) -> Option<Vec<&str>> {
 /// (`spell save DC 13`), or else those of the creature's Spellcasting, which such a paragraph
 /// names (`using the same spellcasting ability as Spellcasting`). A name that no spell has is
 /// left out: the words may name no spell at all.
-pub(crate) fn cast_line(
+pub fn cast_line(
     entry: &Entry,
     paragraph: &str,
     references: &[Option<(usize, String)>],
@@ -456,7 +456,7 @@ pub(crate) fn cast_line(
 }
 
 /// The entry's spells, each with the entry it opens, or `None` when it is missing.
-pub(crate) fn references(entry: &Entry, links: &dyn Links) -> Vec<Option<(usize, String)>> {
+pub fn references(entry: &Entry, links: &dyn Links) -> Vec<Option<(usize, String)>> {
     super::creature::spell_references(entry)
         .iter()
         .map(|reference: &Reference| links.find_spell(reference))
@@ -465,12 +465,12 @@ pub(crate) fn references(entry: &Entry, links: &dyn Links) -> Vec<Option<(usize,
 
 /// A paragraph that is only a comment, such as `<!-- SRD page 325 -->` where a printed page
 /// ends: it parts no Spellcasting paragraph from its lists.
-pub(crate) fn aside(paragraph: &str) -> bool {
+pub fn aside(paragraph: &str) -> bool {
     paragraph.starts_with("<!--") && paragraph.ends_with("-->") && !paragraph[4..].contains("<!--")
 }
 
 /// Each Spellcasting paragraph of `body` with the list paragraphs after it.
-pub(crate) fn groups(body: &str) -> Vec<(&str, Vec<&str>)> {
+pub fn groups(body: &str) -> Vec<(&str, Vec<&str>)> {
     let mut groups: Vec<(&str, Vec<&str>)> = Vec::new();
     let mut open = false;
     for paragraph in body.split("\n\n").map(str::trim).filter(|p| !p.is_empty()) {
@@ -520,7 +520,7 @@ fn words(text: &str) -> String {
 impl Resolved {
     /// The next occurrence of a list line. The reader presents the source in order and may
     /// omit sections. Identical lines in separate lists still have separate positions.
-    pub(crate) fn line(&self, text: &str, caster: Caster, next: &mut usize) -> Option<&SpellLine> {
+    pub fn line(&self, text: &str, caster: Caster, next: &mut usize) -> Option<&SpellLine> {
         let text = words(text);
         let at = *next
             + self.lines[*next..]
@@ -531,7 +531,7 @@ impl Resolved {
     }
 
     /// The spells that a Spellcasting paragraph and its lists name, by their joined words.
-    pub(crate) fn named_in(&self, text: &str) -> Option<&[(usize, String)]> {
+    pub fn named_in(&self, text: &str) -> Option<&[(usize, String)]> {
         let text = words(text);
         self.named
             .iter()
@@ -541,7 +541,7 @@ impl Resolved {
 
     /// What a paragraph that casts spells by name resolved to: `Some(None)` when it names no
     /// spell that can be found, `None` when the paragraph was not resolved.
-    pub(crate) fn cast(&self, paragraph: &str, next: &mut usize) -> Option<Option<&SpellLine>> {
+    pub fn cast(&self, paragraph: &str, next: &mut usize) -> Option<Option<&SpellLine>> {
         let paragraph = words(paragraph);
         let at = *next
             + self.casts[*next..]

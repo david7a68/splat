@@ -84,7 +84,7 @@ pub(crate) fn category(entry: &Entry) -> &str {
         .unwrap_or_else(|| entry.category())
 }
 
-pub(super) fn book_case(value: &str) -> String {
+pub fn book_case(value: &str) -> String {
     value
         .replace('_', " ")
         .split_whitespace()
@@ -699,7 +699,7 @@ pub fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSection<'a>
 }
 
 /// A heading is useful only when the reader can show something below it.
-pub(super) fn visible_reading_section(section: &ReadingSection<'_>) -> bool {
+pub fn visible_reading_section(section: &ReadingSection<'_>) -> bool {
     section.title != "Splat data"
         && Parser::new_ext(section.body, pulldown_cmark::Options::ENABLE_TABLES).any(|event| {
             match event {

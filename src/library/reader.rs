@@ -24,7 +24,7 @@ const LABELS: &[&str] = &[
 ];
 
 /// Promote only explicit source labels. Everything else remains in the prose.
-fn source_facts(source: &str) -> (Vec<(String, String)>, String) {
+pub fn source_facts(source: &str) -> (Vec<(String, String)>, String) {
     let mut facts: Vec<(String, String)> = Vec::new();
     let mut prose = Vec::new();
     let mut preamble = true;
@@ -65,7 +65,7 @@ fn source_facts(source: &str) -> (Vec<(String, String)>, String) {
     (facts, prose.join("\n"))
 }
 
-fn display_value(value: &serde_yaml_ng::Value) -> String {
+pub fn display_value(value: &serde_yaml_ng::Value) -> String {
     use serde_yaml_ng::Value;
     match value {
         Value::String(s) => s.clone(),
@@ -95,10 +95,18 @@ fn display_value(value: &serde_yaml_ng::Value) -> String {
     }
 }
 
-fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
-    let Some(item) = entry.fields.get("splat_item").and_then(|v| v.as_mapping()) else {
-        return;
-    };
+/// An item's summary, as the reader shows it under its title: its identity line, its facts, and
+/// its other plain details (each a label and its value).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ItemSummary {
+    pub identity: String,
+    pub facts: Vec<(String, String)>,
+    pub details: Vec<(String, String)>,
+}
+
+/// The summary of an item entry; `printed` is the identity line its source prints.
+pub fn item_summary_parts(entry: &Entry, printed: Option<&str>) -> Option<ItemSummary> {
+    let item = entry.fields.get("splat_item").and_then(|v| v.as_mapping())?;
     let identity = ["weapon_category", "category", "rarity"]
         .into_iter()
         .filter_map(|key| item.get(key).map(display_value))
@@ -118,9 +126,6 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
         _ => identity,
     };
     let identity = printed.map_or(identity, str::to_owned);
-    if !identity.is_empty() {
-        style::identity(ui, &identity);
-    }
     let mut facts = Vec::new();
     for key in ["damage", "armor_class", "price", "mass"] {
         if let Some(value) = item.get(key) {
@@ -152,7 +157,7 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
     if let Some(ac) = item.get("armor").and_then(|armor| armor.get("base_ac")) {
         facts.insert(0, ("Base AC".into(), display_value(ac)));
     }
-    style::facts(ui, &facts);
+    let mut details = Vec::new();
     for (key, value) in item {
         let Some(key) = key.as_str() else { continue };
         if ![
@@ -169,16 +174,33 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
             if value.is_mapping() || value.is_sequence() {
                 continue;
             }
-            style::detail(
-                ui,
-                &key.trim_end_matches("_text").replace('_', " "),
-                &display_value(value),
-            );
+            details.push((
+                key.trim_end_matches("_text").replace('_', " "),
+                display_value(value),
+            ));
         }
+    }
+    Some(ItemSummary {
+        identity,
+        facts,
+        details,
+    })
+}
+
+fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
+    let Some(summary) = item_summary_parts(entry, printed) else {
+        return;
+    };
+    if !summary.identity.is_empty() {
+        style::identity(ui, &summary.identity);
+    }
+    style::facts(ui, &summary.facts);
+    for (label, value) in &summary.details {
+        style::detail(ui, label, value);
     }
 }
 
-fn remaining_item_detail(
+pub fn remaining_item_detail(
     _entry: &Entry,
     key: &serde_yaml_ng::Value,
     value: &serde_yaml_ng::Value,
@@ -205,7 +227,7 @@ pub(super) fn item_details(ui: &mut egui::Ui, entry: &Entry) {
     }
 }
 
-pub(super) fn has_item_details(entry: &Entry) -> bool {
+pub fn has_item_details(entry: &Entry) -> bool {
     entry
         .fields
         .get("splat_item")
@@ -220,7 +242,7 @@ pub(super) fn has_item_details(entry: &Entry) -> bool {
 
 /// A value with nothing to read. Sheet copies often have these, and they must not show
 /// as a label with no text after it.
-fn blank(value: &serde_yaml_ng::Value) -> bool {
+pub fn blank(value: &serde_yaml_ng::Value) -> bool {
     match value {
         serde_yaml_ng::Value::Null => true,
         serde_yaml_ng::Value::String(text) => text.trim().is_empty(),
@@ -253,7 +275,7 @@ fn structured_value(ui: &mut egui::Ui, value: &serde_yaml_ng::Value) {
     }
 }
 
-pub(super) fn spell_facts(spell: &serde_yaml_ng::Value) -> Vec<(String, String)> {
+pub fn spell_facts(spell: &serde_yaml_ng::Value) -> Vec<(String, String)> {
     // Use the table's printed values, including text ranges and
     // component codes. A reader must not expose the model's internal shapes.
     let mut spell = spell.clone();
@@ -295,9 +317,16 @@ pub(super) fn spell_facts(spell: &serde_yaml_ng::Value) -> Vec<(String, String)>
         .collect()
 }
 
-fn preparation_summary(ui: &mut egui::Ui, entry: &Entry, has_source: bool) {
+/// What a spell or an encounter shows under its title: groups of facts, then an encounter's
+/// completion mode.
+pub fn preparation_parts(
+    entry: &Entry,
+    has_source: bool,
+) -> (Vec<Vec<(String, String)>>, Option<String>) {
+    let mut groups = Vec::new();
+    let mut completion = None;
     if !has_source && let Some(spell) = entry.fields.get("splat_spell") {
-        style::facts(ui, &spell_facts(spell));
+        groups.push(spell_facts(spell));
     }
     if let Some(encounter) = entry.fields.get("splat_encounter") {
         let mut facts = Vec::new();
@@ -310,16 +339,28 @@ fn preparation_summary(ui: &mut egui::Ui, entry: &Entry, has_source: bool) {
         if let Some(rounds) = encounter.get("limits").and_then(|v| v.get("rounds")) {
             facts.push(("Round limit".into(), display_value(rounds)));
         }
-        style::facts(ui, &facts);
-        if let Some(mode) = encounter.get("completion").and_then(|v| v.get("mode")) {
-            style::detail(ui, "Completion", &display_value(mode));
-        }
+        groups.push(facts);
+        completion = encounter
+            .get("completion")
+            .and_then(|v| v.get("mode"))
+            .map(display_value);
+    }
+    (groups, completion)
+}
+
+fn preparation_summary(ui: &mut egui::Ui, entry: &Entry, has_source: bool) {
+    let (groups, completion) = preparation_parts(entry, has_source);
+    for facts in &groups {
+        style::facts(ui, facts);
+    }
+    if let Some(mode) = completion {
+        style::detail(ui, "Completion", &mode);
     }
 }
 
 /// Generated item source tables contain JSON. Hide it only if it exactly
 /// matches the item fields displayed above; unmatched source always stays.
-fn represented_item_source(entry: &Entry, source: &str) -> bool {
+pub fn represented_item_source(entry: &Entry, source: &str) -> bool {
     let Some((caption, json)) = source.trim().split_once("\n\n") else {
         return false;
     };
