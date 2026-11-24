@@ -658,6 +658,8 @@ fn sheet(
                 pages.iter().map(|(_, words)| *words).collect::<Vec<_>>(),
                 chosen,
             )
+            // The sheet's pages keep one line beside the run.
+            .small()
             .on_select(cx.listener(move |root: &mut SplatRoot, at: &usize, _, cx| {
                 if let Some(run) = root.app.encounters.run_mut()
                     && let Some(page) = numbers.get(*at)
@@ -1889,22 +1891,42 @@ fn creature_form(run: &Run, window: &Window, cx: &mut Context<SplatRoot>) -> Any
             )
             .child(kit::text(Type::Small, c.muted, picked.detail.clone()));
     } else {
+        let typed_any = !run.ad_hoc.query.is_empty();
         column = column.child(
-            div().key_context("RunField").child(
-                kit::TextField::new("run-creature-search", run.ad_hoc.query.clone())
-                    .placeholder("Find or name a creature…")
-                    .name("Find or name a creature")
-                    .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
-                        if let Some(run) = root.app.encounters.run_mut() {
-                            run.ad_hoc.query = words.to_owned();
-                            let typed = words.trim().to_lowercase();
-                            if run.ad_hoc.show_all.as_deref() != Some(typed.as_str()) {
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(theme::XS)
+                .child(
+                    div().key_context("RunField").flex_1().min_w_0().child(
+                        kit::TextField::new("run-creature-search", run.ad_hoc.query.clone())
+                            .placeholder("Find or name a creature…")
+                            .name("Find or name a creature")
+                            .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
+                                if let Some(run) = root.app.encounters.run_mut() {
+                                    run.ad_hoc.query = words.to_owned();
+                                    let typed = words.trim().to_lowercase();
+                                    if run.ad_hoc.show_all.as_deref() != Some(typed.as_str()) {
+                                        run.ad_hoc.show_all = None;
+                                    }
+                                }
+                                cx.notify();
+                            })),
+                    ),
+                )
+                // As egui's search: Clear empties the words and the matches with them.
+                .when(typed_any, |line| {
+                    line.child(
+                        kit::Button::quiet("run-creature-clear", "Clear")
+                            .name("Clear the creature search")
+                            .density(Density::Read)
+                            .on_click(on_run(cx, |run| {
+                                run.ad_hoc.query.clear();
                                 run.ad_hoc.show_all = None;
-                            }
-                        }
-                        cx.notify();
-                    })),
-            ),
+                            })),
+                    )
+                }),
         );
         let (matches, shown) = run.creature_matches();
         let typed = run.ad_hoc.query.trim().to_lowercase();

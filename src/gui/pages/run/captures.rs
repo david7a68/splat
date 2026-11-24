@@ -482,6 +482,10 @@ fn run_add_creature() {
     shell.type_text("wolf");
     let (matches, _) = with_run(&mut shell, |run| run.creature_matches());
     assert!(matches.len() > 1, "wolf finds several creatures");
+    assert!(
+        has_target(&mut shell, "Clear the creature search"),
+        "typed words can be cleared"
+    );
     shell.capture("run-add-creature__07-arrivals-found__1200x800");
 
     shell.click("id:run-creature-Wolf");
