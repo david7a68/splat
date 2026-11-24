@@ -66,7 +66,7 @@ impl SyncAlert {
 impl Run {
     /// The current turn's reminders, from the effects with a time: all of them whole, their
     /// count, and the whole words for the hover and the accessible name.
-    pub(super) fn turn_reminders(&self) -> Option<(String, String, String)> {
+    pub fn turn_reminders(&self) -> Option<(String, String, String)> {
         if self.state.phase != Phase::Running {
             return None;
         }
@@ -92,7 +92,7 @@ impl Run {
         clippy::disallowed_methods,
         reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    pub(super) fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) -> bool {
+    pub fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) -> bool {
         let c = colors();
         let nobody_present = !self.state.participants.iter().any(|p| p.present);
         // The heading borrows the current participant's own name: no copy, no cut words.

@@ -1,15 +1,17 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
 #[path = "encounter_run/ad_hoc.rs"]
-mod ad_hoc;
+pub mod ad_hoc;
 #[path = "encounter_run/dock.rs"]
-mod dock;
+pub mod dock;
 pub use splat_campaign::encounter_run::effect;
 #[path = "encounter_run/loot.rs"]
-mod loot;
+pub mod loot;
+#[path = "encounter_run/messages.rs"]
+pub mod messages;
 #[path = "encounter_run/notice.rs"]
-mod notice;
+pub mod notice;
 #[path = "encounter_run/rolling.rs"]
-mod rolling;
+pub mod rolling;
 use splat_campaign::encounter_run::undo;
 #[path = "encounter_run/view.rs"]
 pub mod view;
@@ -96,7 +98,7 @@ pub use splat_content_ui::roster::keep_whole;
 pub use splat_content_ui::roster::{FaultKind, GroupMember, MemberFault, RunGroup, grouped_number};
 /// A campaign's groups, as one run sorts them.
 #[derive(Debug, Default)]
-pub(crate) struct OfferedGroups {
+pub struct OfferedGroups {
     pub own: Vec<Arc<RunGroup>>,
     pub any: Vec<Arc<RunGroup>>,
     /// Groups for an encounter, when the run cannot say which encounter it is.
@@ -171,7 +173,7 @@ type State = splat_campaign::encounter_run::State<rolling::Cast>;
 /// What an arrival is called, as its parts: its group (or the creatures added by hand), and,
 /// when another group has its name, the first member that tells them apart.
 #[derive(Clone, Debug, PartialEq)]
-struct ArrivalName {
+pub struct ArrivalName {
     group: String,
     member: Option<String>,
 }
@@ -216,7 +218,7 @@ type SummaryKey = (crate::design::memo::Revision, u32, u32, u32);
 /// A group's member summary in Arrivals: the wrapped words, and whether they take a full-width
 /// line above Initiative and Add because `Will add:` and its first member do not fit beside them.
 #[derive(Clone)]
-pub(crate) struct ArrivalSummary {
+pub struct ArrivalSummary {
     pub members: Arc<str>,
     pub above: bool,
 }
@@ -227,7 +229,7 @@ pub(crate) type ArrivalWords = BTreeMap<Uuid, (crate::difficulty::Difficulty, u6
 /// Each carried player's place in the roster, and HP and temporary HP from their sheet.
 type SheetValues = Vec<(usize, Option<i64>, i64)>;
 /// HP that came from the last fight, not from the sheets.
-struct CarriedHp {
+pub struct CarriedHp {
     saved: bool,
     from: String,
     sheets: SheetValues,
@@ -239,7 +241,7 @@ struct CarriedHp {
 }
 /// A run step as the owner of its footer result: this run, and the step's number in it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct StepOwner {
+pub struct StepOwner {
     run: Uuid,
     step: u64,
 }
@@ -253,7 +255,7 @@ impl crate::design::results::Owner for StepOwner {
 
 /// The footer result of one step (the saved HP's use and its Undo, a recharge roll, an
 /// arrival). Its words are worked out from the run's state while it is the newest step's.
-pub(crate) struct StepResult {
+pub struct StepResult {
     owner: StepOwner,
 }
 
@@ -281,179 +283,179 @@ thread_local! {
 
 pub struct Run {
     pub name: String,
-    id: Uuid,
+    pub id: Uuid,
     /// The encounter this run came from. Saves from before this was kept have none.
-    source: Option<Uuid>,
+    pub source: Option<Uuid>,
     /// Recheck only this encounter when its file metadata changes. Never rebuild the catalogue per frame.
     /// The campaign root and the file's path in it, which the setup file line shows as the
     /// editor does (`Encounters/Shrine of Cinders.md`, FA11).
-    roster_source: Option<(PathBuf, String)>,
-    roster_stamp: Option<(Option<std::time::SystemTime>, u64)>,
-    roster_faults: Vec<crate::encounters::RosterFault>,
+    pub roster_source: Option<(PathBuf, String)>,
+    pub roster_stamp: Option<(Option<std::time::SystemTime>, u64)>,
+    pub roster_faults: Vec<crate::encounters::RosterFault>,
     /// The roster slot of each unread row, by its participant key, with the row's line, so a
     /// setup row marks its own fault (FF1). It changes with `roster_faults` and nowhere else.
-    roster_fault_keys: BTreeMap<String, usize>,
-    roster_names: BTreeMap<String, String>,
-    roster_names_revision: Option<Uuid>,
-    initiative: Initiative,
+    pub roster_fault_keys: BTreeMap<String, usize>,
+    pub roster_names: BTreeMap<String, String>,
+    pub roster_names_revision: Option<Uuid>,
+    pub initiative: Initiative,
     /// What a player character's inspiration does, from the campaign's rules. None when its
     /// packages define no inspiration rule.
-    inspiration: Option<Inspiration>,
+    pub inspiration: Option<Inspiration>,
     /// A target waiting for the DM to say which damage condition holds.
-    asking: Option<rolling::Asking>,
+    pub asking: Option<rolling::Asking>,
     /// The last d20 rolled for a player, which their inspiration can reroll.
-    reroll: Option<rolling::Reroll>,
+    pub reroll: Option<rolling::Reroll>,
     /// The DM edited Amount since the run last put a save's damage there.
-    amount_typed: bool,
+    pub amount_typed: bool,
     /// Participants, by key, whose inspiration the run spent and whose sheet does not show it
     /// yet. Saved with the run.
-    spent_inspiration: BTreeSet<String>,
+    pub spent_inspiration: BTreeSet<String>,
     /// What the last read of each row's sheet says about their inspiration.
-    sheet_inspiration: BTreeMap<usize, bool>,
-    storage: Option<Storage>,
-    recovery: Recovery,
+    pub sheet_inspiration: BTreeMap<usize, bool>,
+    pub storage: Option<Storage>,
+    pub recovery: Recovery,
     /// Each character's cached portrait, by D&D Beyond ID.
-    portraits: BTreeMap<String, Option<PathBuf>>,
-    portraits_read: Option<Instant>,
-    dirty: bool,
-    state: State,
-    history: Vec<State>,
+    pub portraits: BTreeMap<String, Option<PathBuf>>,
+    pub portraits_read: Option<Instant>,
+    pub dirty: bool,
+    pub state: State,
+    pub history: Vec<State>,
     /// What each history step did, for a named Undo.
-    history_labels: Vec<String>,
+    pub history_labels: Vec<String>,
     /// Beside each label: true when a sheet made the step, not the DM. Only such a step may
     /// give up its source when Undo is tight.
-    history_from_sheet: Vec<bool>,
+    pub history_from_sheet: Vec<bool>,
     /// Beside each label: the words in it that name what the step acted on, the row's name or
     /// a loot table, as `describe` made them. Undo shortens them from these parts, and never
     /// reads them back out of the label (a row named `2` is not the `2` of `DC 12`).
-    history_targets: Vec<Option<String>>,
+    pub history_targets: Vec<Option<String>>,
     /// Beside each step: its number in this run, the owner of the footer result that step
     /// gives (the saved HP's use, a recharge roll, an arrival). Not saved: a reopened run
     /// numbers its steps again when it opens.
-    history_steps: Vec<u64>,
+    pub history_steps: Vec<u64>,
     /// The next step's number.
-    next_step: u64,
+    pub next_step: u64,
     /// The footer results of the steps, one per step, each owned by its step of this run. Ends:
     /// the step's Undo or its drop from the Undo stack (`owner_changed`), the run's close (the
     /// run goes). Only the newest step's result shows.
-    step_results: crate::design::Results<StepOwner, StepResult>,
+    pub step_results: crate::design::Results<StepOwner, StepResult>,
     /// The scope of `step_results`: made when this run opens, and kept when its saved file
     /// gets a new id (Save as a new run), so its results stay with the run on screen.
-    results_scope: Uuid,
+    pub results_scope: Uuid,
     /// How many of the oldest steps came from the run file. Undo of an ending among them makes
     /// the fight live again by `continue_blocked`, as Continue fight does. Never saved.
-    saved_steps: usize,
-    selected: usize,
+    pub saved_steps: usize,
+    pub selected: usize,
     /// More targets for one amount, beside the selected row. Never saved.
-    also: BTreeSet<usize>,
+    pub also: BTreeSet<usize>,
     /// The targets that take half of a damage amount, for a save.
-    halved: BTreeSet<usize>,
+    pub halved: BTreeSet<usize>,
     /// How many steps the DM has taken or taken back since this opened. A sheet's change is
     /// not one, and neither is opening a run to read it. Never saved.
-    dm_steps: usize,
+    pub dm_steps: usize,
     /// Counts every kept step and every Undo, so a result can name the step it belongs to.
     /// Its revision keys Arrivals' kept lines (`arrival_lines`). Never saved.
-    revision: crate::design::memo::Revised<u64>,
+    pub revision: crate::design::memo::Revised<u64>,
     /// `Loot copied.`: the copy action, at the `revision` it was made. Undo and any new step
     /// (a roll among them) end it. Never saved.
-    loot_copied: Option<u64>,
+    pub loot_copied: Option<u64>,
     /// What each group in Arrivals would make the fight, with the XP its members on the other
     /// side add, worked out for one `revision`, one read of the groups and one scale. Never saved.
-    arrival_words: Option<(ArrivalKey, ArrivalWords)>,
+    pub arrival_words: Option<(ArrivalKey, ArrivalWords)>,
     /// Arrivals' difficulty lines, fitted and kept by group (point 1 of the round 29 review):
     /// this run's own, so they die with it and no other run reads them.
-    arrival_lines: crate::difficulty::Kept<Uuid, Option<crate::difficulty::Fitted>, ArrivalLineKey>,
+    pub arrival_lines: crate::difficulty::Kept<Uuid, Option<crate::difficulty::Fitted>, ArrivalLineKey>,
     /// The turn heading's one kept candidate (M5): this run's own, so it ends with the run.
     /// The part chooses again when the heading's data or metrics change.
-    turn_heading: crate::design::KeptTurnHeading,
+    pub turn_heading: crate::design::KeptTurnHeading,
     /// The groups' revision that `arrival_lines` was last trimmed to.
-    arrival_lines_seen: Option<crate::design::memo::Revision>,
+    pub arrival_lines_seen: Option<crate::design::memo::Revision>,
     /// Each pending sync's line in the ended view, by row, with the sync values' revision it
     /// was worked out from (G178).
-    pending_lines: BTreeMap<usize, (u64, String)>,
+    pub pending_lines: BTreeMap<usize, (u64, String)>,
     /// How often frames asked for the Arrivals words, and how often they were worked out.
     #[cfg(any(test, feature = "test-support"))]
     pub arrival_counts: (usize, usize),
     /// Each Arrivals group's member summary, wrapped for its place, worked out for one read of
     /// the groups, one width and one type size (FI8). Never saved.
-    arrival_summaries: Option<(SummaryKey, BTreeMap<Uuid, ArrivalSummary>)>,
+    pub arrival_summaries: Option<(SummaryKey, BTreeMap<Uuid, ArrivalSummary>)>,
     /// Bumped by every edit of `group_totals`, so the Arrivals reasons are read again only then.
-    totals_revision: u64,
+    pub totals_revision: u64,
     /// The Encounters page's snapshot that `groups` and `scale` came from (`set_reads`).
-    reads_from: Option<Uuid>,
+    pub reads_from: Option<Uuid>,
     /// A new revision with each new read of `groups` (a reload replaces it, also while
     /// Arrivals is closed). The Arrivals caches are keyed by it.
-    groups_read: crate::design::memo::Revised<()>,
+    pub groups_read: crate::design::memo::Revised<()>,
     /// A new revision with each new read of `scale`.
-    scale_read: crate::design::memo::Revised<()>,
+    pub scale_read: crate::design::memo::Revised<()>,
     /// The Arrivals reasons of each Add that waits for the DM (FI5, R35: a typed total that
     /// cannot be read, a roll with no bonus), for one `ReasonsKey`. Never saved.
-    arrival_reasons: Option<(ReasonsKey, Arc<[String]>)>,
+    pub arrival_reasons: Option<(ReasonsKey, Arc<[String]>)>,
     /// The tie's Move words (`move_choice`) for the arrival's and the passed row's names, made
     /// once for them: an unchanged frame builds no form. Replaced when another tie shows.
     /// Never saved.
-    tie_choice: Option<(String, String, crate::design::outcome::ChoiceWords)>,
+    pub tie_choice: Option<(String, String, crate::design::outcome::ChoiceWords)>,
     /// Never saved.
-    carried: Option<CarriedHp>,
-    rest_order: u64,
+    pub carried: Option<CarriedHp>,
+    pub rest_order: u64,
     /// The armed action, until it is stopped or the turn ends. Never saved.
-    armed: Option<rolling::Armed>,
+    pub armed: Option<rolling::Armed>,
     /// What each row shows from the current action: its chance to hit or its result.
-    badges: BTreeMap<usize, String>,
+    pub badges: BTreeMap<usize, String>,
     /// Each save target's roll, shown where its AC is.
-    saves: BTreeMap<usize, i64>,
+    pub saves: BTreeMap<usize, i64>,
     /// The dice field's last roll, beside it in the dock.
-    dock_roll: Option<crate::rolls::Rolled>,
+    pub dock_roll: Option<crate::rolls::Rolled>,
     /// A recharge roll's result: its die in the dock's total place and its words in the
     /// footer, while its act is the DM's newest (`recharge_result`, X4).
-    recharged: Option<Recharged>,
+    pub recharged: Option<Recharged>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
-    amount: String,
-    note: String,
-    dice: String,
-    outcome: String,
-    error: Option<String>,
-    confirm_close: bool,
-    setup_details: String,
-    syncs: BTreeMap<usize, crate::combat_sync::CombatSync>,
-    sync_shadows: BTreeMap<usize, SheetShadow>,
-    panel: Panel,
-    closing: Opening,
-    ending: bool,
-    focus_amount: bool,
+    pub amount: String,
+    pub note: String,
+    pub dice: String,
+    pub outcome: String,
+    pub error: Option<String>,
+    pub confirm_close: bool,
+    pub setup_details: String,
+    pub syncs: BTreeMap<usize, crate::combat_sync::CombatSync>,
+    pub sync_shadows: BTreeMap<usize, SheetShadow>,
+    pub panel: Panel,
+    pub closing: Opening,
+    pub ending: bool,
+    pub focus_amount: bool,
     /// The row whose effect the dock's field is open for, by key.
-    effect_open: Option<String>,
+    pub effect_open: Option<String>,
     /// Words typed in the dock's effect field, by the key of the row they are for. They wait
     /// for that row when the field closes without Enter.
-    effect_fields: BTreeMap<String, crate::design::AddField>,
+    pub effect_fields: BTreeMap<String, crate::design::AddField>,
     /// The dock had room for `Effect` beside the selected name, so `E` opens its field.
-    effect_in_dock: bool,
+    pub effect_in_dock: bool,
     /// The Conditions tab's `Other effect…` field takes focus on its next frame.
-    focus_other_effect: bool,
-    roster_height: f32,
-    sync_to_restore: Vec<String>,
+    pub focus_other_effect: bool,
+    pub roster_height: f32,
+    pub sync_to_restore: Vec<String>,
     /// Sync starts by itself for each linked player, and again after a connection comes back.
-    keep_party_synced: bool,
-    connected: bool,
+    pub keep_party_synced: bool,
+    pub connected: bool,
     /// Test builds have no session. This lets the party-sync control be exercised.
-    simulate_connection: bool,
-    scroll_to_selected: bool,
+    pub simulate_connection: bool,
+    pub scroll_to_selected: bool,
     /// What sync changed. The next run action or sync event clears it.
-    notice: Option<String>,
-    notice_changes: usize,
+    pub notice: Option<String>,
+    pub notice_changes: usize,
     /// How many Undo steps the last sheet update removed: set by `reconcile_sync_history`,
     /// taken by `note_sync_changes` for its notice (FJ1).
-    removed_steps: usize,
-    notice_summary: Option<String>,
-    live_initiative: Option<usize>,
+    pub removed_steps: usize,
+    pub notice_summary: Option<String>,
+    pub live_initiative: Option<usize>,
     /// A value reached the run with no step of its own, so Undo stops there.
-    undo_stopped: bool,
-    undo_boundary: Option<String>,
-    setup_inputs: BTreeMap<usize, String>,
+    pub undo_stopped: bool,
+    pub undo_boundary: Option<String>,
+    pub setup_inputs: BTreeMap<usize, String>,
     /// The participant whose initiative the last step set, to merge keystrokes.
-    last_initiative: Option<usize>,
+    pub last_initiative: Option<usize>,
     /// An exhaustion drag shows its level and becomes one step when it ends.
-    exhaustion_drag: Option<view::ExhaustionDrag>,
+    pub exhaustion_drag: Option<view::ExhaustionDrag>,
     /// Lookup is beside the run, so the run's own panel gives up its space.
     pub hide_panel: bool,
     /// The recording needs a look, shown where the run's notices go, so nothing moves.
@@ -476,11 +478,11 @@ pub struct Run {
     /// Lookup is open. Letters are then the next word of a search, never a command.
     pub lookup_open: bool,
     /// Opened from a save.
-    reopened: bool,
+    pub reopened: bool,
     /// Why a run opened from a save has no Undo steps from before, when its file gave none.
-    no_saved_undo: Option<&'static str>,
+    pub no_saved_undo: Option<&'static str>,
     /// The file's Undo steps could not be read. The run says so until the DM dismisses it.
-    undo_unread: bool,
+    pub undo_unread: bool,
     /// Why Prep's `Edit encounter` did not open this run's encounter. This run owns it: the
     /// next press of `Edit encounter` ends it, and it ends with the run (closing it, another
     /// run, a campaign change). A draft refusal also ends when no draft blocks any more (the
@@ -490,12 +492,12 @@ pub struct Run {
     /// A link the DM followed in the side panel.
     pub lookup_request: Option<usize>,
     /// The Party page's sheet for the selected participant, when there is one.
-    sheet: Option<Arc<splat::character::EntitySnapshot>>,
-    sheet_for: Option<usize>,
-    sheet_page: usize,
-    setup_expanded: Option<usize>,
-    focus_field: Option<usize>,
-    focus_first_missing: bool,
+    pub sheet: Option<Arc<splat::character::EntitySnapshot>>,
+    pub sheet_for: Option<usize>,
+    pub sheet_page: usize,
+    pub setup_expanded: Option<usize>,
+    pub focus_field: Option<usize>,
+    pub focus_first_missing: bool,
     /// The panel needs its space back, so Lookup should close.
     pub close_lookup: bool,
     pub wants_sign_in: bool,
@@ -509,24 +511,24 @@ pub struct Run {
     /// Words typed in Amount beside Notes. A letter is never the one number.
     pub for_note: Option<String>,
     /// The end step just opened, and its one field takes the keyboard.
-    focus_outcome: bool,
+    pub focus_outcome: bool,
     /// The file changed under this run. Saving stops until the DM chooses what to keep.
-    disk_conflict: bool,
+    pub disk_conflict: bool,
     /// The campaign's encounter groups, as they read from disk, once they have been read
     /// (`set_reads`). A run does not save these.
-    groups: Option<Arc<Vec<Arc<RunGroup>>>>,
+    pub groups: Option<Arc<Vec<Arc<RunGroup>>>>,
     /// The campaign's XP budget table and party, once they have been read (`set_reads`).
-    scale: Option<Arc<crate::difficulty::Scale>>,
+    pub scale: Option<Arc<crate::difficulty::Scale>>,
     /// The campaign's creatures that can join a fight, once they have been read.
     pub creatures: Option<Arc<Vec<Arc<RunCreature>>>>,
     /// The names linked in tonight's plan. Those groups come first in the panel.
     pub planned: Vec<String>,
-    ad_hoc: ad_hoc::AdHoc,
+    pub ad_hoc: ad_hoc::AdHoc,
     /// The total typed beside each group in the panel, until it is used.
-    group_totals: BTreeMap<Uuid, String>,
+    pub group_totals: BTreeMap<Uuid, String>,
 }
-#[derive(Clone, Copy, Default, PartialEq)]
-enum Panel {
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Panel {
     #[default]
     Reference,
     Conditions,
@@ -550,7 +552,7 @@ const HALF_FOR: &str = ", half for ";
 const SHEET_SOURCE: &str = "D&D Beyond ";
 /// What a saved run may hold. A larger one does not open again.
 const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe until you choose. Saving has stopped.";
-const MAX_FROM_SHEET: &str =
+pub const MAX_FROM_SHEET: &str =
     "Maximum HP comes from the D&D Beyond sheet while sync is on. Stop sync to change it here.";
 /// What `Last:` says after a long rest fills a saved Setup's HP. It is no Undo step.
 const REST_STEP: &str = "full HP after long rest";
@@ -659,7 +661,7 @@ pub enum Unend {
     Undo,
 }
 /// The outcome of an ending whose outcome field was left empty.
-const NO_OUTCOME: &str = "Undecided";
+pub const NO_OUTCOME: &str = "Undecided";
 /// The Undo step an ending makes. While it is the newest step, Undo is how the fight goes on.
 /// An Undo step's label, and the words in it that name what it acted on (`describe_named`).
 type Named = (String, Option<String>);
@@ -677,7 +679,7 @@ pub const SAVED_HP_USED: &str = "Party HP set to the saved values.";
 pub const CLOSE_BLOCKED: &str =
     "Wait for pending sync changes, resolve conflicts, or stop sync for them before closing.";
 /// What the one party action does when pressed.
-enum PartySync {
+pub enum PartySync {
     Start(Vec<usize>),
     Stop(Vec<usize>),
 }
@@ -699,7 +701,7 @@ pub struct Strip {
     pub name: String,
 }
 #[derive(Clone)]
-enum Command {
+pub enum Command {
     RollNpcs(Grouping),
     Npc(usize, bool),
     RollMode(usize, i8),
@@ -745,7 +747,7 @@ enum Command {
 /// act that rolled it, by `dm_steps`: any later act of the DM (a step, a roll, an Undo) ends
 /// it, in one rule (review of PR 292).
 #[derive(Clone)]
-struct Recharged {
+pub struct Recharged {
     die: i64,
     name: String,
     words: String,
@@ -1067,7 +1069,7 @@ impl Run {
     }
     /// Keep one more Undo step: the state before it, its name, and whether a sheet made it.
     /// Every step enters here, so the stack never holds more than the limit: the oldest goes.
-    fn keep_step(&mut self, before: State, (label, target): Named, from_sheet: bool) {
+    pub fn keep_step(&mut self, before: State, (label, target): Named, from_sheet: bool) {
         let extra = (self.history.len() + 1).saturating_sub(undo::LIMIT);
         self.saved_steps = self.saved_steps.saturating_sub(extra);
         self.history.drain(..extra);
@@ -1090,12 +1092,12 @@ impl Run {
         self.count_step();
     }
     /// Keep a step that the DM took, which counts as play.
-    fn keep_own_step(&mut self, before: State, named: Named, from_sheet: bool) {
+    pub fn keep_own_step(&mut self, before: State, named: Named, from_sheet: bool) {
         self.keep_step(before, named, from_sheet);
         self.dm_steps += 1;
     }
     /// Number the newest step and keep its footer result: the store issues its order now.
-    fn record_step(&mut self) {
+    pub fn record_step(&mut self) {
         let step = self.next_step;
         self.next_step += 1;
         self.history_steps.push(step);
@@ -1108,14 +1110,14 @@ impl Run {
     }
     /// A step left the Undo stack (undone, dropped as the oldest, or taken out by a sheet's
     /// update): its result ends.
-    fn end_step_result(&mut self, step: u64) {
+    pub fn end_step_result(&mut self, step: u64) {
         self.step_results.owner_changed(&StepOwner {
             run: self.results_scope,
             step,
         });
     }
     /// The newest Undo step's footer result, the one a footer result of the newest step shows.
-    pub(crate) fn newest_step_result(
+    pub fn newest_step_result(
         &self,
     ) -> Option<crate::design::results::Shown<'_, StepResult>> {
         let step = *self.history_steps.last()?;
@@ -1129,14 +1131,14 @@ impl Run {
             .flatten()
     }
     /// The newest Undo step's name, if there is one.
-    fn last_step(&self) -> Option<&str> {
+    pub fn last_step(&self) -> Option<&str> {
         self.history_labels.last().map(String::as_str)
     }
     /// True while the long rest's full HP still stands on a saved Setup: every hero it filled
     /// is at full HP with no temporary HP, and `Use the saved HP` is not the newest step. The
     /// fill is no Undo step, so this reads the state itself. Its owner is `carried`, which a
     /// close ends; any change to those heroes' HP ends the offer, and Undo of it brings it back.
-    fn rest_filled_saved_hp(&self) -> bool {
+    pub fn rest_filled_saved_hp(&self) -> bool {
         self.carried.as_ref().is_some_and(|carried| {
             carried.saved
                 && !carried.sheets.is_empty()
@@ -1150,7 +1152,7 @@ impl Run {
     }
     /// True while this rest's `Use the saved HP` is the newest step, so its result and Undo
     /// still apply. An older rest's use, still the newest label after a second rest, is not.
-    fn saved_hp_used(&self) -> bool {
+    pub fn saved_hp_used(&self) -> bool {
         self.carried
             .as_ref()
             .is_some_and(|carried| carried.saved && carried.used_at == Some(self.history.len()))
@@ -1158,7 +1160,7 @@ impl Run {
     }
     /// Put back the HP the Setup had before the rest, as one named step that Undo takes back.
     /// The full HP stays in history, so the DM can return to it.
-    fn use_saved_hp(&mut self) -> Result<(), String> {
+    pub fn use_saved_hp(&mut self) -> Result<(), String> {
         if !self.rest_filled_saved_hp() {
             return Err("The party’s HP changed after the long rest.".into());
         }
@@ -1191,7 +1193,7 @@ impl Run {
         Ok(())
     }
     /// The carried values that still differ from the sheets, as one step back to the sheets.
-    fn back_to_sheets(&self) -> Option<(String, Command)> {
+    pub fn back_to_sheets(&self) -> Option<(String, Command)> {
         let carried = self.carried.as_ref()?;
         if carried.saved && !self.rest_filled_saved_hp() {
             return None;
@@ -1209,7 +1211,7 @@ impl Run {
         (!commands.is_empty()).then(|| (carried.from.clone(), Command::Several(commands)))
     }
     /// The fights whose HP could not be read, in words.
-    fn carry_missing(&self) -> Option<String> {
+    pub fn carry_missing(&self) -> Option<String> {
         let carried = self.carried.as_ref()?;
         (!carried.missing.is_empty()).then(|| {
             format!(
@@ -1222,11 +1224,11 @@ impl Run {
     pub fn prep(&self) -> (&str, Option<&str>) {
         prep_parts(&self.setup_details)
     }
-    fn current(&self) -> Option<usize> {
+    pub fn current(&self) -> Option<usize> {
         (self.state.phase == Phase::Running).then(|| self.state.order[self.state.cursor])
     }
     /// NPCs with the same key share one `Roll NPCs` roll in this mode.
-    fn roll_key(p: &Participant, grouping: Grouping) -> String {
+    pub fn roll_key(p: &Participant, grouping: Grouping) -> String {
         match grouping {
             // An encounter group that arrived together stays one roll. It joins
             // neither its like outside the group, nor another addition of itself.
@@ -1249,7 +1251,7 @@ impl Run {
     }
     /// True when this mode gives two or more NPCs one shared roll. Their equal totals then
     /// show tie arrows, so setup can reserve the tie column before the roll.
-    pub(crate) fn rolls_a_group(&self, grouping: Grouping) -> bool {
+    pub fn rolls_a_group(&self, grouping: Grouping) -> bool {
         let mut keys = std::collections::BTreeSet::new();
         self.state
             .participants
@@ -1258,7 +1260,7 @@ impl Run {
             .any(|p| !keys.insert(Self::roll_key(p, grouping)))
     }
     /// A shared roll is one block, including its first member.
-    fn roll_block_first(state: &State, index: usize) -> usize {
+    pub fn roll_block_first(state: &State, index: usize) -> usize {
         let p = &state.participants[index];
         state
             .order
@@ -1274,7 +1276,7 @@ impl Run {
             .unwrap_or(index)
     }
 
-    fn roll_block_name(state: &State, p: &Participant) -> String {
+    pub fn roll_block_name(state: &State, p: &Participant) -> String {
         if p.shared_roll.is_some()
             && state
                 .participants
@@ -1303,13 +1305,13 @@ impl Run {
     /// at` message uses. That is the group, or the creatures added by hand. When the roster
     /// has another group of that name, the first member tells them apart:
     /// `Rival Team (Rival Captain 2)`.
-    fn arrival_name(state: &State, first: usize, before: &str) -> String {
+    pub fn arrival_name(state: &State, first: usize, before: &str) -> String {
         Self::arrival_parts(state, first, before).whole()
     }
 
     /// [`Self::arrival_name`] as its parts, so a shorter form gives up the member by data, never
     /// by reading parentheses back out of the words (#512: `Patrol (Goblin (East) 2)`).
-    fn arrival_parts(state: &State, first: usize, before: &str) -> ArrivalName {
+    pub fn arrival_parts(state: &State, first: usize, before: &str) -> ArrivalName {
         let p = &state.participants[first];
         let alone = |group: String| ArrivalName {
             group,
@@ -1352,7 +1354,7 @@ impl Run {
     }
 
     /// What a total set in combat does to the turn order, in words.
-    fn initiative_notice(
+    pub fn initiative_notice(
         state: &State,
         index: usize,
         total: i64,
@@ -1405,7 +1407,7 @@ impl Run {
     }
     /// The initiative of each new participant, and the words the log uses for it. They are
     /// new, so none of them is in `state` yet.
-    fn group_initiative(
+    pub fn group_initiative(
         state: &mut State,
         added: &mut [Participant],
         total: Option<i64>,
@@ -1486,7 +1488,7 @@ impl Run {
         }
         Ok(words.join("; "))
     }
-    fn join_group(
+    pub fn join_group(
         state: &mut State,
         group: &RunGroup,
         total: Option<i64>,
@@ -1547,7 +1549,7 @@ impl Run {
     }
     /// The dock's roll. It changes no game state, so it goes to the Log and is not an Undo
     /// step. Undo of an earlier step keeps its line, and the dice do not roll the same again.
-    pub(super) fn roll_dice(&mut self, expression: &str) -> Result<(), String> {
+    pub fn roll_dice(&mut self, expression: &str) -> Result<(), String> {
         let link = splat::content::dice_text::RollLink::Dice {
             label: String::new(),
             dice: expression.to_owned(),
@@ -1561,7 +1563,7 @@ impl Run {
     }
     /// The recharge roll's result while its act is the DM's newest: a step, a roll or an Undo
     /// after it ends it (X4).
-    fn recharge_result(&self) -> Option<&Recharged> {
+    pub fn recharge_result(&self) -> Option<&Recharged> {
         self.recharged
             .as_ref()
             .filter(|recharged| recharged.step == self.dm_steps)
@@ -1579,16 +1581,16 @@ impl Run {
     }
     /// True while the ending is the newest Undo step. Undo then takes the ending away, so the
     /// run shows no second control for that.
-    fn undo_continues(&self) -> bool {
+    pub fn undo_continues(&self) -> bool {
         self.last_step() == Some(END_STEP)
     }
     /// True while Undo would take away an ending that came from the run file.
-    fn undo_unends_saved(&self) -> bool {
+    pub fn undo_unends_saved(&self) -> bool {
         self.undo_continues() && self.history.len() <= self.saved_steps
     }
     /// Whether this run's encounter is still in the campaign. A run with no encounter, or with
     /// no index read yet, counts as present: only a known deletion changes words.
-    fn encounter_exists(&self) -> bool {
+    pub fn encounter_exists(&self) -> bool {
         match (&self.content, self.source) {
             // A map lookup, so the ended view may ask every frame.
             (Some(index), Some(source)) => index
@@ -1598,12 +1600,12 @@ impl Run {
         }
     }
     /// The words that stand where Continue fight would be (`continue_reason`).
-    pub(super) fn continue_words(&self) -> Option<&'static str> {
+    pub fn continue_words(&self) -> Option<&'static str> {
         self.continue_blocked
             .map(|reason| continue_reason(reason, self.encounter_exists()))
     }
     /// Why Undo cannot take the ending away, as far as the app last worked it out.
-    pub(super) fn undo_blocked(&self) -> Option<&'static str> {
+    pub fn undo_blocked(&self) -> Option<&'static str> {
         self.continue_blocked.filter(|_| self.undo_unends_saved())
     }
     /// Make this ended fight live again, if `continue_blocked` allows it now, with the
@@ -1639,7 +1641,7 @@ impl Run {
     /// Timeline's read diagnosis: a file Splat cannot read is an error; a file that changed under
     /// an unsaved edit is a warning, settled on the Timeline page; the run rule's answer comes
     /// from `Refusal::run_rule`, which ends at its cause once the encounter is deleted.
-    fn unend_refusal(&self, act: Unend, reason: &'static str) -> crate::design::results::Refusal {
+    pub fn unend_refusal(&self, act: Unend, reason: &'static str) -> crate::design::results::Refusal {
         use crate::design::results::{
             Cause, FailedAct, Fallback, File, Name, Recovery, Refusal, RunRule, Step,
         };
@@ -1688,7 +1690,7 @@ impl Run {
     /// The outcome of the ending that the newest Continue fight took away, for the next
     /// ending to start from. It is read from the Undo steps, which the run file keeps, so it
     /// is the same after a close and a restart. None when that ending gave no outcome.
-    fn outcome_before_continue(&self) -> Option<&str> {
+    pub fn outcome_before_continue(&self) -> Option<&str> {
         let at = self
             .history_labels
             .iter()
@@ -1732,7 +1734,7 @@ impl Run {
             self.scroll_to_selected = true;
         }
     }
-    fn apply(&mut self, command: Command) -> Result<(), String> {
+    pub fn apply(&mut self, command: Command) -> Result<(), String> {
         self.apply_step(command)?;
         // Inspiration rerolls a die immediately after the roll, not after the next step that
         // the run takes. The step that applies a save's damage spends that damage itself.
@@ -1740,7 +1742,7 @@ impl Run {
         Ok(())
     }
 
-    fn apply_step(&mut self, command: Command) -> Result<(), String> {
+    pub fn apply_step(&mut self, command: Command) -> Result<(), String> {
         if matches!(command, Command::Begin) {
             self.roster_stamp = None;
             self.refresh_roster_faults();
@@ -2040,7 +2042,7 @@ impl Run {
         self.error = None;
         Ok(())
     }
-    fn participant_command(
+    pub fn participant_command(
         state: &mut State,
         command: Command,
         roster_ties: bool,
@@ -2262,7 +2264,7 @@ impl Run {
         }
         Ok(label)
     }
-    fn undo(&mut self) {
+    pub fn undo(&mut self) {
         // An ending from the run file can belong to a fight played before another one, so the
         // app decides it by the Timeline.
         if self.undo_unends_saved() {
@@ -2271,7 +2273,7 @@ impl Run {
         }
         self.take_back();
     }
-    fn take_back(&mut self) {
+    pub fn take_back(&mut self) {
         if let Some(previous) = self.history.pop() {
             self.count_step();
             self.saved_steps = self.saved_steps.min(self.history.len());
@@ -2308,7 +2310,7 @@ impl Run {
         }
     }
     /// Undo can take away an encounter group, and these all hold a participant's place.
-    fn forget_removed_participants(&mut self) {
+    pub fn forget_removed_participants(&mut self) {
         let count = self.state.participants.len();
         // A draft belongs to its participant: one that left the run takes its words along.
         let keys: BTreeSet<&str> = self
@@ -2347,7 +2349,7 @@ impl Run {
     }
     /// The rules a single NPC roll can use. Initiative groups need a group to be different
     /// from individual rolls.
-    fn roll_choices(&self) -> Vec<Grouping> {
+    pub fn roll_choices(&self) -> Vec<Grouping> {
         let has_group = self
             .state
             .participants
@@ -2360,7 +2362,7 @@ impl Run {
     }
     /// The words a named Undo uses for this command, and the words in them that name what it
     /// acted on: the row that `name` gave at the label's start or end, or the one loot table.
-    fn describe_named(&self, command: &Command) -> Named {
+    pub fn describe_named(&self, command: &Command) -> Named {
         let named = std::cell::RefCell::new(None);
         let label = self.describe_with(command, &|index| {
             let name = self
@@ -2384,7 +2386,7 @@ impl Run {
         });
         (label, target)
     }
-    fn describe_with<'a>(&'a self, command: &Command, name: &dyn Fn(&usize) -> &'a str) -> String {
+    pub fn describe_with<'a>(&'a self, command: &Command, name: &dyn Fn(&usize) -> &'a str) -> String {
         let condition = |index: &usize, at: &usize| {
             self.state
                 .participants
@@ -2584,20 +2586,20 @@ impl Run {
         }
     }
     /// True when a sheet made the newest Undo step.
-    fn undo_from_sheet(&self) -> bool {
+    pub fn undo_from_sheet(&self) -> bool {
         self.history_from_sheet.last().copied().unwrap_or(false)
     }
     /// The words of the newest step's label that name what it acted on (`describe_named`).
-    fn undo_target(&self) -> Option<&str> {
+    pub fn undo_target(&self) -> Option<&str> {
         let at = self.history_labels.len().checked_sub(1)?;
         self.history_targets.get(at)?.as_deref()
     }
-    fn undo_label(&self) -> String {
+    pub fn undo_label(&self) -> String {
         self.history_labels
             .last()
             .map_or_else(|| "Undo".to_owned(), |label| format!("Undo: {label}"))
     }
-    fn next_up(&self) -> Option<usize> {
+    pub fn next_up(&self) -> Option<usize> {
         if self.state.phase != Phase::Running {
             return None;
         }
@@ -2607,7 +2609,7 @@ impl Run {
             .find(|index| self.state.participants[*index].present)
             .filter(|index| Some(*index) != self.current())
     }
-    fn linked_participants(&self) -> Vec<usize> {
+    pub fn linked_participants(&self) -> Vec<usize> {
         self.state
             .participants
             .iter()
@@ -2626,7 +2628,7 @@ impl Run {
         }
     }
     /// The first participant whose sync is in this state.
-    fn first_sync_in(&self, state: crate::combat_sync::SyncState) -> Option<usize> {
+    pub fn first_sync_in(&self, state: crate::combat_sync::SyncState) -> Option<usize> {
         self.syncs
             .iter()
             .find(|(_, sync)| sync.state() == state)
@@ -2730,7 +2732,7 @@ impl Run {
             }
         }
     }
-    fn sync_names(&self, wanted: impl Fn(&crate::combat_sync::CombatSync) -> bool) -> Vec<String> {
+    pub fn sync_names(&self, wanted: impl Fn(&crate::combat_sync::CombatSync) -> bool) -> Vec<String> {
         self.syncs
             .iter()
             .filter(|(_, sync)| wanted(sync))
@@ -2748,7 +2750,7 @@ impl Run {
             .any(crate::combat_sync::CombatSync::unconfirmed)
     }
     /// How many participants have a conflict to settle.
-    pub(crate) fn conflict_count(&self) -> usize {
+    pub fn conflict_count(&self) -> usize {
         self.syncs
             .values()
             .filter(|sync| sync.state() == crate::combat_sync::SyncState::Conflict)
@@ -2759,7 +2761,7 @@ impl Run {
         self.sync_names(crate::combat_sync::CombatSync::unsent_only_here)
     }
     /// Who has changes a lost session left unsent.
-    pub(crate) fn stranded_names(&self) -> Vec<String> {
+    pub fn stranded_names(&self) -> Vec<String> {
         self.sync_names(crate::combat_sync::CombatSync::stranded)
     }
     pub fn path(&self) -> Option<&Path> {
@@ -2788,7 +2790,7 @@ impl Run {
     /// A linked player with no sync starts one, and one the lost connection stopped starts
     /// again. A sync the DM stopped for one player stays stopped. Each first read asks before it
     /// replaces a value the DM changed.
-    fn start_party_sync(&mut self, linked: Option<&str>) {
+    pub fn start_party_sync(&mut self, linked: Option<&str>) {
         for index in self.linked_participants() {
             let in_campaign = remote_identity(&self.state.participants[index])
                 .is_some_and(|(campaign, _)| linked == Some(campaign.as_str()));
@@ -2798,7 +2800,7 @@ impl Run {
         }
     }
     /// Players whose sync the DM stopped. A reopened run must not start these again.
-    fn stopped_players(&self) -> Vec<String> {
+    pub fn stopped_players(&self) -> Vec<String> {
         self.syncs
             .iter()
             .filter(|(_, sync)| !sync.enabled && !sync.session_lost() && sync.error.is_none())
@@ -2806,7 +2808,7 @@ impl Run {
             .map(|p| p.key.clone())
             .collect()
     }
-    fn resume_restored_sync(&mut self) {
+    pub fn resume_restored_sync(&mut self) {
         let keys = std::mem::take(&mut self.sync_to_restore);
         for index in self.linked_participants() {
             if keys.contains(&self.state.participants[index].key) {
@@ -2828,7 +2830,7 @@ fn condition_removed(condition: &Condition) -> String {
     }
 }
 
-fn mode_label(mode: i8) -> &'static str {
+pub fn mode_label(mode: i8) -> &'static str {
     match mode {
         -1 => "Disadvantage / surprised",
         1 => "Advantage",
@@ -3258,7 +3260,7 @@ impl Run {
     }
 }
 impl Run {
-    fn participant_edit(participant: &Participant) -> serde_json::Value {
+    pub fn participant_edit(participant: &Participant) -> serde_json::Value {
         let mut value = serde_json::to_value(participant).expect("a saved participant");
         // Read confirmations are facts, not changes made by the history step.
         if let Some(fields) = value.as_object_mut() {
@@ -3270,7 +3272,7 @@ impl Run {
 
     /// Snapshots include the whole run. Drop a step only if it changed this character,
     /// then carry the new sheet values through the snapshots that remain.
-    fn reconcile_sync_history(&mut self, before: &State, indices: &[usize], choices: &[usize]) {
+    pub fn reconcile_sync_history(&mut self, before: &State, indices: &[usize], choices: &[usize]) {
         let mut kept = Vec::new();
         let mut labels = Vec::new();
         let mut from_sheet = Vec::new();
@@ -3393,7 +3395,7 @@ impl Run {
     }
 
     /// The log keeps the complete change; the notice names each character's undo boundary.
-    fn note_sync_changes(&mut self, from_sheet: &[String], from_panel: &[String]) {
+    pub fn note_sync_changes(&mut self, from_sheet: &[String], from_panel: &[String]) {
         let mut what = Vec::new();
         if !from_sheet.is_empty() {
             what.push(format!("From D&D Beyond: {}.", from_sheet.join("; ")));
@@ -3488,7 +3490,7 @@ impl Run {
     }
     /// A sheet changed outside Splat, with these words for what changed.
     #[cfg(any(test, feature = "test-support"))]
-    pub(crate) fn note_sheet_update(&mut self, lines: &[String]) {
+    pub fn note_sheet_update(&mut self, lines: &[String]) {
         let before = self.state.clone();
         let indices: Vec<_> = self
             .state
@@ -3503,7 +3505,7 @@ impl Run {
     }
 }
 type SavedRun = splat_campaign::encounter_run::SavedRun<rolling::Cast>;
-struct Storage {
+pub struct Storage {
     path: PathBuf,
     root: PathBuf,
     campaign: Uuid,
@@ -3511,7 +3513,7 @@ struct Storage {
 }
 
 impl Run {
-    fn refresh_portraits(&mut self) {
+    pub fn refresh_portraits(&mut self) {
         if self
             .portraits_read
             .is_some_and(|read| read.elapsed() < PORTRAIT_REREAD)
@@ -3537,7 +3539,7 @@ impl Run {
             .collect();
     }
     /// The picture for a participant's row: a character's portrait, or a creature's art.
-    fn row_art(&self, ctx: &egui::Context, p: &Participant) -> Option<PathBuf> {
+    pub fn row_art(&self, ctx: &egui::Context, p: &Participant) -> Option<PathBuf> {
         match remote_identity(p) {
             Some((_, id)) => self.portraits.get(&id).cloned().flatten(),
             None => crate::art::entry_art(ctx, &p.definition),
@@ -3552,7 +3554,7 @@ impl Run {
         )
     }
 
-    fn mark_closed(&mut self) {
+    pub fn mark_closed(&mut self) {
         let Some(storage) = &self.storage else {
             return;
         };
@@ -3581,14 +3583,14 @@ impl Run {
     }
     /// Damage and a condition on one participant, as the DM gives them in the run.
     #[cfg(test)]
-    pub(crate) fn hurt_for_test(&mut self, index: usize, amount: i64, condition: &str) {
+    pub fn hurt_for_test(&mut self, index: usize, amount: i64, condition: &str) {
         self.apply(Command::Damage(index, amount)).unwrap();
         self.apply(Command::Condition(index, condition.into()))
             .unwrap();
     }
     /// One participant's HP and conditions.
     #[cfg(test)]
-    pub(crate) fn combat_state_for_test(&self, index: usize) -> (Option<i64>, Vec<String>) {
+    pub fn combat_state_for_test(&self, index: usize) -> (Option<i64>, Vec<String>) {
         let participant = &self.state.participants[index];
         let words = participant.conditions.iter().map(Condition::words);
         (participant.hp, words.collect())
@@ -3600,7 +3602,7 @@ impl Run {
     /// AB1, FB1: Save encounter gives this run, when it came from that encounter, the saved
     /// read-aloud text and notes. Prep reads them from here. The setup's technical details, the
     /// roster and every combat state stay. Returns whether the Prep text changed.
-    pub(crate) fn follow_prep(&mut self, encounter: Uuid, prep: &str) -> bool {
+    pub fn follow_prep(&mut self, encounter: Uuid, prep: &str) -> bool {
         if self.source != Some(encounter) {
             return false;
         }
@@ -3668,7 +3670,7 @@ impl Run {
     /// party), from the Encounters page's snapshot `from`. The page hands them on every frame;
     /// only another snapshot gives them new revisions, so the Arrivals caches are worked out
     /// again once per read, also while Arrivals is closed (not by comparing addresses).
-    pub(crate) fn set_reads(
+    pub fn set_reads(
         &mut self,
         from: Uuid,
         groups: &Arc<Vec<Arc<RunGroup>>>,
@@ -3683,32 +3685,32 @@ impl Run {
     }
     /// A new read of the groups: a new revision.
     /// A kept step or an Undo: the count, and so its revision, moves on.
-    fn count_step(&mut self) {
+    pub fn count_step(&mut self) {
         self.revision.revise(|steps| {
             *steps += 1;
             crate::design::memo::Changed::Yes
         });
     }
 
-    fn set_groups(&mut self, groups: Arc<Vec<Arc<RunGroup>>>) {
+    pub fn set_groups(&mut self, groups: Arc<Vec<Arc<RunGroup>>>) {
         self.groups = Some(groups);
         self.groups_read
             .revise(|()| crate::design::memo::Changed::Yes);
     }
     /// A new read of the scale: a new revision.
-    fn set_scale(&mut self, scale: Arc<crate::difficulty::Scale>) {
+    pub fn set_scale(&mut self, scale: Arc<crate::difficulty::Scale>) {
         self.scale = Some(scale);
         self.scale_read
             .revise(|()| crate::design::memo::Changed::Yes);
     }
-    pub(crate) fn set_roster_names(&mut self, revision: Uuid, names: &BTreeMap<String, String>) {
+    pub fn set_roster_names(&mut self, revision: Uuid, names: &BTreeMap<String, String>) {
         if self.roster_names_revision != Some(revision) {
             self.roster_names.extend(names.clone());
             self.roster_names_revision = Some(revision);
             self.roster_stamp = None;
         }
     }
-    fn refresh_roster_faults(&mut self) {
+    pub fn refresh_roster_faults(&mut self) {
         let Some(path) = self
             .roster_source
             .as_ref()
@@ -3738,10 +3740,10 @@ impl Run {
         }
     }
     /// The line of the unread roster row this participant came from, if it did.
-    pub(super) fn roster_fault_line(&self, key: &str) -> Option<usize> {
+    pub fn roster_fault_line(&self, key: &str) -> Option<usize> {
         self.roster_fault_keys.get(key).copied()
     }
-    fn roster_blocked(&self) -> Option<&'static str> {
+    pub fn roster_blocked(&self) -> Option<&'static str> {
         (!self.roster_faults.is_empty()).then_some("Fix the unread row first.")
     }
     pub fn save(&mut self) -> Result<(), String> {
@@ -3888,7 +3890,7 @@ impl Run {
     }
     /// Why the run must stay open. Closing drops the worker, so anything it has not
     /// confirmed would be lost with no message.
-    fn close_block(&self) -> Option<&'static str> {
+    pub fn close_block(&self) -> Option<&'static str> {
         // Stranded changes warn instead. They cannot leave without a session, and that must
         // not trap the run.
         self.syncs
@@ -3898,7 +3900,7 @@ impl Run {
     }
     /// What `Sync party` does now. A running sync is never restarted: starting one drops
     /// its pending writes and any open conflict.
-    fn party_sync_plan(&self) -> PartySync {
+    pub fn party_sync_plan(&self) -> PartySync {
         let linked = self.linked_participants();
         let on = |i: &usize| self.syncs.get(i).is_some_and(|s| s.enabled);
         let off: Vec<usize> = linked.iter().copied().filter(|i| !on(i)).collect();
@@ -3949,7 +3951,7 @@ impl Run {
         Ok(run)
     }
     /// A saved run without its Undo steps, which stay as the file's text.
-    fn load(
+    pub fn load(
         path: &Path,
         campaign: Uuid,
     ) -> Result<(Self, Option<Box<serde_json::value::RawValue>>), String> {
@@ -4212,7 +4214,7 @@ impl Run {
         let saved_at = crate::hermetic::file_time(&path);
         Some(self.info(path, saved_at, false))
     }
-    fn change_with_result(state: &State, label: &str, target: Option<&str>) -> String {
+    pub fn change_with_result(state: &State, label: &str, target: Option<&str>) -> String {
         target
             .filter(|name| label.ends_with(&format!("damage to {name}")))
             .and_then(|name| state.participants.iter().find(|p| p.name == name))
@@ -4220,7 +4222,7 @@ impl Run {
             .map_or_else(|| label.to_owned(), |hp| format!("{label} ({hp} HP left)"))
     }
 
-    fn info(&self, path: PathBuf, saved_at: Option<u64>, paused: bool) -> SavedRunInfo {
+    pub fn info(&self, path: PathBuf, saved_at: Option<u64>, paused: bool) -> SavedRunInfo {
         let saved = saved_at.map_or_else(String::new, |at| {
             format!(
                 " · Saved {}",
@@ -4270,7 +4272,7 @@ impl Run {
     }
     /// Who holds values that D&D Beyond did not confirm, in a run that keeps the party matched.
     /// With its file gone, nothing else has these values.
-    fn unsent_in_save(&self) -> Vec<String> {
+    pub fn unsent_in_save(&self) -> Vec<String> {
         if !self.keep_party_synced {
             return Vec::new();
         }
@@ -4581,7 +4583,7 @@ impl Run {
     /// Typed words as a run saved before effects kept them: a label, whatever its end says,
     /// with that version's Log line and Undo step. A fixture of an older run file.
     #[cfg(any(test, feature = "test-support"))]
-    pub(crate) fn label_as_older_run(&mut self, index: usize, words: &str) -> Result<(), String> {
+    pub fn label_as_older_run(&mut self, index: usize, words: &str) -> Result<(), String> {
         let mut next = self.state.clone();
         let p = next
             .participants

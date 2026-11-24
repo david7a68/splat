@@ -1413,9 +1413,9 @@ fn with_changes(link: &RollLink, (attack, damage): (i64, i64)) -> RollLink {
     link
 }
 
-/// A tile's two lines of words, its numbers and its facts, for a check outside the app.
-#[cfg(test)]
-pub(crate) fn tile_words(chip: &Chip) -> (String, Option<String>) {
+/// A tile's two lines of words, its numbers and its facts (the GPUI tiles, and a check
+/// outside the app).
+pub fn tile_words(chip: &Chip) -> (String, Option<String>) {
     (tile_detail(&chip.link), tile_facts(chip))
 }
 

@@ -1,6 +1,7 @@
 //! A caret section (`design::section`, `design::Section`; the quiet one is `QuietSection`): a `Strong` title after a caret that
 //! points right while closed and down while open; the body shows under the title while open.
-//! The caller keeps whether it is open (its state, or a default), so a reopened page keeps it.
+//! The caller keeps whether it is open when it gives `on_toggle` (its state, so a reopened page
+//! keeps it); without `on_toggle` the section keeps it under its id, starting at `open`.
 //!
 //! ```ignore
 //! kit::Section::new("cookie-help", "How to get your sign-in cookie", state.cookie_help)
@@ -62,9 +63,17 @@ impl ParentElement for Section {
 }
 
 impl RenderOnce for Section {
-    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let c = colors();
-        let open = self.open;
+        let first = self.open;
+        let kept = self.on_toggle.is_none().then(|| {
+            window.use_keyed_state(
+                ElementId::NamedChild(std::sync::Arc::new(self.id.clone()), "open".into()),
+                cx,
+                move |_, _| first,
+            )
+        });
+        let open = kept.as_ref().map_or(self.open, |kept| *kept.read(cx));
         let enabled = self.blocked.is_none();
         let (ty, color) = (Type::Strong, c.text);
         let mut header = div()
@@ -96,11 +105,19 @@ impl RenderOnce for Section {
             header = header
                 .opacity(super::button::DISABLED_OPACITY)
                 .tooltip(super::tooltip::tip(reason));
-        } else if let Some(on_toggle) = self.on_toggle {
+        } else {
+            let on_toggle = self.on_toggle;
             header = header
                 .cursor_pointer()
                 .hover(|s| s.text_color(c.text))
-                .on_click(move |_, window, cx| on_toggle(&!open, window, cx));
+                .on_click(move |_, window, cx| match (&kept, &on_toggle) {
+                    (Some(kept), _) => {
+                        kept.update(cx, |open, _| *open = !*open);
+                        window.refresh();
+                    }
+                    (None, Some(on_toggle)) => on_toggle(&!open, window, cx),
+                    (None, None) => {}
+                });
         }
         let header = target(header, self.title.clone());
         let header = target(header, element_name(&self.id));

@@ -10,9 +10,9 @@
 //!   before `Splat::route`).
 //! - its render hooks, each `fn(&mut SplatRoot, &mut Window, &mut Context<SplatRoot>) ->
 //!   AnyElement`: the page (`render`), and the bands and panels the shell places for it.
-use super::{SplatRoot, kit, theme};
+use super::SplatRoot;
 use crate::Page;
-use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div};
+use gpui::{AnyElement, Context, IntoElement, Window, div};
 
 pub mod campaigns;
 pub mod encounters;
@@ -98,35 +98,5 @@ pub(crate) fn render_page(
         Page::Library => library::render(root, window, cx),
         // Drawn by the shell; listed so the match stays whole.
         Page::Campaign | Page::Settings => div().into_any_element(),
-    }
-}
-
-/// What an area shows until its port lands: the page's header and one line that says so.
-pub(crate) fn placeholder(title: &str, what: &str) -> AnyElement {
-    let c = theme::colors();
-    div()
-        .flex()
-        .flex_col()
-        .size_full()
-        .when_title(title)
-        .child(kit::text(
-            theme::Type::Body,
-            c.muted,
-            format!("{what} is not in the GPUI app yet."),
-        ))
-        .into_any_element()
-}
-
-trait WhenTitle {
-    fn when_title(self, title: &str) -> Self;
-}
-
-impl WhenTitle for gpui::Div {
-    fn when_title(self, title: &str) -> Self {
-        if title.is_empty() {
-            self
-        } else {
-            self.child(kit::page_header(title.to_owned(), None, Vec::new()))
-        }
     }
 }

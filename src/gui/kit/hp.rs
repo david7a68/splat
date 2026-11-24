@@ -19,7 +19,7 @@ pub fn hp_color(state: HpState) -> Hsla {
 }
 
 /// The current HP's colour in a readout (healthy HP is plain text).
-fn current_color(state: HpState) -> Hsla {
+pub fn current_color(state: HpState) -> Hsla {
     let c = colors();
     match state {
         HpState::Zero => c.hp.zero,

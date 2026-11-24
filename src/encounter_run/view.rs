@@ -25,7 +25,7 @@ use uuid::Uuid;
 /// What is held while an encounter group is dragged to the initiative list.
 struct GroupDrag(Uuid);
 
-pub(super) const AMOUNT: &str = "Amount";
+pub(crate) const AMOUNT: &str = "Amount";
 /// The run's one damage and healing amount: one field, keyed by its run.
 const AMOUNT_FIELD: design::FieldName = crate::field_id!("run_amount");
 /// A group's typed initiative total in Arrivals, keyed by its run and the group (two groups can
@@ -43,16 +43,16 @@ const CORRECT_INITIATIVE_FIELD: design::FieldName = crate::field_id!("run_correc
 const ROLL_MODE_FIELD: design::FieldName = crate::field_id!("run_initiative_mode");
 const OUTCOME_FIELD: design::FieldName = crate::field_id!("run_outcome");
 const DM_NOTE_FIELD: design::FieldName = crate::field_id!("run_dm_note");
-const READ_ALOUD: &str = "Read-aloud and notes";
+pub const READ_ALOUD: &str = "Read-aloud and notes";
 /// FI10: Arrivals says what the fight becomes when a group joins.
 pub(crate) const FIGHT_AFTER: &str = "Fight after: ";
 /// Two lines of controls in a frame.
-pub(super) const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
+pub const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
 /// The dock's width from which Damage has its key hint, and Temp HP and Roll their full forms.
-pub(super) const DOCK_ALL_WORDS_FROM: f32 = design::turn_heading::ADD_WORDS_FROM;
+pub const DOCK_ALL_WORDS_FROM: f32 = design::turn_heading::ADD_WORDS_FROM;
 /// FK1 (iter-27-R): the dock's name slot, one width in every fight and for every row, so the
 /// controls after it keep one x. A name that `Heading` does not hold on one line wraps in it.
-pub(super) const DOCK_NAME_WIDTH: f32 = 8.0 * design::L;
+pub const DOCK_NAME_WIDTH: f32 = 8.0 * design::L;
 /// The lines a dock name may take. Two share the height of one control.
 const DOCK_NAME_LINES: usize = 2;
 const FOOTER_HEIGHT: f32 = 28.0 + 7.0;
@@ -71,9 +71,9 @@ const NAME_ROOM: f32 = 8.0;
 /// A long name wraps to at most this many lines; the last one ends in `…`.
 const NAME_LINES: usize = 3;
 /// X8: the Conditions field's words while the dock has no room for `Effect`.
-const OTHER_EFFECT_TIMED: &str = "Other effect, such as Bless 10 rounds";
+pub const OTHER_EFFECT_TIMED: &str = "Other effect, such as Bless 10 rounds";
 /// X7: what the Conditions tab records, and what Splat does with a time the DM types.
-const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9. Other effects stay local and do not sync.";
+pub const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9. Other effects stay local and do not sync.";
 /// A creature's effects beyond the official conditions, in the run's Conditions tab and in a
 /// change form alike: the `Other effects` label, then each in Body text with its row menu.
 /// Returns the position in `effects` of the one the DM removed. `field` is the width of the
@@ -211,7 +211,7 @@ fn vital_columns(ui: &mut egui::Ui, columns: &[(&str, String)]) {
 }
 
 /// The width `toggle` takes, on or off: its words and the frame's padding.
-pub(super) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
+pub(crate) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
     #[cfg(any(test, feature = "test-support"))]
     CONDITION_MEASURES.with(|count| count.set(count.get() + 1));
     let words = egui::WidgetText::from(Type::Body.rich(ui, format!("{icon} {label}")))
@@ -335,6 +335,58 @@ fn conditions_grid_counted(
         }
     });
     (pressed, counts)
+}
+
+/// Where an official condition is among a participant's conditions (Exhaustion at any level).
+fn found_condition(p: &Participant, name: &str) -> Option<usize> {
+    p.conditions
+        .iter()
+        .position(|c| c.same(name) || (name == "Exhaustion" && c.name().starts_with("Exhaustion")))
+}
+
+/// An official condition's words on its toggle while it holds (`Bless 9` with a count), or
+/// `None` while it does not.
+pub fn condition_label(p: &Participant, name: &str) -> Option<String> {
+    found_condition(p, name).map(|at| {
+        let c = &p.conditions[at];
+        c.count().map_or_else(|| name.to_owned(), |_| c.words())
+    })
+}
+
+/// A press on an official condition's toggle: it holds now, or it ends.
+pub fn condition_press(p: &Participant, index: usize, name: &str) -> Command {
+    found_condition(p, name).map_or_else(
+        || Command::Condition(index, name.to_owned()),
+        |at| Command::RemoveCondition(index, at),
+    )
+}
+
+/// The effects and unofficial conditions the Conditions tab lists under `Other effects`, by
+/// their place: an effect whose count the toggles show (`counts`) stays on its toggle.
+pub fn other_effects(p: &Participant, counts: bool) -> Vec<(usize, String)> {
+    p.conditions
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| {
+            super::recognized_condition(c.name()).is_none()
+                || (c.is_effect() && !(counts && c.count().is_some()))
+        })
+        .map(|(at, c)| (at, c.words()))
+        .collect()
+}
+
+/// `Other effect…`'s words, added: an Exhaustion level sets the level of the one it has.
+pub fn other_effect_command(p: &Participant, index: usize, typed: String) -> Command {
+    let exhausted = p
+        .conditions
+        .iter()
+        .any(|c| c.name().starts_with("Exhaustion"));
+    let level = typed.starts_with("Exhaustion") && !super::Condition::read(&typed).is_effect();
+    if exhausted && level {
+        set_exhaustion(index, exhaustion_level(&typed))
+    } else {
+        Command::Condition(index, typed)
+    }
 }
 
 /// Blank means roll; invalid text must never silently request a roll.
@@ -468,7 +520,7 @@ const PENDING_WORDS: &str =
 /// Splat would send and D&D Beyond does not have yet: `Its change to 49/62 HP has not reached
 /// D&D Beyond yet. Splat tries again by itself.` HP has the form of the conflict's buttons.
 /// With nothing to compare, the general words.
-fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
+pub fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
     #[cfg(any(test, feature = "test-support"))]
     PENDING_WORK.with(|work| work.set(work.get() + 1));
     let max = sync.max_hp().unwrap_or(0);
@@ -526,7 +578,7 @@ fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
     }
 }
 
-pub(super) fn sync_status(state: SyncState) -> Status<'static> {
+pub fn sync_status(state: SyncState) -> Status<'static> {
     let s = colors().sync;
     match state {
         SyncState::Off => Status {
@@ -621,7 +673,7 @@ fn side_mark(painter: &egui::Painter, center: egui::Pos2, side: &str, size: f32)
 }
 
 /// The run's keyboard commands.
-const KEYS: [(&str, &str); 13] = [
+pub const KEYS: [(&str, &str); 13] = [
     ("N", "Next turn"),
     ("Enter", "Damage the selected rows by the amount"),
     ("Shift+Enter", "Heal the selected rows by the amount"),
@@ -665,14 +717,14 @@ impl Run {
 
     /// A participant's setup initiative field: the setup row draws it, and the tie slot and the
     /// shared-roll marks read it.
-    pub(super) fn setup_initiative_id(&self, participant: &super::Participant) -> egui::Id {
+    pub fn setup_initiative_id(&self, participant: &super::Participant) -> egui::Id {
         self.participant_field(SETUP_INITIATIVE_FIELD, participant)
     }
 
     /// A participant's field in this run, keyed by the run and the participant
     /// (`ParticipantKey`): a rename keeps its focus and text, and another run's participant of
     /// the same slot shares neither.
-    fn participant_field(
+    pub fn participant_field(
         &self,
         field: design::FieldName,
         participant: &super::Participant,
@@ -683,11 +735,11 @@ impl Run {
     }
 
     /// The Amount field's id: the dock draws it, and the keys read whether it has focus.
-    pub(super) fn amount_id(&self) -> egui::Id {
+    pub fn amount_id(&self) -> egui::Id {
         AMOUNT_FIELD.of(self.id).id()
     }
 
-    pub(super) fn run_command(&mut self, command: Command) {
+    pub fn run_command(&mut self, command: Command) {
         let follow = matches!(command, Command::Next | Command::Begin | Command::Continue);
         // A field that reports each key keeps the keyboard, or the next digit lands in the
         // note. The roll goes on to the first empty field.
@@ -719,13 +771,13 @@ impl Run {
         }
     }
 
-    pub(super) fn clear_targets(&mut self) {
+    pub fn clear_targets(&mut self) {
         self.also.clear();
         self.halved.clear();
     }
 
     /// Add or take back one row, for one amount on several targets.
-    pub(super) fn toggle_target(&mut self, index: usize) {
+    pub fn toggle_target(&mut self, index: usize) {
         if index == self.selected {
             if let Some(next) = self.also.pop_first() {
                 self.selected = next;
@@ -745,7 +797,7 @@ impl Run {
     }
 
     /// The selected row and every other target, in turn order, as the log reads.
-    pub(super) fn targets(&self) -> Vec<usize> {
+    pub fn targets(&self) -> Vec<usize> {
         let mut targets: Vec<usize> = self
             .also
             .iter()
@@ -759,7 +811,7 @@ impl Run {
 
     /// The same step on the selected row and on every other target, as one step of undo. Half
     /// is for damage, and it rounds down.
-    pub(super) fn amount_command(&self, amount: i64, make: fn(usize, i64) -> Command) -> Command {
+    pub fn amount_command(&self, amount: i64, make: fn(usize, i64) -> Command) -> Command {
         if self.also.is_empty() {
             return make(self.selected, amount);
         }
@@ -775,7 +827,7 @@ impl Run {
         )
     }
 
-    pub(super) fn select(&mut self, index: usize) {
+    pub fn select(&mut self, index: usize) {
         self.selection_left_save();
         self.clear_targets();
         if self.selected != index {
@@ -797,7 +849,7 @@ impl Run {
     /// After a step, the keyboard goes to Amount, for the next number. Beside a panel, the
     /// DM may be typing there, and a digit and Enter must never become damage. Only a click
     /// on a row or on Amount itself takes the keyboard from a panel, for one number.
-    pub(super) fn follow_with_keyboard(&mut self) {
+    pub fn follow_with_keyboard(&mut self) {
         if self.lookup_open {
             self.amount.clear();
             self.return_focus = true;
@@ -812,7 +864,7 @@ impl Run {
     }
 
     /// Escape backs out of a footer's second step, in every phase.
-    fn back_out_on_escape(&mut self, ui: &egui::Ui) -> bool {
+    pub fn back_out_on_escape(&mut self, ui: &egui::Ui) -> bool {
         let modal = ui.ctx().memory(|memory| memory.top_modal_layer()).is_some();
         if !modal
             && (self.closing.is_open() || self.ending)
@@ -826,7 +878,7 @@ impl Run {
         false
     }
 
-    fn step_selection(&mut self, delta: isize) {
+    pub fn step_selection(&mut self, delta: isize) {
         let order = &self.state.order;
         let Some(position) = order.iter().position(|i| *i == self.selected) else {
             return;
@@ -839,7 +891,7 @@ impl Run {
 
     /// Single-letter commands work when no text field has focus, and in the amount
     /// field, which accepts only digits.
-    fn live_keys(&mut self, ui: &egui::Ui) {
+    pub fn live_keys(&mut self, ui: &egui::Ui) {
         // A dialog above the run takes the keyboard.
         if ui.ctx().memory(|memory| memory.top_modal_layer()).is_some() {
             return;
@@ -979,7 +1031,7 @@ impl Run {
         }
     }
 
-    pub(super) fn undo_action<'a>(&'a self, label: &'a str) -> Action<'a> {
+    pub fn undo_action<'a>(&'a self, label: &'a str) -> Action<'a> {
         let action = Action::secondary(label)
             .icon(icons::UNDO)
             .density(Density::Read);
@@ -991,7 +1043,7 @@ impl Run {
         action.blocked_if(self.history.is_empty(), self.empty_undo_reason())
     }
 
-    pub(super) fn empty_undo_reason(&self) -> &str {
+    pub fn empty_undo_reason(&self) -> &str {
         if self.undo_stopped {
             self.undo_boundary
                 .as_deref()
@@ -1005,7 +1057,7 @@ impl Run {
 
     /// The words beside an empty Undo, before any fitting. While the unread-steps warning
     /// shows, it says the cause, so the header says only `Nothing to undo` (AI3).
-    pub(super) fn empty_undo_words(&self) -> &str {
+    pub fn empty_undo_words(&self) -> &str {
         if self.undo_unread {
             "Nothing to undo"
         } else {
@@ -1013,7 +1065,7 @@ impl Run {
         }
     }
 
-    pub(super) fn empty_undo(&self, ui: &mut egui::Ui) -> bool {
+    pub fn empty_undo(&self, ui: &mut egui::Ui) -> bool {
         let full = self.empty_undo_reason();
         let words = self.empty_undo_words();
         let action = self.undo_action("Undo");
@@ -1036,7 +1088,7 @@ impl Run {
         clicked
     }
 
-    fn run_title(&self, ui: &mut egui::Ui, what: &str) {
+    pub fn run_title(&self, ui: &mut egui::Ui, what: &str) {
         ui.add(
             egui::Label::new(
                 Type::Small
@@ -1055,7 +1107,7 @@ impl Run {
     /// error is one of them: its whole fault wraps there, with its repair place as a choice.
     /// Owners: the step's result is its step's (`step_results`); the reasons and notices are
     /// worked out again each frame from the run's own state, which owns them.
-    pub(super) fn run_messages<'f>(
+    pub fn run_messages<'f>(
         &self,
         frame: &'f design::outcome::PaneFrame,
         setup: bool,
@@ -1177,7 +1229,7 @@ impl Run {
 
     /// What a press in the run's footer does, in its frame. The step's Undo goes by its ticket:
     /// a step that is gone (undone, or no longer the newest) does nothing.
-    pub(super) fn run_press(
+    pub fn run_press(
         &mut self,
         press: Option<design::outcome::Press<RunPress>>,
         command: &mut Option<Command>,
@@ -1208,27 +1260,8 @@ impl Run {
                     self.undo();
                 }
             }
-            RunPress::SaveAsNew => {
-                if let Err(error) = self.save_as_new_run() {
-                    self.error = Some(error);
-                }
-            }
-            RunPress::Replace => {
-                if let Err(error) = self.keep_this_run() {
-                    self.error = Some(error);
-                }
-            }
-            RunPress::DismissError => self.error = None,
-            RunPress::DismissRefusal => self.unend_refused = None,
-            RunPress::ToPackages => self.wants_packages = true,
-            RunPress::DismissUnread => self.undo_unread = false,
-            RunPress::UseSaved => {
-                if let Err(error) = self.use_saved_hp() {
-                    self.error = Some(error);
-                }
-            }
-            RunPress::UseSheets => {
-                if let Some((_, back)) = self.back_to_sheets() {
+            other => {
+                if let Some(back) = self.press_message(other) {
                     *command = Some(back);
                 }
             }
@@ -1236,7 +1269,7 @@ impl Run {
     }
 
     /// Beside a panel the roster reaches it, wherever the DM drags it. Alone, it keeps its cap.
-    fn roster_width(&self, ui: &egui::Ui) -> f32 {
+    pub fn roster_width(&self, ui: &egui::Ui) -> f32 {
         let room = ui.available_width() - GUTTER;
         if self.hide_panel {
             room.min(design::RUN_LARGE.max_width)
@@ -1251,7 +1284,7 @@ impl Run {
         clippy::disallowed_methods,
         reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn live_view(&mut self, ui: &mut egui::Ui) -> bool {
+    pub fn live_view(&mut self, ui: &mut egui::Ui) -> bool {
         // Before the keys, which give way to the keyboard beside a panel.
         self.back_out_on_escape(ui);
         self.live_keys(ui);
@@ -1572,13 +1605,13 @@ impl Run {
     }
 
     /// The sync state a row shows, if this participant has one.
-    pub(super) fn sync_word(&self, index: usize) -> Option<SyncState> {
+    pub fn sync_word(&self, index: usize) -> Option<SyncState> {
         self.syncs
             .get(&index)
             .map(crate::combat_sync::CombatSync::state)
     }
 
-    pub(super) fn party_sync_off(&self) -> bool {
+    pub fn party_sync_off(&self) -> bool {
         let mut linked = self
             .state
             .participants
@@ -1595,7 +1628,7 @@ impl Run {
             })
     }
 
-    fn row_sync_word(&self, index: usize) -> Option<SyncState> {
+    pub fn row_sync_word(&self, index: usize) -> Option<SyncState> {
         // A lost connection stops sync, and it starts again by itself: not the DM's Sync off.
         self.sync_word(index).filter(|state| {
             *state != SyncState::Stopped && !(*state == SyncState::Off && self.party_sync_off())
@@ -1606,7 +1639,7 @@ impl Run {
     /// damage dealt if that is more, and at most 30. The step keeps its own damage in memory,
     /// so the DC lasts until the next step; the run file gains no field, and after a restart
     /// the row has no DC. Splat does not roll it.
-    pub(super) fn conc_save_dc(&self, index: usize) -> Option<u32> {
+    pub fn conc_save_dc(&self, index: usize) -> Option<u32> {
         let p = self.state.participants.get(index)?;
         // The newest step's own damage to this row, as dealt: nothing is read from words.
         let damage = *self.state.damage.get(&index)?;
@@ -1646,7 +1679,7 @@ impl Run {
     }
 
     /// The height of this list at its most compressed, in this room.
-    fn tightest_roster(&self, ui: &egui::Ui, width: f32, room: f32) -> f32 {
+    pub fn tightest_roster(&self, ui: &egui::Ui, width: f32, room: f32) -> f32 {
         let scale = RunScale::fit(room, width, self.state.order.len());
         self.roster_layouts(ui, width, scale, RowFit::Summary)
             .iter()
@@ -1663,7 +1696,7 @@ impl Run {
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn roster(&mut self, ui: &mut egui::Ui, visible: f32, lent: f32, hidden: f32) {
+    pub fn roster(&mut self, ui: &mut egui::Ui, visible: f32, lent: f32, hidden: f32) {
         let room = visible + hidden;
         // R6 (FK1): room for a footer message of up to two lines (and the pane's `S` above it)
         // stays free under the rows while every row keeps its scale height, so such a message
@@ -2197,7 +2230,7 @@ impl Run {
 
     /// In a long roster, say what is out of view, on which side, and what needs attention
     /// there. A row cut by the edge cannot be read, so it counts as out of view.
-    fn overflow_note(
+    pub fn overflow_note(
         &self,
         ui: &mut egui::Ui,
         output: &egui::scroll_area::ScrollAreaOutput<()>,
@@ -2282,14 +2315,14 @@ impl Run {
         );
     }
 
-    pub(super) fn open_conditions_tab(&mut self) {
+    pub fn open_conditions_tab(&mut self) {
         self.panel = Panel::Conditions;
         self.close_lookup = true;
     }
 
     /// `E`: the dock's effect field for the selected row; when `Effect` has no room there, or
     /// several rows are selected, the Conditions tab with focus in its `Other effect…` field.
-    pub(super) fn open_effect_field(&mut self) {
+    pub fn open_effect_field(&mut self) {
         if self.state.phase != Phase::Running {
             return;
         }
@@ -2305,7 +2338,7 @@ impl Run {
     }
 
     /// What was typed in this field beside Notes, when it cannot be a number.
-    pub(super) fn words_in_number_field(
+    pub fn words_in_number_field(
         notes_open: bool,
         ui: &egui::Ui,
         id: egui::Id,
@@ -2334,7 +2367,7 @@ impl Run {
 
     /// The official conditions, one click each. A second click removes one. This sits
     /// beside the roster and needs no typing, so a mistyped name cannot lose its sync.
-    fn conditions_tab(&mut self, ui: &mut egui::Ui, index: usize) {
+    pub fn conditions_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         let mut command = None;
         let mut added = false;
         let p = &self.state.participants[index];
@@ -2344,25 +2377,12 @@ impl Run {
             // A form, not the pane: the grid, the effects and Add stay within its width.
             ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
             ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
-            let found = |name: &str| {
-                p.conditions.iter().position(|c| {
-                    c.same(name) || (name == "Exhaustion" && c.name().starts_with("Exhaustion"))
-                })
-            };
             // Fixed columns, `S` apart: never spread across the form, never moved by a toggle.
             // X11: a condition with a count shows it on its tick, `✓ Frightened 10`.
-            let label = |name: &str| {
-                found(name).map(|at| {
-                    let c = &p.conditions[at];
-                    c.count().map_or_else(|| name.to_owned(), |_| c.words())
-                })
-            };
+            let label = |name: &str| condition_label(p, name);
             let (pressed, counts) = conditions_grid_counted(ui, "official_conditions", &label);
             if let Some(name) = pressed {
-                command = Some(found(name).map_or_else(
-                    || Command::Condition(index, name.to_owned()),
-                    |i| Command::RemoveCondition(index, i),
-                ));
+                command = Some(condition_press(p, index, name));
             }
             // One level, not a pile of lines. Each step replaces the last.
             let exhausted = p
@@ -2416,17 +2436,7 @@ impl Run {
             }
             // Each other effect with its whole words. An official condition's count is on
             // its tick; it is here only when the tick cannot show it.
-            let listed = |c: &super::Condition| {
-                super::recognized_condition(c.name()).is_none()
-                    || (c.is_effect() && !(counts && c.count().is_some()))
-            };
-            let custom: Vec<_> = p
-                .conditions
-                .iter()
-                .enumerate()
-                .filter(|(_, c)| listed(c))
-                .map(|(at, c)| (at, c.words()))
-                .collect();
+            let custom = other_effects(p, counts);
             // The list's heading adds its own space above it; an empty list has no heading.
             if custom.is_empty() {
                 design::gap(ui, design::Gap::S);
@@ -2466,12 +2476,7 @@ impl Run {
                 // Typed as a level, it is still the one Exhaustion a creature has.
                 // Words with a time go through the one reader, which keeps the level.
                 let typed = draft.words.trim().to_owned();
-                let level =
-                    typed.starts_with("Exhaustion") && !super::Condition::read(&typed).is_effect();
-                command = Some(match exhausted.filter(|_| level) {
-                    Some(_) => set_exhaustion(index, exhaustion_level(&typed)),
-                    None => Command::Condition(index, typed),
-                });
+                command = Some(other_effect_command(p, index, typed));
                 added = true;
             }
             design::help(ui, CONDITIONS_HELP);
@@ -2487,16 +2492,16 @@ impl Run {
         }
     }
 
-    pub(super) fn sync_needs_sign_in(&self) -> bool {
+    pub fn sync_needs_sign_in(&self) -> bool {
         !self.connected && !self.simulate_connection && !self.linked_participants().is_empty()
     }
 
-    fn footer_height(&self) -> f32 {
+    pub fn footer_height(&self) -> f32 {
         FOOTER_HEIGHT
     }
 
     /// Sync and the closing controls. These are kept far from Next turn.
-    fn live_footer(&mut self, ui: &mut egui::Ui) -> bool {
+    pub fn live_footer(&mut self, ui: &mut egui::Ui) -> bool {
         let mut closed = false;
         design::gap(ui, design::Gap::XS);
         ui.horizontal(|ui| {
@@ -2551,7 +2556,7 @@ impl Run {
             if self.closing.is_open() {
                 // FK7 (iter-27-R): the dialog takes the input, and the line behind it stays
                 // as it was, with its save state, so the page behind a dialog does not change.
-                let note = close_saved_words(self.syncs.values().any(|sync| sync.enabled));
+                let note = self.close_note();
                 closed = self.close_confirmation(ui, &note);
             }
             // Five actions share the narrowest row. None of them may lose a letter.
@@ -2682,7 +2687,7 @@ impl Run {
     }
 
     /// `Saved` or `Not saved`, in every phase.
-    fn save_status(&self, ui: &mut egui::Ui) {
+    pub fn save_status(&self, ui: &mut egui::Ui) {
         let status = self.save_status_value();
         let base_word = status.word;
         let path = self.path().map(|path| path.display().to_string());
@@ -2707,7 +2712,7 @@ impl Run {
         }
     }
 
-    fn save_status_value(&self) -> Status<'static> {
+    pub fn save_status_value(&self) -> Status<'static> {
         if self.strip().not_saved {
             Status {
                 icon: icons::ERROR,
@@ -2733,7 +2738,7 @@ impl Run {
     /// the save state: a run that cannot save must not say that it stays saved.
     /// Why a close waits, as one exact sentence: `Settle 2 conflicts and 1 pending change
     /// first.` The ended view and the close dialog both say it, so one block has one form.
-    fn close_reason(&self) -> Option<String> {
+    pub fn close_reason(&self) -> Option<String> {
         self.close_block().map(|general| {
             let conflicts = self.conflict_count();
             let pending = self
@@ -2759,16 +2764,16 @@ impl Run {
     }
 
     /// This run's close dialog, as the owner of the focus it remembers (G44).
-    fn close_owner(&self) -> egui::Id {
+    pub fn close_owner(&self) -> egui::Id {
         egui::Id::new(("close_run", self.id))
     }
 
-    fn close_confirmation(&mut self, ui: &mut egui::Ui, note: &str) -> bool {
+    pub fn close_confirmation(&mut self, ui: &mut egui::Ui, note: &str) -> bool {
         self.close_dialog(ui, note)
     }
 
     /// All close paths share the same safe default and separate loss from saving.
-    fn close_dialog(&mut self, ui: &egui::Ui, note: &str) -> bool {
+    pub fn close_dialog(&mut self, ui: &egui::Ui, note: &str) -> bool {
         let cannot_save = self.strip().not_saved;
         let stranded = self.stranded_names();
         let lost = self.unsent_only_here_names();
@@ -2919,7 +2924,7 @@ impl Run {
         close && (cannot_save || self.close_run())
     }
 
-    fn unsaved_summary(&self) -> Vec<String> {
+    pub fn unsaved_summary(&self) -> Vec<String> {
         let saved_lines = self
             .storage
             .as_ref()
@@ -2944,7 +2949,7 @@ impl Run {
         }
     }
 
-    fn request_close(&mut self) -> bool {
+    pub fn request_close(&mut self) -> bool {
         if self.strip().not_saved
             || !self.stranded_names().is_empty()
             || !self.unsent_only_here_names().is_empty()
@@ -2956,7 +2961,7 @@ impl Run {
         }
     }
 
-    pub(super) fn close_run(&mut self) -> bool {
+    pub fn close_run(&mut self) -> bool {
         if let Some(reason) = self.close_block() {
             self.error = Some(reason.to_owned());
             return false;
@@ -2976,7 +2981,7 @@ impl Run {
     }
 
     /// One action for the whole party (T3.3). The run works fully without it.
-    fn party_sync_action(&self) -> Option<Action<'static>> {
+    pub fn party_sync_action(&self) -> Option<Action<'static>> {
         if self.linked_participants().is_empty() {
             return None;
         }
@@ -2996,7 +3001,7 @@ impl Run {
             ))
     }
 
-    fn sync_party_button(&mut self, ui: &mut egui::Ui) {
+    pub fn sync_party_button(&mut self, ui: &mut egui::Ui) {
         if self
             .party_sync_action()
             .is_some_and(|action| action.show(ui).clicked())
@@ -3006,7 +3011,7 @@ impl Run {
         }
     }
 
-    pub(super) fn toggle_party_sync(&mut self) {
+    pub fn toggle_party_sync(&mut self) {
         let plan = self.party_sync_plan();
         self.keep_party_synced = matches!(plan, PartySync::Start(_));
         self.dirty = true;
@@ -3031,7 +3036,7 @@ impl Run {
 
     /// Setup and the ended view have no row panel, but a sync can still be running. Its
     /// conflicts, and a way to stop it, must be here or the run cannot close.
-    fn sync_block(&mut self, ui: &mut egui::Ui) {
+    pub fn sync_block(&mut self, ui: &mut egui::Ui) {
         let names: Vec<(usize, String)> = self
             .syncs
             .iter()
@@ -3115,7 +3120,7 @@ impl Run {
 
     // ---- Side panel -------------------------------------------------------------
 
-    fn side_panel(&mut self, ui: &mut egui::Ui) {
+    pub fn side_panel(&mut self, ui: &mut egui::Ui) {
         // While an action is armed, its actor's stat block stays; the other tabs follow the row.
         let index = if self.panel == Panel::Reference {
             self.panel_row()
@@ -3166,7 +3171,7 @@ impl Run {
     /// Add to fight opens Arrivals. It is beside the fight's own controls, not among the
     /// panel's tabs, so that the DM finds it when something arrives. It takes the height of
     /// the controls in its row. Narrow layouts keep the icon and the word Add.
-    pub(super) fn add_to_fight(&self, words: bool, density: Density) -> Action<'static> {
+    pub fn add_to_fight(&self, words: bool, density: Density) -> Action<'static> {
         design::turn_heading::add_to_fight(
             words,
             density,
@@ -3175,7 +3180,7 @@ impl Run {
     }
 
     /// One row, with participant controls on the left and fight controls on the right.
-    fn fight_panel_title(&self) -> &'static str {
+    pub fn fight_panel_title(&self) -> &'static str {
         match self.panel {
             Panel::Log => "This fight · Log",
             Panel::Encounter => "This fight · Prep",
@@ -3186,7 +3191,7 @@ impl Run {
         }
     }
 
-    fn panel_tabs(&mut self, ui: &mut egui::Ui, reference: Option<&str>, conditions: bool) {
+    pub fn panel_tabs(&mut self, ui: &mut egui::Ui, reference: Option<&str>, conditions: bool) {
         let mut participant = Vec::new();
         if let Some(reference) = reference {
             participant.push((Panel::Reference, reference));
@@ -3246,7 +3251,7 @@ impl Run {
         });
     }
 
-    fn panel_body(&mut self, ui: &mut egui::Ui, index: usize, panel: Panel) {
+    pub fn panel_body(&mut self, ui: &mut egui::Ui, index: usize, panel: Panel) {
         match panel {
             Panel::Reference => {
                 self.reference_tab(ui, index);
@@ -3261,14 +3266,14 @@ impl Run {
         }
     }
 
-    fn notes_tab(&mut self, ui: &mut egui::Ui) {
+    pub fn notes_tab(&mut self, ui: &mut egui::Ui) {
         design::ScrollColumn::new("run_encounter_notes").show(ui, |ui| self.prep_notes(ui));
     }
 
     /// The encounter's prep: its read-aloud text and technical details, or what to do when it
     /// has none. In its own column on the Prep tab (`notes_tab`); in the ended view's panel, in
     /// the sync block's column, which is its scroll (`ended_panel`).
-    fn prep_notes(&mut self, ui: &mut egui::Ui) {
+    pub fn prep_notes(&mut self, ui: &mut egui::Ui) {
         let (prep, technical) = self.prep();
         let mut pressed = false;
         if prep.is_empty() {
@@ -3329,7 +3334,7 @@ impl Run {
         clippy::disallowed_methods,
         reason = "staged: Arrivals keeps its own scroll under a `Fills` body (`FillsReason::ArrivalsList`), counted (design::results::STAGED_ALLOWS)"
     )]
-    fn groups_tab(&mut self, ui: &mut egui::Ui) {
+    pub fn groups_tab(&mut self, ui: &mut egui::Ui) {
         // FB1: the newest arrival's result, and a tie's Move button, sit in a footer pinned
         // to the panel's bottom, below the scrolling list. The list keeps its top, so a result
         // that comes, grows with a tie, or goes moves no group row. Its owner is the newest
@@ -3433,12 +3438,12 @@ impl Run {
 
     /// The revision of the groups' read (`set_reads`): a new one with each read, whatever page
     /// was open when it came.
-    fn groups_revision(&self) -> design::memo::Revision {
+    pub fn groups_revision(&self) -> design::memo::Revision {
         self.groups_read.revision()
     }
 
     /// The revision of the scale's read, as `groups_revision` is for the groups.
-    fn scale_revision(&self) -> design::memo::Revision {
+    pub fn scale_revision(&self) -> design::memo::Revision {
         self.scale_read.revision()
     }
 
@@ -3447,7 +3452,7 @@ impl Run {
     /// of the typed totals, a new read of the groups, another encounter, a step or its Undo
     /// (which can give a side its initiative) or another grouping rule (`totals_revision`,
     /// `groups_revision`, `source`, `revision`, `initiative.grouping`).
-    fn arrival_reasons(&mut self) -> Arc<[String]> {
+    pub fn arrival_reasons(&mut self) -> Arc<[String]> {
         let groups_revision = self.groups_revision();
         let Some(groups) = self.groups.as_ref() else {
             return Arc::from([]);
@@ -3479,6 +3484,11 @@ impl Run {
         reasons
     }
 
+    /// The words of `add_waits`, for a view in any toolkit.
+    pub fn add_waits_words(&self, group: &super::RunGroup) -> Option<String> {
+        self.add_waits(group).map(|waits| waits.words().to_owned())
+    }
+
     /// Why this group's Add waits now, or `None` when it runs: its faults, then its typed total,
     /// then a roll with no bonus. The ONE value for the button, its drop, its Enter and the
     /// painted words (`AddWaits`).
@@ -3502,7 +3512,7 @@ impl Run {
     /// full-width line above them when `Will add:` and its first member do not fit beside them.
     /// Worked out once for each read of the groups, width and type size; a frame that changes
     /// none of them reads the kept words.
-    fn arrival_summary(
+    pub fn arrival_summary(
         &mut self,
         ui: &egui::Ui,
         group: &super::RunGroup,
@@ -3549,7 +3559,7 @@ impl Run {
     /// What each group would make the fight when it joins, for the groups whose XP is known. The
     /// party is the characters who are present; the fight is every present creature against them.
     /// Worked out again only after a step, a new read of the groups or of the scale.
-    pub(super) fn arrival_words(&mut self) -> Option<&super::ArrivalWords> {
+    pub fn arrival_words(&mut self) -> Option<&super::ArrivalWords> {
         let key = (
             *self.revision,
             self.groups_revision(),
@@ -3639,7 +3649,7 @@ impl Run {
 
     /// Whether `arrival_result` has a result to show: the newest step added an arrival, or it
     /// settled a tie.
-    fn arrival_result_shown(&self) -> bool {
+    pub fn arrival_result_shown(&self) -> bool {
         let last = self.state.log.last();
         (!self.history.is_empty()
             && last.is_some_and(|line| {
@@ -3742,7 +3752,7 @@ impl Run {
 
     /// The roster shows members; this notice keeps just the group and its totals.
     /// Roll details and member names remain in the unmodified Log.
-    fn group_arrival_notice(&self, start: usize) -> Option<String> {
+    pub fn group_arrival_notice(&self, start: usize) -> Option<String> {
         let added = self.state.participants.get(start..)?;
         let origin = added.first()?.added_from.as_ref()?;
         // A creature added by hand has no group: the notice names the rows it added, in the
@@ -3771,7 +3781,7 @@ impl Run {
     /// Initiative and Add, and no wider than a list, so the controls stay near the names they
     /// add, at one x in every group. Also the width of the Add slot. The search field above
     /// takes the block's width, so the panel has one right edge. None without groups.
-    fn arrival_block(&self, ui: &egui::Ui) -> Option<(f32, f32)> {
+    pub fn arrival_block(&self, ui: &egui::Ui) -> Option<(f32, f32)> {
         let groups = self.groups.as_ref()?;
         let offered = super::OfferedGroups::of(groups, self.source);
         let all: Vec<_> = offered
@@ -3853,7 +3863,7 @@ impl Run {
     /// Point 1 of the fourth review: a group that is no longer offered here
     /// (`OfferedGroups::of`, as this list shows them) drops its kept Arrivals line. It runs where
     /// the list is built, also when the list is empty, once for each read of the groups.
-    pub(super) fn keep_offered_lines(&mut self) {
+    pub fn keep_offered_lines(&mut self) {
         let revision = self.groups_revision();
         if self.arrival_lines_seen == Some(revision) {
             return;
@@ -3877,12 +3887,12 @@ impl Run {
     }
 
     /// The widest join status a group can show (FI5): `Added in round NN`.
-    fn widest_status(&self) -> String {
+    pub fn widest_status(&self) -> String {
         format!("Added in round {}", self.state.round.max(10))
     }
 
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
-    fn group_list(&mut self, ui: &mut egui::Ui, arrival: Option<(f32, f32)>) -> Option<Uuid> {
+    pub fn group_list(&mut self, ui: &mut egui::Ui, arrival: Option<(f32, f32)>) -> Option<Uuid> {
         self.keep_offered_lines();
         let c = colors();
         let Some(groups) = self.groups.clone() else {
@@ -4012,7 +4022,7 @@ impl Run {
     }
 
     /// By side, a creature joins its side's initiative with no roll, when the side has one.
-    pub(super) fn joins_side(&self, side: &str) -> bool {
+    pub fn joins_side(&self, side: &str) -> bool {
         self.initiative.grouping == Grouping::BySide
             && self
                 .state
@@ -4023,7 +4033,7 @@ impl Run {
 
     /// The newest round this group joined in (0 for setup), from one scan of the participants
     /// and no list. Its row's status and its layout both take it from here.
-    fn group_joined(&self, group: &super::RunGroup) -> Option<u64> {
+    pub fn group_joined(&self, group: &super::RunGroup) -> Option<u64> {
         #[cfg(any(test, feature = "test-support"))]
         GROUP_SCANS.with(|count| count.set(count.get() + 1));
         self.state
@@ -4038,7 +4048,7 @@ impl Run {
     /// What a group's row says about it before its members: when it joined (`joined`, from
     /// `group_joined`), or whose encounter it is for. `Changed` follows the members
     /// (`changed_mark`).
-    fn group_status(&self, group: &super::RunGroup, joined: Option<u64>) -> String {
+    pub fn group_status(&self, group: &super::RunGroup, joined: Option<u64>) -> String {
         if let Some(round) = joined {
             if round == 0 {
                 // Short enough for the member slot at 960, in the run's own phase word, so a
@@ -4062,7 +4072,7 @@ impl Run {
     }
 
     /// Returns true when the DM chooses to add this group.
-    fn group_row(
+    pub fn group_row(
         &mut self,
         ui: &mut egui::Ui,
         group: &super::RunGroup,
@@ -4500,7 +4510,7 @@ impl Run {
     }
 
     /// The same step for the button and for a drop: the total typed beside it, or a roll.
-    pub(super) fn add_group_from_panel(&mut self, id: Uuid) {
+    pub fn add_group_from_panel(&mut self, id: Uuid) {
         let Some(group) = self
             .groups
             .iter()
@@ -4528,7 +4538,7 @@ impl Run {
     /// While a group is held, the initiative list says it can take it. A group whose Add came
     /// to wait while it was held (a step or its Undo took away its side's initiative, a new
     /// read of the groups) is let go: no outline promises a drop that would not join.
-    fn group_drop_zone(&mut self, ui: &mut egui::Ui, rect: Rect) {
+    pub fn group_drop_zone(&mut self, ui: &mut egui::Ui, rect: Rect) {
         let Some(held) = egui::DragAndDrop::payload::<GroupDrag>(ui.ctx()) else {
             return;
         };
@@ -4557,7 +4567,7 @@ impl Run {
         }
     }
 
-    fn keys_tab(&self, ui: &mut egui::Ui) {
+    pub fn keys_tab(&self, ui: &mut egui::Ui) {
         let c = colors();
         // The panel's title names them (FE14), so the list has no label of its own.
         design::gap(ui, design::Gap::XS);
@@ -4593,7 +4603,7 @@ impl Run {
     }
 
     /// Recording only. Colour says nothing here, because nothing is wrong.
-    fn death_saves(&mut self, ui: &mut egui::Ui, index: usize, successes: u8, failures: u8) {
+    pub fn death_saves(&mut self, ui: &mut egui::Ui, index: usize, successes: u8, failures: u8) {
         let c = colors();
         design::heading(
             ui,
@@ -4663,7 +4673,7 @@ impl Run {
         }
     }
 
-    fn reference_tab(&mut self, ui: &mut egui::Ui, index: usize) {
+    pub fn reference_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         self.card_loot(ui, index);
         let p = &self.state.participants[index];
         let definition = &p.definition;
@@ -4917,7 +4927,7 @@ impl Run {
         }
     }
 
-    fn record_tab(&mut self, ui: &mut egui::Ui, index: usize) {
+    pub fn record_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         let mut command = None;
         design::ScrollColumn::new("run_record").show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = design::S;
@@ -5087,13 +5097,13 @@ impl Run {
         }
     }
 
-    fn log_tab(&mut self, ui: &mut egui::Ui) {
+    pub fn log_tab(&mut self, ui: &mut egui::Ui) {
         design::ScrollColumn::new("run_log").show(ui, |ui| self.log_lines(ui));
     }
 
     /// The log, newest first, or what to do while it is empty. In the Log tab's own column
     /// (`log_tab`), or in the ended panel's column, as tall as its lines (`ended_panel`).
-    fn log_lines(&self, ui: &mut egui::Ui) {
+    pub fn log_lines(&self, ui: &mut egui::Ui) {
         let c = colors();
         if self.state.log.is_empty() {
             design::empty_state(
@@ -5111,7 +5121,7 @@ impl Run {
 
     // ---- Setup ------------------------------------------------------------------
 
-    fn setup_view(&mut self, ui: &mut egui::Ui) -> bool {
+    pub fn setup_view(&mut self, ui: &mut egui::Ui) -> bool {
         self.back_out_on_escape(ui);
         let mut closed = false;
         let width = panel_width(ui);
@@ -5136,30 +5146,10 @@ impl Run {
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn setup_body(&mut self, ui: &mut egui::Ui) -> bool {
+    pub fn setup_body(&mut self, ui: &mut egui::Ui) -> bool {
         self.refresh_roster_faults();
         let mut closed = false;
-        let missing_initiative = self
-            .state
-            .participants
-            .iter()
-            .filter(|p| p.initiative.is_none() && p.present)
-            .count();
-        let missing_hp = self
-            .state
-            .participants
-            .iter()
-            .filter(|p| !matches!((p.hp, p.max_hp), (Some(hp), Some(max)) if max > 0 && hp >= 0 && hp <= max))
-            .count();
-        let blocked = if let Some(reason) = self.roster_blocked() {
-            Some(reason.to_owned())
-        } else if missing_hp > 0 {
-            Some(format!("{missing_hp} need valid HP."))
-        } else if missing_initiative > 0 {
-            Some(format!("{missing_initiative} need initiative."))
-        } else {
-            None
-        };
+        let blocked = self.setup_blocked();
         let mut command = None;
         let default_roll = self.initiative.grouping;
         let default_hint = format!("Campaign default: {}", default_roll.label());
@@ -5503,12 +5493,8 @@ impl Run {
         design::gap(ui, design::Gap::XS);
         ui.horizontal(|ui| {
             if self.closing.is_open() {
-                let note = if self.untouched_setup() {
-                    "Nothing was done, so no run is kept."
-                } else {
-                    "The run stays saved, in setup."
-                };
-                closed = self.close_confirmation(ui, note);
+                let note = self.close_note();
+                closed = self.close_confirmation(ui, &note);
             } else {
                 if Action::quiet(if self.close_block().is_some() {
                     "Close after sync"
@@ -5553,7 +5539,7 @@ impl Run {
     /// Roll precedes initiative so party and NPC totals share one column.
     /// When `Roll NPCs` will give two NPCs one roll, their tie slot is there from the start,
     /// so the roll moves no field. Typed ties still wait for blur.
-    fn setup_slots(&self, ui: &egui::Ui, npc: bool) -> ((f32, f32, f32), f32) {
+    pub fn setup_slots(&self, ui: &egui::Ui, npc: bool) -> ((f32, f32, f32), f32) {
         let grouped_roll =
             !self.initiative.roster_ties && self.rolls_a_group(self.initiative.grouping);
         let tie = if grouped_roll
@@ -5604,7 +5590,7 @@ impl Run {
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn setup_row(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
+    pub fn setup_row(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let mut command = None;
         let p = self.state.participants[index].clone();
         // What the DM weighs before a fight: who is hurt, and what is still on them.
@@ -5952,7 +5938,7 @@ impl Run {
         command
     }
 
-    fn setup_panel(&mut self, ui: &mut egui::Ui) {
+    pub fn setup_panel(&mut self, ui: &mut egui::Ui) {
         let title = if matches!(
             self.panel,
             Panel::Log | Panel::Encounter | Panel::Groups | Panel::Keys
@@ -5990,13 +5976,13 @@ impl Run {
     }
 
     /// How many the DM must order, when Notes hide the panel that says so.
-    pub(super) fn tied_count(&self) -> usize {
+    pub fn tied_count(&self) -> usize {
         (0..self.state.participants.len())
             .filter(|&index| self.setup_tied(index))
             .count()
     }
 
-    fn setup_tied(&self, index: usize) -> bool {
+    pub fn setup_tied(&self, index: usize) -> bool {
         let p = &self.state.participants[index];
         !self.initiative.roster_ties
             && p.initiative.is_some()
@@ -6012,7 +5998,7 @@ impl Run {
                 })
     }
 
-    fn setup_hidden_attention(&self, rows: &[usize]) -> String {
+    pub fn setup_hidden_attention(&self, rows: &[usize]) -> String {
         let missing = rows
             .iter()
             .filter(|&&i| {
@@ -6034,13 +6020,13 @@ impl Run {
         words
     }
 
-    fn shared_initiative(&self, a: usize, b: usize) -> bool {
+    pub fn shared_initiative(&self, a: usize, b: usize) -> bool {
         let p = &self.state.participants[a];
         let q = &self.state.participants[b];
         p.shared_roll.is_some() && p.shared_roll == q.shared_roll
     }
 
-    fn setup_tie_directions(&self, index: usize) -> Option<(usize, bool, bool)> {
+    pub fn setup_tie_directions(&self, index: usize) -> Option<(usize, bool, bool)> {
         let position = self.state.order.iter().position(|i| *i == index)?;
         let p = &self.state.participants[index];
         let tied = |other: Option<&usize>| {
@@ -6054,7 +6040,7 @@ impl Run {
     }
 
     /// Tied rows alone have two fixed arrow slots under Init.
-    fn setup_tie_controls(&self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
+    pub fn setup_tie_controls(&self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let (position, up, down) = self.setup_tie_directions(index)?;
         let p = &self.state.participants[index];
         let mut command = None;
@@ -6086,7 +6072,7 @@ impl Run {
 
     // ---- Ended ------------------------------------------------------------------
 
-    fn ended_view(&mut self, ui: &mut egui::Ui) -> bool {
+    pub fn ended_view(&mut self, ui: &mut egui::Ui) -> bool {
         self.back_out_on_escape(ui);
         let c = colors();
         let mut closed = false;
@@ -6259,7 +6245,8 @@ impl Run {
             .pane(ui, design::pane::Body::Content, |ui| {
                 if self.closing.is_open() {
                     ui.horizontal(|ui| {
-                        closed = self.close_confirmation(ui, "The run stays saved.");
+                        let note = self.close_note();
+                        closed = self.close_confirmation(ui, &note);
                     });
                 }
                 // Beside a panel, the final state comes first.
@@ -6336,7 +6323,7 @@ impl Run {
     }
 
     /// The width the ended header keeps for its title, its outcome and its save word.
-    fn ended_title_width(&self, ui: &egui::Ui, outcome: &str) -> f32 {
+    pub fn ended_title_width(&self, ui: &egui::Ui, outcome: &str) -> f32 {
         let small = Type::Small.font(ui);
         let title = design::number_width(ui, &self.state_words(false), &Type::Title.font(ui));
         // A long outcome wraps. A short one keeps its line.
@@ -6360,7 +6347,7 @@ impl Run {
     /// header has it from the start, and the lone Undo there names its target (W6-D2). Undo is
     /// at the roster's right edge, so beside the log panel the actions to its right take at
     /// least the panel's width.
-    fn ended_actions_width(&self, ui: &egui::Ui, undo_room: f32) -> f32 {
+    pub fn ended_actions_width(&self, ui: &egui::Ui, undo_room: f32) -> f32 {
         let gap = ui.spacing().item_spacing.x;
         let glance = |action: Action<'_>| action.density(Density::Glance).natural_width(ui) + gap;
         let close =
@@ -6377,7 +6364,7 @@ impl Run {
     /// encounter`, and at least `14 × L`, which holds a short loot step whole (`Undo: 2 loot
     /// rolls on gems`). A longer target shortens in it by the rule of every Undo label
     /// (`undo_forms`); it never takes room from the line.
-    fn ended_undo_room(&self, ui: &egui::Ui) -> f32 {
+    pub fn ended_undo_room(&self, ui: &egui::Ui) -> f32 {
         self.undo_action(&format!("Undo: {END_STEP}"))
             .density(Density::Glance)
             .natural_width(ui)
@@ -6388,7 +6375,7 @@ impl Run {
     /// stands where Continue fight would be, beside Undo's room, and the line's height. Both
     /// come from the width alone: the line is as tall as the tallest of the reasons at that
     /// room, so no reason, target or step changes its height (X38), and none is ever cut.
-    fn ended_second_line(&self, ui: &egui::Ui, width: f32, undo_room: f32) -> (f32, f32) {
+    pub fn ended_second_line(&self, ui: &egui::Ui, width: f32, undo_room: f32) -> (f32, f32) {
         let gap = ui.spacing().item_spacing.x;
         let room = ended_continue_room(ui)
             .min(width - undo_room - 2.0 * gap)
@@ -6417,7 +6404,7 @@ impl Run {
     /// The ended view's panel column (`ended_view`'s trailing child): the sync block and Prep,
     /// then the Combat log. With choices to make, they have the column, and the log waits behind
     /// a heading. Never a pair of choices cut by a second scroll.
-    fn ended_panel(&mut self, ui: &mut egui::Ui) {
+    pub fn ended_panel(&mut self, ui: &mut egui::Ui) {
         // The Combat log's own line while it is closed: its heading and the gap above it.
         let log_line = Density::Read.control() + design::M;
         let log_id = ui.make_persistent_id("run_ended_combat_log");
@@ -6461,7 +6448,7 @@ impl Run {
         }
     }
 
-    fn ended_undo_whole(&self, ui: &egui::Ui) -> Option<f32> {
+    pub fn ended_undo_whole(&self, ui: &egui::Ui) -> Option<f32> {
         let continues = !self.undo_continues() || self.undo_blocked().is_some();
         (continues && !self.history.is_empty() && self.undo_blocked().is_none()).then(|| {
             self.undo_action(&self.undo_label())
@@ -6473,7 +6460,7 @@ impl Run {
     /// One control takes the ending away. While the ending is the newest step, that is Undo.
     /// After a loot roll, or with no steps, it is Continue fight, beside Close run: the two
     /// ways out of an ended fight, with the one that changes nothing last.
-    fn ended_continue(&mut self, ui: &mut egui::Ui, room: f32) {
+    pub fn ended_continue(&mut self, ui: &mut egui::Ui, room: f32) {
         if self.undo_continues() && self.undo_blocked().is_none() {
             return;
         }
@@ -6502,7 +6489,7 @@ impl Run {
 
     /// Undo in the ended header. It gives up its target before a word beside it is cut, and
     /// keeps the target in hover and in its accessible name.
-    fn ended_undo(&mut self, ui: &mut egui::Ui, room: f32) {
+    pub fn ended_undo(&mut self, ui: &mut egui::Ui, room: f32) {
         if self.history.is_empty() || self.undo_blocked().is_some() {
             return;
         }
@@ -6524,7 +6511,7 @@ impl Run {
     /// Undo's words as a header's line has `room` for them, in the ended and the setup view:
     /// whole when they fit, else the first form of the one rule (`undo_forms`) that fits, and
     /// `Undo` alone last.
-    fn undo_words_in(&self, ui: &egui::Ui, full: &str, room: f32, density: Density) -> String {
+    pub fn undo_words_in(&self, ui: &egui::Ui, full: &str, room: f32, density: Density) -> String {
         let fits =
             |words: &str| self.undo_action(words).density(density).natural_width(ui) <= room + 0.5;
         if fits(full) {
@@ -6569,7 +6556,7 @@ pub(crate) fn continue_action() -> Action<'static> {
 }
 
 /// The level in `Exhaustion (2)`. Plain `Exhaustion` is the first.
-pub(super) fn exhaustion_level(condition: &str) -> u8 {
+pub fn exhaustion_level(condition: &str) -> u8 {
     condition
         .trim()
         .strip_prefix("Exhaustion (")
@@ -6582,13 +6569,13 @@ pub(super) fn exhaustion_level(condition: &str) -> u8 {
 const ARRIVAL_FIELD_WIDTH: f32 = 72.0;
 
 /// The highest exhaustion level. The run's stepper stops here and says why.
-const EXHAUSTION_MAX: i64 = 6;
+pub const EXHAUSTION_MAX: i64 = 6;
 const EXHAUSTION_AT_LOW: &str = "Exhaustion is already 0.";
 const EXHAUSTION_AT_HIGH: &str = "Exhaustion stops at 6.";
 
 /// An exhaustion drag in progress: the level it started at, and the level shown now.
 #[derive(Clone, Copy, Debug)]
-pub(super) struct ExhaustionDrag {
+pub struct ExhaustionDrag {
     index: usize,
     at: usize,
     start: u8,
@@ -6600,13 +6587,13 @@ pub(super) struct ExhaustionDrag {
 
 /// One step of undo: the old level goes, and the new one comes.
 /// The one Exhaustion entry at another level. Its time stays.
-fn set_exhaustion(index: usize, level: u8) -> Command {
+pub fn set_exhaustion(index: usize, level: u8) -> Command {
     Command::Condition(index, format!("Exhaustion ({level})"))
 }
 
 /// The line under a character's card. The notice above it, when it shows, already says the
 /// card is the copy from the start of the fight, so the line does not say it again.
-fn snapshot_values_line(notice_shown: bool) -> &'static str {
+pub fn snapshot_values_line(notice_shown: bool) -> &'static str {
     if notice_shown {
         "The roster has the current values."
     } else {
@@ -6657,7 +6644,7 @@ fn live_notice(
     clippy::disallowed_methods,
     reason = "the run’s errors carry the system’s words, and its results the DM’s names"
 )]
-pub(super) fn outside_words(words: String) -> Option<design::outcome::Sentence> {
+pub(crate) fn outside_words(words: String) -> Option<design::outcome::Sentence> {
     design::outcome::Sentence::outside(words)
 }
 
@@ -6670,7 +6657,7 @@ enum ArrivalPress {
 
 /// What the run's message footer can press.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum RunPress {
+pub enum RunPress {
     /// The Undo of the newest step's result (the saved HP's use).
     UndoStep,
     SaveAsNew,
@@ -6750,7 +6737,7 @@ impl design::outcome::Fault for SnapshotFault {
     }
 }
 
-fn snapshot_notice(
+pub fn snapshot_notice(
     snapshot: &Entry,
     current: Option<&Entry>,
     unreadable: bool,
@@ -6823,7 +6810,7 @@ fn snapshot_notice(
     })
 }
 
-fn change_origin(p: &Participant) -> Option<String> {
+pub fn change_origin(p: &Participant) -> Option<String> {
     let mut parts = Vec::new();
     if let Some(added) = &p.added_from
         && (!p.stat_changes() || added.group.is_empty())
@@ -6988,7 +6975,7 @@ fn arrival_summary(ui: &egui::Ui, status: &str, members: &str, width: f32) -> Op
     }
 }
 
-fn ordinal(place: usize) -> String {
+pub fn ordinal(place: usize) -> String {
     let suffix = if (11..=13).contains(&(place % 100)) {
         "th"
     } else {
@@ -7004,7 +6991,7 @@ fn ordinal(place: usize) -> String {
 
 /// The words of an error for a stat block that cannot be read, whose repair is in Campaign →
 /// Packages.
-const STAT_BLOCK_UNREAD: &str = "stat block could not be read";
+pub(crate) const STAT_BLOCK_UNREAD: &str = "stat block could not be read";
 
 /// What the DM chose among a close dialog's recovery actions.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
@@ -7038,13 +7025,13 @@ pub fn close_recovery_actions(ui: &mut egui::Ui, review: bool, connect: bool) ->
 /// The close dialog's words for a sync conflict. They offer a close only when a close can happen.
 /// Round 27 FN4: a blocked close has no words here. The title names the conflict, and the reason
 /// beside the disabled `Close now` says what to do, once.
-fn conflict_close_words(blocked: bool) -> Option<&'static str> {
+pub fn conflict_close_words(blocked: bool) -> Option<&'static str> {
     (!blocked).then_some("Choose which HP to keep, or close and choose next time.")
 }
 
 /// What a close keeps. A close keeps the run's Undo steps too (they are saved with the run), so
 /// nothing here may say that closing ends Undo.
-fn close_saved_words(sync: bool) -> String {
+pub fn close_saved_words(sync: bool) -> String {
     if sync {
         "The run stays saved. Sync stops."
     } else {
@@ -7096,7 +7083,7 @@ fn shortened_names<'a>(group: &'a str, before: &'a str) -> impl Iterator<Item = 
 }
 
 /// The forms of one Undo label, longest first: see `undo_forms`.
-pub(super) struct UndoForms {
+pub struct UndoForms {
     /// Forms that name the act's target, from the whole label to its shortest telling form.
     pub(super) target: Vec<String>,
     /// Forms without the target, for an Undo too narrow for any of `target`:
@@ -7112,7 +7099,7 @@ pub(super) struct UndoForms {
 /// before its target's short forms. When no telling form fits, the target goes (`bare`). No
 /// form cuts a name to only `…` and its number. Hover and the accessible name keep the whole
 /// label.
-pub(super) fn undo_forms(
+pub(crate) fn undo_forms(
     label: &str,
     target: Option<&str>,
     from_sheet: bool,
@@ -7171,7 +7158,7 @@ pub(super) fn undo_forms(
 /// `undo_forms`' order (the header's Undo fits them with `Run::undo_words_in`); the tie's Move
 /// shortens as a typed choice since migration-32 L2c (`move_choice`).
 #[cfg(test)]
-pub(super) fn undo_words(
+pub(crate) fn undo_words(
     ui: &egui::Ui,
     (label, target): (&str, Option<&str>),
     from_sheet: bool,
@@ -7358,7 +7345,7 @@ fn move_forms(action: &str) -> Option<Vec<String>> {
 /// A step on several rows without them, for an Undo too narrow for its words:
 /// `Undo: 8 damage × 3` (a step on one row gives up its row by `act_words`). FI4: the row count follows `×`, never `to`, so it cannot be read as a copy number
 /// (`to 2` beside `Cinder Wolf 2`). `None` when the words name no row to leave out.
-pub(super) fn undo_compact(label: &str) -> Option<String> {
+pub(crate) fn undo_compact(label: &str) -> Option<String> {
     let action = label.strip_prefix("Undo: ")?;
     let several = action.split(super::HALF_FOR).next().unwrap_or(action);
     let counted = several.strip_suffix(super::SEVERAL_TARGETS)?;
@@ -7368,7 +7355,7 @@ pub(super) fn undo_compact(label: &str) -> Option<String> {
 
 /// False when shortening left a name as only `…` and its copy number (`move … 2 before`,
 /// `effect Wis… on … 2`): such a form tells the DM nothing, so `undo_forms` never gives it.
-pub(super) fn keeps_names(words: &str) -> bool {
+pub(crate) fn keeps_names(words: &str) -> bool {
     !words.split(' ').any(|word| word == "…")
 }
 
@@ -7500,7 +7487,7 @@ fn name_lines(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> (Ar
 /// on it and cut by letters where it does not fit (SK1: `Seraphina` / `Thornwood-Ash…`); else
 /// the first word's letters and `…`. Every line break is at a space (R15). Hover and the
 /// accessible name hold it whole.
-pub(super) fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> Arc<Galley> {
+pub(crate) fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> Arc<Galley> {
     let layout = |text: &str, font: egui::FontId, line_height: Option<f32>| {
         let mut job = egui::text::LayoutJob::single_section(
             text.to_owned(),
@@ -7614,11 +7601,11 @@ fn dock_name_fit(ui: &egui::Ui, text: &str, room: f32) -> Option<Arc<Galley>> {
 }
 
 /// Whole words of a name that fit, then `…`, as the turn heading shortens it.
-pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
+pub(crate) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
     design::turn_heading::whole_words_name(ui, name, font, width)
 }
 
-pub(super) fn presence_action(present: bool) -> (&'static str, &'static str) {
+pub fn presence_action(present: bool) -> (&'static str, &'static str) {
     if present {
         (
             "Absent",
@@ -7634,7 +7621,7 @@ fn hp_word(p: &Participant) -> Option<(&'static str, &'static str, egui::Color32
 }
 
 /// The death-save counts in words: `1 success · 0 failures`.
-fn death_save_words(successes: u8, failures: u8) -> String {
+pub fn death_save_words(successes: u8, failures: u8) -> String {
     format!(
         "{successes} {} · {failures} {}",
         if successes == 1 {
@@ -7719,7 +7706,7 @@ fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String 
 }
 
 #[cfg(test)]
-pub(super) fn row_words_for_test(p: &Participant) -> String {
+pub(crate) fn row_words_for_test(p: &Participant) -> String {
     row_name(p, TurnMark::None, None)
 }
 
@@ -8030,7 +8017,7 @@ struct RowLayout {
     input: Option<std::sync::Arc<RowInput>>,
 }
 
-pub(super) fn header_height(scale: RunScale) -> f32 {
+pub fn header_height(scale: RunScale) -> f32 {
     design::TurnHeading::height(scale)
 }
 

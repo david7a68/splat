@@ -28,7 +28,7 @@ const EFFECT_LINE: design::FieldName = crate::field_id!("run_effect_line");
 impl Run {
     /// The entry controls have one fixed home, labelled with the row they act on, so
     /// no row moves when the selection changes. Typing needs no pointer travel at all.
-    pub(super) fn dock(&mut self, ui: &mut egui::Ui) {
+    pub fn dock(&mut self, ui: &mut egui::Ui) {
         let c = colors();
         let index = self.selected;
         let mut command = None;
@@ -269,7 +269,7 @@ impl Run {
     }
 
     /// The quiet `Effect` of the dock's second line, with its key while the key works.
-    fn effect_action(key: &str) -> Action<'_> {
+    pub fn effect_action(key: &str) -> Action<'_> {
         Action::quiet("Effect")
             .icon(icons::PIN)
             .density(Density::Read)
@@ -285,7 +285,7 @@ impl Run {
         clippy::disallowed_methods,
         reason = "staged: the run’s Effect field keeps its row’s height, keys only, as the design system describes it (design::results::STAGED_ALLOWS)"
     )]
-    fn effect_line(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
+    pub fn effect_line(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let p = &self.state.participants[index];
         let (key, hint) = (
             p.key.clone(),
@@ -328,7 +328,7 @@ impl Run {
     /// In place of the one row's actions: how to give half. The choice is on each row, so that
     /// any number of targets stays in view. FK5: the words show the mark that the rows paint
     /// (`icons::OK`), and leave the count to the panel's hint, so it shows once.
-    fn target_words(&self, ui: &mut egui::Ui) {
+    pub fn target_words(&self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.set_min_height(28.0);
             ui.add(
@@ -340,7 +340,7 @@ impl Run {
 
     /// Beside the amount, so the stat block that asks for the roll stays in view. Laid out
     /// right to left: the result, then the button, then the field.
-    fn dice(&mut self, ui: &mut egui::Ui, narrow: bool) {
+    pub fn dice(&mut self, ui: &mut egui::Ui, narrow: bool) {
         ui.spacing_mut().item_spacing.x = design::XS;
         if !narrow {
             ui.allocate_ui_with_layout(
@@ -393,7 +393,7 @@ impl Run {
     /// The last roll beside the dice, as its total, its hover and its accessible name: a
     /// recharge's while its act is the newest (X4), named by its participant and effect; else
     /// the dice field's.
-    pub(super) fn dock_roll(&self) -> Option<(i64, String, String)> {
+    pub fn dock_roll(&self) -> Option<(i64, String, String)> {
         match (self.recharge_result(), &self.dock_roll) {
             (Some(recharged), _) => Some((
                 recharged.die,
@@ -413,7 +413,7 @@ impl Run {
     /// The last roll in the slot that `ui` is: the total after the first of `prefixes` that
     /// fits, else after the last one and ending in `…`. It never leaves the slot. Hover keeps
     /// the roll's whole line, and the accessible name its total.
-    fn dock_result(&self, ui: &mut egui::Ui, role: Type, prefixes: &[&str]) {
+    pub fn dock_result(&self, ui: &mut egui::Ui, role: Type, prefixes: &[&str]) {
         let Some((total, line, name)) = self.dock_roll() else {
             return;
         };
@@ -436,7 +436,7 @@ impl Run {
 
     /// Beside Notes, a letter in Amount means the DM went on writing. It and the digits
     /// before it go to the note, and they never apply as an amount.
-    fn take_words_for_note(&mut self, ui: &egui::Ui) {
+    pub fn take_words_for_note(&mut self, ui: &egui::Ui) {
         let id = self.amount_id();
         if let Some(typed) =
             Self::words_in_number_field(self.notes_open, ui, id, design::number_char)
@@ -446,7 +446,7 @@ impl Run {
         }
     }
 
-    fn amount_field(&mut self, ui: &mut egui::Ui, width: f32) {
+    pub fn amount_field(&mut self, ui: &mut egui::Ui, width: f32) {
         self.take_words_for_note(ui);
         let id = self.amount_id();
         let response = design::number_field_with_id(
@@ -469,7 +469,7 @@ impl Run {
 }
 
 /// The dock's words while several rows are targets: the mark the rows paint, and what it does.
-pub(super) fn target_hint() -> String {
+pub fn target_hint() -> String {
     format!(
         "Press a target’s {} to give it half, rounded down.",
         icons::OK
