@@ -1906,7 +1906,10 @@ impl Lookup {
     /// Load or reload in the background when the active campaign or packages change.
     pub fn poll(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
         let active = campaigns.active_campaign();
-        // Coming back from Obsidian, show what was just written there.
+        // Coming back from Obsidian, show what was just written there. The readers compare their
+        // files on disk again too: asked here in each frame, a focus gain is counted whichever
+        // page shows.
+        let _ = crate::world::outside_changes(ctx);
         let focused = ctx.input(|i| i.focused);
         if focused && !self.was_focused {
             let (tx, rx) = mpsc::channel();

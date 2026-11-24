@@ -247,6 +247,168 @@ pub struct Origin<'a> {
     pub path: &'a str,
     pub owner: &'a str,
     pub builtin: bool,
+    /// The host's revision of what it shows (layout PR 9b-R1c): a new value whenever the entry,
+    /// its body or its name can differ. The view keeps its reading of the entry and its prepared
+    /// text while this and the entry's id stay the same, so a quiet frame parses nothing.
+    pub revision: u64,
+}
+
+/// Where the shared view's Markdown is kept (layout PR 9b-R1c): one document for each part of
+/// the entry, at the host's revision.
+#[derive(Clone, Copy)]
+pub(super) struct Docs {
+    id: Uuid,
+    revision: u64,
+}
+
+impl Docs {
+    /// For a test that draws the section reader alone, in a new context each time.
+    #[cfg(test)]
+    pub(super) fn for_test() -> Self {
+        Self {
+            id: Uuid::nil(),
+            revision: 0,
+        }
+    }
+
+    /// The part's Markdown, kept prepared (`markdown_view::show_document`).
+    pub(super) fn show(self, ui: &mut egui::Ui, part: crate::markdown_view::EntryPart, text: &str) {
+        crate::markdown_view::show_document(
+            ui,
+            crate::markdown_view::ReaderSource {
+                doc: crate::markdown_view::DocumentId::Part(self.id, part),
+                revision: self.revision,
+                text,
+            },
+        );
+    }
+}
+
+/// Everything the shared view's reading of an entry is made from (layout PR 9b-R1c; the
+/// invariants note, class 2): the entry, its body and its name, and the host's revision of them.
+/// The reading is made from this alone, with no `Ui`, and kept by a key made from the same
+/// struct: each one names every field, so a new input cannot miss the key.
+struct EntryInputs<'a> {
+    entry: Option<&'a Entry>,
+    body: &'a str,
+    name: &'a str,
+    /// The host's revision of the entry, its body and its name (`Origin::revision`).
+    revision: u64,
+}
+
+impl EntryInputs<'_> {
+    /// The entry's id (nil for a file that could not be read), and the revision that stands for
+    /// its words: the entry's fields, its body and its name.
+    fn key(&self) -> (Uuid, u64) {
+        let Self {
+            entry,
+            body: _,
+            name: _,
+            revision,
+        } = self;
+        (entry.map_or(Uuid::nil(), |entry| entry.id), *revision)
+    }
+}
+
+/// The shared view's reading of one entry, kept between frames (layout PR 9b-R1c): its summary,
+/// its sections (from the body with a stat block's lines taken out) and whether it reads as a
+/// styled stat block. Kept for its inputs' key.
+struct Prepared {
+    key: (Uuid, u64),
+    reading: Option<Reading>,
+    sections: Vec<presentation::ReadingSection<'static>>,
+    styled: bool,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// Each time the shared view read an entry again (its summary, body and sections), on this
+    /// thread: none on a quiet frame (layout PR 9b-R1c's proof).
+    pub static ENTRY_PREPARES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+impl Prepared {
+    fn of(inputs: &EntryInputs<'_>) -> Self {
+        #[cfg(any(test, feature = "test-support"))]
+        ENTRY_PREPARES.with(|count| count.set(count.get() + 1));
+        let key = inputs.key();
+        let EntryInputs {
+            entry,
+            body,
+            name,
+            revision: _,
+        } = *inputs;
+        let reading = entry.and_then(|entry| entry.reading().ok().flatten());
+        let clean_body;
+        let body = if let Some(entry) = entry.filter(|entry| creature::has_stats(entry)) {
+            clean_body = creature::without_vitals(entry, body);
+            clean_body.as_str()
+        } else if let Some(entry) =
+            entry.filter(|entry| ["spell", "item"].contains(&entry.kind.as_str()))
+        {
+            clean_body = splat::content::stat_blocks::reading_body(entry, body);
+            clean_body.as_str()
+        } else {
+            body
+        };
+        let sections: Vec<_> = presentation::reading_sections(body, name)
+            .into_iter()
+            .filter(|section| {
+                if entry.is_some_and(|e| ["creature", "spell", "item"].contains(&e.kind.as_str()))
+                    && presentation::overview_markdown(&section.body)
+                        .trim()
+                        .is_empty()
+                {
+                    return false;
+                }
+                section.title != "Personal notes"
+                    || section.body.trim() != "This section is kept when the sheet refreshes."
+            })
+            .map(presentation::ReadingSection::into_owned)
+            .collect();
+        let styled =
+            reading.is_none() && entry.is_some_and(|entry| creature::supports(entry, &sections));
+        Self {
+            key,
+            reading,
+            sections,
+            styled,
+        }
+    }
+}
+
+/// Each view's kept reading, by the view's place, with the frame it last drew in. A view not
+/// drawn in the last frame loses it, so an entry no view shows keeps nothing.
+#[derive(Clone, Default)]
+struct KeptViews(std::sync::Arc<std::sync::Mutex<KeptMap>>);
+
+type KeptMap = std::collections::HashMap<egui::Id, (u64, std::sync::Arc<Prepared>)>;
+
+/// The view's reading of the entry, kept for its inputs' key. The `Ui` gives only the view's
+/// place and the frame.
+fn prepared(ui: &egui::Ui, inputs: &EntryInputs<'_>) -> std::sync::Arc<Prepared> {
+    let key = inputs.key();
+    let frame = ui.ctx().cumulative_frame_nr();
+    let views = ui.ctx().data_mut(|data| {
+        data.get_temp_mut_or_default::<KeptViews>(egui::Id::new("entry_view_kept"))
+            .clone()
+    });
+    let mut views = views
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    views.retain(|_, (drawn, _)| *drawn + 1 >= frame);
+    match views.get_mut(&ui.id()) {
+        Some((drawn, kept)) if kept.key == key => {
+            *drawn = frame;
+            kept.clone()
+        }
+        _ => {
+            let made = std::sync::Arc::new(Prepared::of(inputs));
+            views.insert(ui.id(), (frame, made.clone()));
+            made
+        }
+    }
 }
 
 /// Values from an open run. The saved entry stays unchanged.
@@ -349,46 +511,43 @@ fn show_inner(
             });
         }
     }
-    let reading = entry.and_then(|entry| entry.reading().ok().flatten());
-    let clean_body;
-    let body = if let Some(entry) = entry.filter(|entry| creature::has_stats(entry)) {
-        clean_body = creature::without_vitals(entry, body);
-        clean_body.as_str()
-    } else if let Some(entry) =
-        entry.filter(|entry| ["spell", "item"].contains(&entry.kind.as_str()))
-    {
-        clean_body = splat::content::stat_blocks::reading_body(entry, body);
-        clean_body.as_str()
-    } else {
-        body
+    // Layout PR 9b-R1c: the reading, the body's sections and the prepared text are kept for the
+    // entry and the host's revision, so a quiet frame parses and lays out nothing.
+    let prepared = prepared(
+        ui,
+        &EntryInputs {
+            entry,
+            body,
+            name,
+            revision: origin.revision,
+        },
+    );
+    let docs = Docs {
+        id: prepared.key.0,
+        revision: origin.revision,
     };
-    let sections: Vec<_> = presentation::reading_sections(body, name)
-        .into_iter()
-        .filter(|section| {
-            if entry.is_some_and(|e| ["creature", "spell", "item"].contains(&e.kind.as_str()))
-                && presentation::overview_markdown(section.body)
-                    .trim()
-                    .is_empty()
-            {
-                return false;
-            }
-            section.title != "Personal notes"
-                || section.body.trim() != "This section is kept when the sheet refreshes."
-        })
-        .collect();
-    let styled = entry.filter(|entry| reading.is_none() && creature::supports(entry, &sections));
-    let reading = reading.as_ref();
+    let reading = prepared.reading.as_ref();
+    let sections = prepared.sections.as_slice();
+    let styled = entry.filter(|_| prepared.styled);
     let builtin = origin.builtin;
     // Rules text keeps its measure in a wide side panel too.
     style::measure(ui, |ui| {
         let open_link = content(
-            ui, entry, reading, &sections, styled, builtin, links, values, lead_gap,
+            ui, entry, reading, sections, styled, builtin, links, values, lead_gap, docs,
         );
         let open_link = open_link.or(related(ui));
         if entry.is_some() {
             design::gap(ui, design::Gap::L);
             design::rule(ui);
-            reference(ui, entry, &sections, styled.is_some(), origin);
+            reference(
+                ui,
+                entry,
+                sections,
+                styled.is_some(),
+                reading.is_some(),
+                origin,
+                docs,
+            );
         }
         open_link
     })
@@ -411,13 +570,18 @@ fn content(
     links: &dyn Links,
     values: Option<&RunValues>,
     lead_gap: bool,
+    docs: Docs,
 ) -> Option<usize> {
     let mut open_link = None;
     if let Some(reading) = reading {
         if lead_gap {
             design::gap(ui, design::Gap::L);
         }
-        style::markdown(ui, &reading.summary);
+        docs.show(
+            ui,
+            crate::markdown_view::EntryPart::Summary,
+            &reading.summary,
+        );
     }
     if let Some(entry) = styled {
         let mut spells = SpellLinks {
@@ -450,6 +614,7 @@ fn content(
             reading.is_some(),
             lead_gap,
             after_stat_head,
+            docs,
         );
     }
     if let Some(entry) = entry.filter(|entry| class::lists_features(entry)) {
@@ -467,7 +632,9 @@ fn reference(
     entry: Option<&Entry>,
     sections: &[presentation::ReadingSection<'_>],
     styled: bool,
+    has_reading: bool,
     origin: &Origin<'_>,
+    docs: Docs,
 ) {
     design::gap(ui, design::Gap::M);
     // M0387 (round 31 reader-end-section-pitch): the end sections are one group at the Read
@@ -479,36 +646,48 @@ fn reference(
         (design::Type::Small.line() + 2.0 * page.button_padding.y).max(page.interact_size.y);
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = (design::Density::Read.control() - header).max(0.0);
-        end_sections(ui, &page, entry, sections, styled, origin);
+        end_sections(
+            ui,
+            &page,
+            entry,
+            sections,
+            styled,
+            has_reading,
+            origin,
+            docs,
+        );
     });
 }
 
 /// The reader's end sections (`reference`), header after header; `page` is the page's
-/// spacing, which each open body gets back.
+/// spacing, which each open body gets back. `has_reading`: the entry has a reading (a summary).
+#[allow(clippy::too_many_arguments)]
 fn end_sections(
     ui: &mut egui::Ui,
     page: &egui::style::Spacing,
     entry: Option<&Entry>,
     sections: &[presentation::ReadingSection<'_>],
     styled: bool,
+    has_reading: bool,
     origin: &Origin<'_>,
+    docs: Docs,
 ) {
     let body = |ui: &mut egui::Ui| *ui.spacing_mut() = page.clone();
-    if entry.is_some_and(|entry| entry.reading().ok().flatten().is_some())
+    if has_reading
         && let Some(source) = sections
             .iter()
             .find(|section| section.title == "Source text")
     {
         design::quiet_section(ui, "Source text", |ui| {
             body(ui);
-            style::markdown(ui, source.body);
+            docs.show(ui, crate::markdown_view::EntryPart::Source, &source.body);
         });
     }
     let technical: Vec<_> = sections
         .iter()
         .filter(|section| {
             !section.title.starts_with("Splat data")
-                && splat::content::has_data_marker(section.body)
+                && splat::content::has_data_marker(&section.body)
         })
         .collect();
     let item_details = entry.is_some_and(reader::has_item_details);
@@ -520,7 +699,7 @@ fn end_sections(
             }
             for section in technical {
                 design::quiet_section(ui, &section.title, |ui| {
-                    style::compact_markdown(ui, section.body);
+                    style::compact_markdown(ui, &section.body);
                 });
             }
         });
@@ -619,6 +798,7 @@ mod tests {
                         path: &entry.path,
                         owner: "Campaign",
                         builtin: false,
+                        revision: 0,
                     },
                     &NoLinks,
                     empty_value_block,
@@ -652,6 +832,7 @@ mod tests {
                         path: &entry.path,
                         owner: "Campaign",
                         builtin: false,
+                        revision: 0,
                     },
                     &NoLinks,
                     false,
@@ -832,6 +1013,7 @@ mod tests {
                         path: &entry.path,
                         owner: "Campaign",
                         builtin: false,
+                        revision: 0,
                     },
                     &NoLinks,
                     false,

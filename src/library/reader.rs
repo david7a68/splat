@@ -332,6 +332,7 @@ fn represented_item_source(entry: &Entry, source: &str) -> bool {
 
 /// `after_stat_head`: a stat head is drawn just above. Its gap `S` comes before the first prose,
 /// and a section heading takes none (the heading part owns its space; d-rows L).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn show(
     ui: &mut egui::Ui,
     entry: Option<&Entry>,
@@ -340,6 +341,7 @@ pub(super) fn show(
     has_summary: bool,
     lead_gap: bool,
     after_stat_head: bool,
+    docs: super::view::Docs,
 ) {
     let mut after_stat_head = after_stat_head;
     let mut settle = |ui: &mut egui::Ui, heading: bool| {
@@ -355,9 +357,9 @@ pub(super) fn show(
             .iter()
             .map(|section| {
                 if section.title == "Overview" {
-                    section.body.to_owned()
+                    section.body.to_string()
                 } else {
-                    format!("## {}\n\n{}", section.title, section.body)
+                    format!("## {}\n\n{}", section.title, &section.body)
                 }
             })
             .collect::<Vec<_>>()
@@ -380,7 +382,7 @@ pub(super) fn show(
             .find(|section| section.title == "Source text")
             .filter(|_| builtin && !table_stats)
             .and_then(|section| {
-                source_facts(section.body)
+                source_facts(&section.body)
                     .0
                     .into_iter()
                     .find(|(label, _)| label == "Identity")
@@ -393,10 +395,8 @@ pub(super) fn show(
             !table_stats && sections.iter().any(|s| s.title == "Source text"),
         );
     }
-    for section in sections
-        .iter()
-        .filter(|section| presentation::visible_reading_section(section))
-    {
+    // `reading_sections` keeps only the sections the reader can show something for.
+    for (place, section) in sections.iter().enumerate() {
         if section.title == "Source text" && has_summary {
             continue;
         }
@@ -409,17 +409,17 @@ pub(super) fn show(
             );
             if section.title == "Source text"
                 && let Some(entry) = entry.filter(|entry| super::class::supports(entry))
-                && super::class::show_source(ui, section.body, &entry.name)
+                && super::class::show_source(ui, &section.body, &entry.name)
             {
                 continue;
             }
             if section.title == "Source text"
-                && entry.is_some_and(|e| represented_item_source(e, section.body))
+                && entry.is_some_and(|e| represented_item_source(e, &section.body))
             {
                 continue;
             }
             if section.title == "Source text" && (builtin || table_stats) {
-                let (mut facts, prose) = source_facts(section.body);
+                let (mut facts, prose) = source_facts(&section.body);
                 if table_stats {
                     facts.clear();
                 }
@@ -456,9 +456,14 @@ pub(super) fn show(
                 }
                 // A hand-written stat block's actions read as the book's do.
                 if let Some(entry) = entry.filter(|entry| super::creature::has_stats(entry)) {
-                    super::creature::rules_text(ui, &entry.name, &entry.body, section.body);
+                    super::creature::rules_text(ui, &entry.name, &entry.body, &section.body);
                 } else {
-                    style::markdown(ui, section.body);
+                    // Layout PR 9b-R1c: kept prepared for the entry and the host's revision.
+                    docs.show(
+                        ui,
+                        crate::markdown_view::EntryPart::Section(place),
+                        &section.body,
+                    );
                 }
             }
         }
@@ -490,6 +495,7 @@ mod tests {
                             false,
                             true,
                             false,
+                            crate::library::view::Docs::for_test(),
                         );
                     });
                 },
@@ -546,6 +552,7 @@ mod tests {
                         false,
                         true,
                         false,
+                        crate::library::view::Docs::for_test(),
                     );
                 });
             });
@@ -627,7 +634,7 @@ mod tests {
         let text = splat::content::definitions::source_file(path).unwrap();
         let entry = Entry::parse(path, text).unwrap();
         let sections = presentation::reading_sections(&entry.body, &entry.name);
-        let source = sections
+        let source: &str = &sections
             .iter()
             .find(|s| s.title == "Source text")
             .unwrap()

@@ -23,10 +23,15 @@
 //! (its accessible name and its AccessKit text runs: M25, counted, not removed). With AccessKit
 //! off it costs nothing that grows with the text, so neither may the host.
 //!
-//! What is COUNTED by the part: the Reader's Markdown parses (`markdown_view::MARKDOWN_PARSES`).
-//! None on a quiet frame. Each eviction case (a resize, the theme installed again, the font
-//! atlas made again, the link index loaded again, a new art index) prepares again exactly as
-//! often as its dependency changed, then is quiet again.
+//! What is COUNTED by the part: the Reader's Markdown parses (`markdown_view::MARKDOWN_PARSES`)
+//! and the shared entry view's readings of an entry (`library::view::ENTRY_PREPARES`). None on a
+//! quiet frame. Each eviction case (a resize, the theme installed again, the font atlas made
+//! again, the link index loaded again, a new art index) prepares again exactly as often as its
+//! dependency changed, then is quiet again.
+//!
+//! Each row draws one of two fixtures (layout PR 9b-R1c): a plain note, whose body World's reader
+//! draws as one document, and an NPC, a typed entry, whose body goes through the shared entry
+//! view (`library::view`): its reading of the entry is kept, and each section is one document.
 //!
 //! Layout PR 9b-R2: what a quiet frame lays out does not grow with the note. Per host, with one
 //! screen in view (800 px), over notes of 40, 400 and 4,000 blocks (headings, paragraphs and a
@@ -46,6 +51,7 @@ mod counting;
 use counting::{Allocated, measured, root_sized, stock_label};
 use eframe::egui;
 use splat_content_ui::{
+    library::view::ENTRY_PREPARES,
     lookup::ContentIndex,
     markdown_view::{self, BLOCKS_LAID, MARKDOWN_PARSES},
     persistence::Campaign,
@@ -61,6 +67,18 @@ enum Host {
     /// Lookup's reader of the same entry (`Reader::compact`).
     Lookup,
 }
+
+/// Which entry a row's host draws.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Fixture {
+    /// A plain note: World's reader draws its body as one document.
+    Note,
+    /// An NPC: a typed entry, drawn through the shared entry view.
+    Npc,
+}
+
+/// The other NPC's words, for the case where the DM opens another entry.
+const OTHER: &str = "Words of Wil at the gate.";
 
 /// Every row sees the whole note: egui reads out a label's words only where the label can be
 /// seen, so the host and the stock labels must see the same paragraphs.
@@ -116,12 +134,17 @@ fn blocks_body(blocks: usize) -> String {
     body
 }
 
-/// A campaign with one note on disk, its loaded index, and a reader host drawing it.
+/// A campaign with the fixture's entry on disk (and, for the NPC, another NPC), its loaded
+/// index, and a reader host drawing the entry.
 struct Reading {
     ctx: egui::Context,
     reader: Reader,
     index: Arc<ContentIndex>,
     at: usize,
+    /// The fixture's entry, then the other NPC (the NPC fixture only).
+    ids: Vec<uuid::Uuid>,
+    /// The fixture's file.
+    path: std::path::PathBuf,
     campaign: Campaign,
     time: f64,
     width: f32,
@@ -130,15 +153,22 @@ struct Reading {
 }
 
 impl Reading {
-    fn new(host: Host, bytes: usize, accesskit: bool) -> Self {
-        Self::with(host, bytes, accesskit, false, SCREEN_HEIGHT)
+    fn new(host: Host, fixture: Fixture, bytes: usize, accesskit: bool) -> Self {
+        Self::with(host, fixture, bytes, accesskit, false, SCREEN_HEIGHT)
     }
 
-    fn with(host: Host, bytes: usize, accesskit: bool, linked: bool, height: f32) -> Self {
-        Self::with_body(host, &note_body(bytes, linked), accesskit, height)
+    fn with(
+        host: Host,
+        fixture: Fixture,
+        bytes: usize,
+        accesskit: bool,
+        linked: bool,
+        height: f32,
+    ) -> Self {
+        Self::with_body(host, fixture, &note_body(bytes, linked), accesskit, height)
     }
 
-    fn with_body(host: Host, body: &str, accesskit: bool, height: f32) -> Self {
+    fn with_body(host: Host, fixture: Fixture, body: &str, accesskit: bool, height: f32) -> Self {
         let dir = tempfile::tempdir().expect("a folder for the campaign");
         let campaign = Campaign {
             id: uuid::Uuid::new_v4(),
@@ -147,16 +177,33 @@ impl Reading {
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
         };
-        // A plain note: World's and Lookup's readers draw its body as one document. (A typed
-        // entry draws through the shared entry view, which is not moved yet: note 9b §10.6.)
-        let id = world::create_entry(&campaign, "Watch notes", "").expect("a note");
+        // A plain note draws as one document; an NPC through the shared entry view.
+        let (name, kind) = match fixture {
+            Fixture::Note => ("Watch notes", ""),
+            Fixture::Npc => ("Hob", "npc"),
+        };
+        let id = world::create_entry(&campaign, name, kind).expect("the entry");
+        let mut ids = vec![id];
+        if fixture == Fixture::Npc {
+            ids.push(world::create_entry(&campaign, "Wil", "npc").expect("the other NPC"));
+        }
         let first = ContentIndex::load(&[], Some(&campaign)).expect("the index");
-        let found = &first.items[first.position(id).expect("the note in the index")];
-        assert!(found.is_note(), "the fixture is a plain note");
-        let path = dir.path().join(&found.entry.path);
-        let mut text = std::fs::read_to_string(&path).expect("the note’s file");
-        text.push_str(body);
-        std::fs::write(&path, text).expect("the note’s body");
+        let file = |id| {
+            let found = &first.items[first.position(id).expect("the entry in the index")];
+            assert_eq!(
+                found.is_note(),
+                fixture == Fixture::Note && id == ids[0],
+                "the fixture is a plain note, or a typed entry"
+            );
+            dir.path().join(&found.entry.path)
+        };
+        let path = file(id);
+        for (id, body) in ids.iter().zip([body.to_owned(), format!("{OTHER}\n")]) {
+            let path = file(*id);
+            let mut text = std::fs::read_to_string(&path).expect("the entry’s file");
+            text.push_str(&body);
+            std::fs::write(&path, text).expect("the entry’s body");
+        }
         let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).expect("the index"));
         let at = index.position(id).expect("the note in the index");
         let ctx = egui::Context::default();
@@ -171,6 +218,8 @@ impl Reading {
             reader,
             index,
             at,
+            ids,
+            path,
             campaign,
             time: 0.0,
             width: 900.0,
@@ -353,24 +402,27 @@ fn stock_labels(galleys: &[Arc<egui::Galley>], accesskit: bool) -> Allocated {
 /// nothing.
 fn both(
     host: Host,
+    fixture: Fixture,
     bytes: usize,
     accesskit: bool,
     linked: bool,
     focused: bool,
 ) -> (Allocated, Allocated, usize) {
     let what = format!(
-        "{host:?}, AccessKit {accesskit}, linked {linked}, a link focused {focused}, {bytes} B"
+        "{host:?}, {fixture:?}, AccessKit {accesskit}, linked {linked}, a link focused \
+         {focused}, {bytes} B"
     );
     // The linked rows see a part of the first paragraph only, at every size: a link out of view
     // costs the same whatever its words (its parts and targets are built only in view), and the
     // same blocks are laid out (layout PR 9b-R2: a block out of view is not).
     let height = if linked { LINKED_HEIGHT } else { SCREEN_HEIGHT };
-    let mut reading = Reading::with(host, bytes, accesskit, linked, height);
+    let mut reading = Reading::with(host, fixture, bytes, accesskit, linked, height);
     if focused {
         reading.focus_a_link();
     }
     let parses = MARKDOWN_PARSES.with(std::cell::Cell::get);
     let laid = BLOCKS_LAID.with(std::cell::Cell::get);
+    let entries = ENTRY_PREPARES.with(std::cell::Cell::get);
     let first = reading.quiet(&what);
     let laid = BLOCKS_LAID.with(std::cell::Cell::get) - laid;
     for _ in 0..4 {
@@ -385,6 +437,11 @@ fn both(
         parses,
         "{what}: the reader parsed nothing on its quiet frames"
     );
+    assert_eq!(
+        ENTRY_PREPARES.with(std::cell::Cell::get),
+        entries,
+        "{what}: the shared entry view read the entry again on no quiet frame"
+    );
     let galleys = markdown_view::kept_galleys(&reading.ctx);
     assert!(
         galleys.len() >= 6,
@@ -398,7 +455,7 @@ fn both(
 /// what it costs, and how many blocks it laid out. Its five quiet frames are equal.
 fn in_view(host: Host, blocks: usize) -> (Allocated, usize) {
     let what = format!("{host:?}, {blocks} blocks in one screen");
-    let mut reading = Reading::with_body(host, &blocks_body(blocks), false, 800.0);
+    let mut reading = Reading::with_body(host, Fixture::Note, &blocks_body(blocks), false, 800.0);
     let laid = BLOCKS_LAID.with(std::cell::Cell::get);
     let first = reading.quiet(&what);
     let laid = BLOCKS_LAID.with(std::cell::Cell::get) - laid;
@@ -419,35 +476,150 @@ fn in_view(host: Host, blocks: usize) -> (Allocated, usize) {
     (first, laid)
 }
 
-/// After `change`, the reader prepares again exactly `expected` times, then is quiet again.
+/// After `change`, each document the reader keeps prepares again exactly `expected` times, and
+/// the shared entry view reads the entry again `entry` times (an NPC's; a plain note has no
+/// entry view), then all are quiet again.
 fn prepares_again(
     host: Host,
+    fixture: Fixture,
     case: &str,
     expected: usize,
+    entry: usize,
     change: impl FnOnce(&mut Reading),
 ) -> Option<String> {
-    let mut reading = Reading::new(host, 10_000, true);
-    let before = MARKDOWN_PARSES.with(std::cell::Cell::get);
+    let mut reading = Reading::new(host, fixture, 10_000, true);
+    let documents = markdown_view::kept_documents(&reading.ctx);
+    let entry = if fixture == Fixture::Npc { entry } else { 0 };
+    let parses = || MARKDOWN_PARSES.with(std::cell::Cell::get);
+    let entries = || ENTRY_PREPARES.with(std::cell::Cell::get);
+    let before = (parses(), entries());
     change(&mut reading);
     for _ in 0..4 {
         let _ = reading.frame();
     }
-    let made = MARKDOWN_PARSES.with(std::cell::Cell::get) - before;
-    let quiet = MARKDOWN_PARSES.with(std::cell::Cell::get);
+    let made = (parses() - before.0, entries() - before.1);
+    let quiet = (parses(), entries());
     let _ = reading.quiet(case);
-    let again = MARKDOWN_PARSES.with(std::cell::Cell::get) - quiet;
-    (made != expected || again != 0).then(|| {
+    let again = (parses() - quiet.0, entries() - quiet.1);
+    (made != (expected * documents, entry) || again != (0, 0)).then(|| {
         format!(
-            "{host:?}, {case}: prepared {made} times (expected {expected}), then {again} on a \
-             quiet frame"
+            "{host:?}, {fixture:?}, {case}: prepared {} times (expected {expected} for each of \
+             {documents} documents), the entry read {} times (expected {entry}), then {again:?} \
+             on a quiet frame",
+            made.0, made.1
         )
     })
+}
+
+/// The entry view's content cases (lead brief Sol 2-017): each changes what the host shows
+/// through a production event, and the next frame must show the new words, then the frame after
+/// it reuses them (no parse, no reading of the entry, the same words).
+fn entry_cases(host: Host) -> Vec<String> {
+    let mut failures = Vec::new();
+    let parses = || {
+        (
+            MARKDOWN_PARSES.with(std::cell::Cell::get),
+            ENTRY_PREPARES.with(std::cell::Cell::get),
+        )
+    };
+    let words = |output: &egui::FullOutput| painted(output).join(" | ");
+    let mut check = |case: &str, reading: &mut Reading, shows: &str, gone: &str| {
+        let after = words(&reading.frame());
+        let counted = parses();
+        let again = words(&reading.frame());
+        if !(after.contains(shows)
+            && !after.contains(gone)
+            && again == after
+            && parses() == counted)
+        {
+            failures.push(format!(
+                "{host:?}, {case}: shows {shows:?} and not {gone:?}, then reused: the frame \
+                 {after:?}, then {again:?}, with {:?} more parses and entry readings",
+                (parses().0 - counted.0, parses().1 - counted.1)
+            ));
+        }
+    };
+    // The entry's file edited by another program while the app keeps the focus (the same
+    // length: only the words), then the index loads again, as the app's reload delivers it.
+    let mut reading = Reading::new(host, Fixture::Npc, 10_000, true);
+    let text = std::fs::read_to_string(&reading.path).expect("the entry’s file");
+    std::fs::write(&reading.path, text.replace("crossing", "fordings")).expect("the edit");
+    let _ = reading.frame();
+    reading.index =
+        Arc::new(ContentIndex::load(&[], Some(&reading.campaign)).expect("the index again"));
+    reading.at = reading.index.position(reading.ids[0]).expect("the entry");
+    check(
+        "the body edited on disk, then the index loaded again",
+        &mut reading,
+        "Opening words of the fordings",
+        "Opening words of the crossing",
+    );
+    // The DM opens another entry, at the same load of the index.
+    let mut reading = Reading::new(host, Fixture::Npc, 10_000, true);
+    reading.at = reading
+        .index
+        .position(reading.ids[1])
+        .expect("the other NPC");
+    check("another entry opened", &mut reading, OTHER, OPENING);
+    failures
+}
+
+/// A figure's image loader whose completion the test delivers (PR 874 review, P3; lead brief
+/// Sol 2-017): it answers "pending" through egui's loaders, the path the reader's figure takes,
+/// until `done`, then the image. No loader thread, no wall-clock wait.
+#[derive(Default)]
+struct HeldImage {
+    done: std::sync::atomic::AtomicBool,
+}
+
+impl HeldImage {
+    /// The load completes, as egui's own loader thread ends it: the image is ready and a
+    /// repaint is asked for.
+    fn complete(&self, ctx: &egui::Context) {
+        self.done.store(true, std::sync::atomic::Ordering::Relaxed);
+        ctx.request_repaint();
+    }
+}
+
+impl egui::load::ImageLoader for HeldImage {
+    fn id(&self) -> &str {
+        "quiet_reader::HeldImage"
+    }
+
+    fn load(&self, _: &egui::Context, uri: &str, _: egui::SizeHint) -> egui::load::ImageLoadResult {
+        if !(uri.starts_with("file://") && uri.ends_with("/Figures/map.png")) {
+            Err(egui::load::LoadError::NotSupported)
+        } else if self.done.load(std::sync::atomic::Ordering::Relaxed) {
+            Ok(egui::load::ImagePoll::Ready {
+                image: Arc::new(egui::ColorImage::filled(
+                    [40, 20],
+                    splat_design::design::colors().muted,
+                )),
+            })
+        } else {
+            Ok(egui::load::ImagePoll::Pending { size: None })
+        }
+    }
+
+    fn forget(&self, _: &str) {}
+
+    fn forget_all(&self) {}
+
+    fn byte_size(&self) -> usize {
+        0
+    }
+
+    fn has_pending(&self) -> bool {
+        !self.done.load(std::sync::atomic::Ordering::Relaxed)
+    }
 }
 
 /// A document drawn by the Reader directly, frame by frame: for the cache's content cases,
 /// where the document, its revision, the link index and the art each change on their own.
 struct Direct {
     ctx: egui::Context,
+    /// The figure's loader, in the context's loaders.
+    image: Arc<HeldImage>,
     time: f64,
     /// The textured shapes (images) the last frame painted.
     images: usize,
@@ -457,10 +629,12 @@ impl Direct {
     fn new() -> Self {
         let ctx = egui::Context::default();
         splat_design::design::theme::install(&ctx);
-        // The app's image loaders: a figure's local copy loads and paints.
-        egui_extras::install_image_loaders(&ctx);
+        // A figure's local copy loads when the test completes it, then paints.
+        let image = Arc::new(HeldImage::default());
+        ctx.add_image_loader(image.clone());
         Self {
             ctx,
+            image,
             time: 0.0,
             images: 0,
         }
@@ -633,27 +807,27 @@ fn content_cases() -> Vec<String> {
         .ctx
         .data_mut(|data| data.insert_temp(egui::Id::new("art_index"), art));
     let shown_before = reader.images;
-    let mut after = reader.frame(&a, 1, text, None);
-    // The file loads on egui's loader thread: the figure paints once it has.
-    for _ in 0..100 {
-        if reader.images > 0 {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        after = reader.frame(&a, 1, text, None);
-    }
+    // The figure takes the link's place at once; its image is still loading.
+    let loading = reader.frame(&a, 1, text, None);
+    let shown_loading = reader.images;
+    // The loader's completion, delivered through egui's loaders: the next frame paints it.
+    reader.image.complete(&reader.ctx);
+    let after = reader.frame(&a, 1, text, None);
     let shown_after = reader.images;
     let reused = reader.reused(&a, 1, text, None, &after);
     check(
         &format!(
-            "the image’s local copy (only the art index), painted ({shown_before} images, then \
-             {shown_after}), then reused"
+            "the image’s local copy (only the art index), painted when its load completes \
+             ({shown_before} images, {shown_loading} while it loads, then {shown_after}), then \
+             reused"
         ),
         &before,
         &after,
         before.contains("image")
+            && !loading.contains("image")
             && !after.contains("image")
             && shown_before == 0
+            && shown_loading == 0
             && shown_after > 0
             && reused,
     );
@@ -664,29 +838,34 @@ fn main() {
     let sizes = [10_000, 100_000, 1_000_000];
     let mut failures = Vec::new();
     let rows = [
-        (Host::World, false, false, false),
-        (Host::World, true, false, false),
-        (Host::Lookup, false, false, false),
-        (Host::Lookup, true, false, false),
+        (Host::World, Fixture::Note, false, false, false),
+        (Host::World, Fixture::Note, true, false, false),
+        (Host::Lookup, Fixture::Note, false, false, false),
+        (Host::Lookup, Fixture::Note, true, false, false),
         // The links' own words grow (PR 813 review, P2), AccessKit off: what grows with them
         // is the app's, not egui's text runs.
-        (Host::World, false, true, false),
+        (Host::World, Fixture::Note, false, true, false),
         // The same, with a long link focused (PR 861 review, P2): its ring on its rows in view.
-        (Host::World, false, true, true),
+        (Host::World, Fixture::Note, false, true, true),
+        // A typed entry through the shared entry view (layout PR 9b-R1c).
+        (Host::World, Fixture::Npc, false, false, false),
+        (Host::World, Fixture::Npc, true, false, false),
+        (Host::Lookup, Fixture::Npc, false, false, false),
+        (Host::Lookup, Fixture::Npc, true, false, false),
     ];
-    for (host, accesskit, linked, focused) in rows {
+    for (host, fixture, accesskit, linked, focused) in rows {
         {
             let frames: Vec<_> = sizes
                 .iter()
-                .map(|&bytes| both(host, bytes, accesskit, linked, focused))
+                .map(|&bytes| both(host, fixture, bytes, accesskit, linked, focused))
                 .collect();
             let (host_small, stock_small, laid_small) = frames[0];
             for (&bytes, &(reader, stock, laid)) in sizes.iter().zip(&frames).skip(1) {
                 if laid != laid_small {
                     failures.push(format!(
-                        "{host:?}, AccessKit {accesskit}, linked {linked}, {bytes} B: {laid} blocks \
-                         laid out against {laid_small} at the smallest size: the sizes see \
-                         different views"
+                        "{host:?}, {fixture:?}, AccessKit {accesskit}, linked {linked}, {bytes} B: \
+                         {laid} blocks laid out against {laid_small} at the smallest size: the \
+                         sizes see different views"
                     ));
                 }
                 let count = |a: Allocated, b: Allocated| a.count as i64 - b.count as i64;
@@ -696,21 +875,22 @@ fn main() {
                 let (host_bytes, stock_bytes) =
                     (gross(reader, host_small), gross(stock, stock_small));
                 println!(
-                    "{:<7} accesskit {accesskit:<5} {bytes:>8} B: host +{host_count} allocations \
-                     +{host_bytes} B, stock +{stock_count} +{stock_bytes} B (host {reader:?}, \
-                     stock {stock:?}, {laid} blocks laid out)",
-                    format!("{host:?}")
+                    "{:<7} {:<4} accesskit {accesskit:<5} {bytes:>8} B: host +{host_count} \
+                     allocations +{host_bytes} B, stock +{stock_count} +{stock_bytes} B (host \
+                     {reader:?}, stock {stock:?}, {laid} blocks laid out)",
+                    format!("{host:?}"),
+                    format!("{fixture:?}")
                 );
                 if host_count != stock_count {
                     failures.push(format!(
-                        "{host:?}, AccessKit {accesskit}, {bytes} B: the host's allocation count \
-                         grows by {host_count}, egui's labels' by {stock_count}"
+                        "{host:?}, {fixture:?}, AccessKit {accesskit}, {bytes} B: the host's \
+                         allocation count grows by {host_count}, egui's labels' by {stock_count}"
                     ));
                 }
                 if (host_bytes - stock_bytes).abs() > 4096 {
                     failures.push(format!(
-                        "{host:?}, AccessKit {accesskit}, {bytes} B: the host's gross bytes grow \
-                         by {host_bytes}, egui's labels' by {stock_bytes}"
+                        "{host:?}, {fixture:?}, AccessKit {accesskit}, {bytes} B: the host's \
+                         gross bytes grow by {host_bytes}, egui's labels' by {stock_bytes}"
                     ));
                 }
             }
@@ -738,59 +918,83 @@ fn main() {
                 ));
             }
         }
-        failures.extend(prepares_again(host, "a resize", 1, |reading| {
-            // Below the reader's measure: the note's column gets narrower.
-            reading.width = 480.0;
-        }));
-        failures.extend(prepares_again(
-            host,
-            "the theme installed again",
-            1,
-            |reading| {
-                // The event under test: the theme installed again on the reader's own context, between its
-                // frames (the fonts' generation rises). Counted in `lint_allowlist.txt` (`late-theme`).
-                splat_design::design::theme::install(&reading.ctx);
-            },
-        ));
-        failures.extend(prepares_again(
-            host,
-            "the font atlas made again",
-            2,
-            |reading| {
-                // egui makes its font atlas again for a new text alpha mode, and again when it
-                // comes back: the same fonts, style and size, in a new atlas.
-                let alpha = reading.ctx.style().visuals.text_alpha_from_coverage;
-                reading.ctx.all_styles_mut(|style| {
-                    style.visuals.text_alpha_from_coverage =
-                        egui::epaint::AlphaFromCoverage::Linear;
-                });
-                let _ = reading.frame();
-                reading
-                    .ctx
-                    .all_styles_mut(|style| style.visuals.text_alpha_from_coverage = alpha);
-            },
-        ));
-        failures.extend(prepares_again(
-            host,
-            "the link index loaded again",
-            1,
-            |reading| {
-                reading.index = Arc::new(
-                    ContentIndex::load(&[], Some(&reading.campaign)).expect("the index again"),
-                );
-            },
-        ));
-        failures.extend(prepares_again(host, "a new art index", 1, |reading| {
-            reading.ctx.data_mut(|data| {
-                data.insert_temp(
-                    egui::Id::new("art_index"),
-                    Arc::new(splat_content_ui::content::art::ArtIndex::default()),
-                );
-            });
-        }));
-        failures.extend(prepares_again(host, "a new scale", 1, |reading| {
-            reading.ctx.set_pixels_per_point(1.5);
-        }));
+        for fixture in [Fixture::Note, Fixture::Npc] {
+            failures.extend(prepares_again(host, fixture, "a resize", 1, 0, |reading| {
+                // Below the reader's measure: the note's column gets narrower.
+                reading.width = 480.0;
+            }));
+            failures.extend(prepares_again(
+                host,
+                fixture,
+                "the theme installed again",
+                1,
+                0,
+                |reading| {
+                    // The event under test: the theme installed again on the reader's own context,
+                    // between its frames (the fonts' generation rises). Counted in
+                    // `lint_allowlist.txt` (`late-theme`).
+                    splat_design::design::theme::install(&reading.ctx);
+                },
+            ));
+            failures.extend(prepares_again(
+                host,
+                fixture,
+                "the font atlas made again",
+                2,
+                0,
+                |reading| {
+                    // egui makes its font atlas again for a new text alpha mode, and again when it
+                    // comes back: the same fonts, style and size, in a new atlas.
+                    let alpha = reading.ctx.style().visuals.text_alpha_from_coverage;
+                    reading.ctx.all_styles_mut(|style| {
+                        style.visuals.text_alpha_from_coverage =
+                            egui::epaint::AlphaFromCoverage::Linear;
+                    });
+                    let _ = reading.frame();
+                    reading
+                        .ctx
+                        .all_styles_mut(|style| style.visuals.text_alpha_from_coverage = alpha);
+                },
+            ));
+            failures.extend(prepares_again(
+                host,
+                fixture,
+                "the link index loaded again",
+                1,
+                1,
+                |reading| {
+                    reading.index = Arc::new(
+                        ContentIndex::load(&[], Some(&reading.campaign)).expect("the index again"),
+                    );
+                },
+            ));
+            failures.extend(prepares_again(
+                host,
+                fixture,
+                "a new art index",
+                1,
+                0,
+                |reading| {
+                    reading.ctx.data_mut(|data| {
+                        data.insert_temp(
+                            egui::Id::new("art_index"),
+                            Arc::new(splat_content_ui::content::art::ArtIndex::default()),
+                        );
+                    });
+                },
+            ));
+            failures.extend(prepares_again(
+                host,
+                fixture,
+                "a new scale",
+                1,
+                0,
+                |reading| {
+                    reading.ctx.set_pixels_per_point(1.5);
+                },
+            ));
+        }
+        failures.extend(entry_cases(host));
     }
     failures.extend(content_cases());
     assert!(

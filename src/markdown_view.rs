@@ -64,11 +64,24 @@ pub fn show_reader(ui: &mut egui::Ui, markdown: &str) {
 pub enum DocumentId {
     /// A World entry's note body, in World's reader or in Lookup's.
     Entry(uuid::Uuid),
-    /// A section of a Library entry: the entry's key and the section's place in it.
-    Section(String, usize),
+    /// A part of an entry in the shared entry view (`library::view`: typed entries in World and
+    /// Lookup, the Library, the run's side panel): the entry's id (nil for a file that could not
+    /// be read) and which part (layout PR 9b-R1c).
+    Part(uuid::Uuid, EntryPart),
     /// A session's recording text: its folder's key, the part shown, and the slice around the
     /// DM's reading mark (before the mark, its line, after it).
     Recording(String, usize, usize),
+}
+
+/// A part of an entry that the shared entry view draws as one document.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum EntryPart {
+    /// The reading's summary, above the entry's sections.
+    Summary,
+    /// A section, at its place in the sections the view draws.
+    Section(usize),
+    /// The source text, in the entry's end sections.
+    Source,
 }
 
 /// A document's text as a reader shows it: whose text it is, and its revision (a reload of its
@@ -82,9 +95,12 @@ pub struct ReaderSource<'a> {
     pub text: &'a str,
 }
 
-/// The Reader's Markdown of a document, kept prepared for its [`ReaderSource`].
+/// The Reader's Markdown of a document, kept prepared for its [`ReaderSource`]. Its place is
+/// the document's own (layout PR 9b-R1c): egui gives sibling scopes one id, so two documents
+/// side by side, such as an entry's sections, would take each other's kept blocks.
 pub fn show_document(ui: &mut egui::Ui, source: ReaderSource<'_>) {
-    ui.scope(|ui| show_kept(ui, source));
+    let place = egui::Id::new(&source.doc);
+    ui.push_id(place, |ui| show_kept(ui, source));
 }
 
 /// A plan row's words, such as a scene's line: the plan row title's type (`Body`) at every
@@ -399,6 +415,28 @@ fn show_kept(ui: &mut egui::Ui, source: ReaderSource<'_>) {
             Some((&mut kept.maps.offsets, &mut kept.maps.height, view)),
         );
     }
+}
+
+/// How many documents the readers keep prepared (layout PR 9b-R1c's harness: an eviction
+/// prepares each again).
+#[cfg(any(test, feature = "test-support"))]
+pub fn kept_documents(ctx: &egui::Context) -> usize {
+    let readers = ctx.data_mut(|data| {
+        data.get_temp_mut_or_default::<KeptReaders>(egui::Id::new("markdown_kept_readers"))
+            .clone()
+    });
+    let readers = readers
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    readers
+        .values()
+        .filter(|(_, kept)| {
+            kept.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some()
+        })
+        .count()
 }
 
 /// The galleys of every document a reader keeps prepared, in drawing order (layout PR 9b-R1a's

@@ -391,6 +391,7 @@ mod tests {
                         path: "x",
                         owner: "x",
                         builtin: true,
+                        revision: 0,
                     };
                     crate::library::view::show(
                         &mut columns[0],

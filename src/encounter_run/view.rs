@@ -4900,6 +4900,8 @@ impl Run {
                         path: &definition.path,
                         owner: "Starting snapshot, saved with this run",
                         builtin: false,
+                        // The run's revision holds each participant's snapshot.
+                        revision: egui::Id::new((self.revision.revision(), &p.key)).value(),
                     },
                     links,
                     &values,

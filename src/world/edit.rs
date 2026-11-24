@@ -659,7 +659,7 @@ impl Reader {
                 self.picker = None;
                 self.error = None;
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => self.write_refused(error),
         }
     }
 
@@ -1336,7 +1336,7 @@ impl Reader {
                     self.edits.insert(id, draft);
                     return Some(Go::Reload(id));
                 }
-                Err(error) => self.error = Some(error),
+                Err(error) => self.write_refused(error),
             }
         }
         self.edits.insert(id, draft);

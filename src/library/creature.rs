@@ -836,15 +836,15 @@ pub(super) fn show(
                 ui,
                 &entry.name,
                 &entry.body,
-                &rules_prose(entry, section.body),
+                &rules_prose(entry, &section.body),
                 values,
                 spells,
             );
         } else {
             let body = if section.body.contains("<!-- splat:") {
-                authored_prose(section.body)
+                authored_prose(&section.body)
             } else {
-                section.body.to_owned()
+                section.body.to_string()
             };
             if body.trim().is_empty() {
                 continue;
@@ -884,7 +884,7 @@ mod tests {
         let mut entry = Entry::parse("Cinder Wolf.md", &text).unwrap();
         entry.body = "## Source text\n\nMedium humanoid, Unaligned\\\nAC 10  Initiative +0 (10)\\\nHP 1\\\nSpeed 30 ft.\\\nCR 1 (XP 200; PB +2)\\  \n\n### Actions\n\nBite. Roll damage.\n".into();
         let sections = presentation::reading_sections(&entry.body, &entry.name);
-        let source = sections
+        let source: &str = &sections
             .iter()
             .find(|s| s.title == "Source text")
             .unwrap()
@@ -1027,7 +1027,7 @@ mod tests {
             .find(|s| s.title == "Source text")
             .unwrap()
             .body
-            .to_owned();
+            .into_owned();
         entry
             .fields
             .get_mut("splat_creature")
