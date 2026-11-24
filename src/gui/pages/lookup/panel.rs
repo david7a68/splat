@@ -77,18 +77,6 @@ pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context
     let search = div()
         .capture_key_down(cx.listener(|root, event: &gpui::KeyDownEvent, _, cx| {
             let key = event.keystroke.key.as_str();
-            // Escape in the field closes Lookup, as everywhere else in the panel.
-            if key == "escape" && !event.keystroke.modifiers.modified() {
-                let app = &root.app;
-                let held = app.lookup.reader.takes_escape()
-                    || (app.page == crate::Page::Library && app.library.form_open());
-                if !crate::gui::kit::menu::any_open(cx) && !held {
-                    root.app.lookup.close();
-                    cx.stop_propagation();
-                    cx.notify();
-                }
-                return;
-            }
             if event.keystroke.modifiers.modified() || !matches!(key, "up" | "down") {
                 return;
             }
