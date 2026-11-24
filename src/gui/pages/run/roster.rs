@@ -728,7 +728,7 @@ fn second_line(
             };
             words = words.child(kit::target(element, name));
         } else {
-            words = words.child(element);
+            words = words.child(kit::target(element, part.words.clone()));
         }
     }
     words.into_any_element()

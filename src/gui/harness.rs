@@ -191,6 +191,55 @@ impl Shell {
         self.settle();
     }
 
+    /// Drag the target `from` to the middle of the target `to` with the left button: press,
+    /// move there in a few steps, release; then settle.
+    pub(crate) fn drag(&mut self, from: &str, to: &str) {
+        let start = self
+            .bounds(from)
+            .unwrap_or_else(|| panic!("No target named {from:?}"))
+            .center();
+        let end = self
+            .bounds(to)
+            .unwrap_or_else(|| panic!("No target named {to:?}"))
+            .center();
+        let mut inputs = vec![PlatformInput::MouseDown(MouseDownEvent {
+            button: MouseButton::Left,
+            position: start,
+            modifiers: Modifiers::default(),
+            click_count: 1,
+            first_mouse: false,
+        })];
+        for step in 1..=4 {
+            let at = step as f32 / 4.0;
+            inputs.push(PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                position: start + (end - start) * at,
+                pressed_button: Some(MouseButton::Left),
+                modifiers: Modifiers::default(),
+            }));
+        }
+        inputs.push(PlatformInput::MouseUp(MouseUpEvent {
+            button: MouseButton::Left,
+            position: end,
+            modifiers: Modifiers::default(),
+            click_count: 1,
+        }));
+        for input in inputs {
+            self.cx
+                .update_window(self.window, |_, window, cx| {
+                    window.dispatch_event(input, cx);
+                })
+                .expect("the window");
+            self.cx.run_until_parked();
+            self.cx
+                .update_window(self.window, |_, window, cx| {
+                    window.refresh();
+                    window.draw(cx).clear(cx);
+                })
+                .expect("the window");
+        }
+        self.settle();
+    }
+
     /// Press keys, as GPUI writes them: `"ctrl-k"`, `"escape"`, `"tab shift-tab"`.
     pub(crate) fn press(&mut self, keystrokes: &str) {
         for text in keystrokes.split_whitespace() {

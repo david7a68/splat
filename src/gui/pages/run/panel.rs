@@ -1626,6 +1626,15 @@ fn group_row(
     );
     let split = &heading_fit.split;
     let title = format!("{} {name}", icons::DRAG);
+    // The line's words as one, the name a test finds it by.
+    let line_words = heading_fit.line.as_ref().map(|fitted| {
+        let form: String = fitted.form.iter().map(|(words, _)| words.as_str()).collect();
+        match (fitted.lead.is_empty(), form.is_empty()) {
+            (true, _) => form,
+            (false, true) => fitted.lead.clone(),
+            (false, false) => format!("{} · {form}", fitted.lead),
+        }
+    });
     let answer = heading_fit.line.as_ref().map(|fitted| {
         let mut words = div()
             .flex()
@@ -1696,9 +1705,11 @@ fn group_row(
         .child(grip);
     let mut below = None;
     match answer {
-        Some(answer) if split.below => below = Some(answer),
+        Some(answer) if split.below => {
+            below = Some(kit::target(answer, line_words.clone().unwrap_or_default()));
+        }
         Some(answer) => {
-            heading = heading.child(div().flex_1()).child(
+            heading = heading.child(div().flex_1()).child(kit::target(
                 div()
                     .id(ElementId::Name(format!("run-arrival-fight-{id}").into()))
                     .flex_none()
@@ -1706,7 +1717,8 @@ fn group_row(
                     .when_some(described.clone(), |line, words| {
                         line.with_tooltip_words(words)
                     }),
-            );
+                line_words.clone().unwrap_or_default(),
+            ));
         }
         None => {}
     }

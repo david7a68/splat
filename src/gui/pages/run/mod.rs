@@ -47,6 +47,11 @@ pub struct State {
     roster_scroll: gpui::ScrollHandle,
     /// The window height the roster was last laid out for: a new one scrolls to the selection.
     roster_room: Option<Pixels>,
+    /// The height the live roster's box had when it was last laid out (its rows and the
+    /// overflow line), which the next frame fits its rows to.
+    roster_box: std::rc::Rc<std::cell::Cell<f32>>,
+    /// Lookup or Notes was open beside the run last frame.
+    side_open: bool,
 }
 
 /// Once, when the root is built.
@@ -66,10 +71,15 @@ pub(crate) fn poll(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<S
         run.refresh_portraits();
         run.autosave();
     }
+    // When Lookup or Notes closes, the keyboard comes back to the run, so its letters work
+    // again (egui: the closed panel's field no longer holds it); a hidden editor keeps no key.
+    let side_open = root.app.lookup.open || root.app.sessions.notes_open;
+    let closed = std::mem::replace(&mut root.pages.run.side_open, side_open) && !side_open;
     if let Some(focus) = &root.pages.run.focus
-        && window
-            .focused(cx)
-            .is_none_or(|focused| focused == root.focus)
+        && (closed
+            || window
+                .focused(cx)
+                .is_none_or(|focused| focused == root.focus))
     {
         window.focus(focus, cx);
     }

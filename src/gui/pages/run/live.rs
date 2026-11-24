@@ -45,16 +45,23 @@ pub(super) fn render(
     } else {
         room - side - theme::M
     };
-    let roster_room = f32::from(height)
-        - (theme::RUN_REGULAR.hp * 1.6).max(36.0)
-        - 32.0
-        - view::DOCK_HEIGHT
-        - FOOTER_HEIGHT
-        - if hide_panel {
-            crate::rolls::BAR_BUTTONS + 4.0
-        } else {
-            0.0
-        };
+    // The roster's box as it was laid out last frame; before the first, an estimate.
+    let measured = root.pages.run.roster_box.get();
+    let roster_room = if measured > 1.0 {
+        measured
+    } else {
+        f32::from(height)
+            - (theme::RUN_REGULAR.hp * 1.6).max(36.0)
+            - 32.0
+            - view::DOCK_HEIGHT
+            - FOOTER_HEIGHT
+            - if hide_panel {
+                crate::rolls::BAR_BUTTONS + 4.0
+            } else {
+                0.0
+            }
+    };
+    let roster_box = root.pages.run.roster_box.clone();
     let current = run.current();
     let next_up = run.next_up();
     let order = run.state.order.clone();
@@ -132,18 +139,41 @@ pub(super) fn render(
                 .flex_1()
                 .min_h_0()
                 .child(
-                    panel::group_drop_zone(
-                        div().flex().flex_col().flex_1().min_h_0(),
-                        "run-roster-drop",
-                        cx,
-                    )
-                    .child(kit::scroll::scroll_column_with(
-                        "run-roster",
-                        &handle,
-                        div().flex().flex_col().w_full().children(rows),
-                    )),
+                    // The rows' box: its height is the room the next frame fits them to.
+                    div()
+                        .relative()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_h_0()
+                        .child(
+                            gpui::canvas(
+                                move |bounds, window, _| {
+                                    let height = f32::from(bounds.size.height);
+                                    if (roster_box.get() - height).abs() > 0.5 {
+                                        roster_box.set(height);
+                                        window.on_next_frame(|window, _| window.refresh());
+                                    }
+                                },
+                                |_, _, _, _| {},
+                            )
+                            .absolute()
+                            .size_full(),
+                        )
+                        .child(
+                            panel::group_drop_zone(
+                                div().flex().flex_col().flex_1().min_h_0(),
+                                "run-roster-drop",
+                                cx,
+                            )
+                            .child(kit::scroll::scroll_column_with(
+                                "run-roster",
+                                &handle,
+                                div().flex().flex_col().w_full().children(rows),
+                            )),
+                        )
+                        .children(overflow_line),
                 )
-                .children(overflow_line)
                 .children(notice)
                 .when(!messages.is_empty(), |body| {
                     body.child(

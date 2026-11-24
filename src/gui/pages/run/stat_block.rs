@@ -120,7 +120,10 @@ pub(super) fn changes(p: &Participant, above_stat_block: bool) -> Option<AnyElem
     let mut any = false;
     if let Some(words) = lines.add_by_hand {
         any = true;
-        block = block.child(kit::text(Type::Body, c.participant.changed, words));
+        block = block.child(kit::target(
+            kit::text(Type::Body, c.participant.changed, words.clone()),
+            words,
+        ));
     }
     if let Some(origin) = lines.origin {
         any = true;
@@ -145,18 +148,16 @@ pub(super) fn changes(p: &Participant, above_stat_block: bool) -> Option<AnyElem
                 block = block.child(kit::gap(theme::S));
             }
             let ty = if row.by_hand { Type::Body } else { Type::Small };
-            block = block.child(
+            let preview = view::change_preview(row);
+            block = block.child(kit::target(
                 div()
                     .flex()
                     .flex_row()
                     .flex_wrap()
                     .child(kit::text(ty, c.muted, format!("{}: ", row.label)))
-                    .child(kit::text(
-                        ty,
-                        c.participant.changed,
-                        view::change_preview(row),
-                    )),
-            );
+                    .child(kit::text(ty, c.participant.changed, preview.clone())),
+                format!("{}: {preview}", row.label),
+            ));
         }
         if let Some(note) = lines.note {
             block = block.child(kit::text(Type::Small, c.muted, note));
