@@ -85,7 +85,9 @@ pub(crate) fn render(
     };
     let mut page = div().key_context("Encounters");
     if let Some(focus) = root.pages.encounters.focus.clone() {
-        let lost = window.focused(cx).is_none_or(|focused| focused == root.focus);
+        let lost = window
+            .focused(cx)
+            .is_none_or(|focused| focused == root.focus);
         if lost {
             window.focus(&focus, cx);
         }

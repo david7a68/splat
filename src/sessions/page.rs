@@ -39,15 +39,15 @@ use uuid::Uuid;
 
 #[path = "carry.rs"]
 mod carry;
+#[path = "folder_view.rs"]
+mod folder_view;
+/// What the GPUI view reads and does (`src/gui/pages/sessions/`, `docs/gpui-port.md`).
+#[path = "gpui_facade.rs"]
+pub mod gpui_facade;
 #[path = "kept.rs"]
 mod kept;
 #[path = "plan.rs"]
 mod plan;
-/// What the GPUI view reads and does (`src/gui/pages/sessions/`, `docs/gpui-port.md`).
-#[path = "gpui_facade.rs"]
-pub mod gpui_facade;
-#[path = "folder_view.rs"]
-mod folder_view;
 #[cfg(any(test, feature = "test-support"))]
 pub use plan::scene_fit_counts;
 

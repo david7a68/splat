@@ -26,13 +26,13 @@ use crate::gui::icons;
 use crate::gui::theme::{
     HAIRLINE_WIDTH, L, LINE_GAP, M, READER_MEASURE, S, Type, TypeExt, XL, XS, colors,
 };
-use eframe::egui;
 pub use crate::markdown_view::LinkTarget;
+use eframe::egui;
 use gpui::{
-    AnyElement, App, AppContext, Bounds, ElementId, Entity, FontStyle, FontWeight,
-    InteractiveText, IntoElement, ObjectFit, ParentElement, Pixels, RenderOnce, ScrollHandle,
-    SharedString, StrikethroughStyle, Styled, StyledImage, StyledText, TextRun, UnderlineStyle,
-    Window, canvas, div, img, point, prelude::*, px,
+    AnyElement, App, AppContext, Bounds, ElementId, Entity, FontStyle, FontWeight, InteractiveText,
+    IntoElement, ObjectFit, ParentElement, Pixels, RenderOnce, ScrollHandle, SharedString,
+    StrikethroughStyle, Styled, StyledImage, StyledText, TextRun, UnderlineStyle, Window, canvas,
+    div, img, point, prelude::*, px,
 };
 use parse::{Block, Look, Mode, Paragraph, Words};
 use std::collections::HashMap;
@@ -219,8 +219,13 @@ impl RenderOnce for Markdown {
             mode.hash(&mut hasher);
             self.entries.hash(&mut hasher);
             self.document.hash(&mut hasher);
-            index.as_ref().map(|index| index.generation()).hash(&mut hasher);
-            ctx.as_ref().and_then(crate::art::generation).hash(&mut hasher);
+            index
+                .as_ref()
+                .map(|index| index.generation())
+                .hash(&mut hasher);
+            ctx.as_ref()
+                .and_then(crate::art::generation)
+                .hash(&mut hasher);
             hasher.finish()
         };
         if kept.read(cx).key != key || kept.read(cx).blocks.is_empty() {
@@ -313,7 +318,9 @@ impl RenderOnce for Markdown {
                             .flex_col()
                             .when_some(prose_measure, |block, measure| block.max_w(measure))
                             .child(draw.paragraph(at, paragraph))
-                            .when(!row, |block| block.pb(spacing).child(super::gap(paragraph.after)))
+                            .when(!row, |block| {
+                                block.pb(spacing).child(super::gap(paragraph.after))
+                            })
                             .into_any_element(),
                     )
                 }
@@ -750,16 +757,12 @@ impl Draw {
                 crate::roll_table::matched_in(ctx, self.roll_reader(at), marker, &table.rows)
             })
         });
-        let mut block = div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .child(table::draw(
-                self.child_id(format!("table-{at}")),
-                table,
-                laid,
-                matched,
-            ));
+        let mut block = div().flex().flex_col().w_full().child(table::draw(
+            self.child_id(format!("table-{at}")),
+            table,
+            laid,
+            matched,
+        ));
         if let Some(marker) = &table.rolls {
             block = block.child(self.roll_control(at, table, marker, window, cx));
         }
@@ -951,7 +954,11 @@ fn follow(
 }
 
 /// A link's hover words: where it goes, or why it goes nowhere.
-fn hint(target: &LinkTarget, ctx: Option<&egui::Context>, from: Option<uuid::Uuid>) -> Option<String> {
+fn hint(
+    target: &LinkTarget,
+    ctx: Option<&egui::Context>,
+    from: Option<uuid::Uuid>,
+) -> Option<String> {
     match target {
         LinkTarget::Missing => Some("Not found in this campaign".to_owned()),
         LinkTarget::Url(url) => Some(url.clone()),
@@ -1016,9 +1023,17 @@ fn fields(rows: &[Vec<String>], width: Option<Pixels>, spacing: Pixels) -> AnyEl
                 .flex()
                 .flex_row()
                 .gap(M)
-                .child(div().w(label).flex_none().child(super::text(Type::StatLabel, c.text, field)))
-                .child(div().w(value).min_w_0().child(super::text(Type::Stat, c.text, shown)))
+                .child(div().w(label).flex_none().child(super::text(
+                    Type::StatLabel,
+                    c.text,
+                    field,
+                )))
+                .child(
+                    div()
+                        .w(value)
+                        .min_w_0()
+                        .child(super::text(Type::Stat, c.text, shown)),
+                )
         }))
         .into_any_element()
 }
-

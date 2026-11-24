@@ -89,17 +89,9 @@ impl RenderOnce for Section {
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(self.title.clone())
             .aria_expanded(open)
-            .child(
-                div()
-                    .icon_font(Type::Small)
-                    .w(ICON_SLOT)
-                    .flex_none()
-                    .child(SharedString::new_static(if open {
-                        icons::DOWN
-                    } else {
-                        icons::NEXT
-                    })),
-            )
+            .child(div().icon_font(Type::Small).w(ICON_SLOT).flex_none().child(
+                SharedString::new_static(if open { icons::DOWN } else { icons::NEXT }),
+            ))
             .child(div().ty(ty).child(self.title.clone()));
         if let Some(reason) = self.blocked.clone() {
             header = header
@@ -122,19 +114,15 @@ impl RenderOnce for Section {
         let header = target(header, self.title.clone());
         let header = target(header, element_name(&self.id));
         let _ = enabled;
-        div()
-            .flex()
-            .flex_col()
-            .child(header)
-            .when(open, |section| {
-                section.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(XS)
-                        .pl(ICON_SLOT)
-                        .children(self.body),
-                )
-            })
+        div().flex().flex_col().child(header).when(open, |section| {
+            section.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(XS)
+                    .pl(ICON_SLOT)
+                    .children(self.body),
+            )
+        })
     }
 }

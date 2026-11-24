@@ -198,9 +198,11 @@ pub(crate) fn render(
         );
     }
     if !block.outside.is_empty() {
-        column = column
-            .child(kit::gap(XS))
-            .child(kit::text(Type::Small, c.muted, "Outside this journey now"));
+        column = column.child(kit::gap(XS)).child(kit::text(
+            Type::Small,
+            c.muted,
+            "Outside this journey now",
+        ));
         for (label, check) in &block.outside {
             column = column.child(check_line(
                 root,
@@ -330,12 +332,15 @@ fn result(
                 check: (check.label.clone(), check.words.clone()),
             };
             words = words.child(
-                kit::Button::quiet(part(id, &format!("plan-{name}-{}", check.label)), format!("Plan “{name}”"))
-                    .line_start()
-                    .density(Density::Read)
-                    .on_click(cx.listener(move |root, _, _, cx| {
-                        act(root, &owner, Act::Plan(planned.clone()), cx);
-                    })),
+                kit::Button::quiet(
+                    part(id, &format!("plan-{name}-{}", check.label)),
+                    format!("Plan “{name}”"),
+                )
+                .line_start()
+                .density(Density::Read)
+                .on_click(cx.listener(move |root, _, _, cx| {
+                    act(root, &owner, Act::Plan(planned.clone()), cx);
+                })),
             );
         }
     }

@@ -8,7 +8,11 @@ use crate::gui::theme::{Density, FORM_WIDTH, L, LIST_MEASURE, S, Type, XS, color
 use crate::gui::{SplatRoot, bridge, icons};
 use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div, prelude::*};
 
-pub(super) fn render(root: &mut SplatRoot, _: &mut Window, cx: &mut Context<SplatRoot>) -> AnyElement {
+pub(super) fn render(
+    root: &mut SplatRoot,
+    _: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let blocked = root.app.blocked_switch();
     let lock = crate::campaigns::Campaigns::link_lock(blocked);
@@ -71,7 +75,11 @@ pub(super) fn render(root: &mut SplatRoot, _: &mut Window, cx: &mut Context<Spla
         }));
     if open {
         details = details
-            .child(kit::text(Type::Body, c.text, format!("ID: {}", campaign.id)))
+            .child(kit::text(
+                Type::Body,
+                c.text,
+                format!("ID: {}", campaign.id),
+            ))
             .child(kit::help("Settings are stored in the campaign manifest."));
     }
     column = column.child(details);
@@ -87,7 +95,11 @@ pub(super) fn render(root: &mut SplatRoot, _: &mut Window, cx: &mut Context<Spla
 }
 
 /// The Session folder's block: its field and help, its save row, and its own messages under it.
-fn session_folder(root: &mut SplatRoot, lock: Option<&'static str>, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn session_folder(
+    root: &mut SplatRoot,
+    lock: Option<&'static str>,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let crate::Splat {
         sessions, timeline, ..
     } = &mut root.app;
@@ -149,12 +161,14 @@ fn session_folder(root: &mut SplatRoot, lock: Option<&'static str>, cx: &mut Con
         .py(XS)
         .child(kit::status(&bridge::status(&state.status())))
         .when(changed && lock.is_none(), |row| {
-            row.child(Button::quiet("session-folder-discard", "Discard").on_click(
-                cx.listener(|root, _, _, cx| {
-                    root.app.sessions.discard_folder();
-                    cx.notify();
-                }),
-            ))
+            row.child(
+                Button::quiet("session-folder-discard", "Discard").on_click(cx.listener(
+                    |root, _, _, cx| {
+                        root.app.sessions.discard_folder();
+                        cx.notify();
+                    },
+                )),
+            )
         })
         .child(div().flex_1())
         .child(save);
@@ -181,7 +195,11 @@ fn session_folder(root: &mut SplatRoot, lock: Option<&'static str>, cx: &mut Con
 
 /// The D&D Beyond block: its heading row with the link's state, the way to connect, Refresh
 /// list, the picker, the linked campaign's facts and its page.
-fn dndbeyond(root: &mut SplatRoot, lock: Option<&'static str>, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn dndbeyond(
+    root: &mut SplatRoot,
+    lock: Option<&'static str>,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let (_, session) = root.app.settings.campaign_session();
     {
@@ -191,8 +209,12 @@ fn dndbeyond(root: &mut SplatRoot, lock: Option<&'static str>, cx: &mut Context<
     }
     let ddb = &root.app.dndbeyond;
     let note: AnyElement = if ddb.refreshing() {
-        kit::status(&kit::Status::new(icons::BUSY, "Refreshing…", c.connection.busy))
-            .into_any_element()
+        kit::status(&kit::Status::new(
+            icons::BUSY,
+            "Refreshing…",
+            c.connection.busy,
+        ))
+        .into_any_element()
     } else if session.is_none() {
         kit::text(
             Type::Small,
@@ -238,13 +260,15 @@ fn dndbeyond(root: &mut SplatRoot, lock: Option<&'static str>, cx: &mut Context<
                 .items_center()
                 .gap(XS)
                 .child(kit::text(Type::Small, c.muted, "Connect your account in"))
-                .child(Link::new("link-open-settings", "Settings").small().on_click(
-                    cx.listener(|root, _, _, cx| {
-                        root.app.settings_tab = crate::SettingsTab::default();
-                        root.app.settings.focus_sign_in();
-                        root.show_page(crate::Page::Settings, cx);
-                    }),
-                ))
+                .child(
+                    Link::new("link-open-settings", "Settings")
+                        .small()
+                        .on_click(cx.listener(|root, _, _, cx| {
+                            root.app.settings_tab = crate::SettingsTab::default();
+                            root.app.settings.focus_sign_in();
+                            root.show_page(crate::Page::Settings, cx);
+                        })),
+                )
                 .child(kit::text(Type::Small, c.muted, "to update this link.")),
         );
     }
@@ -265,7 +289,10 @@ fn dndbeyond(root: &mut SplatRoot, lock: Option<&'static str>, cx: &mut Context<
     );
     block = block.children(campaign_list::link_dropdown(root, lock, cx));
     let campaign = root.app.campaigns.active_campaign();
-    if let Some(id) = campaign.as_ref().and_then(|c| c.dndbeyond_campaign_id.clone()) {
+    if let Some(id) = campaign
+        .as_ref()
+        .and_then(|c| c.dndbeyond_campaign_id.clone())
+    {
         let mut facts = div().flex().flex_row().flex_wrap().items_center().gap(S);
         if let Some(remote) = root.app.dndbeyond.remotes().find(|remote| remote.id == id) {
             if let Some(dm) = remote.dm {

@@ -114,7 +114,10 @@ fn press_words(shell: &mut Shell, start: &str) {
         .find(|name| name.starts_with(start))
         .unwrap_or_else(|| panic!("no linked paragraph starts with {start:?}"));
     let bounds = shell.bounds(&name).expect("the paragraph's place");
-    shell.click_at(gpui::point(bounds.left() + px(8.0), bounds.top() + px(10.0)));
+    shell.click_at(gpui::point(
+        bounds.left() + px(8.0),
+        bounds.top() + px(10.0),
+    ));
 }
 
 #[test]
@@ -124,7 +127,10 @@ fn a_note_link_opens_its_note_in_lookup() {
     show_scrolled(&mut shell, f32::from(READER_MEASURE), |_| {
         kit::markdown("setting", "[[Verori|The home country]]").into_any_element()
     });
-    assert!(!shell.read(|root| root.app.lookup.open), "Lookup starts closed");
+    assert!(
+        !shell.read(|root| root.app.lookup.open),
+        "Lookup starts closed"
+    );
     press_words(&mut shell, "The home country");
     assert!(
         shell.read(|root| root.app.lookup.open),
@@ -154,10 +160,16 @@ fn a_dice_link_and_a_roll_table_roll() {
         crate::rolls::plain::preview_words(root.bridge.ctx(), "Gate Mechanics", &[&link])
     });
     assert!(rolled.is_some(), "the dice link asked for its roll");
-    assert!(shell.bounds(crate::gui::kit::markdown::ROLL_RESULT).is_none());
+    assert!(
+        shell
+            .bounds(crate::gui::kit::markdown::ROLL_RESULT)
+            .is_none()
+    );
     shell.click("Roll 1d20");
     assert!(
-        shell.bounds(crate::gui::kit::markdown::ROLL_RESULT).is_some(),
+        shell
+            .bounds(crate::gui::kit::markdown::ROLL_RESULT)
+            .is_some(),
         "the table's roll came back to this reader"
     );
     shell.capture("markdown-links__08-roll-table-rolled__1200x800");
@@ -171,9 +183,24 @@ fn reader_tables() {
 The table leaves this note readable.\n\n\
 Read the row for your class level. A slot is spent when you cast a spell of that level or higher, and every slot comes back when you finish a Long Rest, so plan the hardest fights of the day around the slots you still have.\n";
     for (window, width, name, scrolls) in [
-        ((1200.0, 800.0), 500.0, "reader-tables__01-wide-table-in-library__1200x800", true),
-        ((960.0, 640.0), 380.0, "reader-tables__01-wide-table-in-library__960x640", true),
-        ((1920.0, 1080.0), 1100.0, "reader-tables__01-wide-table-in-library__1920x1080", false),
+        (
+            (1200.0, 800.0),
+            500.0,
+            "reader-tables__01-wide-table-in-library__1200x800",
+            true,
+        ),
+        (
+            (960.0, 640.0),
+            380.0,
+            "reader-tables__01-wide-table-in-library__960x640",
+            true,
+        ),
+        (
+            (1920.0, 1080.0),
+            1100.0,
+            "reader-tables__01-wide-table-in-library__1920x1080",
+            false,
+        ),
     ] {
         let mut shell = Shell::with_size(
             "reader-tables",
@@ -181,10 +208,14 @@ Read the row for your class level. A slot is spent when you cast a spell of that
             gpui::size(px(window.0), px(window.1)),
         );
         show_scrolled(&mut shell, width, |_| {
-            kit::Markdown::new("table", TABLE).wide_tables().into_any_element()
+            kit::Markdown::new("table", TABLE)
+                .wide_tables()
+                .into_any_element()
         });
         assert_eq!(
-            shell.bounds("More columns: scroll sideways or use Shift+wheel.").is_some(),
+            shell
+                .bounds("More columns: scroll sideways or use Shift+wheel.")
+                .is_some(),
             scrolls,
             "{name}: a table scrolls sideways only where it does not fit"
         );
@@ -195,7 +226,10 @@ Read the row for your class level. A slot is spent when you cast a spell of that
 #[test]
 fn a_typed_jump_scrolls_to_its_heading() {
     let mut shell = Shell::new("markdown-links", Seed::Empty);
-    let long = format!("{}\n\n## Later that night\n\nThe end.\n", "Words on a line.\n\n".repeat(60));
+    let long = format!(
+        "{}\n\n## Later that night\n\nThe end.\n",
+        "Words on a line.\n\n".repeat(60)
+    );
     let scroll = show_scrolled(&mut shell, f32::from(READER_MEASURE), move |handle| {
         kit::markdown("long", long.clone())
             .jump_in(handle)

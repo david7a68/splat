@@ -152,7 +152,9 @@ fn add_strip(view: &PlanView, cx: &mut Context<SplatRoot>) -> AnyElement {
             .blocked(view.fight_blocked.clone()),
     );
     for name in &view.fights {
-        fight = fight.item(kit::MenuItem::new(name.clone()).on_click(on(cx, PlanAct::PlanName(name.clone()))));
+        fight = fight.item(
+            kit::MenuItem::new(name.clone()).on_click(on(cx, PlanAct::PlanName(name.clone()))),
+        );
     }
     fight = fight.item(
         kit::MenuItem::new("New encounter")
@@ -168,7 +170,9 @@ fn add_strip(view: &PlanView, cx: &mut Context<SplatRoot>) -> AnyElement {
             .blocked(view.group_blocked.clone()),
     );
     for name in &view.groups {
-        group = group.item(kit::MenuItem::new(name.clone()).on_click(on(cx, PlanAct::PlanName(name.clone()))));
+        group = group.item(
+            kit::MenuItem::new(name.clone()).on_click(on(cx, PlanAct::PlanName(name.clone()))),
+        );
     }
     group = group.item(
         kit::MenuItem::new("New group")
@@ -386,7 +390,12 @@ fn event_row(
         on(cx, PlanAct::ToggleEvent(event.clone())),
     );
     let second = {
-        let mut line = div().flex().flex_row().flex_wrap().items_baseline().gap_x(XS);
+        let mut line = div()
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .items_baseline()
+            .gap_x(XS);
         if running {
             line = line.child(
                 kit::Button::quiet(id(format!("plan-back-{event}")), summary.clone())
@@ -394,7 +403,10 @@ fn event_row(
                     .on_click(on(cx, PlanAct::BackToRun)),
             );
         } else {
-            match warning.as_deref().and_then(|w| summary.find(w).map(|i| (i, w.len()))) {
+            match warning
+                .as_deref()
+                .and_then(|w| summary.find(w).map(|i| (i, w.len())))
+            {
                 Some((start, len)) => {
                     line = line
                         .child(small(summary[..start].to_owned()))
@@ -421,12 +433,19 @@ fn event_row(
     if let Some(saved) = saved {
         let mut items = Vec::new();
         if let Some(path) = saved_fight {
-            items.push(kit::MenuItem::new("Start a new run").on_click(on(cx, PlanAct::StartFight(path))));
+            items.push(
+                kit::MenuItem::new("Start a new run").on_click(on(cx, PlanAct::StartFight(path))),
+            );
         }
         if let Some(run) = saved.id {
-            items.push(kit::MenuItem::new("Delete the saved run").on_click(on(cx, PlanAct::DeleteRun(run))));
+            items.push(
+                kit::MenuItem::new("Delete the saved run")
+                    .on_click(on(cx, PlanAct::DeleteRun(run))),
+            );
         }
-        items.push(kit::MenuItem::new("Remove").on_click(on(cx, PlanAct::RemoveEvent(event.clone()))));
+        items.push(
+            kit::MenuItem::new("Remove").on_click(on(cx, PlanAct::RemoveEvent(event.clone()))),
+        );
         actions.push(
             primary_or_secondary(primary_free, format!("plan-resume-{event}"), "Resume")
                 .icon(icons::RUN)
@@ -636,7 +655,9 @@ fn fight_row(
             );
         }
     }
-    items.push(kit::MenuItem::new("Edit encounter").on_click(on(cx, PlanAct::EditEncounter(encounter))));
+    items.push(
+        kit::MenuItem::new("Edit encounter").on_click(on(cx, PlanAct::EditEncounter(encounter))),
+    );
     let mut actions = Vec::new();
     if !running {
         let (words, act_now) = match &saved {
@@ -753,13 +774,9 @@ fn scene_row(row: SceneRow, blocked: &Option<String>, cx: &mut Context<SplatRoot
         ..
     } = row;
     let plain = crate::sessions::plain_links(&words);
-    let lead = kit::Checkbox::new(
-        id(format!("plan-scene-box-{line}-{plain}")),
-        "",
-        done,
-    )
-    .on_click(on(cx, PlanAct::SceneTick(line)))
-    .into_any_element();
+    let lead = kit::Checkbox::new(id(format!("plan-scene-box-{line}-{plain}")), "", done)
+        .on_click(on(cx, PlanAct::SceneTick(line)))
+        .into_any_element();
     let title = scene_words(line, &words, cx);
     let second = if let Some(detail) = detail {
         Some(small(detail))

@@ -4,13 +4,13 @@
 //! tiles, Conditions, Correct, Log, Prep, Keys, or Arrivals.
 use super::{on_command, on_run};
 use crate::encounter_run::{Command, MAX_FROM_SHEET, Panel, Participant, Phase, Run, view};
-use splat_party::combat_sync::SyncState;
 use crate::gui::{SplatRoot, bridge, icons, kit, theme};
 use crate::rolls::{self, ArmedAction, Ask, Mode};
 use gpui::{
     AnyElement, ClickEvent, Context, ElementId, InteractiveElement, IntoElement, ParentElement,
     Pixels, SharedString, Styled, div, prelude::*, px,
 };
+use splat_party::combat_sync::SyncState;
 use theme::{Density, Type, TypeExt, colors};
 
 /// The panel, `width` wide, with its gutter and hairline on the left.
@@ -168,25 +168,30 @@ fn death_saves(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> impl Int
                 .items_center()
                 .gap(theme::XS)
                 .min_h(Density::Read.control())
-                .child(
-                    div()
-                        .w(px(150.0))
-                        .flex_none()
-                        .child(kit::text(Type::Small, c.text, view::death_save_words(successes, failures))),
-                )
+                .child(div().w(px(150.0)).flex_none().child(kit::text(
+                    Type::Small,
+                    c.text,
+                    view::death_save_words(successes, failures),
+                )))
                 .child(
                     kit::Button::quiet("run-death-success", "+ Success")
                         .name("Add a death save success")
                         .density(Density::Read)
                         .blocked((successes >= 3).then_some("Three successes are recorded."))
-                        .on_click(on_command(cx, Command::DeathSaves(index, successes + 1, failures))),
+                        .on_click(on_command(
+                            cx,
+                            Command::DeathSaves(index, successes + 1, failures),
+                        )),
                 )
                 .child(
                     kit::Button::quiet("run-death-failure", "+ Failure")
                         .name("Add a death save failure")
                         .density(Density::Read)
                         .blocked((failures >= 3).then_some("Three failures are recorded."))
-                        .on_click(on_command(cx, Command::DeathSaves(index, successes, failures + 1))),
+                        .on_click(on_command(
+                            cx,
+                            Command::DeathSaves(index, successes, failures + 1),
+                        )),
                 )
                 .child(
                     kit::Button::quiet("run-death-roll", "Roll")
@@ -227,7 +232,11 @@ fn conflicts(
         };
         let (use_key, keep_key) = (row.key.clone(), row.key.clone());
         block = block
-            .child(kit::status(&kit::Status::new(icons::WARN, title, c.sync.conflict)))
+            .child(kit::status(&kit::Status::new(
+                icons::WARN,
+                title,
+                c.sync.conflict,
+            )))
             .when(name.is_none(), |block| {
                 block.child(kit::text(Type::Small, c.text, row.message.clone()))
             })
@@ -261,7 +270,9 @@ fn conflicts(
                     )
                     .child(
                         kit::Button::secondary(
-                            ElementId::Name(format!("run-conflict-keep-{index}-{}", row.key).into()),
+                            ElementId::Name(
+                                format!("run-conflict-keep-{index}-{}", row.key).into(),
+                            ),
                             row.keep_label.clone(),
                         )
                         .name("Keep Splat values and retry")
@@ -285,7 +296,11 @@ fn value_line(label: &'static str, value: String) -> impl IntoElement {
         .flex()
         .flex_row()
         .gap(theme::L)
-        .child(div().w(px(80.0)).child(kit::text(Type::Small, c.muted, label)))
+        .child(
+            div()
+                .w(px(80.0))
+                .child(kit::text(Type::Small, c.muted, label)),
+        )
         .child(kit::text(Type::Strong, c.text, value))
 }
 
@@ -301,9 +316,11 @@ fn sync_block(run: &Run, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
     if names.is_empty() {
         return None;
     }
-    let any_conflict = names
-        .iter()
-        .any(|(index, _)| run.syncs.get(index).is_some_and(|sync| sync.state() == SyncState::Conflict));
+    let any_conflict = names.iter().any(|(index, _)| {
+        run.syncs
+            .get(index)
+            .is_some_and(|sync| sync.state() == SyncState::Conflict)
+    });
     let mut block = div()
         .flex()
         .flex_col()
@@ -372,7 +389,11 @@ fn changes_block(p: &Participant) -> Option<AnyElement> {
             .items_center()
             .gap(theme::XS)
             .pb(theme::S)
-            .child(kit::icon(icons::CHANGED, Type::Small, c.participant.changed))
+            .child(kit::icon(
+                icons::CHANGED,
+                Type::Small,
+                c.participant.changed,
+            ))
             .child(kit::text(Type::Small, c.participant.changed, origin))
             .into_any_element(),
     )
@@ -408,9 +429,14 @@ fn reference(root: &SplatRoot, run: &Run, index: usize, cx: &mut Context<SplatRo
     let mut column = div().flex().flex_col().gap(theme::XS).w_full();
     column = column.children(super::ended::card_loot(run, index, cx));
     if definition.path == "Made up in this fight" {
-        let unknown = |value: Option<i64>| value.map_or_else(|| "Unknown".to_owned(), |n| n.to_string());
+        let unknown =
+            |value: Option<i64>| value.map_or_else(|| "Unknown".to_owned(), |n| n.to_string());
         return column
-            .child(kit::text(Type::Body, c.muted, "Made up in this fight. It has no stat block."))
+            .child(kit::text(
+                Type::Body,
+                c.muted,
+                "Made up in this fight. It has no stat block.",
+            ))
             .child(vitals(&[
                 ("ARMOR CLASS", unknown(p.armor_class)),
                 (
@@ -492,29 +518,32 @@ fn reference(root: &SplatRoot, run: &Run, index: usize, cx: &mut Context<SplatRo
             .find(|row| row.label == "Speed")
             .map(|row| row.changed)
     });
-    column = column
-        .children(changes_block(p))
-        .child(vitals(&[
-            ("ARMOR CLASS", display(p.armor_class)),
-            (
-                "HIT POINTS",
-                splat_party::combat_sync::fraction(display(p.hp), display(p.max_hp)),
-            ),
-            (
-                "INITIATIVE",
-                p.initiative_bonus
-                    .map_or_else(|| "—".to_owned(), crate::design::signed),
-            ),
-        ]))
-        .children(speed.map(|speed| kit::text(Type::Small, c.participant.changed, format!("Speed {speed}"))))
-        .child(tiles(run, index, cx))
-        .child(
-            kit::markdown::Markdown::new(
-                ElementId::Name(format!("run-stat-block-{}", p.key).into()),
-                definition.body.clone(),
-            )
-            .compact(),
-        );
+    column =
+        column
+            .children(changes_block(p))
+            .child(vitals(&[
+                ("ARMOR CLASS", display(p.armor_class)),
+                (
+                    "HIT POINTS",
+                    splat_party::combat_sync::fraction(display(p.hp), display(p.max_hp)),
+                ),
+                (
+                    "INITIATIVE",
+                    p.initiative_bonus
+                        .map_or_else(|| "—".to_owned(), crate::design::signed),
+                ),
+            ]))
+            .children(speed.map(|speed| {
+                kit::text(Type::Small, c.participant.changed, format!("Speed {speed}"))
+            }))
+            .child(tiles(run, index, cx))
+            .child(
+                kit::markdown::Markdown::new(
+                    ElementId::Name(format!("run-stat-block-{}", p.key).into()),
+                    definition.body.clone(),
+                )
+                .compact(),
+            );
     if let Some((words, unreadable, at)) = notice {
         let tone = if unreadable {
             kit::Tone::Error
@@ -546,10 +575,12 @@ fn tiles(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
     }
     let armed = run.armed_view().filter(|_| run.panel_row() == index);
     let name = run.state.participants[index].name.clone();
-    let mut column = div().flex().flex_col().gap(theme::XS).pt(theme::S).child(kit::heading(
-        kit::Heading::Section("Actions"),
-        true,
-    ));
+    let mut column = div()
+        .flex()
+        .flex_col()
+        .gap(theme::XS)
+        .pt(theme::S)
+        .child(kit::heading(kit::Heading::Section("Actions"), true));
     for (at, chip) in chips.into_iter().enumerate() {
         let (detail, facts) = rolls::tile_words(&chip);
         let marked = armed.as_ref().is_some_and(|view| {
@@ -566,7 +597,11 @@ fn tiles(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
             .gap(px(2.0))
             .p(theme::S)
             .rounded(theme::RADIUS_CONTROL)
-            .border(if marked { theme::FOCUS_WIDTH } else { theme::HAIRLINE_WIDTH })
+            .border(if marked {
+                theme::FOCUS_WIDTH
+            } else {
+                theme::HAIRLINE_WIDTH
+            })
             .border_color(if marked { c.accent } else { c.field_border })
             .cursor_pointer()
             .hover(|s| s.bg(c.hover))
@@ -577,35 +612,41 @@ fn tiles(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
                     .items_center()
                     .gap(theme::XS)
                     .child(kit::icon(tile_icon(&chip.link), Type::Body, c.text))
-                    .child(div().flex_1().min_w_0().child(kit::text::one_line(Type::Strong, c.text, tile_title(&chip))))
+                    .child(div().flex_1().min_w_0().child(kit::text::one_line(
+                        Type::Strong,
+                        c.text,
+                        tile_title(&chip),
+                    )))
                     .when(at < 9, |line| {
                         line.child(kit::text(Type::Small, c.faint, format!("Ctrl+{}", at + 1)))
                     }),
             )
             .child(kit::text(Type::Small, c.text, detail))
             .children(facts.map(|facts| kit::text(Type::Small, c.muted, facts)))
-            .on_click(cx.listener(move |root: &mut SplatRoot, event: &ClickEvent, _, cx| {
-                if let Some(run) = root.app.encounters.run_mut() {
-                    let modifiers = event.modifiers();
-                    let d20 = matches!(link, splat::content::dice_text::RollLink::D20 { .. });
-                    let mode = if d20 && modifiers.shift {
-                        Mode::Advantage
-                    } else if d20 && modifiers.secondary(cx) {
-                        Mode::Disadvantage
-                    } else {
-                        Mode::Normal
-                    };
-                    run.roll_link(Ask {
-                        link: link.clone(),
-                        occurrence,
-                        mode,
-                        roller: Some(index),
-                        entry: entry.clone(),
-                        inspired: false,
-                    });
-                }
-                cx.notify();
-            }));
+            .on_click(
+                cx.listener(move |root: &mut SplatRoot, event: &ClickEvent, _, cx| {
+                    if let Some(run) = root.app.encounters.run_mut() {
+                        let modifiers = event.modifiers();
+                        let d20 = matches!(link, splat::content::dice_text::RollLink::D20 { .. });
+                        let mode = if d20 && modifiers.shift {
+                            Mode::Advantage
+                        } else if d20 && modifiers.secondary(cx) {
+                            Mode::Disadvantage
+                        } else {
+                            Mode::Normal
+                        };
+                        run.roll_link(Ask {
+                            link: link.clone(),
+                            occurrence,
+                            mode,
+                            roller: Some(index),
+                            entry: entry.clone(),
+                            inspired: false,
+                        });
+                    }
+                    cx.notify();
+                }),
+            );
         let tile = kit::WithTooltip::with_tooltip(tile, chip.text.clone());
         column = column.child(kit::target(tile, chip.label.clone()));
         if marked && let Some(view) = &armed {
@@ -685,21 +726,24 @@ pub(super) fn compact_actions(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElem
         let marked = armed.as_ref().is_some_and(|view| view.link == chip.link);
         let (link, occurrence, entry) = (chip.link.clone(), chip.spell_occurrence, name.clone());
         line = line.child(
-            kit::Button::quiet(ElementId::Name(format!("run-compact-{at}").into()), chip.label.clone())
-                .icon(tile_icon(&chip.link))
-                .density(Density::Read)
-                .selected(marked)
-                .hint(chip.text.clone())
-                .on_click(on_run(cx, move |run| {
-                    run.roll_link(Ask {
-                        link: link.clone(),
-                        occurrence,
-                        mode: Mode::Normal,
-                        roller: Some(row),
-                        entry: entry.clone(),
-                        inspired: false,
-                    });
-                })),
+            kit::Button::quiet(
+                ElementId::Name(format!("run-compact-{at}").into()),
+                chip.label.clone(),
+            )
+            .icon(tile_icon(&chip.link))
+            .density(Density::Read)
+            .selected(marked)
+            .hint(chip.text.clone())
+            .on_click(on_run(cx, move |run| {
+                run.roll_link(Ask {
+                    link: link.clone(),
+                    occurrence,
+                    mode: Mode::Normal,
+                    roller: Some(row),
+                    entry: entry.clone(),
+                    inspired: false,
+                });
+            })),
         );
     }
     line.into_any_element()
@@ -710,7 +754,12 @@ pub(super) fn compact_actions(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElem
 fn conditions(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
     let c = colors();
     let p = &run.state.participants[index];
-    let mut grid = div().flex().flex_row().flex_wrap().gap(theme::XS).max_w(theme::FORM_WIDTH);
+    let mut grid = div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .gap(theme::XS)
+        .max_w(theme::FORM_WIDTH);
     for (_, name) in splat_party::combat_sync::CONDITIONS.iter() {
         let label = view::condition_label(p, name);
         let selected = label.is_some();
@@ -718,12 +767,15 @@ fn conditions(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElemen
         let command = view::condition_press(p, index, name);
         grid = grid.child(
             div().w(px(170.0)).flex_none().child(
-                kit::Button::quiet(ElementId::Name(format!("run-condition-{name}").into()), shown)
-                    .icon(if selected { icons::OK } else { icons::ADD })
-                    .name(*name)
-                    .density(Density::Read)
-                    .selected(selected)
-                    .on_click(on_command(cx, command)),
+                kit::Button::quiet(
+                    ElementId::Name(format!("run-condition-{name}").into()),
+                    shown,
+                )
+                .icon(if selected { icons::OK } else { icons::ADD })
+                .name(*name)
+                .density(Density::Read)
+                .selected(selected)
+                .on_click(on_command(cx, command)),
             ),
         );
     }
@@ -748,8 +800,12 @@ fn conditions(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElemen
                 .gap(theme::S)
                 .child(kit::text(Type::Body, c.text, "Exhaustion level"))
                 .child(
-                    kit::IconButton::new("run-exhaustion-down", icons::SUBTRACT, "Lower exhaustion")
-                        .on_click(on_command(cx, down)),
+                    kit::IconButton::new(
+                        "run-exhaustion-down",
+                        icons::SUBTRACT,
+                        "Lower exhaustion",
+                    )
+                    .on_click(on_command(cx, down)),
                 )
                 .child(kit::text(Type::Strong, c.text, level.to_string()))
                 .child(
@@ -782,11 +838,19 @@ fn conditions(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElemen
                     .items_center()
                     .gap(theme::S)
                     .min_h(Density::Read.control())
-                    .child(div().flex_1().min_w_0().child(kit::text(Type::Body, c.text, words)))
                     .child(
-                        kit::Button::quiet(ElementId::Name(format!("run-effect-remove-{at}").into()), "Remove")
-                            .density(Density::Read)
-                            .on_click(on_command(cx, Command::RemoveCondition(index, at))),
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(kit::text(Type::Body, c.text, words)),
+                    )
+                    .child(
+                        kit::Button::quiet(
+                            ElementId::Name(format!("run-effect-remove-{at}").into()),
+                            "Remove",
+                        )
+                        .density(Density::Read)
+                        .on_click(on_command(cx, Command::RemoveCondition(index, at))),
                     ),
             );
         }
@@ -816,7 +880,8 @@ fn conditions(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElemen
                     .map(|field| field.words.trim().to_owned())
                     .unwrap_or_default();
                 if !typed.is_empty() {
-                    let command = view::other_effect_command(&run.state.participants[index], index, typed);
+                    let command =
+                        view::other_effect_command(&run.state.participants[index], index, typed);
                     run.run_command(command);
                     if run.error.is_none() {
                         run.effect_fields.remove(&key);
@@ -839,26 +904,33 @@ fn conditions(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElemen
                 .max_w(theme::FORM_WIDTH)
                 .child(
                     div().key_context("RunField").flex_1().child(
-                        kit::TextField::new(ElementId::Name(format!("run-other-effect-{key}").into()), draft.clone())
-                            .placeholder(placeholder)
-                            .name("Other effect")
-                            .focus(run.focus_other_effect)
-                            .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                        kit::TextField::new(
+                            ElementId::Name(format!("run-other-effect-{key}").into()),
+                            draft.clone(),
+                        )
+                        .placeholder(placeholder)
+                        .name("Other effect")
+                        .focus(run.focus_other_effect)
+                        .on_change(
+                            cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
                                 if let Some(run) = root.app.encounters.run_mut() {
                                     run.effect_fields.entry(typing.clone()).or_default().words =
                                         words.to_owned();
                                     run.focus_other_effect = false;
                                 }
                                 cx.notify();
-                            }))
-                            .on_enter(super::plain(cx, move |root, _, cx| add(root, cx))),
+                            }),
+                        )
+                        .on_enter(super::plain(cx, move |root, _, cx| add(root, cx))),
                     ),
                 )
                 .child(
                     kit::Button::secondary("run-other-effect-add", "Add")
                         .density(Density::Read)
                         .blocked(draft.trim().is_empty().then_some("Type an effect first."))
-                        .on_click(cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| add_click(root, cx))),
+                        .on_click(cx.listener(
+                            move |root: &mut SplatRoot, _: &ClickEvent, _, cx| add_click(root, cx),
+                        )),
                 ),
         )
         .child(kit::help(view::CONDITIONS_HELP));
@@ -870,7 +942,11 @@ fn record(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
     let c = colors();
     let p = &run.state.participants[index];
     let sheet_decides = run.syncs.get(&index).is_some_and(|sync| sync.ready());
-    let mut column = div().flex().flex_col().gap(theme::S).max_w(theme::FORM_WIDTH);
+    let mut column = div()
+        .flex()
+        .flex_col()
+        .gap(theme::S)
+        .max_w(theme::FORM_WIDTH);
     column = column
         .child(kit::heading(
             kit::Heading::Group {
@@ -939,7 +1015,10 @@ fn record(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
         let total = crate::design::parse_signed(&text);
         let set = move |root: &mut SplatRoot, cx: &mut Context<SplatRoot>| {
             if let Some(run) = root.app.encounters.run_mut()
-                && let Some(total) = run.setup_inputs.get(&index).and_then(|text| crate::design::parse_signed(text))
+                && let Some(total) = run
+                    .setup_inputs
+                    .get(&index)
+                    .and_then(|text| crate::design::parse_signed(text))
             {
                 if run.state.participants[index].initiative != Some(total) {
                     run.run_command(Command::Initiative(index, Some(total)));
@@ -956,26 +1035,37 @@ fn record(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
                     .flex_row()
                     .items_center()
                     .gap(theme::XS)
-                    .child(div().w(px(110.0)).child(kit::text(Type::Small, c.muted, "Initiative")))
+                    .child(
+                        div()
+                            .w(px(110.0))
+                            .child(kit::text(Type::Small, c.muted, "Initiative")),
+                    )
                     .child(
                         div().key_context("RunField").w(px(72.0)).child(
-                            kit::TextField::new(ElementId::Name(format!("run-correct-initiative-{}", p.key).into()), text)
-                                .placeholder("Total")
-                                .name(format!("Initiative for {}", p.name))
-                                .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                            kit::TextField::new(
+                                ElementId::Name(format!("run-correct-initiative-{}", p.key).into()),
+                                text,
+                            )
+                            .placeholder("Total")
+                            .name(format!("Initiative for {}", p.name))
+                            .on_change(cx.listener(
+                                move |root: &mut SplatRoot, words: &str, _, cx| {
                                     if let Some(run) = root.app.encounters.run_mut() {
                                         run.setup_inputs.insert(index, super::number_text(words));
                                     }
                                     cx.notify();
-                                }))
-                                .on_enter(super::plain(cx, move |root, _, cx| set(root, cx))),
+                                },
+                            ))
+                            .on_enter(super::plain(cx, move |root, _, cx| set(root, cx))),
                         ),
                     )
                     .child(
                         kit::Button::secondary("run-set-initiative", "Set initiative")
                             .density(Density::Read)
                             .blocked(total.is_none().then_some("Type a number first."))
-                            .on_click(cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| set(root, cx))),
+                            .on_click(cx.listener(
+                                move |root: &mut SplatRoot, _: &ClickEvent, _, cx| set(root, cx),
+                            )),
                     ),
             )
             .child(kit::text(Type::Small, color, words));
@@ -997,18 +1087,27 @@ fn record(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
                 .flex_row()
                 .items_center()
                 .gap(theme::XS)
-                .child(div().w(px(110.0)).child(kit::text(Type::Small, c.muted, "Note")))
+                .child(
+                    div()
+                        .w(px(110.0))
+                        .child(kit::text(Type::Small, c.muted, "Note")),
+                )
                 .child(
                     div().key_context("RunField").flex_1().child(
-                        kit::TextField::new(ElementId::Name(format!("run-note-{}", p.key).into()), note_text.clone())
-                            .placeholder("What happened")
-                            .name("DM note")
-                            .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
+                        kit::TextField::new(
+                            ElementId::Name(format!("run-note-{}", p.key).into()),
+                            note_text.clone(),
+                        )
+                        .placeholder("What happened")
+                        .name("DM note")
+                        .on_change(cx.listener(
+                            |root: &mut SplatRoot, words: &str, _, cx| {
                                 if let Some(run) = root.app.encounters.run_mut() {
                                     run.note = words.to_owned();
                                 }
                                 cx.notify();
-                            })),
+                            },
+                        )),
                     ),
                 ),
         )
@@ -1057,23 +1156,29 @@ fn number_row(
         .flex_row()
         .items_center()
         .gap(theme::XS)
-        .child(div().w(px(110.0)).child(kit::text(Type::Small, c.muted, label)))
+        .child(
+            div()
+                .w(px(110.0))
+                .child(kit::text(Type::Small, c.muted, label)),
+        )
         .child(
             div().key_context("RunField").w(px(96.0)).child(
                 kit::TextField::new(id, value.map_or_else(String::new, |n| n.to_string()))
                     .name(label)
                     .disabled(locked)
-                    .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                        if let Some(run) = root.app.encounters.run_mut() {
-                            let typed = super::number_text(words);
-                            let parsed = crate::design::parse_signed(&typed);
-                            if typed.is_empty() || parsed.is_some() {
-                                let command = make(run, parsed);
-                                run.run_command(command);
+                    .on_change(
+                        cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                            if let Some(run) = root.app.encounters.run_mut() {
+                                let typed = super::number_text(words);
+                                let parsed = crate::design::parse_signed(&typed);
+                                if typed.is_empty() || parsed.is_some() {
+                                    let command = make(run, parsed);
+                                    run.run_command(command);
+                                }
                             }
-                        }
-                        cx.notify();
-                    })),
+                            cx.notify();
+                        }),
+                    ),
             ),
         )
 }
@@ -1089,8 +1194,12 @@ fn sync_settings(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyEle
     if !connected {
         return column
             .child(
-                kit::Checkbox::new("run-sync-sheet", "Sync combat stats with D&D Beyond", enabled)
-                    .blocked(Some("Connect to sync")),
+                kit::Checkbox::new(
+                    "run-sync-sheet",
+                    "Sync combat stats with D&D Beyond",
+                    enabled,
+                )
+                .blocked(Some("Connect to sync.")),
             )
             .child(
                 kit::Button::quiet("run-sync-connect", "Connect to sync")
@@ -1103,8 +1212,8 @@ fn sync_settings(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyEle
     }
     column = column
         .child(
-            kit::Checkbox::new("run-sync-sheet", "Sync this sheet with D&D Beyond", enabled).on_click(
-                on_run(cx, move |run| {
+            kit::Checkbox::new("run-sync-sheet", "Sync this sheet with D&D Beyond", enabled)
+                .on_click(on_run(cx, move |run| {
                     let sync = run.syncs.entry(index).or_default();
                     if sync.enabled {
                         sync.stop();
@@ -1112,8 +1221,7 @@ fn sync_settings(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyEle
                         sync.start();
                     }
                     run.dirty = true;
-                }),
-            ),
+                })),
         )
         .child(kit::help(
             "During a fight, Sync party in the run turns sync on for the whole party.",
@@ -1226,21 +1334,24 @@ pub(super) fn prep(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                     .child(
                         kit::Button::quiet("run-edit-encounter", "Edit encounter")
                             .line_start()
-                            .on_click(cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
-                                root.bridge.ctx().data_mut(|data| {
-                                    data.insert_temp(eframe::egui::Id::new("edit_run_encounter"), id);
-                                });
-                                if let Some(run) = root.app.encounters.run_mut() {
-                                    run.prep_refusal = None;
-                                }
-                                cx.notify();
-                            })),
+                            .on_click(cx.listener(
+                                move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
+                                    root.bridge.ctx().data_mut(|data| {
+                                        data.insert_temp(
+                                            eframe::egui::Id::new("edit_run_encounter"),
+                                            id,
+                                        );
+                                    });
+                                    if let Some(run) = root.app.encounters.run_mut() {
+                                        run.prep_refusal = None;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
                     )
-                    .children(
-                        run.prep_refusal
-                            .as_ref()
-                            .map(|refusal| kit::text(Type::Small, c.muted, refusal.reason().to_owned())),
-                    );
+                    .children(run.prep_refusal.as_ref().map(|refusal| {
+                        kit::text(Type::Small, c.muted, refusal.reason().to_owned())
+                    }));
                 column.child(kit::empty_state(
                     icons::SESSIONS,
                     "No prep notes yet",
@@ -1263,8 +1374,9 @@ pub(super) fn prep(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
     if let Some(technical) = technical {
         let technical = technical.to_owned();
         column = column.child(kit::gap(theme::M)).child(
-            kit::QuietSection::new("run-prep-technical", "Technical details")
-                .child(kit::markdown::Markdown::new("run-prep-technical-body", technical).compact()),
+            kit::QuietSection::new("run-prep-technical", "Technical details").child(
+                kit::markdown::Markdown::new("run-prep-technical-body", technical).compact(),
+            ),
         );
     }
     column.into_any_element()
@@ -1283,8 +1395,18 @@ fn keys(run: &Run) -> AnyElement {
                 .flex()
                 .flex_row()
                 .items_start()
-                .child(div().w(px(96.0)).flex_none().child(kit::text(Type::Heading, c.text, *key)))
-                .child(div().flex_1().min_w_0().child(kit::text(Type::Body, c.muted, *what)))
+                .child(
+                    div()
+                        .w(px(96.0))
+                        .flex_none()
+                        .child(kit::text(Type::Heading, c.text, *key)),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(kit::text(Type::Body, c.muted, *what)),
+                )
         }))
         .child(kit::gap(theme::XS))
         .child(kit::text(
@@ -1303,7 +1425,11 @@ fn keys(run: &Run) -> AnyElement {
 /// with their Add.
 fn arrivals(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
     let c = colors();
-    let mut column = div().flex().flex_col().gap(theme::XS).max_w(theme::LIST_MEASURE);
+    let mut column = div()
+        .flex()
+        .flex_col()
+        .gap(theme::XS)
+        .max_w(theme::LIST_MEASURE);
     if run.groups.as_ref().is_some_and(|groups| !groups.is_empty()) {
         column = column.child(kit::help("Use Add to bring a group into the fight."));
     }
@@ -1328,7 +1454,11 @@ fn arrivals(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                     .flex_wrap()
                     .items_center()
                     .gap(theme::XS)
-                    .child(kit::text(Type::Small, c.muted, "No groups yet. Make one on Encounters with"))
+                    .child(kit::text(
+                        Type::Small,
+                        c.muted,
+                        "No groups yet. Make one on Encounters with",
+                    ))
                     .child(
                         kit::Button::quiet("run-new-group", "New group")
                             .plain()
@@ -1378,7 +1508,11 @@ fn arrivals(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
 
 /// One encounter group in Arrivals: its name and numbers, its status and members, an
 /// initiative total and Add.
-fn group_row(run: &Run, group: &crate::encounter_run::RunGroup, cx: &mut Context<SplatRoot>) -> impl IntoElement {
+fn group_row(
+    run: &Run,
+    group: &crate::encounter_run::RunGroup,
+    cx: &mut Context<SplatRoot>,
+) -> impl IntoElement {
     let c = colors();
     let id = group.id;
     let status = run.group_status(group, run.group_joined(group));
@@ -1412,12 +1546,23 @@ fn group_row(run: &Run, group: &crate::encounter_run::RunGroup, cx: &mut Context
                 .flex_row()
                 .items_baseline()
                 .gap(theme::S)
-                .child(div().min_w_0().child(kit::text::one_line(Type::Strong, c.text, group.name.clone())))
+                .child(div().min_w_0().child(kit::text::one_line(
+                    Type::Strong,
+                    c.text,
+                    group.name.clone(),
+                )))
                 .child(kit::text::one_line(Type::Small, c.muted, numbers)),
         )
-        .when(!status.is_empty(), |row| row.child(kit::text(Type::Small, c.muted, status.clone())))
+        .when(!status.is_empty(), |row| {
+            row.child(kit::text(Type::Small, c.muted, status.clone()))
+        })
         .child(kit::text(Type::Small, c.muted, members.join(", ")))
-        .children(group.problem.clone().map(|problem| kit::text(Type::Small, c.result.warning, problem)))
+        .children(
+            group
+                .problem
+                .clone()
+                .map(|problem| kit::text(Type::Small, c.result.warning, problem)),
+        )
         .child(
             div()
                 .flex()
@@ -1427,25 +1572,33 @@ fn group_row(run: &Run, group: &crate::encounter_run::RunGroup, cx: &mut Context
                 .child(kit::text(Type::Small, c.muted, "Initiative"))
                 .child(
                     div().key_context("RunField").w(px(72.0)).child(
-                        kit::TextField::new(ElementId::Name(format!("run-arrival-total-{id}").into()), total)
-                            .placeholder("Roll")
-                            .name(format!("Initiative total for {}", group.name))
-                            .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                        kit::TextField::new(
+                            ElementId::Name(format!("run-arrival-total-{id}").into()),
+                            total,
+                        )
+                        .placeholder("Roll")
+                        .name(format!("Initiative total for {}", group.name))
+                        .on_change(cx.listener(
+                            move |root: &mut SplatRoot, words: &str, _, cx| {
                                 if let Some(run) = root.app.encounters.run_mut() {
                                     run.group_totals.insert(id, words.to_owned());
                                     run.totals_revision += 1;
                                 }
                                 cx.notify();
-                            })),
+                            },
+                        )),
                     ),
                 )
                 .child(
-                    kit::Button::secondary(ElementId::Name(format!("run-arrival-add-{id}").into()), "Add")
-                        .icon(icons::ADD)
-                        .name(format!("Add {}", group.name))
-                        .density(Density::Read)
-                        .blocked(blocked.clone())
-                        .on_click(on_run(cx, move |run| run.add_group_from_panel(id))),
+                    kit::Button::secondary(
+                        ElementId::Name(format!("run-arrival-add-{id}").into()),
+                        "Add",
+                    )
+                    .icon(icons::ADD)
+                    .name(format!("Add {}", group.name))
+                    .density(Density::Read)
+                    .blocked(blocked.clone())
+                    .on_click(on_run(cx, move |run| run.add_group_from_panel(id))),
                 ),
         )
         .children(blocked.map(|why| kit::text(Type::Small, c.muted, why)))
@@ -1462,7 +1615,11 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                     .flex()
                     .flex_row()
                     .items_center()
-                    .child(div().flex_1().min_w_0().child(kit::text::one_line(Type::Strong, c.text, picked.entry.name.clone())))
+                    .child(div().flex_1().min_w_0().child(kit::text::one_line(
+                        Type::Strong,
+                        c.text,
+                        picked.entry.name.clone(),
+                    )))
                     .child(
                         kit::Button::quiet("run-creature-change", "Change")
                             .name("Choose another creature")
@@ -1500,16 +1657,23 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                     creature.detail.clone(),
                     creature.lower == typed,
                 )
-                .on_click(on_run(cx, move |run| run.ad_hoc.picked = Some(picked.clone()))),
+                .on_click(on_run(cx, move |run| {
+                    run.ad_hoc.picked = Some(picked.clone())
+                })),
             );
         }
         if shown < matches.len() {
             let all = typed.clone();
             column = column.child(
-                kit::Button::quiet("run-creature-show-all", format!("Show all {}", matches.len()))
-                    .density(Density::Read)
-                    .hint("List every creature that matches, without more typing")
-                    .on_click(on_run(cx, move |run| run.ad_hoc.show_all = Some(all.clone()))),
+                kit::Button::quiet(
+                    "run-creature-show-all",
+                    format!("Show all {}", matches.len()),
+                )
+                .density(Density::Read)
+                .hint("List every creature that matches, without more typing")
+                .on_click(on_run(cx, move |run| {
+                    run.ad_hoc.show_all = Some(all.clone())
+                })),
             );
         }
         if typed.is_empty() {
@@ -1518,9 +1682,21 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
     }
     let add = run.creature_add();
     if add.made_up {
-        column = column.child(kit::text(Type::Small, c.muted, "Made up here. It stays in this fight."));
+        column = column.child(kit::text(
+            Type::Small,
+            c.muted,
+            "Made up here. It stays in this fight.",
+        ));
     }
-    let field = |id: &'static str, label: &'static str, name: &'static str, value: String, hint: String, width: f32, focus: bool, set: fn(&mut crate::encounter_run::ad_hoc::AdHoc, String), cx: &mut Context<SplatRoot>| {
+    let field = |id: &'static str,
+                 label: &'static str,
+                 name: &'static str,
+                 value: String,
+                 hint: String,
+                 width: f32,
+                 focus: bool,
+                 set: fn(&mut crate::encounter_run::ad_hoc::AdHoc, String),
+                 cx: &mut Context<SplatRoot>| {
         div()
             .flex()
             .flex_row()
@@ -1533,13 +1709,15 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                         .placeholder(hint)
                         .name(name)
                         .focus(focus)
-                        .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                            if let Some(run) = root.app.encounters.run_mut() {
-                                set(&mut run.ad_hoc, words.to_owned());
-                                run.ad_hoc.focus_hp = false;
-                            }
-                            cx.notify();
-                        }))
+                        .on_change(
+                            cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                                if let Some(run) = root.app.encounters.run_mut() {
+                                    set(&mut run.ad_hoc, words.to_owned());
+                                    run.ad_hoc.focus_hp = false;
+                                }
+                                cx.notify();
+                            }),
+                        )
                         .on_enter(super::plain(cx, |root, _, cx| {
                             if let Some(run) = root.app.encounters.run_mut() {
                                 run.add_creature_from_form();
@@ -1557,9 +1735,39 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                 .flex_row()
                 .flex_wrap()
                 .gap(theme::M)
-                .child(field("run-creature-count", "Count", "New creature count", form.count.clone(), "1".into(), 52.0, false, |form, words| form.count = words, cx))
-                .child(field("run-creature-hp", "HP", "New creature HP", form.hp.clone(), add.hp_hint.clone(), 64.0, form.focus_hp, |form, words| form.hp = words, cx))
-                .child(field("run-creature-ac", "AC", "New creature AC", form.ac.clone(), add.ac_hint.clone(), 52.0, false, |form, words| form.ac = words, cx)),
+                .child(field(
+                    "run-creature-count",
+                    "Count",
+                    "New creature count",
+                    form.count.clone(),
+                    "1".into(),
+                    52.0,
+                    false,
+                    |form, words| form.count = words,
+                    cx,
+                ))
+                .child(field(
+                    "run-creature-hp",
+                    "HP",
+                    "New creature HP",
+                    form.hp.clone(),
+                    add.hp_hint.clone(),
+                    64.0,
+                    form.focus_hp,
+                    |form, words| form.hp = words,
+                    cx,
+                ))
+                .child(field(
+                    "run-creature-ac",
+                    "AC",
+                    "New creature AC",
+                    form.ac.clone(),
+                    add.ac_hint.clone(),
+                    52.0,
+                    false,
+                    |form, words| form.ac = words,
+                    cx,
+                )),
         )
         .child(
             div()
@@ -1568,10 +1776,24 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                 .flex_wrap()
                 .items_center()
                 .gap(theme::M)
-                .child(field("run-creature-total", "Initiative", "New creature initiative total", form.total.clone(), "Roll".into(), 52.0, false, |form, words| form.total = words, cx))
+                .child(field(
+                    "run-creature-total",
+                    "Initiative",
+                    "New creature initiative total",
+                    form.total.clone(),
+                    "Roll".into(),
+                    52.0,
+                    false,
+                    |form, words| form.total = words,
+                    cx,
+                ))
                 .child(side_choice(run, cx)),
         )
-        .children(add.blocked.clone().map(|why| kit::text(Type::Small, c.muted, why)))
+        .children(
+            add.blocked
+                .clone()
+                .map(|why| kit::text(Type::Small, c.muted, why)),
+        )
         .child(
             kit::Button::secondary("run-creature-add", add.label.clone())
                 .icon(icons::ADD)
@@ -1599,17 +1821,22 @@ fn side_choice(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
         .gap(theme::XS)
         .child(kit::text(Type::Small, c.muted, "Side"))
         .child(
-            kit::Dropdown::new("run-creature-side", "Side of the new creature", words, chosen)
-                .width(px(110.0))
-                .density(Density::Read)
-                .on_select(cx.listener(move |root: &mut SplatRoot, at: &usize, _, cx| {
-                    if let Some(run) = root.app.encounters.run_mut()
-                        && let Some(side) = run.sides_to_join().get(*at).cloned()
-                    {
-                        run.ad_hoc.side = Some(side);
-                    }
-                    cx.notify();
-                })),
+            kit::Dropdown::new(
+                "run-creature-side",
+                "Side of the new creature",
+                words,
+                chosen,
+            )
+            .width(px(110.0))
+            .density(Density::Read)
+            .on_select(cx.listener(move |root: &mut SplatRoot, at: &usize, _, cx| {
+                if let Some(run) = root.app.encounters.run_mut()
+                    && let Some(side) = run.sides_to_join().get(*at).cloned()
+                {
+                    run.ad_hoc.side = Some(side);
+                }
+                cx.notify();
+            })),
         )
 }
 

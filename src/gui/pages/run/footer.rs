@@ -3,12 +3,11 @@
 //! step's outcome field; the close dialog; and the message footer under each body.
 use super::{on_run, save_status};
 use crate::encounter_run::{Command, NO_OUTCOME, Panel, PartySync, Run, view};
-use splat_party::combat_sync::SyncState;
 use crate::gui::{SplatRoot, icons, kit, theme};
 use gpui::{
-    AnyElement, ClickEvent, Context, IntoElement, ParentElement, Styled, Window, div,
-    prelude::*,
+    AnyElement, ClickEvent, Context, IntoElement, ParentElement, Styled, Window, div, prelude::*,
 };
+use splat_party::combat_sync::SyncState;
 use theme::{Density, Type, colors};
 
 /// The words of Close run: while sync must settle first, `Close after sync`.
@@ -21,7 +20,12 @@ fn close_word(run: &Run) -> &'static str {
 }
 
 /// `Close run`: closes now, or opens the close dialog when something would be lost.
-pub(super) fn close_button(run: &Run, id: &'static str, primary: bool, cx: &mut Context<SplatRoot>) -> kit::Button {
+pub(super) fn close_button(
+    run: &Run,
+    id: &'static str,
+    primary: bool,
+    cx: &mut Context<SplatRoot>,
+) -> kit::Button {
     let button = if primary {
         kit::Button::primary(id, close_word(run)).density(Density::Glance)
     } else {
@@ -147,24 +151,29 @@ fn end_step(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
                 .w(gpui::px(160.0))
                 .flex_none()
                 .child(
-                    kit::TextField::new(("run-outcome", run.id().as_u128() as u64), run.outcome.clone())
-                        .placeholder("Outcome, if any")
-                        .name("Outcome")
-                        .focus(run.focus_outcome)
-                        .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
-                            if let Some(run) = root.app.encounters.run_mut() {
-                                run.outcome = words.to_owned();
-                                run.focus_outcome = false;
-                            }
-                            cx.notify();
-                        }))
-                        .on_enter(super::plain(cx, move |root, _, cx| end(root, cx))),
+                    kit::TextField::new(
+                        ("run-outcome", run.id().as_u128() as u64),
+                        run.outcome.clone(),
+                    )
+                    .placeholder("Outcome, if any")
+                    .name("Outcome")
+                    .focus(run.focus_outcome)
+                    .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
+                        if let Some(run) = root.app.encounters.run_mut() {
+                            run.outcome = words.to_owned();
+                            run.focus_outcome = false;
+                        }
+                        cx.notify();
+                    }))
+                    .on_enter(super::plain(cx, move |root, _, cx| end(root, cx))),
                 ),
         )
         .child(
             kit::Button::destructive("run-end-confirm", "End encounter")
                 .density(Density::Read)
-                .on_click(cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| end(root, cx))),
+                .on_click(
+                    cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| end(root, cx)),
+                ),
         )
         .child(
             kit::Button::quiet("run-keep-playing", "Keep playing")
@@ -307,24 +316,36 @@ pub(super) fn close_dialog(
             keep(root);
             cx.notify();
         }))
-        .children(words.into_iter().map(|words| kit::text(Type::Body, c.text, words)))
-        .when(any_recovery, |dialog| dialog.child(kit::gap(theme::S)).child(recovery))
-        .children(block.clone().map(|reason| kit::text(Type::Small, c.muted, reason)));
+        .children(
+            words
+                .into_iter()
+                .map(|words| kit::text(Type::Body, c.text, words)),
+        )
+        .when(any_recovery, |dialog| {
+            dialog.child(kit::gap(theme::S)).child(recovery)
+        })
+        .children(
+            block
+                .clone()
+                .map(|reason| kit::text(Type::Small, c.muted, reason)),
+        );
     if cannot_save || !lost.is_empty() {
         dialog = dialog.destructive(
             kit::Button::destructive("run-close-lose", "Close and lose changes")
                 .blocked(block.clone())
-                .on_click(cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
-                    let closed = root
-                        .app
-                        .encounters
-                        .run_mut()
-                        .is_some_and(|run| cannot_save || run.close_run());
-                    if closed {
-                        super::closed(root, cx);
-                    }
-                    cx.notify();
-                })),
+                .on_click(
+                    cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
+                        let closed = root
+                            .app
+                            .encounters
+                            .run_mut()
+                            .is_some_and(|run| cannot_save || run.close_run());
+                        if closed {
+                            super::closed(root, cx);
+                        }
+                        cx.notify();
+                    }),
+                ),
         );
     }
     if cannot_save {
@@ -364,11 +385,13 @@ pub(super) fn close_dialog(
                 })),
         );
     }
-    dialog = dialog.action(kit::Button::secondary("run-close-keep", "Keep running").on_click(
-        cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
-            keep(root);
-            cx.notify();
-        }),
-    ));
+    dialog = dialog.action(
+        kit::Button::secondary("run-close-keep", "Keep running").on_click(cx.listener(
+            move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
+                keep(root);
+                cx.notify();
+            },
+        )),
+    );
     Some(dialog.into_any_element())
 }

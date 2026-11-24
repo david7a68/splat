@@ -2,9 +2,9 @@
 //! folder, what it also copies, then its result with the next steps.
 use super::act;
 use crate::copy_dialog::CopyDialog;
+use crate::gui::kit::WithTooltip as _;
 use crate::gui::theme::{HAIRLINE_WIDTH, S, Type, TypeExt, XS, colors};
 use crate::gui::{SplatRoot, kit};
-use crate::gui::kit::WithTooltip as _;
 use gpui::{
     AnyElement, Context, InteractiveElement, IntoElement, ParentElement, Styled, Window, div,
     prelude::*,
@@ -87,13 +87,15 @@ pub(super) fn render(
                     },
                 )),
             )
-            .action(kit::Button::quiet("copy-close", "Close").on_click(cx.listener(
-                |root, _, _, cx| {
-                    let ctx = root.bridge.ctx().clone();
-                    root.app.follow_copy_dialog(&ctx, false);
-                    cx.notify();
-                },
-            )));
+            .action(
+                kit::Button::quiet("copy-close", "Close").on_click(cx.listener(
+                    |root, _, _, cx| {
+                        let ctx = root.bridge.ctx().clone();
+                        root.app.follow_copy_dialog(&ctx, false);
+                        cx.notify();
+                    },
+                )),
+            );
         // The result's refresh, as egui's frame does after the dialog draws.
         follow(root);
         return frame.into_any_element();
@@ -177,17 +179,13 @@ pub(super) fn render(
                     .flex_col()
                     .gap(XS)
                     .child(
-                        kit::Checkbox::new(
-                            "copy-used",
-                            "Choose for this campaign",
-                            dialog.used(),
-                        )
-                        .on_click(cx.listener(|root, _, _, cx| {
-                            if let Some(dialog) = &mut root.app.copy_dialog {
-                                dialog.toggle_used();
-                            }
-                            cx.notify();
-                        })),
+                        kit::Checkbox::new("copy-used", "Choose for this campaign", dialog.used())
+                            .on_click(cx.listener(|root, _, _, cx| {
+                                if let Some(dialog) = &mut root.app.copy_dialog {
+                                    dialog.toggle_used();
+                                }
+                                cx.notify();
+                            })),
                     )
                     .child(kit::help(
                         "Adds the copy to this campaign’s package choices.",
@@ -195,13 +193,12 @@ pub(super) fn render(
             );
         }
     }
-    let cancel = kit::Button::quiet("copy-cancel", "Cancel").on_click(cx.listener(
-        |root, _, _, cx| {
+    let cancel =
+        kit::Button::quiet("copy-cancel", "Cancel").on_click(cx.listener(|root, _, _, cx| {
             let ctx = root.bridge.ctx().clone();
             root.app.follow_copy_dialog(&ctx, false);
             cx.notify();
-        },
-    ));
+        }));
     let Some(plan) = dialog.plan() else {
         if let Some(reason) = blocked {
             frame = frame.child(kit::text(Type::Small, c.muted, reason));
@@ -212,21 +209,19 @@ pub(super) fn render(
         .map(|d| d.2.split_once(" · ").map_or(d.2.as_str(), |(_, name)| name))
         .unwrap_or_default()
         .to_owned();
-    frame = frame
-        .child(kit::rule())
-        .child(
-            div()
-                .id("copy-path")
-                .with_tooltip(format!(
-                    "Will create {}",
-                    plan.root.join(&plan.relative).display()
-                ))
-                .child(kit::text(
-                    Type::Small,
-                    c.muted,
-                    format!("Will create {name}/{}", plan.relative),
-                )),
-        );
+    frame = frame.child(kit::rule()).child(
+        div()
+            .id("copy-path")
+            .with_tooltip(format!(
+                "Will create {}",
+                plan.root.join(&plan.relative).display()
+            ))
+            .child(kit::text(
+                Type::Small,
+                c.muted,
+                format!("Will create {name}/{}", plan.relative),
+            )),
+    );
     for dependency in &plan.shared {
         if let Ok(entry) = Entry::parse(&dependency.relative, &dependency.text) {
             frame = frame.child(kit::text(

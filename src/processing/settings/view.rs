@@ -156,9 +156,10 @@ impl ProcessingSettings {
         let (provider, url, model) = LLM_CHOICES
             .iter()
             .find(|(name, ..)| *name == chosen)
-            .map_or((Provider::OpenAiCompatible, "", ""), |(_, provider, url, model)| {
-                (*provider, *url, *model)
-            });
+            .map_or(
+                (Provider::OpenAiCompatible, "", ""),
+                |(_, provider, url, model)| (*provider, *url, *model),
+            );
         self.config.provider = provider;
         self.config.llm_url = url.to_owned();
         self.config.llm_model = model.to_owned();
@@ -267,12 +268,10 @@ impl ProcessingSettings {
             .as_str()
             .to_owned()
         });
-        let not_kept = field.error.as_deref().map(|error| {
-            SettingsFault::KeyNotKept(error)
-                .cause()
-                .as_str()
-                .to_owned()
-        });
+        let not_kept = field
+            .error
+            .as_deref()
+            .map(|error| SettingsFault::KeyNotKept(error).cause().as_str().to_owned());
         KeyView {
             typing: field.typing.clone(),
             saved,

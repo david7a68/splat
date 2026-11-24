@@ -149,13 +149,21 @@ pub(crate) fn lay_out(table: &Table, available: Pixels, window: &Window) -> Laid
     };
     if slot > px(0.0) {
         for row in 0..table.rows.len() {
-            let role = if row == 0 { Type::StatLabel } else { Type::Stat };
+            let role = if row == 0 {
+                Type::StatLabel
+            } else {
+                Type::Stat
+            };
             widths[0] = widths[0].max(line_width(table.cell(row, 0), role, window) + slot + XS);
         }
     }
     let heights = (0..table.rows.len())
         .map(|row| {
-            let role = if row == 0 { Type::StatLabel } else { Type::Stat };
+            let role = if row == 0 {
+                Type::StatLabel
+            } else {
+                Type::Stat
+            };
             let tallest = (0..count)
                 .map(|position| {
                     let width = if position == 0 {
@@ -180,13 +188,22 @@ pub(crate) fn lay_out(table: &Table, available: Pixels, window: &Window) -> Laid
 }
 
 /// The table, drawn from its layout. `matched` is the rolled row (0 is the header).
-pub(crate) fn draw(id: ElementId, table: &Table, laid: &Laid, matched: Option<usize>) -> AnyElement {
+pub(crate) fn draw(
+    id: ElementId,
+    table: &Table,
+    laid: &Laid,
+    matched: Option<usize>,
+) -> AnyElement {
     let c = colors();
     if laid.widths.is_empty() {
         return div().into_any_element();
     }
     let cell = |row: usize, position: usize| -> Div {
-        let role = if row == 0 { Type::StatLabel } else { Type::Stat };
+        let role = if row == 0 {
+            Type::StatLabel
+        } else {
+            Type::Stat
+        };
         let words = table.cell(row, position).to_owned();
         if position == 0 && laid.slot > px(0.0) {
             // The rolled row's mark sits in the slot; every row's range starts after it.
@@ -203,7 +220,14 @@ pub(crate) fn draw(id: ElementId, table: &Table, laid: &Laid, matched: Option<us
                             slot.child(super::super::icon(icons::DICE, Type::Stat, c.text))
                         }),
                 )
-                .child(div().flex_1().min_w_0().ty(role).text_color(c.text).child(words));
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .ty(role)
+                        .text_color(c.text)
+                        .child(words),
+                );
         }
         div()
             .w(laid.widths[position])
@@ -260,14 +284,18 @@ pub(crate) fn draw(id: ElementId, table: &Table, laid: &Laid, matched: Option<us
                         .children(rows.clone().map(|at| row(at, 0..1))),
                 )
                 .child(
-                    div().flex_1().min_w_0().pl(TABLE_GAP).child(super::super::scroll::sideways(
-                        id,
-                        div()
-                            .flex()
-                            .flex_col()
-                            .pb(lane)
-                            .children(rows.map(|at| row(at, 1..count))),
-                    )),
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .pl(TABLE_GAP)
+                        .child(super::super::scroll::sideways(
+                            id,
+                            div()
+                                .flex()
+                                .flex_col()
+                                .pb(lane)
+                                .children(rows.map(|at| row(at, 1..count))),
+                        )),
                 ),
         )
         .into_any_element()

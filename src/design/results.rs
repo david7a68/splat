@@ -951,7 +951,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/campaign_content.rs", "packages_content", &[Ban::Body]),
         ("src/campaign_content.rs", "page", &[Ban::Body]),
         // Ruling Q-x: the answer to the DM's last act leads the footer.
-        ("src/campaign_content.rs", "page_footer_with", &[Ban::Answer]),
+        (
+            "src/campaign_content.rs",
+            "page_footer_with",
+            &[Ban::Answer],
+        ),
         (
             "src/campaign_content.rs",
             "repair_section_content",

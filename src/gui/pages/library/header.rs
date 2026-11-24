@@ -5,8 +5,7 @@ use crate::gui::theme::{Density, L, LINE_GAP, READER_MEASURE, S, Type, XL, XS, c
 use crate::gui::{SplatRoot, bridge, icons, kit};
 use crate::lookup::ContentIndex;
 use gpui::{
-    AnyElement, Context, ElementId, IntoElement, ParentElement, Styled, Window, div, prelude::*,
-    px,
+    AnyElement, Context, ElementId, IntoElement, ParentElement, Styled, Window, div, prelude::*, px,
 };
 use std::sync::Arc;
 

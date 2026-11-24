@@ -2850,7 +2850,11 @@ pub mod plain {
 
     /// Outside a run, the last preview's result under the tiles that rolled it: its totals,
     /// each part's words, joined by a muted dot.
-    pub fn preview_words(ctx: &egui::Context, entry: &str, links: &[&RollLink]) -> Option<Vec<String>> {
+    pub fn preview_words(
+        ctx: &egui::Context,
+        entry: &str,
+        links: &[&RollLink],
+    ) -> Option<Vec<String>> {
         if roller(ctx).is_some() {
             return None;
         }

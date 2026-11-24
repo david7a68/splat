@@ -40,9 +40,12 @@ fn inventory_instances_and_creature_identity_remain_stable() {
     // a note's maps are written in one order whatever order the model holds them in.
     fn reversed(value: &Value) -> Value {
         match value {
-            Value::Object(map) => {
-                Value::Object(map.iter().rev().map(|(k, v)| (k.clone(), reversed(v))).collect())
-            }
+            Value::Object(map) => Value::Object(
+                map.iter()
+                    .rev()
+                    .map(|(k, v)| (k.clone(), reversed(v)))
+                    .collect(),
+            ),
             Value::Array(items) => Value::Array(items.iter().map(reversed).collect()),
             other => other.clone(),
         }

@@ -6,14 +6,17 @@ use crate::gui::theme::{Density, L, M, PANEL_MIN_WIDTH, S, Type, XS, XXL, colors
 use crate::gui::{SplatRoot, icons};
 use crate::lookup::panel_view::{Showing, search_hint};
 use gpui::{
-    AnyElement, Context, IntoElement, ParentElement, SharedString, Styled, Window, div,
-    prelude::*,
+    AnyElement, Context, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::*,
 };
 
 /// A result row's height (`RESULT_ROW`).
 const RESULT_ROW: gpui::Pixels = XXL;
 
-pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) -> AnyElement {
+pub(super) fn render(
+    root: &mut SplatRoot,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let lookup = &mut root.app.lookup;
     let query = lookup.refresh_matches();
@@ -129,12 +132,14 @@ pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context
                     ),
                     c.result.error,
                 )))
-                .child(Link::new("lookup-broken-show", "Show").on_click(cx.listener(
-                    |root, _, _, cx| {
-                        root.app.lookup.show_broken();
-                        cx.notify();
-                    },
-                ))),
+                .child(
+                    Link::new("lookup-broken-show", "Show").on_click(cx.listener(
+                        |root, _, _, cx| {
+                            root.app.lookup.show_broken();
+                            cx.notify();
+                        },
+                    )),
+                ),
         );
     }
     if let Some(error) = lookup.create_error() {
@@ -183,12 +188,14 @@ pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context
                     c.document.unsaved,
                 )))
                 .child(kit::text(Type::Body, c.muted, "·"))
-                .child(Link::new("lookup-unsaved-show", "Show").on_click(cx.listener(
-                    |root, _, _, cx| {
-                        root.app.lookup.show_card();
-                        cx.notify();
-                    },
-                ))),
+                .child(
+                    Link::new("lookup-unsaved-show", "Show").on_click(cx.listener(
+                        |root, _, _, cx| {
+                            root.app.lookup.show_card();
+                            cx.notify();
+                        },
+                    )),
+                ),
         );
     }
     let body = match lookup.showing() {
@@ -196,7 +203,9 @@ pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context
         Showing::Entry(position) => super::entry::render(root, position, window, cx),
         Showing::Generated | Showing::Nothing => {
             if query.is_empty() {
-                kit::help(crate::lookup::SEARCH_HELP).pt(S).into_any_element()
+                kit::help(crate::lookup::SEARCH_HELP)
+                    .pt(S)
+                    .into_any_element()
             } else {
                 div().into_any_element()
             }
@@ -332,9 +341,18 @@ fn card(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
         .flex_col()
         .gap(XS)
         .child(kit::rule())
-        .child(kit::heading(kit::Heading::Group { title: "Generated NPC", count: 0 }, false))
+        .child(kit::heading(
+            kit::Heading::Group {
+                title: "Generated NPC",
+                count: 0,
+            },
+            false,
+        ))
         .child(kit::text(Type::Strong, c.text, npc.name.clone()));
-    for (label, words) in splat_content_ui::npc_generator::ATTRIBUTES.iter().zip(&npc.attributes) {
+    for (label, words) in splat_content_ui::npc_generator::ATTRIBUTES
+        .iter()
+        .zip(&npc.attributes)
+    {
         column = column.child(kit::text(Type::Body, c.text, format!("{label}: {words}")));
     }
     if sources.is_empty() && problems.is_empty() {
@@ -345,7 +363,11 @@ fn card(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
                 .flex_wrap()
                 .items_center()
                 .gap(S)
-                .child(kit::text(Type::Small, c.muted, crate::lookup::BUILT_IN_NAMES))
+                .child(kit::text(
+                    Type::Small,
+                    c.muted,
+                    crate::lookup::BUILT_IN_NAMES,
+                ))
                 .child(
                     Link::new("lookup-own-names", crate::lookup::USE_OWN_NAMES)
                         .small()
@@ -363,7 +385,11 @@ fn card(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
         } else {
             crate::design::reader::human_label(kind)
         };
-        column = column.child(kit::text(Type::Small, c.muted, format!("{label} from {path}")));
+        column = column.child(kit::text(
+            Type::Small,
+            c.muted,
+            format!("{label} from {path}"),
+        ));
     }
     for problem in problems {
         column = column.child(Message::new(Tone::Warning, problem.message.clone()));
@@ -384,10 +410,13 @@ fn card(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
                 .flex_wrap()
                 .items_center()
                 .gap(S)
-                .child(save.density(Density::Read).on_click(cx.listener(|root, _, _, cx| {
-                    root.app.lookup.save_generated();
-                    cx.notify();
-                })))
+                .child(
+                    save.density(Density::Read)
+                        .on_click(cx.listener(|root, _, _, cx| {
+                            root.app.lookup.save_generated();
+                            cx.notify();
+                        })),
+                )
                 .child(
                     Button::secondary("lookup-reroll", "Reroll")
                         .icon(icons::DICE)
@@ -454,6 +483,7 @@ fn written(root: &SplatRoot, at: usize, query: &str, cx: &mut Context<SplatRoot>
         column = column.child(kit::rule());
     }
     let text = SharedString::from(note.text.clone());
-    column = column.child(kit::markdown::Markdown::new(("lookup-written-text", at), text).compact());
+    column =
+        column.child(kit::markdown::Markdown::new(("lookup-written-text", at), text).compact());
     kit::scroll_column(("lookup-written", at), column.pr(S)).into_any_element()
 }

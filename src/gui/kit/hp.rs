@@ -53,7 +53,7 @@ pub fn readout(hp: Option<i64>, max: Option<i64>, current: Type, max_role: Type)
                 .ty(max_role)
                 .text_color(c.muted)
                 .min_w(slot)
-                .child(format!("/{max_text}")),
+                .child(crate::design::fraction("", &max_text)),
         )
 }
 
@@ -123,5 +123,10 @@ pub fn temp(temp: i64, role: Type) -> Div {
                 .text_color(c.hp.temp)
                 .child(SharedString::new_static(icons::TEMP_HP)),
         )
-        .child(div().ty(role).text_color(c.hp.temp).child(format!("+{temp}")))
+        .child(
+            div()
+                .ty(role)
+                .text_color(c.hp.temp)
+                .child(format!("+{temp}")),
+        )
 }

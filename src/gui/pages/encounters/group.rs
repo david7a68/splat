@@ -3,14 +3,22 @@
 //! counts, the notes, Add creatures, and the footer.
 use super::common::{egui_color, footer, on_page, reason, row_menu, small_icon};
 use super::editor::{add_column, back_line, filter};
-use crate::gui::theme::{Density, HAIRLINE_WIDTH, L, LIST_MEASURE, M, PANEL_MIN_WIDTH, S, Type, XS, colors};
+use crate::gui::theme::{
+    Density, HAIRLINE_WIDTH, L, LIST_MEASURE, M, PANEL_MIN_WIDTH, S, Type, XS, colors,
+};
 use crate::gui::{SplatRoot, icons, kit};
 use gpui::prelude::FluentBuilder as _;
-use gpui::{AnyElement, Context, Div, ElementId, IntoElement, ParentElement, Styled, Window, div, px};
+use gpui::{
+    AnyElement, Context, Div, ElementId, IntoElement, ParentElement, Styled, Window, div, px,
+};
 use splat_encounters_ui::encounters::model::{GroupView, HeadAct, MemberAct, MemberRow};
 
 /// The group editor.
-pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) -> AnyElement {
+pub(super) fn render(
+    root: &mut SplatRoot,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let Some(active) = root.app.campaigns.active_campaign() else {
         return div().into_any_element();
     };
@@ -48,7 +56,11 @@ pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context
             .flex_row()
             .gap(S)
             .child(small_icon(icons::BUSY, colors().muted))
-            .child(kit::text(Type::Body, colors().muted, "Reading this campaign…"))
+            .child(kit::text(
+                Type::Body,
+                colors().muted,
+                "Reading this campaign…",
+            ))
             .into_any_element(),
     };
     let footer_lines = footer("group-editor-footer", lines, cx);
@@ -112,16 +124,25 @@ fn head(view: &GroupView, width: gpui::Pixels, focus: bool, cx: &mut Context<Spl
         .items_center()
         .gap(S)
         .min_h(Density::Read.control())
-        .child(kit::status(&kit::Status::new(icon.clone(), word.clone(), egui_color(*color))));
-    if view.discard {
-        row = row.child(kit::Button::quiet("group-discard", "Discard").on_click(on_page(
-            cx,
-            |page, ctx, active, campaigns| {
-                page.group_head_act(ctx, active, campaigns.modules(), HeadAct::Discard);
-            },
+        .child(kit::status(&kit::Status::new(
+            icon.clone(),
+            word.clone(),
+            egui_color(*color),
         )));
+    if view.discard {
+        row = row.child(
+            kit::Button::quiet("group-discard", "Discard").on_click(on_page(
+                cx,
+                |page, ctx, active, campaigns| {
+                    page.group_head_act(ctx, active, campaigns.modules(), HeadAct::Discard);
+                },
+            )),
+        );
     }
-    for words in [view.elsewhere.or(view.lock_reason), view.empty_reason].into_iter().flatten() {
+    for words in [view.elsewhere.or(view.lock_reason), view.empty_reason]
+        .into_iter()
+        .flatten()
+    {
         row = row.child(reason(words).whitespace_nowrap().ml(S));
     }
     div()
@@ -166,12 +187,14 @@ fn fields(view: &GroupView, cx: &mut Context<SplatRoot>) -> Div {
         .child(
             kit::Dropdown::new("group-side", "Default side", words, chosen)
                 .width(px(104.0))
-                .on_select(cx.listener(move |root: &mut SplatRoot, index: &usize, _, cx| {
-                    if let Some(side) = picked.get(*index) {
-                        root.app.encounters.edit_group(|group| group.side(side));
-                    }
-                    cx.notify();
-                })),
+                .on_select(
+                    cx.listener(move |root: &mut SplatRoot, index: &usize, _, cx| {
+                        if let Some(side) = picked.get(*index) {
+                            root.app.encounters.edit_group(|group| group.side(side));
+                        }
+                        cx.notify();
+                    }),
+                ),
         )
         .child(
             kit::TextField::new(("group-side-other", view.id.as_u128() as u64), "")
@@ -195,20 +218,29 @@ fn fields(view: &GroupView, cx: &mut Context<SplatRoot>) -> Div {
                 kit::Dropdown::new(
                     "group-belongs",
                     "Belongs to",
-                    view.belongs.iter().map(|(_, name)| name.clone()).collect::<Vec<_>>(),
+                    view.belongs
+                        .iter()
+                        .map(|(_, name)| name.clone())
+                        .collect::<Vec<_>>(),
                     view.belongs_chosen,
                 )
-                .on_select(cx.listener(move |root: &mut SplatRoot, index: &usize, _, cx| {
-                    if let Some(id) = ids.get(*index) {
-                        root.app.encounters.edit_group(|group| group.belongs(*id));
-                    }
-                    cx.notify();
-                })),
+                .on_select(cx.listener(
+                    move |root: &mut SplatRoot, index: &usize, _, cx| {
+                        if let Some(id) = ids.get(*index) {
+                            root.app.encounters.edit_group(|group| group.belongs(*id));
+                        }
+                        cx.notify();
+                    },
+                )),
             ),
         );
     let mut heading = kit::label("Members", view.count);
     if !view.heading.is_empty() {
-        heading = heading.child(kit::text(Type::Small, c.muted, format!("· {}", view.heading)));
+        heading = heading.child(kit::text(
+            Type::Small,
+            c.muted,
+            format!("· {}", view.heading),
+        ));
     }
     let mut column = div()
         .flex()
@@ -217,7 +249,9 @@ fn fields(view: &GroupView, cx: &mut Context<SplatRoot>) -> Div {
         .w_full()
         .max_w(LIST_MEASURE)
         .child(side)
-        .child(kit::help("Party, enemies, or any other name, such as rivals."))
+        .child(kit::help(
+            "Party, enemies, or any other name, such as rivals.",
+        ))
         .child(kit::gap(S))
         .child(belongs)
         .children(view.belongs_help.map(kit::help))
@@ -236,21 +270,22 @@ fn fields(view: &GroupView, cx: &mut Context<SplatRoot>) -> Div {
     for member in &view.members {
         column = column.child(member_row(member, cx));
     }
-    column
-        .child(kit::gap(M))
-        .child(kit::field(
-            "Group notes",
-            None,
-            None,
-            kit::TextEditor::new(("group-notes", view.id.as_u128() as u64), view.notes.clone())
-                .name("Group notes")
-                .placeholder("When they arrive, what they want. Markdown is fine.")
-                .rows(4)
-                .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
-                    root.app.encounters.edit_group(|group| group.notes(words));
-                    cx.notify();
-                })),
-        ))
+    column.child(kit::gap(M)).child(kit::field(
+        "Group notes",
+        None,
+        None,
+        kit::TextEditor::new(
+            ("group-notes", view.id.as_u128() as u64),
+            view.notes.clone(),
+        )
+        .name("Group notes")
+        .placeholder("When they arrive, what they want. Markdown is fine.")
+        .rows(4)
+        .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
+            root.app.encounters.edit_group(|group| group.notes(words));
+            cx.notify();
+        })),
+    ))
 }
 
 fn act(
@@ -279,7 +314,11 @@ fn member_row(member: &MemberRow, cx: &mut Context<SplatRoot>) -> Div {
             .ty_small()
             .child(kit::text(Type::Small, c.muted, member.detail.clone()))
             .when(member.hp_missing, |line| {
-                line.child(kit::status(&kit::Status::new(icons::WARN, "HP not set", c.result.warning)))
+                line.child(kit::status(&kit::Status::new(
+                    icons::WARN,
+                    "HP not set",
+                    c.result.warning,
+                )))
             })
     };
     let stepper = div()
@@ -289,23 +328,35 @@ fn member_row(member: &MemberRow, cx: &mut Context<SplatRoot>) -> Div {
         .gap(XS)
         .child(reason("Count"))
         .child(
-            kit::IconButton::new(("member-less", index), icons::SUBTRACT, format!("Fewer {}", member.name))
-                .on_click(act(cx, MemberAct::Count(index, count.saturating_sub(1)))),
+            kit::IconButton::new(
+                ("member-less", index),
+                icons::SUBTRACT,
+                format!("Fewer {}", member.name),
+            )
+            .on_click(act(cx, MemberAct::Count(index, count.saturating_sub(1)))),
         )
         .child(
             kit::TextField::new(("member-count", index), count.to_string())
                 .name(format!("Count of {}", member.name))
                 .width(px(40.0))
-                .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                    if let Ok(number) = words.trim().parse::<u64>() {
-                        root.app.encounters.member_act(MemberAct::Count(index, number));
-                    }
-                    cx.notify();
-                })),
+                .on_change(
+                    cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                        if let Ok(number) = words.trim().parse::<u64>() {
+                            root.app
+                                .encounters
+                                .member_act(MemberAct::Count(index, number));
+                        }
+                        cx.notify();
+                    }),
+                ),
         )
         .child(
-            kit::IconButton::new(("member-more", index), icons::ADD, format!("More {}", member.name))
-                .on_click(act(cx, MemberAct::Count(index, count + 1))),
+            kit::IconButton::new(
+                ("member-more", index),
+                icons::ADD,
+                format!("More {}", member.name),
+            )
+            .on_click(act(cx, MemberAct::Count(index, count + 1))),
         );
     let items = vec![
         kit::MenuItem::new("Move up")

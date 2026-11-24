@@ -2,15 +2,11 @@
 //! and its input, the speech service, the transcript and summary service with their keys, and
 //! the two prompts; the tab's notices in its footer.
 use crate::credentials::KeySlot;
-use crate::gui::kit::{
-    self, Button, Dropdown, Message, Pane, TextEditor, TextField, Tone,
-};
+use crate::gui::kit::{self, Button, Dropdown, Message, Pane, TextEditor, TextField, Tone};
 use crate::gui::theme::{FORM_WIDTH, L, S, Type, XS, XXL, colors};
 use crate::gui::{SplatRoot, icons};
 use crate::processing::settings::view::{Prompt, Recorder, Setting};
-use gpui::{
-    AnyElement, Context, IntoElement, ParentElement, Styled, Window, div, prelude::*,
-};
+use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div, prelude::*};
 
 /// The tab's own GPUI state.
 #[derive(Default)]
@@ -19,7 +15,11 @@ pub struct State {
     pub(crate) prompts_open: bool,
 }
 
-pub(super) fn render(root: &mut SplatRoot, _: &mut Window, cx: &mut Context<SplatRoot>) -> AnyElement {
+pub(super) fn render(
+    root: &mut SplatRoot,
+    _: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let lines = root.app.processing.footer_lines();
     let mut column = div()
         .flex()
@@ -216,18 +216,21 @@ fn llm_section(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement 
             "The codex command was not found on this computer."
         }));
     } else {
-        column = column.child(key_row(root, KeySlot::Llm, "Transcript and summary API key", cx));
+        column = column.child(key_row(
+            root,
+            KeySlot::Llm,
+            "Transcript and summary API key",
+            cx,
+        ));
     }
     let open = root.pages.settings.recording.prompts_open;
-    let mut prompts = kit::QuietSection::new(
-        "recording-prompts",
-        "Transcript and summary instructions",
-    )
-    .open(open)
-    .on_toggle(cx.listener(|root, open: &bool, _, cx| {
-        root.pages.settings.recording.prompts_open = *open;
-        cx.notify();
-    }));
+    let mut prompts =
+        kit::QuietSection::new("recording-prompts", "Transcript and summary instructions")
+            .open(open)
+            .on_toggle(cx.listener(|root, open: &bool, _, cx| {
+                root.pages.settings.recording.prompts_open = *open;
+                cx.notify();
+            }));
     if open {
         for (prompt, label, help) in [
             (

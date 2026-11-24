@@ -6,24 +6,33 @@ use crate::gui::kit::{self, Button, Checkbox, Dropdown, Pane, TextField};
 use crate::gui::pages::settings;
 use crate::gui::theme::{FORM_WIDTH, L, S, Type, XS, colors};
 use crate::gui::{SplatRoot, bridge};
-use gpui::{AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::*};
+use gpui::{
+    AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
+    prelude::*,
+};
 
 /// `Roll NPC initiative`'s help (`INITIATIVE_HELP`).
 const INITIATIVE_HELP: &str = "Run setup starts with this choice. You can change it there for one roll. Groups that arrive later use it too.";
 /// The house rules' help (`HOUSE_RULES_HELP`).
 const HOUSE_RULES_HELP: &str = "Trackers (Ctrl+T) shows the trackers of each note in play.";
 
-pub(super) fn render(root: &mut SplatRoot, _: &mut Window, cx: &mut Context<SplatRoot>) -> AnyElement {
+pub(super) fn render(
+    root: &mut SplatRoot,
+    _: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     {
         let SplatRoot { app, bridge, .. } = root;
-        app.encounters.run_settings_prepare(bridge.ctx(), &app.campaigns);
+        app.encounters
+            .run_settings_prepare(bridge.ctx(), &app.campaigns);
     }
     let Some(active) = root.app.campaigns.active_campaign() else {
         return div().into_any_element();
     };
     let Some(form) = root.app.encounters.run_form() else {
-        return kit::icon(crate::gui::icons::BUSY, Type::Body, c.connection.busy).into_any_element();
+        return kit::icon(crate::gui::icons::BUSY, Type::Body, c.connection.busy)
+            .into_any_element();
     };
     let closed = root
         .app
@@ -60,23 +69,32 @@ pub(super) fn render(root: &mut SplatRoot, _: &mut Window, cx: &mut Context<Spla
         "Roll NPC initiative",
         Some(INITIATIVE_HELP.into()),
         None,
-        Dropdown::new(id("run_initiative"), "Roll NPC initiative", form.groupings.clone(), Some(form.grouping))
-            .width(FORM_WIDTH)
-            .blocked(closed)
-            .on_select(cx.listener(|root, at: &usize, _, cx| {
-                root.app.encounters.set_grouping(*at);
-                cx.notify();
-            })),
+        Dropdown::new(
+            id("run_initiative"),
+            "Roll NPC initiative",
+            form.groupings.clone(),
+            Some(form.grouping),
+        )
+        .width(FORM_WIDTH)
+        .blocked(closed)
+        .on_select(cx.listener(|root, at: &usize, _, cx| {
+            root.app.encounters.set_grouping(*at);
+            cx.notify();
+        })),
     ));
     let ties = form.roster_ties;
     column = column.child(
         div().pb(L).child(
-            Checkbox::new(id("run_ties"), "Break initiative ties in roster order", ties)
-                .blocked(closed)
-                .on_click(cx.listener(move |root, _, _, cx| {
-                    root.app.encounters.set_roster_ties(!ties);
-                    cx.notify();
-                })),
+            Checkbox::new(
+                id("run_ties"),
+                "Break initiative ties in roster order",
+                ties,
+            )
+            .blocked(closed)
+            .on_click(cx.listener(move |root, _, _, cx| {
+                root.app.encounters.set_roster_ties(!ties);
+                cx.notify();
+            })),
         ),
     );
     if let Some((lines, chosen)) = form.inspiration.clone() {

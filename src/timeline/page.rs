@@ -2094,13 +2094,7 @@ impl TimelinePage {
         // The page under its header and the file's problems: the quick add, the list and the
         // open event. An early end leaves only this closure, so the save after it always runs.
         let mut body = || {
-            if let Some(id) = quick_add(
-                ui,
-                book,
-                current,
-                &ADD_KINDS,
-                |_| {},
-            ) {
+            if let Some(id) = quick_add(ui, book, current, &ADD_KINDS, |_| {}) {
                 self.record_added(id, book, ui.ctx());
             }
             if let Some(words) = self.dated.clone() {

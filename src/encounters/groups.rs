@@ -3149,7 +3149,13 @@ impl Encounters {
                 // member result), then Save's reason, then the file's warnings sit in one footer
                 // pinned below the members and the search, so none of them moves a member or a
                 // field.
-                this.group_lines(messages, &frame, &active.path, refusal.as_ref(), file_warnings);
+                this.group_lines(
+                    messages,
+                    &frame,
+                    &active.path,
+                    refusal.as_ref(),
+                    file_warnings,
+                );
                 this
             },
         );
@@ -4572,14 +4578,19 @@ impl Encounters {
                     .map(|(id, name)| (Some(id), name.to_owned())),
             );
         }
-        let current = draft.setup.encounter.as_ref().and_then(|reference| reference.id);
+        let current = draft
+            .setup
+            .encounter
+            .as_ref()
+            .and_then(|reference| reference.id);
         let mut belongs_chosen = belongs.iter().position(|(id, _)| *id == current);
         let gone = current.is_some() && belongs_chosen.is_none();
         if gone {
             belongs.push((current, MISSING_ENCOUNTER.to_owned()));
             belongs_chosen = Some(belongs.len() - 1);
         }
-        let unread = splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
+        let unread =
+            splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
         let members = snapshot.map_or_else(Vec::new, |snapshot| {
             let total = draft.setup.members.len();
             draft
@@ -4613,7 +4624,11 @@ impl Encounters {
                                 || (creature.detail.clone(), creature.hp_missing),
                                 |changed| {
                                     (
-                                        super::creature_detail(entry, creature.party, Some(changed)),
+                                        super::creature_detail(
+                                            entry,
+                                            creature.party,
+                                            Some(changed),
+                                        ),
                                         changed.max_hp.is_none(),
                                     )
                                 },
@@ -4637,7 +4652,12 @@ impl Encounters {
                 })
                 .collect()
         });
-        let count = draft.setup.members.iter().map(|member| member.count).sum::<u64>()
+        let count = draft
+            .setup
+            .members
+            .iter()
+            .map(|member| member.count)
+            .sum::<u64>()
             + unread.iter().filter_map(|member| member.count).sum::<u64>();
         Some(GroupView {
             id: draft.id(),
@@ -4672,7 +4692,10 @@ impl Encounters {
                 snapshot.map_or_else(String::new, |snapshot| members_heading(draft, snapshot))
             },
             members,
-            unread: unread.iter().map(|member| member.flag.message.clone()).collect(),
+            unread: unread
+                .iter()
+                .map(|member| member.flag.message.clone())
+                .collect(),
             notes: draft.notes.to_string(),
             reading: snapshot.is_none(),
         })

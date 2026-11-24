@@ -3,12 +3,12 @@
 //! initiative, Roll, tie moves, place, Absent and menu; the message footer; Close run.
 use super::{on_command, on_run, panel, panel_width, plain, run_title, save_status};
 use crate::encounter_run::{Command, Panel, Participant, Run, view};
-use splat_encounters_ui::encounter_settings::GroupingWords as _;
 use crate::gui::{SplatRoot, icons, kit, theme};
 use gpui::{
-    AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement,
-    SharedString, Styled, Window, div, prelude::*, px,
+    AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, SharedString,
+    Styled, Window, div, prelude::*, px,
 };
+use splat_encounters_ui::encounter_settings::GroupingWords as _;
 use theme::{Density, Type, colors};
 
 /// The Setup phase.
@@ -58,7 +58,7 @@ pub(super) fn render(
                 .flex()
                 .flex_col()
                 .child(kit::scroll_column("run-setup-rows", rows(run, cx)))
-                .children(footer_messages(run, cx)),
+                .children(message_footer(run, cx)),
         )
         .child(kit::rule())
         .child(
@@ -82,7 +82,7 @@ pub(super) fn render(
     page.into_any_element()
 }
 
-fn footer_messages(run: &Run, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
+fn message_footer(run: &Run, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
     let messages = super::footer::messages(run, true, cx);
     (!messages.is_empty()).then(|| {
         div()
@@ -103,7 +103,12 @@ fn header(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
     let blocked = run.setup_blocked();
     let default_roll = run.initiative.grouping;
     let tied = run.tied_count();
-    let mut title = div().flex().flex_col().flex_1().min_w_0().child(run_title(run, run.state_words(false)));
+    let mut title = div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .min_w_0()
+        .child(run_title(run, run.state_words(false)));
     if tied > 0 {
         title = title.child(kit::status(&kit::Status::new(
             icons::WARN,
@@ -151,7 +156,11 @@ fn header(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
                     run.run_command(Command::Begin);
                 })),
         )
-        .children(blocked.clone().map(|reason| kit::text(Type::Small, c.muted, reason)));
+        .children(
+            blocked
+                .clone()
+                .map(|reason| kit::text(Type::Small, c.muted, reason)),
+        );
     let first = div()
         .flex()
         .flex_row()
@@ -188,8 +197,17 @@ fn header(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
             .flex_row()
             .items_center()
             .gap(theme::S)
-            .child(kit::text(Type::Small, c.muted, run.empty_undo_words().to_owned()))
-            .child(super::undo_button(run, "run-undo", "Undo".into(), Density::Read))
+            .child(kit::text(
+                Type::Small,
+                c.muted,
+                run.empty_undo_words().to_owned(),
+            ))
+            .child(super::undo_button(
+                run,
+                "run-undo",
+                "Undo".into(),
+                Density::Read,
+            ))
     } else {
         div().child(
             super::undo_button(run, "run-undo", run.undo_label(), Density::Read).on_click(on_run(
@@ -269,7 +287,11 @@ fn rows(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
             .h(px(28.0))
             .items_end()
             .child(div().flex_1())
-            .child(div().w(px(SLOTS_RIGHT)).flex_none().child(kit::text(Type::Label, c.muted, "INITIATIVE"))),
+            .child(div().w(px(SLOTS_RIGHT)).flex_none().child(kit::text(
+                Type::Label,
+                c.muted,
+                "INITIATIVE",
+            ))),
     );
     for index in 0..run.state.participants.len() {
         column = column.child(row(run, index, cx));
@@ -287,7 +309,14 @@ fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
     let selected = run.panel == Panel::Record && run.selected == index;
     let detail = detail_line(run, p);
     let name = p.name.clone();
-    let row_name = format!("{name} · {}", detail.iter().map(|(words, _)| words.as_str()).collect::<Vec<_>>().join(" · "));
+    let row_name = format!(
+        "{name} · {}",
+        detail
+            .iter()
+            .map(|(words, _)| words.as_str())
+            .collect::<Vec<_>>()
+            .join(" · ")
+    );
     let label = div()
         .id(ElementId::Name(format!("run-setup-row-{}", p.key).into()))
         .flex()
@@ -306,7 +335,11 @@ fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
                 .flex_wrap()
                 .items_center()
                 .gap_x(theme::XS)
-                .children(detail.into_iter().map(|(words, color)| kit::text(Type::Small, color, words))),
+                .children(
+                    detail
+                        .into_iter()
+                        .map(|(words, color)| kit::text(Type::Small, color, words)),
+                ),
         )
         .on_click(on_run(cx, move |run| {
             run.selected = index;
@@ -315,46 +348,74 @@ fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
     let label = kit::target(kit::target(label, row_name), name.clone());
     let roll = div().w(px(64.0)).flex_none().when(p.npc, |slot| {
         slot.child(
-            kit::Button::quiet(ElementId::Name(format!("run-setup-roll-{}", p.key).into()), "Roll")
-                .plain()
-                .icon(icons::DICE)
-                .density(Density::Scan)
-                .name(format!("Roll for {name}"))
-                .blocked(p.initiative_bonus.is_none().then_some("Set an initiative bonus, or type a total."))
-                .on_click(on_command(cx, Command::RollInitiative(index))),
+            kit::Button::quiet(
+                ElementId::Name(format!("run-setup-roll-{}", p.key).into()),
+                "Roll",
+            )
+            .plain()
+            .icon(icons::DICE)
+            .density(Density::Scan)
+            .name(format!("Roll for {name}"))
+            .blocked(
+                p.initiative_bonus
+                    .is_none()
+                    .then_some("Set an initiative bonus, or type a total."),
+            )
+            .on_click(on_command(cx, Command::RollInitiative(index))),
         )
     });
     let initiative = initiative_field(run, index, cx);
-    let tie = div().w(px(56.0)).flex_none().flex().flex_row().children(tie_controls(run, index, cx));
-    let place = run.state.participants.iter().all(|p| !p.present || p.initiative.is_some()) && p.present;
+    let tie = div()
+        .w(px(56.0))
+        .flex_none()
+        .flex()
+        .flex_row()
+        .children(tie_controls(run, index, cx));
+    let place = run
+        .state
+        .participants
+        .iter()
+        .all(|p| !p.present || p.initiative.is_some())
+        && p.present;
     let place = place
-        .then(|| p.initiative.and_then(|_| run.state.order.iter().position(|i| *i == index)))
+        .then(|| {
+            p.initiative
+                .and_then(|_| run.state.order.iter().position(|i| *i == index))
+        })
         .flatten()
         .map(|place| view::ordinal(place + 1))
         .unwrap_or_default();
     let (word, hint) = view::presence_action(p.present);
     let present = p.present;
-    let absent = kit::Button::quiet(ElementId::Name(format!("run-setup-absent-{}", p.key).into()), word)
-        .icon(icons::ABSENT)
-        .plain()
-        .density(Density::Scan)
-        .name(format!("{word}: {name}"))
-        .hint(hint)
-        .selected(!present)
-        .on_click(on_command(cx, Command::Presence(index, !present)));
+    let absent = kit::Button::quiet(
+        ElementId::Name(format!("run-setup-absent-{}", p.key).into()),
+        word,
+    )
+    .icon(icons::ABSENT)
+    .plain()
+    .density(Density::Scan)
+    .name(format!("{word}: {name}"))
+    .hint(hint)
+    .selected(!present)
+    .on_click(on_command(cx, Command::Presence(index, !present)));
     let expanded = run.setup_expanded == Some(index);
     let menu = kit::MenuButton::new(
         ElementId::Name(format!("run-setup-menu-{}", p.key).into()),
-        kit::Button::quiet(ElementId::Name(format!("run-setup-more-{}", p.key).into()), "")
-            .icon(icons::EXPAND)
-            .name(format!("More actions for {name}"))
-            .density(Density::Read),
+        kit::Button::quiet(
+            ElementId::Name(format!("run-setup-more-{}", p.key).into()),
+            "",
+        )
+        .icon(icons::EXPAND)
+        .name(format!("More actions for {name}"))
+        .density(Density::Read),
     )
-    .item(kit::MenuItem::new("Correct…").on_click(on_run(cx, move |run| {
-        run.selected = index;
-        run.panel = Panel::Record;
-        run.close_lookup = true;
-    })))
+    .item(
+        kit::MenuItem::new("Correct…").on_click(on_run(cx, move |run| {
+            run.selected = index;
+            run.panel = Panel::Record;
+            run.close_lookup = true;
+        })),
+    )
     .item(
         kit::MenuItem::new(if expanded {
             "Hide NPC and roll mode"
@@ -376,7 +437,12 @@ fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
         .child(roll)
         .child(initiative)
         .child(tie)
-        .child(div().w(px(36.0)).flex_none().child(kit::text(Type::Small, c.muted, place)))
+        .child(
+            div()
+                .w(px(36.0))
+                .flex_none()
+                .child(kit::text(Type::Small, c.muted, place)),
+        )
         .child(div().w(px(100.0)).flex_none().child(absent))
         .child(menu);
     let mut block = div().flex().flex_col().w_full().child(line);
@@ -393,8 +459,12 @@ fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
                 .pl(theme::S)
                 .pb(theme::XS)
                 .child(
-                    kit::Checkbox::new(ElementId::Name(format!("run-setup-npc-{}", p.key).into()), "NPC", npc)
-                        .on_click(on_command(cx, Command::Npc(index, !npc))),
+                    kit::Checkbox::new(
+                        ElementId::Name(format!("run-setup-npc-{}", p.key).into()),
+                        "NPC",
+                        npc,
+                    )
+                    .on_click(on_command(cx, Command::Npc(index, !npc))),
                 )
                 .child(
                     kit::Dropdown::new(
@@ -405,15 +475,17 @@ fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
                     )
                     .width(px(170.0))
                     .density(Density::Read)
-                    .on_select(cx.listener(move |root: &mut SplatRoot, at: &usize, _, cx| {
-                        if let Some(run) = root.app.encounters.run_mut()
-                            && let Some(picked) = modes.get(*at).copied()
-                            && picked != mode
-                        {
-                            run.run_command(Command::RollMode(index, picked));
-                        }
-                        cx.notify();
-                    })),
+                    .on_select(cx.listener(
+                        move |root: &mut SplatRoot, at: &usize, _, cx| {
+                            if let Some(run) = root.app.encounters.run_mut()
+                                && let Some(picked) = modes.get(*at).copied()
+                                && picked != mode
+                            {
+                                run.run_command(Command::RollMode(index, picked));
+                            }
+                            cx.notify();
+                        },
+                    )),
                 ),
         );
     }
@@ -471,10 +543,14 @@ fn initiative_field(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> Any
         .w(px(48.0))
         .flex_none()
         .child(
-            kit::TextField::new(ElementId::Name(format!("run-setup-initiative-{}", p.key).into()), value)
-                .name(format!("Initiative for {}", p.name))
-                .focus(focus)
-                .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+            kit::TextField::new(
+                ElementId::Name(format!("run-setup-initiative-{}", p.key).into()),
+                value,
+            )
+            .name(format!("Initiative for {}", p.name))
+            .focus(focus)
+            .on_change(
+                cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
                     if let Some(run) = root.app.encounters.run_mut() {
                         let text = super::number_text(words);
                         let parsed = crate::design::parse_signed(&text);
@@ -485,20 +561,21 @@ fn initiative_field(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> Any
                         }
                     }
                     cx.notify();
-                }))
-                .on_enter(plain(cx, move |root, _, cx| {
-                    if let Some(run) = root.app.encounters.run_mut() {
-                        let count = run.state.participants.len();
-                        run.focus_field = (1..count).map(|step| (index + step) % count).find(|i| {
-                            let p = &run.state.participants[*i];
-                            p.initiative.is_none() && p.present
-                        });
-                        if run.focus_field.is_none() {
-                            run.return_focus = run.lookup_open;
-                        }
+                }),
+            )
+            .on_enter(plain(cx, move |root, _, cx| {
+                if let Some(run) = root.app.encounters.run_mut() {
+                    let count = run.state.participants.len();
+                    run.focus_field = (1..count).map(|step| (index + step) % count).find(|i| {
+                        let p = &run.state.participants[*i];
+                        p.initiative.is_none() && p.present
+                    });
+                    if run.focus_field.is_none() {
+                        run.return_focus = run.lookup_open;
                     }
-                    cx.notify();
-                })),
+                }
+                cx.notify();
+            })),
         )
         .into_any_element()
 }
@@ -529,7 +606,12 @@ fn tie_controls(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> Vec<Any
                 .into_any_element(),
             );
         } else {
-            controls.push(div().size(Density::Read.control()).flex_none().into_any_element());
+            controls.push(
+                div()
+                    .size(Density::Read.control())
+                    .flex_none()
+                    .into_any_element(),
+            );
         }
     }
     controls

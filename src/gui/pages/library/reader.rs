@@ -3,13 +3,13 @@
 //! title, the body's notices, the body) or Edit Markdown (the editor), or a changed file's
 //! choices and comparison; the pane's footer under it all.
 use super::{footer, forms};
+use crate::gui::kit::WithTooltip as _;
 use crate::gui::theme::{
     Density, HAIRLINE_WIDTH, L, M, READER_MEASURE, S, Type, TypeExt, XS, colors,
 };
 use crate::gui::{SplatRoot, bridge, icons, kit};
 use crate::library::model::ReaderView;
 use crate::lookup::ContentIndex;
-use crate::gui::kit::WithTooltip as _;
 use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
     prelude::*, px,
@@ -63,12 +63,14 @@ fn empty_reader(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement
         "Choose one from the list."
     };
     let lines = root.app.library.empty_reader_footer(&root.app.campaigns);
-    let mut pane = kit::Pane::new("library-empty-reader").flush().child(kit::empty_state(
-        icons::LIBRARY,
-        "No entry open",
-        body,
-        None::<AnyElement>,
-    ));
+    let mut pane = kit::Pane::new("library-empty-reader")
+        .flush()
+        .child(kit::empty_state(
+            icons::LIBRARY,
+            "No entry open",
+            body,
+            None::<AnyElement>,
+        ));
     for line in footer::render(lines, cx) {
         pane = pane.footer(line);
     }
@@ -121,17 +123,14 @@ fn toolbar(view: &ReaderView, cx: &mut Context<SplatRoot>) -> AnyElement {
     for (at, (label, act, blocked)) in bar.actions.iter().enumerate() {
         let act = *act;
         line = line.child(
-            kit::Button::quiet(
-                ElementId::Name(format!("library-act-{at}").into()),
-                *label,
-            )
-            .density(Density::Read)
-            .blocked(blocked.clone())
-            .on_click(cx.listener(move |root, _, _, cx| {
-                let app = &mut root.app;
-                app.library.reader_act(act, &app.campaigns);
-                cx.notify();
-            })),
+            kit::Button::quiet(ElementId::Name(format!("library-act-{at}").into()), *label)
+                .density(Density::Read)
+                .blocked(blocked.clone())
+                .on_click(cx.listener(move |root, _, _, cx| {
+                    let app = &mut root.app;
+                    app.library.reader_act(act, &app.campaigns);
+                    cx.notify();
+                })),
         );
     }
     if let Some(reason) = &bar.draft_reason {
@@ -244,12 +243,14 @@ fn save_row(view: &ReaderView, width: f32, cx: &mut Context<SplatRoot>) -> Optio
                 bridge::color(*color),
             )))
             .when(row.discard, |line| {
-                line.child(kit::Button::quiet("library-discard", "Discard").on_click(
-                    cx.listener(|root, _, _, cx| {
-                        root.app.library.discard();
-                        cx.notify();
-                    }),
-                ))
+                line.child(
+                    kit::Button::quiet("library-discard", "Discard").on_click(cx.listener(
+                        |root, _, _, cx| {
+                            root.app.library.discard();
+                            cx.notify();
+                        },
+                    )),
+                )
             })
             .children(
                 row.reason
@@ -349,9 +350,7 @@ fn entry(
         let focus = root.app.library.take_focus_editor();
         let editable = view.editable;
         let editor = kit::TextEditor::new(
-            ElementId::Name(
-                format!("library-editor-{:?}-{}", view.key.0, view.key.1).into(),
-            ),
+            ElementId::Name(format!("library-editor-{:?}-{}", view.key.0, view.key.1).into()),
             view.draft.clone(),
         )
         .name("Markdown editor")
@@ -413,7 +412,7 @@ fn entry(
             line = line.child(
                 kit::link(
                     ElementId::Name(format!("library-link-choice-{at}").into()),
-                    words.clone()
+                    words.clone(),
                 )
                 .on_click(cx.listener(move |root, _, _, cx| {
                     root.app.library.open_link(at);
@@ -529,7 +528,11 @@ fn comparison(draft: &str, disk: &str) -> impl IntoElement {
                     .text_color(c.text)
                     .pl(S)
                     .border_l(crate::gui::theme::HAIRLINE_WIDTH)
-                    .border_color(if changed { c.accent } else { gpui::transparent_black() })
+                    .border_color(if changed {
+                        c.accent
+                    } else {
+                        gpui::transparent_black()
+                    })
                     .when(changed, |line| line.bg(c.current_row))
                     .child(if line.is_empty() {
                         " ".to_owned()

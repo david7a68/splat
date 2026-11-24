@@ -2,15 +2,15 @@
 //! acts it asks for. Toolkit-free: no egui `Ui` here. Each act is the same state change the egui
 //! page makes for the same press, by the same methods, so the two UIs share one behaviour. The
 //! GPUI view holds no copy of the page's logic; what it needs from a private field is read here.
-use eframe::egui;
 use super::{
     DraftState, Form, Note, Plan, ProcessingSettings, SessionAct, Sessions, Tab, Template, View,
     form_reason,
 };
 use crate::design::CreateReasons as _;
-use crate::timeline::EventDisplay as _;
 use crate::design::outcome::{PaneFrame, Press, plain};
 use crate::timeline::Book;
+use crate::timeline::EventDisplay as _;
+use eframe::egui;
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -105,7 +105,9 @@ impl Sessions {
 
     /// Other sessions wait until the DM chooses what to keep of the open note.
     pub fn gv_locked(&self) -> bool {
-        self.draft.as_ref().is_some_and(super::Draft::needs_attention)
+        self.draft
+            .as_ref()
+            .is_some_and(super::Draft::needs_attention)
     }
 
     pub fn gv_offers_list_toggle(&self, wide: bool) -> bool {
@@ -178,11 +180,8 @@ impl Sessions {
         let reason = form_reason(form, &self.templates).map(|reason| reason.words());
         let preview = match (&form.editing, &self.folder) {
             (None, Some(folder)) => {
-                let path = super::super::note_path(
-                    folder,
-                    form.number.parse().unwrap_or(1),
-                    &form.title,
-                );
+                let path =
+                    super::super::note_path(folder, form.number.parse().unwrap_or(1), &form.title);
                 let shown = path.strip_prefix(folder).unwrap_or(&path);
                 Some(format!("File: {}", shown.display()))
             }
@@ -448,9 +447,13 @@ impl Sessions {
 pub enum RecordControl {
     None,
     /// `Stop recording`, named for its session when it is another's.
-    Stop { name: String },
+    Stop {
+        name: String,
+    },
     /// `Record`, and why it waits (shown under it too).
-    Record { blocked: Option<String> },
+    Record {
+        blocked: Option<String>,
+    },
 }
 
 /// The record line under the title (`record_line_body`).
@@ -789,8 +792,16 @@ fn draft_warning(draft: &super::Draft, name: Option<&str>, template: bool) -> Ve
                 "This note changed on disk. Your draft is safe until you choose. Other sessions open after that.",
             ),
             vec![
-                choice("Overwrite with my draft", Kind::Choice, act(DraftAct::Overwrite)),
-                choice("Reload and lose my draft", Kind::Lose, act(DraftAct::Reload)),
+                choice(
+                    "Overwrite with my draft",
+                    Kind::Choice,
+                    act(DraftAct::Overwrite),
+                ),
+                choice(
+                    "Reload and lose my draft",
+                    Kind::Lose,
+                    act(DraftAct::Reload),
+                ),
             ],
         )),
         DraftState::Missing if matches!(draft.dropped, Some(Dropped::Discarded(_))) => Some((
@@ -832,7 +843,11 @@ fn draft_warning(draft: &super::Draft, name: Option<&str>, template: bool) -> Ve
         DraftState::Failed(error) => Some((
             Tone::Error,
             words(&error),
-            vec![choice("Try to save again", Kind::Choice, act(DraftAct::Save))],
+            vec![choice(
+                "Try to save again",
+                Kind::Choice,
+                act(DraftAct::Save),
+            )],
         )),
         _ => None,
     };
@@ -886,7 +901,11 @@ impl Sessions {
                     BannerAct::StalledOpen,
                 ));
             }
-            choices.push(choice("Stop recording", Kind::Choice, BannerAct::StalledStop));
+            choices.push(choice(
+                "Stop recording",
+                Kind::Choice,
+                BannerAct::StalledStop,
+            ));
             messages.push(BannerMessage {
                 tone: Tone::Error,
                 words,
@@ -1000,11 +1019,7 @@ impl Sessions {
                 .zip(self.recording_status())
                 .map(|(live, status)| OtherRecording {
                     status,
-                    words: format!(
-                        "{} {}",
-                        status.word,
-                        super::clock(live.recorder.seconds())
-                    ),
+                    words: format!("{} {}", status.word, super::clock(live.recorder.seconds())),
                     detail: format!(" in {}", live.label),
                 })
         } else {
@@ -1618,13 +1633,16 @@ impl Sessions {
                 event.summary(None)
             };
             let warning = event.time_warning().filter(|_| event.run.is_none());
-            let restores = (event.kind == crate::timeline::Kind::LongRest && saved.is_none() && !running)
-                .then(|| crate::timeline::page::long_rest_status(event.restores));
+            let restores =
+                (event.kind == crate::timeline::Kind::LongRest && saved.is_none() && !running)
+                    .then(|| crate::timeline::page::long_rest_status(event.restores));
             let details = open.then(|| EventDetails {
                 title: event.title.clone(),
                 notes: event.notes.clone(),
                 place: event.place.clone(),
-                fight: event.run.map(|_| crate::timeline::played_fight_summary(event, running)),
+                fight: event
+                    .run
+                    .map(|_| crate::timeline::played_fight_summary(event, running)),
                 rest: (event.kind == crate::timeline::Kind::LongRest).then_some(event.restores),
             });
             rows.push(PlanRow::Event(EventRow {
@@ -1711,9 +1729,17 @@ impl Sessions {
                 warnings: group
                     .warnings
                     .iter()
-                    .map(|warning| crate::design::outcome::fault_words(warning).as_str().to_owned())
+                    .map(|warning| {
+                        crate::design::outcome::fault_words(warning)
+                            .as_str()
+                            .to_owned()
+                    })
                     .collect(),
-                problems: group.own_problems().into_iter().map(str::to_owned).collect(),
+                problems: group
+                    .own_problems()
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect(),
                 refused,
             }));
         }
@@ -1779,7 +1805,10 @@ impl Sessions {
                 .map(|fault| self.shown_at(fault.place, rows)),
         };
         let note = self.gv_selected_note().cloned();
-        let page = with_page.then_some(()).and(note.as_ref()).map(|note| (settings, note));
+        let page = with_page
+            .then_some(())
+            .and(note.as_ref())
+            .map(|note| (settings, note));
         let frame = PaneFrame::plain();
         let messages = self.plan_footer_messages(
             &frame,
@@ -1974,7 +2003,13 @@ impl Sessions {
             }
             PlanAct::RollForEncounters(id) => {
                 self.row_reveal = Some((id.clone(), 0, ctx.cumulative_pass_nr()));
-                self.travel_act(book, session, &id, crate::timeline::checks::Act::Start, plan);
+                self.travel_act(
+                    book,
+                    session,
+                    &id,
+                    crate::timeline::checks::Act::Start,
+                    plan,
+                );
             }
         }
     }
@@ -2631,7 +2666,11 @@ impl Sessions {
 
     /// Another text of the same recording.
     pub fn gv_read_made(&mut self, made: u8) {
-        let Some(path) = self.reading.as_ref().map(|reading| reading.recording.clone()) else {
+        let Some(path) = self
+            .reading
+            .as_ref()
+            .map(|reading| reading.recording.clone())
+        else {
             return;
         };
         if let Some(recording) = self
@@ -2691,7 +2730,10 @@ impl Sessions {
             self.job_warned = false;
         }
         let (tone, words) = match crate::sessions::delete_recording(&path) {
-            Ok(()) => (crate::design::Tone::Success, "Recording deleted.".to_owned()),
+            Ok(()) => (
+                crate::design::Tone::Success,
+                "Recording deleted.".to_owned(),
+            ),
             Err(error) => (crate::design::Tone::Error, error),
         };
         self.say(tone, words, None);
@@ -2766,8 +2808,11 @@ impl Sessions {
             .any(|(other, _)| *other == template.name);
         Some(TemplateView {
             name: template.name.clone(),
-            file: template.path.clone().zip(self.template_draft.as_ref()).map(
-                |(path, draft)| {
+            file: template
+                .path
+                .clone()
+                .zip(self.template_draft.as_ref())
+                .map(|(path, draft)| {
                     (
                         path,
                         draft.body.as_str().to_owned(),
@@ -2778,12 +2823,8 @@ impl Sessions {
                             "Delete"
                         },
                     )
-                },
-            ),
-            built_in: template
-                .path
-                .is_none()
-                .then(|| template.body.clone()),
+                }),
+            built_in: template.path.is_none().then(|| template.body.clone()),
         })
     }
 
@@ -2884,4 +2925,3 @@ impl Sessions {
 }
 
 pub use crate::sessions::slash_plain as slash;
-

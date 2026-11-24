@@ -16,9 +16,8 @@ pub struct State {
 
 /// A test's reader part, drawn in place of the page.
 #[cfg(test)]
-pub(crate) type Preview = std::rc::Rc<
-    dyn Fn(&mut SplatRoot, &mut Window, &mut Context<SplatRoot>) -> gpui::AnyElement,
->;
+pub(crate) type Preview =
+    std::rc::Rc<dyn Fn(&mut SplatRoot, &mut Window, &mut Context<SplatRoot>) -> gpui::AnyElement>;
 
 /// Once, when the root is built: readers find the app's egui context (the link index, the art)
 /// and leave pressed links there for the frame logic, as egui's readers do.

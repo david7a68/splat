@@ -23,9 +23,7 @@ use crate::gui::{SplatRoot, icons, kit, rail, theme};
 use crate::processing::settings::ProcessingSettings;
 use crate::sessions::page::{Plan, Sessions};
 use crate::timeline::Book;
-use gpui::{
-    AnyElement, Context, IntoElement, ParentElement, Pixels, Styled, Window, div, px,
-};
+use gpui::{AnyElement, Context, IntoElement, ParentElement, Pixels, Styled, Window, div, px};
 use theme::{L, M, S, Type, colors};
 
 /// The list's default width and the widths the DM can drag it to (`LIST_WIDTH`, `LIST_WIDTHS`).
@@ -174,7 +172,12 @@ fn header(
     let templates = sessions.gv_templates_shown();
     let folder_missing = sessions.folder_missing();
     let (title, count, one, many) = if templates {
-        ("Templates", sessions.gv_templates().len(), "template", "templates")
+        (
+            "Templates",
+            sessions.gv_templates().len(),
+            "template",
+            "templates",
+        )
     } else {
         ("Session", sessions.gv_notes().len(), "session", "sessions")
     };
@@ -241,24 +244,26 @@ fn header(
                 .into_any_element(),
         );
     }
-    let toggle = sessions.gv_offers_list_toggle(width >= TWO_COLUMNS_FROM).then(|| {
-        let hidden = sessions.list_hidden;
-        kit::IconButton::new(
-            "session-list-toggle",
-            icons::SESSION_LIST,
-            crate::sessions::page::LIST_TOGGLE,
-        )
-        .hint(if hidden {
-            "Show the session list (Ctrl+\\)"
-        } else {
-            "Hide the session list (Ctrl+\\)"
-        })
-        .toggled(!hidden)
-        .on_click(cx.listener(|root, _, _, cx| {
-            root.app.sessions.toggle_list();
-            cx.notify();
-        }))
-    });
+    let toggle = sessions
+        .gv_offers_list_toggle(width >= TWO_COLUMNS_FROM)
+        .then(|| {
+            let hidden = sessions.list_hidden;
+            kit::IconButton::new(
+                "session-list-toggle",
+                icons::SESSION_LIST,
+                crate::sessions::page::LIST_TOGGLE,
+            )
+            .hint(if hidden {
+                "Show the session list (Ctrl+\\)"
+            } else {
+                "Hide the session list (Ctrl+\\)"
+            })
+            .toggled(!hidden)
+            .on_click(cx.listener(|root, _, _, cx| {
+                root.app.sessions.toggle_list();
+                cx.notify();
+            }))
+        });
     let mut heading = div()
         .flex()
         .flex_row()
@@ -312,16 +317,14 @@ fn folder_fault(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement
         .flex_col()
         .items_start()
         .max_w(theme::READER_MEASURE)
-        .child(
-            kit::Message::new(kit::Tone::Warning, words).action(
-                kit::Button::secondary("session-choose-folder", "Choose folder").on_click(
-                    cx.listener(|root, _, _, cx| {
-                        root.app.sessions.wants_campaign_link = true;
-                        cx.notify();
-                    }),
-                ),
-            ),
-        )
+        .child(kit::Message::new(kit::Tone::Warning, words).action(
+            kit::Button::secondary("session-choose-folder", "Choose folder").on_click(cx.listener(
+                |root, _, _, cx| {
+                    root.app.sessions.wants_campaign_link = true;
+                    cx.notify();
+                },
+            )),
+        ))
         .into_any_element()
 }
 
@@ -399,10 +402,7 @@ fn notes_view(
     if list_hides {
         return body;
     }
-    let list = div()
-        .size_full()
-        .pr(S)
-        .child(list::render(root, cx));
+    let list = div().size_full().pr(S).child(list::render(root, cx));
     kit::Columns::new("session-columns")
         .column(LIST_WIDTH, LIST_MIN..LIST_MAX, list)
         .rest(div().size_full().pl(S).child(body))

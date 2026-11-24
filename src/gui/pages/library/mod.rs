@@ -99,8 +99,8 @@ pub(crate) fn page_width(root: &SplatRoot, window: &Window) -> f32 {
     } else {
         theme::RAIL_WIDTH
     };
-    let side = root.app.lookup.open
-        || (root.app.sessions.notes_open && root.app.page != Page::Sessions);
+    let side =
+        root.app.lookup.open || (root.app.sessions.notes_open && root.app.page != Page::Sessions);
     let panel = if side {
         theme::PANEL_MIN_WIDTH
     } else {
@@ -202,7 +202,11 @@ fn body(
             .flex_row()
             .items_center()
             .gap(theme::S)
-            .child(kit::icon(crate::gui::icons::BUSY, theme::Type::Body, c.muted))
+            .child(kit::icon(
+                crate::gui::icons::BUSY,
+                theme::Type::Body,
+                c.muted,
+            ))
             .child(kit::text(theme::Type::Body, c.text, "Loading the Library…"))
             .into_any_element();
     }
@@ -220,7 +224,11 @@ fn body(
     let lane = theme::SCROLL_BAR_WIDTH;
     let sections_width = f32::from(px(166.0) + lane + theme::S);
     // The list takes a share of the room the sections column leaves (`entries_column`).
-    let rest = if compact { width } else { width - sections_width };
+    let rest = if compact {
+        width
+    } else {
+        width - sections_width
+    };
     let list_width = (rest * 0.38).clamp(220.0, 420.0);
     let list = {
         let app = &mut root.app;
@@ -287,4 +295,3 @@ pub(crate) fn render_copy_dialog(
 ) -> AnyElement {
     copy::render(root, window, cx)
 }
-

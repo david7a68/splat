@@ -34,9 +34,9 @@ use crate::library::view::{Links, Origin, RunValues};
 use crate::library::{class, creature, presentation, reader};
 use eframe::egui;
 use gpui::{
-    AnyElement, App, Bounds, ElementId, IntoElement, ObjectFit, ParentElement, Pixels,
-    RenderOnce, ScrollHandle, SharedString, Styled, StyledImage, Window, canvas, div, img, point,
-    prelude::*, px,
+    AnyElement, App, Bounds, ElementId, IntoElement, ObjectFit, ParentElement, Pixels, RenderOnce,
+    ScrollHandle, SharedString, Styled, StyledImage, Window, canvas, div, img, point, prelude::*,
+    px,
 };
 use splat::content::{Entry, Reference};
 use std::rc::Rc;
@@ -241,7 +241,8 @@ impl Out<'_> {
         if let (Some(handle), Some(ctx)) = (&self.jump, &self.ctx)
             && crate::markdown_view::wanted_heading(ctx, &title)
         {
-            self.items.push(jump_here(handle.clone()).into_any_element());
+            self.items
+                .push(jump_here(handle.clone()).into_any_element());
         }
         let first = self.items.is_empty();
         self.push(parts::section_heading(title, first));
@@ -366,7 +367,8 @@ impl RenderOnce for EntryView {
                     || section.body.trim() != "This section is kept when the sheet refreshes."
             })
             .collect();
-        let styled = entry.filter(|entry| reading.is_none() && creature::supports(entry, &sections));
+        let styled =
+            entry.filter(|entry| reading.is_none() && creature::supports(entry, &sections));
         let links = self.links.clone();
         content(
             &mut out,
@@ -434,9 +436,7 @@ fn content(
         // reader adds no lead gap after the stat head.
         let mut lead_gap = lead_gap;
         let mut after_stat_head = false;
-        if let Some(entry) =
-            entry.filter(|entry| reading.is_none() && creature::has_stats(entry))
-        {
+        if let Some(entry) = entry.filter(|entry| reading.is_none() && creature::has_stats(entry)) {
             stat_block::stat_head(out, entry, values);
             lead_gap = false;
             after_stat_head = true;
@@ -492,7 +492,9 @@ fn reference(
 ) {
     out.push(kit::gap(M));
     if entry.is_some_and(|entry| entry.reading().ok().flatten().is_some())
-        && let Some(text) = sections.iter().find(|section| section.title == "Source text")
+        && let Some(text) = sections
+            .iter()
+            .find(|section| section.title == "Source text")
     {
         let id = out.next_id("source-text");
         let markdown = out.markdown(id, text.body);
@@ -522,9 +524,8 @@ fn reference(
                     .into_any_element(),
             );
         }
-        let section =
-            kit::QuietSection::new(out.next_id("technical-details"), "Technical details")
-                .children(body);
+        let section = kit::QuietSection::new(out.next_id("technical-details"), "Technical details")
+            .children(body);
         out.push(section);
     }
     // An unreadable file has no source or support details to report.
@@ -600,8 +601,8 @@ fn reference(
             body.push(line(format!("{title} · {locator}")).into_any_element());
         }
     }
-    let section = kit::QuietSection::new(out.next_id("identifiers"), "Source and identifiers")
-        .children(body);
+    let section =
+        kit::QuietSection::new(out.next_id("identifiers"), "Source and identifiers").children(body);
     out.push(section);
 }
 
@@ -626,9 +627,7 @@ pub fn title_with_art(title: &str, subtitle: &str, entry: Option<&Entry>, cx: &A
     } else {
         subtitle.to_owned()
     };
-    let art = entry.and_then(|entry| {
-        host(cx).and_then(|ctx| crate::art::entry_art(&ctx, entry))
-    });
+    let art = entry.and_then(|entry| host(cx).and_then(|ctx| crate::art::entry_art(&ctx, entry)));
     div()
         .flex()
         .flex_row()
@@ -645,11 +644,10 @@ pub fn title_with_art(title: &str, subtitle: &str, entry: Option<&Entry>, cx: &A
         )
         .children(art.map(|path| {
             kit::target(
-                div().size(XXL * 2.0).flex_none().child(
-                    img(path)
-                        .size(XXL * 2.0)
-                        .object_fit(ObjectFit::Contain),
-                ),
+                div()
+                    .size(XXL * 2.0)
+                    .flex_none()
+                    .child(img(path).size(XXL * 2.0).object_fit(ObjectFit::Contain)),
                 title.to_owned(),
             )
         }))

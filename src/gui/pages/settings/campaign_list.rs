@@ -20,9 +20,7 @@ fn id(prefix: &str, uuid: Uuid) -> ElementId {
 
 /// A blocked reason as a line of its own: `Small` muted words.
 pub(crate) fn blocked_reason(reason: Option<&str>) -> Option<AnyElement> {
-    reason.map(|words| {
-        kit::text(Type::Small, colors().muted, words.to_owned()).into_any_element()
-    })
+    reason.map(|words| kit::text(Type::Small, colors().muted, words.to_owned()).into_any_element())
 }
 
 /// The folder's state, said only when it matters (a missing folder), or on Link and folder.
@@ -76,9 +74,11 @@ pub(super) fn list(
     );
     column = column.children(blocked_reason(blocked));
     if all.is_empty() {
-        column = column
-            .child(kit::gap(XS))
-            .child(kit::text(Type::Body, c.muted, "No campaign yet. Add one below."));
+        column = column.child(kit::gap(XS)).child(kit::text(
+            Type::Body,
+            c.muted,
+            "No campaign yet. Add one below.",
+        ));
     }
     let active = campaigns.active_id();
     let editing = campaigns.editing();
@@ -157,12 +157,12 @@ pub(super) fn list(
             .blocked(unwritable);
         actions = actions.child(
             MenuButton::new(id("campaign-menu", campaign_id), more).item(
-                MenuItem::new("Remove…")
-                    .destructive()
-                    .on_click(cx.listener(move |root, _, _, cx| {
+                MenuItem::new("Remove…").destructive().on_click(cx.listener(
+                    move |root, _, _, cx| {
                         root.app.campaigns.ask_remove(campaign_id);
                         cx.notify();
-                    })),
+                    },
+                )),
             ),
         );
         column = column.child(
@@ -214,13 +214,13 @@ fn import_hint(cx: &mut Context<SplatRoot>) -> AnyElement {
         .gap(XS)
         .child(kit::text(Type::Body, c.text, "To import from D&D Beyond,"))
         .child(
-            kit::Link::new("campaigns-connect-hint", "connect your account").on_click(
-                cx.listener(|root, _, _, cx| {
+            kit::Link::new("campaigns-connect-hint", "connect your account").on_click(cx.listener(
+                |root, _, _, cx| {
                     root.pages.settings.focus_cookie = true;
                     root.pages.settings.compact_open = true;
                     cx.notify();
-                }),
-            ),
+                },
+            )),
         )
         .child(kit::text(Type::Body, c.text, "first."))
         .into_any_element()
@@ -262,9 +262,14 @@ fn add_section(
 /// The add form (and the import form, for the remote campaign it adds): the name, the folder
 /// with Browse… and Add campaign on its line, the folder's help, then a kept line with Cancel,
 /// the folder Splat will create and the reason Add waits.
-pub(crate) fn add_form(root: &mut SplatRoot, primary: bool, cx: &mut Context<SplatRoot>) -> AnyElement {
+pub(crate) fn add_form(
+    root: &mut SplatRoot,
+    primary: bool,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
-    let focus = root.app.campaigns.take_focus_name() | std::mem::take(&mut root.pages.settings.focus_name);
+    let focus =
+        root.app.campaigns.take_focus_name() | std::mem::take(&mut root.pages.settings.focus_name);
     let campaigns = &root.app.campaigns;
     let (name, path) = campaigns.form_words();
     let reason = campaigns.form_reason_words();
@@ -366,7 +371,11 @@ fn commit(root: &mut SplatRoot) {
 
 /// The details form of the campaign being edited: its name, its folder with Browse…, the
 /// folder's help, then a save row (its state and Discard or Cancel; Save details at the right).
-pub(crate) fn details_form(root: &mut SplatRoot, primary: bool, cx: &mut Context<SplatRoot>) -> AnyElement {
+pub(crate) fn details_form(
+    root: &mut SplatRoot,
+    primary: bool,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let focus = root.app.campaigns.take_focus_name();
     let campaigns = &root.app.campaigns;
@@ -472,7 +481,10 @@ pub(crate) fn details_form(root: &mut SplatRoot, primary: bool, cx: &mut Context
 
 /// The first campaign's form error, where its page has no footer (`form_error_inline`): a
 /// fault with `Register as a new campaign` when the folder is a copy.
-pub(crate) fn form_error_inline(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
+pub(crate) fn form_error_inline(
+    root: &SplatRoot,
+    cx: &mut Context<SplatRoot>,
+) -> Option<AnyElement> {
     let error = root.app.campaigns.error()?.to_owned();
     let mut message = Message::new(Tone::Error, error.clone());
     if error.contains("registered at another folder") {
@@ -566,7 +578,8 @@ fn import(
             .blocked(refreshing.then_some("Already refreshing."))
             .on_click(cx.listener(move |root, _, _, cx| {
                 let SplatRoot { app, bridge, .. } = root;
-                app.dndbeyond.refresh_list(refresh_session.clone(), bridge.ctx());
+                app.dndbeyond
+                    .refresh_list(refresh_session.clone(), bridge.ctx());
                 cx.notify();
             })),
     );

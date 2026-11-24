@@ -89,9 +89,7 @@ fn take(
         return false;
     }
     // Ctrl+1 to Ctrl+9 arm the panel's actions, as a game's action bar does.
-    if ctrl
-        && let Some(number) = key.parse::<usize>().ok().filter(|n| (1..=9).contains(n))
-    {
+    if ctrl && let Some(number) = key.parse::<usize>().ok().filter(|n| (1..=9).contains(n)) {
         run.arm_by_number(number);
         return true;
     }

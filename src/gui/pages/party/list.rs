@@ -156,7 +156,12 @@ pub(super) fn list(root: &mut SplatRoot, width: Pixels, cx: &mut Context<SplatRo
         if temp > 0 {
             readout = readout.child(kit::hp::temp(temp, Type::Numeral));
         }
-        readout = readout.child(kit::hp::readout(hp, max_hp, Type::NumeralLarge, Type::Numeral));
+        readout = readout.child(kit::hp::readout(
+            hp,
+            max_hp,
+            Type::NumeralLarge,
+            Type::Numeral,
+        ));
         cells.push((
             HP_WIDTH,
             div()
@@ -174,14 +179,22 @@ pub(super) fn list(root: &mut SplatRoot, width: Pixels, cx: &mut Context<SplatRo
             ElementId::Name(SharedString::from(format!("party-member-{}", member.id))),
             name,
         )
-        .height(if wide { MEMBER_ROW } else { MEMBER_ROW + px(16.0) })
+        .height(if wide {
+            MEMBER_ROW
+        } else {
+            MEMBER_ROW + px(16.0)
+        })
         .selected(is_selected)
         .on_click(cx.listener(move |root, _, _, cx| {
             root.app.party.reader.select(id.clone());
             root.pages.party.search.clear();
             cx.notify();
         }))
-        .child(kit::portrait(portrait.as_deref(), &member.name, ROW_PORTRAIT))
+        .child(kit::portrait(
+            portrait.as_deref(),
+            &member.name,
+            ROW_PORTRAIT,
+        ))
         .child(
             div()
                 .flex()

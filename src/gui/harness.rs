@@ -73,7 +73,7 @@ impl Shell {
         crate::hermetic::closed::clear_next_folder();
         let home = tempfile::tempdir().expect("a test folder");
         let world = World::build(&home.path().join(name), &character_cache(), name, seed)
-        .unwrap_or_else(|error| panic!("{name}: could not build its world: {error}"));
+            .unwrap_or_else(|error| panic!("{name}: could not build its world: {error}"));
         Self::over(world.app(), home, window)
     }
 

@@ -128,14 +128,19 @@ impl Encounters {
             .collect();
         let changed = snapshot.options != snapshot.saved_options;
         if changed
-            || self.options_saved.as_ref().is_some_and(|(campaign, saved)| {
-                *campaign != active.id || *saved != snapshot.saved_options
-            })
+            || self
+                .options_saved
+                .as_ref()
+                .is_some_and(|(campaign, saved)| {
+                    *campaign != active.id || *saved != snapshot.saved_options
+                })
         {
             self.options_saved = None;
         }
         let snapshot = self.snapshot.as_ref()?;
-        let left = snapshot.options.runs_left_in(&snapshot.saved_options, active);
+        let left = snapshot
+            .options
+            .runs_left_in(&snapshot.saved_options, active);
         let run_files = left.as_ref().map_or(0, Vec::len);
         let folder_changed = snapshot.options.directory(active).ok()
             != snapshot.saved_options.directory(active).ok();
@@ -167,7 +172,8 @@ impl Encounters {
         if run_open {
             state = state.waits("Close the open run to save run settings.");
         } else if folder_changed && left.is_err() {
-            state = state.waits("Could not read saved runs. Check the old run folder before saving.");
+            state =
+                state.waits("Could not read saved runs. Check the old run folder before saving.");
         } else if choose_move {
             state = state.commits_elsewhere(CHOOSE_MOVE);
         }
@@ -197,7 +203,12 @@ impl Encounters {
     }
 
     /// `Save run settings` (or Ctrl+S).
-    pub fn save_run_settings(&mut self, ctx: &egui::Context, active: &Campaign, campaigns: &Campaigns) {
+    pub fn save_run_settings(
+        &mut self,
+        ctx: &egui::Context,
+        active: &Campaign,
+        campaigns: &Campaigns,
+    ) {
         let Some(snapshot) = &self.snapshot else {
             return;
         };

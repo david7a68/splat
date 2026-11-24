@@ -121,7 +121,13 @@ fn width(glance: &Glance, step: Step) -> Pixels {
         total += XS + small_width(&format!("+{}", glance.temp)) + px(14.0);
     }
     if let Some((_, word, _)) = kit::hp::word(glance.hp, glance.max_hp) {
-        total += S + px(14.0) + if step.state_word { small_width(word) } else { px(0.0) };
+        total += S
+            + px(14.0)
+            + if step.state_word {
+                small_width(word)
+            } else {
+                px(0.0)
+            };
     }
     for (label, value) in stats(glance).into_iter().take(step.shown) {
         total += S + small_width(&format!("{label} {}", known(value)));
@@ -130,7 +136,11 @@ fn width(glance: &Glance, step: Step) -> Pixels {
 }
 
 /// The bar.
-pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) -> AnyElement {
+pub(super) fn render(
+    root: &mut SplatRoot,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let app = &root.app;
     let run = app
@@ -182,7 +192,14 @@ pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context
         .into_iter()
         .find(|words| small_width(words) + px(14.0) <= free)
         .map(str::to_owned);
-    let mut items = div().flex().flex_row().items_center().gap(gap).flex_1().min_w_0().overflow_hidden();
+    let mut items = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(gap)
+        .flex_1()
+        .min_w_0()
+        .overflow_hidden();
     for (at, glance) in glances.iter().take(kept).enumerate() {
         items = items.child(item(glance, step, at, &source.word, cx));
     }
@@ -197,7 +214,11 @@ pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context
             div()
                 .id("party-bar-more")
                 .px(XS)
-                .child(kit::text(Type::Small, c.muted, format!("{} more", hidden.len())))
+                .child(kit::text(
+                    Type::Small,
+                    c.muted,
+                    format!("{} more", hidden.len()),
+                ))
                 .with_tooltip(words),
         );
     }
@@ -247,11 +268,21 @@ pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context
 
 /// One member: its portrait, first name, HP over its bar, temporary HP, its state's word and
 /// its numbers. A press opens the sheet.
-fn item(glance: &Glance, step: Step, at: usize, source: &str, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn item(
+    glance: &Glance,
+    step: Step,
+    at: usize,
+    source: &str,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let first = glance.name.split_whitespace().next().unwrap_or_default();
     let name = if step.initial {
-        first.chars().next().map(|letter| format!("{letter}.")).unwrap_or_default()
+        first
+            .chars()
+            .next()
+            .map(|letter| format!("{letter}."))
+            .unwrap_or_default()
     } else {
         first.to_owned()
     };
@@ -259,7 +290,9 @@ fn item(glance: &Glance, step: Step, at: usize, source: &str, cx: &mut Context<S
     facts.push(source.to_owned());
     let label = format!("{} · {}", glance.name, facts.join(" · "));
     let mut row = div()
-        .id(ElementId::Name(SharedString::from(format!("party-bar-{at}"))))
+        .id(ElementId::Name(SharedString::from(format!(
+            "party-bar-{at}"
+        ))))
         .flex()
         .flex_row()
         .items_center()
@@ -271,7 +304,11 @@ fn item(glance: &Glance, step: Step, at: usize, source: &str, cx: &mut Context<S
         .hover(|row| row.bg(c.hover))
         .aria_label(label.clone());
     if step.portrait {
-        row = row.child(kit::portrait(glance.portrait.as_deref(), &glance.name, PORTRAIT));
+        row = row.child(kit::portrait(
+            glance.portrait.as_deref(),
+            &glance.name,
+            PORTRAIT,
+        ));
     }
     row = row.child(div().pr(XS).child(kit::text(Type::Small, c.text, name)));
     row = row.child(
@@ -279,8 +316,18 @@ fn item(glance: &Glance, step: Step, at: usize, source: &str, cx: &mut Context<S
             .flex()
             .flex_col()
             .gap(px(2.0))
-            .child(kit::hp::readout(glance.hp, glance.max_hp, Type::Numeral, Type::Small))
-            .child(kit::hp::bar(glance.hp, glance.max_hp, glance.temp, px(48.0))),
+            .child(kit::hp::readout(
+                glance.hp,
+                glance.max_hp,
+                Type::Numeral,
+                Type::Small,
+            ))
+            .child(kit::hp::bar(
+                glance.hp,
+                glance.max_hp,
+                glance.temp,
+                px(48.0),
+            )),
     );
     if glance.temp > 0 {
         row = row.child(kit::hp::temp(glance.temp, Type::Small));
@@ -293,7 +340,12 @@ fn item(glance: &Glance, step: Step, at: usize, source: &str, cx: &mut Context<S
                 .flex_row()
                 .items_center()
                 .gap(XS)
-                .child(div().icon_font(Type::Small).text_color(color).child(SharedString::new_static(icon)))
+                .child(
+                    div()
+                        .icon_font(Type::Small)
+                        .text_color(color)
+                        .child(SharedString::new_static(icon)),
+                )
                 .when(step.state_word, |row| {
                     row.child(kit::text(Type::Small, color, word))
                 }),

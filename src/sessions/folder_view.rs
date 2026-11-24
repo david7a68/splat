@@ -41,7 +41,8 @@ impl Sessions {
         locked: Option<&'a str>,
     ) -> Option<(design::DraftState<'a>, bool)> {
         let campaign = self.campaign.clone()?;
-        let changed = super::super::resolve(&campaign, &self.folder_text).ok() != self.folder.clone();
+        let changed =
+            super::super::resolve(&campaign, &self.folder_text).ok() != self.folder.clone();
         let files = self.folder_files();
         let has_files = self.folder_move_counts(book, &files).is_some();
         let mut state = design::DraftState::new(

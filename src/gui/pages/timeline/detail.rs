@@ -57,7 +57,10 @@ pub(crate) fn render(
     crate::timeline::checks::settle_length(&mut root.app.timeline, Some(index));
     let page = &mut root.app.timeline_page;
     page.checks_done.follow(&root.app.timeline);
-    page.copied = page.copied.take().filter(|(_, at)| at.elapsed() < COPIED_FOR);
+    page.copied = page
+        .copied
+        .take()
+        .filter(|(_, at)| at.elapsed() < COPIED_FOR);
     let copied = page.copied.as_ref().is_some_and(|(copied, _)| copied == id);
     if std::mem::take(&mut page.reset_detail) || std::mem::take(&mut root.pages.timeline.form_top) {
         root.pages
@@ -86,15 +89,18 @@ pub(crate) fn render(
     let copy = {
         let link = link.clone();
         let owner = id.to_owned();
-        kit::Button::secondary(part(id, "copy"), if copied { "Copied" } else { "Copy link" })
-            .icon(if copied { icons::OK } else { icons::COPY })
-            .density(Density::Read)
-            .on_click(cx.listener(move |root, _, _, cx| {
-                cx.write_to_clipboard(ClipboardItem::new_string(link.clone()));
-                root.app.timeline_page.copied = Some((owner.clone(), Instant::now()));
-                root.bridge.ctx().request_repaint_after(COPIED_FOR);
-                cx.notify();
-            }))
+        kit::Button::secondary(
+            part(id, "copy"),
+            if copied { "Copied" } else { "Copy link" },
+        )
+        .icon(if copied { icons::OK } else { icons::COPY })
+        .density(Density::Read)
+        .on_click(cx.listener(move |root, _, _, cx| {
+            cx.write_to_clipboard(ClipboardItem::new_string(link.clone()));
+            root.app.timeline_page.copied = Some((owner.clone(), Instant::now()));
+            root.bridge.ctx().request_repaint_after(COPIED_FOR);
+            cx.notify();
+        }))
     };
     let mut menu = kit::MenuButton::new(
         part(id, "menu"),
@@ -105,15 +111,17 @@ pub(crate) fn render(
     );
     if crate::timeline::checks::offered(event, &tables) {
         let owner = id.to_owned();
-        menu = menu.item(kit::MenuItem::new("Roll for encounters").on_click(cx.listener(
-            move |root, _, _, cx| {
-                let acts = DetailActs {
-                    checks: Some(crate::timeline::checks::Act::Start),
-                    ..DetailActs::default()
-                };
-                apply(root, &owner, acts, cx);
-            },
-        )));
+        menu = menu.item(
+            kit::MenuItem::new("Roll for encounters").on_click(cx.listener(
+                move |root, _, _, cx| {
+                    let acts = DetailActs {
+                        checks: Some(crate::timeline::checks::Act::Start),
+                        ..DetailActs::default()
+                    };
+                    apply(root, &owner, acts, cx);
+                },
+            )),
+        );
     }
     let owner = id.to_owned();
     menu = menu.item(
@@ -214,11 +222,16 @@ pub(crate) fn render(
         .flex_col()
         .size_full()
         .child(header)
-        .child(div().flex_1().min_h_0().child(kit::scroll::scroll_column_with(
-            part(id, "form"),
-            &root.pages.timeline.form,
-            div().pr(M).pt(M).child(form),
-        )))
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .child(kit::scroll::scroll_column_with(
+                    part(id, "form"),
+                    &root.pages.timeline.form,
+                    div().pr(M).pt(M).child(form),
+                )),
+        )
         .into_any_element()
 }
 
@@ -236,7 +249,11 @@ fn form(
     let book = &root.app.timeline;
     let event = &book.events[index];
     let starts = clock(&book.events)[index];
-    let mut form = div().flex().flex_col().w_full().max_w(crate::gui::theme::FORM_WIDTH);
+    let mut form = div()
+        .flex()
+        .flex_col()
+        .w_full()
+        .max_w(crate::gui::theme::FORM_WIDTH);
     // Kind.
     let day_start = starts
         .filter(|_| event.kind == Kind::Day)
@@ -440,12 +457,17 @@ fn form(
             "Session",
             None,
             None,
-            kit::Dropdown::new(part(id, "session"), "Session of this event", options, chosen)
-                .on_select(cx.listener(move |root, at: &usize, _, cx| {
-                    let session = at.checked_sub(1).and_then(|at| choice_ids.get(at).copied());
-                    edit(root, &owner, |event| event.session = session);
-                    cx.notify();
-                })),
+            kit::Dropdown::new(
+                part(id, "session"),
+                "Session of this event",
+                options,
+                chosen,
+            )
+            .on_select(cx.listener(move |root, at: &usize, _, cx| {
+                let session = at.checked_sub(1).and_then(|at| choice_ids.get(at).copied());
+                edit(root, &owner, |event| event.session = session);
+                cx.notify();
+            })),
         )
         .pb(XS),
     );
@@ -506,13 +528,7 @@ fn form(
         }),
     ));
     if link_open {
-        form = form.child(
-            div()
-                .ty(Type::Mono)
-                .text_color(c.muted)
-                .pb(S)
-                .child(link),
-        );
+        form = form.child(div().ty(Type::Mono).text_color(c.muted).pb(S).child(link));
     }
     // The session notes that mention it.
     let mentions: Vec<_> = sessions
@@ -524,14 +540,19 @@ fn form(
         for session in mentions {
             let target = session.id;
             links = links.child(
-                kit::Link::new(part(id, &format!("mention-{target}")), session.label.clone())
-                    .on_click(cx.listener(move |root, _, _, cx| {
-                        root.app.timeline_page.open_session = Some(target);
-                        cx.notify();
-                    })),
+                kit::Link::new(
+                    part(id, &format!("mention-{target}")),
+                    session.label.clone(),
+                )
+                .on_click(cx.listener(move |root, _, _, cx| {
+                    root.app.timeline_page.open_session = Some(target);
+                    cx.notify();
+                })),
             );
         }
-        form = form.child(kit::gap(M)).child(kit::field("Mentioned in", None, None, links));
+        form = form
+            .child(kit::gap(M))
+            .child(kit::field("Mentioned in", None, None, links));
     }
     // Place after: the event before this one, in a menu of every other event.
     let labels = event_labels(book, &day_numbers(&book.events), &sessions);
@@ -541,28 +562,36 @@ fn form(
     options.extend(others.iter().map(|at| labels[*at].clone()));
     let chosen = match index.checked_sub(1) {
         None => 0,
-        Some(before) => others.iter().position(|at| *at == before).map_or(0, |at| at + 1),
+        Some(before) => others
+            .iter()
+            .position(|at| *at == before)
+            .map_or(0, |at| at + 1),
     };
     let owner = id.to_owned();
     form = form.child(kit::gap(M)).child(kit::field(
         "Place after",
         None,
         None,
-        kit::Dropdown::new(part(id, "place-after"), "Place this event after", options, Some(chosen))
-            .on_select(cx.listener(move |root, at: &usize, _, cx| {
-                if *at == chosen {
-                    return;
-                }
-                let after = at
-                    .checked_sub(1)
-                    .and_then(|at| others.get(at))
-                    .map(|at| event_ids[*at].clone());
-                let acts = DetailActs {
-                    placed: Some(after),
-                    ..DetailActs::default()
-                };
-                apply(root, &owner, acts, cx);
-            })),
+        kit::Dropdown::new(
+            part(id, "place-after"),
+            "Place this event after",
+            options,
+            Some(chosen),
+        )
+        .on_select(cx.listener(move |root, at: &usize, _, cx| {
+            if *at == chosen {
+                return;
+            }
+            let after = at
+                .checked_sub(1)
+                .and_then(|at| others.get(at))
+                .map(|at| event_ids[*at].clone());
+            let acts = DetailActs {
+                placed: Some(after),
+                ..DetailActs::default()
+            };
+            apply(root, &owner, acts, cx);
+        })),
     ));
     form.into_any_element()
 }

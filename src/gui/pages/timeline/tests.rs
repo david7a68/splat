@@ -19,7 +19,10 @@ fn selected(shell: &mut Shell) -> Option<String> {
 /// The first day: on an empty Timeline `Start with day 1`, else `Add Day`.
 fn first_day(shell: &mut Shell) {
     if events(shell).is_empty() {
-        assert!(shell.bounds("Start with day 1").is_some(), "the empty state");
+        assert!(
+            shell.bounds("Start with day 1").is_some(),
+            "the empty state"
+        );
         shell.capture("session-notes__15-timeline-empty__1200x800");
         shell.click("Start with day 1");
     } else {
@@ -45,8 +48,15 @@ fn add_name_rule_remove_and_save() {
     assert_eq!(now.len(), before + 1);
     let rest = now.last().unwrap().clone();
     assert_eq!(rest.kind, Kind::LongRest);
-    assert_eq!(selected(&mut shell), Some(rest.id.clone()), "the new event opens");
-    assert!(shell.bounds("Undo add Long rest").is_some(), "its result has its Undo");
+    assert_eq!(
+        selected(&mut shell),
+        Some(rest.id.clone()),
+        "the new event opens"
+    );
+    assert!(
+        shell.bounds("Undo add Long rest").is_some(),
+        "its result has its Undo"
+    );
     // The Title has the keyboard.
     shell.type_text("Rest at the mill");
     shell.settle();
@@ -98,11 +108,8 @@ fn add_name_rule_remove_and_save() {
     // A filter: the header says how many show.
     shell.click("Days");
     shell.settle();
-    let shown = shell.update(|root, _, _| {
-        root.app
-            .timeline_page
-            .header_context(&root.app.timeline)
-    });
+    let shown =
+        shell.update(|root, _, _| root.app.timeline_page.header_context(&root.app.timeline));
     assert!(shown.contains(" of "), "{shown}");
     shell.capture("session-notes__21-timeline-filtered__1200x800");
     shell.click("All");
@@ -119,8 +126,7 @@ fn add_name_rule_remove_and_save() {
 /// The open event at the smallest window: two columns still fit beside the rail.
 #[test]
 fn an_open_event_at_the_smallest_window() {
-    let mut shell =
-        Shell::with_size("timeline-small", Seed::Campaign, size(px(960.0), px(640.0)));
+    let mut shell = Shell::with_size("timeline-small", Seed::Campaign, size(px(960.0), px(640.0)));
     shell.click("Timeline");
     shell.settle();
     first_day(&mut shell);
@@ -174,7 +180,10 @@ fn a_journeys_checks() {
         })
     };
     assert!(event(&mut shell).checks_table.is_some(), "the block shows");
-    assert!(shell.bounds("Undo checks").is_some(), "its result has its Undo");
+    assert!(
+        shell.bounds("Undo checks").is_some(),
+        "its result has its Undo"
+    );
     // Several tables: the DM chooses one.
     if event(&mut shell).checks_table.as_deref() == Some("") {
         shell.click(&format!("id:timeline-checks-{journey}-table-button"));
@@ -196,5 +205,8 @@ fn a_journeys_checks() {
     let label = event(&mut shell).checks[0].label.clone();
     shell.click(&format!("id:timeline-checks-{journey}-clear-{label}"));
     shell.settle();
-    assert!(event(&mut shell).checks.is_empty(), "Clear takes the result");
+    assert!(
+        event(&mut shell).checks.is_empty(),
+        "Clear takes the result"
+    );
 }

@@ -165,16 +165,20 @@ pub fn facts(facts: &[(String, String)], window: &Window) -> Option<Div> {
         return None;
     }
     Some(
-        div()
-            .flex()
-            .flex_col()
-            .pb(S)
-            .children(facts.iter().map(|(label, value)| detail(label, value.clone(), window))),
+        div().flex().flex_col().pb(S).children(
+            facts
+                .iter()
+                .map(|(label, value)| detail(label, value.clone(), window)),
+        ),
     )
 }
 
 /// Imported rules text: each paragraph's run-in title (`Bite.`) in bold, in the reader's prose.
-pub fn source_prose(id: impl Into<ElementId>, text: &str, document: Option<uuid::Uuid>) -> AnyElement {
+pub fn source_prose(
+    id: impl Into<ElementId>,
+    text: &str,
+    document: Option<uuid::Uuid>,
+) -> AnyElement {
     let text = text
         .split("\n\n")
         .map(run_in_markdown)

@@ -819,24 +819,37 @@ mod tests {
         let leads: Vec<_> = blocks
             .iter()
             .filter_map(|block| match block {
-                Block::Paragraph(paragraph) => {
-                    Some((paragraph.lead.clone()?.text, paragraph.task, paragraph.words.text.clone()))
-                }
+                Block::Paragraph(paragraph) => Some((
+                    paragraph.lead.clone()?.text,
+                    paragraph.task,
+                    paragraph.words.text.clone(),
+                )),
                 _ => None,
             })
             .collect();
         assert_eq!(
             leads,
             [
-                (format!("{} ", icons::phosphor::CHECK_SQUARE), Some(true), "Done".to_owned()),
-                (format!("1. {} ", icons::phosphor::SQUARE), Some(false), "Open".to_owned()),
+                (
+                    format!("{} ", icons::phosphor::CHECK_SQUARE),
+                    Some(true),
+                    "Done".to_owned()
+                ),
+                (
+                    format!("1. {} ", icons::phosphor::SQUARE),
+                    Some(false),
+                    "Open".to_owned()
+                ),
             ]
         );
     }
 
     #[test]
     fn dense_field_tables_become_field_rows_and_rows_keep_marks_in_line() {
-        let blocks = read("| Field | Value |\n|---|---|\n| hit_points | 22 |\n", Mode::Dense);
+        let blocks = read(
+            "| Field | Value |\n|---|---|\n| hit_points | 22 |\n",
+            Mode::Dense,
+        );
         assert!(matches!(&blocks[..], [Block::Fields(rows)] if rows[0] == ["hit_points", "22"]));
         let blocks = read("- one\n  - inner\n", Mode::Row { muted: false });
         assert_eq!(kinds(&blocks), ["• one", "  • inner"]);
@@ -866,8 +879,14 @@ mod tests {
             .collect();
         assert_eq!(
             targets,
-            [("+6", LinkTarget::Roll(link)), ("Gone", LinkTarget::Missing)]
+            [
+                ("+6", LinkTarget::Roll(link)),
+                ("Gone", LinkTarget::Missing)
+            ]
         );
-        assert!(paragraph.words.text.contains(icons::WARN), "a missing link warns");
+        assert!(
+            paragraph.words.text.contains(icons::WARN),
+            "a missing link warns"
+        );
     }
 }

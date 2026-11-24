@@ -1,13 +1,13 @@
 //! Parts the Encounters page's views share: the page's acts with the campaign, text measures,
 //! footer lines, a row's `⋯` menu and a row's second line.
+use crate::campaigns::Campaigns;
 use crate::gui::theme::{self, Type, TypeExt, XS, colors};
 use crate::gui::{SplatRoot, bridge, icons, kit};
-use crate::campaigns::Campaigns;
 use crate::persistence::Campaign;
 use eframe::egui;
 use gpui::{
-    AnyElement, App, ClickEvent, Context, Div, ElementId, Hsla, ParentElement,
-    Pixels, SharedString, Styled, Window, div, px,
+    AnyElement, App, ClickEvent, Context, Div, ElementId, Hsla, ParentElement, Pixels,
+    SharedString, Styled, Window, div, px,
 };
 use splat_encounters_ui::encounters::Encounters;
 use splat_encounters_ui::encounters::FooterPress;
@@ -165,7 +165,6 @@ pub(super) fn reason(words: impl Into<SharedString>) -> Div {
 pub(super) fn egui_color(color: egui::Color32) -> Hsla {
     bridge::color(color)
 }
-
 
 /// The list measure as a width cap.
 pub(super) fn measure() -> Pixels {

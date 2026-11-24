@@ -53,7 +53,10 @@ pub(super) fn show(
 ) {
     if let Some(handle) = handle(root, in_panel) {
         handle.show_words(words.to_owned(), window, cx);
-        let byte = words.char_indices().nth(at).map_or(words.len(), |(byte, _)| byte);
+        let byte = words
+            .char_indices()
+            .nth(at)
+            .map_or(words.len(), |(byte, _)| byte);
         handle.set_caret(byte, cx);
         handle.focus(window, cx);
     }
@@ -204,10 +207,12 @@ fn read(root: &mut SplatRoot, beside: bool, cx: &mut Context<SplatRoot>) -> AnyE
                 .gap(S)
                 .child(kit::text(Type::Small, c.muted, "Nothing written yet."))
                 .child(
-                    kit::Link::new("note-read-write", "Write").on_click(cx.listener(|root, _, _, cx| {
+                    kit::Link::new("note-read-write", "Write").on_click(cx.listener(
+                        |root, _, _, cx| {
                             root.app.sessions.gv_write();
                             cx.notify();
-                        })),
+                        },
+                    )),
                 ),
         );
     } else {
@@ -248,9 +253,11 @@ fn parts(
                 cx.notify();
             });
             match part {
-                ReadPart::Words(words) => kit::markdown::Markdown::new(ElementId::Name(id.into()), words)
-                    .on_link(link)
-                    .into_any_element(),
+                ReadPart::Words(words) => {
+                    kit::markdown::Markdown::new(ElementId::Name(id.into()), words)
+                        .on_link(link)
+                        .into_any_element()
+                }
                 ReadPart::Embed { from, label, words } => div()
                     .flex()
                     .flex_col()
@@ -263,16 +270,13 @@ fn parts(
                             .gap(S)
                             .child(kit::text(Type::Small, c.muted, "From"))
                             .child(
-                                kit::Link::new(
-                                    ElementId::Name(format!("{id}-from").into()),
-                                    label,
-                                )
-                                .small()
-                                .wrap()
-                                .on_click(cx.listener(move |root, _, _, cx| {
-                                    root.app.sessions.gv_open_session(from);
-                                    cx.notify();
-                                })),
+                                kit::Link::new(ElementId::Name(format!("{id}-from").into()), label)
+                                    .small()
+                                    .wrap()
+                                    .on_click(cx.listener(move |root, _, _, cx| {
+                                        root.app.sessions.gv_open_session(from);
+                                        cx.notify();
+                                    })),
                             ),
                     )
                     .child(
@@ -301,8 +305,13 @@ pub(super) fn conflict(
     };
     // Paragraphs, not blank lines: the two texts side by side, each line once.
     let (draft_lines, disk_lines): (Vec<&str>, Vec<&str>) = (
-        draft.lines().filter(|line| !line.trim().is_empty()).collect(),
-        disk.lines().filter(|line| !line.trim().is_empty()).collect(),
+        draft
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .collect(),
+        disk.lines()
+            .filter(|line| !line.trim().is_empty())
+            .collect(),
     );
     let summary = changed_lines(&draft_lines, &disk_lines);
     let column = |title: &'static str, lines: &[&str], other: &[&str]| {

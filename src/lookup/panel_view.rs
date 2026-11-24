@@ -62,7 +62,11 @@ impl Lookup {
         if query.is_empty() {
             return;
         }
-        let matches = self.matches.as_ref().map(|(_, m)| m.clone()).unwrap_or_default();
+        let matches = self
+            .matches
+            .as_ref()
+            .map(|(_, m)| m.clone())
+            .unwrap_or_default();
         self.results_open = matches.len() != 1;
         match matches.first() {
             Some(Hit::Entry(top)) => {
@@ -380,7 +384,11 @@ impl Lookup {
     /// Where a saved NPC goes.
     pub fn generated_path(&self) -> Option<String> {
         let npc = self.generated.as_ref()?;
-        Some(world::new_entry_path(self.index.as_deref(), &npc.name, "npc"))
+        Some(world::new_entry_path(
+            self.index.as_deref(),
+            &npc.name,
+            "npc",
+        ))
     }
 
     /// `Save` on the card.

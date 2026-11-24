@@ -1,11 +1,11 @@
 //! The Library's list: the scope drop-down, the sections column, the search and the entry rows
 //! (a virtual list: only the rows in view draw), and the empty campaign scope.
 use super::{footer, forms};
+use crate::gui::kit::WithTooltip as _;
 use crate::gui::theme::{Density, L, S, SCROLL_BAR_WIDTH, Type, TypeExt, XS, colors};
 use crate::gui::{SplatRoot, icons, kit};
 use crate::library::model::{EmptyList, ListView};
 use crate::lookup::ContentIndex;
-use crate::gui::kit::WithTooltip as _;
 use gpui::{
     AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, ScrollStrategy,
     SharedString, Styled, Window, div, prelude::*, px,
@@ -51,9 +51,7 @@ fn section_row(
                 .truncate()
                 .child(label),
         )
-        .children(count.map(|count| {
-            kit::text(Type::Small, c.muted, count.to_string()).flex_none()
-        }))
+        .children(count.map(|count| kit::text(Type::Small, c.muted, count.to_string()).flex_none()))
 }
 
 /// The package's About row.
@@ -171,11 +169,14 @@ pub(super) fn entries_column(
         let chosen = list
             .chosen_section
             .and_then(|chosen| sections.iter().position(|s| *s == chosen));
-        let labels = list.section_choices.iter().map(|(section, label)| match section {
-            crate::library::model::Section::All => "All",
-            crate::library::model::Section::Characters => "Characters",
-            _ => label,
-        });
+        let labels = list
+            .section_choices
+            .iter()
+            .map(|(section, label)| match section {
+                crate::library::model::Section::All => "All",
+                crate::library::model::Section::Characters => "Characters",
+                _ => label,
+            });
         column = column.child(
             div()
                 .flex()
@@ -184,17 +185,16 @@ pub(super) fn entries_column(
                 .pb(XS)
                 .child(div().flex_1().min_w_0().child(scope_menu(root, cx)))
                 .when(!sections.is_empty(), |line| {
-                    line.child(
-                        div().flex_1().min_w_0().child(
-                            kit::Dropdown::new("library-section", "Section", labels, chosen)
-                                .on_select(cx.listener(move |root, at: &usize, _, cx| {
-                                    if let Some(section) = sections.get(*at) {
-                                        root.app.library.choose_section(*section, None);
-                                        cx.notify();
-                                    }
-                                })),
+                    line.child(div().flex_1().min_w_0().child(
+                        kit::Dropdown::new("library-section", "Section", labels, chosen).on_select(
+                            cx.listener(move |root, at: &usize, _, cx| {
+                                if let Some(section) = sections.get(*at) {
+                                    root.app.library.choose_section(*section, None);
+                                    cx.notify();
+                                }
+                            }),
                         ),
-                    )
+                    ))
                 }),
         );
     }
@@ -307,53 +307,57 @@ pub(super) fn entries_column(
         "library-entries",
         &handle,
         list.rows,
-        cx.processor(move |root: &mut SplatRoot, range: std::ops::Range<usize>, _, cx| {
-            range
-                .filter_map(|row| {
-                    let entry = root.app.library.entry_row(row, index.as_deref())?;
-                    let note = entry.note;
-                    let c = colors();
-                    let name: SharedString = entry.name.clone().into();
-                    Some(
-                        div()
-                            .id(ElementId::Name(format!("library-entry-{note}").into()))
-                            .w_full()
-                            .with_tooltip(entry.hover.clone())
-                            .child(
-                                kit::Row::new(
-                                    ElementId::Name(format!("library-row-{note}").into()),
-                                    format!("{} · {}", entry.name, entry.subtitle),
-                                )
-                                .height(px(crate::design::ENTRY_ROW_HEIGHT))
-                                .selected(entry.selected)
+        cx.processor(
+            move |root: &mut SplatRoot, range: std::ops::Range<usize>, _, cx| {
+                range
+                    .filter_map(|row| {
+                        let entry = root.app.library.entry_row(row, index.as_deref())?;
+                        let note = entry.note;
+                        let c = colors();
+                        let name: SharedString = entry.name.clone().into();
+                        Some(
+                            div()
+                                .id(ElementId::Name(format!("library-entry-{note}").into()))
+                                .w_full()
+                                .with_tooltip(entry.hover.clone())
                                 .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .child(
-                                            div()
-                                                .ty(if entry.selected {
-                                                    Type::Strong
-                                                } else {
-                                                    Type::Body
-                                                })
-                                                .text_color(c.text)
-                                                .truncate()
-                                                .child(name),
-                                        )
-                                        .child(subtitle(&entry.subtitle)),
-                                )
-                                .on_click(cx.listener(move |root, _, _, cx| {
-                                    root.app.library.press_entry(note);
-                                    cx.notify();
-                                })),
-                            ),
-                    )
-                })
-                .collect()
-        }),
+                                    kit::Row::new(
+                                        ElementId::Name(format!("library-row-{note}").into()),
+                                        format!("{} · {}", entry.name, entry.subtitle),
+                                    )
+                                    .height(px(crate::design::ENTRY_ROW_HEIGHT))
+                                    .selected(entry.selected)
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .child(
+                                                div()
+                                                    .ty(if entry.selected {
+                                                        Type::Strong
+                                                    } else {
+                                                        Type::Body
+                                                    })
+                                                    .text_color(c.text)
+                                                    .truncate()
+                                                    .child(name),
+                                            )
+                                            .child(subtitle(&entry.subtitle)),
+                                    )
+                                    .on_click(cx.listener(
+                                        move |root, _, _, cx| {
+                                            root.app.library.press_entry(note);
+                                            cx.notify();
+                                        },
+                                    )),
+                                ),
+                        )
+                    })
+                    .collect()
+            },
+        ),
     );
     column
         .child(div().flex_1().min_h_0().pt(XS).child(rows))
@@ -370,46 +374,42 @@ pub(super) fn empty_scope(
 ) -> AnyElement {
     let c = colors();
     let (_, new_form) = root.app.library.forms();
-    let body = if new_form {
-        forms::new_entry(root, window, cx)
-    } else {
-        div()
-            .flex()
-            .flex_col()
-            .items_start()
-            .gap(S)
-            .child(kit::icon(icons::LIBRARY, Type::Title, c.muted))
-            .child(kit::text(Type::Title, c.text, "No entries of your own yet"))
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .flex_wrap()
-                    .items_center()
-                    .child(kit::text(Type::Body, c.muted, "Copy an "))
-                    .child(
-                        kit::link("library-can-use", "entry you can use")
-                            .on_click(cx.listener(|root, _, _, cx| {
+    let body =
+        if new_form {
+            forms::new_entry(root, window, cx)
+        } else {
+            div()
+                .flex()
+                .flex_col()
+                .items_start()
+                .gap(S)
+                .child(kit::icon(icons::LIBRARY, Type::Title, c.muted))
+                .child(kit::text(Type::Title, c.text, "No entries of your own yet"))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .flex_wrap()
+                        .items_center()
+                        .child(kit::text(Type::Body, c.muted, "Copy an "))
+                        .child(kit::link("library-can-use", "entry you can use").on_click(
+                            cx.listener(|root, _, _, cx| {
                                 root.app.library.show_usable();
                                 cx.notify();
-                            })),
-                    )
-                    .child(kit::text(
-                        Type::Body,
-                        c.muted,
-                        ", or make a new one here.",
-                    )),
-            )
-            .child(
-                kit::Button::primary("library-empty-scope-new", "New entry")
-                    .icon(icons::ADD)
-                    .on_click(cx.listener(|root, _, _, cx| {
-                        root.app.library.start_entry();
-                        cx.notify();
-                    })),
-            )
-            .into_any_element()
-    };
+                            }),
+                        ))
+                        .child(kit::text(Type::Body, c.muted, ", or make a new one here.")),
+                )
+                .child(
+                    kit::Button::primary("library-empty-scope-new", "New entry")
+                        .icon(icons::ADD)
+                        .on_click(cx.listener(|root, _, _, cx| {
+                            root.app.library.start_entry();
+                            cx.notify();
+                        })),
+                )
+                .into_any_element()
+        };
     let lines = root.app.library.form_footer(&root.app.campaigns);
     let mut pane = kit::Pane::new("library-empty-scope").child(body);
     for line in footer::render(lines, cx) {

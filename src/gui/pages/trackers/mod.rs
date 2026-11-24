@@ -15,8 +15,7 @@ mod tests;
 use crate::design::memo::Revision;
 use crate::design::outcome::{PaneFrame, fault_words, plain::fault_tone};
 use crate::gui::theme::{
-    Density, HAIRLINE_WIDTH, L, M, PANEL_MIN_WIDTH, S, SCROLL_BAR_WIDTH, Type, TypeExt, XS,
-    colors,
+    Density, HAIRLINE_WIDTH, L, M, PANEL_MIN_WIDTH, S, SCROLL_BAR_WIDTH, Type, TypeExt, XS, colors,
 };
 use crate::gui::{SplatRoot, icons, kit};
 use crate::trackers::view::{Act, DueParts, LineWords, RULES_ROUTE, TrackerPress};
@@ -42,7 +41,10 @@ pub struct State {
     /// The view's scroll, which opens at its top when Trackers comes into view.
     scroll: ScrollHandle,
     /// The open sections of tracker histories in a reader, by note and member key.
-    #[allow(dead_code, reason = "World’s reader draws the histories (`history::render`)")]
+    #[allow(
+        dead_code,
+        reason = "World’s reader draws the histories (`history::render`)"
+    )]
     pub(crate) history_open: HashSet<(uuid::Uuid, String)>,
 }
 
@@ -84,7 +86,11 @@ fn panel_room() -> Pixels {
 /// Lay the view out for the trackers' revision: once per revision, never on a quiet frame.
 fn lay(state: &mut State, trackers: &Trackers, window: &Window) {
     let revision = trackers.revision();
-    if state.laid.as_ref().is_some_and(|laid| laid.revision == revision) {
+    if state
+        .laid
+        .as_ref()
+        .is_some_and(|laid| laid.revision == revision)
+    {
         return;
     }
     let (rules, values) = (&trackers.rules, &trackers.state);
@@ -149,8 +155,7 @@ fn lay(state: &mut State, trackers: &Trackers, window: &Window) {
             lines: crate::trackers::view::line_words(rules, values, &tracker.key, def)
                 .into_iter()
                 .map(|line| {
-                    let fitted =
-                        measure::fit_words(window, Type::Body, &line.name, name - indent);
+                    let fitted = measure::fit_words(window, Type::Body, &line.name, name - indent);
                     (line, fitted)
                 })
                 .collect(),
@@ -229,7 +234,12 @@ pub(crate) fn render_view(
                 .child(search),
         )
         .child(kit::rule())
-        .child(div().flex_1().min_h_0().child(render_body(root, window, cx)))
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .child(render_body(root, window, cx)),
+        )
         .into_any_element()
 }
 
@@ -261,7 +271,10 @@ pub(crate) fn render_body(
             .into_any_element()
     } else {
         if root.app.lookup.take_trackers_from_top() {
-            root.pages.trackers.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+            root.pages
+                .trackers
+                .scroll
+                .set_offset(gpui::point(px(0.0), px(0.0)));
         }
         body(root, window, cx)
     };
@@ -271,11 +284,14 @@ pub(crate) fn render_body(
         .flex_col()
         .size_full()
         .child(
-            div().flex_1().min_h_0().child(kit::scroll::scroll_column_with(
-                "trackers-scroll",
-                &scroll,
-                div().px(M).pb(S).child(body),
-            )),
+            div()
+                .flex_1()
+                .min_h_0()
+                .child(kit::scroll::scroll_column_with(
+                    "trackers-scroll",
+                    &scroll,
+                    div().px(M).pb(S).child(body),
+                )),
         )
         .when(!footer.is_empty(), |pane| {
             pane.child(
@@ -371,11 +387,10 @@ fn body(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) 
     // A day count that is not known shows no day notice, never an old one, and says why.
     let banner = trackers.state.clock_not_read.clone();
     if let Some(why) = &banner {
-        column = column.child(
-            div()
-                .pt(S)
-                .child(fault_message(&TrackerFault::ClockNotRead(why.clone()), false)),
-        );
+        column = column.child(div().pt(S).child(fault_message(
+            &TrackerFault::ClockNotRead(why.clone()),
+            false,
+        )));
     }
     if !laid.due.is_empty() {
         column = column.child(kit::heading(
@@ -510,19 +525,21 @@ fn due_row(
                 .name(format!("More actions for {}", parts.short))
                 .density(Density::Read),
         )
-        .item(
-            kit::MenuItem::new("Dismiss").on_click(cx.listener(move |root, _, _, cx| {
+        .item(kit::MenuItem::new("Dismiss").on_click(cx.listener(
+            move |root, _, _, cx| {
                 root.app
                     .trackers
                     .press_in_view(Act::Dismiss(dismiss_notice.clone()));
                 cx.notify();
-            })),
-        );
+            },
+        )));
         if row.notice.days.len() > 1 {
             let all = row.notice.clone();
             menu = menu.item(kit::MenuItem::new("Dismiss all").on_click(cx.listener(
                 move |root, _, _, cx| {
-                    root.app.trackers.press_in_view(Act::DismissAll(all.clone()));
+                    root.app
+                        .trackers
+                        .press_in_view(Act::DismissAll(all.clone()));
                     cx.notify();
                 },
             )));
@@ -577,15 +594,11 @@ fn due_row(
     }
     if let Some(results) = &parts.results {
         block = block.child(
-            div()
-                .pl(L)
-                .flex()
-                .flex_col()
-                .children(
-                    results
-                        .lines()
-                        .map(|line| kit::text(Type::Body, c.text, line.to_owned())),
-                ),
+            div().pl(L).flex().flex_col().children(
+                results
+                    .lines()
+                    .map(|line| kit::text(Type::Body, c.text, line.to_owned())),
+            ),
         );
     }
     for (slot, (words, tick)) in parts.checks.iter().zip(&parts.ticks).enumerate() {
@@ -655,9 +668,9 @@ fn tracker_lines(
             .child(words.value.clone());
         let actions = words.actions.iter().map(|(at, named)| {
             let label = tracker.labels.get(*at).cloned().unwrap_or_default();
-            let here = asking.as_ref().is_some_and(|(k, i, l, _)| {
-                *k == key && *i == words.instance && *l == label
-            });
+            let here = asking
+                .as_ref()
+                .is_some_and(|(k, i, l, _)| *k == key && *i == words.instance && *l == label);
             let id = ElementId::Name(
                 format!(
                     "trackers-action-{key}-{}-{}-{at}",
@@ -689,8 +702,7 @@ fn tracker_lines(
                 .density(Density::Read)
                 .on_click(cx.listener(move |root, _, _, cx| {
                     let trackers = &mut root.app.trackers;
-                    let Some(quick) = trackers.rules.def(&key).and_then(|d| d.quick.get(at))
-                    else {
+                    let Some(quick) = trackers.rules.def(&key).and_then(|d| d.quick.get(at)) else {
                         return;
                     };
                     let label = quick.label.clone();
@@ -771,5 +783,8 @@ pub(crate) fn act(
 }
 
 /// The history of a house rule note in its reader (World's hook): see `history::render`.
-#[allow(unused_imports, reason = "World’s reader calls these (docs/gpui-port.md)")]
+#[allow(
+    unused_imports,
+    reason = "World’s reader calls these (docs/gpui-port.md)"
+)]
 pub(crate) use history::{footer as history_footer, render as render_history};

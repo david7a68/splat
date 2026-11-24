@@ -149,7 +149,14 @@ pub(crate) fn render_account(
             .size_full()
             .pt(L)
             .gap(XL)
-            .child(div().flex_1().min_w_0().max_w(LIST_MEASURE).h_full().child(campaigns))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .max_w(LIST_MEASURE)
+                    .h_full()
+                    .child(campaigns),
+            )
             .child(div().flex_1().min_w_0().h_full().child(account_pane))
             .into_any_element()
     } else {

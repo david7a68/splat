@@ -3,10 +3,10 @@
 //! (`reading_view`); and the dialog that deletes a recording (`delete_dialog`).
 use crate::design::outcome::plain::ChoiceForm as Kind;
 use crate::gui::{SplatRoot, bridge, icons, kit, theme};
-use crate::sessions::page::gpui_facade::{RecordingAct, RecordingRow, ReadingView};
+use crate::sessions::page::gpui_facade::{ReadingView, RecordingAct, RecordingRow};
 use gpui::{
-    AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window,
-    div, prelude::*,
+    AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
+    prelude::*,
 };
 use std::path::PathBuf;
 use theme::{Density, L, LIST_MEASURE, READER_MEASURE, S, Type, XS, colors};
@@ -232,7 +232,11 @@ fn row(row: RecordingRow, cx: &mut Context<SplatRoot>) -> AnyElement {
                             "Replace the results",
                         )
                         .density(Density::Read)
-                        .on_click(on(cx, path.clone(), RecordingAct::AgainReplace)),
+                        .on_click(on(
+                            cx,
+                            path.clone(),
+                            RecordingAct::AgainReplace,
+                        )),
                     ),
             ),
         );
@@ -373,7 +377,10 @@ fn reading(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
         .child(back)
         .child(kit::text(Type::Small, c.muted, name).flex_1())
         .children(notes);
-    let chosen = views.iter().position(|(index, _)| *index == made).unwrap_or(0);
+    let chosen = views
+        .iter()
+        .position(|(index, _)| *index == made)
+        .unwrap_or(0);
     let indices: Vec<u8> = views.iter().map(|(index, _)| *index).collect();
     let tabs = kit::Segmented::new(
         "reading-views",
@@ -389,7 +396,9 @@ fn reading(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
     let short = short_of.map(|(done, parts)| {
         kit::Message::new(
             kit::Tone::Warning,
-            format!("Transcribed so far: {done} of {parts} parts. Continue processing adds the rest."),
+            format!(
+                "Transcribed so far: {done} of {parts} parts. Continue processing adds the rest."
+            ),
         )
     });
     let draft = draft_note.then(|| {
@@ -453,15 +462,13 @@ fn reading(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
         .children(short)
         .children(draft)
         .children(parts)
-        .child(
-            div().flex_1().min_h_0().child(kit::scroll_column(
-                "reading-body",
-                div().max_w(READER_MEASURE).child(kit::markdown(
-                    id(format!("reading-text-{made}-{part}")),
-                    body,
-                )),
+        .child(div().flex_1().min_h_0().child(kit::scroll_column(
+            "reading-body",
+            div().max_w(READER_MEASURE).child(kit::markdown(
+                id(format!("reading-text-{made}-{part}")),
+                body,
             )),
-        )
+        )))
         .into_any_element()
 }
 

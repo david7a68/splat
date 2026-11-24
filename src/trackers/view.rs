@@ -301,7 +301,12 @@ impl Trackers {
             .asking
             .as_ref()
             .map(|(key, instance, label, typed)| {
-                (key.as_str(), instance.as_deref(), label.as_str(), typed.as_str())
+                (
+                    key.as_str(),
+                    instance.as_deref(),
+                    label.as_str(),
+                    typed.as_str(),
+                )
             })
     }
 

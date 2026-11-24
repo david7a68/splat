@@ -6,8 +6,8 @@ use super::note;
 use crate::gui::{SplatRoot, kit, theme};
 use crate::sessions::page::gpui_facade::slash as rules;
 use gpui::{
-    AnyElement, Context, ElementId, IntoElement, ParentElement,
-    SharedString, Styled, Window, div, px,
+    AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
+    px,
 };
 use theme::{L, M, RADIUS_LAYER, S, Type, XS, colors};
 use uuid::Uuid;
@@ -24,8 +24,14 @@ pub(super) struct Open {
 }
 
 enum Stage {
-    Menu { highlight: usize },
-    Search { query: String, highlight: usize, focus: bool },
+    Menu {
+        highlight: usize,
+    },
+    Search {
+        query: String,
+        highlight: usize,
+        focus: bool,
+    },
     Npc {
         npc: Option<splat_content_ui::npc_generator::Generated>,
         error: Option<String>,
@@ -37,7 +43,10 @@ fn chars_before(words: &str, byte: usize) -> usize {
 }
 
 fn byte_of(words: &str, at: usize) -> usize {
-    words.char_indices().nth(at).map_or(words.len(), |(byte, _)| byte)
+    words
+        .char_indices()
+        .nth(at)
+        .map_or(words.len(), |(byte, _)| byte)
 }
 
 /// The DM's edit of the note: open the menu on a new `/` at a word's start; follow the letters
@@ -55,9 +64,14 @@ pub(super) fn follow(
     match &mut state.slash {
         Some(open) if open.session == session && open.in_panel == in_panel => {
             if let Stage::Menu { highlight } = &mut open.stage {
-                let typed: Option<String> = (caret > open.at
-                    && words.chars().nth(open.at) == Some('/'))
-                .then(|| words.chars().skip(open.at + 1).take(caret - open.at - 1).collect());
+                let typed: Option<String> =
+                    (caret > open.at && words.chars().nth(open.at) == Some('/')).then(|| {
+                        words
+                            .chars()
+                            .skip(open.at + 1)
+                            .take(caret - open.at - 1)
+                            .collect()
+                    });
                 match typed.as_deref().and_then(rules::commands) {
                     Some(found) => *highlight = (*highlight).min(found.len() - 1),
                     None => state.slash = None,
@@ -136,7 +150,9 @@ fn keys(
                 let highlight = *highlight;
                 choose_command(root, in_panel, highlight, window, cx);
             }
-            Stage::Search { highlight, query, .. } => {
+            Stage::Search {
+                highlight, query, ..
+            } => {
                 let (highlight, query) = (*highlight, query.clone());
                 choose_result(root, in_panel, &query, highlight, window, cx);
             }
@@ -241,7 +257,12 @@ fn choose_result(
 }
 
 /// `Save`: the rolled NPC goes to the World, and its link to the note.
-fn save_npc(root: &mut SplatRoot, in_panel: bool, window: &mut Window, cx: &mut Context<SplatRoot>) {
+fn save_npc(
+    root: &mut SplatRoot,
+    in_panel: bool,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) {
     let index = root.app.lookup.index();
     let Some(Open {
         stage: Stage::Npc { npc: Some(npc), .. },
@@ -366,7 +387,12 @@ pub(super) fn render(
                 .focus(focus)
                 .on_change(cx.listener(|root, words: &str, _, cx| {
                     if let Some(Open {
-                        stage: Stage::Search { query, highlight, focus },
+                        stage:
+                            Stage::Search {
+                                query,
+                                highlight,
+                                focus,
+                            },
                         ..
                     }) = &mut root.pages.sessions.note.slash
                     {
@@ -415,17 +441,21 @@ pub(super) fn render(
                                     format!(" · {detail}"),
                                     row_at == highlight,
                                 )
-                                .on_click(cx.listener(move |root, _, window, cx| {
-                                    choose_result(root, in_panel, &query, row_at, window, cx);
-                                    cx.notify();
-                                })),
+                                .on_click(cx.listener(
+                                    move |root, _, window, cx| {
+                                        choose_result(root, in_panel, &query, row_at, window, cx);
+                                        cx.notify();
+                                    },
+                                )),
                             );
                         }
                         if all > shown {
                             column = column.child(kit::text(
                                 Type::Small,
                                 c.muted,
-                                format!("The best {shown} of {all}. Type more words to narrow them."),
+                                format!(
+                                    "The best {shown} of {all}. Type more words to narrow them."
+                                ),
                             ));
                         }
                     }

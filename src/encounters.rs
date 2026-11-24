@@ -333,11 +333,11 @@ mod disk;
 mod groups;
 #[path = "encounters/history.rs"]
 mod history;
-#[path = "encounters/results_key.rs"]
-mod results_key;
 /// The page as plain data and its acts, for the GPUI page (`src/gui/pages/encounters/`).
 #[path = "encounters/model.rs"]
 pub mod model;
+#[path = "encounters/results_key.rs"]
+mod results_key;
 #[path = "encounters/run_settings_view.rs"]
 mod run_settings_view;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
@@ -7917,9 +7917,13 @@ impl Encounters {
         } else if discard {
             Some(model::HeadAct::Discard)
         } else if start_another {
-            Some(model::HeadAct::StartAnother { save: save || dirty })
+            Some(model::HeadAct::StartAnother {
+                save: save || dirty,
+            })
         } else if run_it {
-            Some(model::HeadAct::Start { save: save || dirty })
+            Some(model::HeadAct::Start {
+                save: save || dirty,
+            })
         } else if save {
             Some(model::HeadAct::Save)
         } else {
@@ -9640,14 +9644,12 @@ impl Encounters {
                 ));
             }
             messages.outcome(
-                design::outcome::FaultMessage::new(&EncounterFault::FileWarning(
-                    last.clone(),
-                ))
-                .file(
-                    design::outcome::FileLine::new(&active.path, "Campaign.md")
-                        .edit()
-                        .show(),
-                ),
+                design::outcome::FaultMessage::new(&EncounterFault::FileWarning(last.clone()))
+                    .file(
+                        design::outcome::FileLine::new(&active.path, "Campaign.md")
+                            .edit()
+                            .show(),
+                    ),
             );
         }
         // The run files the form read, unless an act changed the folder after it
@@ -9656,7 +9658,9 @@ impl Encounters {
             if snapshot.options.folder == folder {
                 left
             } else {
-                snapshot.options.runs_left_in(&snapshot.saved_options, active)
+                snapshot
+                    .options
+                    .runs_left_in(&snapshot.saved_options, active)
             }
         });
         if let Some(snapshot) = snapshot
@@ -9690,8 +9694,7 @@ impl Encounters {
             // M4: the warning's two choices are the folder's commit while it leaves
             // runs; none while a run or the open encounter locks the form (the save row
             // says why).
-            let mut warning =
-                design::outcome::FaultMessage::new(&EncounterFault::RunsLeft(words));
+            let mut warning = design::outcome::FaultMessage::new(&EncounterFault::RunsLeft(words));
             if !run_open && !draft_open {
                 for (words, press) in [
                     ("Move runs and save", FooterPress::MoveRuns),
@@ -9708,9 +9711,9 @@ impl Encounters {
         // An act's answer (a failed save or move) after the standing reasons, so it never
         // moves the choice the DM pressed.
         if let Some(e) = &self.error {
-            messages.outcome(design::outcome::FaultMessage::new(
-                &EncounterFault::Failed(e.clone()),
-            ));
+            messages.outcome(design::outcome::FaultMessage::new(&EncounterFault::Failed(
+                e.clone(),
+            )));
         }
         if self.draft_dirty() {
             messages.outcome(design::outcome::Notice::new(crate::sentence!(

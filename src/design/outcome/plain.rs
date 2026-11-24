@@ -147,12 +147,7 @@ impl<A> PlainLine<A> {
                 PlainChoice {
                     form,
                     words,
-                    hover: body
-                        .hovers
-                        .get(at)
-                        .cloned()
-                        .flatten()
-                        .or(hover),
+                    hover: body.hovers.get(at).cloned().flatten().or(hover),
                     locked: body
                         .locks
                         .get(at)

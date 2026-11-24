@@ -2,9 +2,9 @@
 //! links opening in Lookup. The full reader (stat blocks, NPC cards, edit forms, `Add to fight`)
 //! is `world::Reader`'s, which the World and Reader ports draw in GPUI; this is Lookup's own view
 //! of an entry until that reader is wired in here.
+use crate::gui::SplatRoot;
 use crate::gui::kit;
 use crate::gui::theme::{S, Type, XS, colors};
-use crate::gui::SplatRoot;
 use gpui::{AnyElement, Context, IntoElement, ParentElement, SharedString, Styled, Window, div};
 
 pub(super) fn render(
@@ -22,7 +22,10 @@ pub(super) fn render(
     };
     let entry = &item.entry;
     let detail = index.result_detail(position);
-    let markdown = prose(&index.reader_markdown(&entry.body, Some(entry.id)), &entry.name);
+    let markdown = prose(
+        &index.reader_markdown(&entry.body, Some(entry.id)),
+        &entry.name,
+    );
     let from = entry.id;
     let mut column = div()
         .flex()

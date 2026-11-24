@@ -34,7 +34,11 @@ pub(super) fn render(
         _ => String::new(),
     };
     let side = super::panel_width(room, window_width);
-    let rows_width = if run.hide_panel { room } else { room - side - theme::S };
+    let rows_width = if run.hide_panel {
+        room
+    } else {
+        room - side - theme::S
+    };
     let scale = RunScale::fit(
         f32::from(height) - 160.0,
         f32::from(rows_width) - f32::from(theme::S),
@@ -46,7 +50,11 @@ pub(super) fn render(
         .flex_1()
         .min_w_0()
         .child(run_title(run, run.state_words(false)))
-        .child(kit::text(Type::Small, c.muted, format!("Outcome: {outcome}")));
+        .child(kit::text(
+            Type::Small,
+            c.muted,
+            format!("Outcome: {outcome}"),
+        ));
     let close_reason = run.close_reason();
     let close = div()
         .flex()
@@ -70,7 +78,17 @@ pub(super) fn render(
         .order
         .clone()
         .into_iter()
-        .map(|index| roster::row(root, run, index, roster::TurnMark::None, scale, roster::Use::Final, cx))
+        .map(|index| {
+            roster::row(
+                root,
+                run,
+                index,
+                roster::TurnMark::None,
+                scale,
+                roster::Use::Final,
+                cx,
+            )
+        })
         .collect();
     let left = div()
         .flex()
@@ -161,13 +179,11 @@ fn ended_panel(run: &Run, width: gpui::Pixels, cx: &mut Context<SplatRoot>) -> i
     let c = colors();
     let mut column = div().flex().flex_col().gap(theme::XS);
     if !run.setup_details.is_empty() {
-        column = column.child(
-            kit::Section::new("run-ended-prep", "Prep", false).child(panel::prep(run, cx)),
-        );
+        column = column
+            .child(kit::Section::new("run-ended-prep", "Prep", false).child(panel::prep(run, cx)));
     }
-    column = column.child(
-        kit::Section::new("run-ended-log", "Combat log", false).child(panel::log(run)),
-    );
+    column = column
+        .child(kit::Section::new("run-ended-log", "Combat log", false).child(panel::log(run)));
     div()
         .flex()
         .flex_col()
@@ -198,7 +214,11 @@ fn loot_line(mark: &'static str, line: &str, source: Option<String>) -> impl Int
         } else {
             kit::icon(mark, Type::Body, c.muted)
         })
-        .child(kit::text(Type::Body, if link { c.accent } else { c.text }, words))
+        .child(kit::text(
+            Type::Body,
+            if link { c.accent } else { c.text },
+            words,
+        ))
         .children(source.map(|source| kit::text(Type::Small, c.muted, source)))
 }
 
@@ -228,7 +248,10 @@ fn loot_list(run: &Run, holder: &Holder, cx: &mut Context<SplatRoot>) -> impl In
                 column = column.child(kit::text(
                     Type::Small,
                     c.muted,
-                    format!("{plain} · {} on {dice}", crate::encounter_run::loot::found_values(found)),
+                    format!(
+                        "{plain} · {} on {dice}",
+                        crate::encounter_run::loot::found_values(found)
+                    ),
                 ));
                 for one in found {
                     column = column.child(loot_line(icons::DICE, &one.text, None));
@@ -250,7 +273,9 @@ fn loot_list(run: &Run, holder: &Holder, cx: &mut Context<SplatRoot>) -> impl In
                         .gap(theme::XS)
                         .child(kit::icon(icons::DICE, Type::Body, c.muted))
                         .child(kit::text(Type::Body, c.text, plain.clone()))
-                        .children(table.map(|dice| kit::text(Type::Small, c.muted, format!("· {dice}"))))
+                        .children(
+                            table.map(|dice| kit::text(Type::Small, c.muted, format!("· {dice}"))),
+                        )
                         .when(problem.is_some(), |line| {
                             line.child(kit::status(&kit::Status::new(
                                 icons::WARN,
@@ -261,13 +286,17 @@ fn loot_list(run: &Run, holder: &Holder, cx: &mut Context<SplatRoot>) -> impl In
                         .child(div().w(theme::S).flex_none())
                         .child(
                             kit::Button::secondary(
-                                ElementId::Name(format!("run-loot-roll-{}-{at}", holder.key).into()),
+                                ElementId::Name(
+                                    format!("run-loot-roll-{}-{at}", holder.key).into(),
+                                ),
                                 "Roll",
                             )
                             .icon(icons::DICE)
                             .name(format!("Roll {plain} for {}", holder.name))
                             .density(Density::Read)
-                            .on_click(on_run(cx, move |run| run.roll_loot(std::slice::from_ref(&pick)))),
+                            .on_click(on_run(cx, move |run| {
+                                run.roll_loot(std::slice::from_ref(&pick))
+                            })),
                         ),
                 );
                 if let Some(problem) = problem {
@@ -281,7 +310,11 @@ fn loot_list(run: &Run, holder: &Holder, cx: &mut Context<SplatRoot>) -> impl In
 
 /// The loot on a creature's card in the stat block tab (`card_loot`): a summary while it
 /// stands, the list with its rolls once it is down.
-pub(super) fn card_loot(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
+pub(super) fn card_loot(
+    run: &Run,
+    index: usize,
+    cx: &mut Context<SplatRoot>,
+) -> Option<AnyElement> {
     let c = colors();
     let p = &run.state.participants[index];
     let lines = p.loot_lines();
@@ -307,7 +340,11 @@ pub(super) fn card_loot(run: &Run, index: usize, cx: &mut Context<SplatRoot>) ->
                 .gap(theme::XS)
                 .pb(theme::S)
                 .child(kit::icon(icons::LOOT, Type::Small, c.muted))
-                .child(kit::text(Type::Small, c.muted, format!("Loot · {}", summary.join(", "))))
+                .child(kit::text(
+                    Type::Small,
+                    c.muted,
+                    format!("Loot · {}", summary.join(", ")),
+                ))
                 .into_any_element(),
         );
     }
@@ -373,13 +410,15 @@ fn loot_section(run: &Run, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
         kit::Button::quiet("run-loot-copy", "Copy loot")
             .icon(icons::COPY)
             .density(Density::Read)
-            .on_click(cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(markdown.clone()));
-                if let Some(run) = root.app.encounters.run_mut() {
-                    run.loot_copied = Some(*run.revision);
-                }
-                cx.notify();
-            })),
+            .on_click(
+                cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(markdown.clone()));
+                    if let Some(run) = root.app.encounters.run_mut() {
+                        run.loot_copied = Some(*run.revision);
+                    }
+                    cx.notify();
+                }),
+            ),
     );
     let mut column = div().flex().flex_col().gap(theme::XS).child(heading);
     for holder in &open {

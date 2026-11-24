@@ -16,13 +16,20 @@ use splat_encounters_ui::encounters::model::{
 use splat_encounters_ui::encounters::{Encounters, ListAction, Story};
 
 /// The list page.
-pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) -> AnyElement {
+pub(super) fn render(
+    root: &mut SplatRoot,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let header = root.app.encounters.list_header();
     let sessions = root.app.sessions.links();
     let story = Story {
         events: &root.app.timeline.events,
         sessions: &sessions,
-        revision: Some((root.app.timeline.revision(), root.app.sessions.notes_revision())),
+        revision: Some((
+            root.app.timeline.revision(),
+            root.app.sessions.notes_revision(),
+        )),
     };
     let body = root.app.encounters.ledger_data(&story);
     let lines = root.app.encounters.list_footer();
@@ -108,7 +115,11 @@ pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context
         .flex_col()
         .size_full()
         .max_w(super::common::measure())
-        .child(kit::page_header("Encounters", header.context.map(Into::into), actions))
+        .child(kit::page_header(
+            "Encounters",
+            header.context.map(Into::into),
+            actions,
+        ))
         .child(div().flex_1().min_h_0().child(pane))
         .into_any_element()
 }
@@ -145,14 +156,17 @@ struct Columns {
 }
 
 /// The width of a kit button with these words (`kit::Button`'s own padding, icon and edge).
-fn button_width(window: &mut Window, words: &str, icon: bool, quiet: bool, primary: bool) -> Pixels {
+fn button_width(
+    window: &mut Window,
+    words: &str,
+    icon: bool,
+    quiet: bool,
+    primary: bool,
+) -> Pixels {
     let ty = if primary { Type::Heading } else { Type::Strong };
     let padding = if quiet { S } else { M };
     let edge = if quiet { px(0.0) } else { px(2.0) };
-    text_width(window, ty, words)
-        + padding * 2.0
-        + if icon { ICON_SLOT } else { px(0.0) }
-        + edge
+    text_width(window, ty, words) + padding * 2.0 + if icon { ICON_SLOT } else { px(0.0) } + edge
 }
 
 fn menu_width() -> Pixels {
@@ -179,7 +193,8 @@ fn columns(window: &mut Window, ledger: &Ledger) -> Columns {
     let mut widest = px(0.0);
     let mut in_progress = px(0.0);
     for row in &ledger.in_progress {
-        let icons = usize::from(row.open.is_none()) + usize::from(row.detail.contains("Changed on disk"));
+        let icons =
+            usize::from(row.open.is_none()) + usize::from(row.detail.contains("Changed on disk"));
         widest = widest.max(facts(window, &row.name, &row.detail, icons));
         let last = match &row.open {
             Some(word) => text_width(window, Type::Small, word) + L,
@@ -216,7 +231,10 @@ fn columns(window: &mut Window, ledger: &Ledger) -> Columns {
     let mut groups = px(0.0);
     for row in ledger.groups.iter().flat_map(|set| &set.rows) {
         widest = widest.max(L + facts(window, &row.name, &row.detail, 0));
-        groups = spaced([button_width(window, "Edit", false, true, false), menu_width()]);
+        groups = spaced([
+            button_width(window, "Edit", false, true, false),
+            menu_width(),
+        ]);
     }
     let mut history = px(0.0);
     for row in ledger.history.sessions.iter().flat_map(|(_, runs)| runs) {
@@ -247,7 +265,11 @@ fn ledger_body(
     let state = &root.pages.encounters;
     let (groups_open, history_open) = (!state.groups_closed, !state.history_closed);
     let c = colors();
-    let mut body = div().flex().flex_col().w_full().children(issues_block(&ledger.issues));
+    let mut body = div()
+        .flex()
+        .flex_col()
+        .w_full()
+        .children(issues_block(&ledger.issues));
 
     // In progress.
     let mut heading = kit::label("In progress", ledger.in_progress.len());
@@ -264,7 +286,11 @@ fn ledger_body(
     body = body.child(kit::gap(L));
 
     // Ready to run.
-    body = body.child(div().pb(XS).child(kit::label("Ready to run", ledger.ready.len())));
+    body = body.child(
+        div()
+            .pb(XS)
+            .child(kit::label("Ready to run", ledger.ready.len())),
+    );
     if let Some(blocked) = ledger.ready_blocked {
         body = body.child(reason(blocked));
     }
@@ -323,7 +349,13 @@ fn ledger_body(
         .fold(px(0.0), Pixels::max)
         .ceil();
     let names = names.min((columns.facts - L * 2.0).max(px(80.0)));
-    body = body.child(history_block(&ledger.history, &columns, history_open, names, cx));
+    body = body.child(history_block(
+        &ledger.history,
+        &columns,
+        history_open,
+        names,
+        cx,
+    ));
     kit::scroll_column("encounters-ledger", body).into_any_element()
 }
 
@@ -344,7 +376,10 @@ fn section_heading(
         .gap(XS)
         .min_h(crate::gui::theme::MIN_TARGET)
         .cursor_pointer()
-        .child(small_icon(if open { icons::DOWN } else { icons::NEXT }, c.text))
+        .child(small_icon(
+            if open { icons::DOWN } else { icons::NEXT },
+            c.text,
+        ))
         .child(kit::label(words.to_owned(), count))
         .on_click(on_click);
     kit::target(toggle, format!("{words} section"))
@@ -392,7 +427,11 @@ fn facts(name: &str, line: impl IntoElement) -> Div {
         .flex()
         .flex_col()
         .min_w_0()
-        .child(kit::text::one_line(Type::Strong, colors().text, name.to_owned()))
+        .child(kit::text::one_line(
+            Type::Strong,
+            colors().text,
+            name.to_owned(),
+        ))
         .child(line)
 }
 
@@ -451,7 +490,14 @@ fn run_row(row: &RunRow, columns: &Columns, cx: &mut Context<SplatRoot>) -> Div 
             .into_any_element(),
         None => edit_slot.into_any_element(),
     });
-    actions.push(row_menu(ElementId::Name(format!("menu:{key}").into()), &row.name, items).into_any_element());
+    actions.push(
+        row_menu(
+            ElementId::Name(format!("menu:{key}").into()),
+            &row.name,
+            items,
+        )
+        .into_any_element(),
+    );
     ledger_row(
         ElementId::Name(format!("run-row:{key}").into()),
         px(0.0),
@@ -495,8 +541,7 @@ fn ready_row(row: &ReadyRow, columns: &Columns, cx: &mut Context<SplatRoot>) -> 
         line = kit::WithTooltip::with_tooltip(line, budgets);
     }
     let mut items = vec![
-        kit::MenuItem::new("Edit encounter")
-            .on_click(act(cx, ListAction::Edit(row.path.clone()))),
+        kit::MenuItem::new("Edit encounter").on_click(act(cx, ListAction::Edit(row.path.clone()))),
     ];
     if row.removable {
         items.push(
@@ -509,10 +554,13 @@ fn ready_row(row: &ReadyRow, columns: &Columns, cx: &mut Context<SplatRoot>) -> 
     if let Some(short) = row.short_reason {
         if row.go_to_run {
             actions.push(
-                kit::Button::quiet(ElementId::Name(format!("go-to-run:{key}").into()), "Go to the run")
-                    .plain()
-                    .on_click(act(cx, ListAction::BackToRun))
-                    .into_any_element(),
+                kit::Button::quiet(
+                    ElementId::Name(format!("go-to-run:{key}").into()),
+                    "Go to the run",
+                )
+                .plain()
+                .on_click(act(cx, ListAction::BackToRun))
+                .into_any_element(),
             );
         }
         actions.push(reason(short).whitespace_nowrap().mr(S).into_any_element());
@@ -535,7 +583,14 @@ fn ready_row(row: &ReadyRow, columns: &Columns, cx: &mut Context<SplatRoot>) -> 
             .on_click(act(cx, ListAction::Edit(row.path.clone())))
             .into_any_element(),
     );
-    actions.push(row_menu(ElementId::Name(format!("menu:{key}").into()), &row.name, items).into_any_element());
+    actions.push(
+        row_menu(
+            ElementId::Name(format!("menu:{key}").into()),
+            &row.name,
+            items,
+        )
+        .into_any_element(),
+    );
     ledger_row(
         ElementId::Name(format!("ready-row:{key}").into()),
         px(0.0),
@@ -560,7 +615,12 @@ fn group_row(row: &GroupRow, columns: &Columns, cx: &mut Context<SplatRoot>) -> 
             .blocked(row.blocked)
             .on_click(act(cx, ListAction::OpenGroup(row.path.clone())))
             .into_any_element(),
-        row_menu(ElementId::Name(format!("menu:{key}").into()), &row.name, items).into_any_element(),
+        row_menu(
+            ElementId::Name(format!("menu:{key}").into()),
+            &row.name,
+            items,
+        )
+        .into_any_element(),
     ];
     let mut block = div().flex().flex_col().child(ledger_row(
         ElementId::Name(format!("group-row:{key}").into()),
@@ -663,7 +723,9 @@ fn history_block(
         for run in runs {
             sessions = sessions.child(past_row(run, columns, cx));
             if let Some(read) = &run.read {
-                sessions = sessions.child(read_run(read, run, names, cx)).child(kit::gap(L));
+                sessions = sessions
+                    .child(read_run(read, run, names, cx))
+                    .child(kit::gap(L));
             }
         }
     }
@@ -705,7 +767,12 @@ fn past_row(row: &PastRow, columns: &Columns, cx: &mut Context<SplatRoot>) -> Di
             .name(format!("{word} the run of {}, {}", row.name, row.label))
             .on_click(act(cx, ListAction::ReadHistory(row.path.clone())))
             .into_any_element(),
-        row_menu(ElementId::Name(format!("menu:{key}").into()), &row.name, items).into_any_element(),
+        row_menu(
+            ElementId::Name(format!("menu:{key}").into()),
+            &row.name,
+            items,
+        )
+        .into_any_element(),
     ];
     ledger_row(
         ElementId::Name(format!("past-row:{key}").into()),
@@ -789,12 +856,11 @@ fn read_run(read: &ReadRun, row: &PastRow, names: Pixels, cx: &mut Context<Splat
                 .flex_row()
                 .items_baseline()
                 .gap(M)
-                .child(
-                    div()
-                        .w(names)
-                        .flex_none()
-                        .child(kit::text(Type::Strong, c.text, final_row.name.clone())),
-                )
+                .child(div().w(names).flex_none().child(kit::text(
+                    Type::Strong,
+                    c.text,
+                    final_row.name.clone(),
+                )))
                 .child(values),
         );
     }

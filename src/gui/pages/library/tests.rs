@@ -68,7 +68,10 @@ fn library_author() {
     shell.click("Markdown editor");
     shell.press("ctrl-end");
     shell.type_text(DRAFT_WORDS);
-    assert!(shell.read(|root| root.app.library.dirty()), "typing makes a draft");
+    assert!(
+        shell.read(|root| root.app.library.dirty()),
+        "typing makes a draft"
+    );
     assert!(shell.bounds("Discard").is_some(), "a draft offers Discard");
     shell.capture("library-author__03-dirty__1200x800");
     // Ctrl+S saves the draft to its file.
@@ -84,7 +87,11 @@ fn library_author() {
             .map(|module| module.path.join("Rules/Ash Exposure.md"))
             .expect("the package")
     });
-    assert!(std::fs::read_to_string(&file).unwrap().contains(DRAFT_WORDS.trim()));
+    assert!(
+        std::fs::read_to_string(&file)
+            .unwrap()
+            .contains(DRAFT_WORDS.trim())
+    );
     shell.capture("library-author__05-saved-with-ctrl-s__1200x800");
     // A change on disk under a draft: Save stops, and the choices show.
     shell.type_text(SECOND_WORDS);
@@ -127,7 +134,10 @@ fn library_author() {
     assert!(shell.read(|root| root.app.library.forms().0));
     shell.capture("library-author__09-manage-packages__1200x800");
     shell.press("escape");
-    assert!(!shell.read(|root| root.app.library.forms().0), "Escape closes the form");
+    assert!(
+        !shell.read(|root| root.app.library.forms().0),
+        "Escape closes the form"
+    );
     // New entry: a creature in the package, opened in the editor.
     shell.click("id:library-new");
     shell.click("id:library-new-name");
@@ -227,7 +237,10 @@ fn library_file_fault() {
         .expect("the unreadable file's row, named by its path");
     shell.click(&row);
     // The reader names the fault, with Try again; Edit Markdown waits.
-    assert!(shell.bounds("Try again").is_some(), "the fault offers Try again");
+    assert!(
+        shell.bounds("Try again").is_some(),
+        "the fault offers Try again"
+    );
     shell.click("Edit Markdown");
     assert!(
         !shell.read(|root| root.app.library.source_open()),
@@ -250,7 +263,11 @@ fn package_manifest_broken() {
     let mut shell = Shell::new("package-manifest-broken", Seed::Campaign);
     let manifest = package_folder(&mut shell).join("Module.md");
     let text = std::fs::read_to_string(&manifest).unwrap();
-    std::fs::write(&manifest, text.replace("splat_kind: package", "splat_kind: [package")).unwrap();
+    std::fs::write(
+        &manifest,
+        text.replace("splat_kind: package", "splat_kind: [package"),
+    )
+    .unwrap();
     library(&mut shell);
     scope(&mut shell, "Ashen Marches");
     // The header counts the file; its entries stay.
@@ -262,7 +279,10 @@ fn package_manifest_broken() {
     // Fixed outside Splat: Reload from disk reads it, and the count goes.
     std::fs::write(&manifest, text).unwrap();
     reload(&mut shell);
-    assert!(shell.bounds("1 file needs fixing").is_none(), "the fault ends with the reload");
+    assert!(
+        shell.bounds("1 file needs fixing").is_none(),
+        "the fault ends with the reload"
+    );
 }
 
 #[test]
@@ -272,10 +292,18 @@ fn library_to_encounter_copy() {
     scope(&mut shell, "Ashen Marches");
     shell.click("Ash Wraith · Creature · CR 1");
     shell.click("Copy to…");
-    assert!(shell.read(|root| root.app.copy_dialog.is_some()), "Copy to… opens the dialog");
+    assert!(
+        shell.read(|root| root.app.copy_dialog.is_some()),
+        "Copy to… opens the dialog"
+    );
     // The catalogue loads on a thread.
     for _ in 0..100 {
-        if shell.read(|root| root.app.copy_dialog.as_ref().is_some_and(|d| d.plan().is_some())) {
+        if shell.read(|root| {
+            root.app
+                .copy_dialog
+                .as_ref()
+                .is_some_and(|d| d.plan().is_some())
+        }) {
             break;
         }
         shell.wait(std::time::Duration::from_millis(50));
@@ -323,5 +351,9 @@ fn remove_package_in_use() {
     shell.capture("remove-package-in-use__02-package-unregistered-with-undo__1200x800");
     shell.click("Undo unregister Ashen Marches");
     loaded(&mut shell);
-    assert_eq!(shell.read(|root| root.app.campaigns.modules().len()), 1, "Undo registers it again");
+    assert_eq!(
+        shell.read(|root| root.app.campaigns.modules().len()),
+        1,
+        "Undo registers it again"
+    );
 }

@@ -79,7 +79,11 @@ pub(crate) fn render(
         return div().into_any_element();
     }
     let window_width = window.viewport_size().width;
-    let room = root.pages.run.width.unwrap_or_else(|| page_width(root, window));
+    let room = root
+        .pages
+        .run
+        .width
+        .unwrap_or_else(|| page_width(root, window));
     root.pages.run.width = Some(page_width(root, window));
     if !root
         .app
@@ -150,12 +154,14 @@ fn panel_width(room: Pixels, window: Pixels) -> Pixels {
 
 /// A click handler that acts on the run, then draws again.
 fn on_run(cx: &mut Context<SplatRoot>, act: impl Fn(&mut Run) + 'static) -> OnClick {
-    Box::new(cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
-        if let Some(run) = root.app.encounters.run_mut() {
-            act(run);
-        }
-        cx.notify();
-    }))
+    Box::new(
+        cx.listener(move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
+            if let Some(run) = root.app.encounters.run_mut() {
+                act(run);
+            }
+            cx.notify();
+        }),
+    )
 }
 
 /// A boxed handler with no event (a field's Enter, a dialog's Escape).
@@ -185,7 +191,11 @@ fn run_title(run: &Run, what: impl Into<gpui::SharedString>) -> gpui::Div {
         .flex()
         .flex_col()
         .min_w_0()
-        .child(kit::text::one_line(Type::Small, c.muted, format!("Run · {}", run.name)))
+        .child(kit::text::one_line(
+            Type::Small,
+            c.muted,
+            format!("Run · {}", run.name),
+        ))
         .child(kit::text::one_line(Type::Title, c.text, what))
 }
 
@@ -233,7 +243,11 @@ fn undo_button(run: &Run, id: &'static str, words: String, density: theme::Densi
     } else {
         button
     };
-    button.blocked(run.history.is_empty().then(|| run.empty_undo_reason().to_owned()))
+    button.blocked(
+        run.history
+            .is_empty()
+            .then(|| run.empty_undo_reason().to_owned()),
+    )
 }
 
 /// A handler with no event (a field's Enter, a dialog's Escape) that acts on the root.
@@ -241,7 +255,8 @@ fn plain(
     cx: &mut Context<SplatRoot>,
     act: impl Fn(&mut SplatRoot, &mut Window, &mut Context<SplatRoot>) + 'static,
 ) -> OnPlain {
-    let listener = cx.listener(move |root: &mut SplatRoot, _: &(), window, cx| act(root, window, cx));
+    let listener =
+        cx.listener(move |root: &mut SplatRoot, _: &(), window, cx| act(root, window, cx));
     Box::new(move |window, cx| listener(&(), window, cx))
 }
 

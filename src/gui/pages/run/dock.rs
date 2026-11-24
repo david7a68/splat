@@ -6,11 +6,11 @@
 use super::{number_text, on_run};
 use crate::encounter_run::{Command, Phase, Run, view};
 use crate::gui::{SplatRoot, icons, kit, theme};
-use kit::WithTooltip as _;
 use gpui::{
     Context, ElementId, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Styled,
     Window, div, prelude::*, px,
 };
+use kit::WithTooltip as _;
 use theme::{Density, Type, TypeExt, colors};
 
 /// Under this width the dock gives up the hint and an icon (egui `DOCK_ALL_WORDS_FROM`).
@@ -21,7 +21,11 @@ const EFFECT_WORD_FROM: f32 = 560.0;
 const EFFECT_ICON_FROM: f32 = 480.0;
 
 /// The dock.
-pub(super) fn render(run: &Run, width: gpui::Pixels, cx: &mut Context<SplatRoot>) -> impl IntoElement {
+pub(super) fn render(
+    run: &Run,
+    width: gpui::Pixels,
+    cx: &mut Context<SplatRoot>,
+) -> impl IntoElement {
     let c = colors();
     let narrow = f32::from(width) < ALL_WORDS_FROM;
     let value = crate::design::parse_signed(&run.amount);
@@ -32,20 +36,23 @@ pub(super) fn render(run: &Run, width: gpui::Pixels, cx: &mut Context<SplatRoot>
         .flex_none()
         .on_key_down(cx.listener(amount_keys))
         .child(
-            kit::TextField::new(("run-amount", run.id().as_u128() as u64), run.amount.clone())
-                .placeholder("Amount")
-                .name("Amount")
-                .focus(run.focus_amount)
-                .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
-                    if let Some(run) = root.app.encounters.run_mut() {
-                        let digits = number_text(words);
-                        if run.amount != digits {
-                            run.amount = digits;
-                            run.amount_typed = true;
-                        }
+            kit::TextField::new(
+                ("run-amount", run.id().as_u128() as u64),
+                run.amount.clone(),
+            )
+            .placeholder("Amount")
+            .name("Amount")
+            .focus(run.focus_amount)
+            .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
+                if let Some(run) = root.app.encounters.run_mut() {
+                    let digits = number_text(words);
+                    if run.amount != digits {
+                        run.amount = digits;
+                        run.amount_typed = true;
                     }
-                    cx.notify();
-                })),
+                }
+                cx.notify();
+            })),
         );
     let damage = kit::Button::secondary("run-damage", "Damage")
         .density(Density::Glance)
@@ -72,7 +79,11 @@ pub(super) fn render(run: &Run, width: gpui::Pixels, cx: &mut Context<SplatRoot>
         .gap(theme::XS)
         .child(amount)
         .child(damage)
-        .child(div().w(if narrow { theme::XS } else { theme::M }).flex_none())
+        .child(
+            div()
+                .w(if narrow { theme::XS } else { theme::M })
+                .flex_none(),
+        )
         .child(heal)
         .child(temp)
         .child(div().flex_1())
@@ -83,7 +94,11 @@ pub(super) fn render(run: &Run, width: gpui::Pixels, cx: &mut Context<SplatRoot>
             .flex_row()
             .items_center()
             .h(px(28.0))
-            .child(kit::text::one_line(Type::Small, c.muted, crate::encounter_run::dock::target_hint()))
+            .child(kit::text::one_line(
+                Type::Small,
+                c.muted,
+                crate::encounter_run::dock::target_hint(),
+            ))
             .into_any_element()
     } else if run
         .effect_open
@@ -129,21 +144,34 @@ pub(super) fn apply(run: &mut Run, make: fn(usize, i64) -> Command) {
 
 /// Enter and Shift+Enter in Amount: damage and heal (Shift first, so a heal is never damage).
 /// Beside Notes, a letter in Amount goes on to the note with the digits before it.
-fn amount_keys(root: &mut SplatRoot, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<SplatRoot>) {
+fn amount_keys(
+    root: &mut SplatRoot,
+    event: &KeyDownEvent,
+    _: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) {
     let Some(run) = root.app.encounters.run_mut() else {
         return;
     };
     let keys = &event.keystroke;
     if keys.key == "enter" && !keys.modifiers.control && !keys.modifiers.alt {
-        apply(run, if keys.modifiers.shift { Command::Heal } else { Command::Damage });
+        apply(
+            run,
+            if keys.modifiers.shift {
+                Command::Heal
+            } else {
+                Command::Damage
+            },
+        );
         cx.stop_propagation();
         cx.notify();
         return;
     }
     if run.notes_open
-        && let Some(typed) = keys.key_char.as_ref().filter(|typed| {
-            typed.chars().any(|c| c.is_alphabetic()) && !keys.modifiers.control
-        })
+        && let Some(typed) = keys
+            .key_char
+            .as_ref()
+            .filter(|typed| typed.chars().any(|c| c.is_alphabetic()) && !keys.modifiers.control)
     {
         run.for_note = Some(format!("{}{typed}", std::mem::take(&mut run.amount)));
         run.return_focus = true;
@@ -206,7 +234,11 @@ fn dice(run: &Run, narrow: bool, cx: &mut Context<SplatRoot>) -> impl IntoElemen
         .density(Density::Read)
         .hint("Roll this expression. The result goes in the log.")
         .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| roll(root, cx)));
-    let button = if narrow { button } else { button.icon(icons::DICE) };
+    let button = if narrow {
+        button
+    } else {
+        button.icon(icons::DICE)
+    };
     div()
         .flex()
         .flex_row()
@@ -242,13 +274,28 @@ fn selected_line(run: &Run, width: gpui::Pixels, cx: &mut Context<SplatRoot>) ->
         .key(conditions_key)
         .on_click(on_run(cx, |run| run.open_conditions_tab()));
     let concentration = p.concentration;
-    let conc = toggle("run-dock-conc", "Conc", icons::CONCENTRATING, concentration, "Concentrating")
-        .hint("Mark concentration. It records your ruling only.")
-        .on_click(super::on_command(cx, Command::Concentration(index, !concentration)));
+    let conc = toggle(
+        "run-dock-conc",
+        "Conc",
+        icons::CONCENTRATING,
+        concentration,
+        "Concentrating",
+    )
+    .hint("Mark concentration. It records your ruling only.")
+    .on_click(super::on_command(
+        cx,
+        Command::Concentration(index, !concentration),
+    ));
     let present = p.present;
-    let absent = toggle("run-dock-absent", presence, icons::ABSENT, !present, presence)
-        .hint(hint)
-        .on_click(super::on_command(cx, Command::Presence(index, !present)));
+    let absent = toggle(
+        "run-dock-absent",
+        presence,
+        icons::ABSENT,
+        !present,
+        presence,
+    )
+    .hint(hint)
+    .on_click(super::on_command(cx, Command::Presence(index, !present)));
     let running = run.state.phase == Phase::Running;
     let effect_key = if run.lookup_open || run.notes_open {
         ""
@@ -335,38 +382,45 @@ fn effect_line(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
         .flex_row()
         .items_center()
         .min_h(Density::Read.control())
-        .on_key_down(cx.listener(move |root: &mut SplatRoot, event: &KeyDownEvent, _, cx| {
-            if event.keystroke.key != "escape" {
-                return;
-            }
-            if let Some(run) = root.app.encounters.run_mut() {
-                if let Some(field) = run.effect_fields.get_mut(&escaping) {
-                    field.clear();
+        .on_key_down(
+            cx.listener(move |root: &mut SplatRoot, event: &KeyDownEvent, _, cx| {
+                if event.keystroke.key != "escape" {
+                    return;
                 }
-                run.effect_fields.retain(|_, field| !field.words.is_empty());
-                run.effect_open = None;
-                run.focus_amount = true;
-            }
-            cx.stop_propagation();
-            cx.notify();
-        }))
+                if let Some(run) = root.app.encounters.run_mut() {
+                    if let Some(field) = run.effect_fields.get_mut(&escaping) {
+                        field.clear();
+                    }
+                    run.effect_fields.retain(|_, field| !field.words.is_empty());
+                    run.effect_open = None;
+                    run.focus_amount = true;
+                }
+                cx.stop_propagation();
+                cx.notify();
+            }),
+        )
         .child(
             kit::TextField::new(ElementId::Name(format!("run-effect-{key}").into()), words)
                 .placeholder(hint.clone())
                 .name("Effect")
                 .focus(focus)
-                .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                    if let Some(run) = root.app.encounters.run_mut() {
-                        let field = run.effect_fields.entry(typing.clone()).or_default();
-                        field.words = words.to_owned();
-                        field.focus = false;
-                    }
-                    cx.notify();
-                }))
+                .on_change(
+                    cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                        if let Some(run) = root.app.encounters.run_mut() {
+                            let field = run.effect_fields.entry(typing.clone()).or_default();
+                            field.words = words.to_owned();
+                            field.focus = false;
+                        }
+                        cx.notify();
+                    }),
+                )
                 .on_enter(super::plain(cx, move |root, _, cx| {
                     if let Some(run) = root.app.encounters.run_mut()
-                        && let Some(index) =
-                            run.state.participants.iter().position(|p| p.key == entering)
+                        && let Some(index) = run
+                            .state
+                            .participants
+                            .iter()
+                            .position(|p| p.key == entering)
                     {
                         let words = run
                             .effect_fields

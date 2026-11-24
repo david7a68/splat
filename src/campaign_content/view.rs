@@ -398,14 +398,13 @@ impl CampaignContent {
                     });
                 let indeterminate = partial || (count == 0 && required > 0);
                 let mark = catalogue.manifest_problems.get(&module.id).map(|problem| {
-                    let folder = campaigns.modules().iter().find(|known| known.id == module.id);
-                    manifest_mark(
-                        folder
-                            .zip(catalogue.entries.get(&module.id))
-                            .is_some_and(|(folder, entry)| {
-                                manifest_on_disk(folder, &entry.entry.path, problem)
-                            }),
-                    )
+                    let folder = campaigns
+                        .modules()
+                        .iter()
+                        .find(|known| known.id == module.id);
+                    manifest_mark(folder.zip(catalogue.entries.get(&module.id)).is_some_and(
+                        |(folder, entry)| manifest_on_disk(folder, &entry.entry.path, problem),
+                    ))
                 });
                 let note = (count == 0 && required > 0)
                     .then(|| {
@@ -416,7 +415,8 @@ impl CampaignContent {
                         };
                         let mut users = selection.campaign_users(catalogue);
                         users.sort_by(|a, b| a.1.cmp(&b.1));
-                        let names: Vec<&str> = users.iter().map(|(_, name)| name.as_str()).collect();
+                        let names: Vec<&str> =
+                            users.iter().map(|(_, name)| name.as_str()).collect();
                         match names.as_slice() {
                             [] => None,
                             [name] => Some(format!("{name} use its creatures.")),
@@ -577,7 +577,8 @@ impl CampaignContent {
             .copied()
             .filter(|id| catalogue.selectable(*id))
             .collect();
-        let all = selection_index.is_some_and(|i| document.selections[i].selection == Selection::All);
+        let all =
+            selection_index.is_some_and(|i| document.selections[i].selection == Selection::All);
         let view = PackageView {
             id: module.id,
             name: module.name.clone(),
@@ -748,6 +749,9 @@ impl CampaignContent {
 
     /// The repairs waiting, by their files.
     pub fn repair_paths(&self) -> Vec<String> {
-        self.repairs.iter().map(|repair| repair.path.clone()).collect()
+        self.repairs
+            .iter()
+            .map(|repair| repair.path.clone())
+            .collect()
     }
 }

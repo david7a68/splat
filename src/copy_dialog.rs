@@ -391,8 +391,8 @@ impl CopyDialog {
                 .iter()
                 .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
         {
-            let result = check_destination(&destination.3, destination.1, destination.0)
-                .and_then(|_| {
+            let result =
+                check_destination(&destination.3, destination.1, destination.0).and_then(|_| {
                     CopyPlan::prepare(
                         &self.source,
                         &destination.3,

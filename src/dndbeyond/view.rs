@@ -78,12 +78,20 @@ impl DndBeyond {
 
     /// The link's picker is in view this frame: a link the list has not named yet asks for the
     /// list once.
-    pub fn link_in_view(&mut self, session: Option<Session>, local: &Campaigns, ctx: &egui::Context) {
+    pub fn link_in_view(
+        &mut self,
+        session: Option<Session>,
+        local: &Campaigns,
+        ctx: &egui::Context,
+    ) {
         self.visible_last_frame = true;
         let Some(campaign) = local.active_campaign() else {
             return;
         };
-        let key = campaign.dndbeyond_campaign_id.clone().map(|id| (campaign.id, id));
+        let key = campaign
+            .dndbeyond_campaign_id
+            .clone()
+            .map(|id| (campaign.id, id));
         if key.is_some()
             && key != self.requested_visible_link
             && self.pending.is_none()

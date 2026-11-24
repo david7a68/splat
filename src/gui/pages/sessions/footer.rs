@@ -24,7 +24,10 @@ pub(super) fn lines(
         gpui::ElementId::Name(id.to_owned().into()),
         lines,
         cx.listener(
-            move |root, pressed: &kit::messages::Pressed<crate::sessions::page::SessionAct>, window, cx| {
+            move |root,
+                  pressed: &kit::messages::Pressed<crate::sessions::page::SessionAct>,
+                  window,
+                  cx| {
                 if let Some(press) = pressed.take() {
                     on_press(root, press, window, cx);
                     cx.notify();

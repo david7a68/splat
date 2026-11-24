@@ -103,8 +103,10 @@ each page's main states, plus interaction tests of the main flows.
 
 ## Kit guide
 
-Wave 1 built this. Page agents read this section and the code under `src/gui/`; each part's doc
-comment says when to use it.
+Wave 1 built this; the wave-2 merges made each shared part one part (one footer data API, one
+Link, one virtual list, one section of each kind, one portrait, one HP readout). Page agents read
+this section and the code under `src/gui/`; each part's doc comment says when to use it. Before
+you add a part, look for it in the table below: a page's own copy of a kit part is merged away.
 
 ### How the app runs
 
@@ -175,38 +177,46 @@ Icons: `gui::icons::*` has the design system's names (`icons::RUN`, `icons::WARN
 
 ### The kit (`gui::kit`)
 
+Every part once, with its signature. Each part's doc comment says more. Ids are `impl Into<ElementId>`,
+words `impl Into<SharedString>`, handlers `Fn(&ClickEvent, &mut Window, &mut App)` unless the row
+says otherwise (`cx.listener` makes them).
+
 | Part | Call | Use |
 | --- | --- | --- |
-| Text | `text(Type, Hsla, words) -> Div`, `one_line(..)`, `icon(glyph, Type, Hsla)`, `label(words, count)`, `heading(Heading::{Group{title,count}, Section, Panel, Name}, first: bool)`, `rule()`, `gap(Pixels)` | All words; `Label` is set in capitals for you |
-| Button | `Button::{primary, secondary, quiet, destructive}(id, label)` then `.icon(glyph)`, `.key("Ctrl+S")`, `.hint(words)`, `.blocked(Option<reason>)`, `.density(Density)`, `.selected(bool)`, `.plain()`, `.line_start()`, `.full_width()`, `.name(words)`, `.on_click(f)` | One primary per view; `line_start` for a quiet action that starts a line |
+| Text (`text`) | `text(Type, Hsla, words) -> Div`, `one_line(Type, Hsla, words)`, `icon(glyph, Type, Hsla)`, `label(words, count)`, `heading(Heading::{Group{title,count}, Section, Panel, Name}, first: bool)`, `rule()`, `gap(Pixels)`, `text::any(element)` | All words; `Label` is set in capitals for you |
+| Button (`button`) | `Button::{primary, secondary, quiet, destructive}(id, label)` then `.icon(glyph)`, `.key("Ctrl+S")`, `.hint(words)`, `.blocked(Option<reason>)`, `.density(Density)`, `.selected(bool)`, `.plain()`, `.line_start()`, `.full_width()`, `.name(words)`, `.on_click(f)` | One primary per view; `line_start` for a quiet action that starts a line. Found by its words, its `.name`, or `id:<id>` (`button::element_name`) |
 | Icon button | `IconButton::new(id, glyph, name).hint(words).toggled(bool).on_click(f)` | `⋯`, `×`, a view toggle; never an action that needs words |
-| Text field | `TextField::new(id, value).placeholder(..).name(..).masked().disabled(bool).width(px).on_change(\|&str, window, cx\|).on_enter(f).on_escape(f).on_blur(f)`, `.focus(bool)` / `.focus_selected(bool)` | One line; two-way sync with your `String` (give the value each frame, take edits in `on_change`). `focus(true)` takes the keyboard with the caret after the words (a field that opens for typing); `focus_selected(true)` takes it with all the words selected (a rename a press opened). Give either for one frame. `on_escape` stops the press there: the window's Escape does not also run |
-| Editor | `TextEditor::new(id, value).placeholder(..).rows(n).mono().text_type(Type).fill().focus(bool).handle(&EditorHandle).on_change(f)` | Several lines that wrap; `text_type(Type::Prose)` for a note |
-| Editor handle | `EditorHandle::new(placeholder, window, cx)`, `.caret(cx)`, `.set_caret(byte, cx)`, `.show_words(words, window, cx)`, `.focus(window, cx)`, `.focused(window, cx)` | An editor state the page keeps (in its `State`, by what it edits) to read and place the caret and to write at it |
-| Field block | `field(caption, Option<help>, Option<error>, control) -> Div`, `help(words)` | Caption, control, help, error, then `L` |
-| Rows | `Row::new(id, name).height(px).grows().selected(bool).on_click(f).child(..)`, `two_line_row(id, title, detail, selected)` | List rows with hover, selection and focus; `grows` makes `height` a minimum, for words that wrap |
-| Tabs | `Segmented::new(id, options, chosen).on_select(\|&usize, window, cx\|)` | Page tabs and small exclusive choices |
-| Checkbox | `Checkbox::new(id, label, checked).blocked(..).on_click(f)`, `Switch::new(id, label, on)` | Yes/no settings |
-| Menu | `MenuButton::new(id, Button).item(MenuItem::new(label).icon(..).checked(bool).blocked(Option<reason>).destructive().on_click(f))` | A row's `⋯`, `New ▾` |
+| Link (`link`) | `Link::new(id, words)` or `link(id, words)`, then `.small()`, `.wrap()`, `.hint(words)`, `.name(words)`, `.on_click(f)` | A move to another place (a note, a file, a page), never an act that changes data. Accent words, underlined, the focus colour on hover; at least `XL` wide and 24 px high. One line by default; `.wrap()` for words of unknown length (a note's name, a path) |
+| Text field (`field`) | `TextField::new(id, value).placeholder(..).name(..).masked().disabled(bool).width(px).on_change(\|&str, window, cx\|).on_enter(f).on_escape(f).on_blur(f)`, `.focus(bool)` / `.focus_selected(bool)` | One line; two-way sync with your `String` (give the value each frame, take edits in `on_change`). `focus(true)` takes the keyboard with the caret after the words (a field that opens for typing); `focus_selected(true)` takes it with all the words selected (a rename a press opened). Give either for one frame. `on_escape` stops the press there: the window's Escape does not also run |
+| Editor | `TextEditor::new(id, value).placeholder(..).name(..).rows(n).mono().text_type(Type).fill().focus(bool).handle(&EditorHandle).on_change(f)` | Several lines that wrap; `text_type(Type::Prose)` for a note |
+| Editor handle | `EditorHandle::new(placeholder, window, cx)`, `.caret(cx)`, `.set_caret(byte, cx)`, `.words(cx)`, `.show_words(words, window, cx)`, `.focus(window, cx)`, `.focused(window, cx)` | An editor state the page keeps (in its `State`, by what it edits) to read and place the caret and to write at it |
+| Field block | `field(caption, Option<help>, Option<error>, control) -> Div`, `help(words) -> Div` | Caption, control, help, error, then `L` |
+| Value block (`value_block`) | `ValueBlock::new(HeadingRow::new(title).note(HeadingNote::..).action(Button), first).field(..).save_row(..).messages(Vec<Message>)` or `.end()` | One settings value: heading row, field, save row, its messages (typed stages: a field comes before its save row) |
+| Fact (`fact`) | `fact::fact_line(label, values)`, `fact::words(label, values)`, `fact::tile_label(..)`, `fact::roll_tile(label, link)` | `Label: a · b` on its own line (no line ends at a dot); a stat tile whose value rolls |
+| Rows (`list`) | `Row::new(id, name).height(px).grows().selected(bool).on_click(f).child(..)`, `two_line_row(id, title, detail, selected)` | List rows with hover, selection and focus; `grows` makes `height` a minimum, for words that wrap |
+| Tabs (`tabs`) | `Segmented::new(id, options, chosen).on_select(\|&usize, window, cx\|)` | Page tabs and small exclusive choices |
+| Checkbox (`checkbox`) | `Checkbox::new(id, label, checked).mixed(bool).blocked(..).on_click(f)`, `Switch::new(id, label, on).blocked(..).on_click(f)` | Yes/no settings; `mixed` draws egui's partly-chosen dash |
+| Menu (`menu`) | `MenuButton::new(id, Button).item(MenuItem::new(label).icon(..).checked(bool).blocked(Option<reason>).destructive().on_click(f))` | A row's `⋯`, `New ▾` |
 | Status menu | `StatusMenu::new(id, Status).item(MenuItem)` | A status that opens a menu under it (`2 notes need fixing`) |
-| Quiet section | `QuietSection::new(id, title).default_open(bool).child(..)` | A caret and muted words that open what most readers skip (Technical details) |
 | Drop-down | `Dropdown::new(id, name, options, Option<chosen>).placeholder(..).blocked(..).width(px).density(..).command(MenuItem).on_select(\|&usize, window, cx\|)` | Choose one value |
-| Popover | `Popover::new(id, Button, content)` | Content in a raised layer under a button |
-| Dialog | `Dialog::new(id, title).child(..).destructive(Button).action(safe).action(commit).on_escape(f)` | Modal tasks only; draw it while open; it covers the window |
-| Message | `Message::new(Tone::{Info, Success, Warning, Error}, words).small().action(Button).destructive(Button)` | Results, reasons, notices; safe action first, `L` before the destructive one |
-| Footer messages | `design::outcome::plain`: build `Messages` as egui does with `let frame = PaneFrame::plain();`, then `messages.into_plain() -> Vec<PlainLine<A>>` (also `KeptLine`, `FaultMessage` and `Notice::into_plain() -> PlainLine<A>`); `kit::messages::lines(id, lines, cx.listener(\|root, pressed: &kit::messages::Pressed<A>, window, cx\| { if let Some(press) = pressed.take() { … } }))`, `kit::messages::message(id, line, on_press, small)`, `kit::messages::tone(design::Tone)` | Every pane footer (Timeline, Trackers, Library, World). One order (`footer_order`), Undo first with its icon, safe choices bordered, a `Lose` choice red with `L` before it (also a `Choice::named_as(Lose, …)`), locks (`blocked` with the reason), hover words, each choice's help under it, the file line with `Edit in Obsidian` and `Show file`. A press is a `Press { id, ticket }`: a kept line's ticket reaches only the entry it showed; give it to the store's `…press…` method as egui does. A locked control gives no press |
-| Status | `Status::new(glyph, word, color).icon_color(c)`, `status(&Status)`, `status_link(id, Status).hint(..).on_click(f)` | Icon + word + colour |
-| Empty state | `empty_state(glyph, title, body, Option<action>)` | An empty pane or page |
-| Page header | `page_header(title, Option<context>, Vec<AnyElement>)` | A page's first line, rule and `L` |
-| Scroll | `scroll_column(id, content)`, `scroll::scroll_column_with(id, &ScrollHandle, content)`, `scroll::sideways(id, content)` | A column that keeps its bar's lane |
-| Virtual list | `uniform_column(id, &UniformListScrollHandle, count, cx.processor(\|root, range, window, cx\| Vec<row>))`, `measured_column(id, &ListState, \|at, window, cx\| AnyElement)` (`kit::virtual_list`) | A long list that builds only the rows in view, in a column that keeps its bar's lane. `uniform_column` when every row has one height (Library entries, Timeline events); `measured_column` when rows have their own heights (World's headings and notes; `splice` the `ListState` when the rows change). Keep the handle or state in your page's GPUI state |
-| Panes | `Pane::new(id).header(..).footer(Message).fixed().flush().child(..)`, `Columns::new(id).column(width, min..max, pane).rest(pane)` | Task columns with splitters; messages in the footer |
-| Markdown | `markdown(id, source)` / `Markdown::new(id, source)` then `.document(uuid)`, `.compact()`, `.fields()`, `.skills()`, `.row_words(muted)`, `.full_width()`, `.wide_tables()`, `.jump_in(&ScrollHandle)`, `.on_link(\|&str, window, cx\|)`, `.on_target(\|&LinkTarget, window, cx\|)` | Every Markdown document; see Reader parts |
-| Fact | `fact::fact_line(label, values)`, `fact::words`, `fact::tile_label`, `fact::roll_tile(label, link)` | `Label: a · b` on its own line; no line ends at a dot |
-| Value block | `ValueBlock::new(HeadingRow::new(title).note(HeadingNote::..).action(Button), first).field(..).save_row(..).messages(vec![Message])` or `.end()` | One settings value: heading row, field, save row, its messages |
-| Nav | `NavItem`, `NavToggle` | The rail only |
-| Tooltip | `.with_tooltip(words)` on an element with an id (`WithTooltip`) | Hints and blocked reasons |
-| Link | `Link::new(id, words)` or `link(id, words)`, then `.small()`, `.wrap()`, `.hint(words)`, `.name(words)`, `.on_click(f)` | A move to another place (a note, a file, a page), never an act that changes data. Accent words, underlined, the focus colour on hover; at least `XL` wide and 24 px high. One line by default; `.wrap()` for words of unknown length (a note's name, a path) |
+| Popover | `Popover::new(id, Button, content).on_status(..)` | Content in a raised layer under a button |
+| Menu layer | `menu::layer_for(&id, content)` with `menu::open_popup(id, window, cx)`, `menu::is_open(&id, cx)`, `menu::any_open(cx)`, `menu::close_open_popup(window, cx)` | A menu that code opens (a row's right-click menu): draw the layer after its element while `is_open` |
+| Section (`section`) | `Section::new(id, title, open).blocked(Option<reason>).on_toggle(\|&bool, window, cx\|).child(..)` | egui's `design::section`: a `Strong` title after a caret. With `on_toggle` the caller keeps whether it is open; without it the section keeps it under its id, starting at `open` |
+| Quiet section | `QuietSection::new(id, title).default_open(bool).child(..)`, or caller-kept `.open(bool).on_toggle(\|&bool, window, cx\|)` | egui's `design::quiet_section`: a caret and muted `Small` words that open what most readers skip (Technical details). It keeps its own open state, unless the caller gives `open` and `on_toggle` (to build a costly body only while open) |
+| Dialog (`dialog`) | `Dialog::new(id, title).child(..).destructive(Button).action(safe).action(commit).on_escape(f)` | Modal tasks only; draw it while open; it covers the window |
+| Message (`outcome`) | `Message::new(Tone::{Info, Success, Warning, Error}, words).small().detail(element).action(element).destructive(element)` | Results, reasons, notices; safe action first, `L` before the destructive one |
+| Footer messages (`messages`) | Build `Messages` as egui does with `let frame = PaneFrame::plain();`, then `messages.into_plain() -> Vec<PlainLine<A>>` (also `RowMessages::into_plain()`, `KeptLine`, `FaultMessage` and `Notice::into_plain() -> PlainLine<A>`; an owner that feeds both a footer and a save row writes to `impl plain::Sink<'f, A>`); `kit::messages::lines(id, lines, cx.listener(\|root, pressed: &kit::messages::Pressed<A>, window, cx\| { if let Some(press) = pressed.take() { … } }))`, `kit::messages::message(id, line, on_press, small)`, `kit::messages::tone(design::Tone)` | Every pane footer and save row's messages. One order (`footer_order`), Undo first with its icon, safe choices bordered, a `Lose` choice red with `L` before it, locks (`blocked` with the reason), hover words, each choice's help under it, the file line with `Edit in Obsidian` and `Show file`. A press is a `Press { id, ticket }` (`PlainLine::press_undo()`, `press_choice(at)`): a kept line's ticket reaches only the entry it showed; give it to the store's `…press…` method as egui does. A locked control gives no press. A view's own choice look (a banner) takes `plain::ChoiceForm` |
+| Status (`status`) | `Status::new(glyph, word, color).icon_color(c)`, `status(&Status)`, `status_link(id, Status).hint(..).on_click(f)` | Icon + word + colour |
+| HP (`hp`) | `hp::readout(hp, max, current: Type, max: Type)`, `hp::bar(hp, max, temp, width)`, `hp::word(hp, max) -> Option<(icon, word, Hsla)>`, `hp::temp(temp, Type)`, `hp::hp_color(HpState)`, `hp::current_color(HpState)` | HP at a glance (`design::hp_readout`, `hp_bar`, `hp_word`); colour is never the only sign |
+| Portrait (`portrait`) | `portrait(Option<&Path>, name, size) -> Div` | A round picture, or the name's initial on a quiet disc |
+| Empty state (`empty`) | `empty_state(glyph, title, body, Option<action>)` | An empty pane or page |
+| Page header (`title`) | `page_header(title, Option<context>, Vec<AnyElement>)`, `page_header_with(title, Option<AnyElement>, Vec<AnyElement>)`, `title::actions(items)` | A page's first line, rule and `L`; `_with` for a context that is an element (a status) |
+| Scroll (`scroll`) | `scroll_column(id, content)`, `scroll::scroll_column_with(id, &ScrollHandle, content)`, `scroll::sideways(id, content)` | A column that keeps its bar's lane |
+| Virtual list (`virtual_list`) | `uniform_column(id, &UniformListScrollHandle, count, cx.processor(\|root, range, window, cx\| Vec<row>))`, `measured_column(id, &ListState, \|at, window, cx\| AnyElement)` | A long list that builds only the rows in view, in a column that keeps its bar's lane. `uniform_column` when every row has one height (Library entries, Timeline events); `measured_column` when rows have their own heights (World's headings and notes; `splice` the `ListState` when the rows change). Keep the handle or state in your page's GPUI state |
+| Panes (`panes`) | `Pane::new(id).header(..).footer(element).fixed().flush().child(..)`, `Columns::new(id).column(width, min..max, pane).rest(pane)` | Task columns with splitters; messages in the footer |
+| Markdown (`markdown`) | `markdown(id, source)` / `Markdown::new(id, source)` then `.document(uuid)`, `.compact()`, `.fields()`, `.skills()`, `.row_words(muted)`, `.full_width()`, `.wide_tables()`, `.jump_in(&ScrollHandle)`, `.on_link(\|&str, window, cx\|)`, `.on_target(\|&LinkTarget, window, cx\|)` | Every Markdown document; see Reader parts |
+| Nav (`nav`) | `NavItem::new(..).detail(..).selected(bool).hint(..).name(..).on_click(f)`, `NavToggle::new(..).hint(..).on_click(f)` | The rail only |
+| Tooltip (`tooltip`) | `.with_tooltip(words)` on an element with an id (`WithTooltip`), `tooltip::tip(words)` | Hints and blocked reasons |
 | Target | `kit::target(element, name)` | Name your own pressable element for the harness |
 
 A control's harness names: its words, its accessible name when `.name(..)` says more (`Button`,
@@ -214,7 +224,9 @@ A control's harness names: its words, its accessible name when `.name(..)` says 
 
 The kit gallery (`src/gui/gallery.rs`, tests only) shows every part on one page:
 `artifacts/screenshots/gpui/gpui-kit__01-gallery__1200x800.png`, `__02-menu`, `__03-dialog`. A
-test sets `root.gallery = Some(Gallery::default())` to show it in place of the page.
+test sets `root.gallery = Some(Gallery::default())` to show it in place of the page, or
+`root.pages.reader.preview = Some(Rc::new(|root, window, cx| element))` to show one part of its
+own (the reader's tests do: an entry view without its page).
 
 Menus, drop-downs and popovers keep which one is open in a GPUI global (`kit::menu`): no open flag
 in your state. `kit::menu::any_open(cx)`, `open_popup(id, window, cx)` and `close_open_popup`
@@ -354,4 +366,11 @@ fn library_browse() {
   top while its rows scroll; images do not open full size; a lone action tile keeps 208 px
   instead of the row's width; Markdown source (`markdown_source`: reader faces, folded
   `splat:` marks, section rules where a note is typed) is not ported, as the kit's
-  `TextEditor` has one font size.
+  `TextEditor` has one font size per editor (`text_type`).
+- The entry view (`pages::reader::entry::EntryView`) is not yet drawn by the Library reader,
+  Lookup or the run's side panel: they show the entry's Markdown (`kit::Markdown`) and their
+  own vitals. Moving them onto `EntryView` changes what they show, so it is a page task.
+- The legacy host freeze (`src/design/legacy_hosts.tsv`) has three GPUI rows (`footer-feed` in
+  `pages/settings/mod.rs` `campaign_lines`, `account_lines`, `pages/party/sheet.rs`
+  `sync_footer`): the GPUI view reads the same egui footer feeders. Its growth check passes
+  only with their raise lines in `SPLAT_STILLNESS_RAISE`; the cleanup wave deletes this lint.

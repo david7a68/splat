@@ -25,7 +25,12 @@ pub(crate) fn width(window: &Window, ty: Type, words: &str) -> Pixels {
     };
     window
         .text_system()
-        .shape_line(SharedString::from(words.to_owned()), ty.size(), &[run], None)
+        .shape_line(
+            SharedString::from(words.to_owned()),
+            ty.size(),
+            &[run],
+            None,
+        )
         .width
 }
 

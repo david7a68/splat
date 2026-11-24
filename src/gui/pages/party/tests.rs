@@ -1,8 +1,8 @@
 //! Party: screenshots of the egui `party`, `party-bar-crowded` and `empty` scenarios' main
 //! states, and the page's flows (choose a member, change the sheet's page, open an entry).
+use crate::Page;
 use crate::gui::harness::Shell;
 use crate::visual_tests::fixture::Seed;
-use crate::Page;
 
 fn party(name: &str) -> Shell {
     let mut shell = Shell::new(name, Seed::Campaign);
@@ -10,7 +10,9 @@ fn party(name: &str) -> Shell {
     assert_eq!(shell.read(|root| root.app.page), Page::Party);
     // The party's sheets are read in the background.
     for _ in 0..100 {
-        if shell.read(|root| !root.app.party.reader.loading() && !root.app.party.reader.members.is_empty()) {
+        if shell.read(|root| {
+            !root.app.party.reader.loading() && !root.app.party.reader.members.is_empty()
+        }) {
             break;
         }
         shell.wait(std::time::Duration::from_millis(50));

@@ -41,14 +41,24 @@ pub(crate) fn render(
     let id = note.id;
     if let Some(error) = &trackers.rules.unreadable {
         let fault = TrackerFault::NotesUnreadable(error.clone());
-        return Some(div().pt(S).child(fault_message(&fault, false)).into_any_element());
+        return Some(
+            div()
+                .pt(S)
+                .child(fault_message(&fault, false))
+                .into_any_element(),
+        );
     }
     if !in_play(&trackers.rules, id) {
         return None;
     }
     if let Some(error) = &trackers.unreadable {
         let fault = TrackerFault::LedgerUnreadable(error.clone());
-        return Some(div().pt(S).child(fault_message(&fault, false)).into_any_element());
+        return Some(
+            div()
+                .pt(S)
+                .child(fault_message(&fault, false))
+                .into_any_element(),
+        );
     }
     let c = colors();
     let mut column = div().flex().flex_col().pt(S);
@@ -72,9 +82,15 @@ pub(crate) fn render(
             let def = t.def.as_ref().ok()?;
             Some((t.key.clone(), def.name.clone(), Some(start_words(def))))
         })
-        .chain(rules.day_marks.iter().filter(|m| m.note == id).filter_map(|m| {
-            Some((m.key.clone(), m.def.as_ref().ok()?.title().to_owned(), None))
-        }))
+        .chain(
+            rules
+                .day_marks
+                .iter()
+                .filter(|m| m.note == id)
+                .filter_map(|m| {
+                    Some((m.key.clone(), m.def.as_ref().ok()?.title().to_owned(), None))
+                }),
+        )
         .collect();
     let played = trackers.played;
     for (key, name, start) in sections {
@@ -178,13 +194,15 @@ pub(crate) fn footer(
     kit::messages::lines(
         ElementId::Name(format!("tracker-history-footer-{note}").into()),
         messages.into_plain(),
-        cx.listener(|root, pressed: &kit::messages::Pressed<HistoryPress>, _, cx| {
-            if let Some(press) = pressed.take() {
-                match press.id {
-                    HistoryPress::UndoRemove => root.app.trackers.undo_remove(press.ticket),
+        cx.listener(
+            |root, pressed: &kit::messages::Pressed<HistoryPress>, _, cx| {
+                if let Some(press) = pressed.take() {
+                    match press.id {
+                        HistoryPress::UndoRemove => root.app.trackers.undo_remove(press.ticket),
+                    }
+                    cx.notify();
                 }
-                cx.notify();
-            }
-        }),
+            },
+        ),
     )
 }

@@ -37,7 +37,13 @@ pub(crate) fn render_strip(
         .px(theme::M)
         .py(theme::XS)
         .bg(c.current_row)
-        .child(div().flex_none().ty(Type::Heading).text_color(c.text).child(title));
+        .child(
+            div()
+                .flex_none()
+                .ty(Type::Heading)
+                .text_color(c.text)
+                .child(title),
+        );
     if strip.running {
         let turn = strip.current.clone().unwrap_or_else(|| "?".to_owned());
         line = line.child(

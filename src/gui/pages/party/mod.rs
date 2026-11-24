@@ -86,7 +86,8 @@ pub(crate) fn render(
         .flex_col()
         .size_full()
         .child(kit::page_header_with("Party", Some(context), actions));
-    if linked && connected
+    if linked
+        && connected
         && let Some(reason) = header.refresh_reason.clone()
     {
         page = page.child(kit::text(Type::Small, c.muted, reason));
@@ -111,8 +112,16 @@ pub(crate) fn render(
         }),
     );
     let body = body(root, session.is_some(), linked, window, cx);
-    page.child(div().flex().flex_col().flex_1().min_h_0().child(body).children(footer))
-        .into_any_element()
+    page.child(
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .child(body)
+            .children(footer),
+    )
+    .into_any_element()
 }
 
 /// The empty states, or the list and the sheet.

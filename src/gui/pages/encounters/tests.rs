@@ -10,9 +10,8 @@ use std::time::Duration;
 fn ready(shell: &mut Shell) {
     shell.update(|root, _, cx| root.show_page(Page::Encounters, cx));
     for _ in 0..400 {
-        let reading = shell.read(|root| {
-            root.app.encounters.busy() || !root.app.encounters.loaded()
-        });
+        let reading =
+            shell.read(|root| root.app.encounters.busy() || !root.app.encounters.loaded());
         if !reading {
             break;
         }
@@ -31,7 +30,10 @@ fn small(name: &str, seed: Seed) -> Shell {
 fn encounter_list() {
     let mut shell = Shell::new("encounter-build", Seed::Campaign);
     ready(&mut shell);
-    assert!(shell.bounds("Start fight").is_some(), "a Ready row's Start fight");
+    assert!(
+        shell.bounds("Start fight").is_some(),
+        "a Ready row's Start fight"
+    );
     assert!(shell.bounds("Resume").is_some(), "the paused run's Resume");
     shell.capture("encounter-build__01-encounter-list__1200x800");
     let mut shell = small("encounter-build", Seed::Campaign);
@@ -96,25 +98,49 @@ fn a_new_encounter_is_built_and_saved() {
     let before = roster_len(&mut shell);
     let add = first_target(&mut shell, "id:add:");
     shell.click(&add);
-    assert_eq!(roster_len(&mut shell), before + 1, "Add puts the creature on the roster");
+    assert_eq!(
+        roster_len(&mut shell),
+        before + 1,
+        "Add puts the creature on the roster"
+    );
     // Enter adds the best match as typed, and the search keeps the keyboard.
     shell.click("Find a creature or party member");
     shell.press("enter");
-    assert_eq!(roster_len(&mut shell), before + 2, "Enter adds the best match");
+    assert_eq!(
+        roster_len(&mut shell),
+        before + 2,
+        "Enter adds the best match"
+    );
     // A new encounter starts with the party, so Add participants says so.
     let names = shell.read(|root| root.app.encounters.roster_names().unwrap_or_default());
-    assert!(names.iter().any(|name| name == "Brannoch Vale"), "{names:?}");
-    assert!(shell.bounds("Add party").is_none(), "no Add party while the party is in");
+    assert!(
+        names.iter().any(|name| name == "Brannoch Vale"),
+        "{names:?}"
+    );
+    assert!(
+        shell.bounds("Add party").is_none(),
+        "no Add party while the party is in"
+    );
     shell.capture("encounter-build__04-creatures-added__1200x800");
     assert!(shell.read(|root| root.app.encounters.encounter_dirty()));
     shell.click("Save encounter");
-    assert!(!shell.read(|root| root.app.encounters.encounter_dirty()), "Save writes the draft");
+    assert!(
+        !shell.read(|root| root.app.encounters.encounter_dirty()),
+        "Save writes the draft"
+    );
     shell.capture("encounter-build__05-saved__1200x800");
     shell.click("id:encounter-back");
     assert!(!shell.read(|root| root.app.encounters.editor_open()));
-    assert!(shell.bounds("Ashfall Crossing").is_some() || shell.read(|root| {
-        root.app.encounters.saved_names().iter().any(|name| name == "Ashfall Crossing")
-    }));
+    assert!(
+        shell.bounds("Ashfall Crossing").is_some()
+            || shell.read(|root| {
+                root.app
+                    .encounters
+                    .saved_names()
+                    .iter()
+                    .any(|name| name == "Ashfall Crossing")
+            })
+    );
 }
 
 /// A roster row's menu moves, duplicates and removes it; Ctrl+S saves; Discard brings the
@@ -156,7 +182,10 @@ fn the_roster_menu_ctrl_s_and_discard_with_undo() {
     // Ctrl+S saves it.
     assert!(shell.read(|root| root.app.encounters.encounter_dirty()));
     shell.press("ctrl-s");
-    assert!(!shell.read(|root| root.app.encounters.encounter_dirty()), "Ctrl+S saves");
+    assert!(
+        !shell.read(|root| root.app.encounters.encounter_dirty()),
+        "Ctrl+S saves"
+    );
 }
 
 /// A Ready row's menu removes the encounter; the footer's Undo brings it back.
@@ -174,7 +203,11 @@ fn remove_an_encounter_and_undo() {
     shell.capture("encounter-build__13-encounter-menu-remove__1200x800");
     shell.click("Remove");
     let after = shell.read(|root| root.app.encounters.saved_names());
-    assert_eq!(after.len() + 1, before.len(), "Remove takes the encounter away");
+    assert_eq!(
+        after.len() + 1,
+        before.len(),
+        "Remove takes the encounter away"
+    );
     shell.capture("encounter-build__14-encounter-removed__1200x800");
     let undo = first_target(&mut shell, "Undo ");
     shell.click(&undo);
@@ -190,25 +223,39 @@ fn a_group_is_edited_and_saved() {
     shell.capture("encounter-groups__01-groups-in-the-list__1200x800");
     let edit = first_target(&mut shell, "id:edit-group:");
     shell.click(&edit);
-    assert_eq!(shell.read(|root| root.app.encounters.group_open()), Some(false));
+    assert_eq!(
+        shell.read(|root| root.app.encounters.group_open()),
+        Some(false)
+    );
     shell.capture("encounter-groups__02-group-editor__1200x800");
     let members = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
     assert!(!members.is_empty(), "the fixture's group has members");
     shell.click("id:member-more-0");
     let more = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
     assert_eq!(more[0].1, members[0].1 + 1, "+ adds one to the count");
-    assert_eq!(shell.read(|root| root.app.encounters.group_open()), Some(true));
+    assert_eq!(
+        shell.read(|root| root.app.encounters.group_open()),
+        Some(true)
+    );
     shell.click("id:member-menu-0-button");
     shell.click("Remove");
     let fewer = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
-    assert_eq!(fewer.len() + 1, members.len(), "Remove takes the member away");
+    assert_eq!(
+        fewer.len() + 1,
+        members.len(),
+        "Remove takes the member away"
+    );
     shell.capture("encounter-groups__10-group-member-removed-with-undo__1200x800");
     let undo = first_target(&mut shell, "Undo ");
     shell.click(&undo);
     let back = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
     assert_eq!(back.len(), members.len(), "Undo brings the member back");
     shell.click("Save group");
-    assert_eq!(shell.read(|root| root.app.encounters.group_open()), Some(false), "saved");
+    assert_eq!(
+        shell.read(|root| root.app.encounters.group_open()),
+        Some(false),
+        "saved"
+    );
     shell.capture("encounter-groups__09-group-saved__1200x800");
     shell.click("id:group-back");
     assert_eq!(shell.read(|root| root.app.encounters.group_open()), None);
@@ -231,7 +278,11 @@ fn a_new_group_needs_a_creature() {
         Some(Vec::new()),
         "an empty group is not saved"
     );
-    assert!(shell.read(|root| root.app.encounters.group_open()).is_some());
+    assert!(
+        shell
+            .read(|root| root.app.encounters.group_open())
+            .is_some()
+    );
     shell.click("Find a creature");
     shell.type_text("wolf");
     let add = first_target(&mut shell, "id:add:");
@@ -271,6 +322,9 @@ fn the_editors_at_the_smallest_window() {
     ready(&mut shell);
     let edit = first_target(&mut shell, "id:edit-group:");
     shell.click(&edit);
-    assert_eq!(shell.read(|root| root.app.encounters.group_open()), Some(false));
+    assert_eq!(
+        shell.read(|root| root.app.encounters.group_open()),
+        Some(false)
+    );
     shell.capture("encounter-groups__02-group-editor__960x640");
 }

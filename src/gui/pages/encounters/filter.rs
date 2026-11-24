@@ -69,15 +69,18 @@ pub(super) fn bar(filter: &Filter, choices: Option<&Choices>, cx: &mut Context<S
     for (at, (facet, value)) in chosen.into_iter().enumerate() {
         let label = format!("{}: {value}", facet.label());
         bar = bar.child(
-            kit::Button::quiet(ElementId::Name(format!("filter-chip:{at}").into()), label.clone())
-                .icon(icons::CLOSE)
-                .density(Density::Scan)
-                .selected(true)
-                .name(format!("Remove filter {label}"))
-                .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                    change(root, |filter| filter.toggle(facet, &value));
-                    cx.notify();
-                })),
+            kit::Button::quiet(
+                ElementId::Name(format!("filter-chip:{at}").into()),
+                label.clone(),
+            )
+            .icon(icons::CLOSE)
+            .density(Density::Scan)
+            .selected(true)
+            .name(format!("Remove filter {label}"))
+            .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+                change(root, |filter| filter.toggle(facet, &value));
+                cx.notify();
+            })),
         );
     }
     if filter.challenge != (None, None) {
@@ -137,20 +140,24 @@ fn menu(filter: &Filter, choices: &Choices, cx: &mut Context<SplatRoot>) -> Div 
                         .density(Density::Read)
                         .selected(bound == Some(number))
                         .name(format!("{title} CR {value}"))
-                        .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                            change(root, |filter| {
-                                let bound = if high {
-                                    &mut filter.challenge.1
-                                } else {
-                                    &mut filter.challenge.0
-                                };
-                                *bound = (*bound != Some(number)).then_some(number);
-                            });
-                            cx.notify();
-                        })),
+                        .on_click(cx.listener(
+                            move |root: &mut SplatRoot, _, _, cx| {
+                                change(root, |filter| {
+                                    let bound = if high {
+                                        &mut filter.challenge.1
+                                    } else {
+                                        &mut filter.challenge.0
+                                    };
+                                    *bound = (*bound != Some(number)).then_some(number);
+                                });
+                                cx.notify();
+                            },
+                        )),
                     );
                 }
-                menu = menu.child(kit::text(Type::Small, c.muted, title)).child(row);
+                menu = menu
+                    .child(kit::text(Type::Small, c.muted, title))
+                    .child(row);
             }
             continue;
         }
@@ -174,5 +181,8 @@ fn menu(filter: &Filter, choices: &Choices, cx: &mut Context<SplatRoot>) -> Div 
 }
 
 fn menu_scroll(menu: Div) -> Div {
-    div().child(kit::scroll_column("creature-filter-menu", menu)).h(gpui::px(420.0)).w(gpui::px(280.0))
+    div()
+        .child(kit::scroll_column("creature-filter-menu", menu))
+        .h(gpui::px(420.0))
+        .w(gpui::px(280.0))
 }

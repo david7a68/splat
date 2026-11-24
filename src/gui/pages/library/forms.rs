@@ -207,11 +207,11 @@ pub(super) fn package_form(
                 .flex()
                 .flex_row()
                 .items_center()
-                .child(div().flex_1().child(kit::text(
-                    Type::Heading,
-                    c.text,
-                    "Manage packages",
-                )))
+                .child(
+                    div()
+                        .flex_1()
+                        .child(kit::text(Type::Heading, c.text, "Manage packages")),
+                )
                 .child(
                     kit::Button::quiet("library-packages-close", "Close")
                         .name("Close the package form")

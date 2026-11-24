@@ -110,9 +110,7 @@ fn remove_asks_first() {
     shell.click("Remove…");
     shell.click("Remove from Splat");
     assert_eq!(shell.read(|root| root.app.campaigns.all().len()), count - 1);
-    assert!(
-        shell.read(|root| !root.app.campaigns.all().iter().any(|c| c.id == second.id))
-    );
+    assert!(shell.read(|root| !root.app.campaigns.all().iter().any(|c| c.id == second.id)));
 }
 
 /// With no campaign, the add form is open; Add waits for a name and a folder, then adds the

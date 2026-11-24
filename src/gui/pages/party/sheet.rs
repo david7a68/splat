@@ -2,7 +2,9 @@
 //! `details`, `background`): its name and kind line, the page tabs, the Combat sync section, and
 //! the page. The Run page's side panel can show the same pages (`page`).
 use crate::gui::kit::{self, Button, Checkbox, Link, Message, Section, Segmented, TextField, Tone};
-use crate::gui::theme::{Density, L, LIST_MEASURE, M, READER_MEASURE, S, Type, TypeExt, XS, colors};
+use crate::gui::theme::{
+    Density, L, LIST_MEASURE, M, READER_MEASURE, S, Type, TypeExt, XS, colors,
+};
 use crate::gui::{SplatRoot, icons};
 use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
@@ -30,8 +32,12 @@ pub(super) fn view(
 ) -> AnyElement {
     let c = colors();
     let Some(selected) = root.app.party.reader.selected.clone() else {
-        return kit::text(Type::Body, c.muted, "Select a character to read their sheet.")
-            .into_any_element();
+        return kit::text(
+            Type::Body,
+            c.muted,
+            "Select a character to read their sheet.",
+        )
+        .into_any_element();
     };
     let mut column = div().flex().flex_col().size_full().min_w_0();
     if let Some(error) = root.app.party.reader.errors.get(&selected) {
@@ -120,10 +126,7 @@ pub(super) fn view(
         column = column.child(
             div().pt(XS).w(px(240.0)).child(
                 TextField::new("party_page_filter", root.pages.party.search.clone())
-                    .placeholder(format!(
-                        "Filter {}…",
-                        SHEET_PAGES[page].1.to_lowercase()
-                    ))
+                    .placeholder(format!("Filter {}…", SHEET_PAGES[page].1.to_lowercase()))
                     .name("Filter this page")
                     .on_change(cx.listener(|root, words: &str, _, cx| {
                         root.pages.party.search = words.to_owned();
@@ -152,7 +155,9 @@ pub(super) fn view(
     if page == 0 {
         body = body.child(kit::gap(M)).child(technical(root, &record, cx));
     }
-    let mut pane = kit::Pane::new(("party-sheet-page", page)).flush().child(body);
+    let mut pane = kit::Pane::new(("party-sheet-page", page))
+        .flush()
+        .child(body);
     for line in lines {
         pane = pane.footer(line);
     }
@@ -198,15 +203,11 @@ fn sync_section(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement
         (icons::ONLINE, "On", c.text)
     };
     let open = root.pages.party.sync_open;
-    let mut section = Section::new(
-        "combat_sync_header",
-        format!("Combat sync · {state}"),
-        open,
-    )
-    .on_toggle(cx.listener(|root, open: &bool, _, cx| {
-        root.pages.party.sync_open = *open;
-        cx.notify();
-    }));
+    let mut section = Section::new("combat_sync_header", format!("Combat sync · {state}"), open)
+        .on_toggle(cx.listener(|root, open: &bool, _, cx| {
+            root.pages.party.sync_open = *open;
+            cx.notify();
+        }));
     let _ = (icon, color);
     if open {
         let combat = &root.app.party.combat;
@@ -285,13 +286,15 @@ fn sync_section(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement
                                 c.muted,
                                 "If the first sheet read does not come, check the connection in ",
                             ))
-                            .child(Link::new("combat-sync-settings", "Settings").small().on_click(
-                                cx.listener(|root, _, _, cx| {
-                                    root.app.settings.focus_sign_in();
-                                    root.app.settings_tab = crate::SettingsTab::Account;
-                                    root.show_page(crate::Page::Settings, cx);
-                                }),
-                            ))
+                            .child(
+                                Link::new("combat-sync-settings", "Settings")
+                                    .small()
+                                    .on_click(cx.listener(|root, _, _, cx| {
+                                        root.app.settings.focus_sign_in();
+                                        root.app.settings_tab = crate::SettingsTab::Account;
+                                        root.show_page(crate::Page::Settings, cx);
+                                    })),
+                            )
                             .child(kit::text(Type::Small, c.muted, ".")),
                     );
                 }
@@ -439,7 +442,8 @@ fn overview(record: &EntitySnapshot, live: Option<&LiveValues>) -> AnyElement {
             )
         },
         |live| {
-            let known = |value: Option<i64>| value.map_or_else(|| "?".to_owned(), |n| n.to_string());
+            let known =
+                |value: Option<i64>| value.map_or_else(|| "?".to_owned(), |n| n.to_string());
             (known(live.hp), known(live.max_hp), live.temporary_hp)
         },
     );
@@ -451,7 +455,11 @@ fn overview(record: &EntitySnapshot, live: Option<&LiveValues>) -> AnyElement {
         tile("Initiative", signed(record, "initiative")),
         tile(
             "Inspiration",
-            if record.initial.inspiration { "Yes" } else { "No" },
+            if record.initial.inspiration {
+                "Yes"
+            } else {
+                "No"
+            },
         ),
     ]));
     let abilities = ABILITIES
@@ -539,10 +547,16 @@ fn overview(record: &EntitySnapshot, live: Option<&LiveValues>) -> AnyElement {
             )
         })
         .collect();
-    column = column.child(section("Skills", 0, false)).child(columns(skills));
+    column = column
+        .child(section("Skills", 0, false))
+        .child(columns(skills));
     column = column.child(section("Resources", 0, false));
     if record.definition.splat_resources.is_empty() {
-        column = column.child(kit::text(Type::Body, c.muted, "No limited-use pools returned."));
+        column = column.child(kit::text(
+            Type::Body,
+            c.muted,
+            "No limited-use pools returned.",
+        ));
     }
     for (key, pool) in &record.definition.splat_resources {
         column = column.child(fact(
@@ -561,24 +575,24 @@ fn overview(record: &EntitySnapshot, live: Option<&LiveValues>) -> AnyElement {
             )],
         ));
     }
-    let mut proficiencies = div()
-        .flex()
-        .flex_col()
-        .flex_1()
-        .min_w_0()
-        .child(section("Proficiencies & languages", 0, true));
+    let mut proficiencies = div().flex().flex_col().flex_1().min_w_0().child(section(
+        "Proficiencies & languages",
+        0,
+        true,
+    ));
     for group in &record.character.proficiencies {
         let values = text(&group["values"]);
         if !values.is_empty() {
             proficiencies = proficiencies.child(fact(text(&group["group"]), values.split(", ")));
         }
     }
-    let mut defenses = div()
-        .flex()
-        .flex_col()
-        .flex_1()
-        .min_w_0()
-        .child(section("Defenses & senses", 0, true));
+    let mut defenses =
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_w_0()
+            .child(section("Defenses & senses", 0, true));
     for (label, values) in [
         ("Resistance", &record.character.resistances),
         ("Immunity", &record.character.immunities),
@@ -611,7 +625,12 @@ fn overview(record: &EntitySnapshot, live: Option<&LiveValues>) -> AnyElement {
                 })
                 .collect()
         },
-        |live| live.conditions.iter().map(|condition| condition.words()).collect(),
+        |live| {
+            live.conditions
+                .iter()
+                .map(|condition| condition.words())
+                .collect()
+        },
     );
     if names.is_empty() {
         defenses = defenses.child(kit::text(Type::Body, c.text, "None"));
@@ -705,15 +724,17 @@ fn background(
             .into_any_element();
     }
     if let Some(background) = &profile.background {
-        column = column.child(section("Background", 0, true)).child(kit::text(
-            Type::Strong,
-            c.text,
-            if background.custom {
-                format!("{} (custom)", background.name)
-            } else {
-                background.name.clone()
-            },
-        ));
+        column = column
+            .child(section("Background", 0, true))
+            .child(kit::text(
+                Type::Strong,
+                c.text,
+                if background.custom {
+                    format!("{} (custom)", background.name)
+                } else {
+                    background.name.clone()
+                },
+            ));
         if let Some((_, feature)) = &profile.background_feature {
             column = column.child(fact("Feature", [&feature.name]));
         }
@@ -971,7 +992,12 @@ fn details(
 /// `Technical details`: the record behind the sheet (`source_and_parity`).
 fn technical(root: &SplatRoot, record: &EntitySnapshot, cx: &mut Context<SplatRoot>) -> AnyElement {
     let record = record.clone();
-    let campaign = root.app.party.reader.campaign_path().map(std::path::Path::to_path_buf);
+    let campaign = root
+        .app
+        .party
+        .reader
+        .campaign_path()
+        .map(std::path::Path::to_path_buf);
     let scope = root.app.party.reader.local_scope();
     let files_open = root.pages.party.open.contains("party-file-details");
     let files = kit::QuietSection::new("party-file-details", "File details")
@@ -1017,30 +1043,38 @@ fn technical(root: &SplatRoot, record: &EntitySnapshot, cx: &mut Context<SplatRo
     } else {
         files
     };
-    quiet(root, "party-technical".into(), "Technical details", cx, move || {
-        let mut body: Vec<AnyElement> =
-            vec![kit::help("D&D Beyond supplies these totals.").into_any_element()];
-        for message in record.coverage.iter().skip(2) {
-            body.push(kit::help(message.clone()).into_any_element());
-        }
-        body.push(
-            kit::help(format!(
-                "Fetched {} UTC. Source details {} UTC.",
-                calendar_time(record.source.fetched_at),
-                calendar_time(record.source.raw_fetched_at),
-            ))
-            .into_any_element(),
-        );
-        if let Some(modified) = &record.source.source_modified {
-            body.push(kit::help(format!("Beyond source modification: {modified}")).into_any_element());
-        }
-        body.push(
+    quiet(
+        root,
+        "party-technical".into(),
+        "Technical details",
+        cx,
+        move || {
+            let mut body: Vec<AnyElement> =
+                vec![kit::help("D&D Beyond supplies these totals.").into_any_element()];
+            for message in record.coverage.iter().skip(2) {
+                body.push(kit::help(message.clone()).into_any_element());
+            }
+            body.push(
+                kit::help(format!(
+                    "Fetched {} UTC. Source details {} UTC.",
+                    calendar_time(record.source.fetched_at),
+                    calendar_time(record.source.raw_fetched_at),
+                ))
+                .into_any_element(),
+            );
+            if let Some(modified) = &record.source.source_modified {
+                body.push(
+                    kit::help(format!("Beyond source modification: {modified}")).into_any_element(),
+                );
+            }
+            body.push(
             kit::help(
                 "D&D Beyond can take time to show a change in every service. Splat checks again for delayed changes.",
             )
             .into_any_element(),
         );
-        body.push(files.into_any_element());
-        body
-    })
+            body.push(files.into_any_element());
+            body
+        },
+    )
 }

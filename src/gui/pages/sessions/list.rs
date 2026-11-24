@@ -13,7 +13,11 @@ pub(super) fn render(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyEl
     let locked = root.app.sessions.gv_locked();
     let rows = root.app.sessions.gv_list_rows();
     let rows = rows.into_iter().map(|row| {
-        let title_ty = if row.selected { Type::Strong } else { Type::Body };
+        let title_ty = if row.selected {
+            Type::Strong
+        } else {
+            Type::Body
+        };
         let mut detail = div()
             .flex()
             .flex_row()
@@ -71,11 +75,19 @@ pub(super) fn render(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyEl
             }));
         }
         // A row's height follows its wrapped title (`session_row`), at least a Glance target.
-        div().w_full().child(item).when(locked, |row| row.opacity(0.5))
+        div()
+            .w_full()
+            .child(item)
+            .when(locked, |row| row.opacity(0.5))
     });
     kit::scroll_column(
         "session-list",
-        div().flex().flex_col().w_full().gap(gpui::px(2.0)).children(rows),
+        div()
+            .flex()
+            .flex_col()
+            .w_full()
+            .gap(gpui::px(2.0))
+            .children(rows),
     )
     .into_any_element()
 }

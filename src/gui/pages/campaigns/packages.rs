@@ -15,13 +15,15 @@ fn id(prefix: &str, uuid: uuid::Uuid) -> ElementId {
     ElementId::Name(SharedString::from(format!("{prefix}-{uuid}")))
 }
 
-pub(super) fn render(root: &mut SplatRoot, _: &mut Window, cx: &mut Context<SplatRoot>) -> AnyElement {
+pub(super) fn render(
+    root: &mut SplatRoot,
+    _: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let ready = {
         let crate::gui::SplatRoot { app, bridge, .. } = root;
-        let ready = app
-            .campaign_content
-            .prepare(bridge.ctx(), &app.campaigns);
+        let ready = app.campaign_content.prepare(bridge.ctx(), &app.campaigns);
         if std::mem::take(&mut app.campaign_content.open_run_settings) {
             app.campaign_tab = crate::CampaignTab::RunSettings;
         }
@@ -84,13 +86,16 @@ pub(super) fn render(root: &mut SplatRoot, _: &mut Window, cx: &mut Context<Spla
             let mut message = Message::new(Tone::Error, words);
             if let Some(action) = action {
                 let write = active.clone();
-                message = message.action(Button::secondary("content-write-campaign", action).on_click(
-                    cx.listener(move |root, _, _, cx| {
-                        let app = &mut root.app;
-                        app.campaign_content.write_campaign_now(&app.campaigns, &write);
-                        cx.notify();
-                    }),
-                ));
+                message = message.action(
+                    Button::secondary("content-write-campaign", action).on_click(cx.listener(
+                        move |root, _, _, cx| {
+                            let app = &mut root.app;
+                            app.campaign_content
+                                .write_campaign_now(&app.campaigns, &write);
+                            cx.notify();
+                        },
+                    )),
+                );
             }
             column = column.child(message);
         }
@@ -143,9 +148,19 @@ pub(super) fn render(root: &mut SplatRoot, _: &mut Window, cx: &mut Context<Spla
 
 /// The save row: the choices' state and Discard, Reload from disk, why Save waits, and
 /// `Save selections`.
-fn save_bar(bar: SaveBar, active: &crate::persistence::Campaign, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn save_bar(
+    bar: SaveBar,
+    active: &crate::persistence::Campaign,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
-    let mut row = div().flex().flex_row().flex_wrap().items_center().gap(S).py(XS);
+    let mut row = div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .items_center()
+        .gap(S)
+        .py(XS);
     if bar.changed {
         row = row
             .child(kit::status(&kit::Status::new(
@@ -162,7 +177,11 @@ fn save_bar(bar: SaveBar, active: &crate::persistence::Campaign, cx: &mut Contex
                     })),
             );
     } else {
-        row = row.child(kit::status(&kit::Status::new(icons::OK, "No changes", c.muted)));
+        row = row.child(kit::status(&kit::Status::new(
+            icons::OK,
+            "No changes",
+            c.muted,
+        )));
     }
     if !bar.dirty {
         let reload = active.clone();
@@ -170,7 +189,10 @@ fn save_bar(bar: SaveBar, active: &crate::persistence::Campaign, cx: &mut Contex
             Button::quiet("content-reload", "Reload from disk")
                 .icon(icons::REFRESH)
                 .density(Density::Read)
-                .blocked(bar.reload_blocked.then_some("Save or discard your changes first."))
+                .blocked(
+                    bar.reload_blocked
+                        .then_some("Save or discard your changes first."),
+                )
                 .on_click(cx.listener(move |root, _, _, cx| {
                     let crate::gui::SplatRoot { app, bridge, .. } = root;
                     app.campaign_content
@@ -198,18 +220,21 @@ fn save_bar(bar: SaveBar, active: &crate::persistence::Campaign, cx: &mut Contex
     );
     let mut column = div().flex().flex_col().child(row);
     if let Some(reason) = bar.repair {
-        column = column.child(
-            div()
-                .flex()
-                .justify_end()
-                .child(kit::text(Type::Small, c.muted, reason)),
-        );
+        column = column.child(div().flex().justify_end().child(kit::text(
+            Type::Small,
+            c.muted,
+            reason,
+        )));
     }
     column.into_any_element()
 }
 
 /// The Campaign.md flags, the errors and missing dependencies, under one caret heading.
-fn issues(root: &mut SplatRoot, active: &crate::persistence::Campaign, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
+fn issues(
+    root: &mut SplatRoot,
+    active: &crate::persistence::Campaign,
+    cx: &mut Context<SplatRoot>,
+) -> Option<AnyElement> {
     let issues = root.app.campaign_content.issues(active)?;
     let flag = |(words, choose): (String, bool), at: usize, cx: &mut Context<SplatRoot>| {
         let mut message = Message::new(Tone::Warning, words);
@@ -234,7 +259,14 @@ fn issues(root: &mut SplatRoot, active: &crate::persistence::Campaign, cx: &mut 
             .enumerate()
             .map(|(at, f)| flag(f, at, cx))
             .collect();
-        return Some(div().flex().flex_col().gap(XS).children(flags).into_any_element());
+        return Some(
+            div()
+                .flex()
+                .flex_col()
+                .gap(XS)
+                .children(flags)
+                .into_any_element(),
+        );
     }
     if issues.errors.is_empty() && issues.flags.is_empty() {
         return None;
@@ -263,7 +295,10 @@ fn issues(root: &mut SplatRoot, active: &crate::persistence::Campaign, cx: &mut 
                     )
                     .on_click(cx.listener(move |root, _, _, cx| {
                         root.bridge.ctx().data_mut(|data| {
-                            data.insert_temp(eframe::egui::Id::new("open_library_repair"), path.clone())
+                            data.insert_temp(
+                                eframe::egui::Id::new("open_library_repair"),
+                                path.clone(),
+                            )
                         });
                         cx.notify();
                     })),
@@ -285,7 +320,11 @@ fn issues(root: &mut SplatRoot, active: &crate::persistence::Campaign, cx: &mut 
 }
 
 /// The package list, left; the chosen package's entries or `Needed by your entries`, right.
-fn lists(root: &mut SplatRoot, active: &crate::persistence::Campaign, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn lists(
+    root: &mut SplatRoot,
+    active: &crate::persistence::Campaign,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let campaign = active.id;
     let rows = root.app.campaign_content.package_rows(&root.app.campaigns);
@@ -299,7 +338,11 @@ fn lists(root: &mut SplatRoot, active: &crate::persistence::Campaign, cx: &mut C
                 .flex_row()
                 .gap(XS)
                 .child(kit::icon(icon, Type::Small, c.result.warning))
-                .child(kit::text::one_line(Type::Small, c.muted, row.detail.clone())),
+                .child(kit::text::one_line(
+                    Type::Small,
+                    c.muted,
+                    row.detail.clone(),
+                )),
             None => kit::text::one_line(Type::Small, c.muted, row.detail.clone()),
         };
         let spoken = match row.mark {
@@ -314,14 +357,14 @@ fn lists(root: &mut SplatRoot, active: &crate::persistence::Campaign, cx: &mut C
                 .items_center()
                 .gap(XS)
                 .child(
-                    Checkbox::new(id("content-use", module), "", checked).mixed(mixed).on_click(cx.listener(
-                        move |root, _, _, cx| {
+                    Checkbox::new(id("content-use", module), "", checked)
+                        .mixed(mixed)
+                        .on_click(cx.listener(move |root, _, _, cx| {
                             root.app
                                 .campaign_content
                                 .toggle_package(campaign, module, !checked);
                             cx.notify();
-                        },
-                    )),
+                        })),
                 )
                 .child(
                     div().flex_1().min_w_0().child(
@@ -338,7 +381,11 @@ fn lists(root: &mut SplatRoot, active: &crate::persistence::Campaign, cx: &mut C
                                     .flex_col()
                                     .min_w_0()
                                     .child(kit::text::one_line(
-                                        if row.selected { Type::Strong } else { Type::Body },
+                                        if row.selected {
+                                            Type::Strong
+                                        } else {
+                                            Type::Body
+                                        },
                                         c.text,
                                         row.name.clone(),
                                     ))
@@ -348,25 +395,31 @@ fn lists(root: &mut SplatRoot, active: &crate::persistence::Campaign, cx: &mut C
                 ),
         );
         if let Some(note) = row.note {
-            left = left.child(div().pl(px(48.0)).child(kit::text(Type::Small, c.muted, note)));
+            left = left.child(
+                div()
+                    .pl(px(48.0))
+                    .child(kit::text(Type::Small, c.muted, note)),
+            );
         }
     }
     let needed = root.app.campaign_content.needed_count();
-    left = left.child(kit::rule()).child(kit::two_line_row(
-        "content-needed",
-        "Needed by your entries",
-        if needed == 0 {
-            String::new()
-        } else {
-            crate::design::count(needed, "entry", "entries")
-        },
-        root.app.campaign_content.needed_shown(),
-    )
-    .height(Density::Glance.row() + XS)
-    .on_click(cx.listener(|root, _, _, cx| {
-        root.app.campaign_content.select_needed();
-        cx.notify();
-    })));
+    left = left.child(kit::rule()).child(
+        kit::two_line_row(
+            "content-needed",
+            "Needed by your entries",
+            if needed == 0 {
+                String::new()
+            } else {
+                crate::design::count(needed, "entry", "entries")
+            },
+            root.app.campaign_content.needed_shown(),
+        )
+        .height(Density::Glance.row() + XS)
+        .on_click(cx.listener(|root, _, _, cx| {
+            root.app.campaign_content.select_needed();
+            cx.notify();
+        })),
+    );
     let right = if root.app.campaign_content.needed_shown() {
         needed_column(root, active, cx)
     } else {
@@ -383,7 +436,12 @@ fn lists(root: &mut SplatRoot, active: &crate::persistence::Campaign, cx: &mut C
         .into_any_element()
 }
 
-fn search(root: &SplatRoot, field: ElementId, name: &'static str, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn search(
+    root: &SplatRoot,
+    field: ElementId,
+    name: &'static str,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     TextField::new(field, root.app.campaign_content.search_words().to_owned())
         .placeholder("Find an entry…")
         .name(name)
@@ -394,7 +452,11 @@ fn search(root: &SplatRoot, field: ElementId, name: &'static str, cx: &mut Conte
         .into_any_element()
 }
 
-fn needed_column(root: &mut SplatRoot, active: &crate::persistence::Campaign, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn needed_column(
+    root: &mut SplatRoot,
+    active: &crate::persistence::Campaign,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let mut column = div()
         .flex()
@@ -407,30 +469,42 @@ fn needed_column(root: &mut SplatRoot, active: &crate::persistence::Campaign, cx
             },
             true,
         ))
-        .child(search(root, id("needed_entry_search", active.id), "Find a needed entry", cx));
+        .child(search(
+            root,
+            id("needed_entry_search", active.id),
+            "Find a needed entry",
+            cx,
+        ));
     for row in root.app.campaign_content.needed_rows() {
         let entry = row.id;
         column = column.child(
-            Row::new(id("content-needed-row", entry), format!("{} · {}", row.name, row.detail))
-                .height(Density::Glance.row() + XS)
-                .on_click(cx.listener(move |root, _, _, cx| {
-                    root.app.campaign_content.open_in_lookup(entry);
-                    cx.notify();
-                }))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .min_w_0()
-                        .child(kit::text::one_line(Type::Body, c.text, row.name))
-                        .child(kit::text::one_line(Type::Small, c.muted, row.detail)),
-                ),
+            Row::new(
+                id("content-needed-row", entry),
+                format!("{} · {}", row.name, row.detail),
+            )
+            .height(Density::Glance.row() + XS)
+            .on_click(cx.listener(move |root, _, _, cx| {
+                root.app.campaign_content.open_in_lookup(entry);
+                cx.notify();
+            }))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .min_w_0()
+                    .child(kit::text::one_line(Type::Body, c.text, row.name))
+                    .child(kit::text::one_line(Type::Small, c.muted, row.detail)),
+            ),
         );
     }
     column.into_any_element()
 }
 
-fn package_column(root: &mut SplatRoot, _: &crate::persistence::Campaign, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn package_column(
+    root: &mut SplatRoot,
+    _: &crate::persistence::Campaign,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let Some(view) = root.app.campaign_content.package_view() else {
         return div().into_any_element();
@@ -490,7 +564,9 @@ fn package_column(root: &mut SplatRoot, _: &crate::persistence::Campaign, cx: &m
                         check = check.blocked(Some(reason.clone()));
                     } else {
                         check = check.on_click(cx.listener(move |root, _, _, cx| {
-                            root.app.campaign_content.toggle_entry(module, entry, !checked);
+                            root.app
+                                .campaign_content
+                                .toggle_entry(module, entry, !checked);
                             cx.notify();
                         }));
                     }
@@ -533,7 +609,12 @@ fn package_column(root: &mut SplatRoot, _: &crate::persistence::Campaign, cx: &m
         .flex_col()
         .gap(XS)
         .child(head)
-        .child(search(root, id("package_entry_search", module), "Find an entry in this package", cx))
+        .child(search(
+            root,
+            id("package_entry_search", module),
+            "Find an entry in this package",
+            cx,
+        ))
         .child(list)
         .into_any_element()
 }

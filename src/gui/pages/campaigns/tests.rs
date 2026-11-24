@@ -21,7 +21,10 @@ fn link_and_folder() {
     shell.capture("campaign-link__01-link-and-folder__1200x800");
     let active = shell.read(|root| root.app.campaigns.active_campaign().expect("a campaign"));
     shell.click("id:link-edit-details");
-    assert_eq!(shell.read(|root| root.app.campaigns.editing()), Some(active.id));
+    assert_eq!(
+        shell.read(|root| root.app.campaigns.editing()),
+        Some(active.id)
+    );
     assert_eq!(
         shell.read(|root| root.app.campaigns.form_words().0.to_owned()),
         active.name
@@ -35,7 +38,10 @@ fn link_and_folder() {
         format!("{saved} more")
     );
     shell.click("Discard");
-    assert_eq!(shell.read(|root| root.app.sessions.folder_text().to_owned()), saved);
+    assert_eq!(
+        shell.read(|root| root.app.sessions.folder_text().to_owned()),
+        saved
+    );
 }
 
 /// Packages: the list and the chosen package; a box changes the choices (Unsaved), and Discard
@@ -63,7 +69,10 @@ fn packages_choose_and_discard() {
     shell.click("id:content-discard");
     assert!(!shell.read(|root| root.app.campaign_content.selections_changed()));
     let after = shell.read(|root| root.app.campaign_content.package_rows(&root.app.campaigns));
-    assert_eq!(after[0].checked, checked, "Discard brings the saved choice back");
+    assert_eq!(
+        after[0].checked, checked,
+        "Discard brings the saved choice back"
+    );
 }
 
 /// Rules and runs: an edit makes the form Unsaved; Discard brings the saved settings back with

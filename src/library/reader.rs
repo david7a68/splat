@@ -106,7 +106,10 @@ pub struct ItemSummary {
 
 /// The summary of an item entry; `printed` is the identity line its source prints.
 pub fn item_summary_parts(entry: &Entry, printed: Option<&str>) -> Option<ItemSummary> {
-    let item = entry.fields.get("splat_item").and_then(|v| v.as_mapping())?;
+    let item = entry
+        .fields
+        .get("splat_item")
+        .and_then(|v| v.as_mapping())?;
     let identity = ["weapon_category", "category", "rarity"]
         .into_iter()
         .filter_map(|key| item.get(key).map(display_value))

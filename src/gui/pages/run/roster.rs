@@ -4,16 +4,16 @@
 //! on Ctrl+click, opens its initiative on a click of the number, and offers its menu on a
 //! right-click; the ended view's rows only show.
 use super::on_run;
-use splat_party::combat_sync::SyncState;
 use crate::design::{hp_state, hp_word};
 use crate::encounter_run::rolling::RowChoice;
 use crate::encounter_run::{Command, Participant, Phase, Run};
 use crate::gui::{SplatRoot, bridge, icons, kit, theme};
 use crate::rolls::Mode;
 use gpui::{
-    AnyElement, ClickEvent, Context, ElementId, Hsla, InteractiveElement, IntoElement,
-    MouseButton, ParentElement, SharedString, Styled, div, prelude::*, px,
+    AnyElement, ClickEvent, Context, ElementId, Hsla, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, SharedString, Styled, div, prelude::*, px,
 };
+use splat_party::combat_sync::SyncState;
 use theme::{Density, RunScale, Type, TypeExt, colors};
 
 /// A row's place in the turn order.
@@ -77,7 +77,12 @@ fn side_mark(side: &str, size: f32) -> AnyElement {
             .flex_none()
             .into_any_element()
         }
-        _ => div().size(size).flex_none().rounded_full().bg(c.other).into_any_element(),
+        _ => div()
+            .size(size)
+            .flex_none()
+            .rounded_full()
+            .bg(c.other)
+            .into_any_element(),
     }
 }
 
@@ -88,7 +93,9 @@ pub(super) fn hp_block(p: &Participant, scale: RunScale) -> impl IntoElement {
     let current_color = kit::hp::current_color(state);
     let fill_color = kit::hp::hp_color(state);
     let current = p.hp.map_or_else(|| "?".to_owned(), |hp| hp.to_string());
-    let max = p.max_hp.map_or_else(|| "?".to_owned(), |max| max.to_string());
+    let max = p
+        .max_hp
+        .map_or_else(|| "?".to_owned(), |max| max.to_string());
     let fraction = match (p.hp, p.max_hp) {
         (Some(hp), Some(max)) if max > 0 => (hp as f32 / max as f32).clamp(0.0, 1.0),
         _ => 0.0,
@@ -119,7 +126,7 @@ pub(super) fn hp_block(p: &Participant, scale: RunScale) -> impl IntoElement {
                 .ty(Type::Numeral)
                 .text_size(px(scale.hp_max))
                 .text_color(c.muted)
-                .child(format!("/{max}")),
+                .child(crate::design::fraction("", &max)),
         );
     let bar = div()
         .relative()
@@ -158,7 +165,14 @@ pub(super) fn hp_block(p: &Participant, scale: RunScale) -> impl IntoElement {
 
 /// A row's second line: Concentration, conditions and effects, the stat block an NPC uses,
 /// changed stats and loot, in the condition colour.
-fn second_line(run: &Run, index: usize, p: &Participant, scale: RunScale, live: bool, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
+fn second_line(
+    run: &Run,
+    index: usize,
+    p: &Participant,
+    scale: RunScale,
+    live: bool,
+    cx: &mut Context<SplatRoot>,
+) -> Option<AnyElement> {
     let c = colors();
     let size = px(scale.condition);
     let mut parts: Vec<AnyElement> = Vec::new();
@@ -178,7 +192,14 @@ fn second_line(run: &Run, index: usize, p: &Participant, scale: RunScale, live: 
                 .items_center()
                 .gap(px(2.0))
                 .text_color(c.participant.concentrating)
-                .child(kit::icon(icons::CONCENTRATING, Type::Body, c.participant.concentrating).text_size(size))
+                .child(
+                    kit::icon(
+                        icons::CONCENTRATING,
+                        Type::Body,
+                        c.participant.concentrating,
+                    )
+                    .text_size(size),
+                )
                 .child(div().ty(Type::Strong).text_size(size).child("Conc"))
                 .into_any_element(),
         );
@@ -291,7 +312,10 @@ fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String 
     let mut parts = vec![
         p.name.clone(),
         p.side.clone(),
-        format!("HP {}/{}", display(p.hp), display(p.max_hp)),
+        format!(
+            "HP {}",
+            crate::design::fraction(display(p.hp), display(p.max_hp))
+        ),
         format!("Temp {}", p.temporary_hp),
         format!("AC {}", display(p.armor_class)),
         format!("Initiative {}", display(p.initiative)),
@@ -310,7 +334,11 @@ fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String 
     if p.concentration {
         parts.push("Concentrating".into());
     }
-    parts.extend(p.conditions.iter().map(crate::encounter_run::Condition::words));
+    parts.extend(
+        p.conditions
+            .iter()
+            .map(crate::encounter_run::Condition::words),
+    );
     if p.loot_ready() {
         parts.push("Loot".into());
     }
@@ -337,10 +365,16 @@ pub(super) fn row(
     let current = turn == TurnMark::Current;
     let selected = live && (run.selected == index || run.also.contains(&index));
     let sync = run.row_sync_word(index);
-    let text = if p.present { c.text } else { c.participant.absent };
+    let text = if p.present {
+        c.text
+    } else {
+        c.participant.absent
+    };
     let height = px(scale.row);
     // The initiative, with the turn mark under it, or a field while the DM changes it.
-    let initiative_words = p.initiative.map_or_else(|| "—".to_owned(), |n| n.to_string());
+    let initiative_words = p
+        .initiative
+        .map_or_else(|| "—".to_owned(), |n| n.to_string());
     let mark = match turn {
         TurnMark::Current => Some(("TURN", c.turn.current)),
         TurnMark::Next => Some(("NEXT", c.turn.next)),
@@ -356,32 +390,42 @@ pub(super) fn row(
             .w(px(52.0))
             .flex_none()
             .child(
-                kit::TextField::new(ElementId::Name(format!("run-live-initiative-{}", p.key).into()), text)
-                    .name(name)
-                    .focus(focus)
-                    .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                kit::TextField::new(
+                    ElementId::Name(format!("run-live-initiative-{}", p.key).into()),
+                    text,
+                )
+                .name(name)
+                .focus(focus)
+                .on_change(
+                    cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
                         if let Some(run) = root.app.encounters.run_mut() {
                             run.setup_inputs.insert(index, super::number_text(words));
                         }
                         cx.notify();
-                    }))
-                    .on_enter(super::plain(cx, move |root, _, cx| {
-                        if let Some(run) = root.app.encounters.run_mut() {
-                            let total = run.setup_inputs.get(&index).and_then(|text| crate::design::parse_signed(text));
-                            if let Some(total) = total
-                                && run.state.participants[index].initiative != Some(total)
-                            {
-                                run.run_command(Command::Initiative(index, Some(total)));
-                            }
-                            run.live_initiative = None;
+                    }),
+                )
+                .on_enter(super::plain(cx, move |root, _, cx| {
+                    if let Some(run) = root.app.encounters.run_mut() {
+                        let total = run
+                            .setup_inputs
+                            .get(&index)
+                            .and_then(|text| crate::design::parse_signed(text));
+                        if let Some(total) = total
+                            && run.state.participants[index].initiative != Some(total)
+                        {
+                            run.run_command(Command::Initiative(index, Some(total)));
                         }
-                        cx.notify();
-                    })),
+                        run.live_initiative = None;
+                    }
+                    cx.notify();
+                })),
             )
             .into_any_element()
     } else {
         let number = div()
-            .id(ElementId::Name(format!("run-row-{}-initiative", p.key).into()))
+            .id(ElementId::Name(
+                format!("run-row-{}-initiative", p.key).into(),
+            ))
             .flex()
             .flex_col()
             .items_end()
@@ -403,18 +447,16 @@ pub(super) fn row(
             }));
         if live && run.state.phase == Phase::Running && (!selected || run.also.is_empty()) {
             let key = p.key.clone();
-            let number = number
-                .cursor_pointer()
-                .on_click(on_run(cx, move |run| {
-                    let Some(index) = run.state.participants.iter().position(|p| p.key == key) else {
-                        return;
-                    };
-                    run.live_initiative = Some(index);
-                    run.focus_field = Some(index);
-                    let total = run.state.participants[index].initiative;
-                    run.setup_inputs
-                        .insert(index, total.map_or_else(String::new, |n| n.to_string()));
-                }));
+            let number = number.cursor_pointer().on_click(on_run(cx, move |run| {
+                let Some(index) = run.state.participants.iter().position(|p| p.key == key) else {
+                    return;
+                };
+                run.live_initiative = Some(index);
+                run.focus_field = Some(index);
+                let total = run.state.participants[index].initiative;
+                run.setup_inputs
+                    .insert(index, total.map_or_else(String::new, |n| n.to_string()));
+            }));
             kit::target(
                 kit::WithTooltip::with_tooltip(number, "Change initiative"),
                 format!("Change initiative for {}", p.name),
@@ -477,13 +519,14 @@ pub(super) fn row(
         .w(px(scale.stat * 2.6))
         .flex_none()
         .when(p.temporary_hp > 0, |temp| {
-            temp.child(kit::icon(icons::TEMP_HP, Type::Small, c.hp.temp)).child(
-                div()
-                    .ty(Type::Numeral)
-                    .text_size(px(scale.stat))
-                    .text_color(c.hp.temp)
-                    .child(format!("+{}", p.temporary_hp)),
-            )
+            temp.child(kit::icon(icons::TEMP_HP, Type::Small, c.hp.temp))
+                .child(
+                    div()
+                        .ty(Type::Numeral)
+                        .text_size(px(scale.stat))
+                        .text_color(c.hp.temp)
+                        .child(format!("+{}", p.temporary_hp)),
+                )
         });
     // The HP word and sync state take only their own room, after the HP, which keeps its place.
     let mut words = div()
@@ -503,7 +546,12 @@ pub(super) fn row(
     }
     if let Some(sync) = sync {
         let status = sync_status(sync);
-        words = words.child(state_word_owned(status.icon.clone(), status.word.clone(), status.color, scale));
+        words = words.child(state_word_owned(
+            status.icon.clone(),
+            status.word.clone(),
+            status.color,
+            scale,
+        ));
     }
     let mut row = div()
         .id(ElementId::Name(format!("run-row-{}", p.key).into()))
@@ -525,7 +573,9 @@ pub(super) fn row(
                 .border_color(c.turn.current)
                 .rounded(px(2.0))
         })
-        .when(live && !selected && !current, |row| row.hover(|s| s.bg(c.hover)))
+        .when(live && !selected && !current, |row| {
+            row.hover(|s| s.bg(c.hover))
+        })
         .child(
             // The current turn's bar at the left edge.
             div()
@@ -564,7 +614,8 @@ pub(super) fn row(
                     kit::icon(icons::OK, Type::Heading, c.accent)
                 })
                 .on_click(on_run(cx, move |run| {
-                    let Some(index) = run.state.participants.iter().position(|p| p.key == key) else {
+                    let Some(index) = run.state.participants.iter().position(|p| p.key == key)
+                    else {
                         return;
                     };
                     if !run.halved.remove(&index) {
@@ -578,9 +629,8 @@ pub(super) fn row(
     let name_words = row_name(p, turn, sync);
     if live {
         let key = p.key.clone();
-        row = row
-            .cursor_pointer()
-            .on_click(cx.listener(move |root: &mut SplatRoot, event: &ClickEvent, _, cx| {
+        row = row.cursor_pointer().on_click(cx.listener(
+            move |root: &mut SplatRoot, event: &ClickEvent, _, cx| {
                 let Some(run) = root.app.encounters.run_mut() else {
                     return;
                 };
@@ -604,10 +654,15 @@ pub(super) fn row(
                     }
                 }
                 cx.notify();
-            }));
+            },
+        ));
         let menu_id = ElementId::Name(format!("run-row-menu-{}", p.key).into());
         let sections = run.row_menu_sections(index);
-        let asking = run.asking.as_ref().filter(|asking| asking.row == index).cloned();
+        let asking = run
+            .asking
+            .as_ref()
+            .filter(|asking| asking.row == index)
+            .cloned();
         if !sections.is_empty() || asking.is_some() {
             let opener = menu_id.clone();
             row = row.on_mouse_down(MouseButton::Right, move |_, window, cx| {
@@ -629,11 +684,26 @@ pub(super) fn row(
 }
 
 /// A state word beside the HP: `♡ Bloodied`, `0 HP`, a sync state.
-fn state_word(icon: &'static str, word: &'static str, color: Hsla, scale: RunScale) -> impl IntoElement {
-    state_word_owned(SharedString::new_static(icon), SharedString::new_static(word), color, scale)
+fn state_word(
+    icon: &'static str,
+    word: &'static str,
+    color: Hsla,
+    scale: RunScale,
+) -> impl IntoElement {
+    state_word_owned(
+        SharedString::new_static(icon),
+        SharedString::new_static(word),
+        color,
+        scale,
+    )
 }
 
-fn state_word_owned(icon: SharedString, word: SharedString, color: Hsla, scale: RunScale) -> impl IntoElement {
+fn state_word_owned(
+    icon: SharedString,
+    word: SharedString,
+    color: Hsla,
+    scale: RunScale,
+) -> impl IntoElement {
     let size = px(scale.mark.max(12.0));
     div()
         .flex()
@@ -642,7 +712,13 @@ fn state_word_owned(icon: SharedString, word: SharedString, color: Hsla, scale: 
         .gap(px(3.0))
         .text_color(color)
         .child(div().icon_font(Type::Small).text_size(size).child(icon))
-        .child(div().ty(Type::Heading).text_size(size).whitespace_nowrap().child(word))
+        .child(
+            div()
+                .ty(Type::Heading)
+                .text_size(size)
+                .whitespace_nowrap()
+                .child(word),
+        )
 }
 
 /// The row's menu: the armed action's rolls against it, a reroll with inspiration, or the
@@ -660,7 +736,11 @@ fn row_menu(
         return None;
     }
     let mut content = div().flex().flex_col().min_w(px(240.0));
-    let choice = |content: gpui::Div, at: String, words: String, choice: RowChoice, cx: &mut Context<SplatRoot>| {
+    let choice = |content: gpui::Div,
+                  at: String,
+                  words: String,
+                  choice: RowChoice,
+                  cx: &mut Context<SplatRoot>| {
         content.child(
             kit::Button::quiet(ElementId::Name(at.into()), words)
                 .plain()
@@ -678,19 +758,36 @@ fn row_menu(
                 .child(kit::text(Type::Body, c.text, asking.question.clone())),
         );
         for (at, (words, _)) in asking.choices.iter().enumerate() {
-            content = choice(content, format!("run-ask-{index}-{at}"), words.clone(), RowChoice::Damage(at), cx);
+            content = choice(
+                content,
+                format!("run-ask-{index}-{at}"),
+                words.clone(),
+                RowChoice::Damage(at),
+                cx,
+            );
         }
-        content = choice(content, format!("run-ask-{index}-cancel"), "Cancel".into(), RowChoice::Cancel, cx);
+        content = choice(
+            content,
+            format!("run-ask-{index}-cancel"),
+            "Cancel".into(),
+            RowChoice::Cancel,
+            cx,
+        );
     } else {
         for (section, (heading, items)) in sections.into_iter().enumerate() {
-            content = content.child(
-                div()
-                    .px(theme::S)
-                    .py(theme::XS)
-                    .child(kit::text(Type::Small, c.muted, heading)),
-            );
+            content = content.child(div().px(theme::S).py(theme::XS).child(kit::text(
+                Type::Small,
+                c.muted,
+                heading,
+            )));
             for (at, (words, row_choice)) in items.into_iter().enumerate() {
-                content = choice(content, format!("run-menu-{index}-{section}-{at}"), words, row_choice, cx);
+                content = choice(
+                    content,
+                    format!("run-menu-{index}-{section}-{at}"),
+                    words,
+                    row_choice,
+                    cx,
+                );
             }
         }
     }

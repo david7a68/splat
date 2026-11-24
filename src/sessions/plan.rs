@@ -3466,7 +3466,12 @@ impl design::results::Kept for RewardsMark {
 impl Rewards {
     /// Read the selected note again when its draft changed; a result whose block no longer
     /// stands as the act left it ends.
-    pub(super) fn see(&mut self, draft: Option<&crate::sessions::Draft>, session: Option<Uuid>, book: &Book) {
+    pub(super) fn see(
+        &mut self,
+        draft: Option<&crate::sessions::Draft>,
+        session: Option<Uuid>,
+        book: &Book,
+    ) {
         let (Some(draft), Some(note)) = (draft, session) else {
             self.seen = None;
             return;

@@ -781,7 +781,13 @@ impl Sessions {
 
     /// The act. It reads the last session again at the click, and writes nothing when what the
     /// line offered changed; otherwise one save of this note through `Draft::apply`.
-    pub(super) fn carry_over(&mut self, session: Uuid, previous: Uuid, plan: &Plan<'_>, book: &Book) {
+    pub(super) fn carry_over(
+        &mut self,
+        session: Uuid,
+        previous: Uuid,
+        plan: &Plan<'_>,
+        book: &Book,
+    ) {
         let Some(previous) = self.notes.iter().find(|note| note.id == previous) else {
             return;
         };

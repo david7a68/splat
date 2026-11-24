@@ -364,7 +364,8 @@ pub struct Run {
     pub arrival_words: Option<(ArrivalKey, ArrivalWords)>,
     /// Arrivals' difficulty lines, fitted and kept by group (point 1 of the round 29 review):
     /// this run's own, so they die with it and no other run reads them.
-    pub arrival_lines: crate::difficulty::Kept<Uuid, Option<crate::difficulty::Fitted>, ArrivalLineKey>,
+    pub arrival_lines:
+        crate::difficulty::Kept<Uuid, Option<crate::difficulty::Fitted>, ArrivalLineKey>,
     /// The turn heading's one kept candidate (M5): this run's own, so it ends with the run.
     /// The part chooses again when the heading's data or metrics change.
     pub turn_heading: crate::design::KeptTurnHeading,
@@ -1117,9 +1118,7 @@ impl Run {
         });
     }
     /// The newest Undo step's footer result, the one a footer result of the newest step shows.
-    pub fn newest_step_result(
-        &self,
-    ) -> Option<crate::design::results::Shown<'_, StepResult>> {
+    pub fn newest_step_result(&self) -> Option<crate::design::results::Shown<'_, StepResult>> {
         let step = *self.history_steps.last()?;
         (self.history_steps.len() == self.history.len())
             .then(|| {
@@ -1641,7 +1640,11 @@ impl Run {
     /// Timeline's read diagnosis: a file Splat cannot read is an error; a file that changed under
     /// an unsaved edit is a warning, settled on the Timeline page; the run rule's answer comes
     /// from `Refusal::run_rule`, which ends at its cause once the encounter is deleted.
-    pub fn unend_refusal(&self, act: Unend, reason: &'static str) -> crate::design::results::Refusal {
+    pub fn unend_refusal(
+        &self,
+        act: Unend,
+        reason: &'static str,
+    ) -> crate::design::results::Refusal {
         use crate::design::results::{
             Cause, FailedAct, Fallback, File, Name, Recovery, Refusal, RunRule, Step,
         };
@@ -2386,7 +2389,11 @@ impl Run {
         });
         (label, target)
     }
-    pub fn describe_with<'a>(&'a self, command: &Command, name: &dyn Fn(&usize) -> &'a str) -> String {
+    pub fn describe_with<'a>(
+        &'a self,
+        command: &Command,
+        name: &dyn Fn(&usize) -> &'a str,
+    ) -> String {
         let condition = |index: &usize, at: &usize| {
             self.state
                 .participants
@@ -2732,7 +2739,10 @@ impl Run {
             }
         }
     }
-    pub fn sync_names(&self, wanted: impl Fn(&crate::combat_sync::CombatSync) -> bool) -> Vec<String> {
+    pub fn sync_names(
+        &self,
+        wanted: impl Fn(&crate::combat_sync::CombatSync) -> bool,
+    ) -> Vec<String> {
         self.syncs
             .iter()
             .filter(|(_, sync)| wanted(sync))

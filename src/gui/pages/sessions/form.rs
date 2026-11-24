@@ -71,13 +71,18 @@ pub(super) fn render(
     let template = (!form.editing && !templates.is_empty()).then(|| {
         let names: Vec<String> = templates.iter().map(|t| t.name.clone()).collect();
         let chosen = names.iter().position(|name| *name == form.template);
-        kit::Dropdown::new("session-template", "Session template", names.clone(), chosen)
-            .on_select(cx.listener(move |root, at: &usize, _, cx| {
-                if let Some(name) = names.get(*at) {
-                    root.app.sessions.gv_form_set(FormField::Template, name);
-                    cx.notify();
-                }
-            }))
+        kit::Dropdown::new(
+            "session-template",
+            "Session template",
+            names.clone(),
+            chosen,
+        )
+        .on_select(cx.listener(move |root, at: &usize, _, cx| {
+            if let Some(name) = names.get(*at) {
+                root.app.sessions.gv_form_set(FormField::Template, name);
+                cx.notify();
+            }
+        }))
     });
     let word = if form.editing {
         "Save details"
@@ -94,12 +99,11 @@ pub(super) fn render(
         root.app.sessions.gv_form_create();
         cx.notify();
     }));
-    let cancel = kit::Button::quiet("session-cancel", "Cancel").on_click(cx.listener(
-        |root, _, _, cx| {
+    let cancel =
+        kit::Button::quiet("session-cancel", "Cancel").on_click(cx.listener(|root, _, _, cx| {
             root.app.sessions.gv_form_cancel();
             cx.notify();
-        },
-    ));
+        }));
     // The kept line: the reason Create waits, else the file it makes.
     let kept = form
         .reason

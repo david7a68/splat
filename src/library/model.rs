@@ -3,11 +3,11 @@
 //! (`begin`, `section_counts`, `find_matches`, `row_subtitle`, `list_empty_words`); the reader's
 //! data here follows `Library::editor_pane` step by step, and its footer lines are the same typed
 //! lines (`design::outcome::plain`). The cleanup wave deletes the egui page and keeps this.
-use super::*;
 pub use super::presentation::Section;
+use super::*;
+use crate::design::outcome::Fault as _;
 pub use crate::design::outcome::plain::PlainLine as FooterLine;
 pub use crate::matching::CLOSE_NAMES;
-use crate::design::outcome::Fault as _;
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------------------------
@@ -106,7 +106,9 @@ pub fn row_subtitle(
         .as_ref()
         .zip(index)
         .filter(|_| note.owner != Owner::Builtin)
-        .map_or(0, |(entry, index)| index.broken_link_count(&entry.body, entry.id));
+        .map_or(0, |(entry, index)| {
+            index.broken_link_count(&entry.body, entry.id)
+        });
     let faults = note
         .entry
         .as_ref()
@@ -799,7 +801,10 @@ impl Library {
                 if !searching
                     && !loaded.notes.iter().any(|note| {
                         note.owner.is_package(id)
-                            && note.entry.as_ref().is_some_and(|entry| entry.kind != "package")
+                            && note
+                                .entry
+                                .as_ref()
+                                .is_some_and(|entry| entry.kind != "package")
                     }) =>
             {
                 EmptyList::Package {
@@ -813,8 +818,8 @@ impl Library {
                 }
             }
             _ => {
-                let filtered = !self.filter.is_empty()
-                    && (searching || self.section == Section::Creatures);
+                let filtered =
+                    !self.filter.is_empty() && (searching || self.section == Section::Creatures);
                 let (words, wider) = list_empty_words(campaigns, scope, filtered, searching);
                 EmptyList::Words { words, wider }
             }
@@ -1347,7 +1352,9 @@ impl Library {
         if fs::read_to_string(&copied).map_err(|e| FileFault::read(copied_path, &e).message())?
             != *copied_text
         {
-            return Err("The copy changed on disk. Keep it, and change the link in Markdown.".into());
+            return Err(
+                "The copy changed on disk. Keep it, and change the link in Markdown.".into(),
+            );
         }
         write_note(root, path, Some(after), before)?;
         if let Err(error) = fs::remove_file(copied) {
@@ -1672,7 +1679,11 @@ impl Library {
             && note.error.is_none()
             && !stopped_reading;
         let status = match &note.owner {
-            Owner::Builtin => (icons::READ_ONLY, "Built-in · Read only".to_owned(), d.read_only),
+            Owner::Builtin => (
+                icons::READ_ONLY,
+                "Built-in · Read only".to_owned(),
+                d.read_only,
+            ),
             _ if let Some(fault) = owner_fault => {
                 let (icon, color) = tone_parts(fault.severity().tone());
                 (icon, fault.words(owner_name), color)
@@ -1683,7 +1694,11 @@ impl Library {
                 d.read_only,
             ),
             Owner::Package(_) => (icons::EDIT, package_word.clone(), d.clean),
-            _ if read_only => (icons::READ_ONLY, "Campaign · Read only".to_owned(), d.read_only),
+            _ if read_only => (
+                icons::READ_ONLY,
+                "Campaign · Read only".to_owned(),
+                d.read_only,
+            ),
             _ => (icons::EDIT, "Campaign · Editable".to_owned(), d.clean),
         };
         let unread = fault.is_some() || stopped_reading;
@@ -2124,7 +2139,12 @@ impl Library {
         }
         let parsed = self.parsed_draft(i);
         let note = &self.loaded.as_ref().unwrap().notes[i];
-        self.loaded.as_ref().unwrap().draft_refusal(i, &parsed).is_none() || note.error.is_some()
+        self.loaded
+            .as_ref()
+            .unwrap()
+            .draft_refusal(i, &parsed)
+            .is_none()
+            || note.error.is_some()
     }
 
     /// Discard: the saved text comes back, with an Undo.

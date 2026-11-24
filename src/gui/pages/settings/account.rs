@@ -5,15 +5,17 @@ use crate::gui::kit::{self, Button, Checkbox, Link, Message, Section, TextField,
 use crate::gui::theme::{Density, Type, XS, colors};
 use crate::gui::{SplatRoot, bridge};
 use crate::settings::Account;
-use gpui::{
-    AnyElement, Context, IntoElement, ParentElement, Styled, Window, div, prelude::*, px,
-};
+use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div, prelude::*, px};
 
 /// The sign-in page of D&D Beyond.
 const SIGN_IN_URL: &str = "https://www.dndbeyond.com/sign-in";
 
 /// The account in the wide tab: its heading, its status and everything under it.
-pub(super) fn wide(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) -> AnyElement {
+pub(super) fn wide(
+    root: &mut SplatRoot,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     div()
         .flex()
         .flex_col()
@@ -116,7 +118,12 @@ pub(super) fn compact(
 }
 
 /// The account's status (when `status`), help, warning, sign-in form and Disconnect.
-fn body(root: &mut SplatRoot, status: bool, _: &mut Window, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn body(
+    root: &mut SplatRoot,
+    status: bool,
+    _: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let focus_cookie = std::mem::take(&mut root.pages.settings.focus_cookie)
         | root.app.settings.take_focus_cookie();
@@ -198,7 +205,11 @@ fn body(root: &mut SplatRoot, status: bool, _: &mut Window, cx: &mut Context<Spl
         }));
         if help_open {
             help = help
-                .child(kit::text(Type::Body, c.text, "1. Sign in to D&D Beyond in your browser."))
+                .child(kit::text(
+                    Type::Body,
+                    c.text,
+                    "1. Sign in to D&D Beyond in your browser.",
+                ))
                 .child(kit::text(
                     Type::Body,
                     c.text,
@@ -252,8 +263,7 @@ fn body(root: &mut SplatRoot, status: bool, _: &mut Window, cx: &mut Context<Spl
         let reason = settings.connect_reason();
         let failure = settings.connect_failure().filter(|_| reason.is_none());
         let shown = reason.map(str::to_owned).or(failure.map(str::to_owned));
-        let connect = if reason.is_none() && account != Account::Connected && !campaign_form_open
-        {
+        let connect = if reason.is_none() && account != Account::Connected && !campaign_form_open {
             Button::primary("account-connect", "Connect")
         } else {
             Button::secondary("account-connect", "Connect")

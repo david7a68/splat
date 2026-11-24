@@ -3369,11 +3369,11 @@ fn needed_by(reasons: impl Iterator<Item = String>) -> String {
     format!("needed by {}", reasons.collect::<Vec<_>>().join(", "))
 }
 
-#[path = "campaign_content/view.rs"]
-pub mod view;
 #[cfg(any(test, feature = "test-support"))]
 #[path = "campaign_content/tests.rs"]
 mod tests;
+#[path = "campaign_content/view.rs"]
+pub mod view;
 
 #[cfg(feature = "test-support")]
 pub use tests::applied_changes_reload_the_catalogue_and_failures_are_shown;

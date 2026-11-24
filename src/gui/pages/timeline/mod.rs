@@ -24,14 +24,17 @@ use crate::timeline::{Kind, kind_icon};
 use crate::{Page, timeline};
 use gpui::{
     AnyElement, Context, InteractiveElement, IntoElement, KeyBinding, ParentElement, Pixels,
-    ScrollHandle, SharedString, Styled, UniformListScrollHandle, Window, actions, div,
-    prelude::*, px,
+    ScrollHandle, SharedString, Styled, UniformListScrollHandle, Window, actions, div, prelude::*,
+    px,
 };
 
-actions!(timeline, [
-    /// Ctrl+S: save the Timeline now.
-    SaveTimeline
-]);
+actions!(
+    timeline,
+    [
+        /// Ctrl+S: save the Timeline now.
+        SaveTimeline
+    ]
+);
 
 /// Two columns from this width of the page; below it the open event takes the list's place.
 const TWO_COLUMNS_FROM: Pixels = px(640.0);
@@ -195,7 +198,7 @@ pub(crate) fn render(
     page = page.child(add_strip(root, cx));
     if let Some(words) = root.app.timeline_page.dated.clone() {
         let notice = Notice::warning(timeline::page::as_sentence(&words))
-        .choice(Choice::new(MessageChoice::Choice("Play this one"), ()));
+            .choice(Choice::new(MessageChoice::Choice("Play this one"), ()));
         page = page.child(div().pb(S).children(kit::messages::lines(
             "timeline-dated",
             vec![notice.into_plain()],
@@ -221,7 +224,8 @@ pub(crate) fn render(
             let current = root.app.sessions.current();
             let id = root.app.timeline.add(Kind::Day, current);
             let SplatRoot { app, bridge, .. } = root;
-            app.timeline_page.record_added(id, &app.timeline, bridge.ctx());
+            app.timeline_page
+                .record_added(id, &app.timeline, bridge.ctx());
             cx.notify();
         }));
         let body = kit::empty_state(
@@ -281,13 +285,11 @@ pub(crate) fn render(
         let list = list::render(root, window, cx);
         let footer = list_footer(root, None, cx);
         return page
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .max_w(LIST_MEASURE)
-                    .child(pane("timeline-list-pane", list, footer)),
-            )
+            .child(div().flex_1().min_h_0().max_w(LIST_MEASURE).child(pane(
+                "timeline-list-pane",
+                list,
+                footer,
+            )))
             .into_any_element();
     };
     let width = detail_width(page_width);
@@ -302,14 +304,11 @@ pub(crate) fn render(
             .flex_1()
             .min_h_0()
             .w(content)
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .pr(S)
-                    .child(pane("timeline-list-pane", list, footer)),
-            )
+            .child(div().flex_1().min_w_0().h_full().pr(S).child(pane(
+                "timeline-list-pane",
+                list,
+                footer,
+            )))
             .child(
                 div()
                     .w(width)
@@ -374,18 +373,20 @@ fn list_footer(
     kit::messages::lines(
         "timeline-footer",
         lines,
-        cx.listener(move |root, pressed: &kit::messages::Pressed<ListAct>, _, cx| {
-            let Some(press) = pressed.take() else {
-                return;
-            };
-            let app = &mut root.app;
-            let offer = open
-                .as_deref()
-                .and_then(|id| app.sessions.event_link_offer(&app.timeline, id));
-            app.timeline_page
-                .footer_act(press, &mut app.timeline, &mut app.sessions, offer);
-            cx.notify();
-        }),
+        cx.listener(
+            move |root, pressed: &kit::messages::Pressed<ListAct>, _, cx| {
+                let Some(press) = pressed.take() else {
+                    return;
+                };
+                let app = &mut root.app;
+                let offer = open
+                    .as_deref()
+                    .and_then(|id| app.sessions.event_link_offer(&app.timeline, id));
+                app.timeline_page
+                    .footer_act(press, &mut app.timeline, &mut app.sessions, offer);
+                cx.notify();
+            },
+        ),
     )
 }
 
@@ -488,14 +489,16 @@ fn comparison(root: &SplatRoot) -> AnyElement {
                     .h_full()
                     .gap(XS)
                     .child(kit::label(title, 0))
-                    .child(div().flex_1().min_h_0().child(kit::scroll_column(
-                        id,
-                        div()
-                            .ty(Type::Mono)
-                            .text_color(c.text)
-                            .whitespace_normal()
-                            .child(words),
-                    )))
+                    .child(
+                        div().flex_1().min_h_0().child(kit::scroll_column(
+                            id,
+                            div()
+                                .ty(Type::Mono)
+                                .text_color(c.text)
+                                .whitespace_normal()
+                                .child(words),
+                        )),
+                    )
             };
             div()
                 .flex()
@@ -544,7 +547,8 @@ fn add_strip(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> impl IntoElement 
                     book.add(kind, current)
                 };
                 let SplatRoot { app, bridge, .. } = root;
-                app.timeline_page.record_added(id, &app.timeline, bridge.ctx());
+                app.timeline_page
+                    .record_added(id, &app.timeline, bridge.ctx());
                 cx.notify();
             }))
         }))
@@ -585,12 +589,19 @@ fn filters(root: &SplatRoot, page_width: Pixels, cx: &mut Context<SplatRoot>) ->
         .and_then(|id| ids.iter().position(|known| *known == id))
         .map_or(0, |at| at + 1);
     let session_ids = ids.clone();
-    let session = kit::Dropdown::new("timeline-session-filter", "Show one session", shown, Some(session_at))
-        .width(px(150.0))
-        .on_select(cx.listener(move |root, index: &usize, _, cx| {
-            root.app.timeline_page.session = index.checked_sub(1).and_then(|at| session_ids.get(at).copied());
-            cx.notify();
-        }));
+    let session = kit::Dropdown::new(
+        "timeline-session-filter",
+        "Show one session",
+        shown,
+        Some(session_at),
+    )
+    .width(px(150.0))
+    .on_select(cx.listener(move |root, index: &usize, _, cx| {
+        root.app.timeline_page.session = index
+            .checked_sub(1)
+            .and_then(|at| session_ids.get(at).copied());
+        cx.notify();
+    }));
     let mut new_shown: Vec<String> = vec!["No session".to_owned()];
     new_shown.extend(
         sessions

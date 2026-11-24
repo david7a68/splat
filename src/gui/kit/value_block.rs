@@ -16,8 +16,7 @@
 use super::{Button, Message, Status, label, status};
 use crate::gui::theme::{Density, FORM_WIDTH, L, S, Type, TypeExt, XS, colors};
 use gpui::{
-    AnyElement, Div, IntoElement, ParentElement, RenderOnce, SharedString, Styled, div,
-    prelude::*,
+    AnyElement, Div, IntoElement, ParentElement, RenderOnce, SharedString, Styled, div, prelude::*,
 };
 use std::marker::PhantomData;
 
@@ -151,14 +150,8 @@ impl ValueBlock<AfterSave> {
             return Block(self.block);
         }
         Block(
-            self.block.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .pt(S)
-                    .gap(S)
-                    .children(messages),
-            ),
+            self.block
+                .child(div().flex().flex_col().pt(S).gap(S).children(messages)),
         )
     }
 

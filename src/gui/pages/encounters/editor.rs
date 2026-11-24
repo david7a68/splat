@@ -3,8 +3,7 @@
 //! roster column, Add participants, and the footer.
 use super::common::{egui_color, footer, on_page, reason, row_menu, small_icon, text_width};
 use crate::gui::theme::{
-    Density, HAIRLINE_WIDTH, L, LIST_MEASURE, M, PANEL_MIN_WIDTH, S, Type,
-    TypeExt, XS, colors,
+    Density, HAIRLINE_WIDTH, L, LIST_MEASURE, M, PANEL_MIN_WIDTH, S, Type, TypeExt, XS, colors,
 };
 use crate::gui::{SplatRoot, icons, kit};
 use eframe::egui;
@@ -35,7 +34,10 @@ pub(super) fn render(
     };
     let ctx = root.bridge.ctx().clone();
     let linked = active.dndbeyond_campaign_id.is_some();
-    let roster = root.app.encounters.roster_view(&ctx, &root.app.party, linked);
+    let roster = root
+        .app
+        .encounters
+        .roster_view(&ctx, &root.app.party, linked);
     let filter = filter(&ctx);
     let add = root.app.encounters.add_view(filter);
     let lines = root.app.encounters.editor_footer(&ctx, &active.path);
@@ -69,7 +71,11 @@ pub(super) fn render(
             .flex_row()
             .gap(S)
             .child(small_icon(icons::BUSY, colors().muted))
-            .child(kit::text(Type::Body, colors().muted, "Reading this campaign…"))
+            .child(kit::text(
+                Type::Body,
+                colors().muted,
+                "Reading this campaign…",
+            ))
             .into_any_element(),
     };
     let footer_lines = footer("encounter-editor-footer", lines, cx);
@@ -179,7 +185,11 @@ fn head(view: &EditorView, roster_width: Pixels, focus: bool, cx: &mut Context<S
         .gap(S)
         .child(save);
     if view.run_open {
-        actions = actions.child(reason("Close the open run first.").whitespace_nowrap().mr(S));
+        actions = actions.child(
+            reason("Close the open run first.")
+                .whitespace_nowrap()
+                .mr(S),
+        );
     }
     actions = actions.child(start);
     if let Some(blocked) = view.start_another.clone() {
@@ -207,7 +217,13 @@ fn head(view: &EditorView, roster_width: Pixels, focus: bool, cx: &mut Context<S
         .flex_wrap()
         .items_center()
         .gap(L)
-        .child(div().w(roster_width - L).min_w(px(200.0)).ty(Type::Heading).child(name))
+        .child(
+            div()
+                .w(roster_width - L)
+                .min_w(px(200.0))
+                .ty(Type::Heading)
+                .child(name),
+        )
         .child(actions);
     let (icon, word, color) = &view.state;
     let mut row = div()
@@ -234,11 +250,13 @@ fn head(view: &EditorView, roster_width: Pixels, focus: bool, cx: &mut Context<S
         row = row.child(reason(words).whitespace_nowrap().ml(S));
     }
     if let Some(state) = &view.run_state {
-        row = row.child(div().flex_1()).child(kit::status(&kit::Status::new(
-            icons::RUN,
-            state.clone(),
-            c.muted,
-        )));
+        row = row
+            .child(div().flex_1())
+            .child(kit::status(&kit::Status::new(
+                icons::RUN,
+                state.clone(),
+                c.muted,
+            )));
     }
     div()
         .flex()
@@ -288,7 +306,13 @@ fn roster_column(
     let facts = roster
         .rows
         .iter()
-        .map(|row| text_width(window, Type::Strong, &format!("{}. {}", row.index + 1, row.name)))
+        .map(|row| {
+            text_width(
+                window,
+                Type::Strong,
+                &format!("{}. {}", row.index + 1, row.name),
+            )
+        })
         .fold(px(0.0), Pixels::max);
     let _ = facts;
     for row in &roster.rows {
@@ -370,7 +394,12 @@ fn roster_column(
 }
 
 /// The encounter's loot: one field per line, a remove for each, and a field that adds a line.
-fn loot(root: &mut SplatRoot, view: &EditorView, roster: &RosterView, cx: &mut Context<SplatRoot>) -> Div {
+fn loot(
+    root: &mut SplatRoot,
+    view: &EditorView,
+    roster: &RosterView,
+    cx: &mut Context<SplatRoot>,
+) -> Div {
     let mut block = div().flex().flex_col().child(kit::heading(
         kit::Heading::Group {
             title: "Loot",
@@ -402,14 +431,16 @@ fn loot(root: &mut SplatRoot, view: &EditorView, roster: &RosterView, cx: &mut C
                             line.clone(),
                         )
                         .name(format!("the encounter loot line {}", at + 1))
-                        .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                            let mut lines = lines.clone();
-                            if let Some(line) = lines.get_mut(at) {
-                                *line = words.to_owned();
-                            }
-                            root.app.encounters.edit_draft(|draft| draft.loot(lines));
-                            cx.notify();
-                        })),
+                        .on_change(cx.listener(
+                            move |root: &mut SplatRoot, words: &str, _, cx| {
+                                let mut lines = lines.clone();
+                                if let Some(line) = lines.get_mut(at) {
+                                    *line = words.to_owned();
+                                }
+                                root.app.encounters.edit_draft(|draft| draft.loot(lines));
+                                cx.notify();
+                            },
+                        )),
                     ),
                 )
                 .child(
@@ -418,14 +449,16 @@ fn loot(root: &mut SplatRoot, view: &EditorView, roster: &RosterView, cx: &mut C
                         icons::CLOSE,
                         format!("Remove loot line {}", at + 1),
                     )
-                    .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                        let mut lines = removed.clone();
-                        if at < lines.len() {
-                            lines.remove(at);
-                        }
-                        root.app.encounters.edit_draft(|draft| draft.loot(lines));
-                        cx.notify();
-                    })),
+                    .on_click(cx.listener(
+                        move |root: &mut SplatRoot, _, _, cx| {
+                            let mut lines = removed.clone();
+                            if at < lines.len() {
+                                lines.remove(at);
+                            }
+                            root.app.encounters.edit_draft(|draft| draft.loot(lines));
+                            cx.notify();
+                        },
+                    )),
                 ),
         );
     }
@@ -456,7 +489,12 @@ fn loot(root: &mut SplatRoot, view: &EditorView, roster: &RosterView, cx: &mut C
 }
 
 /// One roster row: its name and second line, Edit and its menu, and its fields while open.
-fn roster_row(root: &mut SplatRoot, view: &EditorView, row: &RosterRow, cx: &mut Context<SplatRoot>) -> Div {
+fn roster_row(
+    root: &mut SplatRoot,
+    view: &EditorView,
+    row: &RosterRow,
+    cx: &mut Context<SplatRoot>,
+) -> Div {
     let c = colors();
     let key = row.key.clone();
     let mut block = div().flex().flex_col();
@@ -486,7 +524,9 @@ fn roster_row(root: &mut SplatRoot, view: &EditorView, row: &RosterRow, cx: &mut
         }
     }
     if let Some((icon, color, _)) = &row.missing {
-        line = line.child(div().child(" · ")).child(small_icon(icon, egui_color(*color)));
+        line = line
+            .child(div().child(" · "))
+            .child(small_icon(icon, egui_color(*color)));
     }
     if let Some(word) = &row.changed {
         let open = key.clone();
@@ -533,10 +573,14 @@ fn roster_row(root: &mut SplatRoot, view: &EditorView, row: &RosterRow, cx: &mut
         kit::MenuItem::new("Duplicate").on_click(roster_act(cx, RosterAct::Duplicate(index))),
     ];
     if row.make_yours {
-        items.push(kit::MenuItem::new("Make it yours").on_click(on_page(
-            cx,
-            move |page, _, active, campaigns| page.make_yours(index, active, campaigns.modules()),
-        )));
+        items.push(
+            kit::MenuItem::new("Make it yours").on_click(on_page(
+                cx,
+                move |page, _, active, campaigns| {
+                    page.make_yours(index, active, campaigns.modules())
+                },
+            )),
+        );
     }
     items.push(
         kit::MenuItem::new("Remove")
@@ -546,25 +590,31 @@ fn roster_row(root: &mut SplatRoot, view: &EditorView, row: &RosterRow, cx: &mut
     let action: AnyElement = match &row.repair {
         Some((label, path)) => {
             let path = path.clone();
-            kit::Button::quiet(ElementId::Name(format!("roster-repair:{key}").into()), *label)
-                .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                    root.bridge.ctx().data_mut(|data| {
-                        data.insert_temp(egui::Id::new("open_library_repair"), path.clone())
-                    });
-                    cx.notify();
-                }))
-                .into_any_element()
+            kit::Button::quiet(
+                ElementId::Name(format!("roster-repair:{key}").into()),
+                *label,
+            )
+            .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+                root.bridge.ctx().data_mut(|data| {
+                    data.insert_temp(egui::Id::new("open_library_repair"), path.clone())
+                });
+                cx.notify();
+            }))
+            .into_any_element()
         }
         None => {
             let toggle = key.clone();
-            kit::Button::quiet(ElementId::Name(format!("roster-edit:{key}").into()), row.edit_word)
-                .name(format!("{} {}", row.edit_word, row.name))
-                .selected(row.open)
-                .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                    root.app.encounters.toggle_row(&toggle);
-                    cx.notify();
-                }))
-                .into_any_element()
+            kit::Button::quiet(
+                ElementId::Name(format!("roster-edit:{key}").into()),
+                row.edit_word,
+            )
+            .name(format!("{} {}", row.edit_word, row.name))
+            .selected(row.open)
+            .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+                root.app.encounters.toggle_row(&toggle);
+                cx.notify();
+            }))
+            .into_any_element()
         }
     };
     block = block.child(
@@ -584,7 +634,11 @@ fn roster_row(root: &mut SplatRoot, view: &EditorView, row: &RosterRow, cx: &mut
                     .items_center()
                     .gap(S)
                     .child(action)
-                    .child(row_menu(ElementId::Name(format!("roster-menu:{key}").into()), &row.name, items)),
+                    .child(row_menu(
+                        ElementId::Name(format!("roster-menu:{key}").into()),
+                        &row.name,
+                        items,
+                    )),
             ),
     );
     if let Some(form) = &row.form {
@@ -642,28 +696,39 @@ fn row_form(
                 chosen,
             )
             .width(px(104.0))
-            .on_select(cx.listener(move |root: &mut SplatRoot, index: &usize, _, cx| {
-                match picked.get(*index) {
-                    Some(side) => {
-                        root.pages.encounters.other_side = None;
-                        root.app.encounters.edit_draft(|draft| draft.side(&side_key, side));
+            .on_select(cx.listener(
+                move |root: &mut SplatRoot, index: &usize, _, cx| {
+                    match picked.get(*index) {
+                        Some(side) => {
+                            root.pages.encounters.other_side = None;
+                            root.app
+                                .encounters
+                                .edit_draft(|draft| draft.side(&side_key, side));
+                        }
+                        None => root.pages.encounters.other_side = Some(side_key.clone()),
                     }
-                    None => root.pages.encounters.other_side = Some(side_key.clone()),
-                }
-                cx.notify();
-            })),
+                    cx.notify();
+                },
+            )),
         );
     if other_open {
         let other_key = key.clone();
         side_row = side_row.child(
-            kit::TextField::new(ElementId::Name(format!("roster-side-other:{key}").into()), "")
-                .name("Other side for Side")
-                .placeholder("Side name")
-                .width(px(80.0))
-                .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                    root.app.encounters.edit_draft(|draft| draft.side(&other_key, words));
+            kit::TextField::new(
+                ElementId::Name(format!("roster-side-other:{key}").into()),
+                "",
+            )
+            .name("Other side for Side")
+            .placeholder("Side name")
+            .width(px(80.0))
+            .on_change(
+                cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                    root.app
+                        .encounters
+                        .edit_draft(|draft| draft.side(&other_key, words));
                     cx.notify();
-                })),
+                }),
+            ),
         );
     }
     let group_key = key.clone();
@@ -681,12 +746,14 @@ fn row_form(
             .name("Initiative group (optional)")
             .placeholder("Initiative group")
             .width(px(120.0))
-            .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                root.app
-                    .encounters
-                    .edit_draft(|draft| draft.initiative_group(&group_key, words));
-                cx.notify();
-            })),
+            .on_change(
+                cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                    root.app
+                        .encounters
+                        .edit_draft(|draft| draft.initiative_group(&group_key, words));
+                    cx.notify();
+                }),
+            ),
         );
     for (field, label, value) in form.values.iter().copied() {
         let toggle_key = key.clone();
@@ -713,14 +780,16 @@ fn row_form(
                 )
                 .name(label)
                 .width(px(64.0))
-                .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                    if let Ok(number) = words.trim().parse::<i64>() {
-                        root.app
-                            .encounters
-                            .edit_draft(|draft| draft.value(&value_key, field, Some(number)));
-                    }
-                    cx.notify();
-                })),
+                .on_change(cx.listener(
+                    move |root: &mut SplatRoot, words: &str, _, cx| {
+                        if let Ok(number) = words.trim().parse::<i64>() {
+                            root.app
+                                .encounters
+                                .edit_draft(|draft| draft.value(&value_key, field, Some(number)));
+                        }
+                        cx.notify();
+                    },
+                )),
             );
         }
     }
@@ -880,18 +949,26 @@ pub(super) fn results(add: &AddView, cx: &mut Context<SplatRoot>) -> AnyElement 
         } else {
             "Remove a filter, or check Campaign → Packages."
         };
-        return kit::empty_state(icons::SEARCH, "No creatures match", words, None::<AnyElement>).into_any_element();
+        return kit::empty_state(
+            icons::SEARCH,
+            "No creatures match",
+            words,
+            None::<AnyElement>,
+        )
+        .into_any_element();
     }
     let rows: Arc<Vec<ResultRow>> = add.results.clone();
     let close = add.close_names;
     let list = uniform_list(
         "encounter-results",
         rows.len(),
-        cx.processor(move |_root: &mut SplatRoot, range: std::ops::Range<usize>, _window, cx| {
-            range
-                .filter_map(|at| rows.get(at).map(|row| result_row(row, cx)))
-                .collect::<Vec<_>>()
-        }),
+        cx.processor(
+            move |_root: &mut SplatRoot, range: std::ops::Range<usize>, _window, cx| {
+                range
+                    .filter_map(|at| rows.get(at).map(|row| result_row(row, cx)))
+                    .collect::<Vec<_>>()
+            },
+        ),
     )
     .size_full();
     div()
@@ -975,7 +1052,11 @@ fn stat_cells(detail: &str, hp_missing: bool) -> Vec<Div> {
     let parts: Vec<&str> = detail.split(" · ").collect();
     let other = parts
         .iter()
-        .find(|part| !["CR ", "HP ", "AC "].iter().any(|prefix| part.starts_with(prefix)))
+        .find(|part| {
+            !["CR ", "HP ", "AC "]
+                .iter()
+                .any(|prefix| part.starts_with(prefix))
+        })
         .copied();
     let mut cells = Vec::new();
     for (prefix, width) in [("CR ", px(48.0)), ("HP ", px(52.0)), ("AC ", px(40.0))] {

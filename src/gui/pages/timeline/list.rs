@@ -8,8 +8,8 @@ use crate::gui::{SplatRoot, icons, kit};
 use crate::timeline::page::{RowTint, RowWords, long_rest_status, short_session};
 use crate::timeline::{Kind, kind_icon};
 use gpui::{
-    AnyElement, Context, ElementId, Hsla, IntoElement, ParentElement, ScrollStrategy,
-    SharedString, StyledText, Styled, TextRun, Window, div, prelude::*, px,
+    AnyElement, Context, ElementId, Hsla, IntoElement, ParentElement, ScrollStrategy, SharedString,
+    Styled, StyledText, TextRun, Window, div, prelude::*, px,
 };
 
 /// A row's height (egui's `ROW`), and the gap under it.
@@ -79,7 +79,13 @@ pub(crate) fn render(
                     );
                     let selected =
                         root.app.timeline_page.selected.as_deref() == Some(event.id.as_str());
-                    Some(row_element(event.id.clone(), event.kind, words, selected, cx))
+                    Some(row_element(
+                        event.id.clone(),
+                        event.kind,
+                        words,
+                        selected,
+                        cx,
+                    ))
                 })
                 .collect::<Vec<_>>()
         }),
@@ -108,7 +114,10 @@ fn second_line(words: &RowWords, from: usize) -> StyledText {
         strikethrough: None,
     };
     for (range, tint) in &words.spans {
-        let (start, end) = (range.start.max(at).min(detail.len()), range.end.min(detail.len()));
+        let (start, end) = (
+            range.start.max(at).min(detail.len()),
+            range.end.min(detail.len()),
+        );
         if start >= end {
             continue;
         }
@@ -127,8 +136,10 @@ fn second_line(words: &RowWords, from: usize) -> StyledText {
     if detail.len() > at {
         runs.push(run(detail.len() - at, c.muted));
     }
-    StyledText::new(SharedString::from(detail[from.min(detail.len())..].to_owned()))
-        .with_runs(runs)
+    StyledText::new(SharedString::from(
+        detail[from.min(detail.len())..].to_owned(),
+    ))
+    .with_runs(runs)
 }
 
 /// One row: the spine and its kind's icon, the title (and a day heading's flag), the second
@@ -193,10 +204,7 @@ fn row_element(
     if !words.detail.is_empty() {
         if words.open && !words.summary.is_empty() {
             // The open fight's result is a link back to its run; the words around it stay.
-            let (before, _) = words
-                .detail
-                .split_once(&words.summary)
-                .unwrap_or(("", ""));
+            let (before, _) = words.detail.split_once(&words.summary).unwrap_or(("", ""));
             let from = before.len() + words.summary.len();
             text = text.child(
                 div()
@@ -232,21 +240,24 @@ fn row_element(
         }
     }
     let open = id.clone();
-    let row = kit::Row::new(ElementId::Name(format!("timeline-row-{id}").into()), words.name.clone())
-        .height(ROW)
-        .selected(selected)
-        .on_click(cx.listener(move |root, _, _, cx| {
-            let page = &mut root.app.timeline_page;
-            if page.selected.as_ref() != Some(&open) {
-                page.reset_detail = true;
-                root.pages.timeline.form_top = true;
-            }
-            page.select(Some(open.clone()));
-            page.focus_title = false;
-            cx.notify();
-        }))
-        .child(icon)
-        .child(text);
+    let row = kit::Row::new(
+        ElementId::Name(format!("timeline-row-{id}").into()),
+        words.name.clone(),
+    )
+    .height(ROW)
+    .selected(selected)
+    .on_click(cx.listener(move |root, _, _, cx| {
+        let page = &mut root.app.timeline_page;
+        if page.selected.as_ref() != Some(&open) {
+            page.reset_detail = true;
+            root.pages.timeline.form_top = true;
+        }
+        page.select(Some(open.clone()));
+        page.focus_title = false;
+        cx.notify();
+    }))
+    .child(icon)
+    .child(text);
     div()
         .h(ROW + ROW_GAP)
         .pb(ROW_GAP)

@@ -4,9 +4,7 @@
 use super::{on_command, on_run};
 use crate::encounter_run::{Command, NOBODY_PRESENT, Panel, Run};
 use crate::gui::{SplatRoot, bridge, icons, kit, theme};
-use gpui::{
-    Context, InteractiveElement, IntoElement, ParentElement, Styled, div, px,
-};
+use gpui::{Context, InteractiveElement, IntoElement, ParentElement, Styled, div, px};
 use theme::{Density, Type, TypeExt, colors};
 
 /// What sync needs from the DM, on the notice line: the icon, the words and their colour.
@@ -24,11 +22,13 @@ fn sync_alert(run: &Run) -> Option<SyncAlert> {
     let offline = run
         .account_status
         .map_or(c.connection.offline, |status| bridge::color(status.color));
-    let alert = |icon, words: String, color| {
-        Some(SyncAlert { icon, words, color })
-    };
+    let alert = |icon, words: String, color| Some(SyncAlert { icon, words, color });
     if let Some(name) = &strip.conflict {
-        alert(icons::WARN, format!("Sync conflict: {name}"), c.sync.conflict)
+        alert(
+            icons::WARN,
+            format!("Sync conflict: {name}"),
+            c.sync.conflict,
+        )
     } else if strip.sync_stopped {
         alert(icons::OFFLINE, "Signed out of D&D Beyond".into(), offline)
     } else if run.sync_needs_sign_in() && !party_sync_off {
@@ -81,13 +81,20 @@ pub(super) fn live(
             .child(whole.clone())
             .with_tooltip_words(whole)
     });
-    let add = kit::Button::secondary("run-add-to-fight", if f32::from(width) < design_add_words_from() { "Add" } else { "Add to fight" })
-        .icon(icons::ADD)
-        .name("Add to fight")
-        .hint("Add an encounter group or a creature (Ctrl+G)")
-        .density(Density::Read)
-        .selected(run.panel == Panel::Groups && !run.hide_panel)
-        .on_click(on_run(cx, |run| run.show_arrivals()));
+    let add = kit::Button::secondary(
+        "run-add-to-fight",
+        if f32::from(width) < design_add_words_from() {
+            "Add"
+        } else {
+            "Add to fight"
+        },
+    )
+    .icon(icons::ADD)
+    .name("Add to fight")
+    .hint("Add an encounter group or a creature (Ctrl+G)")
+    .density(Density::Read)
+    .selected(run.panel == Panel::Groups && !run.hide_panel)
+    .on_click(on_run(cx, |run| run.show_arrivals()));
     let next = kit::Button::primary("run-next-turn", "Next turn")
         .icon(icons::NEXT)
         .density(Density::Glance)
@@ -277,11 +284,12 @@ fn sheet_notice(summary: String, detail: String, cx: &mut Context<SplatRoot>) ->
                 })),
         )
         .child(
-            kit::IconButton::new("run-sheet-notice-dismiss", icons::CLOSE, "Dismiss")
-                .on_click(on_run(cx, |run| {
+            kit::IconButton::new("run-sheet-notice-dismiss", icons::CLOSE, "Dismiss").on_click(
+                on_run(cx, |run| {
                     run.notice = None;
                     run.notice_summary = None;
-                })),
+                }),
+            ),
         )
         .with_tooltip_words(detail)
 }
@@ -289,7 +297,12 @@ fn sheet_notice(summary: String, detail: String, cx: &mut Context<SplatRoot>) ->
 /// Undo with the newest step's words, or `Nothing to undo` beside the blocked Undo.
 fn undo(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
     let c = colors();
-    let row = div().flex().flex_row().items_center().gap(theme::S).flex_none();
+    let row = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(theme::S)
+        .flex_none();
     if run.history.is_empty() {
         let full = run.empty_undo_reason().to_owned();
         return row
@@ -303,7 +316,12 @@ fn undo(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
                     ))
                     .with_tooltip_words(full),
             )
-            .child(super::undo_button(run, "run-undo", "Undo".into(), Density::Read));
+            .child(super::undo_button(
+                run,
+                "run-undo",
+                "Undo".into(),
+                Density::Read,
+            ));
     }
     let label = run.undo_label();
     row.child(

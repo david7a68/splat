@@ -7,8 +7,8 @@ use crate::design::outcome::plain::ChoiceForm as Kind;
 use crate::gui::{SplatRoot, bridge, kit, theme};
 use crate::sessions::page::gpui_facade::{BannerAct, BannerChoice, BannerMessage};
 use gpui::{
-    AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window,
-    div, prelude::*,
+    AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
+    prelude::*,
 };
 use theme::{M, S, Type, XS, colors};
 
@@ -98,7 +98,8 @@ fn message(at: usize, message: BannerMessage, cx: &mut Context<SplatRoot>) -> An
         });
         match kind {
             Kind::Dismiss => {
-                dismiss = Some(kit::IconButton::new(id, crate::gui::icons::CLOSE, label).on_click(click));
+                dismiss =
+                    Some(kit::IconButton::new(id, crate::gui::icons::CLOSE, label).on_click(click));
             }
             Kind::Lose => {
                 shown = shown.destructive(
@@ -126,7 +127,9 @@ fn message(at: usize, message: BannerMessage, cx: &mut Context<SplatRoot>) -> An
     let words = div().flex_1().min_w_0().child(shown);
     let words = match hover {
         Some(hover) => div()
-            .id(ElementId::Name(SharedString::from(format!("banner-words-{at}"))))
+            .id(ElementId::Name(SharedString::from(format!(
+                "banner-words-{at}"
+            ))))
             .flex_1()
             .min_w_0()
             .child(words)

@@ -28,12 +28,7 @@ fn new_session(shell: &mut Shell, title: &str) {
 
 /// The open note's words, as its draft holds them.
 fn note_words(shell: &mut Shell) -> String {
-    shell.update(|root, _, _| {
-        root.app
-            .sessions
-            .gv_note_words(false)
-            .unwrap_or_default()
-    })
+    shell.update(|root, _, _| root.app.sessions.gv_note_words(false).unwrap_or_default())
 }
 
 /// The open note's words, as the DM's edit in the editor would leave them.
@@ -62,12 +57,18 @@ fn session_notes_main_states() {
     shell.capture("session-notes__02-session-form__1200x800");
     shell.type_text(TITLE);
     shell.click("Create session");
-    assert_eq!(selected_label(&mut shell).as_deref(), Some("Session 1: Ash on the Road"));
+    assert_eq!(
+        selected_label(&mut shell).as_deref(),
+        Some("Session 1: Ash on the Road")
+    );
     shell.capture("session-notes__04-session-write__1200x800");
     // Read with nothing written says so, with Write.
     shell.click("Read");
     shell.capture("session-notes__05-empty-note-read__1200x800");
-    assert!(shell.bounds("Write").is_some(), "an empty Read view offers Write");
+    assert!(
+        shell.bounds("Write").is_some(),
+        "an empty Read view offers Write"
+    );
     shell.click("Write");
     let words = note_words(&mut shell);
     set_note(
@@ -103,7 +104,11 @@ fn session_notes_main_states() {
 
 #[test]
 fn session_notes_small_window() {
-    let mut shell = Shell::with_size("session-notes", Seed::Campaign, size(px(SMALL.0), px(SMALL.1)));
+    let mut shell = Shell::with_size(
+        "session-notes",
+        Seed::Campaign,
+        size(px(SMALL.0), px(SMALL.1)),
+    );
     shell.click("Session");
     new_session(&mut shell, TITLE);
     shell.capture("session-notes__04-session-write__960x640");
@@ -117,7 +122,10 @@ fn session_notes_conflict_and_gone() {
     shell.click("Session");
     new_session(&mut shell, TITLE);
     let words = note_words(&mut shell);
-    set_note(&mut shell, &format!("{words}My words during the conflict.\n"));
+    set_note(
+        &mut shell,
+        &format!("{words}My words during the conflict.\n"),
+    );
     shell.update(|root, _, _| root.app.sessions.simulate_conflict());
     shell.capture("session-notes__24-note-conflict__1200x800");
     assert!(shell.bounds("Overwrite with my draft").is_some());
@@ -173,7 +181,10 @@ fn session_recording_states() {
             .first()
             .map(|row| row.path.display().to_string())
     });
-    shell.click(&format!("id:recording-menu-button-{}", path.expect("a recording")));
+    shell.click(&format!(
+        "id:recording-menu-button-{}",
+        path.expect("a recording")
+    ));
     shell.click("Delete…");
     shell.capture("session-recording__35-recording-delete__1200x800");
     assert!(shell.read(|root| root.app.sessions.gv_confirm_delete().is_some()));
@@ -198,7 +209,10 @@ fn session_carry_over_offered() {
     shell.update(|root, _, _| root.app.sessions.flush());
     new_session(&mut shell, "The Crossing");
     shell.capture("session-carry-over__01-carry-over-offered__1200x800");
-    assert!(shell.bounds("Carry over").is_some(), "a prepared session offers Carry over");
+    assert!(
+        shell.bounds("Carry over").is_some(),
+        "a prepared session offers Carry over"
+    );
 }
 
 #[test]
@@ -232,13 +246,19 @@ fn form_creates_cancels_and_edits() {
     shell.click("New session");
     shell.type_text(TITLE);
     shell.press("enter");
-    assert_eq!(selected_label(&mut shell).as_deref(), Some("Session 1: Ash on the Road"));
+    assert_eq!(
+        selected_label(&mut shell).as_deref(),
+        Some("Session 1: Ash on the Road")
+    );
     shell.click("Details");
     shell.click("Session title");
     shell.press("ctrl-a");
     shell.type_text("The Crossing");
     shell.click("Save details");
-    assert_eq!(selected_label(&mut shell).as_deref(), Some("Session 1: The Crossing"));
+    assert_eq!(
+        selected_label(&mut shell).as_deref(),
+        Some("Session 1: The Crossing")
+    );
 }
 
 /// Words typed into the note save at Ctrl+S, and reach the file.
@@ -254,7 +274,10 @@ fn note_typing_saves_at_ctrl_s() {
     shell.press("ctrl-s");
     let path = shell.read(|root| root.app.sessions.gv_selected_note().map(|n| n.path.clone()));
     let file = std::fs::read_to_string(path.expect("a note")).expect("the note's file");
-    assert!(file.contains("Wolves at the ford."), "Ctrl+S saved the typed words");
+    assert!(
+        file.contains("Wolves at the ford."),
+        "Ctrl+S saved the typed words"
+    );
 }
 
 /// Ctrl+\ hides and shows the session list; the header's toggle does too.
@@ -263,11 +286,17 @@ fn list_toggle_key_and_button() {
     let mut shell = Shell::new("session-list-toggle", Seed::Campaign);
     shell.click("Session");
     new_session(&mut shell, TITLE);
-    assert!(shell.bounds(&format!("Session 1: {TITLE} · 2026-01-01 · Playing")).is_some());
+    assert!(
+        shell
+            .bounds(&format!("Session 1: {TITLE} · 2026-01-01 · Playing"))
+            .is_some()
+    );
     shell.press("ctrl-\\");
     assert!(shell.read(|root| root.app.sessions.list_hidden));
     assert!(
-        shell.bounds(&format!("Session 1: {TITLE} · 2026-01-01 · Playing")).is_none(),
+        shell
+            .bounds(&format!("Session 1: {TITLE} · 2026-01-01 · Playing"))
+            .is_none(),
         "the hidden list draws no rows"
     );
     shell.click(crate::sessions::page::LIST_TOGGLE);
@@ -282,7 +311,10 @@ fn plan_add_and_undo() {
     new_session(&mut shell, TITLE);
     let before = shell.read(|root| root.app.timeline.events.len());
     shell.click("Long rest");
-    assert_eq!(shell.read(|root| root.app.timeline.events.len()), before + 1);
+    assert_eq!(
+        shell.read(|root| root.app.timeline.events.len()),
+        before + 1
+    );
     shell.click("Undo add");
     assert_eq!(
         shell.read(|root| root.app.timeline.events.len()),
@@ -367,8 +399,12 @@ fn notes_panel_beside_another_page() {
     shell.click("Timeline");
     shell.press("ctrl-j");
     assert!(shell.read(|root| root.app.sessions.notes_open));
-    let slice = shell.update(|root, _, _| root.app.sessions.gv_note_words(true).unwrap_or_default());
-    assert!(slice.starts_with("## What happened"), "the panel holds the note from What happened: {slice:?}");
+    let slice =
+        shell.update(|root, _, _| root.app.sessions.gv_note_words(true).unwrap_or_default());
+    assert!(
+        slice.starts_with("## What happened"),
+        "the panel holds the note from What happened: {slice:?}"
+    );
     shell.capture("session-notes__38-notes-panel__1200x800");
     shell.click("Close notes");
     assert!(!shell.read(|root| root.app.sessions.notes_open));
@@ -384,14 +420,23 @@ fn slash_menu_in_the_note() {
     shell.click("Note text");
     shell.press("ctrl-end");
     shell.type_text("Met /");
-    assert!(shell.bounds("Generate NPC").is_some(), "the / menu lists Generate NPC");
+    assert!(
+        shell.bounds("Generate NPC").is_some(),
+        "the / menu lists Generate NPC"
+    );
     assert!(shell.bounds("Search").is_some(), "the / menu lists Search");
     shell.capture("session-notes__53-slash-menu__1200x800");
     shell.type_text("se");
-    assert!(shell.bounds("Generate NPC").is_none(), "the letters narrow the menu");
+    assert!(
+        shell.bounds("Generate NPC").is_none(),
+        "the letters narrow the menu"
+    );
     shell.press("escape");
     assert!(shell.bounds("Search").is_none(), "Escape closes the menu");
-    assert!(note_words(&mut shell).ends_with("Met /se"), "Escape leaves the words");
+    assert!(
+        note_words(&mut shell).ends_with("Met /se"),
+        "Escape leaves the words"
+    );
     shell.type_text(" and /");
     shell.click("Search");
     shell.type_text("Hobb");
@@ -399,6 +444,9 @@ fn slash_menu_in_the_note() {
     if first.is_some() {
         shell.press("enter");
         let words = note_words(&mut shell);
-        assert!(words.contains("and [["), "the chosen entry's link takes the / place: {words:?}");
+        assert!(
+            words.contains("and [["),
+            "the chosen entry's link takes the / place: {words:?}"
+        );
     }
 }

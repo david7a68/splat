@@ -13,7 +13,7 @@ pub use super::groups::{GroupEdit, GroupView, MemberAct, MemberRow};
 /// What the page shows now (`Encounters::show_page`).
 pub enum PageShown {
     /// Another campaign's encounter is open: its fault stands in place of the page.
-    OtherCampaign(PlainLine<FooterPress>),
+    OtherCampaign(Box<PlainLine<FooterPress>>),
     List,
     Encounter,
     Group,
@@ -38,7 +38,9 @@ pub enum Body {
     /// Nothing is read yet (a failed read: the footer says why).
     Nothing,
     /// No encounter, run or group yet.
-    Empty { issues: Vec<String> },
+    Empty {
+        issues: Vec<String>,
+    },
     Ledger(Box<Ledger>),
 }
 
@@ -159,7 +161,7 @@ impl Encounters {
             .is_none_or(|c| c.id != active.id || c.path != active.path)
         {
             let fault = design::outcome::FaultMessage::new(&EncounterFault::PreviousCampaignDraft);
-            return Some(PageShown::OtherCampaign(fault.into_plain()));
+            return Some(PageShown::OtherCampaign(Box::new(fault.into_plain())));
         }
         if self.draft_dirty() {
             self.message = None;
@@ -205,7 +207,11 @@ impl Encounters {
                             .catalogue
                             .resolve_ref(slot.creature.as_ref()?)
                             .ok()?;
-                        snapshot.catalogue.entries.get(&id).map(|entry| &entry.entry)
+                        snapshot
+                            .catalogue
+                            .entries
+                            .get(&id)
+                            .map(|entry| &entry.entry)
                     });
                     roster_name(
                         slot,
@@ -302,8 +308,7 @@ impl Encounters {
             return Body::Nothing;
         };
         let issues = snapshot.issues.clone();
-        if snapshot.templates.is_empty() && snapshot.runs.is_empty() && snapshot.groups.is_empty()
-        {
+        if snapshot.templates.is_empty() && snapshot.runs.is_empty() && snapshot.groups.is_empty() {
             return Body::Empty { issues };
         }
         let mut page = history::arrange(
@@ -330,11 +335,14 @@ impl Encounters {
         };
         let ready = ready_rows(&page, live.as_ref(), start_blocked);
         let groups = group_sets(snapshot, group_blocked);
-        let read = self.history_read.as_ref().map(|(path, summary)| list::Reading {
-            path,
-            summary,
-            not_last: history_blocked,
-        });
+        let read = self
+            .history_read
+            .as_ref()
+            .map(|(path, summary)| list::Reading {
+                path,
+                summary,
+                not_last: history_blocked,
+            });
         let history = history_view(&page, start_blocked, live.as_ref(), read.as_ref());
         Body::Ledger(Box::new(Ledger {
             issues,
@@ -479,7 +487,11 @@ fn group_sets(snapshot: &Snapshot, blocked: Option<&'static str>) -> Vec<GroupSe
                 )
             })
             .collect(),
-        problems: group.own_problems().into_iter().map(str::to_owned).collect(),
+        problems: group
+            .own_problems()
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
     };
     let mut sets = Vec::new();
     let any: Vec<_> = snapshot
@@ -587,7 +599,11 @@ fn history_view(
         count: page.ended_count(),
         reason: None,
         sessions,
-        unreadable: page.unreadable.iter().map(|run| run.label.clone()).collect(),
+        unreadable: page
+            .unreadable
+            .iter()
+            .map(|run| run.label.clone())
+            .collect(),
     }
 }
 
@@ -650,9 +666,13 @@ pub enum HeadAct {
     Discard,
     Save,
     /// Start fight (or Resume an unfinished run), saving first when the draft has changes.
-    Start { save: bool },
+    Start {
+        save: bool,
+    },
     /// `Start another fight` beside an unfinished run.
-    StartAnother { save: bool },
+    StartAnother {
+        save: bool,
+    },
 }
 
 /// The editor's back line: the link's words, its accessible name, and the draft that holds it
@@ -768,7 +788,9 @@ pub struct AddView {
 
 /// The party's line above the search: `Add party`, or `Party in roster`.
 pub enum PartyButton {
-    Add { blocked: Option<&'static str> },
+    Add {
+        blocked: Option<&'static str>,
+    },
     InRoster,
     /// A group: party members go on an encounter's roster.
     None,
@@ -1103,7 +1125,12 @@ impl Encounters {
     }
 
     /// The roster column (`roster_column`), as data.
-    pub fn roster_view(&mut self, ctx: &egui::Context, party: &Party, linked: bool) -> Option<RosterView> {
+    pub fn roster_view(
+        &mut self,
+        ctx: &egui::Context,
+        party: &Party,
+        linked: bool,
+    ) -> Option<RosterView> {
         let difficulty = self.draft_difficulty();
         let snapshot = self.snapshot.as_ref()?;
         let draft = self.draft.as_ref()?;
@@ -1134,7 +1161,11 @@ impl Encounters {
                     live,
                     self.expanded.as_deref() == Some(slot.key.as_str()),
                     &sides,
-                    faults.iter().filter(|fault| fault.before == i).map(RosterFault::words).collect(),
+                    faults
+                        .iter()
+                        .filter(|fault| fault.before == i)
+                        .map(RosterFault::words)
+                        .collect(),
                 )
             })
             .collect();
@@ -1148,7 +1179,12 @@ impl Encounters {
                     .rating
                     .as_ref()
                     .map(crate::difficulty::Rating::budget_line)
-                    .or_else(|| difficulty.missing.as_ref().and_then(|missing| missing.words())),
+                    .or_else(|| {
+                        difficulty
+                            .missing
+                            .as_ref()
+                            .and_then(|missing| missing.words())
+                    }),
             ),
             None => (Vec::new(), None),
         };
@@ -1258,10 +1294,9 @@ impl Encounters {
             }
         };
         let adding_to = (!draft.groups.is_empty()).then(|| {
-            draft.target_group().map_or_else(
-                || "the roster".to_owned(),
-                |group| group.name(),
-            )
+            draft
+                .target_group()
+                .map_or_else(|| "the roster".to_owned(), |group| group.name())
         });
         let group = draft.target_group().is_some();
         let list = snapshot.search_list(group);
@@ -1495,7 +1530,6 @@ impl DraftEdit<'_> {
     }
 }
 
-
 /// One roster row (`Encounters::roster`), as data.
 #[allow(clippy::too_many_arguments)]
 fn roster_row(
@@ -1667,7 +1701,11 @@ fn roster_row(
                 note.path.clone(),
             )
         }),
-        edit_word: if creature.is_none() { "Replace…" } else { "Edit" },
+        edit_word: if creature.is_none() {
+            "Replace…"
+        } else {
+            "Edit"
+        },
         make_yours: creature.is_some_and(|c| !c.party),
         first: i == 0,
         last: i + 1 == count,

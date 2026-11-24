@@ -2762,7 +2762,8 @@ mod tests {
         );
         assert_eq!(changes.last().unwrap().expected, target);
         // The writes go in one order whatever order the target's fields are in.
-        let bodies = |changes: Vec<Mutation>| changes.into_iter().map(|m| m.body).collect::<Vec<_>>();
+        let bodies =
+            |changes: Vec<Mutation>| changes.into_iter().map(|m| m.body).collect::<Vec<_>>();
         assert_eq!(
             bodies(mutations(&r, "conditions", &json!({"12":null,"4":2})).unwrap()),
             bodies(changes)

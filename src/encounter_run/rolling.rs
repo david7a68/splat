@@ -671,7 +671,13 @@ impl Run {
 
     /// Whether a damage condition holds, when the run can tell: the roll's mode, or whether
     /// the target or the actor is Bloodied. `None` when only the DM knows.
-    pub fn condition_holds(&self, when: &When, mode: Mode, actor: usize, row: usize) -> Option<bool> {
+    pub fn condition_holds(
+        &self,
+        when: &When,
+        mode: Mode,
+        actor: usize,
+        row: usize,
+    ) -> Option<bool> {
         if let Some(holds) = rolls::condition_by_mode(when, mode) {
             return Some(holds);
         }

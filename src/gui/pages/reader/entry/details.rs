@@ -7,8 +7,8 @@ use super::parts::{detail, facts, identity, item};
 use crate::gui::kit;
 use crate::gui::theme::{L, M, S, Type, XS, colors};
 use crate::library::presentation::{self, ReadingSection};
-use crate::library::{class, creature, reader};
 use crate::library::view::Links;
+use crate::library::{class, creature, reader};
 use gpui::{IntoElement, ParentElement, Styled, div, px};
 use splat::content::Entry;
 
@@ -272,7 +272,9 @@ fn structured_value(out: &Out<'_>, value: &serde_yaml_ng::Value, body: &mut Vec<
                 );
                 structured_value(out, value, body);
             } else {
-                body.push(detail(&key, reader::display_value(value), out.window).into_any_element());
+                body.push(
+                    detail(&key, reader::display_value(value), out.window).into_any_element(),
+                );
             }
         }
     } else if let Some(values) = value.as_sequence() {
@@ -281,8 +283,12 @@ fn structured_value(out: &Out<'_>, value: &serde_yaml_ng::Value, body: &mut Vec<
         }
     } else {
         body.push(
-            item(kit::text(Type::Body, colors().text, reader::display_value(value)))
-                .into_any_element(),
+            item(kit::text(
+                Type::Body,
+                colors().text,
+                reader::display_value(value),
+            ))
+            .into_any_element(),
         );
     }
 }

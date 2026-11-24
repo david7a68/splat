@@ -23,7 +23,10 @@ fn search_open_and_back() {
     wait_for_index(&mut shell);
     shell.capture("run-lookup__00-empty-search__1200x800");
     shell.type_text("fire");
-    assert_eq!(shell.read(|root| root.app.lookup.query().to_owned()), "fire");
+    assert_eq!(
+        shell.read(|root| root.app.lookup.query().to_owned()),
+        "fire"
+    );
     let count = shell.read(|root| root.app.lookup.match_count());
     assert!(count > 1, "fire finds several entries: {count}");
     // The best match opens while the others stay listed.

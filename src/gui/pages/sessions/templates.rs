@@ -13,7 +13,11 @@ use theme::{Density, L, S, Type, colors};
 actions!(session_template, [SaveTemplate]);
 
 pub(super) fn init(cx: &mut App) {
-    cx.bind_keys([KeyBinding::new("ctrl-s", SaveTemplate, Some("SessionTemplate"))]);
+    cx.bind_keys([KeyBinding::new(
+        "ctrl-s",
+        SaveTemplate,
+        Some("SessionTemplate"),
+    )]);
 }
 
 fn id(words: impl std::fmt::Display) -> ElementId {
@@ -50,7 +54,11 @@ pub(super) fn render(
     }
     let list = list(root, false, cx);
     kit::Columns::new("template-columns")
-        .column(super::LIST_WIDTH, super::LIST_MIN..super::LIST_MAX, div().size_full().pr(S).child(list))
+        .column(
+            super::LIST_WIDTH,
+            super::LIST_MIN..super::LIST_MAX,
+            div().size_full().pr(S).child(list),
+        )
         .rest(div().size_full().pl(S).child(editor))
         .into_any_element()
 }
@@ -99,12 +107,10 @@ fn list(root: &mut SplatRoot, alone: bool, cx: &mut Context<SplatRoot>) -> AnyEl
                 })),
         )
         .child(kit::gap(S))
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .child(kit::scroll_column("template-list", div().flex().flex_col().children(rows))),
-        )
+        .child(div().flex_1().min_h_0().child(kit::scroll_column(
+            "template-list",
+            div().flex().flex_col().children(rows),
+        )))
         .children(footer)
         .into_any_element()
 }
@@ -130,21 +136,19 @@ fn editor(
             .child(kit::text(Type::Section, c.text, template.name.clone()).flex_1());
         let words: AnyElement = if let Some((path, words, state, word)) = template.file {
             let status = crate::sessions::page::Sessions::gv_template_status(&state);
-            line = line
-                .child(kit::status(&bridge::status(&status)))
-                .child(
-                    kit::MenuButton::new(
-                        "template-more",
-                        kit::Button::quiet("template-more-button", "More")
-                            .name(format!("More actions for {}", template.name)),
-                    )
-                    .item(
-                        kit::MenuItem::new(word).on_click(cx.listener(|root, _, _, cx| {
-                            root.app.sessions.gv_delete_template();
-                            cx.notify();
-                        })),
-                    ),
-                );
+            line = line.child(kit::status(&bridge::status(&status))).child(
+                kit::MenuButton::new(
+                    "template-more",
+                    kit::Button::quiet("template-more-button", "More")
+                        .name(format!("More actions for {}", template.name)),
+                )
+                .item(kit::MenuItem::new(word).on_click(cx.listener(
+                    |root, _, _, cx| {
+                        root.app.sessions.gv_delete_template();
+                        cx.notify();
+                    },
+                ))),
+            );
             div()
                 .key_context("SessionTemplate")
                 .on_action(cx.listener(|root, _: &SaveTemplate, _, cx| {

@@ -5,9 +5,7 @@
 //! action's status and what can follow it; outside a run, the last preview's result.
 use super::OnOpen;
 use crate::gui::kit;
-use crate::gui::theme::{
-    HAIRLINE_WIDTH, RADIUS_CONTROL, S, Type, TypeExt, XS, colors,
-};
+use crate::gui::theme::{HAIRLINE_WIDTH, RADIUS_CONTROL, S, Type, TypeExt, XS, colors};
 use crate::rolls::plain::{self, TileView};
 use crate::rolls::{Chip, SpellOccurrence};
 use eframe::egui;
@@ -43,21 +41,27 @@ pub fn tile_row(
         return div().into_any_element();
     }
     let c = colors();
-    let row = div()
+    let row =
+        div()
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .gap(S)
+            .children(tiles.into_iter().enumerate().map(|(at, (view, press))| {
+                tile(
+                    super::parts::child(id, format!("tile-{at}")),
+                    view,
+                    press,
+                    ctx.cloned(),
+                    on_open.clone(),
+                )
+            }));
+    let mut block = div()
         .flex()
-        .flex_row()
-        .flex_wrap()
-        .gap(S)
-        .children(tiles.into_iter().enumerate().map(|(at, (view, press))| {
-            tile(
-                super::parts::child(id, format!("tile-{at}")),
-                view,
-                press,
-                ctx.cloned(),
-                on_open.clone(),
-            )
-        }));
-    let mut block = div().flex().flex_col().pt(XS).child(row).child(kit::gap(XS));
+        .flex_col()
+        .pt(XS)
+        .child(row)
+        .child(kit::gap(XS));
     let refs: Vec<&Chip> = chips.iter().collect();
     if let Some(ctx) = ctx {
         if let Some(view) = plain::armed_under(ctx, &refs) {
@@ -76,15 +80,12 @@ pub fn tile_row(
                     view.actions.iter().enumerate().map(|(at, (word, action))| {
                         let ctx = ctx.clone();
                         let action = *action;
-                        kit::Button::quiet(
-                            super::parts::child(id, format!("armed-{at}")),
-                            *word,
-                        )
-                        .line_start()
-                        .on_click(move |_, window, _| {
-                            plain::send_armed_action(&ctx, action);
-                            window.refresh();
-                        })
+                        kit::Button::quiet(super::parts::child(id, format!("armed-{at}")), *word)
+                            .line_start()
+                            .on_click(move |_, window, _| {
+                                plain::send_armed_action(&ctx, action);
+                                window.refresh();
+                            })
                     }),
                 ));
         } else {
@@ -163,7 +164,10 @@ fn tile(
                 ),
         )
         .child(kit::text(Type::Small, c.muted, view.detail))
-        .children(view.facts.map(|facts| kit::text(Type::Small, c.muted, facts)))
+        .children(
+            view.facts
+                .map(|facts| kit::text(Type::Small, c.muted, facts)),
+        )
         .with_tooltip(tip)
         .on_click(move |_, window, cx| match &press {
             Press::Roll { link, occurrence } => {

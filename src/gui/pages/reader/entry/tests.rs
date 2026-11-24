@@ -8,8 +8,7 @@ use crate::library::view::{Links, NoLinks};
 use crate::visual_tests::fixture::Seed;
 use gpui::{
     InteractiveElement, IntoElement, ParentElement, Pixels, ScrollHandle, Size,
-    StatefulInteractiveElement, Styled,
-    div, point, px, size,
+    StatefulInteractiveElement, Styled, div, point, px, size,
 };
 use splat::content::Entry;
 use splat::content::dice_text::{D20, RollLink};

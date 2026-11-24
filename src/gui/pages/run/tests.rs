@@ -70,7 +70,13 @@ fn participant(shell: &mut Shell, name: &str) -> crate::encounter_run::Participa
         root.app
             .encounters
             .run()
-            .and_then(|run| run.state.participants.iter().find(|p| p.name == name).cloned())
+            .and_then(|run| {
+                run.state
+                    .participants
+                    .iter()
+                    .find(|p| p.name == name)
+                    .cloned()
+            })
             .unwrap_or_else(|| panic!("no participant {name}"))
     })
 }
@@ -90,7 +96,10 @@ fn encounter_run_live() {
     let before = current_name(&mut shell);
     shell.click("Next turn");
     let after = current_name(&mut shell);
-    assert!(before.is_some() && before != after, "Next turn moves the turn: {before:?} then {after:?}");
+    assert!(
+        before.is_some() && before != after,
+        "Next turn moves the turn: {before:?} then {after:?}"
+    );
     shell.capture("encounter-run__03-next-turn__1200x800");
 
     // A click selects a row; the keyboard goes to Amount, so digits and Enter damage it.

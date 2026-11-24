@@ -7,9 +7,7 @@ use super::{Out, SpellLinks};
 use crate::design::reader::human_label;
 use crate::gui::kit;
 use crate::gui::theme::{HAIRLINE_WIDTH, L, S, Type, TypeExt, XL, XS, colors};
-use crate::library::creature::{
-    self, ABILITIES, ABILITY_CELLS, DETAILS, SAVE_CELL, stat, value,
-};
+use crate::library::creature::{self, ABILITIES, ABILITY_CELLS, DETAILS, SAVE_CELL, stat, value};
 use crate::library::presentation::ReadingSection;
 use crate::library::view::RunValues;
 use crate::rolls::plain;
@@ -106,7 +104,14 @@ fn prose(
             .collect();
         let chips: Vec<_> = tiles.iter().map(|(_, chip)| chip.clone()).collect();
         let id = out.next_id("tiles");
-        let row = tiles::tile_row(&id, out.ctx.as_ref(), name, presses, &chips, out.on_open.clone());
+        let row = tiles::tile_row(
+            &id,
+            out.ctx.as_ref(),
+            name,
+            presses,
+            &chips,
+            out.on_open.clone(),
+        );
         out.push(row);
         tiles.clear();
     };
@@ -258,7 +263,12 @@ fn ability_row(out: &Out<'_>, entry: &Entry, ability: &str, saves: bool) -> AnyE
         .flex()
         .flex_row()
         .gap(XS)
-        .child(cell(label, &ability[..3].to_uppercase(), Type::StatLabel, c.text))
+        .child(cell(
+            label,
+            &ability[..3].to_uppercase(),
+            Type::StatLabel,
+            c.text,
+        ))
         .child(cell(score, &value(entry, ability), Type::Stat, c.text))
         .child(match modifier {
             Some(bonus) => link_cell(
@@ -393,12 +403,17 @@ pub(super) fn stat_head(out: &mut Out<'_>, entry: &Entry, values: Option<&RunVal
         out.push(parts::rule());
         out.push(kit::gap(XS));
         let halves = ABILITIES.chunks(3).map(|half| {
-            div()
-                .flex()
-                .flex_col()
-                .children(half.iter().map(|ability| ability_row(out, entry, ability, saves)))
+            div().flex().flex_col().children(
+                half.iter()
+                    .map(|ability| ability_row(out, entry, ability, saves)),
+            )
         });
-        let table = div().flex().flex_row().flex_wrap().gap_x(XL).children(halves);
+        let table = div()
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .gap_x(XL)
+            .children(halves);
         out.push(item(table));
         out.push(kit::gap(XS));
         out.push(parts::rule());
@@ -410,15 +425,14 @@ pub(super) fn stat_head(out: &mut Out<'_>, entry: &Entry, values: Option<&RunVal
             if label == "Speed"
                 && let Some(speed) = values.and_then(|values| values.speed.as_ref())
             {
-                let preview = splat_content_ui::roster::change_preview(
-                    &splat::content::overrides::Row {
+                let preview =
+                    splat_content_ui::roster::change_preview(&splat::content::overrides::Row {
                         label: "Speed",
                         base: text.clone(),
                         changed: speed.clone(),
                         by_hand: true,
                         in_rolls: false,
-                    },
-                );
+                    });
                 details = details.child(stat_detail(
                     "Speed",
                     preview,
@@ -453,7 +467,9 @@ fn skills_detail(out: &mut Out<'_>, text: &str) -> AnyElement {
             )
             .into_any_element()
         }
-        None => stat_detail("Skills", text.to_owned(), colors().text, out.window).into_any_element(),
+        None => {
+            stat_detail("Skills", text.to_owned(), colors().text, out.window).into_any_element()
+        }
     }
 }
 
@@ -581,7 +597,9 @@ impl SpellLinks<'_> {
                             plain::roll_tiles(ctx, &self.entry.name, &[(spell.place, chip.clone())])
                                 .pop()
                         })
-                        .unwrap_or_else(|| plain::open_tile(&spell.name, &spell.facts, &spell.text));
+                        .unwrap_or_else(|| {
+                            plain::open_tile(&spell.name, &spell.facts, &spell.text)
+                        });
                     tiles.push((
                         view,
                         Press::Roll {

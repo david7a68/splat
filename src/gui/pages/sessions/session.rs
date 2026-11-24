@@ -2,7 +2,9 @@
 //! the record control; the record line; Last time; the tabs; and the shown tab's body: the plan
 //! and the note side by side, the plan, the note, the recordings, or a conflict's choice. The
 //! page's own results and notices sit in the pane's footer (`session_messages`).
-use super::{PLAN_BESIDE_NOTE_FROM, PLAN_MAX_WIDTH, PLAN_WIDTH, TWO_COLUMNS_FROM, footer, with_plan};
+use super::{
+    PLAN_BESIDE_NOTE_FROM, PLAN_MAX_WIDTH, PLAN_WIDTH, TWO_COLUMNS_FROM, footer, with_plan,
+};
 use crate::gui::{SplatRoot, bridge, icons, kit, theme};
 use crate::sessions::page::gpui_facade::{RecordControl, RecordLine};
 use gpui::{
@@ -367,13 +369,15 @@ pub(super) fn record_line(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> 
                 kit::Button::secondary("record-start", "Start recording")
             };
             message = message
-                .action(start.density(Density::Read).on_click(cx.listener(
-                    |root, _, _, cx| {
-                        let app = &mut root.app;
-                        app.sessions.gv_start_recording(&app.processing);
-                        cx.notify();
-                    },
-                )))
+                .action(
+                    start
+                        .density(Density::Read)
+                        .on_click(cx.listener(|root, _, _, cx| {
+                            let app = &mut root.app;
+                            app.sessions.gv_start_recording(&app.processing);
+                            cx.notify();
+                        })),
+                )
                 .action(
                     kit::Button::secondary("record-not-now", "Not now")
                         .density(Density::Read)
