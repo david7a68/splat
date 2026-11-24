@@ -2479,15 +2479,8 @@ impl Library {
                     self.source = false;
                 }
                 if self.section == Section::Creatures || searching {
-                    let notes = &loaded.notes;
-                    let facets = loaded.facets();
                     let changed = crate::creature_filter::filter_bar(ui, &mut self.filter, || {
-                        notes
-                            .iter()
-                            .zip(facets)
-                            .filter(|(note, _)| loaded.in_scope(note, scope))
-                            .filter_map(|(_, facets)| facets.as_ref())
-                            .collect()
+                        model::scope_facets(loaded, scope).collect()
                     });
                     if changed {
                         ui.ctx().request_repaint();

@@ -230,6 +230,25 @@ pub(super) fn entries_column(
     if compact && let Some((at, label, selected)) = &list.about {
         column = column.child(about_row(*at, label.clone(), *selected, cx));
     }
+    if list.creatures_or_search {
+        let library = &root.app.library;
+        column = column.child(
+            div().pt(XS).child(
+                kit::FilterBar::new(
+                    "library-filter",
+                    library.filter(),
+                    || library.filter_choices(),
+                    cx,
+                )
+                .on_change(cx.listener(
+                    |root, filter: &splat_content::content::creature_filter::Filter, _, cx| {
+                        root.app.library.set_filter(filter.clone());
+                        cx.notify();
+                    },
+                )),
+            ),
+        );
+    }
     match list.heading {
         Some((title, count)) => {
             column = column.child(kit::heading(kit::Heading::Group { title, count }, false));
