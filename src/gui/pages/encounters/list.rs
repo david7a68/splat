@@ -268,7 +268,7 @@ fn ledger_body(
 ) -> AnyElement {
     let columns = columns(window, ledger);
     let state = &root.pages.encounters;
-    let (groups_open, history_open) = (!state.groups_closed, !state.history_closed);
+    let (groups_open, history_open) = (state.groups_open, state.history_open);
     let c = colors();
     let mut body = div().flex().flex_col().w_full().children(issues_block(
         &ledger.issues,
@@ -319,7 +319,7 @@ fn ledger_body(
             ledger.group_count,
             groups_open,
             cx.listener(|root: &mut SplatRoot, _, _, cx| {
-                root.pages.encounters.groups_closed ^= true;
+                root.pages.encounters.groups_open ^= true;
                 cx.notify();
             }),
         ));
@@ -717,7 +717,7 @@ fn history_block(
         history.count,
         open,
         cx.listener(|root: &mut SplatRoot, _, _, cx| {
-            root.pages.encounters.history_closed ^= true;
+            root.pages.encounters.history_open ^= true;
             cx.notify();
         }),
     ));

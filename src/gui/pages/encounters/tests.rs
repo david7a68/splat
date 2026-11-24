@@ -64,7 +64,17 @@ fn encounter_list() {
 fn history_opens_a_run_in_place() {
     let mut shell = Shell::new("encounter-history", Seed::History);
     ready(&mut shell);
+    // History starts closed; its heading opens it.
+    assert!(
+        shell
+            .read(|_| crate::gui::kit::probe::names())
+            .iter()
+            .all(|name| !name.starts_with("id:history-open:")),
+        "History starts closed"
+    );
     shell.capture("encounter-history__01-encounters-with-history__1200x800");
+    shell.click("History section");
+    shell.capture("encounter-history__02-history-open__1200x800");
     let open = shell
         .read(|_| crate::gui::kit::probe::names())
         .into_iter()
@@ -73,7 +83,6 @@ fn history_opens_a_run_in_place() {
     shell.click(&open);
     assert!(shell.bounds("Final state").is_some() || shell.bounds("Continue fight").is_some());
     assert!(shell.read(|root| root.app.encounters.history_open()));
-    shell.capture("encounter-history__02-history-open__1200x800");
     shell.click(&open);
     assert!(!shell.read(|root| root.app.encounters.history_open()));
 }
@@ -264,6 +273,15 @@ fn the_roster_menu_ctrl_s_and_discard_with_undo() {
 fn a_group_is_edited_and_saved() {
     let mut shell = Shell::new("encounter-groups", Seed::Groups);
     ready(&mut shell);
+    // Groups starts closed, as egui's sections; its heading opens it.
+    shell.settle();
+    assert!(
+        crate::gui::kit::probe::names()
+            .iter()
+            .all(|name| !name.starts_with("id:edit-group:")),
+        "Groups starts closed"
+    );
+    shell.click("Groups section");
     // The content issue is a closed warning disclosure, as egui's count.
     assert!(shell.bounds("1 content issue to repair").is_some());
     assert!(!shell.read(|root| root.pages.encounters.issues_open));
@@ -381,8 +399,7 @@ fn the_editors_at_the_smallest_window() {
     shell.capture("encounter-build__09-saved-roster__960x640");
     let mut shell = small("encounter-groups", Seed::Groups);
     ready(&mut shell);
-    let edit = first_target(&mut shell, "id:edit-group:");
-    shell.click(&edit);
+    open_group(&mut shell, "Rival Team");
     assert_eq!(
         shell.read(|root| root.app.encounters.group_open()),
         Some(false)
@@ -414,6 +431,9 @@ fn open_encounter(shell: &mut Shell, name: &str) {
 
 /// Open the saved group named `name` from the list's Groups.
 fn open_group(shell: &mut Shell, name: &str) {
+    if !shell.read(|root| root.pages.encounters.groups_open) {
+        shell.click("Groups section");
+    }
     let edit = first_target(shell, &format!("id:edit-group:Encounter Groups/{name}"));
     shell.click(&edit);
     assert!(shell.read(|root| root.app.encounters.group_open().is_some()));
