@@ -201,6 +201,45 @@ impl Encounters {
         self.snapshot.is_some()
     }
 
+    /// The open draft's roster, by each row's shown name.
+    pub fn roster_names(&self) -> Option<Vec<String>> {
+        let draft = self.draft.as_ref()?;
+        let no_names = BTreeMap::new();
+        let snapshot = self.snapshot.as_ref();
+        Some(
+            draft
+                .setup
+                .roster
+                .iter()
+                .map(|slot| {
+                    let definition = snapshot.and_then(|snapshot| {
+                        let id = snapshot
+                            .catalogue
+                            .resolve_ref(slot.creature.as_ref()?)
+                            .ok()?;
+                        snapshot.catalogue.entries.get(&id).map(|entry| &entry.entry)
+                    });
+                    roster_name(
+                        slot,
+                        definition,
+                        snapshot.map_or(&no_names, |snapshot| &snapshot.known_creature_names),
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    /// The saved encounters' names, as the list has them.
+    pub fn saved_names(&self) -> Vec<String> {
+        self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
+            snapshot
+                .templates
+                .iter()
+                .map(|template| template.name.clone())
+                .collect()
+        })
+    }
+
     /// Whether an ended run is read in History.
     pub fn history_open(&self) -> bool {
         self.history_read.is_some()
@@ -756,5 +795,1115 @@ fn read_run(
         continue_blocked: blocked,
         rows,
         log: summary.log.clone(),
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// The encounter editor
+
+/// A press in an editor's head: its back link, Discard, Save, or the run's start.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HeadAct {
+    Back,
+    Discard,
+    Save,
+    /// Start fight (or Resume an unfinished run), saving first when the draft has changes.
+    Start { save: bool },
+    /// `Start another fight` beside an unfinished run.
+    StartAnother { save: bool },
+}
+
+/// The editor's back line: the link's words, its accessible name, and the draft that holds it
+/// (its long and short reasons).
+pub struct BackLine {
+    pub word: &'static str,
+    pub name: &'static str,
+    pub held: Option<(&'static str, &'static str)>,
+}
+
+/// The encounter editor, as data.
+pub struct EditorView {
+    pub draft: Uuid,
+    pub name: String,
+    pub back: BackLine,
+    pub save_primary: bool,
+    pub save_blocked: Option<String>,
+    pub start_word: &'static str,
+    pub start_primary: bool,
+    pub start_blocked: Option<String>,
+    pub start_hint: &'static str,
+    /// `Start another fight` in a menu beside an unfinished run, with its reason.
+    pub start_another: Option<Option<String>>,
+    /// An open run holds Start: its reason shows before Save.
+    pub run_open: bool,
+    /// The save row: the state's icon, word and colour; Discard (shown, and why it waits).
+    pub state: (String, String, egui::Color32),
+    pub discard: Option<Option<&'static str>>,
+    /// The campaign-switch reason and the row's other reason.
+    pub lock_reason: Option<&'static str>,
+    pub other_reason: Option<&'static str>,
+    /// The unfinished run's state, at the row's end.
+    pub run_state: Option<String>,
+    /// What a Save does to an unfinished run.
+    pub unfinished_note: Option<&'static str>,
+    /// The campaign is still being read: the panes wait.
+    pub reading: bool,
+}
+
+/// The roster column, as data.
+pub struct RosterView {
+    pub count: usize,
+    /// The difficulty after the heading: its form's parts (each with whether it is the word),
+    /// and the party's budgets on hover.
+    pub difficulty: Vec<(String, bool)>,
+    pub budgets: Option<String>,
+    pub rows: Vec<RosterRow>,
+    /// Unread roster rows after the last row.
+    pub faults_after: Vec<String>,
+    /// The sync option, when the campaign is linked to D&D Beyond.
+    pub sync: Option<SyncView>,
+    pub repeatable: bool,
+    pub loot: LootView,
+    pub notes: String,
+}
+
+pub struct RosterRow {
+    pub key: String,
+    pub index: usize,
+    pub name: String,
+    /// The row's unread roster rows above it (`Line N: …`).
+    pub faults_before: Vec<String>,
+    /// The second line's parts: words, colour, and whether it is the Bloodied state.
+    pub parts: Vec<(String, egui::Color32, bool)>,
+    /// A missing or unreadable creature: the fault's icon, colour and the duplicate's hover.
+    pub missing: Option<(&'static str, egui::Color32, Option<String>)>,
+    /// The change link's words (`Changed · …`), while the row is closed.
+    pub changed: Option<String>,
+    pub open: bool,
+    /// `Open in World` or `Open in Library` for an unreadable note, with its path.
+    pub repair: Option<(&'static str, PathBuf)>,
+    /// `Edit`, or `Replace…` for a missing creature.
+    pub edit_word: &'static str,
+    pub make_yours: bool,
+    pub first: bool,
+    pub last: bool,
+    pub form: Option<RowForm>,
+}
+
+/// An open row's fields.
+pub struct RowForm {
+    pub side: String,
+    pub sides: Vec<String>,
+    pub group: String,
+    /// `Starting HP` and `Temp HP`: on with a value, or off; none while D&D Beyond decides them.
+    pub values: Vec<(&'static str, &'static str, Option<i64>)>,
+    pub help: &'static str,
+}
+
+pub struct SyncView {
+    pub on: bool,
+    pub line: Option<String>,
+    pub connect: bool,
+    pub help: &'static str,
+}
+
+pub struct LootView {
+    /// The note's Loot section holds more than a list: the field does not own it.
+    pub owned: bool,
+    pub lines: Vec<String>,
+}
+
+/// Add participants, as data.
+pub struct AddView {
+    pub party: PartyButton,
+    pub adding_to: Option<String>,
+    pub search: String,
+    pub filter: Filter,
+    pub results: Arc<Vec<ResultRow>>,
+    /// No result matches as typed: the close names say so.
+    pub close_names: bool,
+}
+
+/// The party's line above the search: `Add party`, or `Party in roster`.
+pub enum PartyButton {
+    Add { blocked: Option<&'static str> },
+    InRoster,
+}
+
+/// A search result.
+#[derive(Clone)]
+pub struct ResultRow {
+    pub id: Uuid,
+    pub party: bool,
+    pub name: String,
+    pub detail: String,
+    pub hp_missing: bool,
+    pub source: Option<String>,
+    pub in_roster: bool,
+    pub unavailable: Option<String>,
+}
+
+/// A change to the roster from a row's menu.
+#[derive(Clone, Copy, Debug)]
+pub enum RosterAct {
+    Remove(usize),
+    Duplicate(usize),
+    Up(usize),
+    Down(usize),
+}
+
+impl Draft {
+    /// A roster change from a row's menu (`Encounters::roster`).
+    fn roster_act(&mut self, act: RosterAct) -> bool {
+        let roster = &mut self.setup.roster;
+        match act {
+            RosterAct::Remove(i) if i < roster.len() => {
+                roster.remove(i);
+                false
+            }
+            RosterAct::Duplicate(i) if i < roster.len() => {
+                let mut slot = roster[i].clone();
+                slot.key = format!("actor_{}", Uuid::new_v4().simple());
+                roster.insert(i + 1, slot);
+                true
+            }
+            RosterAct::Up(i) if i > 0 && i < roster.len() => {
+                roster.swap(i, i - 1);
+                false
+            }
+            RosterAct::Down(i) if i + 1 < roster.len() => {
+                roster.swap(i, i + 1);
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Every side a row names is one of the encounter's sides.
+    fn keep_sides(&mut self) {
+        let named: Vec<String> = self
+            .setup
+            .roster
+            .iter()
+            .flat_map(|slot| {
+                [
+                    Some(slot.side.as_str()),
+                    slot.overrides.get("side").and_then(Value::as_str),
+                ]
+                .into_iter()
+                .flatten()
+                .map(str::to_owned)
+            })
+            .collect();
+        for side in named {
+            if !side.trim().is_empty() && !self.setup.sides.contains_key(side.as_str()) {
+                self.setup
+                    .sides
+                    .insert(side.into(), yaml("{hostile_to: []}"));
+            }
+        }
+    }
+}
+
+impl Encounters {
+    /// The open encounter's unfinished run, if it has one.
+    fn unfinished_run(&self) -> Option<SavedRunInfo> {
+        let draft = self.draft.as_ref()?;
+        self.snapshot
+            .as_ref()?
+            .runs
+            .iter()
+            .find(|run| {
+                run.standing == crate::encounter_run::Standing::Unfinished
+                    && (run.source == Some(draft.id)
+                        || (run.source.is_none() && run.encounter == draft.saved_name))
+            })
+            .cloned()
+    }
+
+    /// A press in the encounter editor's head (`editor_view`). True when the editor closed.
+    pub fn editor_head_act(
+        &mut self,
+        ctx: &egui::Context,
+        active: &Campaign,
+        modules: &[Module],
+        act: HeadAct,
+    ) -> bool {
+        match act {
+            HeadAct::Back => {
+                self.clear_notice();
+                self.draft = None;
+                self.message = None;
+                self.error = None;
+                self.creature = None;
+                self.wants_session = std::mem::take(&mut self.from_session);
+                self.plan_on_save = false;
+                true
+            }
+            HeadAct::Discard => {
+                self.discard_draft(active);
+                true
+            }
+            HeadAct::Save => {
+                self.save_draft(ctx, active, modules);
+                false
+            }
+            HeadAct::Start { save } | HeadAct::StartAnother { save } => {
+                let unfinished = self.unfinished_run();
+                if save {
+                    self.save_draft(ctx, active, modules);
+                }
+                if self.draft_dirty() {
+                    return false;
+                }
+                match (act, &unfinished) {
+                    (HeadAct::Start { .. }, Some(run)) => self.open_saved_run(&run.path, active),
+                    _ => self.open_run(active, modules),
+                }
+                // A fight started from the session goes back there, not to this editor.
+                if self.from_session.is_some() && self.run.is_some() {
+                    self.draft = None;
+                    self.from_session = None;
+                    self.run_from_session = true;
+                    return true;
+                }
+                false
+            }
+        }
+    }
+
+    /// The encounter editor's head and save row (`editor_view`), as data, with the frame's
+    /// checks that the egui editor makes before it draws: Save's refusal for Ctrl+S, the
+    /// encounter's groups read once, and the last refusal checked again.
+    pub fn editor_frame(&mut self, active: &Campaign) -> Option<EditorView> {
+        // After a load in progress, so that a group just saved is among them.
+        if self.pending.is_none()
+            && let (Some(snapshot), Some(draft)) = (&self.snapshot, self.draft.as_mut())
+            && !draft.groups_read
+            && let Err(e) = draft.read_groups(&active.path, snapshot)
+        {
+            self.error = Some(e);
+        }
+        // A frame here follows an input (GPUI draws on a change), so the edit epoch moves.
+        self.refresh_validation_error(false, true);
+        let no_names = BTreeMap::new();
+        let names = self
+            .snapshot
+            .as_ref()
+            .map(|snapshot| &snapshot.known_creature_names)
+            .unwrap_or(&no_names);
+        let dirty = self.encounter_dirty();
+        let creature_dirty = self.creature_dirty();
+        let has_run = self.has_run();
+        let refusal = self
+            .shows_validation_error()
+            .then(|| self.error.clone())
+            .flatten();
+        let loading = self.pending.is_some();
+        let unfinished = self.unfinished_run();
+        let draft = self.draft.as_ref()?;
+        let roster_reason = Entry::parse(&draft.path, &draft.source)
+            .ok()
+            .and_then(|entry| roster_fault_reason(&draft.path, &roster_faults(&entry, names)));
+        let empty_group = draft.empty_group_reason();
+        let roster_empty = draft.setup.roster.is_empty();
+        let draft_origin = draft.origin;
+        let (draft_id, name) = (draft.id, draft.name.clone());
+        let groups = self.owned_groups_diagnosis();
+        let own = refusal
+            .is_some()
+            .then(|| self.validation_error.as_ref().map(Invalid::diagnosis))
+            .flatten();
+        let missing_origins = [
+            groups.origin,
+            own.as_ref()
+                .filter(|own| own.only_incomplete())
+                .map(|_| draft_origin),
+        ];
+        let origin = if missing_origins.contains(&Some(design::save_row::DraftOrigin::Saved)) {
+            design::save_row::DraftOrigin::Saved
+        } else if missing_origins.contains(&Some(design::save_row::DraftOrigin::New)) {
+            design::save_row::DraftOrigin::New
+        } else {
+            draft_origin
+        };
+        let found = groups
+            .found
+            .clone()
+            .and(
+                roster_reason
+                    .clone()
+                    .map_or_else(design::save_row::Diagnosis::valid, unread_rows_found),
+            )
+            .and(own.unwrap_or_else(design::save_row::Diagnosis::valid));
+        let changed = if dirty {
+            design::memo::Changed::Yes
+        } else {
+            design::memo::Changed::No
+        };
+        let primary = if has_run {
+            design::save_row::Primary::Elsewhere
+        } else {
+            design::save_row::Primary::Draft
+        };
+        let mut state = design::DraftState::new(origin, changed, primary)
+            .locks_campaign()
+            .check_when_changed(found);
+        if self.message.is_some() {
+            state = state.just_saved();
+        }
+        self.save_refused = dirty && !state.can_save();
+        let head = design::EditorHead::new(
+            design::EditorKind::Encounter {
+                from_session: self.from_session.is_some(),
+            },
+            &*self,
+        );
+        let (word, back_name) = head.back_words();
+        let start_blocked = roster_reason
+            .as_deref()
+            .or(empty_group.as_deref())
+            .or(has_run
+                .then_some(BLOCKED_BY_RUN)
+                .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                .or(loading.then_some(STILL_READING))
+                .or(roster_empty.then_some(ADD_PARTICIPANTS_FIRST)));
+        let start_blocked: Option<String> = start_blocked.map(str::to_owned);
+        let status = state.status();
+        let run_state = unfinished.as_ref().map(|run| {
+            list::run_state_word(
+                run,
+                self.run
+                    .as_ref()
+                    .and_then(|open| open.path())
+                    .is_none_or(|path| path != run.path),
+            )
+        });
+        let follows = self
+            .run
+            .as_ref()
+            .and_then(crate::encounter_run::Run::source)
+            .is_some_and(|source| source == draft_id);
+        let creature_here = creature_dirty && head.held_by() != Some(design::Unsaved::Creature);
+        Some(EditorView {
+            draft: draft_id,
+            name,
+            back: BackLine {
+                word,
+                name: back_name,
+                held: head
+                    .held_by()
+                    .map(|draft| (draft.reason(), draft.short_reason())),
+            },
+            save_primary: matches!(
+                state.save_weight(),
+                design::save_row::SaveWeight::Primary
+            ),
+            save_blocked: state.save_blocked().map(str::to_owned),
+            start_word: if unfinished.is_some() {
+                "Resume"
+            } else {
+                START_FIGHT
+            },
+            start_primary: !(has_run || dirty),
+            start_blocked: if unfinished.is_some() {
+                has_run
+                    .then_some(BLOCKED_BY_RUN)
+                    .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                    .or(loading.then_some(STILL_READING))
+                    .map(str::to_owned)
+            } else {
+                start_blocked.clone()
+            },
+            start_hint: if unfinished.is_some() {
+                "Save this encounter and resume its unfinished run."
+            } else {
+                "Save this encounter and start a run."
+            },
+            start_another: unfinished.as_ref().map(|_| start_blocked),
+            run_open: has_run,
+            state: (status.icon.to_owned(), status.word.to_owned(), status.color),
+            discard: state
+                .discard_shown()
+                .then(|| creature_dirty.then_some(BLOCKED_BY_CREATURE)),
+            lock_reason: state.lock_reason(),
+            other_reason: creature_here
+                .then_some(BLOCKED_BY_CREATURE)
+                .or(loading.then_some(STILL_READING))
+                .or((!has_run && unfinished.is_none() && roster_empty)
+                    .then_some(ADD_PARTICIPANTS_FIRST)),
+            run_state,
+            unfinished_note: unfinished.as_ref().map(|_| {
+                if follows {
+                    "Save gives this fight’s Prep the new read-aloud text and notes. Other changes apply to the next fight. To add to this fight, use Add to fight in the run."
+                } else {
+                    "Changes apply to the next fight. To add to this fight, use Add to fight in the run."
+                }
+            }),
+            reading: self.snapshot.is_none(),
+        })
+    }
+
+    /// The encounter editor's footer (`editor_lines`), as lines.
+    pub fn editor_footer(&mut self, ctx: &egui::Context, root: &std::path::Path) -> Vec<Line> {
+        use design::outcome::{FaultMessage, Outcome};
+        self.record_member_results();
+        self.record_editor_results();
+        let mut lines = Vec::new();
+        if let (Some(active), Some(draft)) = (self.active.as_ref(), self.draft.as_ref()) {
+            let revision = self.editor_results.revision();
+            for kind in [DraftResult::RemovedGroup, DraftResult::Replacement] {
+                let owner = EditorOwner {
+                    root: active.path.clone(),
+                    draft: draft.results_key.id(),
+                    kind,
+                };
+                if let Some(shown) = self.editor_results.get(&owner) {
+                    lines.push(Line {
+                        message: shown.value().undo.outcome().plain(),
+                        press: Some(LinePress::Editor(owner.draft, kind, revision)),
+                    });
+                }
+            }
+        }
+        lines.extend(self.kept_plain(false));
+        lines.extend(self.separation_plain(root));
+        let members: Vec<Uuid> = self
+            .draft
+            .iter()
+            .flat_map(|draft| draft.groups.iter())
+            .map(GroupDraft::results_key)
+            .collect();
+        lines.extend(self.member_plain(root, members));
+        if let Some(error) = self.separation_failure() {
+            lines.push(fault_line(&EncounterFault::SeparationFailed(error)));
+        }
+        let dirty = self.encounter_dirty();
+        let groups = self.owned_groups_diagnosis();
+        let groups_reason = groups.footer.zip(groups.cause).filter(|_| dirty);
+        let (groups_reason, groups_cause) = groups_reason.unzip();
+        if let Some(error) = self.error.clone()
+            && groups_cause.as_deref() != Some(error.as_str())
+        {
+            let start = self.start_refused.as_ref().filter(|(draft, answers, _)| {
+                *answers == error
+                    && self.shows_validation_error()
+                    && self
+                        .draft
+                        .as_ref()
+                        .is_some_and(|open| open.id == *draft && !open.dirty())
+            });
+            let fault = if let Some((_, _, refusal)) = start {
+                EncounterFault::StartRefused(refusal.clone())
+            } else if self.error_tone() == Tone::Warning {
+                EncounterFault::Invalid(error)
+            } else {
+                EncounterFault::Failed(error)
+            };
+            lines.push(fault_line(&fault));
+        }
+        if let Some(reason) = groups_reason {
+            lines.push(fault_line(&reason));
+        }
+        if let Some(unread) = self.unread_rows(ctx) {
+            for fault in unread.faults() {
+                lines.push(Line {
+                    message: Outcome::Fault(fault.file_in(root)).plain(),
+                    press: None,
+                });
+            }
+        }
+        let _ = FaultMessage::<FooterPress>::new;
+        lines
+    }
+
+    /// The separations of this campaign, newest first, as footer lines.
+    fn separation_plain(&self, root: &std::path::Path) -> Vec<Line> {
+        let revision = self.separations.revision();
+        self.separations
+            .newest_first(root)
+            .enumerate()
+            .map(|(at, shown)| {
+                let separation = shown.value();
+                Line {
+                    message: design::outcome::KeptOutcome::from(
+                        design::outcome::Said::new(outcome_words(separation.change.0.message()))
+                            .undo(
+                                separation
+                                    .undo_step()
+                                    .pressed_as(FooterPress::UndoSeparation),
+                            ),
+                    )
+                    .plain(),
+                    press: Some(LinePress::Separation(at, revision)),
+                }
+            })
+            .collect()
+    }
+
+    /// Each group draft's member result, as footer lines.
+    fn member_plain(&self, root: &std::path::Path, drafts: Vec<Uuid>) -> Vec<Line> {
+        let revision = self.member_results.revision();
+        drafts
+            .into_iter()
+            .filter_map(|draft| {
+                let owner = MemberOwner {
+                    root: root.to_owned(),
+                    draft,
+                };
+                self.member_results.get(&owner).map(|shown| Line {
+                    message: shown.value().outcome().plain(),
+                    press: Some(LinePress::Member(draft, revision)),
+                })
+            })
+            .collect()
+    }
+
+    /// The roster column (`roster_column`), as data.
+    pub fn roster_view(&mut self, ctx: &egui::Context, party: &Party, linked: bool) -> Option<RosterView> {
+        let difficulty = self.draft_difficulty();
+        let snapshot = self.snapshot.as_ref()?;
+        let draft = self.draft.as_ref()?;
+        let names = &snapshot.known_creature_names;
+        let faults = Entry::parse(&draft.path, &draft.source)
+            .map(|entry| roster_faults(&entry, names))
+            .unwrap_or_default();
+        let live = linked.then_some(party).filter(|_| draft.setup.combat_sync);
+        let sides: Vec<String> = draft
+            .setup
+            .sides
+            .keys()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect();
+        let count = draft.setup.roster.len();
+        let rows = draft
+            .setup
+            .roster
+            .iter()
+            .enumerate()
+            .map(|(i, slot)| {
+                roster_row(
+                    ctx,
+                    (i, count),
+                    slot,
+                    snapshot,
+                    live,
+                    self.expanded.as_deref() == Some(slot.key.as_str()),
+                    &sides,
+                    faults.iter().filter(|fault| fault.before == i).map(RosterFault::words).collect(),
+                )
+            })
+            .collect();
+        let (form, budgets) = match difficulty.as_deref() {
+            Some(difficulty) => (
+                crate::difficulty::Line::roster(difficulty, crate::difficulty::Summary::default())
+                    .fit(|_| true)
+                    .map(|fitted| fitted.form)
+                    .unwrap_or_default(),
+                difficulty
+                    .rating
+                    .as_ref()
+                    .map(crate::difficulty::Rating::budget_line)
+                    .or_else(|| difficulty.missing.as_ref().and_then(|missing| missing.words())),
+            ),
+            None => (Vec::new(), None),
+        };
+        let sync = linked.then(|| {
+            let on = draft.setup.combat_sync;
+            let line = on
+                .then(|| {
+                    let sheets: Vec<_> = draft
+                        .setup
+                        .roster
+                        .iter()
+                        .filter_map(|slot| slot_sheet(slot, snapshot, party))
+                        .collect();
+                    crate::party::party_line(&sheets, party.connected())
+                })
+                .flatten()
+                .or_else(|| (!on).then(|| "Nothing in this encounter reaches D&D Beyond.".to_owned()));
+            SyncView {
+                on,
+                line,
+                connect: on && !party.connected(),
+                help: if on {
+                    "The party starts with the HP and conditions on their sheets. When connected, the run and D&D Beyond stay matched."
+                } else {
+                    "The party starts from their saved copies and the starting values here. To sync a fight, select Sync party in the run."
+                },
+            }
+        });
+        Some(RosterView {
+            count,
+            difficulty: form,
+            budgets,
+            rows,
+            faults_after: faults
+                .iter()
+                .filter(|fault| fault.before >= count)
+                .map(RosterFault::words)
+                .collect(),
+            sync,
+            repeatable: draft.setup.repeatable,
+            loot: LootView {
+                owned: draft.loot_owned,
+                lines: draft.loot.clone(),
+            },
+            notes: draft.body.to_string(),
+        })
+    }
+
+    /// Change the open encounter draft (its name, notes, options, a row's fields), then keep
+    /// its sides whole.
+    pub fn edit_draft(&mut self, edit: impl FnOnce(&mut DraftEdit<'_>)) {
+        if let Some(draft) = self.draft.as_mut() {
+            edit(&mut DraftEdit(draft));
+            draft.keep_sides();
+        }
+    }
+
+    /// A roster change from a row's menu.
+    pub fn roster_act(&mut self, act: RosterAct) {
+        if let Some(draft) = self.draft.as_mut() {
+            if draft.roster_act(act) {
+                self.focus_search = true;
+            }
+            draft.keep_sides();
+        }
+    }
+
+    /// A row's Edit: its fields open, or close when open.
+    pub fn toggle_row(&mut self, key: &str) {
+        self.expanded = if self.expanded.as_deref() == Some(key) {
+            None
+        } else {
+            Some(key.to_owned())
+        };
+    }
+
+    /// A row's `Make it yours`: a copy of its creature in this campaign.
+    pub fn make_yours(&mut self, slot: usize, active: &Campaign, modules: &[Module]) {
+        self.make_it_yours(slot, active, modules);
+    }
+
+    /// Add participants (`add_pane`), as data. The ranking is kept until its key changes.
+    pub fn add_view(&mut self, filter: Filter) -> Option<AddView> {
+        let snapshot = self.snapshot.as_ref()?;
+        let draft = self.draft.as_mut()?;
+        let on_roster = |draft: &Draft, id: Uuid| {
+            draft
+                .setup
+                .roster
+                .iter()
+                .any(|slot| slot.creature.as_ref().is_some_and(|c| c.id == Some(id)))
+        };
+        let any_party = snapshot.creatures.iter().any(|c| c.party);
+        let missing = snapshot
+            .creatures
+            .iter()
+            .any(|c| c.party && !on_roster(draft, c.id));
+        let party = if !missing && any_party {
+            PartyButton::InRoster
+        } else {
+            PartyButton::Add {
+                blocked: (!any_party)
+                    .then_some("No saved party copies yet. Connect to D&D Beyond in Settings."),
+            }
+        };
+        let adding_to = (!draft.groups.is_empty()).then(|| {
+            draft.target_group().map_or_else(
+                || "the roster".to_owned(),
+                |group| group.name(),
+            )
+        });
+        let group = draft.target_group().is_some();
+        let list = snapshot.search_list(group);
+        let query = self.search.to_lowercase();
+        let key = SearchKey {
+            list: list.revision,
+            unlinked: list.unlinked,
+            query,
+            filter: filter.clone(),
+        };
+        let draft = self.draft.as_ref()?;
+        let roster = OnRoster::Slots(&draft.setup.roster);
+        let ranked = match self
+            .search_ranked
+            .as_ref()
+            .filter(|kept| kept.0.key == key && (group || roster.names(&kept.0.on_roster)))
+        {
+            Some(kept) => kept.clone(),
+            None => {
+                let already = |c: &Creature| !group && snapshot.already_on_roster(draft, c);
+                let on_roster = if group { Vec::new() } else { roster.to_vec() };
+                let ranked = SearchRanked::rank(key, list, &filter, &already, on_roster);
+                let rows = ranked
+                    .found
+                    .iter()
+                    .map(|&at| {
+                        let c = &list.creatures[at];
+                        ResultRow {
+                            id: c.id,
+                            party: c.party,
+                            name: c.name.clone(),
+                            detail: c.detail.clone(),
+                            hp_missing: c.hp_missing,
+                            source: c.source.clone(),
+                            in_roster: already(c),
+                            unavailable: c.unavailable.clone(),
+                        }
+                    })
+                    .collect();
+                let kept = (Arc::new(ranked), Arc::new(rows));
+                self.search_ranked = Some(kept.clone());
+                kept
+            }
+        };
+        Some(AddView {
+            party,
+            adding_to,
+            search: self.search.clone(),
+            filter,
+            close_names: ranked.0.as_typed == 0 && !ranked.0.found.is_empty(),
+            results: ranked.1,
+        })
+    }
+
+    /// The search's words.
+    pub fn set_search(&mut self, words: &str) {
+        self.search = words.to_owned();
+    }
+
+    /// Whether the search asked for the keyboard (after an add); asking ends it.
+    pub fn take_focus_search(&mut self) -> bool {
+        std::mem::take(&mut self.focus_search)
+    }
+
+    /// Enter in the name field: the search takes the keyboard next.
+    pub fn ask_focus_search(&mut self) {
+        self.focus_search = true;
+    }
+
+    /// Whether the name field asked for the keyboard (a new draft); asking ends it.
+    pub fn take_focus_name(&mut self) -> bool {
+        std::mem::take(&mut self.focus_name)
+    }
+
+    /// `Add party`: every party member not on the roster yet.
+    pub fn add_party(&mut self) {
+        let Some(snapshot) = self.snapshot.as_ref() else {
+            return;
+        };
+        let Some(draft) = self.draft.as_mut() else {
+            return;
+        };
+        let missing: Vec<Uuid> = snapshot
+            .creatures
+            .iter()
+            .filter(|c| {
+                c.party
+                    && !draft
+                        .setup
+                        .roster
+                        .iter()
+                        .any(|slot| slot.creature.as_ref().is_some_and(|r| r.id == Some(c.id)))
+            })
+            .map(|c| c.id)
+            .collect();
+        for id in missing {
+            draft.add(id, true);
+        }
+        self.focus_search = true;
+    }
+
+    /// A result's `Add`, or Enter on the best match: to the chosen group, or the roster.
+    pub fn add_result(&mut self, id: Uuid, party: bool) {
+        let Some(snapshot) = self.snapshot.as_ref() else {
+            return;
+        };
+        if let Some(draft) = self.draft.as_mut() {
+            draft.add_selected(id, party, snapshot);
+            draft.keep_sides();
+        } else if let Some(group) = self.group_draft.as_mut() {
+            group.add(id);
+        }
+        self.focus_search = true;
+    }
+
+    /// Enter in the search: the best match as typed, when it can be added (`creature_search`).
+    pub fn add_best_match(&mut self, results: &[ResultRow], close_names: bool) {
+        if self.search.trim().is_empty() || close_names {
+            return;
+        }
+        if let Some(first) = results.first()
+            && !first.in_roster
+            && first.unavailable.is_none()
+        {
+            self.add_result(first.id, first.party);
+        }
+    }
+}
+
+/// The edits a view makes to the open encounter draft, by name.
+pub struct DraftEdit<'a>(&'a mut Draft);
+
+impl DraftEdit<'_> {
+    pub fn name(&mut self, words: &str) {
+        self.0.name = words.to_owned();
+    }
+    pub fn notes(&mut self, words: &str) {
+        self.0.body = words.to_owned().into();
+    }
+    pub fn toggle_sync(&mut self) {
+        self.0.setup.combat_sync ^= true;
+    }
+    pub fn toggle_repeatable(&mut self) {
+        self.0.setup.repeatable ^= true;
+    }
+    pub fn loot(&mut self, lines: Vec<String>) {
+        self.0.loot = lines;
+    }
+    fn slot(&mut self, key: &str) -> Option<&mut Slot> {
+        self.0.setup.roster.iter_mut().find(|slot| slot.key == key)
+    }
+    /// A row's side.
+    pub fn side(&mut self, key: &str, side: &str) {
+        if let Some(slot) = self.slot(key)
+            && !side.trim().is_empty()
+        {
+            slot.side = side.trim().to_lowercase();
+        }
+    }
+    /// A row's initiative group; blank removes it.
+    pub fn initiative_group(&mut self, key: &str, group: &str) {
+        if let Some(slot) = self.slot(key) {
+            if group.trim().is_empty() {
+                slot.extra.remove("initiative_group");
+            } else {
+                slot.extra.insert("initiative_group".into(), group.into());
+            }
+        }
+    }
+    /// A row's starting value (`hp`, `temporary_hp`): on with a value, or off.
+    pub fn value(&mut self, key: &str, field: &str, value: Option<i64>) {
+        if let Some(slot) = self.slot(key) {
+            match value {
+                Some(value) => {
+                    slot.initial.insert(field.into(), value.max(0).into());
+                }
+                None => {
+                    slot.initial.remove(field);
+                }
+            }
+        }
+    }
+}
+
+fn fault_line(fault: &dyn design::outcome::Fault) -> Line {
+    Line {
+        message: design::outcome::Outcome::Fault(design::outcome::FaultMessage::new(fault)).plain(),
+        press: None,
+    }
+}
+
+/// One roster row (`Encounters::roster`), as data.
+#[allow(clippy::too_many_arguments)]
+fn roster_row(
+    ctx: &egui::Context,
+    (i, count): (usize, usize),
+    slot: &Slot,
+    snapshot: &Snapshot,
+    live: Option<&Party>,
+    open: bool,
+    sides: &[String],
+    faults_before: Vec<String>,
+) -> RosterRow {
+    let resolved = slot
+        .creature
+        .as_ref()
+        .and_then(|r| snapshot.catalogue.resolve_ref(r).ok());
+    let definition = resolved
+        .and_then(|id| snapshot.catalogue.entries.get(&id))
+        .map(|e| &e.entry);
+    let name = roster_name(slot, definition, &snapshot.known_creature_names);
+    let missing = definition.is_none();
+    let unreadable = slot
+        .creature
+        .as_ref()
+        .and_then(|reference| snapshot.catalogue.unreadable_ref(reference));
+    let creature = resolved.and_then(|id| snapshot.creatures.iter().find(|c| c.id == id));
+    let synced = live.is_some() && creature.is_some_and(|c| c.party);
+    let sheet = live
+        .zip(creature)
+        .and_then(|(party, creature)| party.sheet(creature.character.as_deref()?));
+    let hp_missing = sheet.is_none()
+        && creature.zip(definition).is_some_and(|(creature, entry)| {
+            groups::shown_hp_missing(&slot.overrides, entry, &slot.side, creature)
+        });
+    let detail = sheet.map_or_else(
+        || {
+            creature
+                .zip(definition)
+                .map_or_else(String::new, |(creature, entry)| {
+                    groups::shown_detail(&slot.overrides, entry, &slot.side, creature)
+                })
+        },
+        |record| crate::party::SheetNow::of(record).line(),
+    );
+    let detail = detail
+        .strip_prefix("Party copy · ")
+        .map_or_else(|| detail.clone(), str::to_owned);
+    let detail = roster_detail(&detail);
+    let detail = match creature.and_then(|creature| creature.source.as_deref()) {
+        Some(source) => format!("{detail} · {source}"),
+        None => detail,
+    };
+    let side_icon = if slot.side == "party" {
+        icons::PARTY
+    } else if slot.side == "enemies" {
+        icons::ENCOUNTERS
+    } else {
+        icons::GROUP
+    };
+    let identity = definition
+        .filter(|_| slot.overrides.contains_key("name"))
+        .map(|entry| format!(" · as {}", entry.name))
+        .unwrap_or_default();
+    let changed = definition.is_some_and(|entry| {
+        !(slot.overrides.is_empty()
+            || slot.overrides.len() == 1 && snapshot.npc_name_for(entry, &slot.overrides).is_some())
+    });
+    let side = design::reader::human_label(&slot.side);
+    let muted = colors().muted;
+    let (fault_icon, fault_color) = missing_creature_mark(unreadable);
+    let fault_words = unreadable.map_or(MISSING_CREATURE, |note| {
+        if !note.duplicate {
+            note.word.as_str()
+        } else if crate::world::repair_in_world(&note.path) {
+            "Same note in two files"
+        } else {
+            crate::library::SAME_ENTRY
+        }
+    });
+    let lead = format!("{side_icon} {side}");
+    let mut parts: Vec<(String, egui::Color32, bool)> = Vec::new();
+    if missing {
+        parts.push((lead, muted, false));
+        parts.push((fault_words.to_owned(), muted, false));
+    } else if detail.is_empty() {
+        parts.push((format!("{lead}{identity}"), muted, false));
+    } else {
+        parts.push((lead, muted, false));
+        let whole = format!("{detail}{identity}");
+        for part in detail_parts(&whole, hp_missing) {
+            parts.push((
+                stat_line(part.words),
+                part.color(),
+                part.words == "Bloodied",
+            ));
+        }
+    }
+    let change_word = (changed && !open && !missing)
+        .then(|| {
+            definition.and_then(|entry| {
+                Overrides::parse(&slot.overrides).ok().map(|overrides| {
+                    groups::change_words(
+                        &overrides,
+                        entry,
+                        &slot.side,
+                        &crate::loot_editor::missing_in(ctx, overrides.loot.as_deref()),
+                    )
+                })
+            })
+        })
+        .flatten()
+        .or_else(|| (changed && !open && !missing).then(|| "Changed".to_owned()));
+    let form = (open && !missing).then(|| RowForm {
+        side: slot.side.clone(),
+        sides: sides.to_vec(),
+        group: slot
+            .extra
+            .get("initiative_group")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_owned(),
+        values: if synced {
+            Vec::new()
+        } else {
+            [("hp", "Starting HP"), ("temporary_hp", "Temp HP")]
+                .into_iter()
+                .map(|(field, label)| {
+                    (
+                        field,
+                        label,
+                        slot.initial
+                            .get(field)
+                            .and_then(Value::as_u64)
+                            .and_then(|value| i64::try_from(value).ok()),
+                    )
+                })
+                .collect()
+        },
+        help: if synced {
+            "D&D Beyond decides this player’s HP while this encounter syncs."
+        } else {
+            "With a value off, the creature’s own starting state applies."
+        },
+    });
+    RosterRow {
+        key: slot.key.clone(),
+        index: i,
+        name,
+        faults_before,
+        parts,
+        missing: missing.then(|| {
+            (
+                fault_icon,
+                fault_color,
+                unreadable
+                    .filter(|note| note.duplicate)
+                    .map(|note| note.word.clone()),
+            )
+        }),
+        changed: change_word,
+        open,
+        repair: unreadable.map(|note| {
+            (
+                if crate::world::repair_in_world(&note.path) {
+                    "Open in World"
+                } else {
+                    "Open in Library"
+                },
+                note.path.clone(),
+            )
+        }),
+        edit_word: if creature.is_none() { "Replace…" } else { "Edit" },
+        make_yours: creature.is_some_and(|c| !c.party),
+        first: i == 0,
+        last: i + 1 == count,
+        form,
+    }
+}
+
+impl Encounters {
+    /// The creature filter's choices: each fact's values among the creatures the open search
+    /// offers, with how many have each. Worked out only while the filter's menu is open.
+    pub fn filter_choices(
+        &self,
+    ) -> BTreeMap<splat::content::creature_filter::Facet, Vec<(String, usize)>> {
+        let Some(snapshot) = self.snapshot.as_ref() else {
+            return BTreeMap::new();
+        };
+        let unlinked = self
+            .draft
+            .as_ref()
+            .is_none_or(|draft| draft.add_to.is_some());
+        splat::content::creature_filter::choices(
+            snapshot
+                .search_list(unlinked)
+                .creatures()
+                .filter_map(|c| c.facets.as_ref()),
+        )
     }
 }

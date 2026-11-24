@@ -57,3 +57,126 @@ fn history_opens_a_run_in_place() {
     shell.click(&open);
     assert!(!shell.read(|root| root.app.encounters.history_open()));
 }
+
+/// The first target whose name starts with `prefix`, after a frame.
+fn first_target(shell: &mut Shell, prefix: &str) -> String {
+    shell.settle();
+    crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with(prefix))
+        .unwrap_or_else(|| panic!("no target starts with {prefix:?}"))
+}
+
+/// The roster's length in the open draft.
+fn roster_len(shell: &mut Shell) -> usize {
+    shell.read(|root| {
+        root.app
+            .encounters
+            .roster_names()
+            .map_or(0, |names| names.len())
+    })
+}
+
+/// New encounter: name it, find a creature, add it, save with the button, and go back.
+#[test]
+fn a_new_encounter_is_built_and_saved() {
+    let mut shell = Shell::new("encounter-build", Seed::Campaign);
+    ready(&mut shell);
+    shell.click("New encounter");
+    assert!(shell.read(|root| root.app.encounters.editor_open()));
+    shell.type_text("Ashfall Crossing");
+    assert_eq!(
+        shell.read(|root| root.app.encounters.draft_name()),
+        Some("Ashfall Crossing".to_owned())
+    );
+    shell.capture("encounter-build__02-new-encounter__1200x800");
+    shell.click("Find a creature or party member");
+    shell.type_text("wolf");
+    shell.capture("encounter-build__03-find-creature__1200x800");
+    let before = roster_len(&mut shell);
+    let add = first_target(&mut shell, "id:add:");
+    shell.click(&add);
+    assert_eq!(roster_len(&mut shell), before + 1, "Add puts the creature on the roster");
+    // Enter adds the best match as typed, and the search keeps the keyboard.
+    shell.click("Find a creature or party member");
+    shell.press("enter");
+    assert_eq!(roster_len(&mut shell), before + 2, "Enter adds the best match");
+    // A new encounter starts with the party, so Add participants says so.
+    let names = shell.read(|root| root.app.encounters.roster_names().unwrap_or_default());
+    assert!(names.iter().any(|name| name == "Brannoch Vale"), "{names:?}");
+    assert!(shell.bounds("Add party").is_none(), "no Add party while the party is in");
+    shell.capture("encounter-build__04-creatures-added__1200x800");
+    assert!(shell.read(|root| root.app.encounters.encounter_dirty()));
+    shell.click("Save encounter");
+    assert!(!shell.read(|root| root.app.encounters.encounter_dirty()), "Save writes the draft");
+    shell.capture("encounter-build__05-saved__1200x800");
+    shell.click("id:encounter-back");
+    assert!(!shell.read(|root| root.app.encounters.editor_open()));
+    assert!(shell.bounds("Ashfall Crossing").is_some() || shell.read(|root| {
+        root.app.encounters.saved_names().iter().any(|name| name == "Ashfall Crossing")
+    }));
+}
+
+/// A roster row's menu moves, duplicates and removes it; Ctrl+S saves; Discard brings the
+/// saved encounter back and its Undo the draft.
+#[test]
+fn the_roster_menu_ctrl_s_and_discard_with_undo() {
+    let mut shell = Shell::new("encounter-build", Seed::Campaign);
+    ready(&mut shell);
+    let edit = first_target(&mut shell, "id:edit:");
+    shell.click(&edit);
+    assert!(shell.read(|root| root.app.encounters.editor_open()));
+    let names = shell.read(|root| root.app.encounters.roster_names().unwrap_or_default());
+    assert!(names.len() >= 2, "the saved roster has rows: {names:?}");
+    // Move the first row down.
+    let menu = first_target(&mut shell, "id:roster-menu:");
+    shell.click(&menu);
+    shell.click("Move down");
+    let moved = shell.read(|root| root.app.encounters.roster_names().unwrap_or_default());
+    assert_eq!(moved[1], names[0], "Move down swaps the first two rows");
+    assert_eq!(moved[0], names[1]);
+    // Duplicate, then Remove.
+    let menu = first_target(&mut shell, "id:roster-menu:");
+    shell.click(&menu);
+    shell.click("Duplicate");
+    assert_eq!(roster_len(&mut shell), names.len() + 1);
+    let menu = first_target(&mut shell, "id:roster-menu:");
+    shell.click(&menu);
+    shell.click("Remove");
+    assert_eq!(roster_len(&mut shell), names.len());
+    shell.capture("encounter-build__06-roster-changed__1200x800");
+    // Discard: the saved roster comes back, with an Undo that brings the draft back.
+    shell.click("Discard");
+    let back = shell.read(|root| root.app.encounters.roster_names().unwrap_or_default());
+    assert_eq!(back, names, "Discard brings back the saved encounter");
+    let undo = first_target(&mut shell, "id:encounter-editor-footer-undo-");
+    shell.click(&undo);
+    let again = shell.read(|root| root.app.encounters.roster_names().unwrap_or_default());
+    assert_eq!(again[0], names[1], "Undo discard brings back the draft");
+    // Ctrl+S saves it.
+    assert!(shell.read(|root| root.app.encounters.encounter_dirty()));
+    shell.press("ctrl-s");
+    assert!(!shell.read(|root| root.app.encounters.encounter_dirty()), "Ctrl+S saves");
+}
+
+/// A Ready row's menu removes the encounter; the footer's Undo brings it back.
+#[test]
+fn remove_an_encounter_and_undo() {
+    let mut shell = Shell::new("encounter-build", Seed::Campaign);
+    ready(&mut shell);
+    let before = shell.read(|root| root.app.encounters.saved_names());
+    shell.settle();
+    let ready_menu = crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with("id:menu:Encounters/") && name.ends_with("-button"))
+        .expect("a Ready row's menu");
+    shell.click(&ready_menu);
+    shell.capture("encounter-build__13-encounter-menu-remove__1200x800");
+    shell.click("Remove");
+    let after = shell.read(|root| root.app.encounters.saved_names());
+    assert_eq!(after.len() + 1, before.len(), "Remove takes the encounter away");
+    shell.capture("encounter-build__14-encounter-removed__1200x800");
+    let undo = first_target(&mut shell, "id:encounters-list-footer-undo-");
+    shell.click(&undo);
+    assert_eq!(shell.read(|root| root.app.encounters.saved_names()), before);
+}

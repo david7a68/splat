@@ -3017,6 +3017,12 @@ impl EditorHead {
         self.held
     }
 
+    /// The back link's words and its accessible name, for a view that does not draw with egui
+    /// (the GPUI port).
+    pub fn back_words(&self) -> (&'static str, &'static str) {
+        (self.to.word().as_str(), self.to.name())
+    }
+
     /// Draw the back line, then `name_row` under it. True when the DM follows the link (never
     /// while it is held), and what `name_row` returned.
     pub fn show<R>(self, ui: &mut Ui, name_row: impl FnOnce(&mut Ui) -> R) -> (bool, R) {

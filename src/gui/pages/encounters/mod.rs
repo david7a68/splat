@@ -13,6 +13,8 @@ use gpui::{
 use splat_encounters_ui::encounters::model::PageShown;
 
 mod common;
+mod editor;
+mod filter;
 mod list;
 #[cfg(test)]
 mod tests;
@@ -32,11 +34,19 @@ pub struct State {
     pub groups_closed: bool,
     /// The list's History section is closed (an ended run read there opens it).
     pub history_closed: bool,
+    /// The words typed in the loot list's add field.
+    pub loot_typed: String,
+    /// The roster row whose side is being typed (`Other…`), by its key.
+    pub other_side: Option<String>,
+    /// The page's own keyboard focus, so its keys (Ctrl+S) reach it when the control that had
+    /// the keyboard went away (a footer's Undo).
+    pub focus: Option<gpui::FocusHandle>,
 }
 
 /// Once, when the root is built.
-pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
+pub(crate) fn init(root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
     cx.bind_keys([KeyBinding::new("ctrl-s", Save, Some("Encounters"))]);
+    root.pages.encounters.focus = Some(cx.focus_handle());
 }
 
 /// Once per frame, before anything draws.
@@ -70,14 +80,21 @@ pub(crate) fn render(
             ))
             .into_any_element(),
         Some(PageShown::List) => list::render(root, window, cx),
-        Some(PageShown::Encounter | PageShown::Group) => {
+        Some(PageShown::Encounter) => editor::render(root, window, cx),
+        Some(PageShown::Group) => {
             crate::gui::kit::text(Type::Body, colors().muted, "The editor is not ported yet.")
                 .into_any_element()
         }
     };
-    div()
-        .key_context("Encounters")
-        .on_action(cx.listener(save))
+    let mut page = div().key_context("Encounters");
+    if let Some(focus) = root.pages.encounters.focus.clone() {
+        let lost = window.focused(cx).is_none_or(|focused| focused == root.focus);
+        if lost {
+            window.focus(&focus, cx);
+        }
+        page = page.track_focus(&focus);
+    }
+    page.on_action(cx.listener(save))
         .size_full()
         .child(body)
         .into_any_element()

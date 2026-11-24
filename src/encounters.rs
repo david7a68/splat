@@ -4218,6 +4218,9 @@ pub struct Encounters {
     member_results: design::Results<MemberOwner, MemberMark>,
     /// Each encounter draft's own results (a removed group, a replacement), for its editor.
     editor_results: design::Results<EditorOwner, EditorMark>,
+    /// The GPUI page's creature search: its ranking and its rows, kept until the ranking's key
+    /// or the roster it read changes (`model::Encounters::add_view`).
+    search_ranked: Option<(Arc<SearchRanked>, Arc<Vec<model::ResultRow>>)>,
 }
 pub use splat_session_records::encounters::PlanFight;
 /// What the page needs from the story: where each run's event is, and which sessions exist.
@@ -7883,41 +7886,23 @@ impl Encounters {
             );
         }
         design::rule(ui);
-        if back {
-            self.clear_notice();
-            self.draft = None;
-            self.message = None;
-            self.error = None;
-            self.creature = None;
-            self.wants_session = std::mem::take(&mut self.from_session);
-            self.plan_on_save = false;
+        let act = if back {
+            Some(model::HeadAct::Back)
+        } else if discard {
+            Some(model::HeadAct::Discard)
+        } else if start_another {
+            Some(model::HeadAct::StartAnother { save: save || dirty })
+        } else if run_it {
+            Some(model::HeadAct::Start { save: save || dirty })
+        } else if save {
+            Some(model::HeadAct::Save)
+        } else {
+            None
+        };
+        if let Some(act) = act
+            && self.editor_head_act(ui.ctx(), active, campaigns.modules(), act)
+        {
             return;
-        }
-        if discard {
-            self.discard_draft(active);
-            return;
-        }
-        if save {
-            self.save_draft(ui.ctx(), active, campaigns.modules());
-        }
-        if run_it || start_another {
-            if dirty {
-                self.save_draft(ui.ctx(), active, campaigns.modules());
-            }
-            if !self.draft_dirty() {
-                if !start_another && let Some(run) = &unfinished {
-                    self.open_saved_run(&run.path, active);
-                } else {
-                    self.open_run(active, campaigns.modules());
-                }
-                // A fight started from the session goes back there, not to this editor.
-                if self.from_session.is_some() && self.run.is_some() {
-                    self.draft = None;
-                    self.from_session = None;
-                    self.run_from_session = true;
-                    return;
-                }
-            }
         }
         // After a load in progress, so that a group just saved is among them.
         if self.pending.is_none()
