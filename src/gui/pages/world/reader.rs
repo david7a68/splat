@@ -824,7 +824,7 @@ fn values(
             Some(change.into_any_element()),
         ));
         if key == "in" && host.reader(root).place_choices_open() {
-            column = column.child(place_chooser(host, item, index, cx));
+            column = column.child(place_chooser(host, item, index, column_width, cx));
         }
     }
     let reader = &mut host.reader(root);
@@ -896,11 +896,13 @@ fn value_row(
         })
 }
 
-/// The place link's chooser: each file it matches, with `Always use this one`.
+/// The place link's chooser: each file it matches, with `Always use this one`. The files wrap
+/// in the value column, and each action stands in the Change column.
 fn place_chooser(
     host: Host,
     item: &Item,
     index: &ContentIndex,
+    width: gpui::Pixels,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = theme::colors();
@@ -923,20 +925,23 @@ fn place_chooser(
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap(theme::L)
                 .child(
-                    kit::Link::new(("world-place-file", at), path.clone())
-                        .wrap()
-                        .on_click(on_item(cx, host, id, go(to))),
+                    div().w(width).flex_none().child(
+                        kit::Link::new(("world-place-file", at), path.clone())
+                            .wrap()
+                            .on_click(on_item(cx, host, id, go(to))),
+                    ),
                 )
                 .child(
-                    kit::Button::secondary(("world-place-use", at), "Always use this one")
-                        .density(theme::Density::Read)
-                        .name(format!("Always use {path}"))
-                        .on_click(on_item(cx, host, id, move |page, item, index, campaign| {
-                            let at = index.position(to)?;
-                            page.reader.choose_place(campaign, item, index, at)
-                        })),
+                    div().pl(theme::L).flex_none().child(
+                        kit::Button::secondary(("world-place-use", at), "Always use this one")
+                            .density(theme::Density::Read)
+                            .name(format!("Always use {path}"))
+                            .on_click(on_item(cx, host, id, move |page, item, index, campaign| {
+                                let at = index.position(to)?;
+                                page.reader.choose_place(campaign, item, index, at)
+                            })),
+                    ),
                 ),
         );
     }

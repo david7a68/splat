@@ -1102,6 +1102,31 @@ fn world_note_moved() {
         assert!(shell.bounds(&format!("Always use {path}")).is_some());
     }
     assert!(shell.bounds("1 note needs fixing").is_some());
+    let chooser_in_column = |shell: &mut Shell| {
+        let change = shell.bounds("Change Place").expect("Change Place");
+        let places: Vec<_> = ["Locations/Watch House.md", "Other/Watch House.md"]
+            .iter()
+            .map(|path| {
+                let link = shell.bounds(path).expect("the file link");
+                let action = shell
+                    .bounds(&format!("Always use {path}"))
+                    .expect("its action");
+                (link, action)
+            })
+            .collect();
+        let fits = places.iter().all(|(link, action)| {
+            (action.left() - change.left()).abs() <= px(1.0) && action.left() > link.right()
+        });
+        (
+            fits,
+            format!("Change {change:?}, (file, action) {places:?}"),
+        )
+    };
+    let (fits, places) = chooser_in_column(&mut shell);
+    assert!(
+        fits,
+        "each action stands in the Change column, clear of its file: {places}"
+    );
     shell.capture("world-note-moved__01-duplicate-place-chooser-in-world__1200x800");
     shell.click("Always use Locations/Watch House.md");
     assert!(shell.bounds("Undo change to Place").is_some());
@@ -1136,12 +1161,19 @@ fn world_note_moved() {
     shell.capture("world-note-moved__03-mixed-link-problems-need-fixing__1200x800");
     std::fs::write(&npc_path, &original).unwrap();
     reload(&mut shell, None);
+    shell.click("Watch House · 2 matches");
+    shell.click("Locations/Watch House.md");
     look_up(&mut shell, "Rook Ambry");
     shell.click("Watch House · 2 matches");
     assert!(
         shell
             .bounds("Always use Locations/Watch House.md")
             .is_some()
+    );
+    let (fits, places) = chooser_in_column(&mut shell);
+    assert!(
+        fits,
+        "in Lookup too, each action stands in the Change column, clear of its file: {places}"
     );
     shell.capture("world-note-moved__04-duplicate-place-chooser-in-lookup__1200x800");
     shell.update(|root, _, _| root.app.lookup.close());
