@@ -6,12 +6,12 @@ use crate::{
     content_workspace::{
         CampaignDocument, Catalogue, Closure, EntryRef, PackageSelection, Selection,
     },
-    design::{self, Action, Density, Type, colors, icons},
+    design::{self, icons},
     library::{note_path, write_note},
     persistence::{Campaign, Module},
 };
 use eframe::egui;
-use splat::character::campaign_package::{self, Move, Proposal};
+use splat::character::campaign_package::{self, Proposal};
 use std::{
     collections::BTreeSet,
     fs,
@@ -152,57 +152,7 @@ struct Reconcile {
     proposals: Vec<Proposal>,
     /// Proposals that the DM unticked.
     declined: BTreeSet<String>,
-    /// The lines and keys made from `proposals` and `declined`, kept until either changes:
-    /// cleared where they change (`set_check_owner`, `finish_check`, a tick).
-    view: Option<ReviewView>,
     error: Option<String>,
-}
-/// One item of a list drawn in place in the page's column (the changes to review, the issue
-/// list): drawn, then registered as a whole row, so the pane's whole-row cut keeps it whole at
-/// the footer's edge (layout step 11c, review of PR 719).
-fn whole_row(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
-    let row = ui.scope(add);
-    design::register_row(ui, row.response.rect);
-}
-
-/// What the changes to review show, kept until the proposals or the DM's ticks change: each
-/// proposal's line and the keys an Apply would carry out (review of PR 719: not rebuilt each
-/// frame).
-struct ReviewView {
-    lines: Vec<String>,
-    keys: BTreeSet<String>,
-}
-
-impl ReviewView {
-    fn of(proposals: &[Proposal], declined: &BTreeSet<String>) -> Self {
-        let lines = proposals
-            .iter()
-            .map(|proposal| {
-                let line = format!(
-                    "{} ({}): {}",
-                    proposal.name,
-                    proposal.kind,
-                    match &proposal.change {
-                        Move::ToPackage(package) => format!("move to {package}"),
-                        Move::ToCampaign =>
-                            "move back to the campaign package; its package is no longer enabled"
-                                .to_owned(),
-                        Move::Forget => "remove; no current entry uses it".to_owned(),
-                    }
-                );
-                match &proposal.blocked {
-                    Some(reason) => format!("{line}. Not available: {reason}"),
-                    None => line,
-                }
-            })
-            .collect();
-        let keys = proposals
-            .iter()
-            .filter(|p| p.blocked.is_none() && !declined.contains(&p.key))
-            .map(|p| p.key.clone())
-            .collect();
-        Self { lines, keys }
-    }
 }
 
 /// The error that says Campaign.md is missing, as `Campaigns` words it.
@@ -408,8 +358,6 @@ enum ContentFault<'a> {
     /// Campaign.md is missing: what Splat can write (the campaigns' preview words). A missing
     /// file is a warning (R41), as the missing manifests and folders are.
     MissingCampaign(&'a str),
-    /// The campaign folder is not on disk.
-    NoFolder,
     /// A note the page needs cannot be read; `problem` is Save's refusal or that the repair is
     /// not saved, while the repair is closed.
     Unreadable {
@@ -440,15 +388,6 @@ enum ContentFault<'a> {
         /// The package's reference, while its Technical details are open.
         reference: Option<&'a str>,
     },
-    /// A Campaign.md flag (the content layer's words).
-    Flag(&'a str),
-    /// A missing dependency (M0044): with one owner, the owner and the line of its missing
-    /// link head the words (`Lost Patrol · line 13: Needs a creature that is not in this
-    /// campaign’s packages.`); with several, the content layer's sentence names them all.
-    Missing {
-        place: Option<(&'a str, Option<u32>)>,
-        cause: &'a str,
-    },
     /// Encounters a package removal left without creatures.
     LeftWithout(&'a design::outcome::Sentence),
 }
@@ -465,11 +404,8 @@ impl design::outcome::Fault for ContentFault<'_> {
             },
             Self::Manifest { on_disk: true, .. } => Severity::CannotRead,
             Self::MissingCampaign(_)
-            | Self::NoFolder
             | Self::Manifest { on_disk: false, .. }
             | Self::Unavailable { .. }
-            | Self::Flag(_)
-            | Self::Missing { .. }
             | Self::LeftWithout(_) => Severity::NeedsFixing,
         }
     }
@@ -480,20 +416,13 @@ impl design::outcome::Fault for ContentFault<'_> {
                 name: (*path).into(),
                 line: None,
             }),
-            Self::Missing {
-                place: Some((owner, line)),
-                ..
-            } => Some(design::outcome::FaultPlace {
-                name: (*owner).into(),
-                line: *line,
-            }),
             _ => None,
         }
     }
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "errors, refusals, manifest problems and flags carry the system’s, the workspace’s or the content layer’s own words"
+        reason = "errors, refusals and manifest problems carry the system’s, the workspace’s or the content layer’s own words"
     )]
     fn cause(&self) -> design::outcome::Sentence {
         use design::outcome::Sentence;
@@ -515,7 +444,6 @@ impl design::outcome::Fault for ContentFault<'_> {
             Self::MissingCampaign(preview) => {
                 outside(preview).unwrap_or(crate::sentence!("Campaign.md is missing."))
             }
-            Self::NoFolder => crate::sentence!("This campaign folder does not exist yet."),
             Self::Unreadable { path, problem } => {
                 let first = crate::sentence!("{} cannot be read. Fix it here or in World.", path);
                 match problem.and_then(outside) {
@@ -534,9 +462,6 @@ impl design::outcome::Fault for ContentFault<'_> {
                 .blocking()
                 .and_then(&outside)
                 .unwrap_or(crate::sentence!("This needs fixing.")),
-            Self::Flag(cause) | Self::Missing { cause, .. } => {
-                outside(cause).unwrap_or(crate::sentence!("This needs fixing."))
-            }
             // What Replace keeps and replaces is its choice's own help line (ruling M8).
             Self::Manifest {
                 package, problem, ..
@@ -605,10 +530,6 @@ pub struct CampaignContent {
     /// The app takes it after the page (`Splat::route`) and reads Lookup and Encounters again,
     /// so their searches follow what the campaign uses now.
     pub choices_written: bool,
-    /// Issue #513: Ctrl+S, taken before the page draws (`save_shortcut`). The page saves the
-    /// package choices after the package list has taken the frame's input; the key ends with
-    /// the frame (`show`).
-    save_key: bool,
     error: Option<String>,
     /// The newest failed answer to an act of the DM (ruling Q-x): a refused folder pick, a
     /// failed Undo or write, a repair's failed Save. First in the footer. See [`Answer`] for its
@@ -843,40 +764,6 @@ fn manifest_mark(on_disk: bool) -> (&'static str, &'static str) {
     }
 }
 
-/// `design::two_line_row` for a package, with a fault mark on the second line in its own tone.
-/// `spoken` is the second line as the accessible name says it, with words for the mark.
-fn package_row(
-    ui: &mut egui::Ui,
-    selected: bool,
-    title: &str,
-    detail: &str,
-    spoken: &str,
-) -> egui::Response {
-    design::row(
-        ui,
-        Density::Glance.row() + design::XS,
-        selected,
-        &format!("{title} · {spoken}"),
-        |ui, rect| {
-            let c = colors();
-            let width = rect.width() - 2.0 * design::S;
-            let font = if selected { Type::Strong } else { Type::Body };
-            let galley = design::one_line(ui, title, font.font(ui), c.text, width);
-            let total = galley.size().y + Type::Small.line();
-            let top = rect.center().y - total / 2.0;
-            ui.painter()
-                .galley(egui::pos2(rect.left() + design::S, top), galley, c.text);
-            let detail =
-                crate::library::marked_line(ui, detail, Type::Small.font(ui), c.muted, width);
-            ui.painter().galley(
-                egui::pos2(rect.left() + design::S, top + total - Type::Small.line()),
-                detail,
-                c.muted,
-            );
-        },
-    )
-}
-
 /// A failed Undo, as the page's error: checked words first, so a path at the start of the
 /// cause (`package.md changed on disk.`) keeps its spelling (`Sentence::outside` would make its
 /// first letter a capital).
@@ -1045,17 +932,6 @@ impl CampaignContent {
             design::count(chosen + needed, "entry chosen", "entries chosen")
         })
     }
-    /// Issue #513: the app calls this before the page draws, with its one modal test
-    /// (`crate::modal_open`): no key acts beneath a modal. It only takes the key; the page saves
-    /// after the package list (`page`), so a box ticked in the frame of the key is in the save.
-    /// A repair editor takes its own key (`repair_section`), so the key is left for it while a
-    /// repair stands.
-    pub fn save_shortcut(&mut self, ctx: &egui::Context, modal: bool) {
-        self.save_key = design::save_row::save_key_before_drawing(
-            ctx,
-            !modal && self.snapshot.is_some() && self.repairs.is_empty(),
-        );
-    }
 
     /// The page wrote the open campaign's package choices: the check is due again, and the app
     /// reads Lookup and Encounters again (`choices_written`).
@@ -1089,7 +965,6 @@ impl CampaignContent {
         if self.reconcile.campaign != owner {
             self.reconcile.proposals.clear();
             self.reconcile.declined.clear();
-            self.reconcile.view = None;
             self.reconcile.error = None;
             self.reconcile.checked_at = None;
         }
@@ -1146,7 +1021,6 @@ impl CampaignContent {
         match checked.proposals {
             Ok(proposals) => {
                 self.reconcile.proposals = proposals;
-                self.reconcile.view = None;
             }
             Err(error) => self.reconcile.error = Some(error),
         }
@@ -1313,87 +1187,6 @@ impl CampaignContent {
         self.end_plain(PageResult::Saved);
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
-        let scope = (self.module, self.dependencies);
-        if self.notice_scope.is_some_and(|previous| previous != scope) {
-            self.clear_notice();
-        }
-        self.notice_scope = Some(scope);
-        let Some(active) = campaigns.active_campaign() else {
-            ui.label("Select a campaign first.");
-            return;
-        };
-        if self.refresh_pending {
-            self.reload(ui.ctx(), campaigns, active.clone());
-        }
-        if self
-            .active
-            .as_ref()
-            .is_none_or(|c| c.id != active.id || c.path != active.path)
-        {
-            if self.dirty() {
-                design::heading(ui, design::Heading::Section("Unsaved campaign content"));
-                ui.label("The previous campaign still has pending changes. Select it again to save them, or discard and switch.");
-                if Action::destructive("Discard and switch campaign")
-                    .show(ui)
-                    .clicked()
-                {
-                    self.reload(ui.ctx(), campaigns, active);
-                }
-                return;
-            }
-            self.reload(ui.ctx(), campaigns, active.clone());
-        }
-        self.take_load(campaigns, &active);
-        if self.dirty() {
-            self.end_plain(PageResult::Saved);
-        }
-        // Round 25 review: the page scrolls, as the other pages do, so every repair and its Save
-        // stay in reach at any window size. The page keeps the scroll bar's lane whether or not
-        // the bar shows, so nothing moves when it starts to scroll.
-        let width = ui.available_width() - design::lane_width();
-        // Round 26: the page's results, reasons and package warnings sit in one footer, so none
-        // of them moves the save rows, the repairs or the package list. Round 28: the pane
-        // places it. Layout step 7 (SA4, AA2): the page is the pane's scroll column, and the
-        // package list's two columns are one task in it (`PaneColumns::shared_task`), as tall as
-        // the taller list; so the footer follows the page's content `S` below its end, with or
-        // without the package list, and is pinned only when the content fills the room.
-        let frame = design::outcome::PaneFrame::new(ui);
-        let open = |path: &str| {
-            ui.data(|data| {
-                data.get_temp::<bool>(egui::Id::new(("repair_open", path)))
-                    .unwrap_or(false)
-            })
-        };
-        let footer = self.page_footer_with(
-            &frame,
-            &open,
-            campaigns,
-            &active,
-            width.min(design::LIST_MEASURE),
-        );
-        // Layout step 11c (L11c-C.1): the page is always the pane's scroll column. The changes
-        // to review and the issue list are drawn in place (whole rows), a repair's editor keeps
-        // its own framed region (layout step 9), and the pane brings a focused control whole
-        // into view (focus clearance, layout step 10): no inner scroll is left above the columns.
-        let paned = footer.pane(ui, design::Body::Content, |ui| {
-            self.page(ui, campaigns, &active);
-        });
-        let write = matches!(
-            paned.pressed,
-            Some(design::outcome::Press {
-                id: ContentPress::WriteCampaign,
-                ..
-            })
-        );
-        self.press_result(ui.ctx(), campaigns, paned.pressed);
-        if write {
-            self.write_campaign(campaigns, &active);
-        }
-        // A key no save took (the page still loading) ends with its frame.
-        self.save_key = false;
-    }
-
     /// A load that came in: its repairs, its snapshot or its error (`show`'s step).
     fn take_load(&mut self, campaigns: &Campaigns, active: &Campaign) {
         if let Some(rx) = &self.pending {
@@ -1432,56 +1225,6 @@ impl CampaignContent {
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
             }
-        }
-    }
-
-    /// The Packages page below the tabs, inside its scroll area.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "a missing campaign folder is the page’s fault with its repair, at the top of the body"
-    )]
-    fn page(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
-        let active = active.clone();
-        let save = self.snapshot.is_some() && self.selection_bar(ui, campaigns, &active);
-        if self.body_missing() {
-            // Round 27 FB3, AB1: a page with no package list draws its errors as its content,
-            // where an empty state starts, so the DM does not look past a blank page for them.
-            let write = ui
-                .scope(|ui| {
-                    ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-                    self.draw_reason(ui, campaigns, &active)
-                })
-                .inner;
-            if write {
-                self.write_campaign(campaigns, &active);
-            }
-        }
-        self.repair_section(ui, campaigns, &active);
-        if !active.path.exists()
-            && design::outcome::BodyFault::new(&ContentFault::NoFolder)
-                .repair(design::outcome::Repair::new("Create campaign folder", ()))
-                .show(ui)
-                .is_some()
-        {
-            match fs::create_dir_all(&active.path) {
-                Ok(()) => self.reload(ui.ctx(), campaigns, active.clone()),
-                Err(e) => self.fail_or_content(e.to_string()),
-            }
-        }
-        if self.pending.is_some() {
-            ui.horizontal(|ui| {
-                crate::design::spinner(ui);
-                ui.label("Loading campaign content…");
-            });
-            return;
-        }
-        self.reconcile_section(ui, campaigns, &active);
-        if self.snapshot.is_some() {
-            self.packages(ui, campaigns, &active);
-        }
-        // Issue #513: after the package list, which takes the frame's input.
-        if save || std::mem::take(&mut self.save_key) {
-            self.save_choices();
         }
     }
 
@@ -1613,32 +1356,6 @@ impl CampaignContent {
     /// Campaign.md, a load that failed). Then the page's errors are its content.
     fn body_missing(&self) -> bool {
         self.snapshot.is_none() && self.pending.is_none()
-    }
-
-    /// The page's errors as its content (no package list to show): each a fault in the body, a
-    /// missing Campaign.md with the way to write it. True when the DM asks to write it again.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "with no package list, the page’s errors are its content: body faults (round 27 FB3, AB1)"
-    )]
-    fn draw_reason(&self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) -> bool {
-        use design::outcome::{BodyFault, Repair};
-        let mut write = false;
-        if let Some(error) = &self.error {
-            if error.contains(MISSING_CAMPAIGN) {
-                let (preview, action) = campaigns.campaign_write_preview(active);
-                write = BodyFault::new(&ContentFault::MissingCampaign(&preview))
-                    .repair(Repair::new(action, ()))
-                    .show(ui)
-                    .is_some();
-            } else {
-                let _ = BodyFault::<()>::new(&ContentFault::Error(error)).show(ui);
-            }
-        }
-        if let Some(error) = &self.reconcile.error {
-            let _ = BodyFault::<()>::new(&ContentFault::Error(error)).show(ui);
-        }
-        write
     }
 
     /// The removal result of `campaign`, if it has one.
@@ -1776,338 +1493,6 @@ impl CampaignContent {
             }
             Err(error) => self.fail_or_content(error),
         }
-    }
-
-    /// Each change waits for the DM. A blocked one says what they must decide first.
-    fn reconcile_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
-        let reconcile = &mut self.reconcile;
-        if reconcile.applying {
-            ui.horizontal(|ui| {
-                crate::design::spinner(ui);
-                ui.label("Applying changes to the campaign package…");
-            });
-            return;
-        }
-        if reconcile.proposals.is_empty() {
-            return;
-        }
-        let c = colors();
-        design::heading(
-            ui,
-            design::Heading::Section("Campaign package: changes to review"),
-        );
-        // Drawn in place, each proposal a whole row of the page's column (L11c-C.1).
-        let view = reconcile
-            .view
-            .get_or_insert_with(|| ReviewView::of(&reconcile.proposals, &reconcile.declined));
-        let mut ticked = None;
-        ui.vertical(|ui| {
-            for (proposal, line) in reconcile.proposals.iter().zip(&view.lines) {
-                whole_row(ui, |ui| {
-                    if proposal.blocked.is_some() {
-                        ui.add(
-                            egui::Label::new(Type::Small.rich(ui, line.as_str()).color(c.muted))
-                                .wrap(),
-                        );
-                        return;
-                    }
-                    let mut chosen = !reconcile.declined.contains(&proposal.key);
-                    if ui.checkbox(&mut chosen, line.as_str()).changed() {
-                        ticked = Some((proposal.key.clone(), chosen));
-                    }
-                });
-            }
-        });
-        if let Some((key, chosen)) = ticked {
-            if chosen {
-                reconcile.declined.remove(&key);
-            } else {
-                reconcile.declined.insert(key);
-            }
-            reconcile.view = None;
-        }
-        let keys = reconcile
-            .view
-            .get_or_insert_with(|| ReviewView::of(&reconcile.proposals, &reconcile.declined))
-            .keys
-            .clone();
-        let unsaved = self
-            .snapshot
-            .as_ref()
-            .is_some_and(|s| s.document.selections != self.saved_selections);
-        let label = format!("Apply {}", design::count(keys.len(), "change", "changes"));
-        let apply = Action::secondary(&label)
-            .density(Density::Read)
-            .hint("Sheets follow the change. Package notes get the D&D Beyond ID and keep their words. Old notes go to archives.")
-            .blocked(if unsaved {
-                Some("Save or discard your selection changes first.")
-            } else if keys.is_empty() {
-                Some("Tick a change to apply it.")
-            } else {
-                None
-            })
-            .show(ui)
-            .clicked();
-        if apply && self.reconcile.pending.is_none() {
-            self.end_plain(PageResult::Applied);
-            // A new act: an older failure no longer answers the last act.
-            self.answer = None;
-            self.start_check(ui.ctx(), campaigns, active.clone(), Some(keys));
-        }
-        design::gap(ui, design::Gap::S);
-    }
-
-    fn repair_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
-        ui.scope(|ui| {
-            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-            self.repair_section_content(ui, campaigns, active);
-        });
-    }
-
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: a raw heading that a design part replaces; a note that cannot be read is a fault with its repair, where the repair opens (design::results::STAGED_ALLOWS)"
-    )]
-    fn repair_section_content(
-        &mut self,
-        ui: &mut egui::Ui,
-        campaigns: &Campaigns,
-        active: &Campaign,
-    ) {
-        // Which editors are open stays in the egui context, by the repair's path; the rows,
-        // the save row's state and every act are the page's (`view.rs`), shared with GPUI.
-        let ctx = ui.ctx().clone();
-        let open_of = |path: &str| {
-            ctx.data(|data| {
-                data.get_temp::<bool>(egui::Id::new(("repair_open", path)))
-                    .unwrap_or(false)
-            })
-        };
-        // One primary Save on the screen: the active repair's, else the last open changed one.
-        let owner = self.repair_owner(&open_of);
-        let mut saves = Vec::new();
-        let mut discards = Vec::new();
-        for row in self.repair_rows(&open_of) {
-            let path = &row.path;
-            // A failed Save shows once, in the save row's state slot, so the message stops at
-            // the way to fix the file.
-            let id = egui::Id::new(("repair_open", path.as_str()));
-            let mut open = row.open;
-            // Round 25 FD1: while the repair is open, its message keeps the same words, and the
-            // cause moves to the message space below the save row. So no edit moves the editor.
-            if design::outcome::BodyFault::new(&ContentFault::Unreadable {
-                path,
-                problem: row.problem.as_deref(),
-            })
-            .repair(design::outcome::Repair::new(
-                if open { "Close repair" } else { "Repair" },
-                (),
-            ))
-            .show(ui)
-            .is_some()
-            {
-                open = !open;
-            }
-            ui.data_mut(|data| data.insert_temp(id, open));
-            if open {
-                // The message above names the file; the editor's accessible name names it too.
-                design::group_heading(ui, "Repair", 0);
-                ui.scope(|ui| {
-                    // What is wrong comes first, and stays true as the DM edits.
-                    let Some(repair) = self.repairs.iter_mut().find(|repair| repair.path == *path)
-                    else {
-                        return;
-                    };
-                    let editor = ui.scope(|ui| {
-                        crate::world::repair::editor_events(
-                            ui,
-                            path,
-                            &mut repair.draft,
-                            repair.error_line,
-                        )
-                    });
-                    let (edited, focused) = editor.inner;
-                    // A click into the editor does not scroll the page: the pane's focus
-                    // clearance keeps a pressed control where it is (layout step 10), and
-                    // keyboard and screen-reader focus bring the editor's block into view.
-                    if focused {
-                        self.focus_repair(path);
-                    }
-                    if edited {
-                        self.repair_edited(active, path);
-                    }
-                    // One save row (`DraftState`): the word, Discard and the switch reason at
-                    // the left, Save at the right. Primary while the draft has changes that
-                    // Save would write, unless an open run owns `Next turn` or another repair
-                    // is the active one. After Save failed on the disk it stays open to try
-                    // again, but `owner` skips it until the next edit.
-                    let Some(state) = self.repair_state(path, owner.as_deref()) else {
-                        return;
-                    };
-                    let saved = design::save_row(ui, &state, "Save repaired note");
-                    if saved.save || design::save_row::save_key(ui, state.can_save()) {
-                        saves.push(path.clone());
-                    }
-                    if saved.discard {
-                        discards.push(path.clone());
-                    }
-                    // One discard result per repair: its next Discard or edit ends its own
-                    // result only.
-                    self.end_repair_discard(active, path);
-                });
-            }
-        }
-        if self.repairs.iter().any(|repair| open_of(&repair.path)) {
-            // The package list below draws the one rule; a second rule here would separate nothing.
-            design::gap(ui, design::Gap::L);
-        }
-        for path in discards {
-            self.discard_repair(active, &path);
-        }
-        // The last act's result, failed or successful (see `Answer`).
-        for path in saves {
-            self.save_repair(ui.ctx(), campaigns, active, &path);
-        }
-    }
-
-    /// Whether `Save selections` was pressed. The save waits for the package list (`page`).
-    fn selection_bar(
-        &mut self,
-        ui: &mut egui::Ui,
-        campaigns: &Campaigns,
-        active: &Campaign,
-    ) -> bool {
-        ui.scope(|ui| {
-            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-            self.selection_bar_content(ui, campaigns, active)
-        })
-        .inner
-    }
-
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    fn selection_bar_content(
-        &mut self,
-        ui: &mut egui::Ui,
-        campaigns: &Campaigns,
-        active: &Campaign,
-    ) -> bool {
-        let snapshot = self.snapshot.as_mut().unwrap();
-        let catalogue = &snapshot.catalogue;
-        let document = &mut snapshot.document;
-        if snapshot.closure.0 != document.selections {
-            snapshot.closure = (
-                document.selections.clone(),
-                catalogue.closure(&document.selections, document.campaign.id),
-            );
-            snapshot.issues = None;
-        }
-        let mut reload = false;
-        let c = colors();
-        let mut repair_reason = None;
-        let mut pressed = false;
-        // Discard and the end of its result are the page's acts (`view.rs`), shared with GPUI.
-        let mut discard = false;
-        let mut changed_now = false;
-        ui.horizontal(|ui| {
-            let dirty = document.selections != self.saved_selections || document.baseline.is_none();
-            let repair_text = self
-                .repairs
-                .first()
-                .map(|repair| format!("Fix {} first.", repair.path));
-            let repair = repair_text.as_deref();
-            let changed = document.selections != self.saved_selections;
-            if changed {
-                design::status(
-                    ui,
-                    design::Status {
-                        icon: icons::DRAFT,
-                        word: "Unsaved",
-                        color: c.document.unsaved,
-                    },
-                );
-                changed_now = true;
-                discard = Action::quiet("Discard")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked();
-            } else {
-                design::save_row_state(
-                    ui,
-                    design::Status {
-                        icon: icons::OK,
-                        word: "No changes",
-                        color: c.muted,
-                    },
-                    false,
-                    None,
-                );
-            }
-            if !dirty {
-                // Round 28 FB5: a repair's draft blocks Reload, which would drop it; Reload keeps
-                // its place and says why, as on Encounters.
-                reload = Action::quiet("Reload from disk")
-                    .icon(icons::REFRESH)
-                    .density(Density::Read)
-                    .blocked_if(
-                        self.repairs.iter().any(Repair::dirty),
-                        "Save or discard your changes first.",
-                    )
-                    .show(ui)
-                    .clicked();
-            }
-            if document.selections != self.saved_selections {
-                // A repair blocks Save selections: Discard is the one way to switch.
-                design::blocked_reason(
-                    ui,
-                    Some(if repair.is_some() {
-                        crate::content_actions::blocked_draft_switch_reason()
-                    } else {
-                        crate::content_actions::draft_switch_reason()
-                    }),
-                );
-            }
-            pressed = ui
-                .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let blocked = repair.or((!dirty).then_some("No changes to save."));
-                    let pressed = (if self.run_open {
-                        Action::secondary("Save selections")
-                    } else {
-                        Action::primary("Save selections")
-                    })
-                    .density(Density::Read)
-                    .key("Ctrl+S")
-                    .blocked(blocked)
-                    .show(ui)
-                    .clicked();
-                    // One place at every width: beside Save it would fit only once `Reload from
-                    // disk` hides, so it goes to the message space below.
-                    repair_reason = repair.map(str::to_owned);
-                    pressed
-                })
-                .inner;
-        });
-        // The repair that blocks Save keeps its own line below Save at every width: it stays while
-        // the repair does, so it never comes and goes under the DM's work.
-        if let Some(reason) = &repair_reason {
-            ui.horizontal(|ui| {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    design::blocked_reason(ui, Some(reason));
-                });
-            });
-        }
-        if changed_now {
-            self.choices_edited(active.id);
-        }
-        if discard {
-            self.discard_choices();
-        }
-        if reload {
-            self.reload(ui.ctx(), campaigns, active.clone());
-        }
-        pressed
     }
 
     /// Save the package choices: `Save selections` or Ctrl+S (`save_shortcut`), after the
@@ -2526,642 +1911,6 @@ impl CampaignContent {
             }
         }
     }
-
-    fn packages(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
-        ui.scope(|ui| {
-            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-            self.packages_content(ui, campaigns, active);
-        });
-    }
-
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "Campaign.md flags and missing dependencies are faults in the issue list, each with its repairs"
-    )]
-    fn packages_content(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
-        let snapshot = self.snapshot.as_mut().unwrap();
-        snapshot.issue_lines(active.id);
-        let errors: &[String] = snapshot.issues.as_deref().unwrap_or_default();
-        let catalogue = &snapshot.catalogue;
-        let document = &mut snapshot.document;
-        let closure = &snapshot.closure.1;
-        let c = colors();
-        let mut acts = Vec::new();
-
-        let affected: Vec<_> = catalogue
-            .entries
-            .values()
-            .filter(|entry| entry.private && entry.entry.kind == "encounter")
-            .filter(|entry| {
-                splat::content::required_references(&entry.entry).is_ok_and(|references| {
-                    references.iter().any(|r| catalogue.resolve(r).is_err())
-                })
-            })
-            .map(|entry| (entry.entry.id, entry.entry.name.clone()))
-            .collect();
-        let campaign_flags = catalogue
-            .entries
-            .get(&active.id)
-            .map(|entry| entry.entry.flags.as_slice())
-            .unwrap_or_default();
-        let issues_shown = self.repairs.is_empty()
-            && !missing_package(catalogue, document)
-            && removal_of(&self.results, active.id).is_none_or(|removed| removed.users.is_empty());
-        let flag_lines = |ui: &mut egui::Ui, open_run_settings: &mut bool| {
-            for (at, flag) in campaign_flags.iter().enumerate() {
-                // Every flag is about Campaign.md, so one file line follows the last of them.
-                let last = at + 1 == campaign_flags.len();
-                whole_row(ui, |ui| {
-                    ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-                    let mut fault =
-                        design::outcome::BodyFault::new(&ContentFault::Flag(&flag.message));
-                    if flag.kind == splat::content::layout::FlagKind::RuleChoice {
-                        fault = fault
-                            .repair(design::outcome::Repair::new("Choose in Rules and runs", ()));
-                    }
-                    *open_run_settings |= fault.show(ui).is_some();
-                    if last {
-                        // The file line starts at the warning's words, as its repairs do.
-                        design::message_choice_row(ui, design::Tone::Warning, |ui| {
-                            ui.vertical(|ui| {
-                                crate::content_actions::file_line(ui, &active.path, &document.path)
-                            });
-                        });
-                    }
-                });
-            }
-        };
-        // Campaign.md flags stay in view while another repair hides the issue list.
-        if !issues_shown && !campaign_flags.is_empty() {
-            flag_lines(ui, &mut self.open_run_settings);
-        }
-        if (!errors.is_empty() || !campaign_flags.is_empty()) && issues_shown {
-            let heading = if affected.is_empty() {
-                crate::content_actions::content_issue_count(errors.len() + campaign_flags.len())
-            } else {
-                let gone = format!(
-                    "{} need a creature that is gone",
-                    design::count(affected.len(), "encounter", "encounters")
-                );
-                if campaign_flags.is_empty() {
-                    gone
-                } else {
-                    format!(
-                        "{gone} · {}",
-                        design::count(
-                            campaign_flags.len(),
-                            "Campaign.md issue",
-                            "Campaign.md issues"
-                        )
-                    )
-                }
-            };
-            let issues = issues_section(ui, &heading, !campaign_flags.is_empty(), |ui| {
-                // Drawn in place, whole rows of the page's column (L11c-C.1).
-                ui.vertical(|ui| {
-                    flag_lines(ui, &mut self.open_run_settings);
-                    for e in errors.iter().filter(|error| {
-                        !closure
-                            .missing_dependencies
-                            .iter()
-                            .any(|issue| issue.message.as_str() == error.as_str())
-                    }) {
-                        whole_row(ui, |ui| {
-                            ui.add(
-                                egui::Label::new(Type::Small.rich(ui, e.as_str()).color(c.muted))
-                                    .wrap(),
-                            );
-                        });
-                    }
-                    for issue in &closure.missing_dependencies {
-                        ui.push_id(&issue.reference, |ui| {
-                            whole_row(ui, |ui| {
-                                // FA6: a dependency issue is a warning like the flags above
-                                // it, and its repairs start at its words, one per owner.
-                                let missing = issue.fault();
-                                let mut fault =
-                                    design::outcome::BodyFault::new(&ContentFault::Missing {
-                                        place: missing.place,
-                                        cause: &missing.cause,
-                                    });
-                                for id in &issue.owners {
-                                    if let Some(path) = catalogue.file_path_of(*id) {
-                                        let owner = &catalogue.entries[id];
-                                        fault = fault.repair(design::outcome::Repair::new(
-                                            crate::choice!("Repair {}", owner.entry.name),
-                                            path.to_path_buf(),
-                                        ));
-                                    }
-                                }
-                                let repair = fault.show(ui);
-                                if let Some(path) = repair {
-                                    ui.ctx().data_mut(|data| {
-                                        data.insert_temp(
-                                            egui::Id::new("open_library_repair"),
-                                            path,
-                                        );
-                                        // The editor names the missing link and opens at
-                                        // its line.
-                                        if let Some(target) = &issue.target {
-                                            data.insert_temp(
-                                                egui::Id::new("open_library_repair_link"),
-                                                Some((target.clone(), issue.message.clone())),
-                                            );
-                                        }
-                                    });
-                                }
-                                design::quiet_section(ui, "Technical details", |ui| {
-                                    ui.label(
-                                        Type::Small.rich(ui, issue.technical()).color(c.muted),
-                                    );
-                                });
-                            })
-                        });
-                    }
-                    for entry in catalogue.entries.values().filter(|entry| {
-                        entry.private
-                            && !closure
-                                .missing_dependencies
-                                .iter()
-                                .any(|issue| issue.owners.contains(&entry.entry.id))
-                    }) {
-                        if splat::content::required_references(&entry.entry).is_ok_and(
-                            |references| {
-                                references
-                                    .iter()
-                                    .any(|reference| catalogue.resolve(reference).is_err())
-                            },
-                        ) {
-                            whole_row(ui, |ui| {
-                                if design::link(ui, &format!("Open {}", entry.entry.name)).clicked()
-                                {
-                                    self.open_lookup = Some(entry.entry.id);
-                                }
-                            });
-                        }
-                    }
-                });
-            });
-            design::named(ui, &issues.header_response, &heading);
-        }
-        design::rule(ui);
-        // Layout step 7 (SA4, AA2): the package list and what it opens are one task, as tall as
-        // the taller of them (each list scrolls when the room is shorter, keeping a few rows),
-        // so the footer follows the taller list by `S` and the splitter's rule ends there.
-        // Each column clips to the page's view (egui's panels set their own clip), so no row
-        // paints or takes a click under the footer.
-        let rows = 4.0 * (Density::Glance.row() + design::XS) + design::XXL;
-        let modules = design::Column::left("campaign_modules", 236.0, 180.0..=420.0).frame(
-            egui::Frame::new().inner_margin(egui::Margin {
-                left: 0,
-                right: design::M as i8,
-                top: design::XS as i8,
-                bottom: 0,
-            }),
-        );
-        let columns = design::PaneColumns::shared_task("campaign_package_columns")
-            .resizable(0.0, modules)
-            .rest(design::M)
-            .least_height(rows)
-            .edges(ui);
-        columns.show_children(ui, |ui, index| {
-            if index == 0 {
-                design::ScrollColumn::new("package_list")
-                    .fit_height()
-                    .show(ui, |ui| {
-                        for module in catalogue.modules.iter().filter(|m| !m.private) {
-                            let existing = document.selections.iter().position(|s| {
-                                catalogue.resolve_ref(&s.package).ok() == Some(module.id)
-                            });
-                            let total = module
-                                .entries
-                                .iter()
-                                .filter(|id| catalogue.selectable(**id))
-                                .count();
-                            let count =
-                                existing.map_or(0, |i| match &document.selections[i].selection {
-                                    Selection::All => total,
-                                    Selection::Selected { entries } => entries.len(),
-                                });
-                            // What the campaign's other choices pull in is ticked too.
-                            let required = module
-                                .entries
-                                .iter()
-                                .filter(|id| {
-                                    catalogue.selectable(**id)
-                                        && closure.required.contains_key(id)
-                                        && !closure.direct.contains(id)
-                                })
-                                .count();
-                            let partial = count + required < total
-                                && existing.is_some_and(|i| {
-                                    matches!(&document.selections[i].selection,
-                                    Selection::Selected { entries } if !entries.is_empty())
-                                });
-                            let mut enabled = count > 0;
-                            ui.push_id(module.id, |ui| {
-                                let rect = egui::Rect::from_min_size(
-                                    ui.cursor().min,
-                                    egui::vec2(
-                                        ui.available_width(),
-                                        Density::Glance.row() + design::XS,
-                                    ),
-                                );
-                                let selected = !self.dependencies && self.module == Some(module.id);
-                                let hovered = ui.rect_contains_pointer(rect);
-                                if selected || hovered {
-                                    ui.painter().rect_filled(
-                                        rect,
-                                        design::RADIUS_CONTROL,
-                                        if selected {
-                                            colors().selected
-                                        } else {
-                                            colors().hover
-                                        },
-                                    );
-                                }
-                                // Round 28 FC12: where the row's name starts, for its note.
-                                let name_left = ui
-                                    .horizontal(|ui| {
-                                        let check = ui.add(
-                                            egui::Checkbox::new(&mut enabled, "").indeterminate(
-                                                partial || (count == 0 && required > 0),
-                                            ),
-                                        );
-                                        design::named(ui, &check, &format!("Use {}", module.name));
-                                        if check.changed() {
-                                            acts.push(PackageAct::Package(module.id, enabled));
-                                        }
-                                        // Round 24 FF4: a manifest fault the warning above names
-                                        // is marked on its row too, in its tone.
-                                        let mark = catalogue.manifest_problems.get(&module.id).map(
-                                            |problem| {
-                                                let folder = campaigns
-                                                    .modules()
-                                                    .iter()
-                                                    .find(|known| known.id == module.id);
-                                                manifest_mark(
-                                                    folder
-                                                        .zip(catalogue.entries.get(&module.id))
-                                                        .is_some_and(|(folder, entry)| {
-                                                            manifest_on_disk(
-                                                                folder,
-                                                                &entry.entry.path,
-                                                                problem,
-                                                            )
-                                                        }),
-                                                )
-                                            },
-                                        );
-                                        let counted = package_count(
-                                            count + required,
-                                            total,
-                                            partial || (count == 0 && required > 0),
-                                        );
-                                        let (detail, spoken) = match mark {
-                                            Some((icon, words)) => (
-                                                format!("{icon} {counted}"),
-                                                format!("{words} · {counted}"),
-                                            ),
-                                            None => (counted.clone(), counted),
-                                        };
-                                        let row = package_row(
-                                            ui,
-                                            !self.dependencies && self.module == Some(module.id),
-                                            &module.name,
-                                            &detail,
-                                            &spoken,
-                                        );
-                                        if row.clicked() {
-                                            self.module = Some(module.id);
-                                            self.dependencies = false;
-                                            self.search.clear();
-                                        }
-                                        row.rect.left() + design::S
-                                    })
-                                    .inner;
-                                if count == 0 && required > 0 {
-                                    let selection = PackageSelection {
-                                        name: Some(module.name.clone()),
-                                        package: EntryRef::id(module.id),
-                                        selection: Selection::All,
-                                    };
-                                    let users = selection.campaign_users(catalogue);
-                                    let mut users = users;
-                                    users.sort_by(|a, b| a.1.cmp(&b.1));
-                                    let names = users
-                                        .iter()
-                                        .map(|(_, name)| name.as_str())
-                                        .collect::<Vec<_>>();
-                                    let names = match names.as_slice() {
-                                        [] => String::new(),
-                                        [name] => (*name).to_owned(),
-                                        [rest @ .., last] => {
-                                            format!("{} and {last}", rest.join(", "))
-                                        }
-                                    };
-                                    if !names.is_empty() {
-                                        // It starts at the row's name, not at its checkbox.
-                                        let mut note = ui.available_rect_before_wrap();
-                                        note.min.x = name_left.max(note.min.x);
-                                        ui.scope_builder(
-                                            egui::UiBuilder::new().max_rect(note),
-                                            |ui| {
-                                                ui.label(
-                                                    Type::Small
-                                                        .rich(
-                                                            ui,
-                                                            format!("{names} use its creatures."),
-                                                        )
-                                                        .color(c.muted),
-                                                );
-                                            },
-                                        );
-                                    }
-                                }
-                            });
-                        }
-                        design::rule(ui);
-                        let needed_count = if closure.required.is_empty() {
-                            String::new()
-                        } else {
-                            design::count(closure.required.len(), "entry", "entries")
-                        };
-                        if design::two_line_row(
-                            ui,
-                            Density::Glance.row() + design::XS,
-                            self.dependencies,
-                            "Needed by your entries",
-                            &needed_count,
-                        )
-                        .clicked()
-                        {
-                            self.dependencies = true;
-                            self.search.clear();
-                        }
-                    });
-                return;
-            }
-            design::gap(ui, design::Gap::XS);
-            if self.dependencies {
-                ui.horizontal(|ui| {
-                    ui.set_min_height(Density::Read.control());
-                    design::heading(
-                        ui,
-                        design::Heading::Group {
-                            title: "Needed by your entries",
-                            count: closure.required.len(),
-                        },
-                    );
-                });
-                let width = ui.available_width();
-                let _ = crate::field_id!("needed_entry_search")
-                    .of(active.id)
-                    .search(
-                        ui,
-                        "Find a needed entry",
-                        &mut self.search,
-                        "Find an entry…",
-                        width,
-                    );
-                let query = self.search.to_lowercase();
-                let mut required: Vec<_> = closure
-                    .required
-                    .iter()
-                    .filter(|(id, _)| {
-                        catalogue.entries[id]
-                            .entry
-                            .name
-                            .to_lowercase()
-                            .contains(&query)
-                    })
-                    .collect();
-                required.sort_by_key(|(id, _)| catalogue.entries[id].entry.name.to_lowercase());
-                design::ScrollColumn::new("required_entries")
-                    .fit_height()
-                    .show(ui, |ui| {
-                        for (id, reasons) in required {
-                            let entry = &catalogue.entries[id];
-                            let owner = if entry.private {
-                                "Campaign".to_owned()
-                            } else {
-                                catalogue.package_name(entry.owner)
-                            };
-                            let detail = format!(
-                                "{} · {owner} · {}",
-                                crate::design::reader::human_label(&entry.entry.kind),
-                                needed_by(reasons.iter().cloned())
-                            );
-                            if design::two_line_row(
-                                ui,
-                                Density::Glance.row() + design::XS,
-                                false,
-                                &entry.entry.name,
-                                &detail,
-                            )
-                            .clicked()
-                            {
-                                self.open_lookup = Some(*id);
-                            }
-                        }
-                    });
-                return;
-            }
-            let Some(module) = catalogue
-                .modules
-                .iter()
-                .find(|m| Some(m.id) == self.module)
-                .or_else(|| catalogue.modules.first())
-            else {
-                return;
-            };
-            self.module = Some(module.id);
-            let selection_index = document
-                .selections
-                .iter()
-                .position(|s| catalogue.resolve_ref(&s.package).ok() == Some(module.id));
-            let entry_ids: Vec<_> = module
-                .entries
-                .iter()
-                .copied()
-                .filter(|id| catalogue.selectable(*id))
-                .collect();
-            let all =
-                selection_index.is_some_and(|i| document.selections[i].selection == Selection::All);
-            ui.horizontal_wrapped(|ui| {
-                ui.set_min_height(Density::Read.control());
-                // Round 26 FA8: a wrapping row places a text job at the bottom of its first
-                // line unless the job says otherwise, so the heading sat 7 px below the
-                // mode and the actions. Centre it on the row's centre line.
-                let mut heading = design::group_heading_text(ui, &module.name, entry_ids.len());
-                for section in &mut heading.sections {
-                    section.format.valign = egui::Align::Center;
-                }
-                ui.label(heading);
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            if all {
-                                "Whole package, with future additions"
-                            } else {
-                                "Chosen entries only"
-                            },
-                        )
-                        .color(c.muted),
-                );
-                if !all
-                    && Action::secondary(
-                        if entry_ids.iter().all(|id| {
-                            closure.direct.contains(id) || closure.required.contains_key(id)
-                        }) {
-                            "Include future additions"
-                        } else {
-                            "Choose all"
-                        },
-                    )
-                    .density(Density::Read)
-                    .blocked_if(all, "This whole package is already in use.")
-                    .hint("Every entry, including future additions")
-                    .show(ui)
-                    .clicked()
-                {
-                    acts.push(PackageAct::All(module.id));
-                }
-                if Action::quiet("Choose none")
-                    .density(Density::Read)
-                    .blocked_if(selection_index.is_none(), "Nothing here is chosen.")
-                    .show(ui)
-                    .clicked()
-                {
-                    acts.push(PackageAct::None(module.id));
-                }
-            });
-            let width = ui.available_width();
-            let _ = crate::field_id!("package_entry_search")
-                .of(module.id)
-                .search(
-                    ui,
-                    "Find an entry in this package",
-                    &mut self.search,
-                    "Find an entry…",
-                    width,
-                );
-            let query = self.search.to_lowercase();
-            if self
-                .entry_matches
-                .as_ref()
-                .is_none_or(|(module_id, cached_query, _)| {
-                    *module_id != module.id || *cached_query != query
-                })
-            {
-                let mut ids: Vec<_> = entry_ids
-                    .iter()
-                    .copied()
-                    .filter(|id| {
-                        catalogue.entries[id]
-                            .entry
-                            .name
-                            .to_lowercase()
-                            .contains(&query)
-                    })
-                    .collect();
-                ids.sort_by_cached_key(|id| catalogue.entries[id].entry.name.to_lowercase());
-                self.entry_matches = Some((module.id, query.clone(), ids));
-            }
-            let ids = &self.entry_matches.as_ref().unwrap().2;
-            let mut toggled = None;
-            design::ScrollColumn::new(("package_entries", module.id, &query))
-                .fit_height()
-                .show_rows(ui, 30.0, ids.len(), |ui, range| {
-                    for index in range {
-                        let id = ids[index];
-                        let entry = &catalogue.entries[&id].entry;
-                        let required = closure.required.contains_key(&id);
-                        let mut selected = closure.direct.contains(&id) || required;
-                        ui.push_id(id, |ui| {
-                            let row = ui.horizontal(|ui| {
-                                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-                                ui.set_min_height(30.0);
-                                let why = closure.required.get(&id).map(|reasons| {
-                                    reasons.iter().cloned().collect::<Vec<_>>().join(", ")
-                                });
-                                let response = ui
-                                    .add_enabled(!required, egui::Checkbox::new(&mut selected, ""))
-                                    .on_hover_text(&entry.name)
-                                    .on_disabled_hover_text(why.as_ref().map_or_else(
-                                        || entry.name.clone(),
-                                        |why| {
-                                            format!(
-                                                "{} is needed by {why}, so it stays selected.",
-                                                entry.name
-                                            )
-                                        },
-                                    ));
-                                design::named(ui, &response, &format!("Use {}", entry.name));
-                                if crate::content_actions::creature_name_link(ui, &entry.name)
-                                    .clicked()
-                                {
-                                    self.open_lookup = Some(id);
-                                }
-                                if response.changed() {
-                                    toggled = Some((id, selected));
-                                }
-                                // Round 28 FB7: one detail line, in the form of the
-                                // `Needed by your entries` list: `Rule · needed by Ember
-                                // Cultist` (`needed_by`).
-                                let subtitle =
-                                    snapshot.subtitles.get(&id).cloned().unwrap_or_default();
-                                let font = Type::Small.font(ui);
-                                let mut job = egui::text::LayoutJob::default();
-                                job.append(
-                                    &subtitle,
-                                    0.0,
-                                    egui::TextFormat::simple(font.clone(), c.muted),
-                                );
-                                if let Some(reasons) = closure.required.get(&id) {
-                                    let lead = if subtitle.is_empty() { "" } else { " · " };
-                                    job.append(
-                                        &format!("{lead}{}", needed_by(reasons.iter().cloned())),
-                                        0.0,
-                                        egui::TextFormat::simple(font, c.document.read_only),
-                                    );
-                                }
-                                ui.label(job);
-                            });
-                            design::register_row(ui, row.response.rect);
-                        });
-                    }
-                });
-            if let Some((id, checked)) = toggled {
-                acts.push(PackageAct::Entry(module.id, id, checked));
-            }
-        });
-        // The boxes, Choose all and Choose none act after the lists drew, through the page's
-        // acts (`view.rs`), which GPUI calls too.
-        for act in acts {
-            match act {
-                PackageAct::Package(module, enabled) => {
-                    self.toggle_package(active.id, module, enabled)
-                }
-                PackageAct::All(module) => self.choose_all(module),
-                PackageAct::None(module) => self.choose_none(module),
-                PackageAct::Entry(module, id, checked) => self.toggle_entry(module, id, checked),
-            }
-        }
-    }
-}
-
-/// A press on the package lists, applied after they drew (`packages_content`).
-enum PackageAct {
-    /// A package's box: on or off.
-    Package(Uuid, bool),
-    /// `Choose all` (or `Include future additions`).
-    All(Uuid),
-    /// `Choose none`.
-    None(Uuid),
-    /// An entry's box in a package: on or off.
-    Entry(Uuid, Uuid, bool),
 }
 
 /// The catalogue's and the closure's errors that the issue list shows: not those that a
@@ -3230,26 +1979,6 @@ pub fn load_snapshot(campaign: &Campaign, modules: &[Module]) -> Loaded {
         })
     });
     (repairs, result)
-}
-
-/// What the DM pressed in the Packages page's footer: the result and its press, done after the
-/// pane returns (`CampaignContent::press_result`).
-/// The issue list's section, under its count (`heading`). A fault count is a status: the warning
-/// icon and colour, then the count. Review of PR 730: its id is not its count, so a repair that
-/// changes the count keeps it as the DM left it. It is whether Campaign.md has flags
-/// (`flagged`): flags that appear open it (`default_open`), and with the last one repaired it
-/// starts closed again.
-fn issues_section<R>(
-    ui: &mut egui::Ui,
-    heading: &str,
-    flagged: bool,
-    add: impl FnOnce(&mut egui::Ui) -> R,
-) -> egui::CollapsingResponse<R> {
-    let job = crate::content_actions::issue_count_title(ui, heading);
-    design::Section::new(job)
-        .id(("campaign_issues", !flagged))
-        .default_open(flagged)
-        .show(ui, add)
 }
 
 /// `needed by Ember Cultist, Arena Final`: the one form of what keeps an entry selected, in the

@@ -45,6 +45,13 @@ fn account_states() {
     shell.update(|root, _, _| root.app.settings.simulate(Account::Connected));
     assert!(shell.bounds("Disconnect").is_some());
     assert!(shell.bounds("Paste sign-in cookie").is_none());
+    // The keyring warning names the sign-in; its Connect again opens the sign-in form, whose
+    // cookie field asks for the keyboard.
+    shell.update(|root, _, _| root.app.settings.simulate(Account::KeyringWarning));
+    assert!(shell.bounds("Paste sign-in cookie").is_none());
+    shell.click("Connect again");
+    assert!(shell.read(|root| root.app.settings.signing_in_again()));
+    assert!(shell.bounds("Paste sign-in cookie").is_some());
     let mut shell = Shell::with_size("settings", Seed::Campaign, size(px(960.0), px(640.0)));
     shell.click("Settings");
     shell.update(|root, _, _| root.app.settings.simulate(Account::NotConnected));
@@ -53,6 +60,15 @@ fn account_states() {
     assert!(shell.bounds("Paste sign-in cookie").is_none());
     shell.click("Connect…");
     assert!(shell.bounds("Paste sign-in cookie").is_some());
+    // Connected, the narrow account opens its sign-in and Disconnect as a caret section.
+    shell.update(|root, _, _| {
+        root.pages.settings.compact_open = false;
+        root.app.settings.simulate(Account::Connected);
+    });
+    assert!(shell.bounds("Disconnect").is_none());
+    shell.click("Sign-in details");
+    assert!(shell.read(|root| root.pages.settings.sign_in_details_open));
+    assert!(shell.bounds("Disconnect").is_some());
 }
 
 /// The campaign list: Edit details opens the form under its row; an edit says Unsaved; Discard

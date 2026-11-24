@@ -7,7 +7,7 @@ pub use splat_design::{field_id, sentence};
 #[cfg(test)]
 use splat_content_ui::test_support;
 use splat_content_ui::{
-    art, auth, content_workspace, design, dndbeyond, hermetic, persistence, rolls, sheet_writer,
+    auth, content_workspace, design, dndbeyond, hermetic, persistence, rolls, sheet_writer,
 };
 
 #[path = "../../combat_sync.rs"]

@@ -1363,14 +1363,9 @@ mod tests {
                     .clone()
             );
             assert!(record.entry().is_ok());
-            let ctx = egui::Context::default();
-            let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    for (page, _) in crate::party::SHEET_PAGES {
-                        crate::party::sheet_page(ui, &record, page, "", None);
-                    }
-                });
-            });
+            for (page, _) in crate::party::SHEET_PAGES {
+                let _ = crate::party::sheet_entries(&record, page);
+            }
             cache.save(local, &record).unwrap();
         }
         cache

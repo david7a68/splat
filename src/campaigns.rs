@@ -1,9 +1,8 @@
 use crate::{
     content_workspace::CampaignDocument,
-    design::{self, Action, Density, Status, Type, colors, icons, memo::Revised},
+    design::{self, memo::Revised},
     persistence::{Campaign, Store, UserData},
 };
-use eframe::egui;
 use std::{collections::HashMap, path::PathBuf};
 use uuid::Uuid;
 
@@ -129,11 +128,6 @@ pub struct Campaigns {
     writable: bool,
     editing: Option<Uuid>,
     focus_name: bool,
-    /// The details form's fields as the last frame drew them (name, folder): while one of them
-    /// has the keyboard, the whole form with its Save is that field's block, which the pane's
-    /// focus clearance brings whole into view (round 28: the session folder's save row stands
-    /// above the form; layout step 11c, L11c-C.2).
-    details_fields: [egui::Id; 2],
     form_open: bool,
     add_name: String,
     add_path: String,
@@ -141,16 +135,11 @@ pub struct Campaigns {
     path: String,
     /// The discarded details draft and the add's result, each with the order its act took.
     results: crate::design::Results<FormResult, FormKept>,
-    /// The open import form: the remote campaign it adds, and its reveal (R30), which ends
-    /// with it whatever path closes it.
+    /// The open import form: the remote campaign it adds.
     remote: Option<ImportForm>,
     confirm_remove: Option<Uuid>,
     /// The DM asked to go on to Encounters, from that message.
     pub wants_encounters: bool,
-    /// Round 26 AG1: the widest name and link block and the widest action group, as the last
-    /// frame drew them. The list is as wide as these with an `L` gap, so the actions follow
-    /// the block. Drawing the rows measures them; nothing else does.
-    list_measure: (f32, f32),
 }
 
 fn index_modules(modules: &[crate::persistence::Module]) -> Revised<HashMap<Uuid, usize>> {
@@ -163,8 +152,6 @@ fn index_modules(modules: &[crate::persistence::Module]) -> Revised<HashMap<Uuid
     )
 }
 
-/// The rail's campaign selector, with a name on two lines.
-const SELECTOR_HEIGHT: f32 = 44.0;
 /// A missing Campaign.md without a copy. The write is a choice the DM makes with the button.
 pub(crate) const NO_CAMPAIGN_COPY: &str = "Campaign.md is missing, and Splat has no copy. You can write a new one with the default packages.";
 
@@ -181,7 +168,6 @@ impl Default for Campaigns {
             writable: false,
             editing: None,
             focus_name: false,
-            details_fields: [egui::Id::NULL; 2],
             form_open: false,
             add_name: String::new(),
             add_path: String::new(),
@@ -191,7 +177,6 @@ impl Default for Campaigns {
             remote: None,
             confirm_remove: None,
             wants_encounters: false,
-            list_measure: (0.0, 0.0),
         };
         match Store::user() {
             Ok(store) => {
@@ -205,18 +190,8 @@ impl Default for Campaigns {
 }
 
 impl Campaigns {
-    pub fn start_import(&mut self, act: design::reveal::Act, id: &str, name: &str) {
-        self.begin_import(id, name);
-        // The form opens with the name field taking the keyboard, and shows whole (the folder
-        // Splat proposes and its preview too: G138).
-        let visit = (id, self.data.active_campaign_id);
-        if let Some(form) = &mut self.remote {
-            form.reveal.ask(act, visit, IMPORT_FORM);
-        }
-    }
-
     /// `Add…` on a remote campaign: the import form opens for it, with a folder Splat proposes
-    /// and the name field taking the keyboard. (`start_import` also brings it whole into view.)
+    /// and the name field taking the keyboard.
     pub fn begin_import(&mut self, id: &str, name: &str) {
         self.clear_form();
         self.name = name.into();
@@ -247,7 +222,6 @@ impl Campaigns {
         self.remote = Some(ImportForm {
             id: id.into(),
             name: name.into(),
-            reveal: design::reveal::Reveal::default(),
         });
         self.focus_name = true;
     }
@@ -492,7 +466,6 @@ impl Campaigns {
             writable: true,
             editing: None,
             focus_name: false,
-            details_fields: [egui::Id::NULL; 2],
             form_open: false,
             add_name: String::new(),
             add_path: String::new(),
@@ -502,7 +475,6 @@ impl Campaigns {
             remote: None,
             confirm_remove: None,
             wants_encounters: false,
-            list_measure: (0.0, 0.0),
         }
     }
 
@@ -769,129 +741,6 @@ impl Campaigns {
         self.data.campaigns.iter().find(|c| c.id == id).cloned()
     }
 
-    /// The always-visible campaign switcher. `blocked` says why it cannot change now.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
-    pub fn selector(&mut self, ui: &mut egui::Ui, blocked: Option<&str>) -> bool {
-        let current = self.data.active_campaign_id;
-        let mut add = false;
-        let mut selected = current;
-        let label = self
-            .data
-            .campaigns
-            .iter()
-            .find(|p| Some(p.id) == current)
-            .map(|p| p.name.as_str())
-            .unwrap_or(if self.data.campaigns.is_empty() {
-                "No campaign"
-            } else {
-                "Select campaign"
-            });
-        let reason = if self.writable {
-            blocked
-        } else {
-            Some("Reload valid campaign settings in Settings first.")
-        };
-        // The name, lock and caret share a fixed-height control: a slot of `SELECTOR_HEIGHT`,
-        // whatever the name's lines (layout step 11c, L11c-C.2: no measured space after it).
-        let slot = egui::vec2(ui.available_width(), SELECTOR_HEIGHT);
-        ui.allocate_ui_with_layout(slot, egui::Layout::top_down(egui::Align::Min), |ui| {
-            ui.set_min_height(SELECTOR_HEIGHT);
-            let locked = reason.is_some();
-            let column_right = ui.clip_rect().right();
-            let combo = egui::ComboBox::from_id_salt("active_campaign")
-                .icon(move |ui, rect, visuals, open| {
-                    if locked {
-                        ui.painter().text(
-                            rect.center(),
-                            egui::Align2::CENTER_CENTER,
-                            icons::READ_ONLY,
-                            Type::Body.font(ui),
-                            colors().muted,
-                        );
-                    } else {
-                        design::combo_icon(ui, rect, visuals, open);
-                    }
-                })
-                .width(ui.available_width())
-                .wrap()
-                .selected_text(Type::Small.rich(ui, label).color(colors().text))
-                .show_ui(ui, |ui| {
-                    // The menu stays inside the navigation column, clear of its splitter. A
-                    // narrow column wraps the names.
-                    let room = column_right
-                        - design::S
-                        - ui.style().spacing.menu_margin.rightf()
-                        - ui.max_rect().left();
-                    if room < 220.0 {
-                        ui.set_max_width(room);
-                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                    }
-                    ui.set_min_width(room.min(220.0));
-                    if let Some(reason) = reason {
-                        design::blocked_reason(ui, Some(reason));
-                        design::gap(ui, design::Gap::L);
-                    }
-                    ui.add_enabled_ui(reason.is_none(), |ui| {
-                        if self.data.campaigns.is_empty() {
-                            // Round 25 FE4: the one command keeps its words on one line, with `S` on
-                            // each side. In the menu's Strong type it needs 119 px and the column
-                            // gives 103, so it uses `Small`, the type of the switcher's own words. A
-                            // column the DM makes narrower still wraps it.
-                            let clicked = ui
-                                .scope(|ui| {
-                                    ui.spacing_mut().button_padding.x = design::S;
-                                    let words = Type::Small.rich(ui, "Add campaign");
-                                    ui.selectable_label(false, words).clicked()
-                                })
-                                .inner;
-                            if clicked {
-                                add = true;
-                                ui.close();
-                            }
-                        } else {
-                            if design::extras::choice_wrapped(
-                                ui,
-                                selected.is_none(),
-                                "No campaign",
-                                None,
-                            )
-                            .clicked()
-                            {
-                                selected = None;
-                            }
-                        }
-                        for campaign in &self.data.campaigns {
-                            // A campaign's name is the DM's own words: it wraps, never cuts.
-                            if design::extras::choice_wrapped(
-                                ui,
-                                selected == Some(campaign.id),
-                                &campaign.name,
-                                None,
-                            )
-                            .clicked()
-                            {
-                                selected = Some(campaign.id);
-                            }
-                        }
-                    });
-                });
-            design::named(ui, &combo.response, &format!("Active campaign: {label}"));
-            if let Some(reason) = reason {
-                ui.ctx()
-                    .accesskit_node_builder(combo.response.id, |node| node.set_description(reason));
-            }
-            combo.response.on_hover_text(reason.unwrap_or(label));
-        });
-
-        if selected != current {
-            self.select(selected);
-        }
-        add
-    }
-
     /// The campaign switcher's words for a UI that draws it itself (the GPUI rail): the active
     /// campaign's name, else `No campaign` or `Select campaign`.
     pub fn switcher_label(&self) -> &str {
@@ -924,11 +773,7 @@ impl Campaigns {
     }
 
     fn select(&mut self, id: Option<Uuid>) {
-        // Another campaign: the open import form's reveal was for the one before, and a
-        // discarded details draft was the other campaign's.
-        if let Some(form) = &mut self.remote {
-            form.reveal.end();
-        }
+        // Another campaign: a discarded details draft was the other campaign's.
         if id != self.data.active_campaign_id {
             self.end_discard();
         }
@@ -948,126 +793,6 @@ impl Campaigns {
                 reason
             }
         })
-    }
-
-    /// The active campaign's folder and D&D Beyond link.
-    pub fn show_active(
-        &mut self,
-        ui: &mut egui::Ui,
-        session: Option<crate::auth::Session>,
-        dndbeyond: &mut crate::dndbeyond::DndBeyond,
-        blocked: Option<&str>,
-    ) {
-        let c = colors();
-        let Some(campaign) = self.active_campaign() else {
-            ui.label(
-                Type::Body
-                    .rich(ui, "Select a campaign, or add one in Settings.")
-                    .color(c.muted),
-            );
-            return;
-        };
-        // Ruling R24, row 93: the folder's block, in the one heading-row form of the Link and
-        // folder page; Edit details is the row's action.
-        let (block, edit) = design::ValueBlock::new(
-            ui,
-            design::HeadingRow::new("Folder")
-                .action(Action::quiet("Edit details").blocked(blocked)),
-        );
-        let link_blocked = Self::link_lock(blocked);
-        // The page's lock is said once, above the first block (lib.rs); each control keeps it on
-        // hover and in its accessible description.
-        let (block, _) = block.field(|ui| {
-            ui.add(egui::Label::new(campaign.path.display().to_string()).wrap());
-            Self::folder_status(ui, &campaign)
-        });
-        block.end();
-        if edit.is_some_and(|edit| edit.clicked()) {
-            // The keyboard goes to the form's first field, and the form comes whole into view
-            // with it (`show_form_if_editing`).
-            self.start_edit(&campaign, true);
-        }
-        design::gap(ui, design::Gap::S);
-        design::rule(ui);
-        // The D&D Beyond heading owns the space above it.
-        dndbeyond.show(ui, session, self, link_blocked);
-        design::gap(ui, design::Gap::S);
-        design::quiet_section(ui, "Technical details", |ui| {
-            ui.label(format!("ID: {}", campaign.id));
-            design::help(ui, "Settings are stored in the campaign manifest.");
-        });
-    }
-
-    fn folder_status(ui: &mut egui::Ui, campaign: &Campaign) -> egui::Response {
-        let c = colors();
-        if campaign.path.is_dir() {
-            design::status(
-                ui,
-                Status {
-                    icon: icons::OK,
-                    word: "Folder available",
-                    color: c.result.success,
-                },
-            )
-        } else {
-            design::status(
-                ui,
-                Status {
-                    icon: icons::WARN,
-                    word: "Folder unavailable",
-                    color: c.result.warning,
-                },
-            )
-        }
-    }
-
-    fn remove_dialog(&mut self, ctx: &egui::Context) {
-        let Some(id) = self.confirm_remove else {
-            return;
-        };
-        let Some(campaign) = self.data.campaigns.iter().find(|c| c.id == id).cloned() else {
-            self.confirm_remove = None;
-            return;
-        };
-        let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
-        let mut remove = false;
-        // Round 24 FC5: the shared dialog, anchored at the top like every other dialog.
-        design::dialog(
-            ctx,
-            "remove_campaign",
-            &format!("Remove {}?", campaign.name),
-            |ui| {
-                ui.add(
-                    egui::Label::new(
-                        "Splat forgets this campaign. Its encounters, runs and D&D Beyond link stay in its folder. To use it again, add the folder back.",
-                    )
-                    .wrap(),
-                );
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(ui, campaign.path.display().to_string())
-                            .color(colors().muted),
-                    )
-                    .wrap(),
-                );
-                design::gap(ui, design::Gap::S);
-                design::dialog_actions(
-                    ui,
-                    |ui| {
-                        remove = Action::destructive("Remove from Splat").show(ui).clicked();
-                    },
-                    |ui| {
-                        keep |= Action::secondary("Keep the campaign").show(ui).clicked();
-                    },
-                );
-            },
-        );
-        if remove {
-            self.remove_confirmed();
-        } else if keep {
-            self.keep_campaign();
-        }
     }
 
     /// `Build an encounter` after a result: the result stays, with its Undo, for the DM's return.
@@ -1127,221 +852,6 @@ impl Campaigns {
         Ok(())
     }
 
-    /// The campaign list. Which exist, where, and how each is linked.
-    pub fn show(
-        &mut self,
-        ui: &mut egui::Ui,
-        session: Option<crate::auth::Session>,
-        dndbeyond: &mut crate::dndbeyond::DndBeyond,
-        blocked: Option<&str>,
-    ) {
-        let c = colors();
-        ui.set_max_width(self.list_width(ui.available_width()));
-        self.remove_dialog(ui.ctx());
-        ui.horizontal(|ui| {
-            design::heading(
-                ui,
-                design::Heading::Group {
-                    title: "Campaigns",
-                    count: self.data.campaigns.len(),
-                },
-            );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if (!self.data.campaigns.is_empty() || !self.writable)
-                    && Action::quiet("Reload from disk")
-                        .blocked(blocked)
-                        .icon(icons::REFRESH)
-                        .density(Density::Read)
-                        .hint("Reload campaign settings from disk")
-                        .show(ui)
-                        .clicked()
-                {
-                    self.reload();
-                }
-            });
-        });
-        design::blocked_reason(ui, blocked);
-        // Round 26: the list's errors and results sit in the Settings footer
-        // (`footer_messages`).
-        let unwritable =
-            blocked.or((!self.writable).then_some("Reload valid campaign settings first."));
-        design::locked(ui, unwritable, |ui| {
-            if self.data.campaigns.is_empty() {
-                design::gap(ui, design::Gap::XS);
-                ui.label(
-                    Type::Body
-                        .rich(ui, "No campaign yet. Add one below.")
-                        .color(c.muted),
-                );
-            }
-            let mut open = None;
-            // Round 26 AG1: one action column for every row, an `L` gap after the widest name
-            // and link block, so the DM's eye does not cross an empty band to reach a row's
-            // actions. Until the rows are measured, the actions keep the old room.
-            let (measured_block, measured_actions) = self.list_measure;
-            let actions_room = if measured_actions > 0.0 {
-                measured_actions
-            } else {
-                220.0
-            };
-            let mut widest = (0.0_f32, 0.0_f32);
-            for campaign in self.data.campaigns.clone() {
-                let active = self.data.active_campaign_id == Some(campaign.id);
-                ui.push_id(campaign.id, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.set_min_height(Density::Glance.row() + design::XS);
-                        let row_left = ui.cursor().left();
-                        let row_right = ui.max_rect().right();
-                        let block = ui.vertical(|ui| {
-                            ui.spacing_mut().item_spacing.y = 0.0;
-                            ui.set_max_width(
-                                (row_right - row_left - actions_room - design::L).max(120.0),
-                            );
-                            ui.horizontal(|ui| {
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Name.rich(ui, &campaign.name).color(c.text),
-                                    )
-                                    .wrap(),
-                                );
-                                if active {
-                                    design::status(
-                                        ui,
-                                        Status {
-                                            icon: icons::OK,
-                                            word: "Active",
-                                            color: c.text,
-                                        },
-                                    );
-                                }
-                            });
-                            // The folder is worth a word only when it is missing. The link has its own line.
-                            if !campaign.path.is_dir() {
-                                Self::folder_status(ui, &campaign)
-                                    .on_hover_text(campaign.path.display().to_string());
-                            }
-                            if let Some(error) = self.manifest_errors.get(&campaign.id) {
-                                ui.label(Type::Small.rich(ui, error).color(c.result.error));
-                            }
-                            {
-                                let link = campaign
-                                    .dndbeyond_campaign_name
-                                    .as_deref()
-                                    .map(|name| format!("Linked to {name}"))
-                                    .or(campaign
-                                        .dndbeyond_campaign_id
-                                        .as_deref()
-                                        .map(|id| format!("Linked to campaign {id}")))
-                                    .unwrap_or_else(|| "Not linked".to_owned());
-                                design::status(
-                                    ui,
-                                    Status {
-                                        icon: if campaign.dndbeyond_campaign_id.is_some() {
-                                            icons::LINK
-                                        } else {
-                                            icons::SYNC_OFF
-                                        },
-                                        word: &link,
-                                        color: c.muted,
-                                    },
-                                );
-                            }
-                        });
-                        widest.0 = widest.0.max(block.response.rect.width());
-                        // The action column starts an `L` gap after the widest block, or ends at
-                        // the list's edge when the block must give way.
-                        let actions_left = (row_left + measured_block + design::L)
-                            .min(row_right - actions_room)
-                            .max(ui.cursor().left());
-                        let line = ui.min_rect();
-                        let actions = egui::Rect::from_min_max(
-                            egui::pos2(actions_left, line.top()),
-                            egui::pos2(actions_left + actions_room, line.bottom()),
-                        );
-                        ui.scope_builder(
-                            egui::UiBuilder::new()
-                                .max_rect(actions)
-                                .layout(egui::Layout::right_to_left(egui::Align::Center)),
-                            |ui| {
-                                // Buttons keep every letter. The name and status give way first.
-                                ui.spacing_mut().item_spacing.x = design::XS;
-                                design::row_menu(ui, &campaign.name, |ui| {
-                                    if Action::destructive("Remove…")
-                                        .density(Density::Read)
-                                        .show(ui)
-                                        .clicked()
-                                    {
-                                        self.confirm_remove = Some(campaign.id);
-                                        ui.close();
-                                    }
-                                });
-                                if self.editing != Some(campaign.id)
-                                    && Action::quiet("Edit details")
-                                        .density(Density::Read)
-                                        .show(ui)
-                                        .clicked()
-                                {
-                                    self.start_edit(&campaign, false);
-                                }
-                                if !active
-                                    && Action::secondary("Open")
-                                        .density(Density::Read)
-                                        .name(&format!(
-                                            "Make {} the active campaign",
-                                            campaign.name
-                                        ))
-                                        .show(ui)
-                                        .clicked()
-                                {
-                                    open = Some(campaign.id);
-                                }
-                                widest.1 = widest.1.max(ui.min_rect().width());
-                            },
-                        );
-                    });
-                    if self.editing == Some(campaign.id) {
-                        self.form(ui, false, true);
-                    }
-                });
-                design::rule(ui);
-            }
-            if (widest.0 - measured_block).abs() > 0.5 || (widest.1 - measured_actions).abs() > 0.5
-            {
-                self.list_measure = widest;
-                ui.ctx().request_discard("the campaign list was measured");
-            }
-            if let Some(id) = open {
-                self.select(Some(id));
-            }
-            // An `S` gap before what follows the list: the import (with a session) or the add form
-            // (when no edit or import form is open). With neither, nothing follows, so the pane's
-            // footer stands `S` below the last rule.
-            if session.is_some() || (self.editing.is_none() && self.remote.is_none()) {
-                design::gap(ui, design::Gap::S);
-            }
-            dndbeyond.show_import(ui, session.clone(), self);
-            if self.editing.is_none() && self.remote.is_none() {
-                self.form(ui, false, true);
-                if session.is_none() && self.form_open {
-                    crate::dndbeyond::DndBeyond::import_hint(ui);
-                }
-            }
-        });
-    }
-
-    /// The campaign list's width within `room`: its widest name and link block, an `L` gap and
-    /// its action column, and never narrower than the campaign form below it (round 26 AG1).
-    pub fn list_width(&self, room: f32) -> f32 {
-        let (block, actions) = self.list_measure;
-        let content = if block > 0.0 && actions > 0.0 {
-            block + design::L + actions
-        } else {
-            design::LIST_MEASURE
-        };
-        room.min(design::LIST_MEASURE)
-            .min(content.max(design::FORM_WIDTH))
-    }
-
     /// Round 26: the campaign form's and the campaign list's messages, in the footer of the pane
     /// that shows them (Settings, or Campaign → Link and folder), so none of them moves the form
     /// or the rows. A discarded details draft with its live Undo first (while its form is open:
@@ -1355,7 +865,7 @@ impl Campaigns {
     /// its act took; `frame` is the pane's.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: the page’s lock words are app-owned `&str` (design::results::STAGED_ALLOWS)"
+        reason = "the page’s lock words are app-owned `&str` from `blocked_switch`, made into a sentence here"
     )]
     pub fn footer_messages<'f, A: From<CampaignAct> + 'static>(
         &self,
@@ -1472,94 +982,12 @@ impl Campaigns {
         }
     }
 
-    /// The form's error where its page has no footer: the first campaign's form on an empty
-    /// page, which has no scroll area, so nothing below it can move. A body fault in its place,
-    /// with its own recovery after it (`Register as a new campaign`, locked with its painted
-    /// reason until the form has a name).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the first campaign’s form has no footer: its error is the page’s body fault (M20)"
-    )]
-    pub fn form_error_inline(&mut self, ui: &mut egui::Ui) {
-        let Some(error) = self.error.clone() else {
-            return;
-        };
-        let mut fault = design::outcome::BodyFault::new(&NotDone::words(&error));
-        if error.contains("registered at another folder") {
-            fault = fault.repair(
-                design::outcome::Repair::new("Register as a new campaign", ()).locked_when(
-                    self.name.trim().is_empty(),
-                    crate::sentence!("Type a name first."),
-                ),
-            );
-        }
-        if fault.show(ui).is_some()
-            && let Err(error) = self.register_campaign_copy()
-        {
-            self.error = Some(error);
-        }
-    }
-
-    /// Whether the open import form's reveal runs (tests).
-    #[cfg(test)]
-    fn reveal_running(&self) -> bool {
-        self.remote
-            .as_ref()
-            .is_some_and(|form| form.reveal.running())
-    }
-
-    /// Why the open import form's reveal ended (tests).
-    #[cfg(test)]
-    fn reveal_ended(&self) -> Option<design::reveal::End> {
-        self.remote.as_ref().and_then(|form| form.reveal.ended())
-    }
-
     pub fn importing(&self, remote: &str) -> bool {
         self.remote.as_ref().is_some_and(|form| form.id == remote)
     }
 
-    pub fn show_import_form(&mut self, ui: &mut egui::Ui, remote_id: &str) {
-        if self
-            .remote
-            .as_ref()
-            .is_some_and(|form| form.id == remote_id)
-        {
-            let rect = ui.scope(|ui| self.form(ui, false, true)).response.rect;
-            // R30: the opened form shows whole (its fields, Add campaign, Cancel and the
-            // preview); a change of campaign is another visit, which ends the reveal.
-            let visit = (remote_id, self.data.active_campaign_id);
-            if let Some(form) = &mut self.remote {
-                form.reveal.mark(ui, visit, IMPORT_FORM, rect);
-            }
-        }
-    }
-
     pub fn focus_add(&mut self) {
         self.focus_name = true;
-    }
-
-    pub fn show_add_form(&mut self, ui: &mut egui::Ui) {
-        self.form(ui, true, true);
-    }
-
-    /// Edit the active campaign's details from the page that links to them.
-    /// Draws the details form while it is open, and says whether it drew it (with its primary save).
-    pub fn show_form_if_editing(&mut self, ui: &mut egui::Ui) -> bool {
-        let open = self.editing.is_some();
-        if open {
-            design::gap(ui, design::Gap::S);
-            let form = ui.scope(|ui| self.form(ui, false, true)).response.rect;
-            // Edit details gives the name field the keyboard. While a field of the form has it,
-            // the whole form with its Save is that field's block, which the pane brings whole
-            // into view (its focus clearance, layout step 10; layout step 11c, L11c-C.2). Every
-            // frame, not once: the clearance waits for the press of Edit details to end, and
-            // brings in the block it has then.
-            let focused = ui.ctx().memory(|memory| memory.focused());
-            if focused.is_some_and(|id| self.details_fields.contains(&id)) {
-                design::pane::reveal_with_focus(ui, form);
-            }
-        }
-        open
     }
 
     pub fn form_open(&self) -> bool {
@@ -1591,205 +1019,8 @@ impl Campaigns {
             (false, false) => None,
         }
     }
-
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    fn form(&mut self, ui: &mut egui::Ui, _inline: bool, primary: bool) {
-        let editing = self.editing.is_some();
-        // Keep the add form's open state when Settings changes between one and two columns.
-        let form_scope = egui::Id::new(("campaign_form", self.editing));
-        ui.scope_builder(egui::UiBuilder::new().id(form_scope), |ui| {
-            ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-            let mut added = false;
-            let direct = editing || self.remote.is_some() || self.data.campaigns.is_empty();
-            let editing_id = self.editing;
-            let focus = self.focus_name;
-            let empty = self.data.campaigns.is_empty();
-            let mut fields = |ui: &mut egui::Ui| {
-                design::gap(ui, design::Gap::XS);
-                let unchanged = self.details_unchanged();
-                let reason = self.form_reason(unchanged);
-                let missing = reason.is_some();
-                // One id per form: the add form and a campaign's details form never share a
-                // field, and neither loses focus when Settings changes between one and two
-                // columns (the ids do not come from the layout).
-                let name_id = CAMPAIGN_NAME.of(editing_id);
-                let folder_id = CAMPAIGN_FOLDER.of(editing_id);
-                let focus = std::mem::take(&mut self.focus_name);
-                let mut commit = false;
-                if !editing {
-                    // Round 26 FB6: the one inline creation layout. Add campaign follows the
-                    // folder field (after Browse…) on its line; the kept line below holds quiet
-                    // Cancel, when there is something to cancel, and the reason.
-                    let create = if primary {
-                        design::Create::primary(ADD_CAMPAIGN)
-                    } else {
-                        design::Create::secondary(ADD_CAMPAIGN)
-                    };
-                    let cancel = !missing || self.remote.is_some();
-                    // G137, G138: the field cuts a long folder's end, the part Splat proposes.
-                    // The kept line names it whole (`Will create …/Salt Road`).
-                    let preview = folder_preview(&self.path);
-                    let form = design::InlineCreate::new()
-                        .field(
-                            design::CreateField::new(name_id, "Campaign name", &mut self.name)
-                                .focus(focus),
-                        )
-                        .field(
-                            design::CreateField::new(folder_id, "Folder", &mut self.path)
-                                .side_action(BROWSE)
-                                .help(FOLDER_HELP),
-                        )
-                        .create(create.blocked(reason))
-                        .kept_line(
-                            design::KeptLine::new()
-                                .cancel(CANCEL, cancel)
-                                .preview_path(WILL_CREATE, preview.as_deref()),
-                        )
-                        .show(ui);
-                    if form.side
-                        && let Some(path) = crate::hermetic::pick_folder()
-                    {
-                        self.path = path.to_string_lossy().into_owned();
-                    }
-                    if form.cancel {
-                        self.clear_form();
-                    }
-                    commit = form.create;
-                } else {
-                    let name = design::labelled_field(
-                        ui,
-                        name_id,
-                        "Campaign name",
-                        &mut self.name,
-                        None,
-                        None,
-                    );
-                    if focus {
-                        name.request_focus();
-                    }
-                    let room = ui.available_width();
-                    let field = ui
-                        .vertical(|ui| {
-                            ui.set_max_width((room - BROWSE_WIDTH - design::S).max(120.0));
-                            design::labelled_field(
-                                ui,
-                                folder_id,
-                                "Folder",
-                                &mut self.path,
-                                None,
-                                None,
-                            )
-                        })
-                        .inner;
-                    let browse = egui::Rect::from_min_size(
-                        egui::pos2(field.rect.right() + design::S, field.rect.top()),
-                        egui::vec2(BROWSE_WIDTH, field.rect.height()),
-                    );
-                    ui.scope_builder(
-                        egui::UiBuilder::new()
-                            .max_rect(browse)
-                            .layout(egui::Layout::right_to_left(egui::Align::Center)),
-                        |ui| {
-                            if Action::secondary(BROWSE.as_str())
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                                && let Some(path) = crate::hermetic::pick_folder()
-                            {
-                                self.path = path.to_string_lossy().into_owned();
-                            }
-                        },
-                    );
-                    self.details_fields = [name.id, field.id];
-                    design::help(ui, FOLDER_HELP);
-                    let action = if primary {
-                        Action::primary("Save details")
-                    } else {
-                        Action::secondary("Save details")
-                    };
-                    // The fields drew above: an edit in this frame counts now, so the frame of
-                    // the edit says Unsaved, offers Discard and ends the discard's result
-                    // (migration-32 L2c; the footer reads it after the form: `pane_then`).
-                    let unchanged = self.details_unchanged();
-                    let reason = self.form_reason(unchanged);
-                    // A save row: state and Discard at the left, Save details at the right edge.
-                    ui.horizontal(|ui| {
-                        design::save_row_state(
-                            ui,
-                            design::Status {
-                                icon: if unchanged {
-                                    design::icons::OK
-                                } else {
-                                    design::icons::DRAFT
-                                },
-                                word: if unchanged { "No changes" } else { "Unsaved" },
-                                color: if unchanged {
-                                    colors().muted
-                                } else {
-                                    colors().document.unsaved
-                                },
-                            },
-                            false,
-                            None,
-                        );
-                        if !unchanged {
-                            self.end_discard();
-                            if Action::quiet("Discard").show(ui).clicked() {
-                                self.discard_details();
-                            }
-                        } else if Action::quiet("Cancel").line_start().show(ui).clicked() {
-                            self.clear_form();
-                        }
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let reason = reason.map(design::CreateReasons::words);
-                            commit = action.blocked(reason).show(ui).clicked();
-                            ui.spacing_mut().item_spacing.x = design::S;
-                            design::blocked_reason(ui, reason.filter(|_| !unchanged));
-                        });
-                    });
-                }
-                if commit {
-                    added = self.commit_form();
-                }
-            };
-            let form = if direct {
-                fields(ui);
-                None
-            } else {
-                Some(
-                    design::Section::new("Add campaign")
-                        .id(("campaign_form", editing_id))
-                        .open(focus.then_some(true))
-                        .default_open(empty)
-                        .show(ui, fields),
-                )
-            };
-            if let Some(form) = &form {
-                design::locked_control(ui, &form.header_response);
-            }
-            self.form_open = !added
-                && (direct
-                    || form
-                        .as_ref()
-                        .is_some_and(|form| form.body_response.is_some()));
-            if added && let Some(form) = form {
-                let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
-                    ui.ctx(),
-                    form.header_response.id,
-                    false,
-                );
-                state.set_open(false);
-                state.store(ui.ctx());
-            }
-        });
-    }
 }
 
-/// The Browse button and the gap before it, beside the details form's folder field.
-const BROWSE_WIDTH: f32 = 92.0;
 crate::create_reasons! {
     /// Why the campaign form cannot add or save yet: every reason it can show, so its kept line
     /// keeps room for the tallest.
@@ -1800,11 +1031,6 @@ crate::create_reasons! {
         Unchanged => "No changes to save.",
     }
 }
-const CAMPAIGN_NAME: design::FieldName = crate::field_id!("campaign_name");
-const CAMPAIGN_FOLDER: design::FieldName = crate::field_id!("campaign_folder");
-const ADD_CAMPAIGN: design::Word = crate::word!("Add campaign");
-const BROWSE: design::Word = crate::word!("Browse…");
-const CANCEL: design::Word = crate::word!("Cancel");
 pub const FOLDER_HELP: &str = "Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.";
 
 /// By number, because a link can be stored with other formatting. An ID that is not a number
@@ -1820,9 +1046,9 @@ fn links_to(campaign: &Campaign, remote_id: &str) -> bool {
         == Some(remote)
 }
 
-/// The folder `Add campaign` will add, by its last name (`…/Salt Road`), after the leading words
-/// [`WILL_CREATE`]: the end of the path is what a narrow field cuts. A folder name alone (a relative
-/// path) is the name.
+/// The folder `Add campaign` will add, by its last name (`…/Salt Road`), after the words
+/// `Will create `: the end of the path is what a narrow field cuts. A folder name alone (a
+/// relative path) is the name.
 fn folder_preview(path: &str) -> Option<String> {
     let path = std::path::Path::new(path.trim());
     let name = path.file_name()?.to_string_lossy();
@@ -1841,14 +1067,7 @@ fn folder_preview(path: &str) -> Option<String> {
 struct ImportForm {
     id: String,
     name: String,
-    reveal: design::reveal::Reveal,
 }
-
-/// The import form's reveal target.
-const IMPORT_FORM: &str = "import form";
-
-/// The leading words of the folder preview; they stay when the path gives way.
-const WILL_CREATE: &str = "Will create ";
 
 /// The result of registering a copied campaign folder, named for the new campaign.
 pub fn copy_registered(name: &str) -> String {
@@ -2153,11 +1372,7 @@ mod tests {
         let folder = temp.path().join("campaign");
         std::fs::create_dir(&folder).unwrap();
         let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
-        campaigns.start_import(
-            design::reveal::Act::outside(&egui::Context::default(), 0),
-            "12",
-            "Remote name",
-        );
+        campaigns.begin_import("12", "Remote name");
         campaigns.path = folder.to_string_lossy().into_owned();
         campaigns.save_form().unwrap();
         let campaign = campaigns.active_campaign().unwrap();
@@ -2172,11 +1387,7 @@ mod tests {
         reopened.save_form().unwrap();
         assert_eq!(reopened.active_campaign(), Some(campaign));
         assert_eq!(std::fs::read_to_string(&file).unwrap(), text);
-        reopened.start_import(
-            design::reveal::Act::outside(&egui::Context::default(), 0),
-            "34",
-            "Other campaign",
-        );
+        reopened.begin_import("34", "Other campaign");
         reopened.path = folder.to_string_lossy().into_owned();
         assert!(reopened.save_form().is_err());
         assert_eq!(std::fs::read_to_string(&file).unwrap(), text);
@@ -2215,7 +1426,6 @@ mod tests {
             writable: true,
             editing: None,
             focus_name: false,
-            details_fields: [egui::Id::NULL; 2],
             form_open: false,
             add_name: String::new(),
             add_path: String::new(),
@@ -2225,7 +1435,6 @@ mod tests {
             remote: None,
             confirm_remove: None,
             wants_encounters: false,
-            list_measure: (0.0, 0.0),
         };
         campaigns.select(Some(first));
         campaigns.link(Some("12".into())).unwrap();
@@ -2292,181 +1501,110 @@ mod tests {
                 .as_deref(),
             Some("12")
         );
-        // Review of PR 642: each result belongs to its campaign. The Link and folder page as
-        // the app draws it: the link's field and the details form, then the pane's footer, and
-        // a press done after it.
-        use egui_kittest::kittest::Queryable;
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(900.0, 900.0))
-            .build_ui_state(
-                |ui, (campaigns, dndbeyond): &mut (Campaigns, crate::dndbeyond::DndBeyond)| {
-                    dndbeyond.poll(ui.ctx(), 0, true, campaigns);
-                    // The switcher draws after `poll`, in the same frame (the sidebar).
-                    if let Some(id) = ui
-                        .ctx()
-                        .data_mut(|data| data.remove_temp::<Uuid>(egui::Id::new("switch")))
-                    {
-                        campaigns.select(Some(id));
-                    }
-                    campaigns.show_active(ui, None, dndbeyond, None);
-                    campaigns.show_form_if_editing(ui);
-                    let frame = design::outcome::PaneFrame::new(ui);
-                    let mut messages =
-                        design::outcome::Messages::<CampaignAct>::new(&frame, "link_footer", 600.0);
-                    campaigns.footer_messages(&frame, &mut messages, false, None);
-                    let open = campaigns.active_campaign().map(|campaign| campaign.id);
-                    dndbeyond.footer_messages(&frame, &mut messages, open);
-                    let paned = messages.pane(ui, design::Body::Content, |_| ());
-                    if let Some(press) = paned.pressed {
-                        campaigns.footer_act(press);
-                    }
-                },
-                (
-                    campaigns,
-                    crate::dndbeyond::DndBeyond::listed_for_test(&[
-                        ("12", "Watchtower"),
-                        ("34", "Harbor"),
-                    ]),
-                ),
-            );
-        harness.run_steps(3);
+        // Review of PR 642: each result belongs to its campaign. The Link and folder pane's
+        // footer as the page builds it (the GPUI `campaign_lines`): the campaign's messages, then
+        // D&D Beyond's for the campaign open now; a press is done after it (`footer_act`).
+        let mut dndbeyond =
+            crate::dndbeyond::DndBeyond::listed_for_test(&[("12", "Watchtower"), ("34", "Harbor")]);
+        let ctx = eframe::egui::Context::default();
+        let lines = |campaigns: &Campaigns, dndbeyond: &crate::dndbeyond::DndBeyond| {
+            let frame = design::outcome::PaneFrame::plain();
+            let mut messages =
+                design::outcome::Messages::<CampaignAct>::new(&frame, "link_footer", 0.0);
+            campaigns.footer_messages(&frame, &mut messages, false, None);
+            let open = campaigns.active_campaign().map(|campaign| campaign.id);
+            dndbeyond.footer_messages(&frame, &mut messages, open);
+            messages.into_plain()
+        };
         const SAVED: &str = "Campaign link saved.";
+        const UNDO: &str = "Undo discard of Campaign details";
         let shows =
-            |harness: &egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
-             words: &str| harness.query_all_by_label_contains(words).next().is_some();
-        let pick =
-            |harness: &mut egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
-             choice: &str| {
-                // The list may still be open from the last pick (a failed link keeps it).
-                if harness.query_by_label(choice).is_none() {
-                    harness
-                        .get_by_label_contains("D&D Beyond campaign link")
-                        .click();
-                    harness.run_steps(2);
-                }
-                harness.get_by_label(choice).click();
-                harness.run_steps(3);
+            |campaigns: &Campaigns, dndbeyond: &crate::dndbeyond::DndBeyond, words: &str| {
+                lines(campaigns, dndbeyond).iter().any(|line| {
+                    line.words.contains(words)
+                        || line.undo.as_ref().is_some_and(|undo| undo.label == words)
+                })
             };
-        let open =
-            |harness: &mut egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
-             id: Uuid| {
-                harness.state_mut().0.select(Some(id));
-                harness.run_steps(3);
-            };
+        dndbeyond.poll(&ctx, 0, true, &mut campaigns);
         // A (the second campaign) unlinks: its result. B (the first, unlinked) opens: A's
         // result ends with the change, and it does not come back with A.
-        pick(&mut harness, "Not linked");
-        assert!(shows(&harness, SAVED), "unlinking A says its result");
-        // The switcher opens B after `poll` ran this frame (review of PR 665): the footer of
-        // that same frame reads the campaign open now, so A's result is not in it.
-        harness
-            .ctx
-            .data_mut(|data| data.insert_temp(egui::Id::new("switch"), first));
-        let frame = harness.ctx.cumulative_frame_nr();
-        harness.step();
-        assert_eq!(harness.ctx.cumulative_frame_nr() - frame, 1, "one frame");
+        dndbeyond.choose_link(&mut campaigns, None);
         assert!(
-            !shows(&harness, SAVED),
+            shows(&campaigns, &dndbeyond, SAVED),
+            "unlinking A says its result"
+        );
+        // The switcher opens B after `poll` ran (review of PR 665): the footer built before the
+        // next `poll` reads the campaign open now, so A's result is not in it.
+        campaigns.select(Some(first));
+        assert!(
+            !shows(&campaigns, &dndbeyond, SAVED),
             "A's link result showed in the frame B opened"
         );
-        harness.run_steps(3);
-        assert!(!shows(&harness, SAVED), "A's link result followed into B");
-        open(&mut harness, second);
-        assert!(!shows(&harness, SAVED), "A's ended link result came back");
-        // A's details: an edit and Discard keep A's draft, with its Undo, in A's own form.
-        let edit_name =
-            |harness: &mut egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>| {
-                harness.get_by_label("Edit details").click();
-                harness.run_steps(3);
-                harness
-                    .query_all_by_role_and_label(egui::accesskit::Role::TextInput, "Campaign name")
-                    .next()
-                    .expect("the name field")
-                    .focus();
-                harness.run_steps(1);
-                harness.event(egui::Event::Text(" A".into()));
-                harness.run_steps(3);
-                // And the folder (review of PR 665: A's folder comes back too).
-                harness
-                    .query_all_by_role_and_label(egui::accesskit::Role::TextInput, "Folder")
-                    .next()
-                    .expect("the folder field")
-                    .focus();
-                harness.run_steps(1);
-                harness.event(egui::Event::Text("-a".into()));
-                harness.run_steps(3);
-                harness.get_by_label("Discard").click();
-                harness.run_steps(3);
-            };
-        const UNDO: &str = "Undo discard of Campaign details";
+        dndbeyond.poll(&ctx, 0, true, &mut campaigns);
+        assert!(
+            !shows(&campaigns, &dndbeyond, SAVED),
+            "A's link result followed into B"
+        );
+        campaigns.select(Some(second));
+        dndbeyond.poll(&ctx, 0, true, &mut campaigns);
+        assert!(
+            !shows(&campaigns, &dndbeyond, SAVED),
+            "A's ended link result came back"
+        );
         // What Undo of A must not touch, and A's saved folder (the draft adds `-a` to it).
-        let stored =
-            |harness: &egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
-             id: Uuid| {
-                harness
-                    .state()
-                    .0
-                    .all()
-                    .iter()
-                    .find(|campaign| campaign.id == id)
-                    .map(|campaign| (campaign.name.clone(), campaign.path.clone()))
-                    .unwrap()
-            };
-        let b_stored = stored(&harness, first);
-        let a_folder = stored(&harness, second).1.to_string_lossy().into_owned();
-        let field =
-            |harness: &egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
-             label: &str| {
-                harness
-                    .query_all_by_role_and_label(egui::accesskit::Role::TextInput, label)
-                    .next()
-                    .and_then(|field| field.value())
-            };
-        edit_name(&mut harness);
+        let stored = |campaigns: &Campaigns, id: Uuid| {
+            campaigns
+                .all()
+                .iter()
+                .find(|campaign| campaign.id == id)
+                .map(|campaign| (campaign.name.clone(), campaign.path.clone()))
+                .unwrap()
+        };
+        let b_stored = stored(&campaigns, first);
+        let a_folder = stored(&campaigns, second).1.to_string_lossy().into_owned();
+        // A's details: an edit of the name and the folder (review of PR 665: A's folder comes
+        // back too), then Discard, keep A's draft with its Undo in A's own form.
+        let a = campaigns.active_campaign().unwrap();
+        campaigns.start_edit(&a, true);
+        campaigns.set_form_name("Campaign A");
+        campaigns.details_edited();
+        campaigns.set_form_path(&format!("{a_folder}-a"));
+        campaigns.details_edited();
+        campaigns.discard_details();
         // Unrelated B: A's link changes (a result of its own). Undo of A then puts A's draft
         // back into A's form, and B's change and its result stay.
-        pick(&mut harness, "Harbor");
-        assert!(shows(&harness, SAVED), "B's link change says its result");
-        // The click's frames end with the press, done after the pane drew; the next frame is
-        // the first one drawn after Undo.
-        harness.get_by_label(UNDO).click();
-        harness.step();
-        let frame = harness.ctx.cumulative_frame_nr();
-        harness.step();
-        assert_eq!(
-            harness.ctx.cumulative_frame_nr() - frame,
-            1,
-            "one frame after the press"
+        dndbeyond.choose_link(&mut campaigns, Some("34".into()));
+        assert!(
+            shows(&campaigns, &dndbeyond, SAVED),
+            "B's link change says its result"
         );
-        // Review of PR 688 (P1) and PR 693 (P2): on the first frame drawn after Undo, the open
-        // form is A's, the fields on screen hold A's draft, and B's stored details did not
-        // change.
-        let (owner, name, folder) = (
-            harness.state().0.editing,
-            field(&harness, "Campaign name"),
-            field(&harness, "Folder"),
-        );
+        let undo = lines(&campaigns, &dndbeyond)
+            .iter()
+            .find(|line| line.undo.as_ref().is_some_and(|undo| undo.label == UNDO))
+            .and_then(|line| line.press_undo())
+            .expect("the discard's Undo");
+        campaigns.footer_act(undo);
+        // Review of PR 688 (P1) and PR 693 (P2): after Undo, the open form is A's, its fields
+        // hold A's draft, and B's stored details did not change.
+        let (owner, (name, folder)) = (campaigns.editing, campaigns.form_words());
         assert!(
             owner == Some(second)
-                && name.as_deref() == Some("Campaign A")
-                && folder.as_deref() == Some(format!("{a_folder}-a").as_str())
-                && stored(&harness, first) == b_stored,
+                && name == "Campaign A"
+                && folder == format!("{a_folder}-a")
+                && stored(&campaigns, first) == b_stored,
             "Undo of A left the form or B wrong: form of {owner:?} (A is {second}), name {name:?}, \
              folder {folder:?}, B stored {:?}",
-            stored(&harness, first)
+            stored(&campaigns, first)
         );
         assert!(
-            shows(&harness, SAVED)
-                && harness
-                    .state()
-                    .0
+            shows(&campaigns, &dndbeyond, SAVED)
+                && campaigns
                     .active_campaign()
                     .is_some_and(|campaign| campaign.dndbeyond_campaign_id.as_deref() == Some("34")),
             "Undo of A changed B's link or ended its result"
         );
-        harness.get_by_label("Discard").click();
-        harness.run_steps(3);
-        assert!(harness.query_by_label(UNDO).is_some());
+        campaigns.discard_details();
+        assert!(shows(&campaigns, &dndbeyond, UNDO));
         // A link attempt fails (the settings cannot be written): the failure is the newest
         // answer, and the older success ends.
         use std::os::unix::fs::PermissionsExt;
@@ -2476,30 +1614,30 @@ mod tests {
         };
         mode(&path, 0o444);
         mode(&settings, 0o555);
-        pick(&mut harness, "Watchtower");
+        dndbeyond.choose_link(&mut campaigns, Some("12".into()));
         mode(&settings, 0o755);
         mode(&path, 0o644);
         assert!(
-            harness.state().1.error_for_test().is_some() && !shows(&harness, SAVED),
+            dndbeyond.error_for_test().is_some() && !shows(&campaigns, &dndbeyond, SAVED),
             "a failed link left its older success beside the error ({:?})",
-            harness.state().1.error_for_test()
+            dndbeyond.error_for_test()
         );
         // B opens and its Edit details opens B's form. A's draft is not B's: no Undo of it
         // shows there, and B's form keeps B's details.
-        open(&mut harness, first);
-        harness.get_by_label("Edit details").click();
-        harness.run_steps(3);
+        campaigns.select(Some(first));
+        dndbeyond.poll(&ctx, 0, true, &mut campaigns);
+        campaigns.start_edit(&campaigns.active_campaign().unwrap(), true);
         assert!(
-            harness.query_by_label(UNDO).is_none() && harness.state().0.name == "Campaign",
+            !shows(&campaigns, &dndbeyond, UNDO) && campaigns.name == "Campaign",
             "A's discarded draft offers its Undo in B's form (name {:?})",
-            harness.state().0.name
+            campaigns.name
         );
         // Back in A: the draft ended with the change; A's form shows A's saved details.
-        open(&mut harness, second);
-        harness.get_by_label("Edit details").click();
-        harness.run_steps(3);
-        assert!(harness.query_by_label(UNDO).is_none());
-        assert_eq!(harness.state().0.name, "Campaign");
+        campaigns.select(Some(second));
+        dndbeyond.poll(&ctx, 0, true, &mut campaigns);
+        campaigns.start_edit(&campaigns.active_campaign().unwrap(), true);
+        assert!(!shows(&campaigns, &dndbeyond, UNDO));
+        assert_eq!(campaigns.name, "Campaign");
     }
     #[test]
     fn unregistering_remembers_legacy_names_and_finding_a_folder_restores_one_registration() {
@@ -2507,11 +1645,7 @@ mod tests {
         let folder = temp.path().join("campaign");
         std::fs::create_dir(&folder).unwrap();
         let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
-        campaigns.start_import(
-            design::reveal::Act::outside(&egui::Context::default(), 0),
-            "12",
-            "Campaign",
-        );
+        campaigns.begin_import("12", "Campaign");
         campaigns.path = folder.to_string_lossy().into_owned();
         campaigns.save_form().unwrap();
         let campaign = campaigns.active_campaign().unwrap();
@@ -2557,295 +1691,19 @@ mod tests {
         assert_eq!(campaigns.modules()[0].path, temp.path().join("new-folder"));
     }
 
-    /// G137, G138: at 960 px Settings gives the add form about 544 px, and the Folder field cuts
-    /// the folder Splat proposes. The kept line names it whole, `Will create …/<name>`.
+    /// G137, G138: the Folder field cuts a long folder Splat proposes. The kept line names it
+    /// whole by its last name, `Will create …/<name>` (`form_preview`; the GPUI form draws it).
     #[test]
     fn import_form_names_the_proposed_folder_whole() {
-        use egui_kittest::kittest::Queryable;
         let temp = tempfile::tempdir().unwrap();
         let settings = temp
             .path()
             .join("a-long-folder-of-settings/with/several/levels/settings");
         let mut campaigns = Campaigns::at(settings.join("settings.json"));
-        campaigns.start_import(
-            design::reveal::Act::outside(&egui::Context::default(), 0),
-            "7",
-            "Salt Road",
-        );
+        campaigns.begin_import("7", "Salt Road");
         assert!(campaigns.path.ends_with("Salt Road"));
-        const WIDTH: f32 = 544.0;
-        let words = "Will create …/Salt Road";
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(WIDTH, 400.0))
-            .build_ui_state(
-                |ui, (campaigns, natural): &mut (Campaigns, f32)| {
-                    campaigns.show_import_form(ui, "7");
-                    let font = design::Type::Small.font(ui);
-                    *natural = ui
-                        .painter()
-                        .layout_no_wrap(words.into(), font, egui::Color32::WHITE)
-                        .size()
-                        .x;
-                },
-                (campaigns, 0.0),
-            );
-        harness.run();
-        let natural = harness.state().1;
-        let shown = harness.get_by_label(words).rect();
-        assert!(
-            shown.right() <= WIDTH && (shown.width() - natural).abs() < 1.0,
-            "the preview {shown:?} is not whole ({natural} px of words)"
-        );
-
-        // R30: the form's reveal in a column that scrolls, the form far below the view.
-        let scrolled = |height: f32| {
-            let campaigns = Campaigns::at(settings.join("settings.json"));
-            // The form opens in the caller's first step (the harness runs frames as it is
-            // built), by an act in the column.
-            let open = std::rc::Rc::new(std::cell::Cell::new(false));
-            let opening = open.clone();
-            let h = egui_kittest::Harness::builder()
-                .with_size(egui::vec2(WIDTH, height))
-                .build_ui_state(
-                    move |ui, campaigns: &mut Campaigns| {
-                        // 900 px of the page above and below the form (a block that holds room).
-                        let room = |ui: &mut egui::Ui| {
-                            ui.allocate_exact_size(egui::vec2(1.0, 900.0), egui::Sense::hover());
-                        };
-                        design::ScrollColumn::new("column")
-                            .hosts_reveals()
-                            .show(ui, |ui| {
-                                room(ui);
-                                if opening.replace(false) {
-                                    let act = design::reveal::Act::test(ui, 0);
-                                    campaigns.start_import(act, "7", "Salt Road");
-                                }
-                                campaigns.show_import_form(ui, "7");
-                                room(ui);
-                            });
-                    },
-                    campaigns,
-                );
-            open.set(true);
-            h
-        };
-        let in_view = |h: &egui_kittest::Harness<'_, Campaigns>, height: f32| {
-            ["Add campaign", "Cancel", words].iter().all(|name| {
-                h.query_all_by_label(name).next().is_some_and(|node| {
-                    let rect = node.rect();
-                    rect.top() >= -0.5 && rect.bottom() <= height + 0.5
-                })
-            })
-        };
-        let wheel = |h: &mut egui_kittest::Harness<'_, Campaigns>, by: f32| {
-            h.event(egui::Event::PointerMoved(egui::pos2(WIDTH / 2.0, 100.0)));
-            h.event(egui::Event::MouseWheel {
-                unit: egui::MouseWheelUnit::Point,
-                delta: egui::vec2(0.0, by),
-                modifiers: egui::Modifiers::NONE,
-            });
-        };
-        // A wheel turn while the reveal could still act is not pulled back. The fight comes
-        // where a reveal cannot finish: a form taller than its view, which never shows whole.
-        // Its top shows once; 200 px of the DM's wheel up from there stays.
-        let mut h = scrolled(120.0);
-        h.run_steps(8);
-        let revealed = h.get_by_label("Add campaign").rect().top();
-        let mut h = scrolled(120.0);
-        h.step();
-        wheel(&mut h, 200.0);
-        h.run_steps(12);
-        let top = h.get_by_label("Add campaign").rect().top();
-        assert!(
-            top > revealed + 150.0 && !h.state().reveal_running(),
-            "a wheel turn during the reveal was pulled back: Add campaign at {top}, the reveal \
-             put it at {revealed}"
-        );
-        // After the DM scrolled the form away, a resize does not bring it back.
-        let mut h = scrolled(400.0);
-        h.run_steps(8);
-        wheel(&mut h, 3000.0);
-        h.run_steps(4);
-        assert!(!in_view(&h, 400.0));
-        h.set_size(egui::vec2(WIDTH, 460.0));
-        h.run_steps(8);
-        assert!(
-            !in_view(&h, 460.0) && !h.state().reveal_running(),
-            "a resize pulled the view back to a form the DM had scrolled away"
-        );
-        // A form taller than its view: its top shows and the reveal ends within its bound.
-        let mut h = scrolled(120.0);
-        // The open act's frame.
-        h.step();
-        let mut frames = 1;
-        while h.state().reveal_running() && frames < 20 {
-            h.step();
-            frames += 1;
-        }
-        assert!(
-            frames <= usize::from(design::reveal::PASSES) + 1 && !h.state().reveal_running(),
-            "a form taller than its view kept its reveal for {frames} frames"
-        );
-        let top = h
-            .query_all_by_label("Campaign name")
-            .next()
-            .expect("the name field")
-            .rect()
-            .top();
-        assert!(
-            (-0.5..=120.0).contains(&top),
-            "a form taller than its view shows its top: Campaign name at {top}"
-        );
-        h.run_steps(4);
-        assert!(!h.state().reveal_running(), "an ended reveal started again");
-        // The DM types during the reveal: it ends, and nothing moves on later frames (its scroll
-        // is not animated, so no motion outlives it).
-        let mut h = scrolled(400.0);
-        h.step();
-        h.event(egui::Event::Text("s".into()));
-        h.step();
-        let typed = h.get_by_label("Add campaign").rect().top();
-        h.run_steps(10);
-        let later = h.get_by_label("Add campaign").rect().top();
-        assert!(
-            (later - typed).abs() < 0.5 && !h.state().reveal_running(),
-            "the form moved after the DM typed: {typed} then {later}"
-        );
-        // So do pasted and composed text (IME) during the reveal.
-        for event in [
-            egui::Event::Paste("Salt".into()),
-            egui::Event::Ime(egui::ImeEvent::Commit("Salt".into())),
-        ] {
-            let mut h = scrolled(400.0);
-            h.step();
-            h.event(event.clone());
-            h.step();
-            let typed = h.get_by_label("Add campaign").rect().top();
-            h.run_steps(10);
-            let later = h.get_by_label("Add campaign").rect().top();
-            assert!(
-                (later - typed).abs() < 0.5
-                    && h.state().reveal_ended() == Some(design::reveal::End::ByTheDm),
-                "the form moved after {event:?}: {typed} then {later}"
-            );
-        }
-        // It opens: the whole form comes into view, and the reveal ends.
-        let mut h = scrolled(400.0);
-        h.run_steps(8);
-        assert!(in_view(&h, 400.0), "the opened form shows whole");
-        assert!(!h.state().reveal_running());
-        // The DM types in the whole form, then the window gets smaller and cuts the form: the
-        // typing ended the reveal for good, so the resize brings nothing back.
-        let before = h.get_by_label("Add campaign").rect().top();
-        h.event(egui::Event::Text("s".into()));
-        h.step();
-        h.set_size(egui::vec2(WIDTH, 300.0));
-        h.run_steps(8);
-        let after = h.get_by_label("Add campaign").rect().top();
-        assert!(
-            (after - before).abs() < 0.5 && !h.state().reveal_running() && !in_view(&h, 300.0),
-            "a resize after the DM typed moved the form: Add campaign {before} then {after}"
-        );
-        // Untouched, a smaller window does not bring the reveal back (R34: it never repeats):
-        // the form stays where it is, with no second scroll.
-        let mut h = scrolled(400.0);
-        h.run_steps(8);
-        let before = h.get_by_label("Add campaign").rect().top();
-        h.set_size(egui::vec2(WIDTH, 300.0));
-        h.run_steps(8);
-        let after = h.get_by_label("Add campaign").rect().top();
-        assert!(
-            (after - before).abs() < 0.5
-                && h.state().reveal_ended() == Some(design::reveal::End::Whole),
-            "a resize scrolled an ended reveal again: Add campaign {before} then {after}"
-        );
-
-        // Settings' real form: the remote list's `Add…` opens it inside the `Add from D&D
-        // Beyond` collapsing header, in the pane's own scroll column, with the pane's footer.
-        let session = crate::auth::Session::for_test(
-            std::time::Duration::from_secs(3600),
-            std::time::Duration::from_secs(7200),
-        );
-        let settings_page = |height: f32| {
-            let campaigns = Campaigns::at(settings.join("settings.json"));
-            let mut h = egui_kittest::Harness::builder()
-                .with_size(egui::vec2(WIDTH, height))
-                .build_ui_state(
-                    |ui, (campaigns, dndbeyond): &mut (Campaigns, crate::dndbeyond::DndBeyond)| {
-                        dndbeyond.poll(ui.ctx(), 0, true, campaigns);
-                        let footer = design::Footer::new("settings_footer", WIDTH);
-                        let scroll = design::pane::ContentScroll::default().hosts_reveals();
-                        footer.pane_content(ui, scroll, |ui| {
-                            // 700 px of the account section above the list.
-                            ui.allocate_exact_size(egui::vec2(1.0, 700.0), egui::Sense::hover());
-                            campaigns.show(ui, Some(session.clone()), dndbeyond, None);
-                        });
-                    },
-                    (campaigns, crate::dndbeyond::DndBeyond::default()),
-                );
-            for _ in 0..200 {
-                h.step();
-                if h.query_by_label("Add Salt Road from D&D Beyond").is_some()
-                    && !h.state().1.busy()
-                {
-                    break;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(5));
-            }
-            h
-        };
-        let mut h = settings_page(400.0);
-        // The DM scrolls until the list's last row just shows at the bottom, then presses its
-        // `Add…`: the form opens below the view.
-        let below = h
-            .get_by_label("Add Salt Road from D&D Beyond")
-            .rect()
-            .bottom()
-            - 396.0;
-        h.event(egui::Event::PointerMoved(egui::pos2(WIDTH / 2.0, 100.0)));
-        h.event(egui::Event::MouseWheel {
-            unit: egui::MouseWheelUnit::Point,
-            delta: egui::vec2(0.0, -below),
-            modifiers: egui::Modifiers::NONE,
-        });
-        h.run_steps(12);
-        let add = h.get_by_label("Add Salt Road from D&D Beyond").rect();
-        assert!(
-            add.bottom() <= 400.0 && add.bottom() > 300.0,
-            "the Add… row is not at the view's bottom: {add:?}"
-        );
-        h.get_by_label("Add Salt Road from D&D Beyond").click();
-        let cut = |h: &egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>| {
-            ["Add campaign", "Cancel", words]
-                .iter()
-                .filter(|name| {
-                    h.query_all_by_label(name).next().is_none_or(|node| {
-                        let rect = node.rect();
-                        rect.top() < -0.5 || rect.bottom() > 400.0 + 0.5
-                    })
-                })
-                .copied()
-                .collect::<Vec<_>>()
-        };
-        h.step();
-        let opened = cut(&h);
-        assert!(
-            !opened.is_empty() && h.state().0.reveal_running(),
-            "the form opened whole, or with no reveal: the case proves nothing ({opened:?} cut)"
-        );
-        h.run_steps(8);
-        assert!(
-            cut(&h).is_empty() && h.state().0.reveal_ended() == Some(design::reveal::End::Whole),
-            "Settings' import form opened from Add… at {add:?} is not whole: {:?} cut; {:?}",
-            cut(&h),
-            h.state().0.reveal_ended()
-        );
-        // The opened form's name field keeps the keyboard: the reveal reads the focused field's
-        // place without taking its focus.
-        assert!(
-            h.query_all_by_label("Campaign name")
-                .any(|node| node.is_focused()),
-            "the opened form's name field lost the keyboard focus"
-        );
+        assert_eq!(campaigns.form_preview().as_deref(), Some("…/Salt Road"));
+        // The form opens for that campaign, with the name field taking the keyboard.
+        assert!(campaigns.importing("7") && campaigns.take_focus_name());
     }
 }

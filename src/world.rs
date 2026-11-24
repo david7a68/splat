@@ -2848,29 +2848,6 @@ impl Reader {
         None
     }
 
-    /// The choice a link to several files is waiting for. It stays above the scrolling text.
-    pub(crate) fn choices(&mut self, ui: &mut egui::Ui, index: &ContentIndex) -> Option<Nav> {
-        if self.many.is_empty() {
-            return None;
-        }
-        ui.label(
-            Type::Small
-                .rich(ui, "This link matches more than one note. Choose one.")
-                .color(colors().muted),
-        );
-        let mut chosen = None;
-        for &position in &self.many {
-            if design::link(ui, &index.items[position].entry.path).clicked() {
-                chosen = Some(position);
-            }
-        }
-        chosen.and_then(|position| {
-            let heading = self.many_heading.take();
-            self.heading_document = Some(index.items[position].entry.id);
-            self.settle(Go::Item(position, heading))
-        })
-    }
-
     /// Draw any item: a plain note, a world entry, or an entry of another kind.
     /// A newly opened note starts with its own state: the last note's change, kept form,
     /// error and pickers end here. Both the footer and the body call it first.
@@ -4405,51 +4382,6 @@ impl Reader {
         }
     }
 
-    /// Take a footer press on the open note. `Page`, `Trackers` and `Untick` are the page's or
-    /// the pane's; a kept result's press acts by its ticket, and a replaced or ended result
-    /// (`Gone`) does nothing.
-    pub(crate) fn footer_act(
-        &mut self,
-        ctx: &egui::Context,
-        press: design::outcome::Press<FooterAct>,
-        open: Option<Uuid>,
-        campaign: &Campaign,
-    ) -> Option<Nav> {
-        let go = match press.id {
-            FooterAct::Undo => self.undo_result(press.ticket?, open, campaign),
-            FooterAct::GoneCopy(id) => {
-                if let Some(gone) = self.held.gone_log_lines.iter().find(|gone| gone.id == id) {
-                    ctx.copy_text(gone.words.clone());
-                }
-                self.end_gone_log(id);
-                None
-            }
-            FooterAct::GoneDismiss(id) => {
-                self.dismiss_gone_log(id);
-                None
-            }
-            FooterAct::UndoDismiss => {
-                self.undo_dismiss(press.ticket?);
-                None
-            }
-            FooterAct::LostCopy(id) => {
-                self.copy_lost(ctx, id);
-                None
-            }
-            FooterAct::LostDiscard(id) => {
-                self.discard_lost(id);
-                None
-            }
-            FooterAct::OpenEditor(path) => {
-                ctx.open_url(egui::OpenUrl::new_tab(obsidian_url(&path)));
-                None
-            }
-            // The page takes its own result's Undo and its ticks, and the pane the trackers'.
-            FooterAct::Page | FooterAct::Trackers | FooterAct::Untick => None,
-        };
-        go.and_then(|go| self.settle(go))
-    }
-
     /// `Undo` of a kept result of the reader's store, by its ticket: a replaced or ended result
     /// (`Gone`) does nothing; a failed Undo keeps the result and says why.
     pub(crate) fn undo_result(
@@ -5047,32 +4979,6 @@ fn add_form(
 /// The words for a held NPC, in the rail and in the row above another view. The rail's link
 /// is found by this constant.
 pub const UNSAVED_NPC: &str = "Unsaved NPC";
-
-/// The one row above another view while an unsaved generated NPC is held, on World and in
-/// Lookup: `<name> ✎ Unsaved NPC · Show`, named `Unsaved NPC: <name>`. Returns whether the DM
-/// chose `Show`.
-pub(crate) fn unsaved_npc_row(ui: &mut egui::Ui, name: &str) -> bool {
-    let mut show = false;
-    ui.horizontal_wrapped(|ui| {
-        // M0602: the held NPC has the shared draft status, as the rail shows it (the draft icon
-        // and the unsaved colour). Its name starts the line at the text edge, as an entry's
-        // name leads its state; the name reads as the row's sentence, `Unsaved NPC: <name>`.
-        let words = ui.label(Type::Body.rich(ui, name).color(colors().text));
-        design::named(ui, &words, &format!("{UNSAVED_NPC}: {name}"));
-        design::status(
-            ui,
-            design::Status {
-                icon: design::icons::DRAFT,
-                word: UNSAVED_NPC,
-                color: colors().document.unsaved,
-            },
-        );
-        ui.label(Type::Body.rich(ui, "·").color(colors().muted));
-        show = design::link(ui, "Show").clicked();
-    });
-    design::gap(ui, design::Gap::S);
-    show
-}
 
 #[cfg(test)]
 mod tests {

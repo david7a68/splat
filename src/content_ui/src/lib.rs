@@ -59,10 +59,6 @@ pub mod session_notes;
 pub mod test_support;
 
 #[cfg(test)]
-#[path = "../../trackers/reader.rs"]
-mod tracker_reader;
-
-#[cfg(test)]
 fn workspace() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")

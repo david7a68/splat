@@ -92,7 +92,6 @@ use splat_sessions_ui::processing;
 #[cfg(test)]
 use splat_sessions_ui::recording;
 use splat_sessions_ui::sessions;
-#[allow(dead_code, reason = "egui drawing; deleted in wave 3 step 2")]
 mod settings;
 #[cfg(test)]
 use splat_content_ui::sheet_writer;
