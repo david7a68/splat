@@ -19,7 +19,7 @@ pub mod ownership {
 }
 
 #[cfg(test)]
-#[path = "../../visual_tests/input_frame.rs"]
+#[path = "../input_frame.rs"]
 mod input_frame;
 
 #[cfg(test)]

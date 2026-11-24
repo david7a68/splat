@@ -1,8 +1,8 @@
 //! Trackers in Lookup's panel: the empty state's route, the Tournament's note in play beside the
 //! Session page, a quick action and its Undo, a Due row and `Done`, an amount typed for an action
 //! that asks, and the panel's captures (`trackers__*`, paired with the egui references).
+use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
-use crate::visual_tests::fixture::Seed;
 use gpui::{px, size};
 use std::fs;
 

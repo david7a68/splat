@@ -1,11 +1,11 @@
 //! The entry views' screenshots and interaction tests, drawn in place of the page at the Library
 //! reader's width, with the app's content index for links when the fixture has one.
 use super::{EntryView, Source, index_links, title_with_art};
+use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
 use crate::gui::pages::reader::Preview;
 use crate::gui::theme::{L, colors};
 use crate::library::view::{Links, NoLinks};
-use crate::visual_tests::fixture::Seed;
 use gpui::{
     InteractiveElement, IntoElement, ParentElement, Pixels, ScrollHandle, Size,
     StatefulInteractiveElement, Styled, div, point, px, size,

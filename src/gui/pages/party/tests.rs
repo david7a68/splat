@@ -1,8 +1,8 @@
 //! Party: screenshots of the egui `party`, `party-bar-crowded` and `empty` scenarios' main
 //! states, and the page's flows (choose a member, change the sheet's page, open an entry).
 use crate::Page;
+use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
-use crate::visual_tests::fixture::Seed;
 
 fn party(name: &str) -> Shell {
     let mut shell = Shell::new(name, Seed::Campaign);
@@ -306,7 +306,7 @@ fn party_bar_holds_through_a_fight() {
             .encounters
             .saved_runs()
             .iter()
-            .find(|run| run.encounter == crate::visual_tests::fixture::RUN)
+            .find(|run| run.encounter == crate::fixtures::RUN)
             .expect("the fixture's saved run")
             .path
             .clone();

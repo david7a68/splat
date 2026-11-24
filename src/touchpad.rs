@@ -1,8 +1,8 @@
-//! Touchpad scrolling speed. egui moves content one point for each unit the system sends,
+//! Touchpad scrolling speed. A toolkit moves content one point for each unit the system sends,
 //! as macOS expects, where the system adds speed and momentum itself. On Linux it does not:
 //! Firefox moves about 4 pixels for each unit and Chromium-based apps about 12, so Splat
-//! scrolled far less than they did for the same swipe. The DM chooses the factor.
-use eframe::egui;
+//! scrolled far less than they did for the same swipe. The DM chooses the factor; the GPUI app
+//! applies it (`gui::touchpad`).
 use serde::{Deserialize, Deserializer, Serialize};
 
 /// How far content moves for each unit of touchpad scrolling. Mouse wheels keep their speed.
@@ -37,59 +37,7 @@ impl TouchpadSpeed {
             Self::Twelve => 12.0,
         }
     }
-
-    /// Touchpads report scrolling in points and mouse wheels in lines, so only points change.
-    /// With the zoom modifier held, a scroll zooms, and zoom keeps its own speed.
-    ///
-    /// winit does not say what sent a scroll in points. On-button scrolling (a TrackPoint, or
-    /// a mouse moved with a button held) also arrives in points, so it gets the same factor.
-    ///
-    /// egui spreads a step of 8 points or more over the next frames, as it does for a mouse
-    /// wheel's notch, and a touchpad would feel that as lag. Smaller steps move at once, so
-    /// a faster step goes to egui in parts.
-    pub fn apply(self, events: &mut Vec<egui::Event>) {
-        let factor = self.factor();
-        if factor == 1.0 {
-            return;
-        }
-        let mut faster = Vec::with_capacity(events.len());
-        for event in events.drain(..) {
-            let egui::Event::MouseWheel {
-                unit: egui::MouseWheelUnit::Point,
-                delta,
-                modifiers,
-                ..
-            } = &event
-            else {
-                faster.push(event);
-                continue;
-            };
-            if modifiers.command {
-                faster.push(event);
-                continue;
-            }
-            let delta = *delta * factor;
-            // With Shift or Alt held, egui first turns a diagonal step into a straight one
-            // of x + y, and then measures it.
-            let size = delta.length().max((delta.x + delta.y).abs());
-            let parts = (size / LARGEST_STEP).ceil().clamp(1.0, MOST_PARTS);
-            for _ in 0..parts as usize {
-                let mut part = event.clone();
-                if let egui::Event::MouseWheel { delta: step, .. } = &mut part {
-                    *step = delta / parts;
-                }
-                faster.push(part);
-            }
-        }
-        *events = faster;
-    }
 }
-
-/// Below egui's 8-point smoothing threshold.
-const LARGEST_STEP: f32 = 7.5;
-/// A very fast swipe at 12× can be hundreds of points. Past this many parts, egui smooths the
-/// rest rather than taking more events.
-const MOST_PARTS: f32 = 64.0;
 
 /// Any value this version does not know, of any type, reads as the default, so the rest of
 /// the file still opens.
@@ -110,102 +58,9 @@ impl<'de> Deserialize<'de> for TouchpadSpeed {
 mod tests {
     use super::*;
 
-    fn wheel(unit: egui::MouseWheelUnit, y: f32, modifiers: egui::Modifiers) -> egui::Event {
-        egui::Event::MouseWheel {
-            unit,
-            delta: egui::vec2(0.0, y),
-            modifiers,
-        }
-    }
-
-    /// The scroll in these units, and with or without the zoom modifier.
-    fn total(events: &[egui::Event], wanted: egui::MouseWheelUnit, zoom: bool) -> f32 {
-        events
-            .iter()
-            .filter_map(|event| match event {
-                egui::Event::MouseWheel {
-                    unit,
-                    delta,
-                    modifiers,
-                    ..
-                } if *unit == wanted && modifiers.command == zoom => Some(delta.y),
-                _ => None,
-            })
-            .sum()
-    }
-
-    #[test]
-    fn only_touchpad_scrolls_move_further() {
-        let none = egui::Modifiers::NONE;
-        let mut events = vec![
-            wheel(egui::MouseWheelUnit::Point, -10.0, none),
-            wheel(egui::MouseWheelUnit::Line, -1.0, none),
-            wheel(egui::MouseWheelUnit::Page, 1.0, none),
-            wheel(egui::MouseWheelUnit::Point, 5.0, egui::Modifiers::COMMAND),
-            egui::Event::Zoom(1.5),
-        ];
-        TouchpadSpeed::Eight.apply(&mut events);
-        let point = egui::MouseWheelUnit::Point;
-        assert!(
-            (total(&events, point, false) + 80.0).abs() < 1e-3,
-            "a touchpad scroll"
-        );
-        assert_eq!(
-            total(&events, egui::MouseWheelUnit::Line, false),
-            -1.0,
-            "a mouse wheel"
-        );
-        assert_eq!(
-            total(&events, egui::MouseWheelUnit::Page, false),
-            1.0,
-            "a page step"
-        );
-        assert_eq!(total(&events, point, true), 5.0, "a zoom");
-        assert!(events.contains(&egui::Event::Zoom(1.5)));
-        let before = events.clone();
-        TouchpadSpeed::One.apply(&mut events);
-        assert_eq!(events, before);
-    }
-
-    /// egui smooths a large step over the next frames. A faster touchpad must still move the
-    /// whole way in the frame its scroll arrives, as it did before.
-    #[test]
-    fn a_faster_scroll_moves_in_the_frame_it_arrives() {
-        let ctx = egui::Context::default();
-        let down = egui::vec2(0.0, -5.0);
-        let diagonal = egui::vec2(2.5, 2.5);
-        // Shift scrolls sideways and Alt only up and down: egui adds x and y for both.
-        for (delta, modifiers, wanted) in [
-            (down, egui::Modifiers::NONE, down),
-            (diagonal, egui::Modifiers::SHIFT, egui::vec2(5.0, 0.0)),
-            (diagonal, egui::Modifiers::ALT, egui::vec2(0.0, 5.0)),
-        ] {
-            for speed in [TouchpadSpeed::Four, TouchpadSpeed::Twelve] {
-                let mut events = vec![egui::Event::MouseWheel {
-                    unit: egui::MouseWheelUnit::Point,
-                    delta,
-                    modifiers,
-                }];
-                speed.apply(&mut events);
-                let mut moved = egui::Vec2::ZERO;
-                let _ = ctx.run(
-                    egui::RawInput {
-                        events,
-                        modifiers,
-                        ..Default::default()
-                    },
-                    |ctx| moved = ctx.input(|input| input.smooth_scroll_delta),
-                );
-                let wanted = wanted * speed.factor();
-                assert!(
-                    (moved - wanted).length() < 1e-3,
-                    "{speed:?} {modifiers:?}: moved {moved:?} of {wanted:?}"
-                );
-            }
-        }
-    }
-
-    /// eframe asks for this before the first frame, where the rest of the saved state returns.
+    /// The saved speed returns before the first frame, with the rest of the saved state
+    /// (`Splat::restore`, which the GPUI root calls as it is built), so the first scroll moves
+    /// at it. `gui::tests` proves that a scroll moves at the app's speed.
     #[test]
     fn the_saved_speed_applies_from_the_first_scroll() {
         let dir = tempfile::tempdir().unwrap();
@@ -215,16 +70,9 @@ mod tests {
             ui_store: crate::ui_state::Store::at(path),
             ..Default::default()
         };
-        let mut input = egui::RawInput {
-            events: vec![wheel(
-                egui::MouseWheelUnit::Point,
-                -1.0,
-                egui::Modifiers::NONE,
-            )],
-            ..Default::default()
-        };
-        eframe::App::raw_input_hook(&mut app, &egui::Context::default(), &mut input);
-        assert!((total(&input.events, egui::MouseWheelUnit::Point, false) + 12.0).abs() < 1e-3);
+        assert_eq!(app.touchpad_speed, TouchpadSpeed::Four);
+        app.restore();
+        assert_eq!(app.touchpad_speed, TouchpadSpeed::Twelve);
     }
 
     #[test]

@@ -5919,21 +5919,18 @@ mod tests {
         assert!(fight_summary(&path, campaign).is_err());
     }
     /// F2: a real run file that a version before effects saved, with its Undo steps: the
-    /// plain campaign's run, as G7 keeps it. It opens with its steps, and its words stay
-    /// labels: nothing counts and nothing reminds.
+    /// plain campaign's run, as G7 kept it (`tests/fixtures/runs/`). It opens with its steps,
+    /// and its words stay labels: nothing counts and nothing reminds.
     #[test]
     fn a_run_file_saved_before_effects_opens_with_its_steps_and_keeps_its_words() {
-        let folder = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../src/visual_tests/plain_evening/files/emberfall/Encounter Runs");
-        let source = fs::read_dir(&folder)
-            .unwrap()
-            .map(|entry| entry.unwrap().path())
-            .find(|path| {
-                fs::read_to_string(path)
-                    .unwrap()
-                    .contains("Bless 10 rounds")
-            })
-            .expect("the plain campaign's run file");
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/runs/679b1d94-eafc-8371-af01-5dabde386320.json");
+        assert!(
+            fs::read_to_string(&source)
+                .unwrap()
+                .contains("Bless 10 rounds"),
+            "the plain campaign's run file"
+        );
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(source.file_name().unwrap());
         fs::copy(&source, &path).unwrap();

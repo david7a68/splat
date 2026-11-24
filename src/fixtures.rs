@@ -1,5 +1,6 @@
-//! Synthetic worlds for the visual suite. Every file lives in a temporary folder,
-//! every name is invented, and the only other content is the built-in SRD.
+//! Synthetic worlds for the GUI tests (`gui::harness`) and the content integration tests. Every
+//! file lives in a temporary folder, every name is invented, and the only other content is the
+//! built-in SRD.
 use crate::{
     Splat,
     campaigns::Campaigns,
@@ -58,11 +59,6 @@ pub const PLAIN_TONIGHT: &str = "The Crossing";
 pub const PLAIN_LONG_NAME: &str = "Ashfang, Eldest Wolf of the Southern Ridge";
 /// The titles that `docs/design/session-cycle.md` section 1.2 sums: 13, 16 and 19 letters.
 pub const PLAIN_TITLES: [&str; 3] = ["Captain Varra", "Oren Thistlewick", "Captain Varra Black"];
-
-/// The package creature that the plain campaign selects.
-pub fn plain_package_creature() -> uuid::Uuid {
-    module_entry_id("cinder_wolf")
-}
 
 /// A reader in the plain campaign: a World NPC, with no portrait, or a humanoid creature,
 /// which has its type's art.

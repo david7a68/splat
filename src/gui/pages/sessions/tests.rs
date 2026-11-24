@@ -1,8 +1,8 @@
 //! Screenshots and interaction tests of the Session page. Captures pair with the egui references
 //! by name (`<scenario>__<step>__<w>x<h>`).
+use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
 use crate::recording::Health;
-use crate::visual_tests::fixture::Seed;
 use gpui::{px, size};
 
 const TITLE: &str = "Ash on the Road";
@@ -147,7 +147,7 @@ fn plain_evening_states() {
     shell.capture("plain-evening__03-session-tonight: planned fight open__1200x800");
     // Gap 4: the opened played fight shows how it ended (egui `fight_block`): each player's
     // final HP, `Log · Whole run · Timeline`, and the Log under them while it is open.
-    use crate::visual_tests::fixture::{PLAIN_LAST, PLAIN_PLAYED};
+    use crate::fixtures::{PLAIN_LAST, PLAIN_PLAYED};
     let last = shell
         .read(|root| {
             root.app

@@ -1,8 +1,8 @@
 //! The Encounters page's screenshots and interaction tests. Captures are named
 //! `<egui-scenario>__<step>__<w>x<h>` so they pair with `artifacts/screenshots/egui-reference/`.
 use crate::Page;
+use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
-use crate::visual_tests::fixture::Seed;
 use gpui::{px, size};
 use std::time::Duration;
 
@@ -408,7 +408,7 @@ fn a_rows_changes_are_edited_in_its_form() {
     use splat_encounters_ui::encounters::model::ChangesOf;
     let mut shell = Shell::new("run-overrides", Seed::Groups);
     ready(&mut shell);
-    open_encounter(&mut shell, crate::visual_tests::fixture::RUN_ARENA);
+    open_encounter(&mut shell, crate::fixtures::RUN_ARENA);
     shell.capture("run-overrides__02-slot-with-changes__1200x800");
     let change = first_target(&mut shell, "id:roster-change:");
     let key = change.trim_start_matches("id:roster-change:").to_owned();
@@ -597,7 +597,7 @@ fn the_encounters_loot_list() {
     // The loot ends the roster's column: a tall window shows it and its suggestions whole.
     let mut shell = Shell::with_size("run-loot", Seed::Loot, size(px(1200.0), px(1400.0)));
     ready(&mut shell);
-    open_encounter(&mut shell, crate::visual_tests::fixture::RUN);
+    open_encounter(&mut shell, crate::fixtures::RUN);
     let loot = |shell: &mut Shell| {
         shell.update(|root, _, cx| {
             let ctx = root.bridge.ctx().clone();
@@ -924,7 +924,7 @@ fn use_it_offers_a_creature_from_an_unused_package() {
     crate::hermetic::closed::repeatable_uuids(1);
     let home = tempfile::tempdir().expect("a test folder");
     let root = home.path().join("use-it");
-    let world = crate::visual_tests::fixture::World::build(
+    let world = crate::fixtures::World::build(
         &root,
         &crate::gui::harness::character_cache(),
         "use-it",

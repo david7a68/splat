@@ -1,10 +1,10 @@
 //! The Reader's screenshots and interaction tests: the Markdown view and the entry views, drawn
 //! in place of the page (`State::preview`) at the widths the egui scenarios show them.
 use super::Preview;
+use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
 use crate::gui::kit;
 use crate::gui::theme::{L, READER_MEASURE, colors};
-use crate::visual_tests::fixture::Seed;
 use gpui::{IntoElement, ParentElement, Styled, div, px};
 use std::rc::Rc;
 

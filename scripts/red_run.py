@@ -2,13 +2,13 @@
 """One red run, the same way in every lane (Sol 2-006).
 
 A red run proves a check can fail: a mutation patch breaks the code under test, the check runs,
-and it must fail at the assertion (or visual check id) it was written for. This command:
+and it must fail at the assertion it was written for. This command:
 
 1. makes an isolated copy of the proved head (a scratch git worktree under
    `artifacts/screenshots/red/<label>`, which git ignores, seeded with a reflinked copy of this
    checkout's `target/`, so only the crates the patch touches compile again);
 2. applies the mutation patch there;
-3. runs the focused command there (a test filter, `visual-test <label> --only …`, any command);
+3. runs the focused command there (a test filter, `gui-test <filter>`, any command);
 4. REJECTS the run when the patch does not apply, the mutant does not compile, the command
    passes, or it fails without the expected assertion text or check id in a failure message;
 5. keeps the log in `artifacts/screenshots/red-<label>.log`, removes the copy, and prints one
@@ -17,11 +17,11 @@ and it must fail at the assertion (or visual check id) it was written for. This 
 Usage (from the repository root):
   scripts/red_run.py --patch mutant.diff --expect "the two long names are fitted once" \\
       -- devenv shell -- cargo test --locked --lib -p splat-trackers -- a_name_in_its_column
-  scripts/red_run.py --patch mutant.diff --expect "T19.4" -- devenv shell -- visual-test red-t19 --only trackers
+  scripts/red_run.py --patch mutant.diff --expect "the tracker's row moves down" -- devenv shell -- gui-test gui::pages::trackers
 
 Options:
   --patch FILE     the mutation, as `git diff` writes it (required)
-  --expect TEXT    the assertion's message, its words, or a visual check id (required)
+  --expect TEXT    the assertion's message or its words (required)
   --head REF       the proved head (default: HEAD)
   --label NAME     names the copy and the log (default: from the patch's file name)
   --summary TEXT   the row's patch summary (default: the patch's first changed file and line)
@@ -43,8 +43,7 @@ def run(cmd, cwd, **kw):
 
 
 def failures(log):
-    """Each failure message in the log: a test's panic (its lines up to a blank line) and the
-    visual suite's report, which is part of its panic."""
+    """Each failure message in the log: a test's panic (its lines up to a blank line)."""
     blocks = []
     lines = log.splitlines()
     for at, line in enumerate(lines):

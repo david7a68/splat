@@ -1,8 +1,8 @@
 //! Screenshots and interaction tests of the Library page. Captures are named after the egui
 //! scenarios' steps (`<scenario>__<step>__<w>x<h>`), so they pair with the references.
 use crate::Page;
+use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
-use crate::visual_tests::fixture::Seed;
 use gpui::{px, size};
 
 /// Open the Library and settle its load.

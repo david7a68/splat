@@ -29,8 +29,6 @@ pub mod turn_heading;
 pub mod value_block;
 
 #[cfg(test)]
-pub(crate) mod attributes;
-#[cfg(test)]
 mod lint;
 #[cfg(test)]
 mod typing_history_model;

@@ -922,656 +922,8 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
     }
 }
 
-/// Every suppression of `clippy::disallowed_methods` that may stay, one row per suppression:
-/// the file, the item it is on (a function's name, or `<function or macro!> statement`), and the
-/// bans it is for. Clippy's `disallowed-methods` (`clippy.toml`) fails `check` on any call of
-/// `ResultOrder::issue`, `Footer::result` and `save_row_state`, and of package M's escapes and
-/// helpers (`Ban::Words`, `Ban::Sentence`, `Ban::Order`, `Ban::Body`), by any name (an alias, a
-/// function item, a qualified path); a suppression frees only what it sits on. `Ban::Words` and
-/// `Ban::Body` are named escapes: their rows need not reach 0, but each new one is a visible row.
-///
-/// `staged_allows_only_shrink` finds every suppression (`allow` or `expect`, any reason or none,
-/// also in `cfg_attr`, also of a group that holds the lint) and fails on one that is not listed,
-/// on a file, module, `impl`, trait or macro, or on a function that holds a nested function. A
-/// listed one whose item no longer calls, or a row with no suppression, asks to remove the row.
-/// The rows can only go; at none with `Ban::Results`, those parts become private.
-///
-/// **Package K.** K bans raw egui calls through the same lint (`Ban::Layout(n)`, `Ban::RowKey(n)`, each with the number of calls its item holds). Its staged rows are
-/// here; where one function holds both kinds of call, that function keeps one attribute and its
-/// row lists both bans. The owners of the raw calls, `src/design/` and the capture harness
-/// `src/visual_tests/`, list theirs in [`OWNED_ALLOWS`], which never shrinks to none.
-#[cfg(test)]
-pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
-    use suppressions::Ban;
-    &[
-        // Campaign content (Wave 2 d, C): body faults with their repairs, and outside words.
-        ("src/campaign_content.rs", "cause", &[Ban::Words]),
-        ("src/campaign_content.rs", "draw_reason", &[Ban::Body]),
-        ("src/campaign_content.rs", "outcome_of", &[Ban::Words]),
-        ("src/campaign_content.rs", "packages_content", &[Ban::Body]),
-        ("src/campaign_content.rs", "page", &[Ban::Body]),
-        // Ruling Q-x: the answer to the DM's last act leads the footer.
-        (
-            "src/campaign_content.rs",
-            "page_footer_with",
-            &[Ban::Answer],
-        ),
-        (
-            "src/campaign_content.rs",
-            "repair_section_content",
-            &[Ban::Extras(1), Ban::Body],
-        ),
-        (
-            "src/campaign_content.rs",
-            "selection_bar_content",
-            &[Ban::Results],
-        ),
-        (
-            "src/campaigns.rs",
-            "footer_messages",
-            // Layout PR 2b: typed lines; the page's lock words are app-owned `&str`.
-            &[Ban::Words],
-        ),
-        ("src/campaigns.rs", "form", &[Ban::Results]),
-        // M20: the first campaign's form has no footer; its error is a typed body fault in
-        // place of `design::message` (`draw_error`, gone).
-        ("src/campaigns.rs", "form_error_inline", &[Ban::Body]),
-        // The design system's pane tests with closure lines (the `#[cfg(test)]` `Footer::result`,
-        // `legacy_reason`) and a footer placed by hand (migration-32 L2c: no app code can).
-        (
-            "src/design/components.rs",
-            "iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::Footer],
-        ),
-        (
-            "src/design/components.rs",
-            "iter27_a_footer_results_go_newest_first_by_their_action",
-            &[Ban::Results, Ban::Footer],
-        ),
-        (
-            "src/design/components.rs",
-            "iter27_a_the_footer_follows_a_short_body",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::Footer],
-        ),
-        (
-            "src/design/gallery.rs",
-            "components",
-            &[Ban::Results, Ban::Layout(4)],
-        ),
-        ("src/design/results.rs", "act_order", &[Ban::Results]),
-        // Layout PR 2b: the one escape of the Settings and Link and folder footers' words.
-        ("src/campaigns.rs", "footer_words", &[Ban::Words]),
-        // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c), a design
-        // `ScrollColumn` since layout step 11a (no raw scroll area is left).
-        ("src/encounter_run/view.rs", "groups_tab", &[Ban::Pane(1)]),
-        (
-            "src/encounters/groups.rs",
-            "group_editor_view",
-            &[Ban::Results, Ban::Pane(1)],
-        ),
-        (
-            "src/encounters.rs",
-            "creature_pane",
-            &[Ban::Results, Ban::Pane(1), Ban::RowKey(1)],
-        ),
-        ("src/encounters.rs", "run_settings", &[Ban::Results]),
-        (
-            "src/design/results.rs",
-            "a_failed_undo_keeps_its_entry_and_its_order",
-            &[Ban::ByOwner(3)],
-        ),
-        (
-            "src/design/results.rs",
-            "end_events_do_what_the_kind_says",
-            &[Ban::ByOwner(1)],
-        ),
-        // The part's own tests of the by-owner revisions (M3), and the pilot fixture's.
-        (
-            "src/design/results.rs",
-            "a_ticket_reaches_only_its_own_entry",
-            &[Ban::ByOwner(4)],
-        ),
-        ("src/design/outcome.rs", "show_active", &[Ban::ByOwner(1)]),
-        (
-            "src/design/results.rs",
-            "a_result_shows_only_in_its_own_scope statement",
-            &[Ban::ByOwner(1)],
-        ),
-        (
-            "src/design/results.rs",
-            "a_result_shows_only_in_its_own_scope statement",
-            &[Ban::ByOwner(1)],
-        ),
-        // M20 (M-L0.6): the disk-change warnings above the comparison, typed placeholders.
-        ("src/library.rs", "editor_pane", &[Ban::Body]),
-        // M20 (M-L0.6): a read fault in the reader's body, with `Try again`.
-        ("src/library/catalogue.rs", "fault_notice", &[Ban::Body]),
-        // M20 (M-L0.6): a copied package folder's warnings in the form, with its repair.
-        ("src/library.rs", "package_form", &[Ban::Body]),
-        // M20 (M-L0.6): a failed load where the page has no pane.
-        ("src/library.rs", "show statement", &[Ban::Body]),
-        ("src/library/catalogue.rs", "field_key", &[Ban::RowKey(1)]),
-        // M17 (M-L0.4b): the page's error, the system's or the workspace's words.
-        ("src/library/catalogue.rs", "cause", &[Ban::Words]),
-        // M17 (M-L0.4b): a manifest write's words, which start with the file's path from disk.
-        ("src/library.rs", "outcome_of", &[Ban::Words]),
-        ("src/party.rs", "sheet_view", &[Ban::Body]),
-        // R24: a value block's save row shows its own messages (the Session folder's).
-        ("src/sessions/page.rs", "folder_block", &[Ban::Body]),
-        // M-N0.6 (M20): typed body places, each in place of an untyped body message.
-        ("src/sessions/page.rs", "show_form", &[Ban::Body]),
-        ("src/sessions/page.rs", "notes_panel", &[Ban::Body]),
-        ("src/sessions/page.rs", "show", &[Ban::Body]),
-        // M-N0.10: the record line's warning (M0453).
-        ("src/sessions/page.rs", "record_line_body", &[Ban::Body]),
-        (
-            "src/sessions/page.rs",
-            "banner_notices",
-            &[Ban::Results, Ban::Body],
-        ),
-        ("src/sessions/page.rs", "markers", &[Ban::Results]),
-        (
-            "src/sessions/page.rs",
-            "reading_view",
-            &[Ban::Results, Ban::Body],
-        ),
-        ("src/sessions/page.rs", "session_messages", &[Ban::Order]),
-        // M-N0.4: the template's text field is keyed by its file (`TextKey::from_data`): a
-        // template has no typed owner key yet.
-        (
-            "src/sessions/page.rs",
-            "template_editor",
-            &[Ban::Results, Ban::RowKey(1)],
-        ),
-        (
-            "src/sessions/plan.rs",
-            "plan_pane",
-            // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            // `Body` (M-N1.5, M20): a planned group's member faults in its row, typed.
-            &[Ban::Body, Ban::ByOwner(1)],
-        ),
-        // M-N1.3 (ruling M20): Read's embed whose source is gone, typed (`BodyMessage`), in
-        // place of a `small_message`.
-        ("src/sessions/carry.rs", "show_prepared", &[Ban::Body]),
-        // M-N1.4 (ruling M20): a scene act's typed fault where the DM acted, in place of a
-        // `design::message`.
-        ("src/sessions/plan.rs", "row_fault", &[Ban::Body]),
-        // M-N1.5 (M20): the open played fight's fault in its details, typed, in place of two
-        // `design::message` calls; `/npc`'s fault in its menu, in place of two more.
-        ("src/sessions/plan.rs", "fight_block", &[Ban::Body]),
-        ("src/sessions/slash.rs", "show", &[Ban::Body]),
-        // M-N1.5 (M17): `/npc`'s fault carries the generator's and the system's words.
-        ("src/sessions/slash.rs", "cause", &[Ban::Words]),
-        // M-N1.1 (ruling M20): a result with the note's Undo at its own place
-        // (`PlacedResult`), replacing three `undo_message` calls.
-        (
-            "src/sessions/plan.rs",
-            "removed_scene_message",
-            &[Ban::Body],
-        ),
-        ("src/sessions/plan.rs", "field_result", &[Ban::Body]),
-        (
-            "src/sessions/plan.rs",
-            "removed_fight_message",
-            &[Ban::Body],
-        ),
-        ("src/world/edit.rs", "edit_form", &[Ban::Results]),
-        // M20 (M-W0.4): the creation error in place of the page's body (was
-        // `message_with_actions`).
-        ("src/world/page.rs", "creation_body", &[Ban::Body]),
-        // Package K: raw egui calls that a layout part replaces.
-        (
-            "src/campaigns.rs",
-            "selector",
-            &[Ban::Layout(1), Ban::Extras(1)],
-        ),
-        // M20: the copy dialog's error is a typed body message (`BodyMessage` of a
-        // `FaultMessage`) in place of an untyped `design::message`.
-        ("src/copy_dialog.rs", "show", &[Ban::Body]),
-        (
-            "src/encounter_run/ad_hoc.rs",
-            "add_creature_form",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/encounter_run/dock.rs",
-            "effect_line",
-            &[Ban::Extras(1)],
-        ),
-        ("src/encounter_run/view.rs", "roster", &[Ban::Layout(1)]),
-        (
-            "src/encounter_run/view.rs",
-            "setup_body",
-            &[Ban::Layout(1), Ban::Pane(1), Ban::Body],
-        ),
-        ("src/encounter_run/view.rs", "setup_row", &[Ban::Extras(1)]),
-        // The editor's columns (`Fills::because`). Its unread rows' warning is a typed fault
-        // with its file line since migration-32 L2c.
-        ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
-        ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
-        ("src/encounters/groups.rs", "members", &[Ban::Body]),
-        ("src/loot_editor.rs", "add_row", &[Ban::Extras(1)]),
-        (
-            "src/markdown_view.rs",
-            "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
-            &[Ban::Layout(1)],
-        ),
-        ("src/sessions/page.rs", "banner", &[Ban::Body]),
-        ("src/sessions/page.rs", "note_editor", &[Ban::Body]),
-        (
-            "src/timeline/page.rs",
-            "apply_detail",
-            // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            &[Ban::ByOwner(1)],
-        ),
-        ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
-        ("src/world/repair.rs", "source_editor", &[Ban::RowKey(1)]),
-        // Package M (round 28): the escapes of `design::outcome`, and its own helpers.
-        ("src/design/outcome.rs", "__literal", &[Ban::Sentence]),
-        ("src/design/outcome.rs", "check_literal", &[Ban::Sentence]),
-        (
-            "src/design/outcome.rs",
-            "sentence! statement",
-            &[Ban::Sentence],
-        ),
-        (
-            "src/design/outcome.rs",
-            "sentence! statement",
-            &[Ban::Sentence],
-        ),
-        (
-            "src/design/outcome.rs",
-            "sentence! statement",
-            &[Ban::Sentence],
-        ),
-        (
-            "src/design/outcome.rs",
-            "choice! statement",
-            &[Ban::Sentence],
-        ),
-        (
-            "src/design/outcome.rs",
-            "choice! statement",
-            &[Ban::Sentence],
-        ),
-        // M4: the macro's own check of its lead words.
-        ("src/design/outcome.rs", "lead! statement", &[Ban::Sentence]),
-        ("src/design/outcome.rs", "rejected", &[Ban::Sentence]),
-        (
-            "src/design/outcome.rs",
-            "a_template_is_a_sentence_in_the_dms_words",
-            &[Ban::Sentence],
-        ),
-        (
-            "src/design/outcome.rs",
-            "outside_words_get_a_capital_and_an_end_mark",
-            &[Ban::Words],
-        ),
-        (
-            "src/design/outcome.rs",
-            "one_fault_has_one_tone_in_every_place",
-            &[Ban::Body],
-        ),
-        // Layout 11c scope C: the proof that a row fault's measure is its painted height.
-        (
-            "src/design/outcome.rs",
-            "a_row_fault_paints_at_its_measured_height",
-            &[Ban::Body],
-        ),
-        ("src/encounter_run/view.rs", "outside_words", &[Ban::Words]),
-        ("src/encounters.rs", "cause", &[Ban::Words]),
-        ("src/encounters.rs", "kept_outcome", &[Ban::Words]),
-        ("src/encounters.rs", "outcome_words", &[Ban::Words]),
-        // Ruling M20 (M0178): the duplicate repair in the search results; it replaces an
-        // untyped `design::message_with_actions`.
-        (
-            "src/encounters.rs",
-            "duplicate_creature_results",
-            &[Ban::Body],
-        ),
-        // Ruling M20 (M0192): the page's placeholder while another campaign's encounter is open;
-        // it replaces an untyped `design::message`.
-        ("src/encounters.rs", "show_page", &[Ban::Body]),
-        // M0126 (M-R0.9): a group row's member faults are typed messages in the row they are
-        // about, with their repairs (`BodyMessage`); their words are the loader's, with the
-        // DM's names in them (`Sentence::outside`).
-        ("src/content_ui/src/roster.rs", "cause", &[Ban::Words]),
-        ("src/encounters/groups.rs", "member_fault_row", &[Ban::Body]),
-        // Ruling M20 (lane E1): the group editor's faults, typed; each replaces an untyped
-        // `design::message` or `small_message`.
-        ("src/encounters/groups.rs", "belongs_to", &[Ban::Body]),
-        ("src/encounters/groups.rs", "body_fault", &[Ban::Body]),
-        // Layout 11c (L11c-E.2): a change's fault under its own field (was under the row's
-        // `Extras` allow with its raw space).
-        ("src/encounters/groups.rs", "change_row", &[Ban::Body]),
-        // Ruling M20 (lane E2): a draft's disk conflict takes its editor's place (the
-        // comparison follows), typed; it replaces `design::message` and `message_with_actions`.
-        ("src/encounters/disk.rs", "show", &[Ban::Body]),
-        (
-            "src/design/outcome.rs",
-            "a_body_fault_gives_its_repairs_back_by_id",
-            &[Ban::Body],
-        ),
-        (
-            "src/design/outcome.rs",
-            "a_placed_result_shows_its_undo_whole_where_it_fits",
-            &[Ban::Body],
-        ),
-        // N0 (ruling M21): a message holds at most one primary choice.
-        (
-            "src/design/outcome.rs",
-            "a_message_has_at_most_one_primary_choice",
-            &[Ban::Body],
-        ),
-        ("src/processing/settings.rs", "cause", &[Ban::Words]),
-        ("src/processing/settings.rs", "key_fault", &[Ban::Body]),
-        // M-U0.1 (rulings M17, M20): the account's warning, in the keyring's words when it is not
-        // the unsaved sign-in; it replaces `message_with_action` and `message` in `show_account`.
-        (
-            "src/settings.rs",
-            "account_warning",
-            &[Ban::Body, Ban::Words],
-        ),
-        // M-U0.1 (rulings M17, M20): a table marker's warning, in its parser's words, under the
-        // table in the reader's body; it replaces two `design::message` calls in `roll_control`.
-        (
-            "src/roll_table.rs",
-            "table_warning",
-            &[Ban::Body, Ban::Words],
-        ),
-        ("src/timeline/checks.rs", "cause", &[Ban::Words]),
-        ("src/timeline/page.rs", "as_sentence", &[Ban::Words]),
-        ("src/sessions/plan.rs", "as_sentence", &[Ban::Words]),
-        ("src/timeline/checks.rs", "check_fault", &[Ban::Body]),
-        ("src/timeline/checks.rs", "check_notice", &[Ban::Body]),
-        // Ruling M20 (lane T0): Timeline.md's problems in the page's place and the session date
-        // notice, typed; each replaces `design::message`, `message_with_actions` or
-        // `message_with_action`.
-        ("src/timeline/page.rs", "problems", &[Ban::Body]),
-        ("src/timeline/page.rs", "dated_notice", &[Ban::Body]),
-        ("src/trackers.rs", "act_words", &[Ban::Words]),
-        ("src/world/repair.rs", "cause", &[Ban::Words]),
-        ("src/world.rs", "said", &[Ban::Words]),
-        ("src/combat_sync.rs", "cause", &[Ban::Words]),
-        ("src/party.rs", "cause", &[Ban::Words]),
-        ("src/trackers.rs", "cause", &[Ban::Words]),
-        ("src/trackers/history.rs", "show", &[Ban::Body]),
-        ("src/trackers/view.rs", "body", &[Ban::Body]),
-        // Package T (PR 328 review): a repeated amount field's problem stands at its line.
-        ("src/trackers/view.rs", "tracker_lines", &[Ban::Body]),
-        (
-            "src/content_ui/src/session_notes.rs",
-            "notice_sentence",
-            &[Ban::Words],
-        ),
-        (
-            "src/encounter_run/notice.rs",
-            "live_header",
-            &[Ban::Extras(2)],
-        ),
-        ("src/encounter_run/view.rs", "live_view", &[Ban::Pane(1)]),
-        // M-P0 item 7: the run's notices in the compact typed form, where they stand.
-        ("src/encounter_run/view.rs", "live_notice", &[Ban::Body]),
-        ("src/encounter_run/notice.rs", "header_notice", &[Ban::Body]),
-        ("src/encounter_run/view.rs", "toggle", &[Ban::Extras(1)]),
-        ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
-        ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
-        (
-            "src/encounters/groups.rs",
-            "conditions_row",
-            &[Ban::RowKey(1)],
-        ),
-        (
-            "src/encounters/groups.rs",
-            "overrides_form",
-            &[Ban::RowKey(2)],
-        ),
-        ("src/encounters/groups.rs", "unread_member", &[Ban::Body]),
-        // M20 (M-L0.6): a repair draft's fault in the reader's body, with its repair.
-        ("src/library/catalogue.rs", "repair_notice", &[Ban::Body]),
-        ("src/sessions/page.rs", "draft_warning", &[Ban::Body]),
-        ("src/sessions/page.rs", "recording_row", &[Ban::Body]),
-        (
-            "src/sessions/plan.rs",
-            "gone_scene_words",
-            &[Ban::Extras(1)],
-        ),
-        ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
-        ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
-        // M20 (M-W0.4, M-W0.5, M0178): the index's warnings on this note, the renamed-file
-        // warning with its two repairs and the duplicate repair, in the reader's body (were
-        // `message`, `message_with_actions`).
-        ("src/world.rs", "draw", &[Ban::Body]),
-        // M20 (M-W0.4): an unread value's warning (was `message`).
-        ("src/world.rs", "unread_warning", &[Ban::Body]),
-        // M20 (M-W0.5): an unread value's warning with its repair, `Edit in Obsidian` (was
-        // `message` and a link).
-        ("src/world.rs", "unread_groups_message", &[Ban::Body]),
-        ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
-        // M20 (M-W0.5): a note that cannot be read, in place of its page (was
-        // `message_with_actions`).
-        ("src/world/page.rs", "unread_pane", &[Ban::Body]),
-        ("src/sessions/page.rs", "fills_body", &[Ban::Pane(1)]),
-        ("src/party.rs", "show", &[Ban::Pane(1)]),
-    ]
-};
-
-/// The suppressions of `clippy::disallowed_methods` in the owners of the raw egui calls: the
-/// design system (`src/design/`) and its capture harness (`src/visual_tests/`). One row per
-/// suppression, as in [`STAGED_ALLOWS`], so each one sits on one function and frees nothing
-/// else; only rows in those two folders may stand here, and only for `Ban::Layout`, `Ban::RowKey`
-/// and `Ban::Extras`.
-#[cfg(test)]
-pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
-    use suppressions::Ban;
-    &[
-        ("src/design/column.rs", "finish_handle", &[Ban::Layout(1)]),
-        (
-            "src/design/reader.rs",
-            "the_scroll_bar_does_not_choose_the_prose_type",
-            &[Ban::Layout(1)],
-        ),
-        // Migration-32 L2c: the design system's own pane tests draw closure lines (the
-        // `#[cfg(test)]` `legacy_reason`, `legacy_notice`) to place a footer of a known height;
-        // every app footer is typed. Its other three such tests, which also call
-        // `Footer::result` and `show_by_hand`, stay in `STAGED_ALLOWS`.
-        (
-            "src/design/components.rs",
-            "iter28_p_the_pane_places_its_footer_for_every_body",
-            &[Ban::Layout(1), Ban::Footer],
-        ),
-        // The test of the staged keys-only add field itself (`AddFieldForm::keys_only`).
-        (
-            "src/design/components.rs",
-            "iter29_p1_an_opened_add_field_shows_add_and_cancel",
-            &[Ban::Extras(1)],
-        ),
-        (
-            "src/design/components.rs",
-            "suggestion_rows",
-            &[Ban::Extras(1)],
-        ),
-        (
-            "src/design/components.rs",
-            "dialog_width",
-            &[Ban::Layout(3)],
-        ),
-        (
-            "src/design/components.rs",
-            "draft_comparison_labeled",
-            &[Ban::Layout(1), Ban::Extras(2)],
-        ),
-        (
-            "src/design/components.rs",
-            "enclosing_lock_describes_each_control_and_stays_inside_its_scope",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/design/components.rs",
-            "hanging_add_strip",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/design/components.rs",
-            "iter3_text_input_placeholder_uses_body_and_faint",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/design/components.rs",
-            "iter_two_form_labels_share_sentence_case_small_muted_type",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/design/components.rs",
-            "menu_submenu",
-            &[Ban::Layout(1)],
-        ),
-        // M0412: the one collapsing section (`Section::show`); `CollapsingHeader::new` is
-        // banned outside it.
-        ("src/design/components.rs", "show", &[Ban::Layout(1)]),
-        // Review of PR 730: the section whose header is the caller's row (a sheet's spells).
-        ("src/design/components.rs", "section_row", &[Ban::Layout(1)]),
-        (
-            "src/design/components.rs",
-            "number_field_with_id",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/design/components.rs",
-            "overflow_tabs",
-            &[Ban::Layout(1)],
-        ),
-        ("src/design/components.rs", "row_menu", &[Ban::Layout(1)]),
-        ("src/design/components.rs", "scroll_part", &[Ban::Layout(1)]),
-        ("src/design/components.rs", "search_box", &[Ban::Layout(1)]),
-        (
-            "src/design/components.rs",
-            "split_action",
-            &[Ban::Layout(1)],
-        ),
-        ("src/design/components.rs", "stepper_as", &[Ban::Layout(1)]),
-        (
-            "src/design/components.rs",
-            "text_field_label",
-            &[Ban::Layout(1)],
-        ),
-        ("src/design/components.rs", "text_input", &[Ban::Layout(1)]),
-        ("src/design/components.rs", "paint", &[Ban::Extras(1)]),
-        ("src/design/extras.rs", "space", &[Ban::Extras(1)]),
-        // Layout step 11c (M0478): an empty line as tall as a label, allocated as a label is.
-        ("src/design/extras.rs", "empty_line", &[Ban::Extras(1)]),
-        ("src/design/gallery.rs", "markdown", &[Ban::Layout(1)]),
-        ("src/design/gallery.rs", "show", &[Ban::Layout(1)]),
-        ("src/design/layout.rs", "area", &[Ban::Layout(2)]),
-        ("src/design/pane/laid.rs", "stray_mark", &[Ban::Layout(1)]),
-        ("src/design/layout.rs", "editor", &[Ban::Layout(1)]),
-        (
-            "src/design/layout.rs",
-            "field_id! statement",
-            &[Ban::Layout(1)],
-        ),
-        // Both anchors of a menu (a control, or a place such as the text cursor): M-P0.S1 moved
-        // Sessions' `/` menu here, whose own `popup_at` row (1) is gone.
-        ("src/design/layout.rs", "menu_popup_raw", &[Ban::Layout(2)]),
-        ("src/design/layout.rs", "multi_line", &[Ban::Layout(1)]),
-        ("src/design/layout.rs", "sideways_scroll", &[Ban::Layout(1)]),
-        ("src/design/layout.rs", "single_line", &[Ban::Layout(1)]),
-        ("src/design/layout.rs", "word! statement", &[Ban::Layout(1)]),
-        ("src/design/layout.rs", "key! statement", &[Ban::Layout(1)]),
-        (
-            "src/design/layout/tests.rs",
-            "a_field_id_keeps_focus_across_a_layout_branch",
-            &[Ban::Layout(2)],
-        ),
-        (
-            "src/visual_tests/ergonomics.rs",
-            "a_control_in_a_popup_is_not_its_background",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/visual_tests/ergonomics.rs",
-            "a_menu_over_a_column_splitter_is_an_app_fault",
-            &[Ban::Layout(3)],
-        ),
-        (
-            "src/visual_tests/ergonomics.rs",
-            "a_press_on_a_menu_item_reaches_the_item_and_the_pair_stays_chrome",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/visual_tests/ergonomics.rs",
-            "a_press_where_a_scroll_bar_lies_on_a_row_reaches_the_bar_and_is_an_app_fault",
-            &[Ban::Layout(2)],
-        ),
-        (
-            "src/visual_tests/ergonomics.rs",
-            "a_small_control_without_a_name_is_not_chrome",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/visual_tests/ergonomics.rs",
-            "a_thin_unnamed_control_inside_horizontal_content_is_not_chrome",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/visual_tests/ergonomics.rs",
-            "help_measure_fails_on_a_wide_muted_small_label",
-            &[Ban::Extras(1)],
-        ),
-        (
-            "src/visual_tests/ergonomics.rs",
-            "horizontal_clipping_is_allowed_only_where_a_real_scroll_bar_can_reveal_it",
-            &[Ban::Layout(2), Ban::Extras(1)],
-        ),
-        (
-            "src/visual_tests/ergonomics.rs",
-            "only_the_real_scroll_bar_is_chrome",
-            &[Ban::Layout(1), Ban::Extras(1)],
-        ),
-        (
-            "src/visual_tests/ergonomics.rs",
-            "scrolled_content_is_clipped_by_its_own_area_and_not_one_it_passes_behind",
-            &[Ban::Layout(2)],
-        ),
-        // Package K2: the popup parts.
-        ("src/design/outcome.rs", "measuring", &[Ban::Layout(1)]),
-        ("src/design/pane.rs", "stop_body", &[Ban::Layout(1)]),
-        // Layout PR 9b: the quiet-frame harnesses' bare screen and their stock reference, egui's
-        // own text edit, whose cost a document editor is measured against (shared by
-        // `quiet_text` and `splat-content-ui`'s `quiet_markdown`).
-        (
-            "src/design/tests/quiet/counting.rs",
-            "root",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/design/tests/quiet/counting.rs",
-            "stock_text_edit",
-            &[Ban::Layout(1)],
-        ),
-        // Layout PR 9b-R1a: the Reader's harness (`quiet_reader`): a bare screen of its size.
-        (
-            "src/design/tests/quiet/counting.rs",
-            "root_sized",
-            &[Ban::Layout(1)],
-        ),
-        ("src/design/popups.rs", "list", &[Ban::Layout(1)]),
-        ("src/design/popups.rs", "rich_tip", &[Ban::Layout(2)]),
-        ("src/design/popups.rs", "drag_source", &[Ban::Layout(3)]),
-        ("src/design/popups.rs", "image_viewer", &[Ban::Layout(1)]),
-        (
-            "src/design/popups/tests.rs",
-            "a_submenu_in_a_narrow_pane_keeps_its_parent_reachable",
-            &[Ban::Layout(1)],
-        ),
-    ]
-};
-
-#[cfg(test)]
-mod suppressions;
-
 /// Calls of parts that a shared part replaces, by file, counted in the source text. They are a
-/// second net inside the functions of [`STAGED_ALLOWS`], whose allow would let a new call
+/// net inside the functions whose `#[allow(clippy::disallowed_methods)]` would let a new call
 /// in: a count can only go down. A file with fewer calls than its count asks to lower the count.
 ///
 /// - `ResultOrder::issue(`: only [`Results::record`] issues an order. Elsewhere, an order
@@ -1600,14 +952,6 @@ mod suppressions;
 #[cfg(test)]
 pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, usize)]);
 
-/// Layout PR 2b: every use of the legacy footer's closure lines (`suppressions::FOOTER_LINES`),
-/// by file, in every call form (a method, an associated call, a reference: ruling L13), read as
-/// tokens (`suppressions::footer_line_uses`). Clippy bans them, each calling function lists
-/// `Ban::Footer`, and these counts can only shrink: give the footer typed data instead
-/// (`outcome::Messages`).
-#[cfg(test)]
-pub(crate) const LEGACY_FOOTER_LINES: &[(&str, usize)] = &[("src/design/components.rs", 11)];
-
 /// See [`Staged`]: the pattern, what to use instead, and the count of each file.
 #[cfg(test)]
 pub(crate) const STAGED: &[Staged] = &[
@@ -1634,7 +978,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/campaign_content.rs", 1),
             ("src/campaigns.rs", 1),
             ("src/design/components.rs", 1),
-            ("src/design/gallery.rs", 2),
         ],
     ),
     (
@@ -2518,8 +1861,8 @@ mod tests {
         let mut faults = Vec::new();
         for (pattern, instead, allowed) in STAGED {
             for (path, text) in &files {
-                // The store itself, this table and the suppressions' checker name the patterns.
-                if path == "src/design/results.rs" || path == "src/design/results/suppressions.rs" {
+                // The store itself and this table name the patterns.
+                if path == "src/design/results.rs" {
                     continue;
                 }
                 let count = text.matches(pattern).count();
@@ -2538,56 +1881,6 @@ mod tests {
                 }
             }
         }
-        assert!(faults.is_empty(), "{}", faults.join("\n"));
-    }
-
-    /// Layout PR 2b, ruling L13: the legacy footer's closure lines only shrink, counted in every
-    /// call form.
-    #[test]
-    fn legacy_footer_lines_only_shrink() {
-        let mut files = Vec::new();
-        collect(&crate::workspace().join("src"), &mut files);
-        let mut found: Vec<(String, usize)> = files
-            .iter()
-            .map(|(path, text)| (path.clone(), suppressions::footer_line_uses(text)))
-            .filter(|(_, uses)| *uses > 0)
-            .collect();
-        found.sort();
-        let listed: Vec<(String, usize)> = LEGACY_FOOTER_LINES
-            .iter()
-            .map(|(path, uses)| ((*path).to_owned(), *uses))
-            .collect();
-        assert_eq!(
-            found, listed,
-            "a footer line lowered to a closure is the legacy footer's: give the footer typed \
-             data (`outcome::Messages`); a removed use lowers its row"
-        );
-    }
-
-    /// Every suppression of `clippy::disallowed_methods` is a row of `STAGED_ALLOWS` (see
-    /// there); the checker's own cases are in `suppressions::tests`.
-    #[test]
-    fn staged_allows_only_shrink() {
-        let mut files = Vec::new();
-        collect(&crate::workspace().join("src"), &mut files);
-        for (file, item, bans) in OWNED_ALLOWS {
-            assert!(
-                (file.starts_with("src/design/") || file.starts_with("src/visual_tests/"))
-                    && bans.iter().all(|ban| matches!(
-                        ban,
-                        suppressions::Ban::Layout(_)
-                            | suppressions::Ban::RowKey(_)
-                            | suppressions::Ban::Extras(_)
-                            // Layout PR 2b: the design system owns the legacy footer's closure
-                            // lines, and its own tests of them.
-                            | suppressions::Ban::Footer
-                    )),
-                "{file} `{item}`: only the design system and its harness own raw egui calls and \
-                 the legacy footer's closure lines"
-            );
-        }
-        let rows: Vec<_> = STAGED_ALLOWS.iter().chain(OWNED_ALLOWS).copied().collect();
-        let faults = suppressions::check(&files, &rows);
         assert!(faults.is_empty(), "{}", faults.join("\n"));
     }
 
@@ -2640,7 +1933,7 @@ mod tests {
         }
         let mut faults = Vec::new();
         for (path, text) in &files {
-            let compact: String = suppressions::code_only(text).split_whitespace().collect();
+            let compact: String = code_only(text).split_whitespace().collect();
             for pattern in &patterns {
                 if compact.contains(pattern.as_str()) {
                     faults.push(format!(
@@ -2650,6 +1943,113 @@ mod tests {
             }
         }
         assert!(faults.is_empty(), "{}", faults.join("\n"));
+    }
+
+    /// The code of `text` with string and char literals and comments blanked, kept to the same
+    /// length and lines, so brackets in them do not count.
+    fn code_only(text: &str) -> String {
+        let chars: Vec<char> = text.chars().collect();
+        let mut out = String::with_capacity(text.len());
+        let mut i = 0;
+        let blank = |out: &mut String, c: char| out.push(if c == '\n' { '\n' } else { ' ' });
+        while i < chars.len() {
+            let c = chars[i];
+            let next = chars.get(i + 1).copied();
+            if c == '/' && next == Some('/') {
+                while i < chars.len() && chars[i] != '\n' {
+                    blank(&mut out, chars[i]);
+                    i += 1;
+                }
+            } else if c == '/' && next == Some('*') {
+                let mut depth = 0;
+                while i < chars.len() {
+                    if chars[i] == '/' && chars.get(i + 1) == Some(&'*') {
+                        depth += 1;
+                        blank(&mut out, '/');
+                        blank(&mut out, '*');
+                        i += 2;
+                    } else if chars[i] == '*' && chars.get(i + 1) == Some(&'/') {
+                        depth -= 1;
+                        blank(&mut out, '*');
+                        blank(&mut out, '/');
+                        i += 2;
+                        if depth == 0 {
+                            break;
+                        }
+                    } else {
+                        blank(&mut out, chars[i]);
+                        i += 1;
+                    }
+                }
+            } else if c == 'r'
+                && matches!(next, Some('"') | Some('#'))
+                && (i == 0 || !(chars[i - 1].is_alphanumeric() || chars[i - 1] == '_'))
+            {
+                let mut j = i + 1;
+                let mut hashes = 0;
+                while chars.get(j) == Some(&'#') {
+                    hashes += 1;
+                    j += 1;
+                }
+                if chars.get(j) != Some(&'"') {
+                    out.push(c);
+                    i += 1;
+                    continue;
+                }
+                j += 1;
+                while j < chars.len() {
+                    if chars[j] == '"' && (0..hashes).all(|h| chars.get(j + 1 + h) == Some(&'#')) {
+                        j += 1 + hashes;
+                        break;
+                    }
+                    j += 1;
+                }
+                for &skipped in &chars[i..j.min(chars.len())] {
+                    blank(&mut out, skipped);
+                }
+                i = j;
+            } else if c == '"' {
+                blank(&mut out, c);
+                i += 1;
+                while i < chars.len() && chars[i] != '"' {
+                    if chars[i] == '\\' {
+                        blank(&mut out, chars[i]);
+                        i += 1;
+                    }
+                    if i < chars.len() {
+                        blank(&mut out, chars[i]);
+                        i += 1;
+                    }
+                }
+                if i < chars.len() {
+                    blank(&mut out, '"');
+                    i += 1;
+                }
+            } else if c == '\'' {
+                // A char literal ('{', '\n', '\u{7b}'); otherwise a lifetime.
+                let close = if next == Some('\\') {
+                    (i + 2..chars.len().min(i + 12)).find(|&j| chars[j] == '\'')
+                } else {
+                    (chars.get(i + 2) == Some(&'\'')).then_some(i + 2)
+                };
+                match close {
+                    Some(end) => {
+                        for &skipped in &chars[i..=end] {
+                            blank(&mut out, skipped);
+                        }
+                        i = end + 1;
+                    }
+                    None => {
+                        out.push(c);
+                        i += 1;
+                    }
+                }
+            } else {
+                out.push(c);
+                i += 1;
+            }
+        }
+        out
     }
 
     fn collect(folder: &std::path::Path, files: &mut Vec<(String, String)>) {

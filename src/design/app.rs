@@ -1,16 +1,39 @@
 pub use splat_content_ui::design::*;
 
 #[cfg(test)]
-#[path = "gallery.rs"]
-pub mod gallery;
-
-#[cfg(test)]
 #[allow(deprecated)]
 mod tests {
     use super::extras::test_space as space;
     use super::reader::{detail, linked_detail};
     use super::*;
-    use crate::visual_tests::input_frame::painted_texts;
+
+    /// The painted text shapes of a harness: each galley's words, where they are drawn, and
+    /// whether egui cut them to an ellipsis.
+    fn painted(harness: &egui_kittest::Harness<'_>) -> Vec<(String, Rect, bool)> {
+        fn walk(shape: &egui::Shape, out: &mut Vec<(String, Rect, bool)>) {
+            match shape {
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+                egui::Shape::Text(text) => out.push((
+                    text.galley.job.text.clone(),
+                    Rect::from_min_size(text.pos, text.galley.size()),
+                    text.galley.elided,
+                )),
+                _ => {}
+            }
+        }
+        let mut out = Vec::new();
+        for shape in &harness.output().shapes {
+            walk(&shape.shape, &mut out);
+        }
+        out
+    }
+
+    fn painted_texts(harness: &egui_kittest::Harness<'_>) -> Vec<(String, Rect)> {
+        painted(harness)
+            .into_iter()
+            .map(|(words, rect, _)| (words, rect))
+            .collect()
+    }
     use eframe::egui::{self, Rect, Ui, vec2};
     use splat_content::content::dice_text::{D20, RollLink};
 
@@ -26,14 +49,13 @@ mod tests {
                         "Undo delete saved run");
                 });
             harness.run_steps(2);
-            let cut = crate::visual_tests::ergonomics::cut_text(
-                &harness.output().shapes,
-                &[],
-                &[],
-                "message",
-                "wrapped",
-                "test",
-            );
+            // No words are cut to an ellipsis or run past the window's edges.
+            let cut: Vec<_> = painted(&harness)
+                .into_iter()
+                .filter(|(_, rect, elided)| {
+                    *elided || rect.left() < -1.0 || rect.right() > width + 1.0
+                })
+                .collect();
             assert!(cut.is_empty(), "width {width}: {cut:?}");
             // iter-23-S FK3: beside the words, the action starts `L` after their last letter.
             if width >= 880.0 {

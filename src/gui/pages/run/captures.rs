@@ -5,9 +5,9 @@
 //! than giving a wrong picture.
 use crate::Page;
 use crate::encounter_run::{Command, Panel, Phase, Run};
+use crate::fixtures::{RUN, RUN_12, RUN_20, RUN_ARENA, Seed};
 use crate::gui::harness::Shell;
 use crate::gui::kit;
-use crate::visual_tests::fixture::{RUN, RUN_12, RUN_20, RUN_ARENA, Seed};
 use gpui::{ElementId, point, px, size};
 
 const SHRINE: &str = "Encounters/Shrine of Cinders.md";

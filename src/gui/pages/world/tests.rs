@@ -1,7 +1,7 @@
 //! The World page's screenshots and interaction tests. Captures pair with the egui references by
 //! name (`<egui-scenario>__<step>__<w>x<h>`), in `artifacts/screenshots/gpui/`.
+use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
-use crate::visual_tests::fixture::Seed;
 use crate::{Page, world::page::View};
 use gpui::{px, size};
 use std::path::PathBuf;

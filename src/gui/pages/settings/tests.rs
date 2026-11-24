@@ -1,9 +1,9 @@
 //! Settings: screenshots of the egui `settings` and `empty` scenarios' main states, and the
 //! account tab's flows (Connect's reason, Edit details with Discard and its Undo, Remove with
 //! its confirm, Add campaign).
+use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
 use crate::settings::Account;
-use crate::visual_tests::fixture::Seed;
 use crate::{Page, SettingsTab};
 use gpui::{px, size};
 

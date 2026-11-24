@@ -14,7 +14,7 @@
 //! draws its own pressable element marks it with `kit::target(element, name)`.
 use super::{SplatRoot, kit};
 use crate::Splat;
-use crate::visual_tests::fixture::{Seed, World};
+use crate::fixtures::{Seed, World};
 use gpui::{
     AnyWindowHandle, AppContext, Bounds, Context, Entity, HeadlessAppContext, Keystroke, Modifiers,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformInput, Point,

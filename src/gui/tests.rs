@@ -2,7 +2,7 @@
 //! `artifacts/screenshots/gpui/`, named `<scenario>__<step>__<width>x<height>`.
 use super::gallery::Gallery;
 use super::harness::Shell;
-use crate::visual_tests::fixture::Seed;
+use crate::fixtures::Seed;
 use crate::{Page, SettingsTab};
 use gpui::{point, px, size};
 

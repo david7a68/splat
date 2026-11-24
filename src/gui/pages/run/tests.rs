@@ -3,8 +3,8 @@
 //! `artifacts/screenshots/egui-reference/`.
 use crate::Page;
 use crate::encounter_run::{Panel, Phase};
+use crate::fixtures::{RUN, Seed};
 use crate::gui::harness::Shell;
-use crate::visual_tests::fixture::{RUN, Seed};
 use gpui::{px, size};
 
 /// The fixture's run in progress, opened as Resume opens it.
@@ -592,7 +592,7 @@ fn run_effects_on_rows() {
 #[test]
 fn run_overrides_card_and_row() {
     let mut shell = Shell::new("run-overrides", Seed::Groups);
-    open_saved(&mut shell, crate::visual_tests::fixture::RUN_ARENA);
+    open_saved(&mut shell, crate::fixtures::RUN_ARENA);
     shell.click("Rival Captain");
     assert!(
         shell.bounds("Add by hand: speed 40 ft").is_some(),

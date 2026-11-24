@@ -1,8 +1,8 @@
 //! Lookup: screenshots of the panel beside a page (egui `run-lookup`), and its flows: Ctrl+K
 //! opens it with the field focused, typing finds and opens the best match, the arrows move
 //! through the results, Back returns, Escape closes.
+use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
-use crate::visual_tests::fixture::Seed;
 
 fn wait_for_index(shell: &mut Shell) {
     for _ in 0..200 {
@@ -130,7 +130,7 @@ fn open_run(shell: &mut Shell) {
             .encounters
             .saved_runs()
             .iter()
-            .find(|run| run.encounter == crate::visual_tests::fixture::RUN)
+            .find(|run| run.encounter == crate::fixtures::RUN)
             .expect("the fixture's saved run")
             .path
             .clone();

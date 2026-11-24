@@ -1,7 +1,7 @@
 //! Campaign: screenshots of its tabs (egui `campaign-content`, `signed-in` step 15), and the
 //! Link and folder tab's flows (Edit details from the folder block; the session folder's draft).
+use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
-use crate::visual_tests::fixture::Seed;
 use crate::{CampaignTab, Page};
 
 fn campaign(name: &str) -> Shell {

@@ -1,8 +1,8 @@
 //! The Timeline page: add, name, rule, remove and their Undos, the filters, Ctrl+S, a journey's
 //! encounter checks, and the captures (`<egui-scenario>__<step>`, paired with the references).
+use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
 use crate::timeline::Kind;
-use crate::visual_tests::fixture::Seed;
 use gpui::{px, size};
 use std::fs;
 

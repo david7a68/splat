@@ -1,5 +1,5 @@
 use super::*;
-use crate::visual_tests::fixture::{Seed, World};
+use crate::fixtures::{Seed, World};
 
 #[test]
 fn package_copy_keeps_original_entries_encounters_and_byte_exact_undo() {

@@ -1,10 +1,8 @@
 //! No raw colours or text sizes outside the design system, and no straight apostrophe in UI
-//! words. The allowlist can only shrink: a count above it fails, and a count below it asks
-//! you to lower it.
-use super::attributes::{self, Found, Kind};
+//! words; phrases and facts have one owner. The scan reads every Rust file of the app and the
+//! logic crates, the GPUI pages (`src/gui/`) too. The allowlist can only shrink: a count above
+//! it fails, and a count below it asks you to lower it.
 use std::{collections::BTreeMap, fs, path::Path};
-
-pub(crate) mod legacy;
 
 const ALLOWLIST: &str = include_str!("lint_allowlist.txt");
 const COLOUR_CONSTANTS: [&str; 22] = [
@@ -115,85 +113,6 @@ fn violations(line: &str) -> Vec<&'static str> {
         }
     }
     found
-}
-
-/// Lints whose allow lets an old message function (`#[deprecated]`) pass.
-const DEPRECATED: [&str; 2] = ["deprecated", "warnings"];
-
-/// How a file sets the `deprecated` level for the modules below it.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-struct FileLevel {
-    /// An inner allow at the top of the file, or an allow on a `mod x;`: its children inherit it.
-    allows_children: bool,
-    /// An inner attribute that sets the level for this whole file: allow, or warn or deny.
-    explicit: bool,
-}
-
-fn file_level(found: &[Found]) -> FileLevel {
-    let mut level = FileLevel::default();
-    for attribute in found {
-        let top = attribute.inner && attribute.kind == Kind::File;
-        if top && (attribute.lets_pass(&DEPRECATED) || attribute.resets(&DEPRECATED)) {
-            level.explicit = true;
-        }
-        let on_mod_file = !attribute.inner && attribute.kind == Kind::Mod { has_file: true };
-        if attribute.lets_pass(&DEPRECATED) && (top || on_mod_file) {
-            level.allows_children = true;
-        }
-    }
-    level
-}
-
-/// The file of the module that holds the module in `path` (`src/a/b.rs` → `src/a.rs` or
-/// `src/a/mod.rs`; `src/a.rs` → `src/lib.rs` or `src/main.rs`).
-fn parents(path: &str) -> Vec<String> {
-    // A crate root has no parent module.
-    if path.ends_with("src/lib.rs") || path.ends_with("src/main.rs") {
-        return Vec::new();
-    }
-    let dir = match path.strip_suffix("/mod.rs") {
-        Some(module) => module.rsplit_once('/').map_or("", |(dir, _)| dir),
-        None => path.rsplit_once('/').map_or("", |(dir, _)| dir),
-    };
-    if dir.ends_with("/src") || dir == "src" {
-        return vec![format!("{dir}/lib.rs"), format!("{dir}/main.rs")];
-    }
-    vec![format!("{dir}.rs"), format!("{dir}/mod.rs")]
-}
-
-/// Does the file at `path` run under an allow of `deprecated` that it did not write itself? Then
-/// the compiler cannot stop an alias, an import or a call of an old function in it.
-fn inherits_allow(
-    path: &str,
-    levels: &BTreeMap<String, FileLevel>,
-    crate_root_parents: &BTreeMap<String, Vec<String>>,
-) -> bool {
-    if levels.get(path).is_some_and(|level| level.explicit) {
-        return false;
-    }
-    let mut pending = vec![path.to_owned()];
-    let mut visited = std::collections::BTreeSet::new();
-    while let Some(at) = pending.pop() {
-        if !visited.insert(at.clone()) {
-            continue;
-        }
-        let parents = crate_root_parents
-            .get(&at)
-            .cloned()
-            .unwrap_or_else(|| parents(&at));
-        for (parent, level) in parents
-            .into_iter()
-            .filter_map(|parent| levels.get(&parent).map(|level| (parent, *level)))
-        {
-            if level.allows_children {
-                return true;
-            }
-            if !level.explicit {
-                pending.push(parent);
-            }
-        }
-    }
-    false
 }
 
 /// Blocked reasons without an end mark, read by `syn`: the last non-empty string literal in the
@@ -408,16 +327,11 @@ fn phrase_owner(path: &str, words: &str) -> bool {
 }
 
 /// The message rules of one file (package M, round 28), on its code before an inline test
-/// module (`code`, the first `last_line` lines of `text`). Attributes and calls are read by
-/// `syn`, never matched as text; the escapes of `design::outcome` are Clippy bans counted in
-/// `design::results::STAGED_ALLOWS`. Each rule here is a count per file in the allowlist.
-/// "Shrink only" holds for a count alone: a change that raises a count and its allowance
-/// together passes this test, so a reviewer reads every raised line (AGENTS.md). The legacy
-/// host freeze (`legacy`) closes that hole for its own list: it compares with the merge base.
+/// module (`code`, the first `last_line` lines of `text`). Calls are read by `syn`, never matched
+/// as text. Each rule here is a count per file in the allowlist. "Shrink only" holds for a count
+/// alone: a change that raises a count and its allowance together passes this test, so a
+/// reviewer reads every raised line (AGENTS.md).
 ///
-/// - `allow-deprecated`: each attribute that lets `deprecated` (or `warnings`) pass, in any
-///   form: inner or outer, a list across lines, `cfg_attr`.
-/// - `crate-wide-allow`: such an inner attribute at a crate root, which would cover every module.
 /// - `reason-end-mark`: a blocked reason without `.`, `?` or `!`.
 /// - `phrase-owner`: a phrase in a string literal outside its owner file.
 /// - `arrow-label`: a control whose label is only an arrow, as a literal or by the glyph's name
@@ -426,15 +340,6 @@ fn phrase_owner(path: &str, words: &str) -> bool {
 ///   always show their word (K4b, R38).
 fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     let mut found = Vec::new();
-    let crate_root = legacy::is_crate_root(path);
-    for attribute in attributes::read(text).unwrap_or_default() {
-        if attribute.line <= last_line && attribute.lets_pass(&DEPRECATED) {
-            found.push("allow-deprecated");
-            if attribute.inner && attribute.kind == Kind::File && crate_root {
-                found.push("crate-wide-allow");
-            }
-        }
-    }
     for line in text.lines().take(last_line) {
         let line = line.split("//").next().unwrap_or("");
         if string_literals(line)
@@ -442,29 +347,6 @@ fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> 
             .any(|words| phrase_owner(path, words))
         {
             found.push("phrase-owner");
-        }
-    }
-    // M5 (lead's ruling 3): the run's old ways to cut words, and the turn heading's owners.
-    // `fitting-escape` counts raw `.truncate()` and the old fitting primitives (and any alias,
-    // which names them) in the desktop and campaign Run modules; `heading-owner` counts the makers of the run's
-    // kept heading and of a `TurnName`, so a second heading or a cut name is a raised line.
-    let run_source = path.starts_with("src/encounter_run")
-        || path.starts_with("crates/campaign/src/encounter_run");
-    for line in text.lines().take(last_line) {
-        let line = line.split("//").next().unwrap_or("");
-        if run_source {
-            for escape in [
-                ".truncate()",
-                "words_that_fit",
-                "one_line(",
-                "whole_words_name",
-                "dock_name(",
-            ] {
-                found.extend(line.matches(escape).map(|_| "fitting-escape"));
-            }
-        }
-        for owner in ["KeptTurnHeading::new", "TurnName::whole"] {
-            found.extend(line.matches(owner).map(|_| "heading-owner"));
         }
     }
     found.extend((0..reasons_without_end_mark(text, last_line)).map(|_| "reason-end-mark"));
@@ -800,7 +682,6 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
                     .last()
                     .is_some_and(|segment| segment.ident.span().start().line <= self.last_line)
                 && !self.path.ends_with("src/design/popups.rs")
-                && !self.path.ends_with("src/visual_tests/ergonomics.rs")
             {
                 self.found.push("popup-marker-owner");
             }
@@ -813,7 +694,6 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
             let words = literal.value();
             if words == ["Dropdown", "choices"].join(" ")
                 && !self.path.ends_with("src/design/popups.rs")
-                && !self.path.ends_with("src/visual_tests/ergonomics.rs")
             {
                 self.found.push("popup-marker-owner");
             }
@@ -875,331 +755,21 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     formats.found
 }
 
+/// The design system owns raw drawing values.
 fn design_or_capture(path: &str) -> bool {
-    path.starts_with("src/design/") || path.starts_with("src/visual_tests/")
+    path.starts_with("src/design/")
 }
 
-/// Issue #810: each `theme::install(&<harness>.ctx)`, a theme installed on a test harness's
-/// context after `egui_kittest`'s builder already drew the page, so the page's one-time results
-/// were measured at egui's default sizes; and each `theme::install(&<name>)` on a context taken
-/// from a harness (`let ctx = harness.ctx.clone();`, Sol 2-010). A harness is built with
-/// `design::test_harness` instead, whose first frame installs the theme. A context made by hand
-/// and themed before its first `run` (`theme::install(&ctx)`) is not counted.
-fn late_theme_installs(text: &str) -> usize {
-    // The names bound to a harness's context so far (`let [mut] ctx[: T] = [&]<expr>.ctx[.clone()];`).
-    // A later `let` of the same name to anything else ends it, so a plain context is not counted.
-    let mut taken: Vec<&str> = Vec::new();
-    let mut found = 0;
-    for code in text
-        .lines()
-        .map(|line| line.split("//").next().unwrap_or(""))
-    {
-        if let Some(rest) = code.trim().strip_prefix("let ")
-            && let Some((name, value)) = rest.strip_prefix("mut ").unwrap_or(rest).split_once('=')
-        {
-            let name = name.split(':').next().unwrap_or(name).trim();
-            let value = value.trim().trim_end_matches(';').trim();
-            let value = value.strip_suffix(".clone()").unwrap_or(value);
-            taken.retain(|known| *known != name);
-            if value.ends_with(".ctx") {
-                taken.push(name);
-            }
-        }
-        found += code
-            .match_indices("theme::install(&")
-            .filter(|(at, call)| {
-                let rest = &code[at + call.len()..];
-                rest.split(')').next().is_some_and(|argument| {
-                    let argument = argument.trim();
-                    argument.ends_with(".ctx") || taken.contains(&argument)
-                })
-            })
-            .count();
-    }
-    found
-}
-
-#[test]
-fn a_theme_on_a_built_harness_is_counted() {
-    // Split, so this file holds no counted call of its own.
-    let text = concat!(
-        "    design::theme::install",
-        "(&harness.ctx);\n",
-        "crate::design::theme::install",
-        "(&h.ctx); // after build_state\n",
-        "theme::install(&ctx);\n",
-        "let shared = harness.ctx",
-        ".clone();\ndesign::theme::install(&shared);\n",
-        "let plain = egui::Context::default();\ndesign::theme::install(&plain);\n",
-        "// design::theme::install",
-        "(&harness.ctx);\n",
-    );
-    // The harness's own context twice, and a context taken from a harness; not a plain one.
-    assert_eq!(late_theme_installs(text), 3);
-}
-
-/// Sol 2-011 (review of #852): each read of the DM's raw scroll or drag (`raw_scroll_delta`,
-/// `smooth_scroll_delta`, `is_decidedly_dragging`) outside comments. A pending request that
-/// reads them itself goes around the one cancel rule (`design::reveal::cancel`), which ends a
-/// request only on input to its own column.
-fn raw_scroll_reads(code: &str) -> usize {
-    code.lines()
-        .map(|line| line.split("//").next().unwrap_or(""))
-        .map(|line| {
-            // Split, so these names are not counted reads of this file.
-            [
-                concat!("raw_", "scroll_delta"),
-                concat!("smooth_", "scroll_delta"),
-                concat!("is_decidedly_", "dragging"),
-            ]
-            .iter()
-            .map(|name| {
-                line.match_indices(name)
-                    .filter(|(at, _)| {
-                        let before = line[..*at].chars().next_back();
-                        let after = line[at + name.len()..].chars().next();
-                        !before.is_some_and(|c| c.is_alphanumeric() || c == '_')
-                            && !after.is_some_and(|c| c.is_alphanumeric() || c == '_')
-                    })
-                    .count()
-            })
-            .sum::<usize>()
-        })
-        .sum()
-}
-
-#[test]
-fn a_raw_scroll_read_is_counted() {
-    // Split, so this file holds no counted read of its own.
-    let text = concat!(
-        "let a = input.raw_",
-        "scroll_delta;\n",
-        "let b = input.smooth_",
-        "scroll_delta != ZERO || pointer.is_decidedly_",
-        "dragging();\n",
-        "// input.raw_",
-        "scroll_delta in a comment\n",
-        "let c = my_raw_",
-        "scroll_delta_x;\n",
-    );
-    assert_eq!(raw_scroll_reads(text), 3);
-}
-
-/// Review of #875 (P2): after a `.`, a field or method of egui's input or pointer state that reads
-/// the DM's input (its events, keys, presses, pointer place or scroll). Three names are split, so
-/// `raw-scroll-input` does not count them as reads of this file.
-const INPUT_READS: [&str; 39] = [
-    "events",
-    "filtered_events",
-    concat!("raw_", "scroll_delta"),
-    concat!("smooth_", "scroll_delta"),
-    "keys_down",
-    "key_pressed",
-    "key_down",
-    "key_released",
-    "consume_key",
-    "count_and_consume_key",
-    "consume_shortcut",
-    "num_presses",
-    "any_pressed",
-    "any_down",
-    "any_released",
-    "any_click",
-    "press_origin",
-    "press_start_time",
-    concat!("is_decidedly_", "dragging"),
-    "could_any_button_be_click",
-    "button_down",
-    "button_pressed",
-    "button_released",
-    "button_clicked",
-    "button_double_clicked",
-    "button_triple_clicked",
-    "primary_down",
-    "primary_pressed",
-    "primary_released",
-    "primary_clicked",
-    "secondary_down",
-    "secondary_pressed",
-    "secondary_released",
-    "secondary_clicked",
-    "middle_down",
-    "is_moving",
-    "hover_pos",
-    "latest_pos",
-    "interact_pos",
-];
-
-/// Review of #875 (P2): each read of the DM's input in a design file, outside the one cancel entry
-/// point (`mod cancel` in `src/design/reveal.rs`): a field or method of `INPUT_READS` after a
-/// `.`, and an event named by its path (`Event::MouseWheel`, `egui::Event::Key`). A reveal that
-/// reads input itself goes around the entry point, which holds or ends a reveal only on input to
-/// its own column. Read as tokens (`proc_macro2`): words in a comment or a string do not count, a
-/// macro's body (`matches!`) does, and an item under a `cfg` that names `test` does not ship.
-fn input_reads(key: &str, text: &str) -> usize {
-    let tokens = text
-        .parse::<proc_macro2::TokenStream>()
-        .unwrap_or_else(|error| panic!("{key} does not lex: {error}"));
-    input_reads_in(tokens, key == "src/design/reveal.rs")
-}
-
-fn input_reads_in(tokens: proc_macro2::TokenStream, entry: bool) -> usize {
-    use proc_macro2::{Delimiter, TokenTree};
-    let trees: Vec<TokenTree> = tokens.into_iter().collect();
-    let punct = |at: usize, mark: char| matches!(trees.get(at), Some(TokenTree::Punct(punct)) if punct.as_char() == mark);
-    let word = |at: usize, name: &str| matches!(trees.get(at), Some(TokenTree::Ident(word)) if word == name);
-    let mut count = 0;
-    let mut at = 0;
-    while at < trees.len() {
-        let skip = match &trees[at] {
-            // `#[cfg(test)]` (any `cfg` that names `test`) and its item: test code.
-            TokenTree::Punct(mark) if mark.as_char() == '#' => matches!(
-                trees.get(at + 1),
-                Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Bracket && {
-                    let attribute = group.stream().to_string().replace(' ', "");
-                    attribute.starts_with("cfg(") && attribute.contains("test")
-                }
-            ),
-            // The entry point's own module.
-            TokenTree::Ident(name) => entry && name == "mod" && word(at + 1, "cancel"),
-            _ => false,
-        };
-        if skip {
-            // To the item's end: its body, or the `;` or `,` that ends it.
-            at += 1;
-            while at < trees.len()
-                && !matches!(&trees[at], TokenTree::Group(group) if group.delimiter() == Delimiter::Brace)
-                && !punct(at, ';')
-                && !punct(at, ',')
-            {
-                at += 1;
-            }
-            at += 1;
-            continue;
-        }
-        match &trees[at] {
-            TokenTree::Group(group) => count += input_reads_in(group.stream(), entry),
-            TokenTree::Ident(name) => {
-                let name = name.to_string();
-                let field = at >= 1 && punct(at - 1, '.') && INPUT_READS.contains(&name.as_str());
-                let event =
-                    at >= 3 && punct(at - 1, ':') && punct(at - 2, ':') && word(at - 3, "Event");
-                count += usize::from(field || event);
-            }
-            _ => {}
-        }
-        at += 1;
-    }
-    count
-}
-
-/// The files of the modules a parent declares under `#[cfg(test)]` (`#[cfg(test)] mod lint;`),
-/// and the folder of each, whose modules are test code too.
-fn test_only_modules(files: &[(String, String)]) -> std::collections::BTreeSet<String> {
-    use proc_macro2::{Delimiter, TokenTree};
-    let mut found = std::collections::BTreeSet::new();
-    for (key, text) in files {
-        let Ok(tokens) = text.parse::<proc_macro2::TokenStream>() else {
-            continue;
-        };
-        let trees: Vec<TokenTree> = tokens.into_iter().collect();
-        // Where the file's own modules are.
-        let folder = match key.rsplit_once('/') {
-            Some((folder, "mod.rs" | "lib.rs")) => folder.to_owned(),
-            Some(_) => key.trim_end_matches(".rs").to_owned(),
-            None => continue,
-        };
-        for at in 0..trees.len() {
-            let test = matches!(&trees[at], TokenTree::Punct(mark) if mark.as_char() == '#')
-                && matches!(
-                    trees.get(at + 1),
-                    Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Bracket
-                        && group.stream().to_string().replace(' ', "") == "cfg(test)"
-                );
-            if !test {
-                continue;
-            }
-            // A visibility, then `mod name;`.
-            let mut next = at + 2;
-            if matches!(trees.get(next), Some(TokenTree::Ident(word)) if word == "pub") {
-                next += 1;
-                if matches!(trees.get(next), Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Parenthesis)
-                {
-                    next += 1;
-                }
-            }
-            if let (
-                Some(TokenTree::Ident(word)),
-                Some(TokenTree::Ident(name)),
-                Some(TokenTree::Punct(end)),
-            ) = (trees.get(next), trees.get(next + 1), trees.get(next + 2))
-                && word == "mod"
-                && end.as_char() == ';'
-            {
-                found.insert(format!("{folder}/{name}.rs"));
-                found.insert(format!("{folder}/{name}/"));
-            }
-        }
-    }
-    found
-}
-
-#[test]
-fn an_input_read_is_counted() {
-    let text = r#"
-        fn reader(ui: &Ui) -> bool {
-            // input.events in a comment, and "pointer.any_down()" in a string, do not count.
-            let wheel = ui.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::MouseWheel { .. })));
-            let pressed = ui.input(|i| i.pointer.any_pressed() || i.pointer.press_origin().is_some());
-            let events = 3; // a binding named `events` is not a read
-            let a = i.key_pressed(Key::Escape) && i.pointer.any_click();
-            wheel || pressed
-        }
-        #[cfg(test)]
-        mod tests {
-            fn t() { let _ = ui.input(|i| i.pointer.any_down()); }
-        }
-        #[cfg(any(test, feature = "test-support"))]
-        COUNTED.with(|c| c.set(i.events.len()));
-        mod cancel {
-            fn read() { let _ = ui.input(|i| i.events.clone()); }
-        }
-    "#;
-    // events, MouseWheel, any_pressed, press_origin, key_pressed, any_click; the `cancel`
-    // module counts outside its entry file.
-    assert_eq!(input_reads("src/design/pane.rs", text), 7);
-    assert_eq!(input_reads("src/design/reveal.rs", text), 6);
-    // A module declared under `#[cfg(test)]` is test code, and so is its folder.
-    let parent = "#[cfg(test)]\nmod lint;\n#[cfg(test)]\npub(crate) mod harness;\npub mod shown;\n";
-    let test_only = test_only_modules(&[("src/design/mod.rs".to_owned(), parent.to_owned())]);
-    assert!(test_only.contains("src/design/lint.rs") && test_only.contains("src/design/lint/"));
-    assert!(test_only.contains("src/design/harness.rs"));
-    assert!(!test_only.iter().any(|module| module.contains("shown")));
-}
-
-/// Counts the rules of every source file under `folder`, and keeps each file's text by its key
-/// in `files` (for the legacy host freeze).
-fn scan(
-    folder: &Path,
-    counts: &mut BTreeMap<String, usize>,
-    levels: &mut BTreeMap<String, FileLevel>,
-    files: &mut Vec<(String, String)>,
-) {
+fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
     for item in fs::read_dir(folder).expect("read source folder") {
         let path = item.expect("read source entry").path();
         let relative = path.to_string_lossy().replace('\\', "/");
         if path.is_dir() {
-            scan(&path, counts, levels, files);
+            scan(&path, counts);
         } else if path.extension().is_some_and(|e| e == "rs") {
             let text = fs::read_to_string(&path).expect("read source file");
             let root = format!("{}/", crate::workspace().display());
             let key = relative.strip_prefix(&root).unwrap_or(&relative);
-            // The legacy host freeze reads every file: a name does not make a file test-only.
-            files.push((key.to_owned(), text.clone()));
-            // Issue #810, in tests too: a theme installed on a harness that already drew.
-            for _ in 0..late_theme_installs(&text) {
-                *counts.entry(format!("{key} late-theme")).or_default() += 1;
-            }
             // A file of unit tests, such as `formats_tests.rs`, does not ship either.
             if relative.ends_with("tests.rs") {
                 continue;
@@ -1207,33 +777,13 @@ fn scan(
             // Unit tests may name colours and sizes. They do not ship.
             // `mod tests;` near the top names a file of its own, so only an inline module ends it.
             let code = text.split("#[cfg(test)]\nmod tests {").next().unwrap_or("");
-            // Sol 2-011, review of #852: a raw reader of the DM's scroll or drag, in shipping
-            // code, design files too. The one cancel entry point (`design::reveal::cancel`) holds
-            // the counted reads; a request elsewhere judges input through it.
-            for _ in 0..raw_scroll_reads(code) {
-                *counts.entry(format!("{key} raw-scroll-input")).or_default() += 1;
-            }
-            let found = attributes::read(&text)
-                .unwrap_or_else(|error| panic!("{key} does not parse: {error}"));
-            levels.insert(key.to_owned(), file_level(&found));
-            // Design and capture code owns raw drawing values. Its crate root can still set
-            // the lint level for other files, and the popup marker belongs to its own part.
+            // Design code owns raw drawing values. The popup marker belongs to its own part.
             if design_or_capture(key) {
                 for rule in format_rules(key, &text, code.lines().count())
                     .into_iter()
                     .filter(|rule| *rule == "popup-marker-owner")
                 {
                     *counts.entry(format!("{key} {rule}")).or_default() += 1;
-                }
-                if legacy::is_crate_root(key)
-                    && found.iter().any(|attribute| {
-                        attribute.line <= code.lines().count()
-                            && attribute.inner
-                            && attribute.kind == Kind::File
-                            && attribute.lets_pass(&DEPRECATED)
-                    })
-                {
-                    *counts.entry(format!("{key} crate-wide-allow")).or_default() += 1;
                 }
                 continue;
             }
@@ -1248,7 +798,8 @@ fn scan(
             for rule in format_rules(key, &text, code.lines().count()) {
                 *counts.entry(format!("{key} {rule}")).or_default() += 1;
             }
-            // Package K: a layer built by hand, a `CreateReasons` impl by hand (the syntax tree).
+            // A renaming of a banned owner or function, a `CreateReasons` impl by hand (the
+            // syntax tree).
             for rule in super::layout::bans::syntax_rules(&text)
                 .unwrap_or_else(|error| panic!("{key} does not parse: {error}"))
             {
@@ -1261,8 +812,6 @@ fn scan(
 #[test]
 fn raw_colours_and_sizes_stay_inside_the_design_system() {
     let mut counts = BTreeMap::new();
-    let mut levels = BTreeMap::new();
-    let mut files = Vec::new();
     // The logic crates write many UI words too, such as a note's warnings.
     for folder in [
         "/src",
@@ -1274,34 +823,7 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
         scan(
             &crate::workspace().join(folder.trim_start_matches('/')),
             &mut counts,
-            &mut levels,
-            &mut files,
         );
-    }
-    // Review of #875 (P2): in a design file, each read of the DM's input outside the one cancel
-    // entry point (`design::reveal::cancel`). Test code does not ship: the integration tests, a
-    // file of unit tests, and a module its parent declares under `#[cfg(test)]` (`mod lint;`).
-    let test_only = test_only_modules(&files);
-    for (key, text) in &files {
-        let tests = key.starts_with("src/design/tests/")
-            || key.ends_with("tests.rs")
-            || test_only
-                .iter()
-                .any(|module| key == module || (module.ends_with('/') && key.starts_with(module)));
-        if key.starts_with("src/design/") && !tests {
-            for _ in 0..input_reads(key, text) {
-                *counts.entry(format!("{key} input-read")).or_default() += 1;
-            }
-        }
-    }
-    // A module under an allow of `deprecated` writes its own level: an allow (counted), or
-    // `#![warn(deprecated)]`, so the compiler stops every alias, import and call in it.
-    let crate_root_parents = legacy::crate_root_parents(&files)
-        .unwrap_or_else(|error| panic!("crate roots do not parse: {error}"));
-    for key in levels.keys().filter(|key| !design_or_capture(key)) {
-        if inherits_allow(key, &levels, &crate_root_parents) {
-            *counts.entry(format!("{key} inherited-allow")).or_default() += 1;
-        }
     }
     let allowed: BTreeMap<String, usize> = ALLOWLIST
         .lines()
@@ -1317,35 +839,10 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
         if *count > limit {
             let fix = match key.rsplit_once(' ').map_or("", |(_, rule)| rule) {
                 "straight-apostrophe" => "Use ’ in UI words",
-                "allow-deprecated" => {
-                    "Draw messages through `Footer::outcome`, `design::outcome::banner`, `row_fault` or `PagePlaceholder`, and remove the allow"
-                }
-                "inherited-allow" => {
-                    "Write `#![warn(deprecated)]` at the top of this file (its parent allows old message functions)"
-                }
-                "crate-wide-allow" => {
-                    "Put `#[allow(deprecated)]` on the function that calls, not on the crate"
-                }
                 "reason-end-mark" => "End a blocked reason with `.`, `?` or `!`",
-                "late-theme" => {
-                    "A theme installed on a harness after it drew (issue #810). (a) The test draws before it installs the theme by accident: build the harness with `design::test_harness` (`themed_state`, `themed_ui_state`, `themed`, `themed_ui`), whose first frame installs the theme. (b) The test changes the theme on purpose after a draw (a new font generation): keep the visible `theme::install` call on the harness's own context and add a counted row to `lint_allowlist.txt` with its reason, for review; never hide the call behind another binding. Examples of (b): `src/content_ui/tests/quiet_reader.rs`, `src/trackers/view.rs`"
-                }
-                "raw-scroll-input" => {
-                    "Judge the DM's scroll, drag or keys for a pending request through the one cancel entry point (`design::reveal::cancel` in the design, `design::reveal::dm_scrolls` outside it), by the request's own column: a raw read goes around it, and input to another column would end the request (Sol 2-011, review of #852)"
-                }
-                "input-read" => {
-                    "Judge the DM's input for a reveal through the one entry point, `design::reveal::cancel`, with the reveal's own column as its owner (review of #875): a reveal that reads input itself would hold or end on input to another column. A part's own reader that moves no view and holds no reveal (a list's arrow keys, a column's resize) is a counted row in `lint_allowlist.txt`, with its reason, for review"
-                }
-                "fitting-escape" => {
-                    "Fit the run's words through a design part (`design::TurnHeading`), not a raw cut"
-                }
-                "heading-owner" => {
-                    "The run makes its one kept heading, and a `TurnName` comes from the participant's own name"
-                }
-                "foreground-layer" => "Foreground layers and menus belong to src/design/",
                 "hand-create-reasons" => "Declare a form's reasons with `create_reasons!`",
                 "banned-alias" => {
-                    "Name a banned owner or function as clippy.toml names it: an alias (`use … as …`, `type … =`) hides it from the counts"
+                    "Name a banned owner or function as clippy.toml names it: an alias (`use … as …`, `type … =`) hides it from review"
                 }
                 "phrase-owner" => {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`, a close icon's `Dismiss this …` in `MessageChoice::Dismiss`"
@@ -1369,74 +866,12 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
             ));
         }
     }
-    // The legacy host freeze (ruling L12): `legacy_hosts.tsv` is exact, and no site grows
-    // against the merge base with `origin/main`, also when its row grows with it.
-    problems.extend(legacy::problems(&files));
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
 #[test]
 fn the_message_rules_find_what_they_should() {
     let rules = |path: &str, code: &str| message_rules(path, code, code.lines().count());
-    for path in [
-        "src/encounter_run.rs",
-        "crates/campaign/src/encounter_run.rs",
-        "crates/campaign/src/encounter_run/effect.rs",
-    ] {
-        assert_eq!(
-            rules(path, "fn f() { one_line(name); }"),
-            ["fitting-escape"],
-            "{path}"
-        );
-    }
-    assert_eq!(
-        rules("src/a.rs", "#![allow(deprecated)]"),
-        ["allow-deprecated"]
-    );
-    // A list across lines, as a new module would write it: counted, so it fails the lint until
-    // the allowlist names it.
-    assert_eq!(
-        rules(
-            "src/new.rs",
-            "#![allow(\n    deprecated,\n    reason = \"old message functions\"\n)]\nfn f() {}"
-        ),
-        ["allow-deprecated"]
-    );
-    // A combined list, `cfg_attr` and `warnings` are allows too; another lint alone is not.
-    assert_eq!(
-        rules("src/a.rs", "#![allow(deprecated, dead_code)]"),
-        ["allow-deprecated"]
-    );
-    assert_eq!(
-        rules(
-            "src/a.rs",
-            "#[cfg_attr(test, allow(dead_code, deprecated))]\nfn f() {}"
-        ),
-        ["allow-deprecated"]
-    );
-    assert_eq!(
-        rules("src/a.rs", "#[allow(warnings)]\nfn f() {}"),
-        ["allow-deprecated"]
-    );
-    assert!(rules("src/a.rs", "#![allow(dead_code)]").is_empty());
-    assert!(
-        rules(
-            "src/a.rs",
-            "// #![allow(deprecated)]\nconst A: &str = \"#![allow(deprecated)]\";"
-        )
-        .is_empty()
-    );
-    assert_eq!(
-        rules("src/lib.rs", "#![allow(deprecated)]"),
-        ["allow-deprecated", "crate-wide-allow"]
-    );
-    assert_eq!(
-        rules(
-            "src/lib.rs",
-            "impl A {\n    #[allow(deprecated)]\n    fn page(&self) {}\n}"
-        ),
-        ["allow-deprecated"]
-    );
     let reason = |code: &str| rules("src/a.rs", &format!("fn f() {{\n{code}\n}}"));
     assert_eq!(
         reason("Action::quiet(\"Save\").blocked(Some(\"Stop recording first\"));"),
@@ -1536,66 +971,6 @@ fn the_message_rules_find_what_they_should() {
     ] {
         assert!(rules("src/a.rs", &code).is_empty(), "{code}");
     }
-
-    // Levels across files: a child under an allow must write its own level.
-    let level = |code: &str| file_level(&attributes::read(code).unwrap());
-    let files: Vec<(String, String)> = [
-        (
-            "src/lib.rs",
-            "impl A {\n    #[allow(deprecated)]\n    fn page() {}\n}",
-        ),
-        (
-            "src/a.rs",
-            "#![allow(\n    deprecated,\n    reason = \"old\"\n)]\nmod b;",
-        ),
-        ("src/a/b.rs", "use crate::design::message as show;"),
-        ("src/a/c.rs", "#![warn(deprecated)]"),
-        ("src/a/d.rs", "#![allow(deprecated)]"),
-        ("src/a/b/e.rs", ""),
-        ("src/f.rs", "#[allow(deprecated)]\nmod g;"),
-        ("src/f/g.rs", ""),
-        ("src/h.rs", ""),
-        ("src/h/mod.rs", ""),
-        (
-            "src/design/src/lib.rs",
-            r#"#![allow(deprecated)]
-               #[path = "../../frame_clock.rs"] mod frame_clock;
-               #[cfg(test)] #[path = "../../capture.rs"] mod capture;"#,
-        ),
-        ("src/frame_clock.rs", ""),
-        ("src/capture.rs", ""),
-        (
-            "src/trackers/src/lib.rs",
-            r#"#[allow(deprecated)] #[path = "../../trackers.rs"] mod trackers;"#,
-        ),
-        ("src/trackers.rs", ""),
-    ]
-    .into_iter()
-    .map(|(path, code)| (path.to_owned(), code.to_owned()))
-    .collect();
-    let crate_root_parents = legacy::crate_root_parents(&files).unwrap();
-    let levels: BTreeMap<String, FileLevel> = files
-        .iter()
-        .map(|(path, text)| (path.clone(), level(text)))
-        .collect();
-    let inherits: Vec<&str> = levels
-        .keys()
-        .filter(|path| inherits_allow(path, &levels, &crate_root_parents))
-        .map(String::as_str)
-        .collect();
-    // An alias in `b` and a grandchild `e` inherit; `c` resets; `d` is counted; an allow on a
-    // function in `lib.rs` covers no module; an allow on `mod g;` covers `g`. A module
-    // loaded by path inherits its real root's level, except for the test-only declaration.
-    assert_eq!(
-        inherits,
-        [
-            "src/a/b.rs",
-            "src/a/b/e.rs",
-            "src/f/g.rs",
-            "src/frame_clock.rs",
-            "src/trackers.rs"
-        ]
-    );
 }
 
 #[test]
@@ -1718,12 +1093,11 @@ fn format_owners_reject_old_fractions_and_sheet_separators() {
         for path in [
             "src/party.rs",
             "src/design/components.rs",
-            "src/visual_tests/driver.rs",
+            "src/gui/kit/menu.rs",
         ] {
             assert_eq!(rules(path, code), ["popup-marker-owner"]);
         }
         assert!(rules("src/design/popups.rs", code).is_empty());
-        assert!(rules("src/visual_tests/ergonomics.rs", code).is_empty());
     }
 
     for words in [
