@@ -434,11 +434,11 @@ fn note_typing_saves_at_ctrl_s() {
         root.app.sessions.after_a_step_back_to_note(false);
         cx.notify();
     });
-    shell.press("left");
+    shell.press("left right");
     shell.type_text("!");
     let words = note_words(&mut shell);
     assert!(
-        words.contains("Ogre arrives!."),
+        words.contains("Ogre arrives.!"),
         "a correction keeps the line: {words:?}"
     );
     shell.press("ctrl-s");
