@@ -61,6 +61,25 @@ impl Fault for DiskFault {
     }
 }
 
+/// A draft's disk conflict (`Recovery::show`), as data for a view that does not draw with egui.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DiskView {
+    /// The facts before the last one (another file claims this identity).
+    pub facts: Vec<String>,
+    /// The last fact: the choices follow its words.
+    pub last: String,
+    /// The safe choice: `Overwrite with my draft`.
+    pub keep: String,
+    /// The red choice: `Reload and lose my draft`, or `Remove <what> and lose draft`.
+    pub lose: String,
+    /// What differs, part by part, in the DM's words.
+    pub differences: Vec<(String, String)>,
+    /// The draft's text, as Overwrite would save it.
+    pub draft: String,
+    /// The file's text now, and its path; none when the file is gone.
+    pub disk: Option<(String, String)>,
+}
+
 impl Recovery {
     /// `what` names the draft's kind in the DM's words: `encounter`, `group` or `creature`;
     /// `name` is the draft's name.
@@ -119,6 +138,38 @@ impl Recovery {
     pub fn accept(&mut self) -> Option<Change> {
         self.copies_accepted = true;
         self.change.take()
+    }
+
+    /// The conflict as data (`show`'s facts, choices and comparison), while there is one.
+    pub fn view(&self, draft: &str, (what, name): (&str, &str)) -> Option<DiskView> {
+        let change = self.change.as_ref()?;
+        let mut facts = vec![changed_on_disk(what, name).to_string()];
+        facts.extend(change.copies.iter().map(|path| {
+            crate::sentence!(
+                "Another file claims to be this {}: {}. Both files stay.",
+                what,
+                path
+            )
+            .to_string()
+        }));
+        let last = facts.pop()?;
+        Some(DiskView {
+            facts,
+            last,
+            keep: "Overwrite with my draft".to_owned(),
+            lose: if change.text.is_some() {
+                "Reload and lose my draft".to_owned()
+            } else {
+                format!("Remove {what} and lose draft")
+            },
+            differences: change
+                .text
+                .as_deref()
+                .map(|text| differences(draft, text))
+                .unwrap_or_default(),
+            draft: draft.to_owned(),
+            disk: change.text.clone().map(|text| (change.path.clone(), text)),
+        })
     }
 
     /// The conflict in place of the editor, its choices after the last fact, then what differs.
@@ -431,63 +482,109 @@ impl super::Encounters {
         let Some(draft) = self.draft.as_mut() else {
             return false;
         };
-        if draft.recovery.change.is_none() {
-            if let Some(index) = draft
+        let choice = if draft.recovery.change.is_none() {
+            let Some(index) = draft
                 .groups
                 .iter()
                 .position(|group| group.has_disk_change())
-            {
-                let gone = draft.groups[index].file_gone();
-                match draft.groups[index].disk_choice(ui, &campaign.path, snapshot) {
-                    Ok(Some(true)) => self.save_draft(ui.ctx(), campaign, modules),
-                    Ok(Some(false)) => {
-                        // FF7: the group's file is gone. It leaves this encounter's draft, and
-                        // Undo remove puts it back at its place with its draft.
-                        if gone {
-                            let group = draft.groups.remove(index);
-                            if draft.add_to.as_deref() == Some(group.path()) {
-                                draft.add_to = None;
-                            }
-                            draft.new_results.push(super::DraftUndo::RemovedGroup {
-                                index,
-                                group: Box::new(group),
-                                delete: false,
-                            });
-                        }
-                        self.error = None;
-                    }
-                    Err(error) => self.error = Some(error),
-                    _ => {}
+            else {
+                return false;
+            };
+            match draft.groups[index].show_disk(ui, snapshot) {
+                Ok(choice) => choice,
+                Err(error) => {
+                    self.error = Some(error);
+                    None
                 }
-                return true;
             }
-            return false;
-        }
-        let choice = draft.recovery.show(
-            ui,
-            &draft.comparison_text(snapshot).unwrap_or_default(),
-            ("encounter", &draft.name),
-        );
+        } else {
+            draft.recovery.show(
+                ui,
+                &draft.comparison_text(snapshot).unwrap_or_default(),
+                ("encounter", &draft.name),
+            )
+        };
         if let Some(keep) = choice {
-            if keep {
-                if let Some(change) = draft.recovery.accept() {
-                    draft.path = change.path;
-                    draft.baseline = change.text.clone();
-                    if let Some(text) = change.text {
-                        draft.source = text;
-                    }
-                    self.save_draft(ui.ctx(), campaign, modules);
-                }
-            } else {
-                let path = draft.path.clone();
-                let old = self.draft.take();
-                self.draft = super::Draft::open(&campaign.path, &path).ok();
-                self.discarded = old;
-                self.stamp_kept(super::KeptResult::Discarded);
-                self.error = None;
-            }
+            self.encounter_disk_choice(ui.ctx(), campaign, modules, keep);
         }
         true
+    }
+
+    /// The encounter editor's disk conflict: its own, else the first of its groups' (the
+    /// editor shows it in its place, `encounter_disk_view`).
+    pub fn encounter_disk(&self) -> Option<DiskView> {
+        let snapshot = self.snapshot.as_ref()?;
+        let draft = self.draft.as_ref()?;
+        if draft.recovery.change.is_none() {
+            let group = draft.groups.iter().find(|group| group.has_disk_change())?;
+            return group.disk_view(snapshot);
+        }
+        draft.recovery.view(
+            &draft.comparison_text(snapshot).unwrap_or_default(),
+            ("encounter", &draft.name),
+        )
+    }
+
+    /// The DM's choice in the encounter editor's disk conflict: `keep` overwrites with the
+    /// draft, else the draft goes (with Undo) and the file's text comes back.
+    pub fn encounter_disk_choice(
+        &mut self,
+        ctx: &egui::Context,
+        campaign: &crate::persistence::Campaign,
+        modules: &[crate::persistence::Module],
+        keep: bool,
+    ) {
+        let Some(draft) = self.draft.as_mut() else {
+            return;
+        };
+        if draft.recovery.change.is_none() {
+            let Some(index) = draft
+                .groups
+                .iter()
+                .position(|group| group.has_disk_change())
+            else {
+                return;
+            };
+            let gone = draft.groups[index].file_gone();
+            match draft.groups[index].disk_choice(&campaign.path, keep) {
+                Ok(()) if keep => self.save_draft(ctx, campaign, modules),
+                Ok(()) => {
+                    // FF7: the group's file is gone. It leaves this encounter's draft, and
+                    // Undo remove puts it back at its place with its draft.
+                    if gone {
+                        let group = draft.groups.remove(index);
+                        if draft.add_to.as_deref() == Some(group.path()) {
+                            draft.add_to = None;
+                        }
+                        draft.new_results.push(super::DraftUndo::RemovedGroup {
+                            index,
+                            group: Box::new(group),
+                            delete: false,
+                        });
+                    }
+                    self.error = None;
+                }
+                Err(error) => self.error = Some(error),
+            }
+            return;
+        }
+        if keep {
+            if let Some(change) = draft.recovery.accept() {
+                draft.path = change.path;
+                draft.baseline = change.text.clone();
+                if let Some(text) = change.text {
+                    draft.source = text;
+                }
+                self.save_draft(ctx, campaign, modules);
+            }
+        } else {
+            let path = draft.path.clone();
+            let old = self.draft.take();
+            self.draft = super::Draft::open(&campaign.path, &path).ok();
+            self.discarded = old;
+            self.stamp_kept(super::KeptResult::Discarded);
+            self.error = None;
+        }
     }
 }
 

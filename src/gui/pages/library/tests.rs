@@ -621,3 +621,107 @@ fn stat_formats() {
     open_found(&mut shell, "Bound Charm");
     shell.capture("stat-formats__04-item-facts__1200x800");
 }
+
+/// Turn the mouse wheel by `dy` over the target `name` (a row a scrolled menu hides).
+fn scroll_over(shell: &mut Shell, name: &str, dy: gpui::Pixels) {
+    let at = shell
+        .bounds(name)
+        .unwrap_or_else(|| panic!("No target named {name:?}"))
+        .center();
+    shell.scroll(
+        at,
+        gpui::ScrollDelta::Pixels(gpui::point(px(0.0), dy)),
+        gpui::Modifiers::default(),
+    );
+}
+
+/// The heading over the list (`Matches`; none over a section on a wide page) and how many rows
+/// the list has, as it draws them now.
+fn list_heading(shell: &mut Shell) -> (Option<&'static str>, usize) {
+    shell.update(|root, _, _| {
+        let app = &mut root.app;
+        let list = app
+            .library
+            .list_view(&app.campaigns, None, false, 1200.0)
+            .expect("the Library is loaded");
+        (list.heading.map(|(title, _)| title), list.rows)
+    })
+}
+
+/// The creature filter (egui `creature-filter`): the Filter menu's facts open their values, each
+/// chosen value is a chip that removes it, the challenge's lowest and highest rows, and Clear
+/// filters; the list shows only the creatures that match.
+#[test]
+fn creature_filter() {
+    let mut shell = Shell::new("creature-filter", Seed::Empty);
+    library(&mut shell);
+    shell.click("Creatures");
+    assert_eq!(list_heading(&mut shell), (None, 336));
+    shell.click("Filter creatures");
+    shell.click("Habitat");
+    // Its values run past the menu's height: the menu scrolls to Underdark.
+    scroll_over(&mut shell, "Filter Habitat: Any", px(-400.0));
+    shell.click("Filter Habitat: Underdark");
+    // A fact's row counts its chosen values; a second press closes it.
+    scroll_over(&mut shell, "Filter Habitat: Underdark", px(400.0));
+    shell.click("Habitat (1)");
+    assert!(shell.bounds("Filter creatures").is_some());
+    assert!(shell.bounds("Filter Habitat: Underdark").is_none());
+    shell.click("Type");
+    shell.click("Filter Type: Aberration");
+    shell.capture("creature-filter__00-menu-open__1200x800");
+    // Filter again closes the menu.
+    shell.click("Filter creatures");
+    assert!(
+        shell.bounds("Filter Habitat: Underdark").is_none(),
+        "the menu closed"
+    );
+    assert!(shell.bounds("Remove filter Habitat: Underdark").is_some());
+    assert!(shell.bounds("Remove filter Type: Aberration").is_some());
+    assert!(shell.bounds("Clear filters").is_some(), "two values chosen");
+    assert_eq!(list_heading(&mut shell), (Some("Matches"), 9));
+    assert!(shell.bounds("Aboleth · Creature · CR 10").is_some());
+    shell.capture("creature-filter__01-underdark-aberrations__1200x800");
+
+    // Removing the Type chip keeps the habitat; Clear filters goes away with one value left.
+    shell.click("Remove filter Type: Aberration");
+    assert!(shell.bounds("Remove filter Type: Aberration").is_none());
+    assert!(shell.bounds("Clear filters").is_none(), "one value chosen");
+    let underdark = list_heading(&mut shell).1;
+    assert!(
+        underdark > 9,
+        "more Underdark creatures than aberrations: {underdark}"
+    );
+    shell.click("Remove filter Habitat: Underdark");
+    assert_eq!(list_heading(&mut shell), (None, 336));
+
+    // The challenge: a lowest bound is a chip of its own; a second press removes it.
+    shell.click("Filter creatures");
+    shell.click("Challenge");
+    shell.click("Lowest CR 17");
+    assert!(shell.bounds("Remove filter CR 17 or more").is_some());
+    shell.click("Lowest CR 17");
+    assert!(shell.bounds("Remove filter CR 17 or more").is_none());
+    shell.click("Lowest CR 17");
+    shell.click("Highest CR 20");
+    assert!(shell.bounds("Remove filter CR 17 to 20").is_some());
+    let ranged = list_heading(&mut shell);
+    assert_eq!(ranged.0, Some("Matches"));
+    assert!(ranged.1 > 0 && ranged.1 < 336, "CR 17 to 20: {ranged:?}");
+    // A type with the range makes two.
+    shell.click("Challenge (1)");
+    shell.click("Type");
+    shell.click("Filter Type: Dragon");
+    shell.click("Filter creatures");
+    assert!(shell.bounds("Remove filter Type: Dragon").is_some());
+    shell.click("Clear filters");
+    assert!(shell.read(|root| root.app.library.filter().is_empty()));
+    assert_eq!(list_heading(&mut shell), (None, 336));
+
+    // Search terms find by facts; the bar stays under the search.
+    shell.click("id:library-search");
+    shell.type_text("immune:fire cr:17+");
+    assert_eq!(list_heading(&mut shell), (Some("Search results"), 8));
+    assert!(shell.bounds("Filter creatures").is_some());
+    shell.capture("creature-filter__02-search-terms__1200x800");
+}

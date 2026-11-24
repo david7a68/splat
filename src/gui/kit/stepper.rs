@@ -1,7 +1,9 @@
 //! A whole number with − and + (egui `design::stepper`): `Decrease <name>`, the number in a well
 //! the DM can type in, then `Increase <name>`. At a limit the − or + is disabled. A typed number
 //! keeps to the range; a value already outside it only steps back towards it, never further, as
-//! the egui stepper does.
+//! the egui stepper does. `.change()` shows a change (`+3`, `−1`) whose steps skip 0 (egui
+//! `change_stepper`); `.grouped()` a count with its digits grouped (`1,000`, egui
+//! `grouped_stepper`).
 //!
 //! ```ignore
 //! kit::Stepper::new(("hp", id), "Current HP", hp, 0..=max)
@@ -23,6 +25,18 @@ pub const MIN_WELL: Pixels = px(40.0);
 
 type OnValue = Rc<dyn Fn(&i64, &mut Window, &mut App)>;
 
+/// How the well shows its number (egui `Shown`).
+#[derive(Clone, Copy, Default, PartialEq)]
+enum Shown {
+    /// `3`
+    #[default]
+    Plain,
+    /// `+3`, `−1`: a change, whose steps skip 0.
+    Change,
+    /// `1,000`: a count with its digits grouped.
+    Grouped,
+}
+
 #[derive(IntoElement)]
 pub struct Stepper {
     id: ElementId,
@@ -31,6 +45,7 @@ pub struct Stepper {
     range: RangeInclusive<i64>,
     well: Pixels,
     disabled: bool,
+    shown: Shown,
     on_change: Option<OnValue>,
 }
 
@@ -49,6 +64,7 @@ impl Stepper {
             range,
             well: MIN_WELL,
             disabled: false,
+            shown: Shown::Plain,
             on_change: None,
         }
     }
@@ -63,6 +79,20 @@ impl Stepper {
     /// Shown, not changeable (a sheet this sign-in cannot edit).
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// A change (`+3`, `−1`): its − and + step over 0, which changes nothing (egui
+    /// `change_stepper`).
+    pub fn change(mut self) -> Self {
+        self.shown = Shown::Change;
+        self
+    }
+
+    /// A count that can reach the thousands (a group's member count): `1,000`, typed with or
+    /// without the commas (egui `grouped_stepper`).
+    pub fn grouped(mut self) -> Self {
+        self.shown = Shown::Grouped;
         self
     }
 
@@ -91,9 +121,42 @@ pub fn digits(value: i64) -> usize {
         + usize::from(value < 0)
 }
 
-/// A typed number, with a true minus or a hyphen.
+/// A typed number, with a true minus or a hyphen, a `+`, and commas or spaces between digits.
 fn parse(words: &str) -> Option<i64> {
-    words.trim().replace('\u{2212}', "-").parse().ok()
+    crate::design::parse_signed(
+        &words
+            .chars()
+            .filter(|c| *c != ',' && !c.is_whitespace())
+            .collect::<String>(),
+    )
+}
+
+impl Shown {
+    /// The words the well shows for `value`.
+    fn words(self, value: i64) -> String {
+        match self {
+            Self::Plain => value.to_string(),
+            Self::Change => crate::design::signed(value),
+            Self::Grouped => {
+                let digits = crate::design::grouped_number(value.unsigned_abs() as usize);
+                if value < 0 {
+                    format!("\u{2212}{digits}")
+                } else {
+                    digits
+                }
+            }
+        }
+    }
+
+    /// One step from `value` by `by` (±1): a change steps over 0.
+    fn step(self, value: i64, by: i64) -> i64 {
+        let next = value + by;
+        if self == Self::Change && next == 0 {
+            next + by
+        } else {
+            next
+        }
+    }
 }
 
 impl RenderOnce for Stepper {
@@ -114,6 +177,7 @@ impl RenderOnce for Stepper {
             }
         };
         let typed = self.on_change.clone();
+        let shown = self.shown;
         div()
             .flex()
             .flex_row()
@@ -128,10 +192,13 @@ impl RenderOnce for Stepper {
                     format!("Decrease {}", self.name),
                 )
                 .disabled(self.disabled || value <= low)
-                .on_click(send(value - 1, self.on_change.clone())),
+                .on_click(send(
+                    shown.step(value, -1).clamp(low, high),
+                    self.on_change.clone(),
+                )),
             )
             .child(
-                TextField::new(child("well"), value.to_string())
+                TextField::new(child("well"), shown.words(value))
                     .name(self.name.clone())
                     .width(self.well)
                     .disabled(self.disabled)
@@ -150,7 +217,7 @@ impl RenderOnce for Stepper {
             .child(
                 IconButton::new(child("more"), icons::ADD, format!("Increase {}", self.name))
                     .disabled(self.disabled || value >= high)
-                    .on_click(send(value + 1, self.on_change)),
+                    .on_click(send(shown.step(value, 1).clamp(low, high), self.on_change)),
             )
     }
 }
@@ -167,5 +234,13 @@ mod tests {
         assert_eq!(parse(" −3 "), Some(-3));
         assert_eq!(parse("12"), Some(12));
         assert_eq!(parse("x"), None);
+        assert_eq!(parse("+2"), Some(2));
+        assert_eq!(parse("1,000"), Some(1000));
+        assert_eq!(Shown::Change.words(-1), "\u{2212}1");
+        assert_eq!(Shown::Change.words(3), "+3");
+        assert_eq!(Shown::Grouped.words(12_345), "12,345");
+        assert_eq!(Shown::Change.step(1, -1), -1);
+        assert_eq!(Shown::Change.step(-1, 1), 1);
+        assert_eq!(Shown::Plain.step(1, -1), 0);
     }
 }

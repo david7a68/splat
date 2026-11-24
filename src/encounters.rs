@@ -329,6 +329,9 @@ fn named_note_path(root: &std::path::Path, folder: &str, name: &str) -> Result<S
 
 #[path = "encounters/disk.rs"]
 mod disk;
+/// The creature pane, replacement and narrow tabs as plain data, for the GPUI page.
+#[path = "encounters/forms.rs"]
+pub mod forms;
 #[path = "encounters/groups.rs"]
 mod groups;
 #[path = "encounters/history.rs"]
@@ -9295,25 +9298,7 @@ impl Encounters {
             unread_roster_row(ui, fault);
         }
         if let Some((selected, creature, all)) = replacement {
-            let before = draft.setup.roster.clone();
-            replace_roster(&mut draft.setup.roster, selected, creature, all, snapshot);
-            let old = roster_name(&before[selected], None, &snapshot.known_creature_names);
-            let rows = before
-                .iter()
-                .zip(&draft.setup.roster)
-                .filter(|(was, now)| was.creature != now.creature)
-                .count();
-            let new = snapshot
-                .catalogue
-                .entries
-                .get(&creature)
-                .map_or_else(|| "the new creature".to_owned(), |e| e.entry.name.clone());
-            draft.new_results.push(DraftUndo::Replacement {
-                before,
-                after: draft.setup.roster.clone(),
-                words: replacement_words(&old, rows, &new),
-                replaced: old,
-            });
+            draft.replace_missing(selected, creature, all, snapshot);
         }
         for side in draft.setup.roster.iter().flat_map(|slot| {
             [

@@ -153,6 +153,21 @@ pub(super) fn render(
         sessions.gv_editing_group_here(plan)
     })
     .unwrap_or(false);
+    if editing_group {
+        // The group being assembled takes the pane (egui `plan_pane`): the group editor, and on
+        // the narrow Plan tab the page's messages keep their footer under it.
+        let lines = if page_footer {
+            with_plan(&mut root.app, |sessions, settings, book, plan| {
+                sessions.gv_session_footer(settings, book, plan)
+            })
+            .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let footer = footer::lines("plan-footer", lines, super::session::on_session_press(), cx);
+        let editor = crate::gui::pages::encounters::render_group_in_plan(root, window, cx);
+        return pane(editor, footer, None);
+    }
     // The last frame's measures feed this frame's fold, as egui's do.
     let probes = root.pages.sessions.plan.probes.clone();
     let last = {
@@ -193,30 +208,36 @@ pub(super) fn render(
     let travel = travel_block(root, window, cx);
     let fight = fight_block(root, last.width, window, cx);
     let scroll = root.pages.sessions.plan.scroll.clone();
-    let body: AnyElement = if editing_group {
-        // The group being assembled takes the plan's place: the Encounters page's group editor.
-        kit::Message::new(
-            kit::Tone::Info,
-            "A group is being assembled here. Finish it on the Encounters page.",
-        )
-        .into_any_element()
-    } else {
-        body(
-            view,
-            Opened { travel, fight },
-            Measures {
-                probes: &probes,
-                scroll: &scroll,
-                width: last.width,
-            },
-            window,
-            cx,
-        )
-    };
+    let menus = [
+        add_menu(root, AddMenu::FIGHT, &view, cx),
+        add_menu(root, AddMenu::GROUP, &view, cx),
+    ];
+    let body = body(
+        view,
+        menus,
+        Opened { travel, fight },
+        Measures {
+            probes: &probes,
+            scroll: &scroll,
+            width: last.width,
+        },
+        window,
+        cx,
+    );
+    pane(body, footer, Some(&probes))
+}
+
+/// The plan's pane: its body, and its message footer under a rule when it has lines. With
+/// `probes`, the plan's rows wrote their measures this frame (the fold's probe draws last).
+fn pane(
+    body: AnyElement,
+    footer: Vec<AnyElement>,
+    probes: Option<&Rc<RefCell<Probes>>>,
+) -> AnyElement {
     let c = colors();
     // The pane's probe draws last: after every row wrote its measure, a frame that measured
     // other heights or another width than the last asks for one more (as egui's fold settles).
-    let pane_probe = {
+    let pane_probe = probes.map(|probes| {
         let probes = probes.clone();
         canvas(
             move |bounds, window, _| {
@@ -232,7 +253,7 @@ pub(super) fn render(
         .top_0()
         .left_0()
         .size_full()
-    };
+    });
     div()
         .relative()
         .flex()
@@ -251,7 +272,7 @@ pub(super) fn render(
                     .children(footer),
             )
         })
-        .child(pane_probe)
+        .children(pane_probe)
         .into_any_element()
 }
 
@@ -270,6 +291,7 @@ struct Measures<'a> {
 
 fn body(
     view: PlanView,
+    menus: [AnyElement; 2],
     mut opened: Opened,
     measures: Measures<'_>,
     window: &mut Window,
@@ -277,7 +299,7 @@ fn body(
 ) -> AnyElement {
     let probes = measures.probes;
     let heading = plan_heading(&view, cx);
-    let strip = add_strip(&view, cx);
+    let strip = add_strip(&view, menus, cx);
     let primary_free = std::cell::Cell::new(view.primary_free);
     let mut rows: Vec<AnyElement> = Vec::new();
     let any = !view.rows.is_empty();
@@ -403,45 +425,13 @@ fn plan_heading(view: &PlanView, cx: &mut Context<SplatRoot>) -> AnyElement {
 
 /// `Add`: Fight and Group (menus of what the campaign has), Long rest, and the rarer kinds and
 /// Scene under `⋯`.
-fn add_strip(view: &PlanView, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn add_strip(
+    view: &PlanView,
+    [fight, group]: [AnyElement; 2],
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let blocked = view.add_blocked;
-    let mut fight = kit::MenuButton::new(
-        "plan-add-fight",
-        kit::Button::quiet("plan-add-fight-button", "Fight")
-            .icon(icons::ENCOUNTERS)
-            .name("Add a fight")
-            .density(Density::Read)
-            .blocked(view.fight_blocked.clone()),
-    );
-    for name in &view.fights {
-        fight = fight.item(
-            kit::MenuItem::new(name.clone()).on_click(on(cx, PlanAct::PlanName(name.clone()))),
-        );
-    }
-    fight = fight.item(
-        kit::MenuItem::new("New encounter")
-            .icon(icons::ADD)
-            .on_click(on(cx, PlanAct::NewFight)),
-    );
-    let mut group = kit::MenuButton::new(
-        "plan-add-group",
-        kit::Button::quiet("plan-add-group-button", "Group")
-            .icon(icons::GROUP)
-            .name("Add a group")
-            .density(Density::Read)
-            .blocked(view.group_blocked.clone()),
-    );
-    for name in &view.groups {
-        group = group.item(
-            kit::MenuItem::new(name.clone()).on_click(on(cx, PlanAct::PlanName(name.clone()))),
-        );
-    }
-    group = group.item(
-        kit::MenuItem::new("New group")
-            .icon(icons::ADD)
-            .on_click(on(cx, PlanAct::NewGroup)),
-    );
     let rest = kit::Button::quiet("plan-add-long-rest", Kind::LongRest.word())
         .icon(bridge_icon(Kind::LongRest))
         .name("Add Long rest")
@@ -480,6 +470,138 @@ fn add_strip(view: &PlanView, cx: &mut Context<SplatRoot>) -> AnyElement {
         .child(rest)
         .child(more)
         .into_any_element()
+}
+
+/// One of the Add strip's menus (egui `fight_menu`, `group_menu`).
+pub(super) struct AddMenu {
+    group: bool,
+    id: &'static str,
+    word: &'static str,
+    icon: &'static str,
+    name: &'static str,
+    new: &'static str,
+    find: &'static str,
+    hint: &'static str,
+}
+
+impl AddMenu {
+    const FIGHT: Self = Self {
+        group: false,
+        id: "plan-add-fight",
+        word: "Fight",
+        icon: icons::ENCOUNTERS,
+        name: "Add a fight",
+        new: "New encounter",
+        find: "Find a fight",
+        hint: "Find a fight…",
+    };
+    const GROUP: Self = Self {
+        group: true,
+        id: "plan-add-group",
+        word: "Group",
+        icon: icons::GROUP,
+        name: "Add a group",
+        new: "New group",
+        find: "Find a group",
+        hint: "Find a group…",
+    };
+}
+
+/// The menu's width and its list's greatest height (egui `FIGHT_MENU_WIDTH`,
+/// `FIGHT_MENU_HEIGHT`).
+const MENU_WIDTH: gpui::Pixels = gpui::px(240.0);
+const MENU_LIST_HEIGHT: gpui::Pixels = gpui::px(240.0);
+
+/// An Add menu (egui `plan_menu`): the new one first, in a fixed place, with its reason under it
+/// when it is blocked; a search once the campaign has more than `FIGHT_SEARCH_FROM`; then the
+/// campaign's, those that hold the search's words, in a list that scrolls.
+fn add_menu(
+    root: &mut SplatRoot,
+    menu: AddMenu,
+    view: &PlanView,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    let c = colors();
+    let group = menu.group;
+    let menu_id = id(menu.id);
+    // The search takes the keyboard once, as the menu opens.
+    let open = kit::menu::is_open(&menu_id, cx);
+    let was_open = std::mem::replace(
+        &mut root.pages.sessions.add_menu_open[usize::from(group)],
+        open,
+    );
+    let trigger = kit::Button::quiet(id(format!("{}-button", menu.id)), menu.word)
+        .icon(menu.icon)
+        .name(menu.name)
+        .density(Density::Read);
+    if !open {
+        return kit::Popover::new(menu_id, trigger, div()).into_any_element();
+    }
+    let (names, blocked) = if group {
+        (&view.groups, &view.group_blocked)
+    } else {
+        (&view.fights, &view.fight_blocked)
+    };
+    let (search, shown) = root.app.sessions.gv_menu_search(group, names);
+    let new_act = if group {
+        PlanAct::NewGroup
+    } else {
+        PlanAct::NewFight
+    };
+    let mut content = div().flex().flex_col().min_w(MENU_WIDTH).child(
+        kit::Button::quiet(id(format!("{}-new", menu.id)), menu.new)
+            .icon(icons::ADD)
+            .density(Density::Read)
+            .blocked(blocked.clone())
+            .on_click(cx.listener(move |root, _, window, cx| {
+                act(root, new_act.clone());
+                kit::menu::close_open_popup(window, cx);
+                cx.notify();
+            })),
+    );
+    if let Some(note) = blocked {
+        content =
+            content.child(kit::text(Type::Small, c.muted, note.clone()).pl(S + theme::ICON_SLOT));
+    }
+    if let Some(words) = search {
+        content = content.child(
+            div().py(XS).child(
+                kit::TextField::new(id(format!("{}-search", menu.id)), words)
+                    .placeholder(menu.hint)
+                    .name(menu.find)
+                    .width(MENU_WIDTH)
+                    .focus(open && !was_open)
+                    .on_change(cx.listener(move |root, words: &str, _, cx| {
+                        root.app.sessions.gv_set_menu_search(group, words);
+                        cx.notify();
+                    })),
+            ),
+        );
+    }
+    let mut list = div().flex().flex_col();
+    for name in shown {
+        let chosen = name.to_owned();
+        list = list.child(
+            kit::Button::quiet(id(format!("{}-name:{name}", menu.id)), name.to_owned())
+                .plain()
+                .icon("")
+                .name(format!("Plan {name}"))
+                .density(Density::Read)
+                .on_click(cx.listener(move |root, _, window, cx| {
+                    root.app.sessions.gv_menu_choose(group, &chosen);
+                    kit::menu::close_open_popup(window, cx);
+                    cx.notify();
+                })),
+        );
+    }
+    content = content.child(kit::rule().my(XS)).child(
+        div()
+            .id(id(format!("{}-list", menu.id)))
+            .max_h(MENU_LIST_HEIGHT)
+            .overflow_y_scroll()
+            .child(list),
+    );
+    kit::Popover::new(menu_id, trigger, content).into_any_element()
 }
 
 /// A Timeline kind's icon, as the egui plan names it.

@@ -34,6 +34,19 @@ pub(super) fn section_counts(loaded: &Loaded, scope: Scope) -> Vec<(Section, usi
         .collect()
 }
 
+/// The creatures in `scope` that the creature filter's menu counts.
+pub(super) fn scope_facets(
+    loaded: &Loaded,
+    scope: Scope,
+) -> impl Iterator<Item = &splat::content::creature_filter::Facets> {
+    loaded
+        .notes
+        .iter()
+        .zip(loaded.facets())
+        .filter(move |(note, _)| loaded.in_scope(note, scope))
+        .filter_map(|(_, facets)| facets.as_ref())
+}
+
 /// The notes the list shows for `query` in `scope`'s `section` (an unreadable `kind` in the
 /// Cannot be read section) with `filter`, best first, and where the matches found only with a
 /// typo start. A query always searches the whole scope.
@@ -453,6 +466,30 @@ impl Library {
 
     pub fn search_text(&self) -> &str {
         &self.search
+    }
+
+    /// The creature filter. The list shows its bar while it shows creatures or search results
+    /// (`ListView::creatures_or_search`), and filters by it then.
+    pub fn filter(&self) -> &Filter {
+        &self.filter
+    }
+
+    /// The creature filter after a change in its bar.
+    pub fn set_filter(&mut self, filter: Filter) {
+        self.filter = filter;
+    }
+
+    /// The filter menu's choices: each fact's values among the creatures in scope, with how
+    /// many have each. Worked out only while the menu is open.
+    pub fn filter_choices(
+        &self,
+    ) -> std::collections::BTreeMap<splat::content::creature_filter::Facet, Vec<(String, usize)>>
+    {
+        self.loaded
+            .as_ref()
+            .map_or_else(Default::default, |loaded| {
+                splat::content::creature_filter::choices(scope_facets(loaded, self.scope))
+            })
     }
 
     pub fn scope(&self) -> Scope {

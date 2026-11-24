@@ -58,6 +58,7 @@ impl Layout {
 /// row's line on each side (`None`: no line there), how many rows differ, and the first row of
 /// each run of differing rows (a `Next difference` stop). For a view that keeps it between
 /// frames itself (the GPUI comparison keeps it until either text changes).
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Aligned {
     pub rows: Vec<[Option<String>; 2]>,
     pub changed: usize,

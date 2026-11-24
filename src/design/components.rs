@@ -3396,7 +3396,7 @@ pub fn signed(value: i64) -> String {
 
 /// A count and the right word for it: `1 entry`, `2 entries`.
 /// The app's one number form: digits grouped by threes with commas (`2,310`).
-pub(super) fn grouped_number(n: usize) -> String {
+pub fn grouped_number(n: usize) -> String {
     let digits = n.to_string();
     let mut grouped = String::new();
     for (i, digit) in digits.chars().enumerate() {

@@ -1,8 +1,6 @@
 //! The Encounters list (egui: `Encounters::ledger_view`, `encounters/list.rs`): the header, In
 //! progress, Ready to run, Groups and History, one facts column across them, and the footer.
-use super::common::{
-    detail_line, egui_color, footer, on_page, reason, row_menu, small_icon, text_width,
-};
+use super::common::{detail_line, footer, on_page, reason, row_menu, small_icon};
 use crate::gui::theme::{Density, ICON_SLOT, L, M, S, Type, TypeExt, XS, colors};
 use crate::gui::{SplatRoot, icons, kit};
 use eframe::egui;
@@ -166,7 +164,10 @@ fn button_width(
     let ty = if primary { Type::Heading } else { Type::Strong };
     let padding = if quiet { S } else { M };
     let edge = if quiet { px(0.0) } else { px(2.0) };
-    text_width(window, ty, words) + padding * 2.0 + if icon { ICON_SLOT } else { px(0.0) } + edge
+    kit::measure::width(window, ty, words)
+        + padding * 2.0
+        + if icon { ICON_SLOT } else { px(0.0) }
+        + edge
 }
 
 fn menu_width() -> Pixels {
@@ -187,8 +188,8 @@ fn spaced(widths: impl IntoIterator<Item = Pixels>) -> Pixels {
 /// (Groups and History one indent further in), and each list's widest actions.
 fn columns(window: &mut Window, ledger: &Ledger) -> Columns {
     let facts = |window: &mut Window, name: &str, detail: &str, icons: usize| {
-        text_width(window, Type::Strong, name)
-            .max(text_width(window, Type::Small, detail) + (L * icons as f32))
+        kit::measure::width(window, Type::Strong, name)
+            .max(kit::measure::width(window, Type::Small, detail) + (L * icons as f32))
     };
     let mut widest = px(0.0);
     let mut in_progress = px(0.0);
@@ -197,7 +198,7 @@ fn columns(window: &mut Window, ledger: &Ledger) -> Columns {
             usize::from(row.open.is_none()) + usize::from(row.detail.contains("Changed on disk"));
         widest = widest.max(facts(window, &row.name, &row.detail, icons));
         let last = match &row.open {
-            Some(word) => text_width(window, Type::Small, word) + L,
+            Some(word) => kit::measure::width(window, Type::Small, word) + L,
             None => button_width(window, "Resume", true, false, true),
         };
         in_progress = in_progress.max(spaced([
@@ -221,9 +222,9 @@ fn columns(window: &mut Window, ledger: &Ledger) -> Columns {
             menu_width(),
         ];
         if let Some(short) = row.short_reason {
-            parts.insert(0, text_width(window, Type::Small, short) + L);
+            parts.insert(0, kit::measure::width(window, Type::Small, short) + L);
             if row.go_to_run {
-                parts.insert(0, text_width(window, Type::Small, "Go to the run"));
+                parts.insert(0, kit::measure::width(window, Type::Small, "Go to the run"));
             }
         }
         ready = ready.max(spaced(parts));
@@ -345,7 +346,7 @@ fn ledger_body(
         .flat_map(|(_, runs)| runs)
         .filter_map(|run| run.read.as_ref())
         .flat_map(|read| &read.rows)
-        .map(|row| text_width(window, Type::Strong, &row.name))
+        .map(|row| kit::measure::width(window, Type::Strong, &row.name))
         .fold(px(0.0), Pixels::max)
         .ceil();
     let names = names.min((columns.facts - L * 2.0).max(px(80.0)));
@@ -846,7 +847,11 @@ fn read_run(read: &ReadRun, row: &PastRow, names: Pixels, cx: &mut Context<Splat
                 if index > 0 {
                     rest = rest.child(div().text_color(c.muted).child(" · "));
                 }
-                rest = rest.child(div().text_color(egui_color(*color)).child(words.clone()));
+                rest = rest.child(
+                    div()
+                        .text_color(crate::gui::bridge::color(*color))
+                        .child(words.clone()),
+                );
             }
             values = values.child(rest);
         }

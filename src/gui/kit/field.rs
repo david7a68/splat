@@ -157,6 +157,7 @@ pub struct TextField {
     on_escape: Option<super::OnAct>,
     on_blur: Option<super::OnAct>,
     focus: Option<FocusAt>,
+    text_type: Option<Type>,
 }
 
 impl TextField {
@@ -174,6 +175,7 @@ impl TextField {
             on_escape: None,
             on_blur: None,
             focus: None,
+            text_type: None,
         }
     }
 
@@ -241,6 +243,13 @@ impl TextField {
         self
     }
 
+    /// The words' type (`Body` by default): `Heading` for a name that heads its editor (egui's
+    /// name fields set `Type::Heading`), with the field one `Scan` control high.
+    pub fn text_type(mut self, ty: Type) -> Self {
+        self.text_type = Some(ty);
+        self
+    }
+
     /// Take the keyboard in this frame with all the words selected, so typing replaces them (a
     /// rename that a press opened, `design::focus_and_select`). Give `true` for one frame.
     pub fn focus_selected(mut self, focus: bool) -> Self {
@@ -302,8 +311,12 @@ impl RenderOnce for TextField {
             element = element.mask_toggle();
         }
         let enter = self.on_enter.clone();
-        let mut frame = frame(focused, Density::Read.control())
-            .ty(Type::Body)
+        let (ty, height) = match self.text_type {
+            Some(ty) if ty != Type::Body => (ty, Density::Scan.control()),
+            _ => (Type::Body, Density::Read.control()),
+        };
+        let mut frame = frame(focused, height)
+            .ty(ty)
             .text_color(colors().text)
             .child(element);
         frame = match self.width {
