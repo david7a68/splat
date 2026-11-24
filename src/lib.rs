@@ -2490,6 +2490,32 @@ impl Splat {
     }
 
     /// Requests that cross pages: read beside a draft, or open an entry where it lives.
+    /// What the copy dialog asked for as it drew (both UIs): the copy opens in the Library,
+    /// joins the open encounter draft, or refreshes the pages that read its folder; a dialog
+    /// that closed goes.
+    pub(crate) fn follow_copy_dialog(&mut self, ctx: &egui::Context, open: bool) {
+        let Some(dialog) = &mut self.copy_dialog else {
+            return;
+        };
+        if let Some(entry) = dialog.edit_copy.take() {
+            self.library.edit_copy(entry);
+            self.page = Page::Library;
+        }
+        if let Some(id) = dialog.add_to_draft.take() {
+            self.encounters.add_to_draft(id);
+        }
+        if let Some(root) = dialog.refresh.take() {
+            self.library
+                .refresh_destination(&root, ctx, &self.campaigns);
+            self.campaign_content.refresh_destination(&root);
+            self.encounters.refresh_content(ctx, &self.campaigns, &root);
+            self.lookup.refresh();
+        }
+        if !open {
+            self.copy_dialog = None;
+        }
+    }
+
     fn route(&mut self, ctx: &egui::Context) {
         if let Some(target) = markdown_view::take_note_link(ctx) {
             let from = ctx.data_mut(|data| {
@@ -3250,23 +3276,7 @@ impl eframe::App for Splat {
         if let Some(dialog) = &mut self.copy_dialog {
             dialog.draft = self.encounters.draft_name();
             let open = dialog.show(ctx, &self.campaigns);
-            if let Some(entry) = dialog.edit_copy.take() {
-                self.library.edit_copy(entry);
-                self.page = Page::Library;
-            }
-            if let Some(id) = dialog.add_to_draft.take() {
-                self.encounters.add_to_draft(id);
-            }
-            if let Some(root) = dialog.refresh.take() {
-                self.library
-                    .refresh_destination(&root, ctx, &self.campaigns);
-                self.campaign_content.refresh_destination(&root);
-                self.encounters.refresh_content(ctx, &self.campaigns, &root);
-                self.lookup.refresh();
-            }
-            if !open {
-                self.copy_dialog = None;
-            }
+            self.follow_copy_dialog(ctx, open);
         }
         self.follow_page_change();
         // A roll menu the keys opened gives the focus back when it closes, however it closed.

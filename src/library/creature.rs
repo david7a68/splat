@@ -122,7 +122,7 @@ fn vital_lines(body: &str) -> Vec<std::ops::Range<usize>> {
     lines
 }
 
-pub(super) fn without_vitals(entry: &Entry, body: &str) -> String {
+pub fn without_vitals(entry: &Entry, body: &str) -> String {
     let mut output = String::new();
     let mut start = 0;
     for range in vital_lines(body) {
@@ -157,7 +157,7 @@ pub(super) fn supports(entry: &Entry, sections: &[presentation::ReadingSection<'
 }
 
 /// A creature with stats, from the book or written by hand, has a stat block at its head.
-pub(super) fn has_stats(entry: &Entry) -> bool {
+pub fn has_stats(entry: &Entry) -> bool {
     entry.kind == "creature" && entry.fields.contains_key("splat_stats")
 }
 

@@ -2338,6 +2338,14 @@ impl PaneFrame {
         }
     }
 
+    /// The token for a pane that another UI draws in this frame (the GPUI port,
+    /// `docs/gpui-port.md`): the lines it lends die with the caller's frame as egui's do.
+    pub fn headless() -> Self {
+        Self {
+            _not_static: std::marker::PhantomData,
+        }
+    }
+
     /// The token for a pane drawn in this frame, on `ui`.
     pub fn new(ui: &Ui) -> Self {
         let _ = ui;
@@ -4857,7 +4865,8 @@ pub enum Severity {
 }
 
 impl Severity {
-    fn tone(self) -> Tone {
+    /// Its tone (also for a UI that draws a fault itself, the GPUI port).
+    pub fn tone(self) -> Tone {
         match self {
             Self::CannotRead | Self::NotSaved => Tone::Error,
             Self::NeedsFixing => Tone::Warning,
@@ -9646,5 +9655,148 @@ mod tests {
             "one message removed",
             1,
         );
+    }
+}
+
+/// A footer's lines as plain data, for a UI that draws them itself (the GPUI port,
+/// `docs/gpui-port.md`): the same lines, in the same order, with the same words, tones, locks and
+/// presses as [`Messages::pane`] draws. The cleanup wave moves the footer onto this form.
+pub mod port {
+    use super::super::results::Ticket;
+    use super::{MessageChoice, Messages, Press, Tone, holding};
+
+    /// What kind of control a line's control is, for its look.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum Kind {
+        /// The line's Undo: quiet.
+        Undo,
+        /// A safe choice: secondary.
+        Choice,
+        /// The message's one commit: primary.
+        Primary,
+        /// A choice that loses something: destructive, `L` after the others.
+        Lose,
+        /// A link in the words' colour.
+        Link,
+        /// The close icon (`DISMISS_NAME`).
+        Dismiss,
+    }
+
+    /// One control of a line.
+    pub struct Control<A> {
+        pub kind: Kind,
+        pub words: String,
+        /// Why it waits now, if it does.
+        pub blocked: Option<String>,
+        pub hover: Option<String>,
+        /// What pressing it does, under it (ruling M8).
+        pub help: Option<String>,
+        id: A,
+    }
+
+    /// One line: its tone, words, help, file and controls (Undo first, then the choices, safe
+    /// first).
+    pub struct Line<A> {
+        pub tone: Tone,
+        pub words: String,
+        pub words_hover: Option<String>,
+        pub help: Vec<String>,
+        /// The file it is about: its folder and its path in that folder.
+        pub file: Option<(std::path::PathBuf, std::path::PathBuf)>,
+        pub controls: Vec<Control<A>>,
+        ticket: Option<Ticket>,
+    }
+
+    impl<A: Clone> Line<A> {
+        /// The press of control `at`, as the footer gives it back (`Paned::pressed`). A kept
+        /// line's ticket goes with its first press; a line has one press per frame.
+        pub fn press(&mut self, at: usize) -> Option<Press<A>> {
+            let id = self.controls.get(at)?.id.clone();
+            Some(Press {
+                id,
+                ticket: self.ticket.take(),
+            })
+        }
+    }
+
+    impl<A> Messages<'_, A> {
+        /// Every line, in the footer's one order (`footer_order`): answers, live Undos, reasons,
+        /// notices; within a rank, newest first.
+        pub fn into_lines(self) -> Vec<Line<A>> {
+            let newest = self.newest;
+            let mut lines = self.lines;
+            for line in &mut lines {
+                if line.refused {
+                    line.rank = super::refusal_rank(line.order.unwrap_or_default(), newest);
+                }
+            }
+            lines.sort_by_key(|line| (line.rank, line.order.map(std::cmp::Reverse)));
+            lines
+                .into_iter()
+                .map(|line| {
+                    let body = line.typed.body;
+                    let mut controls = Vec::new();
+                    if let (Some(step), Some(id)) = (&body.undo, line.typed.undo) {
+                        controls.push(Control {
+                            kind: Kind::Undo,
+                            words: step.label(),
+                            blocked: holding(&body.undo_lock).map(str::to_owned),
+                            hover: None,
+                            help: None,
+                            id,
+                        });
+                    }
+                    for (at, id) in line.typed.choices.into_iter().enumerate() {
+                        let named = body.named.get(at).and_then(Option::as_ref);
+                        let (kind, words) = match body.choices.get(at) {
+                            Some(MessageChoice::Choice(words)) => (Kind::Choice, (*words).to_owned()),
+                            Some(MessageChoice::Primary(words)) => {
+                                (Kind::Primary, (*words).to_owned())
+                            }
+                            Some(MessageChoice::Lose(words)) => (Kind::Lose, (*words).to_owned()),
+                            Some(MessageChoice::Link { word, .. }) => (Kind::Link, (*word).to_owned()),
+                            Some(MessageChoice::Dismiss(_)) => {
+                                (Kind::Dismiss, super::DISMISS_NAME.to_owned())
+                            }
+                            None => (Kind::Choice, String::new()),
+                        };
+                        let (kind, words) = match named {
+                            Some((super::ChoiceKind::Lose, named)) => (Kind::Lose, named.label()),
+                            Some((super::ChoiceKind::Safe, named)) => (kind, named.label()),
+                            None => (kind, words),
+                        };
+                        let hover = match body.choices.get(at) {
+                            Some(MessageChoice::Link { hover, .. }) => hover.map(str::to_owned),
+                            _ => None,
+                        }
+                        .or_else(|| body.hovers.get(at).cloned().flatten());
+                        controls.push(Control {
+                            kind,
+                            words,
+                            blocked: body.locks.get(at).and_then(holding).map(str::to_owned),
+                            hover,
+                            help: body
+                                .helps
+                                .get(at)
+                                .and_then(Option::as_ref)
+                                .map(|help| help.as_str().to_owned()),
+                            id,
+                        });
+                    }
+                    Line {
+                        tone: body.tone,
+                        words: body.words.as_str().to_owned(),
+                        words_hover: body.words_hover.clone(),
+                        help: body.help.iter().map(|help| help.as_str().to_owned()).collect(),
+                        file: body
+                            .file
+                            .as_ref()
+                            .map(|file| (file.root.clone(), file.relative.clone())),
+                        controls,
+                        ticket: line.ticket,
+                    }
+                })
+                .collect()
+        }
     }
 }

@@ -393,7 +393,7 @@ fn duplicate_consequence(users: &[String], remaining: &str, keeps: bool) -> Sent
 /// the draft holds them. The encounters a folder's batch leaves on the other folder are found
 /// once per load (an egui cache keyed by the whole owner key and the notes).
 pub fn duplicate_notice(
-    ui: &egui::Ui,
+    ctx: &egui::Context,
     loaded: &Loaded,
     note: &Note,
     duplicate_indices: &[usize],
@@ -473,7 +473,7 @@ pub fn duplicate_notice(
                 .map(|note| note.text.len())
                 .sum::<usize>(),
         ));
-        let users = ui
+        let users = ctx
             .data(|data| data.get_temp::<Vec<String>>(slot))
             .unwrap_or_else(|| {
                 let batch: std::collections::HashSet<&String> = paths.iter().collect();
@@ -503,7 +503,7 @@ pub fn duplicate_notice(
                         users.push(encounter.name.clone());
                     }
                 }
-                ui.data_mut(|data| data.insert_temp(slot, users.clone()));
+                ctx.data_mut(|data| data.insert_temp(slot, users.clone()));
                 users
             });
         let choice = locked(Choice::named(
