@@ -520,15 +520,27 @@ struct Paragraph {
     job: Option<LayoutJob>,
     laid: Option<Laid>,
     links: Vec<(std::ops::Range<usize>, LinkTarget)>,
+    /// A task's box: whether it is done, how far it starts from its item's mark (after a
+    /// number) or, in a plan row, from the words, and its type.
     task: Option<(bool, f32, Type)>,
-    /// A plan row's leading icon, in its own column: its words, then their galley.
+    /// A list item's mark (a bullet, a number, a task's box) or a plan row's leading icon, in
+    /// its own column: its words, then their galley.
     lead: Option<Lead>,
+    /// How many lists it is in, in the Reader: its words keep their item's edge. 0 outside a
+    /// list and in a plan row's words.
+    depth: usize,
+    /// The space after it, where the Reader leaves one.
+    after: design::Gap,
     /// Where its linked galley was drawn last, from its block's top left (layout PR 9b-R2): a
     /// paragraph out of view registers its links there, below its block's kept top, without
     /// being laid out. (From the block, not the reader: a block above that drew at a new height
     /// moves the block's kept top, and its links with it.)
     origin: Option<egui::Vec2>,
 }
+
+/// One level of a list in the Reader (`design::list_item`): room for a bullet, a task's box or a
+/// number to 99.
+const LIST_STEP: design::Gap = design::Gap::XL;
 
 /// A leading icon's words until they are laid out, then their galley.
 enum Lead {
@@ -835,11 +847,19 @@ fn paragraph(ops: &mut Vec<Op>, job: &mut LayoutJob, target: &mut Targets) {
     let mut job = std::mem::take(job);
     let lead = target.lead.take().map(|cut| {
         // The icon in its own column; the words wrap at their own left edge.
-        let (icon, words) = split_job(std::mem::take(&mut job), cut);
+        let (mut icon, words) = split_job(std::mem::take(&mut job), cut);
         for (range, _) in &mut links {
             *range = range.start - cut..range.end - cut;
         }
         job = words;
+        if !links.is_empty() {
+            // A link lifts its paragraph's rows to `XL` (`lift_link_rows`): the mark's line
+            // with them, so the mark keeps the baseline of the words' first line.
+            for section in &mut icon.sections {
+                section.format.line_height =
+                    section.format.line_height.map(|line| line.max(design::XL));
+            }
+        }
         Lead::Words(icon)
     });
     ops.push(Op::Paragraph(Box::new(Paragraph {
@@ -848,8 +868,21 @@ fn paragraph(ops: &mut Vec<Op>, job: &mut LayoutJob, target: &mut Targets) {
         links,
         task,
         lead,
+        depth: target.depth,
+        after: design::Gap::S,
         origin: None,
     })));
+}
+
+/// The space after the block before, when that block is a list's words: `gap` in place of the
+/// Reader's `S`. An item of an inner list follows `XS` (it stays with its own list's first
+/// item), and a whole list is followed by `M`.
+fn gap_after_listed(ops: &mut [Op], gap: design::Gap) {
+    if let Some(Op::Paragraph(paragraph)) = ops.last_mut()
+        && paragraph.depth > 0
+    {
+        paragraph.after = gap;
+    }
 }
 
 /// The images found in a block, before its words.
@@ -909,7 +942,8 @@ fn block_id(ctx: &egui::Context, (reader, block): (egui::Id, usize)) -> egui::Id
     base.with(nth)
 }
 
-/// One paragraph: its words, its links, a task's box, inside the quotes it is in.
+/// One paragraph: its words, its links, a list item's mark or a task's box, inside the quotes
+/// and the lists it is in.
 fn draw_paragraph(
     ui: &mut egui::Ui,
     paragraph: &mut Paragraph,
@@ -919,43 +953,32 @@ fn draw_paragraph(
     row: bool,
     quotes: &mut Quotes,
 ) {
-    if let Some(lead) = paragraph.lead.take() {
-        // The icon in its own column; the words wrap at their own left edge.
-        ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = 0.0;
-            let icon = match lead {
-                Lead::Words(job) => lay_out(ui, job, false),
-                Lead::Laid(galley) => galley,
-            };
-            ui.add(egui::Label::new(icon.clone()));
-            paragraph.lead = Some(Lead::Laid(icon));
-            let at = ui
-                .vertical(|ui| match laid(ui, paragraph, short_links) {
-                    Laid::Plain(galley) => {
-                        ui.add(egui::Label::new(galley.clone()));
-                        None
-                    }
-                    Laid::Linked(laid) => {
-                        let id = block_id(ui.ctx(), links);
-                        let (_, at) = draw_laid_links(ui, laid, id);
-                        Some(at - origin)
-                    }
-                })
-                .inner;
-            paragraph.origin = at;
-        });
-        return;
-    }
-    let task = paragraph.task;
+    let (task, depth, after) = (paragraph.task, paragraph.depth, paragraph.after);
+    // The mark is laid out once, on one line.
+    let mark = paragraph.lead.take().map(|lead| match lead {
+        Lead::Words(mut job) => {
+            job.wrap.max_width = f32::INFINITY;
+            ui.fonts_mut(|fonts| fonts.layout_job(job))
+        }
+        Lead::Laid(galley) => galley,
+    });
+    paragraph.lead = mark.clone().map(Lead::Laid);
     let mut at = None;
-    let mut draw = |ui: &mut egui::Ui| {
-        let rect = match laid(ui, paragraph, short_links) {
-            Laid::Plain(galley) => ui.add(egui::Label::new(galley.clone())).rect,
-            Laid::Linked(laid) => {
-                let (rect, position) = draw_laid_links(ui, laid, block_id(ui.ctx(), links));
-                at = Some(position - origin);
-                rect
-            }
+    let mut words = |ui: &mut egui::Ui| match laid(ui, paragraph, short_links) {
+        Laid::Plain(galley) => ui.add(egui::Label::new(galley.clone())).rect,
+        Laid::Linked(laid) => {
+            let (rect, position) = draw_laid_links(ui, laid, block_id(ui.ctx(), links));
+            at = Some(position - origin);
+            rect
+        }
+    };
+    let draw = |ui: &mut egui::Ui| {
+        // The mark in its own column; the words wrap at their own left edge.
+        let rect = if mark.is_some() || depth > 0 {
+            let (mark, rect) = design::list_item(ui, depth, LIST_STEP, mark, words);
+            mark.map_or(rect, |mark| mark.rect)
+        } else {
+            words(ui)
         };
         if let Some((done, indent, role)) = task {
             let icon_rect = egui::Rect::from_min_size(
@@ -984,7 +1007,7 @@ fn draw_paragraph(
     }
     paragraph.origin = at;
     if !row {
-        design::gap(ui, design::Gap::S);
+        design::gap(ui, after);
     }
 }
 
@@ -1125,6 +1148,17 @@ fn prepare(
     let mut italic = false;
     let mut struck = false;
     let mut lists: Vec<Option<u64>> = Vec::new();
+    // The Reader sets an item in by its level, its mark in its own column. A plan row's words
+    // are one line of its row: a mark stays in that line, after two spaces for each level.
+    let in_row = row.is_some();
+    let depth = |lists: usize| if in_row { 0 } else { lists };
+    let row_indent = |lists: usize| {
+        if in_row {
+            "  ".repeat(lists.saturating_sub(1))
+        } else {
+            String::new()
+        }
+    };
     let mut table: Option<Vec<Vec<String>>> = None;
     let mut figures: Vec<std::path::PathBuf> = Vec::new();
     let mut in_figure = false;
@@ -1363,13 +1397,25 @@ fn prepare(
                 ops.push(Op::QuoteEnd);
                 quote_depth = quote_depth.saturating_sub(1);
             }
-            Event::Start(Tag::List(start)) => lists.push(start),
+            Event::Start(Tag::List(start)) => {
+                // An item's own words end before its inner list: they keep their own level.
+                paragraph(&mut ops, &mut job, &mut target);
+                lists.push(start);
+                target.depth = depth(lists.len());
+            }
             Event::End(TagEnd::List(_)) => {
                 lists.pop();
+                target.depth = depth(lists.len());
+                if lists.is_empty() && !dense {
+                    gap_after_listed(&mut ops, design::Gap::M);
+                }
             }
             Event::Start(Tag::Item) => {
                 paragraph(&mut ops, &mut job, &mut target);
-                let indent = "  ".repeat(lists.len().saturating_sub(1));
+                if lists.len() > 1 {
+                    gap_after_listed(&mut ops, design::Gap::XS);
+                }
+                let indent = row_indent(lists.len());
                 let marker = match lists.last_mut() {
                     Some(Some(number)) => {
                         let marker = format!("{number}. ");
@@ -1388,10 +1434,11 @@ fn prepare(
                         ..Default::default()
                     },
                 );
+                target.lead = (target.depth > 0).then_some(job.text.len());
             }
             Event::TaskListMarker(done) => {
                 // The marker follows Item's indentation and bullet, before any prose or links.
-                let indent = "  ".repeat(lists.len().saturating_sub(1));
+                let indent = row_indent(lists.len());
                 // A bulleted item trades its bullet for the box; a numbered item keeps its number
                 // and the box follows it.
                 let bulleted = matches!(lists.last(), Some(None));
@@ -1433,6 +1480,7 @@ fn prepare(
                         ..Default::default()
                     },
                 );
+                target.lead = (target.depth > 0).then_some(job.text.len());
                 target.task = Some((
                     done,
                     design::number_width(ui, &lead, &prose.font(ui)),
@@ -2052,9 +2100,13 @@ struct Targets {
     task: Option<(bool, f32, Type)>,
     /// A plan row's words: no space follows them.
     row: bool,
-    /// In a plan row's words, the bytes of a missing link's icon that starts the words: it takes
-    /// its own column, so the words' wrapped lines start at their text edge (row 49).
+    /// The bytes of what starts the words in its own column, so the words' wrapped lines start
+    /// at their text edge: in the Reader a list item's mark, in a plan row's words a missing
+    /// link's icon (row 49).
     lead: Option<usize>,
+    /// How many lists the words are in, in the Reader; 0 in a plan row's words, which keep a
+    /// mark in their line.
+    depth: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -3006,6 +3058,7 @@ mod tests {
     #[test]
     fn task_markers_replace_only_leading_list_syntax() {
         let markdown = "- [ ] Can a ring be sold?\n- [x] Decided.\n- Keep [ ] and [x] in this line.\n\n[ ] A paragraph, not a task.\n\n`[x] Code stays text.`\n";
+        // Each painted text on its own line: an item's mark (its box), then its words.
         let text = painted(markdown)
             .iter()
             .map(|galley| galley.job.text.as_str())
@@ -3013,14 +3066,14 @@ mod tests {
             .join("\n");
         assert!(
             text.contains(&format!(
-                "{} Can a ring be sold?",
+                "{} \nCan a ring be sold?",
                 egui_phosphor::regular::SQUARE
             )),
             "FD-2-open: {text}"
         );
         assert!(
             text.contains(&format!(
-                "{} Decided.",
+                "{} \nDecided.",
                 egui_phosphor::regular::CHECK_SQUARE
             )),
             "FD-2-answered: {text}"
@@ -3043,10 +3096,10 @@ mod tests {
             .join("\n");
         assert!(
             numbered.contains(&format!(
-                "1. {} Ask the duke",
+                "1. {} \nAsk the duke",
                 egui_phosphor::regular::SQUARE
             )) && numbered.contains(&format!(
-                "2. {} Pay the toll",
+                "2. {} \nPay the toll",
                 egui_phosphor::regular::CHECK_SQUARE
             )),
             "FD-2-numbered: {numbered}"
@@ -3559,6 +3612,154 @@ mod tests {
         assert_eq!(name.underline, egui::Stroke::NONE);
         assert_eq!(format_of(&galleys, "Read ").color, colors().text);
         assert_eq!(format_of(&galleys, "the rules").color, colors().accent);
+    }
+
+    /// Every painted text whose words start with `words`, in drawing order: its galley and
+    /// where it stands.
+    fn drawn(
+        shapes: &[egui::epaint::ClippedShape],
+        words: &str,
+    ) -> Vec<(Arc<egui::Galley>, egui::Rect)> {
+        shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text.starts_with(words) => Some((
+                    text.galley.clone(),
+                    text.galley.rect.translate(text.pos.to_vec2()),
+                )),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn list_items_hang_beside_their_marks() {
+        let context = egui::Context::default();
+        design::theme::install(&context);
+        let long = "words ".repeat(30);
+        let markdown = format!(
+            "Before\n\n- Outer {long}\n  - Inner {long}\n  - Second\n- Next\n\nAfter\n\n\
+             1. Numbered\n\n> - Quoted\n"
+        );
+        let output = context.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(420.0, 900.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| show(ui, &markdown));
+            },
+        );
+        let text = |words: &str| {
+            drawn(&output.shapes, words)
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| panic!("{words} was not drawn"))
+        };
+        let step = design::XL;
+        let left = text("Before").1.left();
+        // Each item's words stand one step in for each level, and every wrapped line starts at
+        // the words' own edge, never under the mark.
+        for (words, depth, wraps) in [
+            ("Outer", 1.0, true),
+            ("Inner", 2.0, true),
+            ("Second", 2.0, false),
+            ("Next", 1.0, false),
+            ("Numbered", 1.0, false),
+        ] {
+            let (galley, rect) = text(words);
+            assert!(
+                (rect.left() - left - depth * step).abs() < 0.5,
+                "{words}: its words start {} in, not {}",
+                rect.left() - left,
+                depth * step
+            );
+            assert_eq!(galley.rows.len() > 1, wraps, "{words}: wrapped lines");
+            assert!(
+                galley.rows.iter().all(|row| row.rect().left().abs() < 0.5),
+                "{words}: a wrapped line starts off the words' edge"
+            );
+        }
+        assert!((text("After").1.left() - left).abs() < 0.5);
+        assert!(
+            (text("Quoted").1.left() - left - QUOTE_INDENT - step).abs() < 0.5,
+            "a list in a quote is set in from the quote's edge"
+        );
+        // Each mark has its own column: it ends where its words start, on their first line.
+        let marks = drawn(&output.shapes, "• ");
+        assert_eq!(marks.len(), 5, "one mark for each bulleted item");
+        for ((_, mark), words) in marks
+            .iter()
+            .zip(["Outer", "Inner", "Second", "Next", "Quoted"])
+        {
+            let (_, rect) = text(words);
+            assert!(
+                (mark.right() - rect.left()).abs() < 0.5 && (mark.top() - rect.top()).abs() < 0.5,
+                "{words}: its mark at {mark:?} is not beside its words at {rect:?}"
+            );
+        }
+        let (_, number) = text("1. ");
+        let (_, numbered) = text("Numbered");
+        assert!((number.right() - numbered.left()).abs() < 0.5);
+        // The space between blocks groups an item with the items under it: `XS` before an item
+        // of an inner list, `S` between a list's own items, `M` after the whole list.
+        let between = |above: &str, below: &str| text(below).1.top() - text(above).1.bottom();
+        // The Reader's own line gap follows each block.
+        let line = design::theme::LINE_GAP;
+        for (above, below, gap) in [
+            ("Before", "Outer", design::S),
+            ("Outer", "Inner", design::XS),
+            ("Inner", "Second", design::XS),
+            ("Second", "Next", design::S),
+            ("Next", "After", design::M),
+        ] {
+            assert!(
+                (between(above, below) - gap - line).abs() < 0.5,
+                "{above} to {below}: {} apart, not {}",
+                between(above, below),
+                gap + line
+            );
+        }
+        // Where the body line is shorter than `XL`, a link lifts its paragraph's rows to `XL`.
+        // The mark's line is lifted with them, so the mark keeps the words' baseline.
+        let output = context.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                show_compact(ui, "- See [the note](splat-note:Rook)\n- Plain words\n");
+            });
+        });
+        let marks = drawn(&output.shapes, "• ");
+        let (linked, _) = drawn(&output.shapes, "See the note").remove(0);
+        let (plain, _) = drawn(&output.shapes, "Plain words").remove(0);
+        assert_eq!(marks.len(), 2);
+        assert_eq!(linked.rows[0].height(), design::XL);
+        assert!(plain.rows[0].height() < design::XL);
+        assert_eq!(marks[0].0.rows[0].height(), linked.rows[0].height());
+        assert_eq!(marks[1].0.rows[0].height(), plain.rows[0].height());
+    }
+
+    #[test]
+    fn a_task_box_stands_in_its_item_mark_column() {
+        use crate::design::test_harness::ThemedPage as _;
+        use egui_kittest::kittest::Queryable as _;
+        let harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(420.0, 300.0))
+            .themed_ui(|ui| show(ui, "- [ ] Ask the duke\n\n1. [x] Pay the toll\n"));
+        // A bulleted task's box is its whole mark; a numbered task's box follows its number.
+        for (name, words) in [("Open", "Ask the duke"), ("Done", "Pay the toll")] {
+            let (mark, words) = (
+                harness.get_by_label(name).rect(),
+                harness.get_by_label(words).rect(),
+            );
+            assert!(
+                mark.right() <= words.left() + 0.5
+                    && mark.left() >= words.left() - design::XL - 0.5
+                    && (mark.top() - words.top()).abs() < 0.5,
+                "{name}: the box at {mark:?} is not in the mark column of {words:?}"
+            );
+        }
     }
 
     #[test]

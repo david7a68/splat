@@ -98,6 +98,32 @@ pub fn indent<R>(
     })
 }
 
+/// A list item's words at its `depth` (1 for a list, 2 for a list in an item), with its `mark`
+/// in its own column: every level is one `step`, the mark ends at the words' left edge, and
+/// `add` (the words) wraps at that edge, so a wrapped line never starts under the mark and an
+/// item's mark stands under its parent's words. With no mark (a second paragraph of an item)
+/// the words keep the item's edge. A mark wider than its room moves only its own words right;
+/// at `depth` 0 the mark takes its own width (a plan row's leading icon).
+pub fn list_item<R>(
+    ui: &mut Ui,
+    depth: usize,
+    step: Gap,
+    mark: Option<std::sync::Arc<egui::Galley>>,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> (Option<egui::Response>, R) {
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        let width = mark.as_ref().map_or(0.0, |mark| mark.size().x);
+        let room = step.size() * depth as f32 - width;
+        if room > 0.0 {
+            space(ui, room);
+        }
+        let mark = mark.map(|mark| ui.add(egui::Label::new(mark)));
+        (mark, ui.vertical(add).inner)
+    })
+    .inner
+}
+
 /// `add` drawn `drop` below the top of its slot. The slot is `size` wide and still holds the
 /// drop, so what follows starts below the block, as when a space came first; the block is placed
 /// by its rect, so a slot taller than the block never moves it.

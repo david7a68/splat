@@ -41,7 +41,7 @@ pub use components::*;
 #[allow(unused_imports)]
 pub use extras::{
     FirstLine, Gap, Heading, QUOTE_INDENT, at_least, choice, choice_value, choice_wrapped,
-    choice_wrapped_value, dropped, empty_line, gap, gap_to_next, heading, indent, quote,
+    choice_wrapped_value, dropped, empty_line, gap, gap_to_next, heading, indent, list_item, quote,
     unless_empty,
 };
 // Wave 2 callers name the layout parts through `design`, as they name the components.
