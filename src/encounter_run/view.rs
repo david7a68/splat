@@ -9,13 +9,12 @@ use crate::{
     design::{self, Action, Density, RunScale, Status, Type, colors, icons, reader as style},
     encounter_settings::{Grouping, GroupingWords},
 };
-use eframe::egui::{self, Align, Key, Layout, vec2};
+use eframe::egui::{self, vec2};
 use splat::content::overrides::{BY_HAND, Row};
 use splat::content::{Entry, Reference};
 use std::sync::Arc;
 use uuid::Uuid;
 
-const OTHER_EFFECT_FIELD: design::FieldName = crate::field_id!("run_other_effect");
 pub const READ_ALOUD: &str = "Read-aloud and notes";
 /// FI10: Arrivals says what the fight becomes when a group joins.
 pub const FIGHT_AFTER: &str = "Fight after: ";
@@ -36,83 +35,6 @@ const NAME_ROOM: f32 = 8.0;
 pub const OTHER_EFFECT_TIMED: &str = "Other effect, such as Bless 10 rounds";
 /// X7: what the Conditions tab records, and what Splat does with a time the DM types.
 pub const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9. Other effects stay local and do not sync.";
-/// A creature's effects beyond the official conditions, in the run's Conditions tab and in a
-/// change form alike: the `Other effects` label, then each in Body text with its row menu.
-/// Returns the position in `effects` of the one the DM removed. `field` is the width of the
-/// `Other effect…` field below: each row ends where that field's Add ends, so the form has one
-/// right edge (FH2).
-pub(crate) fn other_effects_list<'a>(
-    ui: &mut egui::Ui,
-    effects: impl IntoIterator<Item = &'a str>,
-    field: f32,
-) -> Option<usize> {
-    let effects: Vec<_> = effects.into_iter().collect();
-    if effects.is_empty() {
-        return None;
-    }
-    let mut removed = None;
-    design::heading(ui, design::Heading::Label("Other effects"));
-    let row = (field + ui.spacing().item_spacing.x + other_effect_add().natural_width(ui))
-        .min(ui.available_width());
-    for (at, effect) in effects.into_iter().enumerate() {
-        // The menu first, at the row's right edge, then the words in the rest of the row, both
-        // centred on the row's line (FH2: an empty-height slot put the words below the menu).
-        let size = vec2(row, Density::Read.control());
-        ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), |ui| {
-            ui.set_max_width(row);
-            design::row_menu(ui, effect, |ui| {
-                // A menu's choice is a quiet action, as the Encounters row menus' are.
-                if Action::quiet("Remove")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                {
-                    removed = Some(at);
-                    ui.close();
-                }
-            });
-            design::gap(ui, design::Gap::S);
-            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                ui.add(egui::Label::new(Type::Body.rich(ui, effect).color(colors().text)).wrap());
-            });
-        });
-    }
-    removed
-}
-
-/// The other-effect field's Add, measured by `other_effects_list` for the form's right edge.
-fn other_effect_add() -> Action<'static> {
-    Action::secondary("Add").density(Density::Read)
-}
-
-/// The field that adds an other effect, and its Add. True when the DM adds the typed words;
-/// then the field's response. `owner` is the key of the object whose draft it is (a run and
-/// its participant, a group's member): egui keeps the field's cursor and its text Undo under
-/// its id, so no caller leaves the owner out.
-pub(crate) fn other_effect_field(
-    ui: &mut egui::Ui,
-    owner: impl design::RowKey,
-    text: &mut String,
-    (width, placeholder): (f32, &str),
-    focus: bool,
-) -> (bool, egui::Response) {
-    let id = OTHER_EFFECT_FIELD.of(owner);
-    ui.horizontal(|ui| {
-        let response = design::line_field(ui, id, "Other effect", text, placeholder, width);
-        if focus {
-            response.request_focus();
-        }
-        let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-        let added = (other_effect_add()
-            .blocked_if(text.trim().is_empty(), "Type an effect first.")
-            .show(ui)
-            .clicked()
-            || enter)
-            && !text.trim().is_empty();
-        (added, response)
-    })
-    .inner
-}
 
 /// Run toggles use a selected surface; the turn action keeps the accent fill.
 #[allow(
@@ -149,28 +71,6 @@ pub fn toggle(
     response
 }
 
-/// The width `toggle` takes, on or off: its words and the frame's padding.
-pub(crate) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
-    #[cfg(any(test, feature = "test-support"))]
-    CONDITION_MEASURES.with(|count| count.set(count.get() + 1));
-    let words = egui::WidgetText::from(Type::Body.rich(ui, format!("{icon} {label}")))
-        .into_galley(
-            ui,
-            Some(egui::TextWrapMode::Extend),
-            f32::INFINITY,
-            egui::TextStyle::Button,
-        )
-        .size()
-        .x;
-    let v = &ui.visuals().widgets;
-    let expansion = v
-        .inactive
-        .expansion
-        .max(v.hovered.expansion)
-        .max(v.active.expansion);
-    words + 2.0 * (ui.spacing().button_padding.x + expansion)
-}
-
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many times a group row scanned the run's participants for that group's joins.
@@ -189,91 +89,6 @@ thread_local! {
 thread_local! {
     /// How many toggle widths the conditions grid measured.
     static CONDITION_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-/// Each column's width: its widest name in the selected (bordered) form. Measured once per
-/// font size and padding, never from what is drawn, so no toggle moves its neighbours.
-fn condition_column_widths(ui: &egui::Ui, columns: usize) -> Vec<f32> {
-    let font = Type::Body.font(ui);
-    let key = egui::Id::new("condition_column_widths")
-        .with(font.size.to_bits())
-        .with(ui.spacing().button_padding.x.to_bits())
-        .with(ui.ctx().pixels_per_point().to_bits())
-        .with(columns);
-    if let Some(widths) = ui.data(|data| data.get_temp::<Vec<f32>>(key)) {
-        return widths;
-    }
-    let mut widths = vec![0.0_f32; columns];
-    for (at, (_, name)) in crate::combat_sync::CONDITIONS.iter().enumerate() {
-        let width = toggle_width(ui, name, icons::OK);
-        widths[at % columns] = widths[at % columns].max(width);
-    }
-    ui.data_mut(|data| data.insert_temp(key, widths.clone()));
-    widths
-}
-
-/// The official conditions as toggles in fixed columns, `S` apart: the run's Conditions tab
-/// and a group member's Starting conditions. `on` says whether a condition is on. Returns
-/// the condition the DM pressed.
-pub(crate) fn conditions_grid(
-    ui: &mut egui::Ui,
-    salt: &str,
-    on: impl Fn(&str) -> bool,
-) -> Option<&'static str> {
-    conditions_grid_counted(ui, salt, &|name| on(name).then(|| name.to_owned())).0
-}
-
-/// The grid of `conditions_grid`, where `label` gives an on condition's words. X11: a
-/// condition with a time shows its count on its tick, `✓ Frightened 10`, while every column
-/// still fits the room; its column grows by the count. Else each tick shows its name only.
-/// Returns the pressed condition, and whether the counts show.
-fn conditions_grid_counted(
-    ui: &mut egui::Ui,
-    salt: &str,
-    label: &dyn Fn(&str) -> Option<String>,
-) -> (Option<&'static str>, bool) {
-    let columns = if ui.available_width() >= design::CONDITION_THREE_COLUMNS_FROM {
-        3
-    } else {
-        2
-    };
-    let mut widths = condition_column_widths(ui, columns);
-    let mut counted = widths.clone();
-    for (at, (_, name)) in crate::combat_sync::CONDITIONS.iter().enumerate() {
-        if let Some(words) = label(name).filter(|words| words != name) {
-            counted[at % columns] = counted[at % columns].max(toggle_width(ui, &words, icons::OK));
-        }
-    }
-    let gaps = design::S * (columns - 1) as f32;
-    let counts = counted.iter().sum::<f32>() + gaps <= ui.available_width();
-    if counts {
-        widths = counted;
-    }
-    let height = Density::Read.control();
-    let mut pressed = None;
-    ui.push_id(salt, |ui| {
-        ui.spacing_mut().item_spacing.y = design::XS;
-        for row in crate::combat_sync::CONDITIONS.chunks(columns) {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = design::S;
-                for ((_, name), width) in row.iter().zip(&widths) {
-                    let size = vec2(*width, height);
-                    ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
-                        ui.set_min_size(size);
-                        let words = label(name);
-                        let selected = words.is_some();
-                        let icon = if selected { icons::OK } else { icons::ADD };
-                        let shown = words.filter(|_| counts);
-                        let shown = shown.as_deref().unwrap_or(name);
-                        if toggle(ui, shown, icon, selected, name, Density::Read).clicked() {
-                            pressed = Some(*name);
-                        }
-                    });
-                }
-            });
-        }
-    });
-    (pressed, counts)
 }
 
 /// Where an official condition is among a participant's conditions (Exhaustion at any level).
@@ -1958,11 +1773,6 @@ impl Run {
     }
 }
 
-/// The one control that takes an ending away, wherever it shows.
-pub(crate) fn continue_action() -> Action<'static> {
-    Action::secondary("Continue fight").icon(icons::RUN)
-}
-
 /// The level in `Exhaustion (2)`. Plain `Exhaustion` is the first.
 pub fn exhaustion_level(condition: &str) -> u8 {
     condition
@@ -2270,41 +2080,6 @@ pub fn change_lines(p: &Participant, above_stat_block: bool) -> ChangeLines {
             note,
             gap: true,
         }
-    }
-}
-
-/// Each change, with the value it replaces. The editors and the run say it the same way.
-pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
-    let c = colors();
-    // What the DM must do comes first, in larger type. The rest the run has done.
-    let (by_hand, applied): (Vec<&Row>, Vec<&Row>) = rows.iter().partition(|row| row.by_hand);
-    let separate = !by_hand.is_empty() && !applied.is_empty();
-    let mut was_by_hand = false;
-    for row in by_hand.into_iter().chain(applied) {
-        if separate && was_by_hand && !row.by_hand {
-            design::gap(ui, design::Gap::S);
-        }
-        was_by_hand = row.by_hand;
-        let font = if row.by_hand {
-            Type::Body.font(ui)
-        } else {
-            Type::Small.font(ui)
-        };
-        let mut job = egui::text::LayoutJob::default();
-        let mut add = |text: &str, color: egui::Color32| {
-            job.append(
-                text,
-                0.0,
-                egui::TextFormat {
-                    font_id: font.clone(),
-                    color,
-                    ..Default::default()
-                },
-            );
-        };
-        add(&format!("{}: ", row.label), c.muted);
-        add(&change_preview(row), c.participant.changed);
-        ui.add(egui::Label::new(job).wrap());
     }
 }
 

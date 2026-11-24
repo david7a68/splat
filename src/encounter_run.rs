@@ -65,7 +65,6 @@ use std::{
 };
 use uuid::Uuid;
 pub use view::change_preview;
-pub(crate) use view::change_rows;
 
 /// The words after a name in a sheet change's summary. The run header shortens them to `:`.
 pub(crate) const SHEET_CHANGED: &str = "’s sheet changed:";

@@ -1,12 +1,7 @@
 //! The same disk comparison for encounter, group and creature drafts.
 #![warn(deprecated)] // Its parent allows old message functions; this file uses none.
 use crate::{
-    design::{
-        self, Type, colors,
-        outcome::{
-            BodyMessage, Choice, ChoiceKind, Fault, FaultMessage, MessageChoice, Sentence, Severity,
-        },
-    },
+    design::{self, outcome::Sentence},
     library::note_path,
 };
 use eframe::egui;
@@ -45,19 +40,6 @@ pub(super) fn changed_on_disk(what: &str, name: &str) -> Sentence {
             "{} changed on disk. Your draft is safe until you choose.",
             name
         )
-    }
-}
-
-/// What the disk did under a draft: its file changed or went, or another file uses its
-/// identity. The draft is safe and Save waits until the DM chooses: the warning tone.
-struct DiskFault(Sentence);
-
-impl Fault for DiskFault {
-    fn severity(&self) -> Severity {
-        Severity::NeedsFixing
-    }
-    fn cause(&self) -> Sentence {
-        self.0.clone()
     }
 }
 
@@ -170,85 +152,6 @@ impl Recovery {
             draft: draft.to_owned(),
             disk: change.text.clone().map(|text| (change.path.clone(), text)),
         })
-    }
-
-    /// The conflict in place of the editor, its choices after the last fact, then what differs.
-    /// `Some(true)` keeps the draft; `Some(false)` lets it go.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "ruling M20: a draft’s disk conflict in its editor’s place, typed (`Ban::Body`)"
-    )]
-    pub fn show(&self, ui: &mut egui::Ui, draft: &str, (what, name): (&str, &str)) -> Option<bool> {
-        let change = self.change.as_ref()?;
-        let mut faults = vec![DiskFault(changed_on_disk(what, name))];
-        faults.extend(change.copies.iter().map(|path| {
-            DiskFault(crate::sentence!(
-                "Another file claims to be this {}: {}. Both files stay.",
-                what,
-                path
-            ))
-        }));
-        let last = faults.pop()?;
-        for fault in &faults {
-            let _ = BodyMessage::<()>::from(FaultMessage::new(fault)).show(ui);
-        }
-        // The choices follow the last fact the DM reads, at its words: safe first, then the red
-        // one `L` after it (the part's). FF7: a file that is gone says what the red one removes
-        // and loses.
-        let lose = if change.text.is_some() {
-            Choice::new(MessageChoice::Lose("Reload and lose my draft"), false)
-        } else {
-            Choice::named_as(
-                ChoiceKind::Lose,
-                crate::choice!("Remove {} and lose draft", what),
-                false,
-            )
-        };
-        let choice = BodyMessage::from(
-            FaultMessage::new(&last)
-                .choice(Choice::new(
-                    MessageChoice::Choice("Overwrite with my draft"),
-                    true,
-                ))
-                .choice(lose),
-        )
-        .show(ui);
-        if let Some(text) = &change.text {
-            // One line for each part that differs, in the DM's words, above the raw lines.
-            let key = egui::Id::new(("disk_differences", draft, text.as_str()));
-            let lines = ui
-                .data(|data| data.get_temp::<Vec<(String, String)>>(key))
-                .unwrap_or_else(|| {
-                    let lines = differences(draft, text);
-                    ui.data_mut(|data| data.insert_temp(key, lines.clone()));
-                    lines
-                });
-            if !lines.is_empty() {
-                design::gap(ui, design::Gap::S);
-            }
-            for (label, words) in &lines {
-                ui.horizontal_top(|ui| {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(design::XXL * 3.0 + design::S, 0.0),
-                        egui::Layout::left_to_right(egui::Align::Min),
-                        |ui| {
-                            ui.set_min_width(design::XXL * 3.0 + design::S);
-                            ui.label(Type::Small.rich(ui, label).color(colors().muted));
-                        },
-                    );
-                    ui.add(egui::Label::new(Type::Small.rich(ui, words)).wrap());
-                });
-            }
-            design::draft_comparison_styled(
-                ui,
-                draft,
-                text,
-                (&change.path, text),
-                design::Type::Mono.font(ui),
-                design::Type::Mono.line(),
-            );
-        }
-        choice
     }
 }
 
@@ -470,46 +373,6 @@ pub(super) fn comparison_text(
 }
 
 impl super::Encounters {
-    pub(super) fn encounter_disk_view(
-        &mut self,
-        ui: &mut egui::Ui,
-        campaign: &crate::persistence::Campaign,
-        modules: &[crate::persistence::Module],
-    ) -> bool {
-        let Some(snapshot) = self.snapshot.as_ref() else {
-            return false;
-        };
-        let Some(draft) = self.draft.as_mut() else {
-            return false;
-        };
-        let choice = if draft.recovery.change.is_none() {
-            let Some(index) = draft
-                .groups
-                .iter()
-                .position(|group| group.has_disk_change())
-            else {
-                return false;
-            };
-            match draft.groups[index].show_disk(ui, snapshot) {
-                Ok(choice) => choice,
-                Err(error) => {
-                    self.error = Some(error);
-                    None
-                }
-            }
-        } else {
-            draft.recovery.show(
-                ui,
-                &draft.comparison_text(snapshot).unwrap_or_default(),
-                ("encounter", &draft.name),
-            )
-        };
-        if let Some(keep) = choice {
-            self.encounter_disk_choice(ui.ctx(), campaign, modules, keep);
-        }
-        true
-    }
-
     /// The encounter editor's disk conflict: its own, else the first of its groups' (the
     /// editor shows it in its place, `encounter_disk_view`).
     pub fn encounter_disk(&self) -> Option<DiskView> {
