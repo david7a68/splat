@@ -1457,12 +1457,6 @@ pub const SHOW_FILE: &str = "Show file";
 /// use splat_design::outcome::FileLine;
 /// let _ = FileLine { root: "/vault".into(), relative: "Timeline.md".into(), openable: true, edit: true, show: true };
 /// ```
-/// ```compile_fail,E0624
-/// use splat_design::outcome::FileLine;
-/// fn f(ui: &mut egui::Ui) {
-///     FileLine::new("/vault/Campaign", "Timeline.md").show().draw(ui);
-/// }
-/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[must_use = "give it to a footer message's `file`"]
 pub struct FileLine {
@@ -1560,25 +1554,20 @@ pub fn file_url(path: &std::path::Path) -> Option<String> {
 ///
 /// ```
 /// use splat_design::outcome::{Messages, NoPress, Outcome};
-/// fn f(ui: &mut egui::Ui) {
-///     let frame = splat_design::outcome::PaneFrame::new(ui);
+/// fn f() {
+///     let frame = splat_design::outcome::PaneFrame::plain();
 ///     let mut messages = Messages::<NoPress>::new(&frame, "f", 400.0);
 ///     messages.outcome(Outcome::Refused(splat_design::sentence!("No.")));
-///     let _ = messages.pane(ui, splat_design::pane::Body::Content, |_| ());
+///     let _ = messages.into_plain();
 /// }
 /// ```
 /// ```compile_fail
 /// use splat_design::outcome::{Done, Messages, NoPress, Verb};
-/// fn f(ui: &mut egui::Ui) {
-///     let frame = splat_design::outcome::PaneFrame::new(ui);
+/// fn f() {
+///     let frame = splat_design::outcome::PaneFrame::plain();
 ///     let mut messages = Messages::<NoPress>::new(&frame, "f", 400.0);
 ///     messages.outcome(Done::new(Verb::Remove, "Bell"));
-///     let _ = messages.pane(ui, splat_design::pane::Body::Content, |_| ());
-/// }
-/// ```
-/// ```compile_fail
-/// fn f(ui: &mut egui::Ui) {
-///     splat_design::outcome::Outcome::<u8>::Refused(splat_design::sentence!("No.")).draw(ui);
+///     let _ = messages.into_plain();
 /// }
 /// ```
 pub enum Outcome<A> {
@@ -1926,10 +1915,10 @@ impl PaneFrame {
 /// # struct Saved;
 /// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
 /// use splat_design::outcome::{KeptLine, NoPress, PaneFrame, Said};
-/// fn frame(ui: &mut egui::Ui) {
+/// fn frame() {
 ///     let mut store = Results::new();
 ///     store.record(Saved);
-///     let frame = PaneFrame::new(ui);
+///     let frame = PaneFrame::plain();
 ///     let line: KeptLine<NoPress> = store
 ///         .get(&Link)
 ///         .unwrap()
@@ -1953,10 +1942,10 @@ impl PaneFrame {
 /// # struct Saved;
 /// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
 /// use splat_design::outcome::{KeptLine, NoPress, PaneFrame, Said};
-/// fn frame(ui: &mut egui::Ui) {
+/// fn frame() {
 ///     let mut store = Results::new();
 ///     store.record(Saved);
-///     let frame = PaneFrame::new(ui);
+///     let frame = PaneFrame::plain();
 ///     let line: KeptLine<NoPress> = store
 ///         .get(&Link)
 ///         .unwrap()
@@ -1971,10 +1960,10 @@ impl PaneFrame {
 /// # struct Saved;
 /// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
 /// use splat_design::outcome::{KeptLine, NoPress, PaneFrame, Said};
-/// fn frame(ui: &mut egui::Ui) {
+/// fn frame() {
 ///     let mut store = Results::new();
 ///     store.record(Saved);
-///     let frame = PaneFrame::new(ui);
+///     let frame = PaneFrame::plain();
 ///     let line: KeptLine<NoPress> = store
 ///         .get(&Link)
 ///         .unwrap()
@@ -1994,8 +1983,8 @@ impl PaneFrame {
 /// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
 /// use splat_design::outcome::{KeptLine, NoPress, PaneFrame, Said};
 /// struct App { store: Results<Link, Saved>, kept: Option<KeptLine<'static, NoPress>> }
-/// fn frame(ui: &mut egui::Ui, app: &mut App) {
-///     let frame = PaneFrame::new(ui);
+/// fn frame(app: &mut App) {
+///     let frame = PaneFrame::plain();
 ///     app.kept = app
 ///         .store
 ///         .get(&Link)
@@ -2148,37 +2137,36 @@ impl<A> Press<A> {
 /// A pane's footer messages for this frame, owned and typed: built before the body runs, from
 /// values that hold no borrow of the app (`'static` words, ids and sentences; a kept result as a
 /// [`KeptLine`] of this frame). So the body may change any of the app, also the store a result
-/// came from. `pane` draws the body, then the footer (`Footer::pane`'s placement), and gives
-/// back the body's value with the press. No message needs a slot for its press. Each kept
-/// line's controls take their egui ids from its ticket, so a result added or removed above it
-/// moves no focus or pending press onto another result's control.
+/// came from. `into_plain` gives the footer's lines in its one order, each with the presses its
+/// controls make. No message needs a slot for its press, and a kept line's press carries its
+/// ticket, so it reaches only the entry the line showed.
 ///
 /// A footer entry that borrows the app does not compile:
 ///
 /// ```
 /// use splat_design::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
 /// #[derive(Clone, Copy)] enum Act { Again }
-/// fn f(ui: &mut egui::Ui) -> Option<Act> {
-///     let frame = PaneFrame::new(ui);
+/// fn f() -> Option<Act> {
+///     let frame = PaneFrame::plain();
 ///     let mut messages = Messages::new(&frame, "f", 400.0);
 ///     messages.outcome(
 ///         Notice::new(splat_design::sentence!("Sync is off."))
 ///             .choice(Choice::new(MessageChoice::Choice("Try again"), Act::Again)),
 ///     );
-///     messages.pane(ui, splat_design::pane::Body::Content, |_| ()).pressed.map(|press| press.id)
+///     messages.into_plain().first().and_then(|line| line.press_choice(0)).map(|press| press.id)
 /// }
 /// ```
 /// ```compile_fail
 /// use splat_design::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
 /// #[derive(Clone, Copy)] enum Act { Again }
-/// fn f(ui: &mut egui::Ui, name: String) -> Option<Act> {
-///     let frame = PaneFrame::new(ui);
+/// fn f(name: String) -> Option<Act> {
+///     let frame = PaneFrame::plain();
 ///     let mut messages = Messages::new(&frame, "f", 400.0);
 ///     messages.outcome(
 ///         Notice::new(splat_design::sentence!("Sync is off."))
 ///             .choice(Choice::new(MessageChoice::Choice(&name), Act::Again)),
 ///     );
-///     messages.pane(ui, splat_design::pane::Body::Content, |_| ()).pressed.map(|press| press.id)
+///     messages.into_plain().first().and_then(|line| line.press_choice(0)).map(|press| press.id)
 /// }
 /// ```
 ///
@@ -2186,14 +2174,14 @@ impl<A> Press<A> {
 ///
 /// ```compile_fail
 /// use splat_design::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
-/// fn f<'a>(ui: &mut egui::Ui, app: &'a mut u8) {
-///     let frame = PaneFrame::new(ui);
+/// fn f<'a>(app: &'a mut u8) {
+///     let frame = PaneFrame::plain();
 ///     let mut messages = Messages::new(&frame, "f", 400.0);
 ///     messages.outcome(
 ///         Notice::new(splat_design::sentence!("Sync is off."))
 ///             .choice(Choice::new(MessageChoice::Choice("Try again"), &*app)),
 ///     );
-///     let _ = messages.pane(ui, splat_design::pane::Body::Content, |_| ());
+///     let _ = messages.into_plain();
 /// }
 /// ```
 pub struct Messages<'f, A: 'static> {
@@ -2342,24 +2330,10 @@ impl Severity {
 /// line take one tone from one `severity`.
 ///
 /// ```
-/// use splat_design::outcome::{FaultStatus, fault_status};
-/// fn f(ui: &mut egui::Ui) { fault_status(ui, "Ashen Marches", FaultStatus::ManifestDeleted); }
-/// ```
-///
-/// The caller gives no severity and no phrase:
-///
-/// ```compile_fail
-/// use splat_design::outcome::{Severity, fault_status};
-/// fn f(ui: &mut egui::Ui) {
-///     fault_status(ui, "Ashen Marches", Severity::NeedsFixing, "Cannot be read");
-/// }
-/// ```
-///
-/// ```compile_fail
-/// use splat_design::outcome::{FaultStatus, Severity, fault_status};
-/// fn f(ui: &mut egui::Ui) {
-///     fault_status(ui, "Ashen Marches", (FaultStatus::CannotRead, Severity::NeedsFixing));
-/// }
+/// use splat_design::outcome::{Fault, FaultStatus, Severity};
+/// let status = FaultStatus::ManifestDeleted;
+/// assert_eq!(status.words("Ashen Marches"), "Ashen Marches · Manifest deleted");
+/// assert_eq!(status.severity(), Severity::NeedsFixing);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FaultStatus {
@@ -2406,26 +2380,18 @@ pub struct FaultPlace<'a> {
     pub line: Option<u32>,
 }
 
-/// A fault of the DM's files or of a write. Every view draws it through a typed place, which
-/// takes its tone from `severity` and its words from `fault_words`. No place takes a `Tone`:
+/// A fault of the DM's files or of a write. Its tone comes from `severity` and its words from
+/// `fault_words`; no caller gives a `Tone`:
 ///
 /// ```
-/// use splat_design::outcome::{Fault, Sentence, Severity, Tone};
+/// use splat_design::outcome::{Fault, Sentence, Severity, Tone, fault_words};
 /// struct Missing;
 /// impl Fault for Missing {
 ///     fn severity(&self) -> Severity { Severity::NeedsFixing }
 ///     fn cause(&self) -> Sentence { splat_design::sentence!("The note is gone.") }
 /// }
-/// fn f(ui: &mut egui::Ui) { splat_design::outcome::row_fault(ui, &Missing); }
-/// ```
-/// ```compile_fail
-/// use splat_design::outcome::{Fault, Sentence, Severity, Tone};
-/// struct Missing;
-/// impl Fault for Missing {
-///     fn severity(&self) -> Severity { Severity::NeedsFixing }
-///     fn cause(&self) -> Sentence { splat_design::sentence!("The note is gone.") }
-/// }
-/// fn f(ui: &mut egui::Ui) { splat_design::outcome::row_fault(ui, &Missing, Tone::Error); }
+/// assert_eq!(fault_words(&Missing).as_str(), "The note is gone.");
+/// assert_eq!(Missing.severity().tone(), Tone::Warning);
 /// ```
 pub trait Fault {
     fn severity(&self) -> Severity;

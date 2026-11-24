@@ -848,10 +848,10 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`, a close icon's `Dismiss this …` in `MessageChoice::Dismiss`"
                 }
                 "fact-owner" => {
-                    "Draw a sheet's fact with `design::fact::line`, a tile label that holds its number with `fact::tile_label` and a rolling tile with `fact::roll_tile` (M5)"
+                    "Make a sheet's fact with `design::fact::line` and a tile label that holds its number with `fact::tile_label` (M5)"
                 }
                 "arrow-label" => {
-                    "Give the control its word: an editor's back is `EditorHead` (its `BackTo` gives the word) above its name row; a back link that starts a line is `TitleLine::back` with its word"
+                    "Give the control its word: an editor's back is `EditorHead` (its `BackTo` gives the word)"
                 }
                 _ => "Use design tokens",
             };
