@@ -16,10 +16,15 @@ use gpui::{
     AnyElement, Context, Div, ElementId, InteractiveElement, IntoElement, ParentElement, Pixels,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
+use splat_encounters_ui::encounters::model::DuplicateRepair;
 use splat_encounters_ui::encounters::model::{
     AddView, ChangesOf, EditorView, GroupAt, HeadAct, NarrowPane, OwnedAct, PartyButton, ResultRow,
     RosterAct, RosterRow, RosterView, UnusedCreature,
 };
+
+/// What the search offers besides its results: creatures of unused packages (`Use it`) and the
+/// repairs of copied notes.
+pub(super) type Offers<'a> = (&'a [UnusedCreature], &'a [DuplicateRepair]);
 use std::sync::Arc;
 
 /// The page's creature filter, shared by the roster and a group.
@@ -33,13 +38,22 @@ pub(super) const ADD_PANE_MAX_WIDTH: Pixels = px(640.0);
 pub(super) const NARROW: Pixels = px(760.0);
 
 /// Add participants' width: the DM's dragged width, else its own (`editor_columns`).
-pub(super) fn add_width(content: Pixels, cx: &gpui::App) -> Pixels {
+pub(super) fn add_width(content: Pixels, window: &Window, cx: &gpui::App) -> Pixels {
     match kit::edge::column_width(ADD_PANE, cx) {
         Some(width) => px(width).clamp(PANEL_MIN_WIDTH, ADD_PANE_MAX_WIDTH),
-        None => px(crate::design::side_panel_width(f32::from(content)))
-            .max(content - LIST_MEASURE)
-            .min(ADD_PANE_MAX_WIDTH),
+        None => natural_add_width(content, window),
     }
+}
+
+/// Add participants' (and Add creatures') own width: the window's side panel share, or all
+/// that the roster's measure leaves, at most `ADD_PANE_MAX_WIDTH`. The share is of the window,
+/// as egui's `content_rect`, so the column is as wide beside a narrower page.
+pub(super) fn natural_add_width(content: Pixels, window: &Window) -> Pixels {
+    px(crate::design::side_panel_width(f32::from(
+        window.viewport_size().width,
+    )))
+    .max(content - LIST_MEASURE)
+    .min(ADD_PANE_MAX_WIDTH)
 }
 
 /// The encounter editor.
@@ -76,6 +90,7 @@ pub(super) fn render(
     let filter = filter(&ctx);
     let add = root.app.encounters.add_view(filter);
     let unused = root.app.encounters.unused_creatures(&ctx);
+    let repairs = root.app.encounters.duplicate_repairs(&ctx);
     let creature = root.app.encounters.creature_view();
     let owned = root.app.encounters.owned_groups(&ctx);
     let lines = root.app.encounters.editor_footer(&active.path);
@@ -94,7 +109,7 @@ pub(super) fn render(
         .get()
         .map_or(page, |room| room.min(page));
     let narrow = content < NARROW;
-    let add_width = add_width(content, cx);
+    let add_width = add_width(content, window, cx);
     let roster_width = (content - add_width).clamp(PANEL_MIN_WIDTH, LIST_MEASURE);
     let head = head(&view, (roster_width, content, narrow), focus_name, cx);
     let body: AnyElement = match (roster, add, view.reading) {
@@ -107,13 +122,13 @@ pub(super) fn render(
                 Some(creature) => super::creature::pane(creature, cx),
                 None => {
                     let room = if narrow { content } else { add_width - M };
-                    let facts = results_facts(root, &add, room, window);
+                    let columns = results_columns(root, &add, room, window);
                     add_column(
                         &add,
-                        &unused,
+                        (&unused, &repairs),
                         choices.as_ref(),
                         (focus_search, !narrow),
-                        (&root.pages.encounters.results_scroll.clone(), facts),
+                        (&root.pages.encounters.results_scroll.clone(), columns),
                         cx,
                     )
                     .into_any_element()
@@ -1073,7 +1088,7 @@ fn roster_act(
 /// Add participants' head: its heading, the party's line, the target and the search.
 pub(super) fn add_head(
     add: &AddView,
-    unused: &[UnusedCreature],
+    (unused, repairs): Offers<'_>,
     choices: Option<&super::filter::Choices>,
     focus: bool,
     heading: bool,
@@ -1135,6 +1150,9 @@ pub(super) fn add_head(
             summary.to_owned(),
         ));
     }
+    for (at, repair) in repairs.iter().enumerate() {
+        head = head.child(duplicate_repair(at, repair, cx));
+    }
     if add.close_names {
         head = head.child(kit::text(
             Type::Small,
@@ -1151,7 +1169,8 @@ pub(super) fn add_head(
                 .flex_wrap()
                 .items_baseline()
                 .gap(S)
-                .child(kit::text(Type::Small, c.muted, unused.words.clone()))
+                // The words wrap at the column's edge; they never run past it.
+                .child(kit::text(Type::Small, c.muted, unused.words.clone()).min_w_0())
                 .child(
                     kit::Link::new(ElementId::Name(format!("use-it:{at}").into()), "Use it")
                         .small()
@@ -1165,6 +1184,43 @@ pub(super) fn add_head(
         );
     }
     head
+}
+
+/// A copied note the search found (`duplicate_creature_results`): the warning, then each
+/// file's repair, a framed button with what it leaves under it. A press gives the file an
+/// identity of its own; the editor's footer keeps the result with its Undo.
+fn duplicate_repair(at: usize, repair: &DuplicateRepair, cx: &mut Context<SplatRoot>) -> Div {
+    let mut files = div().flex().flex_col().gap(XS);
+    for (position, (path, words, help)) in repair.files.iter().enumerate() {
+        let path = path.clone();
+        files = files.child(
+            div()
+                .flex()
+                .flex_col()
+                .items_start()
+                .gap(XS)
+                .child(
+                    kit::Button::secondary(
+                        ElementId::Name(format!("separate-copy:{at}:{position}").into()),
+                        words.clone(),
+                    )
+                    .density(Density::Read)
+                    .on_click(cx.listener(
+                        move |root: &mut SplatRoot, _, _, cx| {
+                            let ctx = root.ctx.clone();
+                            root.app.encounters.separate_copy(&ctx, &path);
+                            cx.notify();
+                        },
+                    )),
+                )
+                .children(help.clone().map(kit::help)),
+        );
+    }
+    div().child(
+        kit::Message::new(kit::Tone::Warning, repair.warning.clone())
+            .small()
+            .detail(files),
+    )
 }
 
 /// The search field and the filter's words.
@@ -1213,37 +1269,69 @@ pub(super) fn search(
 /// Add participants: its head, then the results in a virtual list that fills the column.
 pub(super) fn add_column(
     add: &AddView,
-    unused: &[UnusedCreature],
+    offers: Offers<'_>,
     choices: Option<&super::filter::Choices>,
     (focus, heading): (bool, bool),
-    (handle, facts): (&gpui::UniformListScrollHandle, Pixels),
+    (handle, columns): (&gpui::UniformListScrollHandle, ResultColumns),
     cx: &mut Context<SplatRoot>,
 ) -> Div {
     add_column_with(
         add,
-        unused,
+        offers,
         choices,
         (focus, heading, None),
-        (handle, facts),
+        (handle, columns),
         cx,
     )
 }
 
-/// Where the results' action column starts (layout PR 4): `L` after the widest facts of every
-/// result, so each `Add` keeps its x as the DM scrolls. Measured once per ranking (kept in the
-/// page's state by the results' list), at most the column's room less the action.
-pub(super) fn results_facts(
+/// The results' columns (layout PR 4, `design::Columns`): the actions start `L` after the widest
+/// facts of every result, so each `Add` keeps its x as the DM scrolls. When the widest facts, `L`
+/// and the widest action do not fit the room, every row's action wraps under its facts instead,
+/// so no fact is ever cut under a button.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct ResultColumns {
+    /// The facts' width: the widest facts, or the whole room when the actions wrap.
+    pub facts: Pixels,
+    /// Whether each row's action is on a line of its own under its facts.
+    pub wrapped: bool,
+}
+
+/// Each stat cell's width in `Small`: its widest value (`CR 1/8`, `HP 999`, `AC 25`) and the gap
+/// after it, `M` after the challenge rating and `S` after the others (`detail_columns`).
+const STAT_CELLS: [(&str, Pixels); 3] = [("CR ", px(49.0)), ("HP ", px(49.0)), ("AC ", px(41.0))];
+
+/// An NPC's `NPC · as Guard`, which follows the stat cells (`detail_columns`).
+fn npc_words(detail: &str) -> Option<String> {
+    let parts: Vec<&str> = detail.split(" · ").collect();
+    (detail.starts_with("NPC · as ") && parts.len() >= 2).then(|| parts[..2].join(" · "))
+}
+
+/// The width of a result's stats line without its package: the cells and an NPC's words.
+fn stats_width(window: &Window, detail: &str) -> Pixels {
+    let cells = STAT_CELLS
+        .iter()
+        .map(|(_, width)| *width)
+        .fold(px(0.0), |sum, width| sum + width);
+    cells
+        + npc_words(detail).map_or(px(0.0), |npc| {
+            XS + kit::measure::width(window, Type::Small, &npc)
+        })
+}
+
+/// The results' columns in `room` (the column's whole width). The widest facts are measured
+/// once per ranking (kept in the page's state); whether the actions wrap follows the room.
+pub(super) fn results_columns(
     root: &mut SplatRoot,
     add: &AddView,
     room: Pixels,
     window: &mut Window,
-) -> Pixels {
+) -> ResultColumns {
     // The ranking's list, while the page keeps it (`add_view`), with its length.
     let key = (Arc::as_ptr(&add.results) as usize, add.results.len());
     let widest = match root.pages.encounters.results_facts {
         Some((kept, width)) if kept == key => width,
         _ => {
-            let stats = px(48.0 + 52.0 + 40.0);
             let width = add
                 .results
                 .iter()
@@ -1254,7 +1342,7 @@ pub(super) fn results_facts(
                             kit::measure::width(window, Type::Small, why) + Type::Small.size() + XS
                         }
                         None => {
-                            stats
+                            stats_width(window, &row.detail)
                                 + row.source.as_deref().map_or(px(0.0), |source| {
                                     XS + kit::measure::width(window, Type::Small, source)
                                 })
@@ -1267,18 +1355,34 @@ pub(super) fn results_facts(
             width
         }
     };
-    // The action: `Add` and, beside a blocked one, `Open in World`.
-    let action = button_width(window, "Add") + S + button_width(window, "Open in World");
-    widest.min((room - L - action - crate::gui::theme::SCROLL_BAR_WIDTH).max(px(120.0)))
+    // The widest action: `Add`, blocked, with the quiet `Open in World` beside it
+    // (`creature_actions_width`), so a row whose action changes keeps the column where it was.
+    let action = button_width(window, "Add")
+        + S
+        + kit::measure::width(window, Type::Strong, "Open in World")
+        + S * 2.0;
+    // The results keep the scroll bar's lane whether or not the bar shows.
+    let room = room - crate::gui::theme::SCROLL_BAR_WIDTH;
+    if widest + L + action > room + px(0.5) {
+        ResultColumns {
+            facts: room.max(px(0.0)),
+            wrapped: true,
+        }
+    } else {
+        ResultColumns {
+            facts: widest,
+            wrapped: false,
+        }
+    }
 }
 
 /// Add participants (or Add creatures, with the members' summary in the narrow group editor).
 pub(super) fn add_column_with(
     add: &AddView,
-    unused: &[UnusedCreature],
+    offers: Offers<'_>,
     choices: Option<&super::filter::Choices>,
     (focus, heading, summary): (bool, bool, Option<&str>),
-    (handle, facts): (&gpui::UniformListScrollHandle, Pixels),
+    (handle, columns): (&gpui::UniformListScrollHandle, ResultColumns),
     cx: &mut Context<SplatRoot>,
 ) -> Div {
     div()
@@ -1288,24 +1392,28 @@ pub(super) fn add_column_with(
         .child(
             div()
                 .flex_none()
-                .child(add_head(add, unused, choices, focus, heading, summary, cx)),
+                .child(add_head(add, offers, choices, focus, heading, summary, cx)),
         )
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .pt(S)
-                .child(results(add, (handle, facts), cx)),
-        )
+        .child(div().flex_1().min_h_0().pt(S).child(results(
+            add,
+            !offers.1.is_empty(),
+            (handle, columns),
+            cx,
+        )))
 }
 
 /// The search's results: a virtual list of rows with its scroll bar, or the empty state.
 pub(super) fn results(
     add: &AddView,
-    (handle, facts): (&gpui::UniformListScrollHandle, Pixels),
+    repairs: bool,
+    (handle, columns): (&gpui::UniformListScrollHandle, ResultColumns),
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
+    // A copied note's repairs are said instead: the search found it, twice.
+    if add.results.is_empty() && repairs {
+        return div().into_any_element();
+    }
     if add.results.is_empty() {
         let words = if add.filter.is_empty() {
             "Check the spelling, or check"
@@ -1347,9 +1455,12 @@ pub(super) fn results(
         handle,
         rows.len(),
         cx.processor(
-            move |_root: &mut SplatRoot, range: std::ops::Range<usize>, _window, cx| {
+            move |_root: &mut SplatRoot, range: std::ops::Range<usize>, window, cx| {
                 range
-                    .filter_map(|at| rows.get(at).map(|row| result_row(row, (status, facts), cx)))
+                    .filter_map(|at| {
+                        rows.get(at)
+                            .map(|row| result_row(row, (status, columns), window, cx))
+                    })
                     .collect::<Vec<_>>()
             },
         ),
@@ -1363,10 +1474,12 @@ pub(super) fn results(
 }
 
 /// One result: its name (it opens the entry in Lookup) and stats, or why it cannot be added,
-/// then Add (with `Open in World` when it cannot), or `In roster`.
+/// then Add (with `Open in World` when it cannot), or `In roster`. The action starts `L` after
+/// the widest facts, or on a line of its own under the facts when the columns wrap.
 fn result_row(
     row: &ResultRow,
-    (status, facts): (bool, Pixels),
+    (status, columns): (bool, ResultColumns),
+    window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
@@ -1386,18 +1499,30 @@ fn result_row(
                 why.clone(),
             )))
             .into_any_element(),
-        None => div()
-            .flex()
-            .flex_row()
-            .items_baseline()
-            .ty(Type::Small)
-            .text_color(c.muted)
-            .whitespace_nowrap()
-            .min_w_0()
-            .overflow_hidden()
-            .children(stat_cells(&row.detail, row.hp_missing))
-            .children(row.source.clone().map(|source| div().ml(XS).child(source)))
-            .into_any_element(),
+        None => {
+            // The package only whole: a cut name says nothing, and Read always shows it.
+            let source = row.source.clone().filter(|source| {
+                !columns.wrapped
+                    || stats_width(window, &row.detail)
+                        + XS
+                        + kit::measure::width(window, Type::Small, source)
+                        <= columns.facts
+            });
+            div()
+                .flex()
+                .flex_row()
+                .items_baseline()
+                .ty(Type::Small)
+                .text_color(c.muted)
+                .whitespace_nowrap()
+                .min_w_0()
+                .overflow_hidden()
+                .children(stat_cells(&row.detail, row.hp_missing))
+                .children(
+                    source.map(|source| kit::target(div().ml(XS).child(source.clone()), source)),
+                )
+                .into_any_element()
+        }
     };
     let action: AnyElement = if row.in_roster {
         kit::status(&kit::Status::new(icons::OK, "In roster", c.muted)).into_any_element()
@@ -1429,25 +1554,34 @@ fn result_row(
         }
         action.into_any_element()
     };
-    div()
+    let facts = div()
+        .flex()
+        .flex_col()
+        .flex_none()
+        .w(columns.facts)
+        .min_w_0()
+        .child(div().flex().min_w_0().child(name_link(row, cx)))
+        .child(detail);
+    let row_box = div()
         .id(ElementId::Name(format!("result:{}", row.id).into()))
         .flex()
-        .flex_row()
-        .items_center()
-        .gap(L)
-        .h(result_height(status))
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .flex_none()
-                .w(facts)
-                .min_w_0()
-                .child(div().flex().child(name_link(row, cx)))
-                .child(detail),
-        )
-        .child(div().flex_none().child(action))
-        .into_any_element()
+        .h(result_height(status, columns.wrapped));
+    if columns.wrapped {
+        row_box
+            .flex_col()
+            .justify_center()
+            .child(facts)
+            .child(div().flex().flex_row().child(action))
+            .into_any_element()
+    } else {
+        row_box
+            .flex_row()
+            .items_center()
+            .gap(L)
+            .child(facts)
+            .child(div().flex_none().child(action))
+            .into_any_element()
+    }
 }
 
 /// A creature's name that opens its entry in Lookup (`creature_name_link`): its words in the
@@ -1458,7 +1592,7 @@ fn name_link(row: &ResultRow, cx: &mut Context<SplatRoot>) -> impl IntoElement {
     kit::target(
         div()
             .id(ElementId::Name(format!("result-read:{}", row.id).into()))
-            .flex_none()
+            .min_w_0()
             .min_h(Density::Read.control() - XS)
             .flex()
             .items_center()
@@ -1466,6 +1600,8 @@ fn name_link(row: &ResultRow, cx: &mut Context<SplatRoot>) -> impl IntoElement {
             .ty(Type::Body)
             .text_color(c.text)
             .whitespace_nowrap()
+            .overflow_hidden()
+            .text_ellipsis()
             .hover(|style| style.underline())
             .child(row.name.clone())
             .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
@@ -1477,14 +1613,17 @@ fn name_link(row: &ResultRow, cx: &mut Context<SplatRoot>) -> impl IntoElement {
 }
 
 /// A result row's height: its two lines and its Add, with room between rows; a third line while
-/// a result's warning can take two (`Row::Action { status }`).
-fn result_height(status: bool) -> Pixels {
-    let base = Density::Scan.row() + S;
+/// a result's warning can take two (`Row::Action { status }`); and the action's own line when
+/// the columns wrap (`row_height`).
+fn result_height(status: bool, wrapped: bool) -> Pixels {
+    let mut height = Density::Scan.row() + S;
     if status {
-        base + Type::Small.line()
-    } else {
-        base
+        height += Type::Small.line();
     }
+    if wrapped {
+        height += Density::Read.control();
+    }
+    height
 }
 
 /// A result's stats, each in its own cell (`detail_columns`): CR, HP and AC.
@@ -1500,7 +1639,7 @@ pub(super) fn stat_cells(detail: &str, hp_missing: bool) -> Vec<Div> {
         })
         .copied();
     let mut cells = Vec::new();
-    for (prefix, width) in [("CR ", px(48.0)), ("HP ", px(52.0)), ("AC ", px(40.0))] {
+    for (prefix, width) in STAT_CELLS {
         let part = parts
             .iter()
             .find(|part| part.starts_with(prefix))
@@ -1521,6 +1660,10 @@ pub(super) fn stat_cells(detail: &str, hp_missing: bool) -> Vec<Div> {
             "HP not set",
             c.result.warning,
         ))));
+    }
+    // An NPC's `NPC · as Guard` follows the cells, so the DM sees that the result is an NPC.
+    if let Some(npc) = npc_words(detail) {
+        cells.push(kit::target(div().ml(XS).child(npc.clone()), npc));
     }
     cells
 }

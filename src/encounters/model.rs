@@ -9,7 +9,9 @@ use crate::encounter_run::SavedRunInfo;
 use std::path::PathBuf;
 
 pub use super::disk::DiskView;
-pub use super::forms::{CreatureAct, CreatureField, CreatureView, NarrowPane, UnusedCreature};
+pub use super::forms::{
+    CreatureAct, CreatureField, CreatureView, DuplicateRepair, NarrowPane, UnusedCreature,
+};
 pub use super::groups::view::{
     ChangeEdit, ChangeHow, ChangeRowView, ChangesForm, ChangesOf, GroupAt, GroupCard, GroupFields,
     OwnedAct, OwnedGroups, SideView,

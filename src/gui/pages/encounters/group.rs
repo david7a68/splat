@@ -61,9 +61,7 @@ pub(super) fn render(
         .map_or(page, |room| room.min(page));
     let narrow = content < NARROW;
     // The Add creatures column keeps its own width here: the group editor does not drag it.
-    let add_width = px(crate::design::side_panel_width(f32::from(content)))
-        .max(content - LIST_MEASURE)
-        .min(super::editor::ADD_PANE_MAX_WIDTH);
+    let add_width = super::editor::natural_add_width(content, window);
     let members_width = (content - add_width).clamp(PANEL_MIN_WIDTH, LIST_MEASURE);
     let head = head(
         &view,
@@ -72,6 +70,10 @@ pub(super) fn render(
         cx,
     );
     let handle = root.pages.encounters.results_scroll.clone();
+    let repairs = {
+        let ctx = root.ctx.clone();
+        root.app.encounters.duplicate_repairs(&ctx)
+    };
     let body: AnyElement =
         match add {
             Some(add) if !view.reading => {
@@ -82,15 +84,15 @@ pub(super) fn render(
                         fields(root, GroupAt::Open, &view.fields, cx).max_w(LIST_MEASURE),
                     ));
                 let room = if narrow { content } else { add_width - M };
-                let facts = super::editor::results_facts(root, &add, room, window);
+                let columns = super::editor::results_columns(root, &add, room, window);
                 if narrow {
                     let summary = view.summary.clone();
                     let side = add_column_with(
                         &add,
-                        &[],
+                        (&[], &repairs),
                         choices.as_ref(),
                         (focus_search, false, Some(&summary)),
-                        (&handle, facts),
+                        (&handle, columns),
                         cx,
                     );
                     narrow_body(root, &view, members, side.into_any_element(), cx)
@@ -110,10 +112,10 @@ pub(super) fn render(
                         .child(div().flex_none().w(add_width).h_full().pl(M).child(
                             add_column_with(
                                 &add,
-                                &[],
+                                (&[], &repairs),
                                 choices.as_ref(),
                                 (focus_search, true, None),
-                                (&handle, facts),
+                                (&handle, columns),
                                 cx,
                             ),
                         ))
@@ -530,11 +532,11 @@ fn member_row(
                 "Choose a replacement, check the packages it uses, or remove this member.",
             ))
             .action(
-                kit::Link::new(
+                kit::Button::secondary(
                     member_id(at, "member-packages", index),
                     "Campaign → Packages",
                 )
-                .small()
+                .density(Density::Read)
                 .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
                     root.ctx.set(crate::requests::OPEN_CAMPAIGN_PACKAGES, true);
                     cx.notify();
@@ -558,7 +560,9 @@ fn member_row(
         }
     }
     if let Some(words) = &member.change_fault {
-        block = block.child(kit::Message::new(kit::Tone::Error, words.clone()).small());
+        block = block
+            .child(kit::Message::new(kit::Tone::Error, words.clone()).small())
+            .child(changes::change_rows(&member.change_rows));
     }
     if member.open
         && let Some(form) = root

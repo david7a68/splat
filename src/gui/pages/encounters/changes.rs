@@ -568,3 +568,33 @@ impl SmallMuted for Div {
             .overflow_hidden()
     }
 }
+
+/// Each change with the value it replaces, as the editors and the run say it (`change_rows`):
+/// what the DM adds by hand first, in `Body`, then the rest in `Small`, a gap between them.
+/// Each row is its label in muted words, then what it does in the changed colour.
+pub(super) fn change_rows(rows: &[(String, String, bool)]) -> Div {
+    let c = colors();
+    let (by_hand, applied): (Vec<_>, Vec<_>) = rows.iter().partition(|row| row.2);
+    let separate = !by_hand.is_empty() && !applied.is_empty();
+    let mut block = div().flex().flex_col();
+    for (at, (label, preview, by_hand_row)) in by_hand.iter().chain(&applied).enumerate() {
+        if separate && at == by_hand.len() {
+            block = block.child(kit::gap(S));
+        }
+        let ty = if *by_hand_row {
+            Type::Body
+        } else {
+            Type::Small
+        };
+        block = block.child(kit::target(
+            div()
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .child(kit::text(ty, c.muted, format!("{label}: ")))
+                .child(kit::text(ty, c.participant.changed, preview.clone())),
+            format!("{label}: {preview}"),
+        ));
+    }
+    block
+}

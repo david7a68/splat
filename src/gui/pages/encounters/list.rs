@@ -31,6 +31,7 @@ pub(super) fn render(
     let body = root.app.encounters.ledger_data(&story);
     let lines = root.app.encounters.list_footer();
     let empty = matches!(body, Body::Empty { .. });
+    let issues_open = root.pages.encounters.issues_open;
     let mut actions = Vec::new();
     if !empty {
         actions.push(
@@ -72,7 +73,7 @@ pub(super) fn render(
         Body::Empty { issues } => div()
             .flex()
             .flex_col()
-            .children(issues_block(&issues))
+            .children(issues_block(&issues, issues_open, cx))
             .child(kit::empty_state(
                 icons::ENCOUNTERS,
                 "No encounters yet",
@@ -121,25 +122,29 @@ pub(super) fn render(
         .into_any_element()
 }
 
-fn issues_block(issues: &[String]) -> Option<Div> {
+/// The content issues (`content_issue_count`): a disclosure in the warning icon and colour,
+/// `N content issues to repair`, closed until the DM opens it; each issue under it.
+fn issues_block(issues: &[String], open: bool, cx: &mut Context<SplatRoot>) -> Option<Div> {
     (!issues.is_empty()).then(|| {
         let count = issues.len();
+        let title = if count == 1 {
+            "1 content issue to repair".to_owned()
+        } else {
+            format!("{count} content issues to repair")
+        };
         div()
             .flex()
             .flex_col()
-            .child(kit::heading(
-                kit::Heading::Group {
-                    title: if count == 1 {
-                        "Content issue"
-                    } else {
-                        "Content issues"
-                    },
-                    count,
-                },
-                true,
-            ))
-            .children(issues.iter().map(|issue| reason(issue.clone())))
-            .child(kit::gap(L))
+            .child(
+                kit::Section::new("encounters-issues", title, open)
+                    .warning()
+                    .on_toggle(cx.listener(|root: &mut SplatRoot, open: &bool, _, cx| {
+                        root.pages.encounters.issues_open = *open;
+                        cx.notify();
+                    }))
+                    .children(issues.iter().map(|issue| reason(issue.clone()))),
+            )
+            .child(kit::gap(S))
     })
 }
 
@@ -263,13 +268,13 @@ fn ledger_body(
 ) -> AnyElement {
     let columns = columns(window, ledger);
     let state = &root.pages.encounters;
-    let (groups_open, history_open) = (!state.groups_closed, !state.history_closed);
+    let (groups_open, history_open) = (state.groups_open, state.history_open);
     let c = colors();
-    let mut body = div()
-        .flex()
-        .flex_col()
-        .w_full()
-        .children(issues_block(&ledger.issues));
+    let mut body = div().flex().flex_col().w_full().children(issues_block(
+        &ledger.issues,
+        state.issues_open,
+        cx,
+    ));
 
     // In progress.
     let mut heading = kit::label("In progress", ledger.in_progress.len());
@@ -314,7 +319,7 @@ fn ledger_body(
             ledger.group_count,
             groups_open,
             cx.listener(|root: &mut SplatRoot, _, _, cx| {
-                root.pages.encounters.groups_closed ^= true;
+                root.pages.encounters.groups_open ^= true;
                 cx.notify();
             }),
         ));
@@ -652,15 +657,25 @@ fn group_row(row: &GroupRow, columns: &Columns, cx: &mut Context<SplatRoot>) -> 
                 }),
             )
         };
+        // The list fits a fault's single repair beside its words, as a framed button
+        // (`BodyMessage::row_repair`); it wraps under them only when the line has no room.
         block = block.child(
-            kit::Message::new(kit::messages::tone(fault.tone), fault.words.clone())
-                .small()
-                .action(
-                    kit::Button::quiet(
+            div()
+                .mt(XS)
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .items_center()
+                .gap(S)
+                .child(div().min_w_0().child(
+                    kit::Message::new(kit::messages::tone(fault.tone), fault.words.clone()).small(),
+                ))
+                .child(
+                    kit::Button::secondary(
                         ElementId::Name(format!("group-fault:{key}:{index}").into()),
                         label,
                     )
-                    .plain()
+                    .density(Density::Read)
                     .on_click(cx.listener(move |root, _, _, cx| {
                         repair(root);
                         cx.notify();
@@ -702,7 +717,7 @@ fn history_block(
         history.count,
         open,
         cx.listener(|root: &mut SplatRoot, _, _, cx| {
-            root.pages.encounters.history_closed ^= true;
+            root.pages.encounters.history_open ^= true;
             cx.notify();
         }),
     ));

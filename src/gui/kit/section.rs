@@ -28,6 +28,7 @@ pub struct Section {
     open: bool,
     blocked: Option<SharedString>,
     on_toggle: Option<OnToggle>,
+    warning: bool,
     body: Vec<AnyElement>,
 }
 
@@ -39,6 +40,7 @@ impl Section {
             open,
             blocked: None,
             on_toggle: None,
+            warning: false,
             body: Vec::new(),
         }
     }
@@ -46,6 +48,13 @@ impl Section {
     /// The title cannot open or close now, with the reason on hover.
     pub fn blocked(mut self, reason: Option<impl Into<SharedString>>) -> Self {
         self.blocked = reason.map(Into::into);
+        self
+    }
+
+    /// A collapsing content issue count (`issue_count_title`): the warning icon and colour
+    /// before the title, so the count reads as a status on every page.
+    pub fn warning(mut self) -> Self {
+        self.warning = true;
         self
     }
 
@@ -75,7 +84,11 @@ impl RenderOnce for Section {
         });
         let open = kept.as_ref().map_or(self.open, |kept| *kept.read(cx));
         let enabled = self.blocked.is_none();
-        let (ty, color) = (Type::Strong, c.text);
+        let (ty, color) = if self.warning {
+            (Type::Strong, c.result.warning)
+        } else {
+            (Type::Strong, c.text)
+        };
         let mut header = div()
             .id(self.id.clone())
             .flex()
@@ -94,6 +107,15 @@ impl RenderOnce for Section {
             .child(div().icon_font(Type::Small).w(ICON_SLOT).flex_none().child(
                 SharedString::new_static(if open { icons::DOWN } else { icons::NEXT }),
             ))
+            .when(self.warning, |header| {
+                header.child(
+                    div()
+                        .icon_font(ty)
+                        .pr(XS)
+                        .flex_none()
+                        .child(SharedString::new_static(icons::WARN)),
+                )
+            })
             .child(div().ty(ty).child(self.title.clone()));
         if let Some(reason) = self.blocked.clone() {
             header = header

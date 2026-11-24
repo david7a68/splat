@@ -20,15 +20,18 @@ mod group;
 mod list;
 mod loot;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 /// This area's GPUI-only state, kept in `root.pages.encounters`.
 #[derive(Default)]
 pub struct State {
-    /// The list's Groups section is closed.
-    pub groups_closed: bool,
-    /// The list's History section is closed (an ended run read there opens it).
-    pub history_closed: bool,
+    /// The list's Groups section is open (it starts closed, as egui's collapsing sections).
+    pub groups_open: bool,
+    /// The list's content issues are open (they start closed).
+    pub issues_open: bool,
+    /// The list's History section is open (it starts closed; an ended run read there opens
+    /// it).
+    pub history_open: bool,
     /// The side choice whose `Other…` field is open, by its id.
     pub other_side: Option<String>,
     /// Each loot list's kept state, by its key (`loot::list`).
