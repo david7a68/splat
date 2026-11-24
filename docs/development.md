@@ -79,6 +79,20 @@ a failure message (another assertion). Otherwise it prints one row for the PR:
 `| patch summary | command | failed assertion | log path |`. Put the command under your build
 lease as for any other build (`local-compile.sh <label> -- …`).
 
+### Compare two captures
+
+`scripts/compare_captures.py A B` compares the findings of two visual captures (two
+`artifacts/screenshots/<label>` folders), read-only. It first checks that they can be compared (the
+same state images and the same recorded renderer; else `PRECHECK_FAILED`, exit 2). Then it prints
+the finding rows of `ergonomics.json` and `stillness.json` that are only in A (REMOVED) or only in
+B (ADDED), by scenario, check, state and width, with the control's name, the other control of an
+overlap, the bounds, and the source file. Numbers in a row's words do not count as a change.
+`--scenario a,b` and `--check G1,no-overlap` narrow it; `--skip-preflight` compares rows anyway.
+
+```sh
+scripts/compare_captures.py artifacts/screenshots/base-f1 artifacts/screenshots/head-f1 --check G1
+```
+
 ## Build layout
 
 | Path | Contents |
