@@ -883,26 +883,6 @@ impl Note {
             .as_ref()
             .map_or(Section::Unreadable, Section::for_entry)
     }
-    /// The key of this note's text fields (its Markdown, the read-only copy of the DM's draft),
-    /// with its owner's id. A file has no identity but its owner and path, so the owner's kind and
-    /// the path are the key (a campaign and a package may share a UUID: `OwnerKey`): a counted
-    /// escape (`Ban::RowKey`), the one place that builds it.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: a text key from data (design::results::STAGED_ALLOWS)"
-    )]
-    pub fn field_key(&self) -> design::TextKey {
-        let kind = match self.owner.key() {
-            OwnerKey::Builtin => "builtin",
-            OwnerKey::Package(_) => "package",
-            OwnerKey::Campaign(_) => "campaign",
-        };
-        design::TextKey::from_data(format!("{kind}\u{0}{}", self.path))
-    }
-    /// This note's Markdown editor.
-    pub fn markdown_field(&self) -> design::FieldId {
-        LIBRARY_MARKDOWN.of(self.owner.id()).with(self.field_key())
-    }
     /// How the row matches, as `matching::with_other` ranks it, or None if it does not. Plain
     /// words match the name (in any order, or with a typo), path or section, or a creature's
     /// facts. `habitat:forest` and the other fact terms match creatures only. A creature's name
@@ -2372,25 +2352,6 @@ pub const MOVED_ON_DISK: Sentence =
 pub const DELETED_ON_DISK: Sentence =
     crate::sentence!("This entry’s file was deleted on disk. Your draft is safe until you choose.");
 
-pub const ENTRY_ROW_HEIGHT: f32 = design::ENTRY_ROW_HEIGHT;
-pub const LIBRARY_SEARCH: design::FieldId =
-    crate::field_id!("library_search").once(design::Once::PageSearch);
-pub const NEW_ENTRY_FOLDER: design::FieldId =
-    crate::field_id!("new_entry_folder").once(design::Once::CreateForm);
-pub const LIBRARY_SECTION: design::FieldId =
-    crate::field_id!("library_section").once(design::Once::PageSearch);
-/// What the Library shows (M0341). Its id is the field's, so an open list stays with the
-/// control as it moves between columns when the reader narrows.
-pub const LIBRARY_SCOPE: design::FieldId =
-    crate::field_id!("library_scope").once(design::Once::PageSearch);
-pub const NEW_ENTRY_NAME: design::FieldId =
-    crate::field_id!("new_entry_name").once(design::Once::CreateForm);
-pub const NEW_ENTRY_KIND: design::FieldId =
-    crate::field_id!("new_entry_kind").once(design::Once::CreateForm);
-pub const NEW_ENTRY_PLACE: design::FieldId =
-    crate::field_id!("new_entry_place").once(design::Once::CreateForm);
-pub const DISK_DRAFT: design::FieldName = crate::field_id!("library_disk_draft");
-const LIBRARY_MARKDOWN: design::FieldName = crate::field_id!("library_markdown");
 /// A row's short cause for an entry whose identity or key another file claims too.
 pub const SAME_ENTRY: &str = "Same entry in two files";
 /// A row's short cause for a first heading that does not say the entry's name.
