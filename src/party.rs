@@ -1089,49 +1089,13 @@ fn source_and_parity(
         if let Some(review) = character_review {
             character_check(ui, review);
         }
-        small(
-            ui,
-            format!(
-                "Campaign content: {} inventory rows, {} action definitions.",
-                entry.inventory.len(),
-                entry
-                    .fields
-                    .get("splat_actions")
-                    .and_then(serde_yaml_ng::Value::as_mapping)
-                    .map_or(0, |v| v.len())
-            ),
-        );
-        if let Some(import) = entry.fields.get("splat_import") {
-            let list = |key: &str| {
-                import
-                    .get(key)
-                    .and_then(serde_yaml_ng::Value::as_sequence)
-                    .cloned()
-                    .unwrap_or_default()
-            };
-            small(
-                ui,
-                format!(
-                    "{} not read yet · {} not supported in Splat",
-                    design::count(list("gaps").len(), "rule", "rules"),
-                    list("engine_gaps")
-                        .iter()
-                        .filter_map(serde_yaml_ng::Value::as_str)
-                        .filter(|gap| !content::adapters::is_implemented(gap))
-                        .count()
-                ),
-            );
-            for (title, key) in [
-                ("Rules still to read", "gaps"),
-                ("Required character or encounter inputs", "required_inputs"),
-            ] {
+        small(ui, technical::content_counts(entry));
+        if let Some(import) = technical::import(entry) {
+            small(ui, import.summary);
+            for (title, reasons) in import.lists {
                 design::quiet_section(ui, title, |ui| {
-                    for item in list(key) {
-                        if let Some(reason) =
-                            item.get("reason").and_then(serde_yaml_ng::Value::as_str)
-                        {
-                            ui.add(egui::Label::new(reason).wrap());
-                        }
+                    for reason in reasons {
+                        ui.add(egui::Label::new(reason).wrap());
                     }
                 });
             }
@@ -1192,46 +1156,91 @@ fn source_and_parity(
 }
 
 fn character_check(ui: &mut egui::Ui, review: &Result<character::check::Review, String>) {
-    use character::check::FindingKind;
-    design::quiet_section(ui, "Character check", |ui| match review {
-        Ok(review) => {
-            ui.add(
-                egui::Label::new(if review.matched.is_empty() {
-                    "Nothing could be compared with the SRD rules.".to_owned()
-                } else {
-                    format!("Matches the SRD rules: {}.", review.matched.join(", "))
-                })
-                .wrap(),
-            );
-            for (kind, title) in [
-                (FindingKind::Differs, "Differs from the SRD rules"),
-                (FindingKind::MissingChoice, "Missing choices"),
-                (FindingKind::InvalidChoice, "Choices the rules do not allow"),
-                (FindingKind::NotChecked, "Not compared"),
-            ] {
-                if review.count(kind) > 0 {
+    design::quiet_section(ui, "Character check", |ui| {
+        for line in technical::check(review) {
+            match line {
+                technical::CheckLine::Title(title) => {
                     ui.label(egui::RichText::new(title).strong());
-                    for finding in review.findings.iter().filter(|f| f.kind == kind) {
-                        ui.add(egui::Label::new(&finding.message).wrap());
-                    }
+                }
+                technical::CheckLine::Words(words) => {
+                    ui.add(egui::Label::new(words).wrap());
                 }
             }
-        }
-        Err(message) => {
-            ui.add(egui::Label::new(format!("The check could not run: {message}")).wrap());
         }
     });
 }
 
 fn campaign_option_status(ui: &mut egui::Ui, entry: &content::Entry) {
-    use content::character::{CampaignOptionState, Sheet};
-    let Some(value) = entry.fields.get("splat_character") else {
-        return;
-    };
-    let Ok(sheet) = serde_yaml_ng::from_value::<Sheet>(value.clone()) else {
+    let Some(lines) = technical::options(entry) else {
         return;
     };
     design::quiet_section(ui, "Optional character rules", |ui| {
+        for line in lines {
+            ui.label(line);
+        }
+        design::help(ui, technical::OPTIONS_HELP);
+    });
+}
+
+/// The technical details' words, free of any toolkit: egui's `source_and_parity` and the GPUI
+/// sheet (`src/gui/pages/party/sheet.rs`) both show them.
+pub mod technical {
+    use splat_character::character;
+    use splat_content::content;
+
+    /// A line of the character check: a group's title, or its words.
+    #[derive(Clone, Debug, PartialEq)]
+    pub enum CheckLine {
+        Title(&'static str),
+        Words(String),
+    }
+
+    /// The help under the optional character rules.
+    pub const OPTIONS_HELP: &str = "Selections follow the D&D Beyond sheet. Active choices can need further details. Simulation support is separate.";
+
+    /// `Character check`: what matches the SRD rules, then each kind of finding under its title.
+    pub fn check(review: &Result<character::check::Review, String>) -> Vec<CheckLine> {
+        use character::check::FindingKind;
+        let review = match review {
+            Ok(review) => review,
+            Err(message) => {
+                return vec![CheckLine::Words(format!(
+                    "The check could not run: {message}"
+                ))];
+            }
+        };
+        let mut lines = vec![CheckLine::Words(if review.matched.is_empty() {
+            "Nothing could be compared with the SRD rules.".to_owned()
+        } else {
+            format!("Matches the SRD rules: {}.", review.matched.join(", "))
+        })];
+        for (kind, title) in [
+            (FindingKind::Differs, "Differs from the SRD rules"),
+            (FindingKind::MissingChoice, "Missing choices"),
+            (FindingKind::InvalidChoice, "Choices the rules do not allow"),
+            (FindingKind::NotChecked, "Not compared"),
+        ] {
+            if review.count(kind) > 0 {
+                lines.push(CheckLine::Title(title));
+                lines.extend(
+                    review
+                        .findings
+                        .iter()
+                        .filter(|finding| finding.kind == kind)
+                        .map(|finding| CheckLine::Words(finding.message.clone())),
+                );
+            }
+        }
+        lines
+    }
+
+    /// `Optional character rules`: each rule's state on the sheet, or `None` when the sheet
+    /// says nothing of them.
+    pub fn options(entry: &content::Entry) -> Option<Vec<String>> {
+        use content::character::{CampaignOptionState, Sheet};
+        let value = entry.fields.get("splat_character")?;
+        let sheet = serde_yaml_ng::from_value::<Sheet>(value.clone()).ok()?;
+        let mut lines = Vec::new();
         for (key, name) in [
             ("dark_bargain", "Dark Bargain"),
             ("character_threads", "Character Threads"),
@@ -1239,13 +1248,13 @@ fn campaign_option_status(ui: &mut egui::Ui, entry: &content::Entry) {
         ] {
             match sheet.campaign_options.get(key) {
                 Some(CampaignOptionState::Inactive) => {
-                    ui.label(format!("{name}: inactive (not granted on the sheet)."));
+                    lines.push(format!("{name}: inactive (not granted on the sheet)."));
                 }
                 Some(CampaignOptionState::Unselected) => {
-                    ui.label(format!("{name}: no effect selected. No effect imported."));
+                    lines.push(format!("{name}: no effect selected. No effect imported."));
                 }
                 Some(CampaignOptionState::Unknown) => {
-                    ui.label(format!("{name}: source selection data is unavailable."));
+                    lines.push(format!("{name}: source selection data is unavailable."));
                 }
                 Some(CampaignOptionState::Active { selections }) => {
                     for selected in selections {
@@ -1254,17 +1263,74 @@ fn campaign_option_status(ui: &mut egui::Ui, entry: &content::Entry) {
                         } else {
                             "needs rule conversion"
                         };
-                        ui.label(format!("{name}: {} ({status}).", selected.name));
+                        lines.push(format!("{name}: {} ({status}).", selected.name));
                     }
                 }
                 None => (),
             }
         }
-        design::help(
-            ui,
-            "Selections follow the D&D Beyond sheet. Active choices can need further details. Simulation support is separate.",
+        Some(lines)
+    }
+
+    /// `Campaign content: 12 inventory rows, 4 action definitions.`
+    pub fn content_counts(entry: &content::Entry) -> String {
+        format!(
+            "Campaign content: {} inventory rows, {} action definitions.",
+            entry.inventory.len(),
+            entry
+                .fields
+                .get("splat_actions")
+                .and_then(serde_yaml_ng::Value::as_mapping)
+                .map_or(0, |v| v.len())
+        )
+    }
+
+    /// What the import left to do: its summary, and each list's reasons under its title.
+    pub struct Import {
+        pub summary: String,
+        pub lists: Vec<(&'static str, Vec<String>)>,
+    }
+
+    /// The import's rules not read yet and its required inputs, when the entry has an import.
+    pub fn import(entry: &content::Entry) -> Option<Import> {
+        let import = entry.fields.get("splat_import")?;
+        let list = |key: &str| {
+            import
+                .get(key)
+                .and_then(serde_yaml_ng::Value::as_sequence)
+                .cloned()
+                .unwrap_or_default()
+        };
+        let summary = format!(
+            "{} not read yet · {} not supported in Splat",
+            crate::design::count(list("gaps").len(), "rule", "rules"),
+            list("engine_gaps")
+                .iter()
+                .filter_map(serde_yaml_ng::Value::as_str)
+                .filter(|gap| !content::adapters::is_implemented(gap))
+                .count()
         );
-    });
+        let lists = [
+            ("Rules still to read", "gaps"),
+            ("Required character or encounter inputs", "required_inputs"),
+        ]
+        .into_iter()
+        .map(|(title, key)| {
+            (
+                title,
+                list(key)
+                    .iter()
+                    .filter_map(|item| {
+                        item.get("reason")
+                            .and_then(serde_yaml_ng::Value::as_str)
+                            .map(str::to_owned)
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+        Some(Import { summary, lists })
+    }
 }
 
 #[cfg(test)]

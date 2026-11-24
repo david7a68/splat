@@ -124,6 +124,15 @@ impl Party {
         }
     }
 
+    /// `Sync this sheet with D&D Beyond`, ticked or cleared by the DM (the GPUI panel; egui's
+    /// is `show_combat_sync`): sync stays off here until they turn it on.
+    pub fn set_combat_sync(&mut self, enabled: bool) {
+        if enabled != self.combat.enabled {
+            self.combat.set_enabled(enabled);
+            self.sync_turned_off = !enabled;
+        }
+    }
+
     /// Combat sync on this page found a conflict. The rail says so, wherever the DM is.
     pub fn sync_conflict(&self) -> bool {
         self.combat.enabled && self.combat.state() == crate::combat_sync::SyncState::Conflict

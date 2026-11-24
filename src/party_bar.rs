@@ -195,6 +195,20 @@ impl Item {
         }
     }
 
+    /// The widths of its parts, for the fit.
+    fn measured(&self) -> Measured {
+        let width = |galley: &Option<Arc<egui::Galley>>| galley.as_ref().map(|g| g.size().x);
+        Measured {
+            first: width(&self.first),
+            initial: width(&self.initial),
+            hp: self.hp_width,
+            temp: width(&self.temp),
+            full_word: width(&self.full_word),
+            icon_word: width(&self.icon_word),
+            stats: self.stats.iter().map(|stat| stat.size().x).collect(),
+        }
+    }
+
     /// The width with the first `shown` stats.
     fn width(&self, shown: usize) -> f32 {
         self.held.max(self.content_width(shown))
@@ -223,7 +237,7 @@ impl Item {
 
 /// Which name each item draws.
 #[derive(Clone, Copy, PartialEq, Debug)]
-enum Names {
+pub enum Names {
     First,
     Initial,
 }
@@ -231,11 +245,11 @@ enum Names {
 /// One way to draw the bar: how many stats, with or without portraits, which names, and
 /// whether the HP state keeps its word.
 #[derive(Clone, Copy, PartialEq, Debug)]
-struct Step {
-    shown: usize,
-    portrait: bool,
-    names: Names,
-    state_word: bool,
+pub struct Step {
+    pub shown: usize,
+    pub portrait: bool,
+    pub names: Names,
+    pub state_word: bool,
 }
 
 /// From the fullest bar down. The optional stats (Per, Ins, DC) drop from the end, down to AC. Then the portraits go together, then AC.
@@ -244,7 +258,7 @@ struct Step {
 /// icon and colour without its word. No item is ever cut off: when even that does not fit, the
 /// items that fit show whole and `N more` names the rest. Every item shows the same parts, and
 /// hover and the accessible name keep everything.
-fn steps(most: usize) -> Vec<Step> {
+pub fn steps(most: usize) -> Vec<Step> {
     let step = |shown, portrait, names, state_word| Step {
         shown,
         portrait,
@@ -280,18 +294,11 @@ fn set(items: &mut [Item], step: Step) {
     }
 }
 
-/// The width of every item drawn as `step` says, and the gaps between them.
-fn needed(items: &mut [Item], step: Step, gap: f32) -> f32 {
-    set(items, step);
-    items.iter().map(|item| item.width(step.shown)).sum::<f32>()
-        + gap * items.len().saturating_sub(1) as f32
-}
-
 /// What a fight holds from frame to frame, in the bar's own state, keyed to the run. The level
 /// may drop when the words need it, but it never rises, and no item narrows, until the fight
 /// ends. A new bar width or a new party measures again.
-#[derive(Clone)]
-struct Hold {
+#[derive(Clone, Debug, PartialEq)]
+pub struct Hold {
     run: Uuid,
     width: f32,
     party: Vec<String>,
@@ -299,6 +306,184 @@ struct Hold {
     step: usize,
     kept: usize,
     widths: Vec<f32>,
+}
+
+/// One item's parts, measured by whichever toolkit draws the bar: each width in points. The fit
+/// ([`fit`]) chooses the parts every item draws.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Measured {
+    /// The first name, and its initial (`B.`).
+    pub first: Option<f32>,
+    pub initial: Option<f32>,
+    /// The HP readout's slots: the current HP and a slash with three digits of maximum.
+    pub hp: f32,
+    /// `+5`, when the member has temporary HP.
+    pub temp: Option<f32>,
+    /// The HP state's icon and word, and its icon alone.
+    pub full_word: Option<f32>,
+    pub icon_word: Option<f32>,
+    /// Each stat as one run: its label, a space, and its value.
+    pub stats: Vec<f32>,
+}
+
+impl Measured {
+    /// The item's width when drawn as `step` says.
+    pub fn width(&self, step: Step) -> f32 {
+        let name = match step.names {
+            Names::First => self.first,
+            Names::Initial => self.initial,
+        };
+        let word = if step.state_word {
+            self.full_word
+        } else {
+            self.icon_word
+        };
+        design::XS
+            + if step.portrait {
+                PORTRAIT + design::XS
+            } else {
+                0.0
+            }
+            + name.map_or(0.0, |w| w + design::S)
+            + self.hp
+            + self.temp.map_or(0.0, |w| design::XS + w)
+            + word.map_or(0.0, |w| design::S + w)
+            + self
+                .stats
+                .iter()
+                .take(step.shown)
+                .map(|w| design::S + w)
+                .sum::<f32>()
+            + design::XS
+    }
+}
+
+/// The room the items have, and what the hold of a fight is keyed to.
+pub struct Room {
+    /// The width the items may take.
+    pub room: f32,
+    /// The gap between two items.
+    pub gap: f32,
+    /// The bar's whole width: a new width measures again.
+    pub bar_width: f32,
+    /// The run being fought, if any.
+    pub fight: Option<Uuid>,
+    /// The members' ids, in order: a new party measures again.
+    pub party: Vec<String>,
+}
+
+/// How the bar is drawn: the step, each item's width, how many items show whole, and what a
+/// fight holds for the next frame (`None` outside a fight).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Fitted {
+    pub step: Step,
+    pub widths: Vec<f32>,
+    pub kept: usize,
+    pub hold: Option<Hold>,
+}
+
+/// Fit the items to the room (see [`steps`]). No item is ever cut off: when even the narrowest
+/// step does not fit, the items that fit show whole and `N more` (`more(hidden)` wide) names the
+/// rest. In a fight (`room.fight`), `held` is the last frame's hold: the level never rises, and
+/// at the same level no item narrows, so nothing after an item moves back while HP changes.
+pub fn fit(
+    items: &[Measured],
+    room: Room,
+    more: impl Fn(usize) -> f32,
+    held: Option<&Hold>,
+) -> Fitted {
+    let Room {
+        room,
+        gap,
+        bar_width,
+        fight,
+        party,
+    } = room;
+    let steps = steps(items.iter().map(|item| item.stats.len()).max().unwrap_or(0));
+    let held = fight.and_then(|run| {
+        held.filter(|hold| {
+            hold.run == run
+                && hold.width == bar_width
+                && hold.party == party
+                && hold.steps == steps.len()
+                && hold.widths.len() == items.len()
+        })
+    });
+    let needed = |step: Step| {
+        items.iter().map(|item| item.width(step)).sum::<f32>()
+            + gap * items.len().saturating_sub(1) as f32
+    };
+    let fitted = steps
+        .iter()
+        .position(|&step| needed(step) <= room)
+        .unwrap_or_else(|| {
+            // Below every step, the narrowest one, so that the most items show whole.
+            (0..steps.len())
+                .min_by(|&a, &b| needed(steps[a]).total_cmp(&needed(steps[b])))
+                .unwrap_or(0)
+        });
+    // How many items show whole, from the first, with these widths.
+    let fit = |widths: &[f32]| {
+        (0..=widths.len())
+            .rev()
+            .find(|&kept| {
+                let shown =
+                    widths[..kept].iter().sum::<f32>() + gap * kept.saturating_sub(1) as f32;
+                let hidden = widths.len() - kept;
+                let count = if hidden == 0 {
+                    0.0
+                } else {
+                    gap + more(hidden) + 2.0 * design::XS
+                };
+                shown + count <= room
+            })
+            .unwrap_or(0)
+    };
+    // Each item's width at this step, with or without the widths a fight held.
+    let measure = |index: usize, hold: Option<&Hold>| {
+        items
+            .iter()
+            .enumerate()
+            .map(|(at, item)| {
+                hold.map_or(0.0, |hold| hold.widths[at])
+                    .max(item.width(steps[index]))
+            })
+            .collect::<Vec<f32>>()
+    };
+    let fresh = fit(&measure(fitted, None));
+    // In a fight the level never rises, and at the same level no item narrows. The held widths
+    // are measured again at the held level each frame. When they would hide a player who shows
+    // without the hold, they are dropped, and the held level stays: its items are no wider than
+    // a fuller level's, so the same players fit.
+    let (index, widths, kept) = match held {
+        Some(hold) if fitted <= hold.step => {
+            let widths = measure(hold.step, Some(hold));
+            let kept = fit(&widths);
+            if kept >= fresh {
+                (hold.step, widths, kept.min(hold.kept).max(fresh))
+            } else {
+                let widths = measure(hold.step, None);
+                let kept = fit(&widths);
+                (hold.step, widths, kept)
+            }
+        }
+        _ => (fitted, measure(fitted, None), fresh),
+    };
+    let hold = fight.map(|run| Hold {
+        run,
+        width: bar_width,
+        party,
+        steps: steps.len(),
+        step: index,
+        kept,
+        widths: widths.clone(),
+    });
+    Fitted {
+        step: steps[index],
+        widths,
+        kept,
+        hold,
+    }
 }
 
 /// The bar's contents. It returns what the DM chose.
@@ -329,103 +514,33 @@ pub fn show(
     let mut items: Vec<Item> = glances.iter().map(|g| Item::measure(ui, g)).collect();
     let room =
         ui.available_width() - label.size().x - design::L - Density::Read.control() - design::S;
-    let steps = steps(items.iter().map(|item| item.stats.len()).max().unwrap_or(0));
-    let held = fight.and_then(|run| {
-        ui.data(|data| data.get_temp::<Hold>(hold_id))
-            .filter(|hold| {
-                hold.run == run
-                    && hold.width == bar_width
-                    && hold.party == party
-                    && hold.steps == steps.len()
-            })
-    });
-    let fitted = steps
-        .iter()
-        .position(|&step| needed(&mut items, step, gap) <= room)
-        .unwrap_or_else(|| {
-            // Below every step, the narrowest one, so that the most items show whole.
-            (0..steps.len())
-                .min_by(|&a, &b| {
-                    needed(&mut items, steps[a], gap).total_cmp(&needed(&mut items, steps[b], gap))
-                })
-                .unwrap_or(0)
-        });
-    // No item is ever cut off. When even the narrowest step does not fit, the items that fit
-    // show whole, and `N more` names the rest on hover and in its accessible name.
     let (painter, small) = (ui.painter().clone(), Type::Small.font(ui));
     let more = |hidden: usize| {
         painter.layout_no_wrap(format!("{hidden} more"), small.clone(), colors().muted)
     };
-    // How many items show whole, from the first, with these widths.
-    let fit = |widths: &[f32]| {
-        (0..=widths.len())
-            .rev()
-            .find(|&kept| {
-                let shown =
-                    widths[..kept].iter().sum::<f32>() + gap * kept.saturating_sub(1) as f32;
-                let hidden = widths.len() - kept;
-                let count = if hidden == 0 {
-                    0.0
-                } else {
-                    gap + more(hidden).size().x + 2.0 * design::XS
-                };
-                shown + count <= room
-            })
-            .unwrap_or(0)
-    };
-    // Each item's width at this step, with or without the widths a fight held.
-    let measure = |items: &mut [Item], index: usize, hold: Option<&Hold>| {
-        set(items, steps[index]);
-        for (at, item) in items.iter_mut().enumerate() {
-            item.held = hold.map_or(0.0, |hold| hold.widths[at]);
-        }
-        items
-            .iter()
-            .map(|item| item.width(steps[index].shown))
-            .collect::<Vec<f32>>()
-    };
-    let fresh = fit(&measure(&mut items, fitted, None));
-    // In a fight the level never rises, and at the same level no item narrows. The held widths
-    // are measured again at the held level each frame. When they would hide a player who shows
-    // without the hold, they are dropped, and the held level stays: its items are no wider than
-    // a fuller level's, so the same players fit.
-    let (index, widths, kept) = match held.as_ref() {
-        Some(hold) if fitted <= hold.step => {
-            let widths = measure(&mut items, hold.step, Some(hold));
-            let kept = fit(&widths);
-            if kept >= fresh {
-                (hold.step, widths, kept.min(hold.kept).max(fresh))
-            } else {
-                let widths = measure(&mut items, hold.step, None);
-                let kept = fit(&widths);
-                (hold.step, widths, kept)
-            }
-        }
-        _ => {
-            let widths = measure(&mut items, fitted, None);
-            (fitted, widths, fresh)
-        }
-    };
-    let step = steps[index];
+    let measured: Vec<Measured> = items.iter().map(Item::measured).collect();
+    let held = ui.data(|data| data.get_temp::<Hold>(hold_id));
+    let fitted = fit(
+        &measured,
+        Room {
+            room,
+            gap,
+            bar_width,
+            fight,
+            party,
+        },
+        |hidden| more(hidden).size().x,
+        held.as_ref(),
+    );
+    let (step, widths, kept) = (fitted.step, fitted.widths, fitted.kept);
     set(&mut items, step);
     for (item, width) in items.iter_mut().zip(&widths) {
         item.stats.truncate(step.shown);
         // Paint each item at the width it was measured with.
         item.held = *width;
     }
-    ui.data_mut(|data| match fight {
-        Some(run) => data.insert_temp(
-            hold_id,
-            Hold {
-                run,
-                width: bar_width,
-                party,
-                steps: steps.len(),
-                step: index,
-                kept,
-                widths: widths.clone(),
-            },
-        ),
+    ui.data_mut(|data| match fitted.hold {
+        Some(hold) => data.insert_temp(hold_id, hold),
         None => data.remove::<Hold>(hold_id),
     });
     // The source is measured by itself, after the items are fitted: it shows whenever the room
