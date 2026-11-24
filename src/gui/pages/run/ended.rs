@@ -184,7 +184,13 @@ fn undo_or_continue(run: &Run, cx: &mut Context<SplatRoot>) -> Vec<AnyElement> {
 /// (`ended_panel`).
 fn ended_panel(run: &Run, width: gpui::Pixels, cx: &mut Context<SplatRoot>) -> impl IntoElement {
     let c = colors();
-    let mut column = div().flex().flex_col().gap(theme::XS);
+    // A sync that has not settled comes first: its choices, and a way to stop it, must be here
+    // or the run cannot close.
+    let mut column = div()
+        .flex()
+        .flex_col()
+        .gap(theme::XS)
+        .children(panel::sync_block(run, cx));
     if !run.setup_details.is_empty() {
         column = column
             .child(kit::Section::new("run-ended-prep", "Prep", false).child(panel::prep(run, cx)));

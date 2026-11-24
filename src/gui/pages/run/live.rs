@@ -42,14 +42,21 @@ pub(super) fn render(
         .is_some_and(|run| std::mem::take(&mut run.scroll_to_selected));
     let resized = root.pages.run.roster_room != Some(height);
     root.pages.run.roster_room = Some(height);
-    let Some(run) = root.app.encounters.run() else {
+    let Some(hide_panel) = root.app.encounters.run().map(|run| run.hide_panel) else {
         return div().into_any_element();
     };
-    let hide_panel = run.hide_panel;
     let roster_width = if hide_panel {
         (room - theme::M).min(px(theme::RUN_LARGE.max_width))
     } else {
         room - side - theme::M
+    };
+    // `E` opens the dock's Effect line while the dock has room for Effect, else the Conditions
+    // tab's field: the dock's room decides it each frame.
+    if let Some(run) = root.app.encounters.run_mut() {
+        run.effect_in_dock = dock::effect_fits(roster_width);
+    }
+    let Some(run) = root.app.encounters.run() else {
+        return div().into_any_element();
     };
     // The roster's box as it was laid out last frame; before the first, an estimate.
     let measured = root.pages.run.roster_box.get();

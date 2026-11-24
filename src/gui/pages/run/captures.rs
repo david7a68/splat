@@ -367,6 +367,12 @@ fn run_sync_states() {
     shell.click("End encounter…");
     shell.click("id:run-end-confirm");
     assert!(matches!(phase(&mut shell), Phase::Ended { .. }));
+    // The ended view keeps the sync's choices and a way to stop it, or the run cannot close.
+    assert!(
+        has_target(&mut shell, "Stop sync for Iselle Marrowind"),
+        "the ended view shows the unsettled sync: {:?}",
+        kit::probe::names()
+    );
     shell.capture("run-sync-states__03-ended-with-conflict__1200x800");
 
     let mut shell = small("run-sync-states", Seed::Campaign);
@@ -601,17 +607,6 @@ fn effect(shell: &mut Shell, name: &str, words: &str) {
     });
 }
 
-fn condition_at(shell: &mut Shell, name: &str, start: &str) -> usize {
-    let at = index(shell, name);
-    with_run(shell, |run| {
-        run.state.participants[at]
-            .conditions
-            .iter()
-            .position(|c| c.words().starts_with(start))
-            .unwrap_or_else(|| panic!("{name} has no {start}"))
-    })
-}
-
 fn effects_on_its_turn(shell: &mut Shell) -> String {
     open_saved(shell, RUN);
     let current = current_name(shell).expect("a turn");
@@ -633,20 +628,12 @@ fn run_effects() {
     effect(&mut shell, ATTACKER, "Hexed until the hag dies");
     effect(&mut shell, ATTACKER, "Legendary actions 3 uses");
     effect(&mut shell, CASTER, "Fire Breath recharge 5-6");
-    let wolf = index(&mut shell, ATTACKER);
-    let uses = condition_at(&mut shell, ATTACKER, "Legendary actions");
-    on_run(&mut shell, |run| {
-        run.run_command(Command::Spend(wolf, uses))
-    });
+    // The counts act from their rows, as the DM's clicks do.
+    shell.click(&format!("Spend one use of Legendary actions of {ATTACKER}"));
     assert!(row_text(&mut shell, ATTACKER).contains("2 of 3"));
-    let cultist = index(&mut shell, CASTER);
-    let breath = condition_at(&mut shell, CASTER, "Fire Breath");
-    on_run(&mut shell, |run| {
-        run.run_command(Command::Recharge(cultist, breath))
-    });
-    on_run(&mut shell, |run| {
-        run.run_command(Command::Recharge(cultist, breath))
-    });
+    shell.click("Mark Fire Breath spent");
+    shell.click("Roll 1d6. 5–6 makes it ready");
+    assert!(row_text(&mut shell, CASTER).contains("Fire Breath"));
     shell.capture("run-effects__02-effects-on-rows__1200x800");
 
     // Beside Lookup: an effect added from Conditions.

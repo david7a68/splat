@@ -419,7 +419,7 @@ fn value_line(label: &'static str, value: String) -> impl IntoElement {
 }
 
 /// `D&D Beyond sync` in setup: each character whose sync has not settled (`sync_block`).
-fn sync_block(run: &Run, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
+pub(super) fn sync_block(run: &Run, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
     let c = colors();
     let names: Vec<(usize, String)> = run
         .syncs
@@ -1005,6 +1005,7 @@ fn conditions(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElemen
     };
     let add_click = add.clone();
     let typing = key.clone();
+    let escaping = key.clone();
     column = column
         .child(
             div()
@@ -1032,7 +1033,18 @@ fn conditions(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElemen
                                 cx.notify();
                             }),
                         )
-                        .on_enter(super::plain(cx, move |root, _, cx| add(root, cx))),
+                        .on_enter(super::plain(cx, move |root, _, cx| add(root, cx)))
+                        // Escape clears the participant's draft, as in the dock's field.
+                        .on_escape(super::plain(cx, move |root, _, cx| {
+                            if let Some(run) = root.app.encounters.run_mut() {
+                                if let Some(field) = run.effect_fields.get_mut(&escaping) {
+                                    field.clear();
+                                }
+                                run.effect_fields.retain(|_, field| !field.words.is_empty());
+                                run.focus_amount = run.state.phase == Phase::Running;
+                            }
+                            cx.notify();
+                        })),
                     ),
                 )
                 .child(

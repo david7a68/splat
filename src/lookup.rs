@@ -777,6 +777,20 @@ impl ContentIndex {
         Ok(index)
     }
 
+    /// The rule of an official condition (`Poisoned`, `Exhaustion (2)`), to open beside a run.
+    /// Words the DM typed for another effect have none.
+    pub fn condition_rule(&self, condition: &str) -> Option<usize> {
+        let name = condition.split(" (").next()?.trim().to_lowercase();
+        if !splat_campaign::encounter_run::effect::CONDITIONS
+            .iter()
+            .any(|(_, official)| official.eq_ignore_ascii_case(&name))
+        {
+            return None;
+        }
+        let wanted = format!("{name} [condition]");
+        self.items.iter().position(|item| item.lower == wanted)
+    }
+
     /// The campaign's tables for the NPC generator, from its world notes and entries. Paths
     /// decide which comes first, so the result does not depend on how the index was built.
     pub fn npc_tables(&self) -> crate::npc_generator::Tables {
