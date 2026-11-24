@@ -6,8 +6,7 @@
 //! list (`list`), the encounter editor (`editor`) and the group editor (`group`).
 use crate::gui::SplatRoot;
 use gpui::{
-    AnyElement, Context, InteractiveElement, IntoElement, KeyBinding, ParentElement, Styled,
-    Window, actions, div,
+    AnyElement, Context, InteractiveElement, IntoElement, ParentElement, Styled, Window, div,
 };
 use splat_encounters_ui::encounters::model::PageShown;
 
@@ -18,14 +17,6 @@ mod group;
 mod list;
 #[cfg(test)]
 mod tests;
-
-actions!(
-    encounters,
-    [
-        /// Ctrl+S: save the open creature, encounter or group.
-        Save,
-    ]
-);
 
 /// This area's GPUI-only state, kept in `root.pages.encounters`.
 #[derive(Default)]
@@ -45,23 +36,19 @@ pub struct State {
 
 /// Once, when the root is built.
 pub(crate) fn init(root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
-    cx.bind_keys([KeyBinding::new("ctrl-s", Save, Some("Encounters"))]);
     root.pages.encounters.focus = Some(cx.focus_handle());
 }
 
 /// Once per frame, before anything draws.
 pub(crate) fn poll(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Context<SplatRoot>) {}
 
-/// Ctrl+S on this page: the open creature while it has changes, else the encounter or group
-/// (`Encounters::save_shortcut`); never under a modal.
-fn save(root: &mut SplatRoot, _: &Save, _: &mut Window, cx: &mut Context<SplatRoot>) {
-    if root.modal_open(cx) {
-        return;
-    }
+/// Ctrl+S on this page (the root's one owner calls it, `pages::save_key`): the open creature
+/// while it has changes, else the encounter or group (`Encounters::save_shortcut`). The Session
+/// page's plan calls it for a group open there.
+pub(crate) fn save_key(root: &mut SplatRoot, _: &mut Context<SplatRoot>) {
     common::with_page(root, |page, ctx, active, campaigns| {
         page.save_by_key_now(ctx, active, campaigns.modules());
     });
-    cx.notify();
 }
 
 /// The page.
@@ -93,8 +80,5 @@ pub(crate) fn render(
         }
         page = page.track_focus(&focus);
     }
-    page.on_action(cx.listener(save))
-        .size_full()
-        .child(body)
-        .into_any_element()
+    page.size_full().child(body).into_any_element()
 }

@@ -8,11 +8,30 @@ use gpui::{Div, Hsla, IntoElement, ParentElement, Pixels, SharedString, Styled, 
 pub fn text(ty: Type, color: Hsla, words: impl Into<SharedString>) -> Div {
     let words = words.into();
     let words = if ty.capitals() {
-        SharedString::from(words.to_uppercase())
+        SharedString::from(tracked(&words.to_uppercase()))
     } else {
         words
     };
     div().ty(ty).text_color(color).child(words)
+}
+
+/// A hair space (U+200A): 0.059 em in IBM Plex Sans, 0.65 px at `Label`'s 11 px.
+const HAIR_SPACE: char = '\u{200A}';
+
+/// `words` with `Label`'s tracking (egui: `extra_letter_spacing` 0.6): a hair space between the
+/// letters of each word. Spaces between words are left as they are, so a label still wraps only
+/// between its words.
+fn tracked(words: &str) -> String {
+    let mut out = String::with_capacity(words.len() * 2);
+    let mut previous: Option<char> = None;
+    for letter in words.chars() {
+        if previous.is_some_and(|p| !p.is_whitespace()) && !letter.is_whitespace() {
+            out.push(HAIR_SPACE);
+        }
+        out.push(letter);
+        previous = Some(letter);
+    }
+    out
 }
 
 /// A Phosphor icon (`gui::icons`) at a role's size, in a colour token. An icon supports words:
@@ -139,4 +158,16 @@ pub fn one_line(ty: Type, color: Hsla, words: impl Into<SharedString>) -> Div {
 /// Turn any `IntoElement` into a boxed element, for heterogeneous lists of children.
 pub fn any(element: impl IntoElement) -> gpui::AnyElement {
     element.into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    /// Label tracking goes between the letters of a word, never beside a space.
+    #[test]
+    fn tracking_is_between_letters() {
+        assert_eq!(
+            super::tracked("IN PLAY 2"),
+            "I\u{200A}N P\u{200A}L\u{200A}A\u{200A}Y 2"
+        );
+    }
 }

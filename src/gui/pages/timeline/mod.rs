@@ -15,26 +15,17 @@ mod tests;
 
 use crate::design::outcome::{Choice, FaultMessage, MessageChoice, Notice, PaneFrame};
 use crate::gui::theme::{
-    Density, HAIRLINE_WIDTH, L, LIST_MEASURE, M, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, RAIL_WIDE_FROM,
-    RAIL_WIDE_WIDTH, RAIL_WIDTH, READER_MEASURE, S, Type, TypeExt, XS, colors,
+    Density, HAIRLINE_WIDTH, L, LIST_MEASURE, M, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, READER_MEASURE,
+    S, Type, TypeExt, XS, colors,
 };
 use crate::gui::{SplatRoot, icons, kit};
 use crate::timeline::page::{ADD_KINDS, FILTERS, ListAct};
 use crate::timeline::{Kind, kind_icon};
 use crate::{Page, timeline};
 use gpui::{
-    AnyElement, Context, InteractiveElement, IntoElement, KeyBinding, ParentElement, Pixels,
-    ScrollHandle, SharedString, Styled, UniformListScrollHandle, Window, actions, div, prelude::*,
-    px,
+    AnyElement, Context, InteractiveElement, IntoElement, ParentElement, Pixels, ScrollHandle,
+    SharedString, Styled, UniformListScrollHandle, Window, div, prelude::*, px,
 };
-
-actions!(
-    timeline,
-    [
-        /// Ctrl+S: save the Timeline now.
-        SaveTimeline
-    ]
-);
 
 /// Two columns from this width of the page; below it the open event takes the list's place.
 const TWO_COLUMNS_FROM: Pixels = px(640.0);
@@ -57,8 +48,12 @@ pub struct State {
 }
 
 /// Once, when the root is built.
-pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
-    cx.bind_keys([KeyBinding::new("ctrl-s", SaveTimeline, Some("Timeline"))]);
+pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Context<SplatRoot>) {}
+
+/// Ctrl+S on this page (the root's one owner calls it, `pages::save_key`): save the Timeline now.
+pub(crate) fn save_key(root: &mut SplatRoot, _: &mut Context<SplatRoot>) {
+    crate::timeline::checks::settle_length(&mut root.app.timeline, None);
+    root.app.timeline.save();
 }
 
 /// Once per frame, before anything draws: what the egui app gives the page before it draws
@@ -100,20 +95,7 @@ pub(crate) fn poll(root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<
 
 /// The page's width: the window less the rail, the side panel and the page's sides.
 fn page_width(root: &SplatRoot, window: &Window) -> Pixels {
-    let window = window.viewport_size().width;
-    let rail = if window >= RAIL_WIDE_FROM {
-        RAIL_WIDE_WIDTH
-    } else {
-        RAIL_WIDTH
-    };
-    let panel = if root.app.lookup.open
-        || (root.app.sessions.notes_open && root.app.page != Page::Sessions)
-    {
-        PANEL_MIN_WIDTH
-    } else {
-        px(0.0)
-    };
-    window - rail - panel - M * 2.0
+    root.page_width(window)
 }
 
 /// The open event's column beside the list (`design::side_panel_width`).
@@ -174,15 +156,6 @@ pub(crate) fn render(
     let mut page = div()
         .key_context("Timeline")
         .track_focus(&focus)
-        .on_action(cx.listener(|root, _: &SaveTimeline, _, cx| {
-            // Under a modal it waits, as every shortcut does.
-            if root.modal_open(cx) {
-                return;
-            }
-            crate::timeline::checks::settle_length(&mut root.app.timeline, None);
-            root.app.timeline.save();
-            cx.notify();
-        }))
         .flex()
         .flex_col()
         .size_full()

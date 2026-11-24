@@ -107,6 +107,8 @@ impl RenderOnce for StatusLink {
             .cursor_pointer()
             .hover(|s| s.bg(c.hover))
             .focusable()
+            .tab_stop(true)
+            .role(gpui::Role::Link)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(
                 self.hint

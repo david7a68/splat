@@ -6,14 +6,12 @@
 use super::with_plan;
 use crate::gui::{SplatRoot, kit, theme};
 use gpui::{
-    AnyElement, App, Context, ElementId, InteractiveElement, IntoElement, KeyBinding,
-    ParentElement, SharedString, Styled, Window, actions, div, prelude::*,
+    AnyElement, App, Context, ElementId, InteractiveElement, IntoElement, ParentElement,
+    SharedString, Styled, Window, div, prelude::*,
 };
 use std::collections::HashMap;
 use theme::{HAIRLINE_WIDTH, L, READER_MEASURE, S, Type, XS, colors};
 use uuid::Uuid;
-
-actions!(session_note, [SaveNote]);
 
 /// The note editors' GPUI state, by session and place (`true`: the Notes panel).
 #[derive(Default)]
@@ -80,9 +78,7 @@ pub(super) fn place_caret(
 
 pub(super) fn init(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) {
     root.pages.sessions.note.slash_keys = Some(super::slash::init(window, cx));
-    cx.bind_keys([KeyBinding::new("ctrl-s", SaveNote, Some("SessionNote"))]);
     super::form::init(cx);
-    super::templates::init(cx);
 }
 
 /// The note frame's width: the reader's measure and the frame's edges.
@@ -175,10 +171,6 @@ pub(super) fn editor(
     let menu = super::slash::render(root, in_panel, cx);
     div()
         .key_context("SessionNote")
-        .on_action(cx.listener(|root, _: &SaveNote, _, cx| {
-            root.app.sessions.gv_save_note();
-            cx.notify();
-        }))
         .relative()
         .size_full()
         .max_w(frame_width())

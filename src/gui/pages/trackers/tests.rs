@@ -65,8 +65,8 @@ fn race_in_play(shell: &mut Shell) {
         root.app.lookup.refresh();
         root.app.lookup.files_changed = true;
     });
-    // The content is read again in the background.
-    for _ in 0..40 {
+    // The content is read again in the background, in real time: up to 20 s while the suite runs.
+    for _ in 0..400 {
         std::thread::sleep(std::time::Duration::from_millis(50));
         shell.wait(std::time::Duration::from_millis(100));
         if shell.read(|root| root.app.trackers.in_play()) {

@@ -223,6 +223,7 @@ fn body(
         .child(
             kit::Columns::new("party-columns")
                 .column(list_width, px(384.0)..px(694.0), list)
+                .saved("party_members")
                 .rest(div().size_full().pl(crate::gui::theme::M).child(sheet)),
         )
         .into_any_element()

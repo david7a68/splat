@@ -133,6 +133,8 @@ impl RenderOnce for NavItem {
             .when(!self.selected, |item| item.hover(|s| s.bg(c.hover)))
             .cursor_pointer()
             .focusable()
+            .tab_stop(true)
+            .role(gpui::Role::Button)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(name)
             .aria_selected(self.selected)
@@ -232,6 +234,8 @@ impl RenderOnce for NavToggle {
             .when(!self.open, |item| item.hover(|s| s.bg(c.hover)))
             .cursor_pointer()
             .focusable()
+            .tab_stop(true)
+            .role(gpui::Role::Button)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(self.label.clone())
             .child(

@@ -180,6 +180,8 @@ fn line(
         .pr(XS)
         .rounded(RADIUS_CONTROL)
         .focusable()
+        .tab_stop(enabled)
+        .role(gpui::Role::CheckBox)
         .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
         .aria_label(label.clone())
         .aria_toggled(toggled)

@@ -1332,6 +1332,11 @@ impl Sessions {
     }
 
     /// The editor took the keyboard: in a narrow page, the note's tab stays.
+    /// Whether the note had the keyboard in the last frame (the Notes panel's Ctrl+S waits for it).
+    pub fn gv_note_had_focus(&self) -> bool {
+        self.note_had_focus
+    }
+
     pub fn gv_note_has_focus(&mut self, in_panel: bool, focused: bool) {
         self.note_had_focus = focused;
         if !in_panel && focused && self.tab == Tab::Plan {

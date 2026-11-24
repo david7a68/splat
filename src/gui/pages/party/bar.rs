@@ -146,7 +146,8 @@ pub(super) fn render(
         .filter(|run| !run.ended())
         .map(crate::encounter_run::Run::id);
     let inert = app.copy_dialog.is_some() || app.confirm_close;
-    let bar_width = window.viewport_size().width - crate::gui::rail::width(root, window) - M * 2.0;
+    let bar_width =
+        window.viewport_size().width - crate::gui::rail::width(root, window, cx) - M * 2.0;
     let room = bar_width
         - kit::measure::width(window, Type::Label, "PARTY")
         - L

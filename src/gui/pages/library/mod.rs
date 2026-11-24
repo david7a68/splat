@@ -27,8 +27,6 @@ use std::sync::Arc;
 actions!(
     library,
     [
-        /// Ctrl+S: save the open draft.
-        Save,
         /// Alt+Left: back to the entry before the last link.
         Back,
         /// Alt+Right: forward to the entry Back left.
@@ -73,7 +71,6 @@ pub struct State {
 /// Once, when the root is built.
 pub(crate) fn init(root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
     cx.bind_keys([
-        KeyBinding::new("ctrl-s", Save, Some("Library")),
         KeyBinding::new("alt-left", Back, Some("Library")),
         KeyBinding::new("alt-right", Forward, Some("Library")),
         // A text field or the editor binds these keys in its own, deeper context first.
@@ -125,20 +122,7 @@ pub(crate) fn link_index(root: &SplatRoot) -> Option<Arc<crate::lookup::ContentI
 
 /// The page's width: the window less the rail, the page's padding and a side panel.
 pub(crate) fn page_width(root: &SplatRoot, window: &Window) -> f32 {
-    let window = window.viewport_size().width;
-    let rail = if window >= theme::RAIL_WIDE_FROM {
-        theme::RAIL_WIDE_WIDTH
-    } else {
-        theme::RAIL_WIDTH
-    };
-    let side =
-        root.app.lookup.open || (root.app.sessions.notes_open && root.app.page != Page::Sessions);
-    let panel = if side {
-        theme::PANEL_MIN_WIDTH
-    } else {
-        px(0.0)
-    };
-    f32::from(window - rail - panel - theme::M * 2.0)
+    f32::from(root.page_width(window))
 }
 
 /// The page.
@@ -172,14 +156,6 @@ pub(crate) fn render(
         .id("library-page")
         .key_context("Library")
         .track_focus(&focus)
-        .on_action(cx.listener(|root, _: &Save, _, cx| {
-            if root.modal_open(cx) {
-                return;
-            }
-            let app = &mut root.app;
-            app.library.save(&app.campaigns);
-            cx.notify();
-        }))
         .on_action(cx.listener(|root, _: &Back, _, cx| {
             if root.modal_open(cx) {
                 return;
@@ -247,6 +223,12 @@ fn list_keys(root: &SplatRoot, window: &Window, cx: &mut Context<SplatRoot>) -> 
         cx.propagate();
         false
     }
+}
+
+/// Ctrl+S on this page (the root's one owner calls it, `pages::save_key`): the open draft.
+pub(crate) fn save_key(root: &mut SplatRoot, _: &mut Context<SplatRoot>) {
+    let app = &mut root.app;
+    app.library.save(&app.campaigns);
 }
 
 /// Escape on the page: a form takes it (it closes), as in egui; else the root's Escape.
@@ -344,18 +326,22 @@ fn body(
     };
     let mut columns = kit::Columns::new(layout);
     if let Some(sections) = sections {
-        columns = columns.column(
-            px(166.0) + lane + theme::S,
-            px(150.0) + lane + theme::S..px(280.0) + lane + theme::S,
-            div().size_full().pr(theme::S).child(sections),
-        );
+        columns = columns
+            .column(
+                px(166.0) + lane + theme::S,
+                px(150.0) + lane + theme::S..px(280.0) + lane + theme::S,
+                div().size_full().pr(theme::S).child(sections),
+            )
+            .saved("library_sections");
     }
     if let Some(entries) = entries {
-        columns = columns.column(
-            px(list_width),
-            px(220.0)..px(560.0),
-            div().size_full().px(theme::S).child(entries),
-        );
+        columns = columns
+            .column(
+                px(list_width),
+                px(220.0)..px(560.0),
+                div().size_full().px(theme::S).child(entries),
+            )
+            .saved("library_entries");
     }
     columns.rest(reader).into_any_element()
 }

@@ -19,7 +19,7 @@ mod templates;
 mod tests;
 
 use crate::Splat;
-use crate::gui::{SplatRoot, icons, kit, rail, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::processing::settings::ProcessingSettings;
 use crate::sessions::page::{Plan, Sessions};
 use crate::timeline::Book;
@@ -63,12 +63,7 @@ pub(crate) fn poll(root: &mut SplatRoot, window: &mut Window, _cx: &mut Context<
 
 /// The page's room: the window, less the rail, the side panel and the page's padding.
 pub(super) fn page_width(root: &SplatRoot, window: &Window) -> Pixels {
-    let mut width = window.viewport_size().width - rail::width(root, window) - M * 2.0;
-    let app = &root.app;
-    if app.lookup.open || (app.sessions.notes_open && app.page != crate::Page::Sessions) {
-        width -= theme::PANEL_MIN_WIDTH + theme::HAIRLINE_WIDTH;
-    }
-    width
+    root.page_width(window)
 }
 
 /// Run `act` with the page's state and what the rest of the app tells it about fights
@@ -405,8 +400,23 @@ fn notes_view(
     let list = div().size_full().pr(S).child(list::render(root, cx));
     kit::Columns::new("session-columns")
         .column(LIST_WIDTH, LIST_MIN..LIST_MAX, list)
+        .saved("session_list_panel")
         .rest(div().size_full().pl(S).child(body))
         .into_any_element()
+}
+
+/// Ctrl+S on the Session page (`pages::save_key`): the shown template's draft; a group open in
+/// the plan while the note does not have the keyboard (`Encounters::group_open_in_plan`); else
+/// the note, which saves at once.
+pub(crate) fn save_key(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) {
+    let sessions = &mut root.app.sessions;
+    if sessions.gv_templates_shown() {
+        sessions.gv_save_template();
+    } else if root.app.encounters.group_open_in_plan() && !root.app.sessions.gv_note_had_focus() {
+        super::encounters::save_key(root, cx);
+    } else {
+        root.app.sessions.gv_save_note();
+    }
 }
 
 /// The note in the side panel beside another page (`Sessions::notes_panel`).

@@ -18,6 +18,8 @@ pub(super) fn render(
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
+    // The search field's room: the panel's width less its sides.
+    let width = root.side_width().unwrap_or(PANEL_MIN_WIDTH) - M * 2.0;
     let lookup = &mut root.app.lookup;
     let query = lookup.refresh_matches();
     let focus = lookup.take_focus_search();
@@ -59,7 +61,6 @@ pub(super) fn render(
                 },
             )),
         );
-    let width = PANEL_MIN_WIDTH - M * 2.0;
     let field = TextField::new("lookup_search", lookup.query().to_owned())
         .placeholder(search_hint(f32::from(width)))
         .name(crate::lookup::SEARCH_NAME)

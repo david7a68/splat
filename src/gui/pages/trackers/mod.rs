@@ -69,6 +69,7 @@ struct TrackerView {
 
 struct Laid {
     revision: Revision,
+    room: Pixels,
     due: Vec<DueRow>,
     trackers: Vec<TrackerView>,
     name: Pixels,
@@ -79,17 +80,18 @@ struct Laid {
 const NAME_SHARE: f32 = 0.4;
 
 /// The room inside the panel: its width less the view's sides and the scroll bar's lane.
-fn panel_room() -> Pixels {
-    PANEL_MIN_WIDTH - M * 2.0 - SCROLL_BAR_WIDTH
+fn panel_room(panel: Option<Pixels>) -> Pixels {
+    panel.unwrap_or(PANEL_MIN_WIDTH) - M * 2.0 - SCROLL_BAR_WIDTH
 }
 
-/// Lay the view out for the trackers' revision: once per revision, never on a quiet frame.
-fn lay(state: &mut State, trackers: &Trackers, window: &Window) {
+/// Lay the view out for the trackers' revision and the panel's room: once per change, never on
+/// a quiet frame.
+fn lay(state: &mut State, trackers: &Trackers, room: Pixels, window: &Window) {
     let revision = trackers.revision();
     if state
         .laid
         .as_ref()
-        .is_some_and(|laid| laid.revision == revision)
+        .is_some_and(|laid| laid.revision == revision && laid.room == room)
     {
         return;
     }
@@ -106,7 +108,6 @@ fn lay(state: &mut State, trackers: &Trackers, window: &Window) {
             })
         })
         .collect();
-    let room = panel_room();
     let keys: Vec<String> = rules.trackers.iter().map(|t| t.key.clone()).collect();
     if keys != state.widest_keys {
         state.widest_keys = keys;
@@ -165,6 +166,7 @@ fn lay(state: &mut State, trackers: &Trackers, window: &Window) {
         .collect();
     state.laid = Some(Laid {
         revision,
+        room,
         due,
         trackers: trackers_laid,
         name,
@@ -376,7 +378,8 @@ fn body(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) 
             .child(fault_message(&fault, false))
             .into_any_element();
     }
-    lay(&mut root.pages.trackers, &root.app.trackers, window);
+    let room = panel_room(root.side_width());
+    lay(&mut root.pages.trackers, &root.app.trackers, room, window);
     let focus = root.app.trackers.take_focus_asking();
     let trackers = &root.app.trackers;
     let state = &root.pages.trackers;

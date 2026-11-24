@@ -13,21 +13,40 @@ use theme::{RAIL_ITEM_GAP, S, Type, XS, colors};
 /// The campaign switcher's slot: two `Small` lines of a long name and its frame.
 const SELECTOR_HEIGHT: f32 = 44.0;
 
-/// The rail's width: wider in a wide window, except at the table (the run page).
-pub fn width(root: &SplatRoot, window: &Window) -> gpui::Pixels {
+/// The rail's column (`Splat::rail`, `Column::left("navigation", …)`): wider in a wide window,
+/// except at the table (the run page); the DM can drag it wider, up to `RAIL_DRAG_MAX_WIDTH`,
+/// but not at the table, where the roster needs the room.
+pub fn column(root: &SplatRoot, window: &Window) -> kit::EdgeColumn {
     let at_table = root.app.visible_page() == Some(Page::Run);
-    if !at_table && window.viewport_size().width >= theme::RAIL_WIDE_FROM {
+    let natural = if !at_table && window.viewport_size().width >= theme::RAIL_WIDE_FROM {
         theme::RAIL_WIDE_WIDTH
     } else {
         theme::RAIL_WIDTH
-    }
+    };
+    let widest = if at_table {
+        natural
+    } else {
+        theme::RAIL_DRAG_MAX_WIDTH
+    };
+    kit::EdgeColumn::new(
+        "navigation",
+        kit::edge::Side::Left,
+        natural,
+        theme::RAIL_WIDTH..=widest,
+    )
+    .page_keeps(theme::RAIL_LEAVES_WINDOW)
+}
+
+/// The rail's width now: its natural width, or the one the DM dragged it to.
+pub fn width(root: &SplatRoot, window: &Window, cx: &gpui::App) -> gpui::Pixels {
+    column(root, window).width(window.viewport_size().width, cx)
 }
 
 /// Draw the rail.
 pub fn render(
     root: &mut SplatRoot,
     connection: crate::Connection,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> gpui::Stateful<Div> {
     let c = colors();
@@ -75,9 +94,7 @@ pub fn render(
         .id("rail")
         .flex()
         .flex_col()
-        .flex_none()
-        .w(width(root, window))
-        .h_full()
+        .size_full()
         .p(S)
         .bg(c.rail)
         .border_r(theme::HAIRLINE_WIDTH)

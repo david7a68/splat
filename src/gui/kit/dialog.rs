@@ -4,8 +4,9 @@
 //! Its look: a raised layer `XXL` from the window's top, `FORM_WIDTH` wide at most, a dim backdrop
 //! that takes every press, the title in `Section` type, the body, then one action line: the
 //! destructive action at the left, then at least `L`, then the safe action and the commit at the
-//! right, commit last. The dialog takes the keyboard when it opens; Escape is the safe action
-//! (`on_escape`). Draw it as the last child of the page or the root while it is open; it covers
+//! right, commit last. The dialog takes the keyboard when it opens and keeps Tab and Shift+Tab
+//! inside it (gpui-component's focus trap, which the window root's Tab honours); Escape is the
+//! safe action (`on_escape`). Draw it as the last child of the page or the root while it is open; it covers
 //! the window wherever it is drawn.
 use crate::gui::theme::{
     DIALOG_INSET, FORM_WIDTH, HAIRLINE_WIDTH, L, RADIUS_LAYER, S, Type, XS, colors,
@@ -15,6 +16,7 @@ use gpui::{
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, anchored, deferred, div,
     point, prelude::*, px,
 };
+use gpui_component::FocusTrapElement;
 use std::rc::Rc;
 
 /// The Escape of the dialog drawn in this frame, so the root's Escape reaches it wherever the
@@ -148,6 +150,8 @@ impl RenderOnce for Dialog {
         let frame = div()
             .id(self.id.clone())
             .track_focus(&focus)
+            .role(gpui::Role::Dialog)
+            .aria_label(self.title.clone())
             .flex()
             .flex_col()
             .gap(XS)
@@ -180,7 +184,14 @@ impl RenderOnce for Dialog {
                     .overflow_y_scroll()
                     .children(self.body),
             )
-            .child(line);
+            .child(line)
+            .focus_trap(
+                ElementId::NamedChild(
+                    std::sync::Arc::new(self.id.clone()),
+                    SharedString::new_static("trap"),
+                ),
+                &focus,
+            );
         deferred(
             anchored().position(point(px(0.0), px(0.0))).child(
                 div()

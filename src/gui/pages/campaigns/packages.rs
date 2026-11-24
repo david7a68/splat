@@ -150,26 +150,18 @@ pub(super) fn render(
     if unheld && !root.modal_open(cx) {
         window.focus(&focus, cx);
     }
-    let save_active = active.clone();
     gpui::div()
         .id("campaign-content-keys")
         .key_context("CampaignPackages")
         .track_focus(&focus)
         .size_full()
-        .on_action(cx.listener(move |root, _: &super::Save, _, cx| {
-            if root.modal_open(cx) {
-                return;
-            }
-            save_key(root, &save_active);
-            cx.notify();
-        }))
         .child(pane)
         .into_any_element()
 }
 
 /// Ctrl+S on Packages: the first open repair whose Save can write, else `Save selections`
 /// while no repair stands (`save_shortcut`, `save_key`).
-fn save_key(root: &mut SplatRoot, active: &crate::persistence::Campaign) {
+pub(super) fn save_key(root: &mut SplatRoot, active: &crate::persistence::Campaign) {
     let open = root.pages.campaigns.repairs_open.clone();
     let open_of = |path: &str| open.contains(path);
     let content = &root.app.campaign_content;

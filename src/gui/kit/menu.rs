@@ -7,8 +7,9 @@
 //!
 //! One layer is open at a time. The kit keeps which one in a GPUI global (`OpenPopup`), so a
 //! caller keeps no open flag: a press on the trigger opens or closes it, a press outside closes
-//! it, a choice closes it, and the root's Escape closes it (`close_open_popup`). The layer keeps
-//! inside the window, one `S` clear of its edges.
+//! it, a choice closes it, and the root's Escape closes it (`close_open_popup`). The layer opens
+//! under its trigger, or above it when there is more room there, inside the pane or column that
+//! holds the trigger (`kit::layer`, egui's `popups`); a long one scrolls.
 use super::{OnClick, button::element_name, target, tooltip::tip};
 use crate::gui::icons;
 use crate::gui::theme::{
@@ -18,7 +19,7 @@ use crate::gui::theme::{
 use gpui::{
     AnyElement, App, ClickEvent, Div, ElementId, Global, InteractiveElement, IntoElement,
     ParentElement, Pixels, Point, RenderOnce, SharedString, StatefulInteractiveElement, Styled,
-    Window, anchored, deferred, div, prelude::*, px,
+    Window, div, prelude::*, px,
 };
 use std::rc::Rc;
 
@@ -102,46 +103,51 @@ impl DownPosition for ClickEvent {
     }
 }
 
-/// The raised layer under a trigger.
-fn layer(id: &ElementId, min_width: Option<Pixels>, content: impl IntoElement) -> impl IntoElement {
+/// The raised layer's frame around `content`: at most as wide and tall as its room allows, and
+/// it scrolls past that. A press outside it closes it.
+fn frame(id: ElementId, content: AnyElement, widest: Pixels, tallest: Pixels) -> AnyElement {
     let c = colors();
-    let closing = id.clone();
-    // `anchored` starts at its parent's origin: a box of no height under the trigger puts the
-    // layer's top at the trigger's bottom edge.
-    div().w_full().h(px(0.0)).child(
-        deferred(
-            anchored().snap_to_window_with_margin(S).child(
-                div()
-                    .id(ElementId::NamedChild(
-                        std::sync::Arc::new(closing),
-                        SharedString::new_static("layer"),
-                    ))
-                    .mt(XS)
-                    .when_some(min_width, |layer, width| layer.min_w(width))
-                    .p(XS)
-                    .bg(c.raised)
-                    .border(HAIRLINE_WIDTH)
-                    .border_color(c.rule)
-                    .rounded(RADIUS_LAYER)
-                    .shadow_lg()
-                    .occlude()
-                    .on_mouse_down_out(|event, window, cx| {
-                        let popup = cx.default_global::<OpenPopup>();
-                        popup.open = None;
-                        popup.closed_at = Some(event.position);
-                        window.refresh();
-                    })
-                    .child(content),
-            ),
-        )
-        .with_priority(1),
-    )
+    div()
+        .id(ElementId::NamedChild(
+            std::sync::Arc::new(id),
+            SharedString::new_static("layer"),
+        ))
+        .max_w(widest)
+        .max_h(tallest)
+        .overflow_y_scroll()
+        .p(XS)
+        .bg(c.raised)
+        .border(HAIRLINE_WIDTH)
+        .border_color(c.rule)
+        .rounded(RADIUS_LAYER)
+        .shadow_lg()
+        .occlude()
+        .role(gpui::Role::Menu)
+        .on_mouse_down_out(|event, window, cx| {
+            let popup = cx.default_global::<OpenPopup>();
+            popup.open = None;
+            popup.closed_at = Some(event.position);
+            window.refresh();
+        })
+        .child(content)
+        .into_any_element()
+}
+
+/// `container` (the trigger's box) with the layer of `id` open from it (`kit::layer::attach`).
+/// `match_width`: the layer is at least as wide as the trigger (a drop-down's list).
+fn open_from(container: Div, id: &ElementId, match_width: bool, content: impl IntoElement) -> Div {
+    let layer = id.clone();
+    let content = content.into_any_element();
+    super::layer::attach(container, id, match_width, move |widest, tallest| {
+        frame(layer, content, widest, tallest)
+    })
 }
 
 /// The raised layer of `id` for a menu that opens from code, such as a row's right-click menu
-/// (`open_popup`): draw it after the element it belongs to while `is_open(id)`.
+/// (`open_popup`): draw it after the element it belongs to while `is_open(id)`. It opens under the
+/// place it is drawn, or above it when there is more room there.
 pub fn layer_for(id: &ElementId, content: impl IntoElement) -> impl IntoElement {
-    layer(id, None, content)
+    open_from(div().w_full().h(px(0.0)), id, false, content)
 }
 
 /// One choice in a menu: its words, an optional icon, and a reason when it is blocked (shown as
@@ -233,6 +239,8 @@ impl MenuItem {
             .rounded(RADIUS_CONTROL)
             .text_color(words_color)
             .focusable()
+            .tab_stop(enabled)
+            .role(gpui::Role::MenuItem)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(self.label.clone())
             .when(icon_slot, |row| {
@@ -246,10 +254,13 @@ impl MenuItem {
                         }),
                 )
             })
+            // The words keep one line while the layer's room allows; a narrow room wraps them
+            // (egui's `choice_wrapped_height`).
             .child(
                 div()
+                    .flex_1()
+                    .min_w_0()
                     .ty(Type::Body)
-                    .whitespace_nowrap()
                     .child(self.label.clone()),
             );
         if enabled {
@@ -330,9 +341,12 @@ impl RenderOnce for MenuButton {
         let trigger = self
             .trigger
             .on_click(move |event, window, cx| toggle(&id, event, window, cx));
-        div().flex().flex_col().child(trigger).when(open, |menu| {
-            menu.child(layer(&self.id, None, items(&self.id, self.items)))
-        })
+        let menu = div().flex().flex_col().child(trigger);
+        if open {
+            open_from(menu, &self.id, false, items(&self.id, self.items))
+        } else {
+            menu
+        }
     }
 }
 
@@ -457,6 +471,8 @@ impl RenderOnce for Dropdown {
             .border(HAIRLINE_WIDTH)
             .border_color(c.field_border)
             .focusable()
+            .tab_stop(enabled)
+            .role(gpui::Role::ComboBox)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(self.name.clone())
             .aria_expanded(open)
@@ -513,15 +529,17 @@ impl RenderOnce for Dropdown {
             })
             .collect();
         choices.extend(self.extra);
-        div()
+        let column = div()
             .flex()
             .flex_col()
             .when_some(self.width, |column, width| column.w(width))
             .when(self.width.is_none(), |column| column.w_full())
-            .child(trigger)
-            .when(open && enabled, |column| {
-                column.child(layer(&self.id, self.width, items(&self.id, choices)))
-            })
+            .child(trigger);
+        if open && enabled {
+            open_from(column, &self.id, true, items(&self.id, choices))
+        } else {
+            column
+        }
     }
 }
 
@@ -580,13 +598,12 @@ impl RenderOnce for Popover {
             Trigger::Button(button) => button.on_click(toggle).into_any_element(),
             Trigger::Status(link) => link.on_click(toggle).into_any_element(),
         };
-        div()
-            .flex()
-            .flex_col()
-            .child(trigger)
-            .when(open, |popover| {
-                popover.child(layer(&self.id, None, self.content))
-            })
+        let popover = div().flex().flex_col().child(trigger);
+        if open {
+            open_from(popover, &self.id, false, self.content)
+        } else {
+            popover
+        }
     }
 }
 
@@ -624,8 +641,11 @@ impl RenderOnce for StatusMenu {
             self.status,
         )
         .on_click(move |event, window, cx| toggle(&id, event, window, cx));
-        div().flex().flex_col().child(trigger).when(open, |menu| {
-            menu.child(layer(&self.id, None, items(&self.id, self.items)))
-        })
+        let menu = div().flex().flex_col().child(trigger);
+        if open {
+            open_from(menu, &self.id, false, items(&self.id, self.items))
+        } else {
+            menu
+        }
     }
 }

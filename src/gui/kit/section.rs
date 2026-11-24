@@ -86,6 +86,8 @@ impl RenderOnce for Section {
             .rounded(RADIUS_CONTROL)
             .text_color(color)
             .focusable()
+            .tab_stop(enabled)
+            .role(gpui::Role::Button)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(self.title.clone())
             .aria_expanded(open)
