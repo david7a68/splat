@@ -77,8 +77,18 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 url = "2.5"
 # Graphemes: a fact line breaks a long word only between whole characters (design::fact).
 unicode-segmentation = "1.13"
+# The GPUI UI (`src/gui/`, docs/gpui-port.md). gpui-component wraps the hard widgets; pages use
+# only `gui::kit`.
+gpui = { package = "gpui-pre", version = "0.3.14" }
+gpui_platform = { package = "gpui-pre-platform", version = "0.3.14", features = ["wayland", "x11"] }
+gpui-component = "0.11"
 
 [dev-dependencies]
+gpui = { package = "gpui-pre", version = "0.3.14", features = ["test-support"] }
+gpui_platform = { package = "gpui-pre-platform", version = "0.3.14", features = ["wayland", "x11", "test-support"] }
+# The screenshot harness's text system: only Splat's own fonts, so captures do not depend on the
+# machine's fonts (`gui::harness`).
+gpui_wgpu = { package = "gpui-pre-wgpu", version = "0.3.14", features = ["test-support"] }
 splat-library-page = { path = "src/library_page", features = ["test-support"] }
 splat-campaign-packages = { path = "src/campaign_packages", features = ["test-support"] }
 splat-sessions-ui = { path = "src/sessions_ui", features = ["test-support"] }
