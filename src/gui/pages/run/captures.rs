@@ -425,6 +425,10 @@ fn run_add_creature() {
 
     select(&mut shell, "Ghost of the Mill");
     on_run(&mut shell, |run| run.panel = Panel::Reference);
+    shell.settle();
+    // Nine rows fit the roster: nothing scrolls and no line says what is out of view.
+    let end = shell.read(|root| f32::from(root.pages.run.roster_scroll.max_offset().y));
+    assert!(end < 1.0, "the roster of nine scrolls by {end}");
     shell.capture("run-add-creature__05-made-up-creature-sheet__1200x800");
 
     let ghost = index(&mut shell, "Ghost of the Mill");

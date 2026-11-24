@@ -1482,7 +1482,9 @@ fn arrivals(run: &Run, room: Pixels, window: &Window, cx: &mut Context<SplatRoot
     if run.groups.as_ref().is_some_and(|groups| !groups.is_empty()) {
         column = column.child(kit::help("Drag a group name to the list, or use Add."));
     }
-    column = column.child(creature_form(run, cx)).child(kit::rule());
+    column = column
+        .child(creature_form(run, window, cx))
+        .child(kit::rule());
     let Some(groups) = run.groups.clone() else {
         return column
             .child(kit::label("Encounter groups", 0))
@@ -1856,7 +1858,7 @@ fn group_row(
 }
 
 /// Find or make up a creature (`add_creature_form`).
-fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn creature_form(run: &Run, window: &Window, cx: &mut Context<SplatRoot>) -> AnyElement {
     let c = colors();
     let mut column = div().flex().flex_col().gap(theme::XS);
     if let Some(picked) = run.ad_hoc.picked.clone() {
@@ -1939,6 +1941,12 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
             "Made up here. It stays in this fight.",
         ));
     }
+    // A field fits its placeholder whole (`Needed`, a stat block's `11`): the words, the
+    // field's frame and padding, and the caret. A field keeps its first placeholder, so a new
+    // one is a new field.
+    let fits = |hint: &str, least: f32| {
+        (f32::from(super::measure::width(window, Type::Body, hint)) + FIELD_CHROME).max(least)
+    };
     let field = |id: &'static str,
                  label: &'static str,
                  name: &'static str,
@@ -1956,7 +1964,7 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
             .child(kit::text(Type::Small, c.muted, label))
             .child(
                 div().key_context("RunField").w(px(width)).child(
-                    kit::TextField::new(id, value)
+                    kit::TextField::new(ElementId::Name(format!("{id}-{hint}").into()), value)
                         .placeholder(hint)
                         .name(name)
                         .focus(focus)
@@ -1992,7 +2000,7 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                     "New creature count",
                     form.count.clone(),
                     "1".into(),
-                    52.0,
+                    fits("99", 52.0),
                     false,
                     |form, words| form.count = words,
                     cx,
@@ -2003,7 +2011,7 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                     "New creature HP",
                     form.hp.clone(),
                     add.hp_hint.clone(),
-                    64.0,
+                    fits(&add.hp_hint, 64.0),
                     form.focus_hp,
                     |form, words| form.hp = words,
                     cx,
@@ -2014,7 +2022,7 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                     "New creature AC",
                     form.ac.clone(),
                     add.ac_hint.clone(),
-                    52.0,
+                    fits(&add.ac_hint, 52.0),
                     false,
                     |form, words| form.ac = words,
                     cx,
@@ -2033,7 +2041,7 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                     "New creature initiative total",
                     form.total.clone(),
                     "Roll".into(),
-                    52.0,
+                    fits("Roll", 52.0),
                     false,
                     |form, words| form.total = words,
                     cx,
@@ -2055,6 +2063,10 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
         );
     column.into_any_element()
 }
+
+/// A one-line field's room around its words: the frame's padding and hairlines, the input's own
+/// padding (`gpui_component` medium: 10 px a side) and the caret.
+const FIELD_CHROME: f32 = 2.0 * 4.0 + 2.0 + 2.0 * 10.0 + 4.0;
 
 /// The made-up creature's side.
 fn side_choice(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {

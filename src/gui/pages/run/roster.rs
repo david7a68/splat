@@ -208,10 +208,26 @@ impl Plan {
     }
 }
 
+/// How a list uses room it does not need.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(super) enum Spare {
+    /// The live roster: spare room goes to the rows, so no gap opens under the list.
+    ToRows,
+    /// The ended view's final state: rows keep their scale's height, and the loot follows.
+    Keep,
+}
+
 /// The run's list of rows in `width` (inside the scroll column's lane) and `room`: its scale, then each row
-/// laid out in the measured columns; spare room goes to the rows; a list that needs the height
-/// compresses, then summarises, and the rest scrolls under a line that counts it.
-pub(super) fn plan(run: &Run, order: &[usize], width: f32, room: f32, window: &Window) -> Plan {
+/// laid out in the measured columns; spare room goes to the rows (`Spare`); a list that needs the
+/// height compresses, then summarises, and the rest scrolls under a line that counts it.
+pub(super) fn plan(
+    run: &Run,
+    order: &[usize],
+    width: f32,
+    room: f32,
+    spare: Spare,
+    window: &Window,
+) -> Plan {
     let count = order.len();
     let mut scale = RunScale::fit(room, width, count);
     let total = |rows: &[RowPlan]| -> f32 { rows.iter().map(|row| row.height).sum() };
@@ -228,9 +244,11 @@ pub(super) fn plan(run: &Run, order: &[usize], width: f32, room: f32, window: &W
     let (mut fit, mut even) = (Fit::Natural, 0.0);
     if natural <= room {
         // Spare room goes to the rows, so a short list leaves no gap under it.
-        let spare = room - natural - 2.0;
-        let share = spare.max(0.0) / count.max(1) as f32;
-        scale.row += share.min(scale.row * 0.4);
+        if spare == Spare::ToRows {
+            let left = room - natural - 2.0;
+            let share = left.max(0.0) / count.max(1) as f32;
+            scale.row += share.min(scale.row * 0.4);
+        }
     } else {
         fit = Fit::Compressed;
         // What is left goes back to the rows, shortest first, so the pitch evens out.

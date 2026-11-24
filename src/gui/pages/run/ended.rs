@@ -45,6 +45,7 @@ pub(super) fn render(
         &order,
         f32::from(rows_width - theme::S - theme::SCROLL_BAR_WIDTH),
         f32::from(height) - 160.0,
+        roster::Spare::Keep,
         window,
     );
     let scale = plan.scale;
@@ -77,22 +78,27 @@ pub(super) fn render(
         .child(save_status(run))
         .children(undo_or_continue(run, cx))
         .child(close);
-    let rows: Vec<AnyElement> = order
+    // Only the rows in view (and a view's height each side) are built, as in the live roster:
+    // a long roster's end costs a frame what a short one does (`kit::placed_rows`). The rows
+    // start under the heading, well inside that margin.
+    let handle = root.pages.run.final_scroll.clone();
+    let places: Vec<(f32, f32)> = plan
+        .spans(&order)
         .iter()
-        .enumerate()
-        .map(|(at, &index)| {
-            roster::row(
-                root,
-                run,
-                index,
-                roster::TurnMark::None,
-                &plan,
-                at,
-                roster::Use::Final,
-                cx,
-            )
-        })
+        .map(|&(top, bottom, _)| (top, bottom))
         .collect();
+    let rows = kit::placed_rows(&places, &handle, f32::from(height), |at| {
+        roster::row(
+            root,
+            run,
+            order[at],
+            roster::TurnMark::None,
+            &plan,
+            at,
+            roster::Use::Final,
+            cx,
+        )
+    });
     let left = div()
         .flex()
         .flex_col()
@@ -100,15 +106,16 @@ pub(super) fn render(
         .flex_none()
         .h_full()
         .pr(theme::S)
-        .child(kit::scroll_column(
+        .child(kit::scroll::scroll_column_with(
             "run-final-state",
+            &handle,
             div()
                 .flex()
                 .flex_col()
                 .max_w(px(scale.max_width))
                 .child(kit::label("Final state", 0))
                 .child(kit::gap(theme::XS))
-                .children(rows)
+                .child(rows)
                 .child(kit::gap(theme::L))
                 .children(loot_section(run, cx)),
         ));

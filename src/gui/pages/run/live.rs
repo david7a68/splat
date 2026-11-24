@@ -83,6 +83,7 @@ pub(super) fn render(
         &order,
         f32::from(roster_width - theme::SCROLL_BAR_WIDTH),
         roster_room,
+        roster::Spare::ToRows,
         window,
     );
     let scale = plan.scale;
@@ -141,7 +142,12 @@ pub(super) fn render(
             cx,
         )
     });
-    let overflow_line = overflow_note(run, &handle, &spans, list_height);
+    // Only a list the plan cannot fit has the line: one drawn for a list that fits takes its
+    // own height from the rows and then keeps itself (the rows no longer fit beside it).
+    let overflow_line = plan
+        .overflow
+        .then(|| overflow_note(run, &handle, &spans, list_height))
+        .flatten();
     let header_sheet = header::sheet_in_header(run, roster_width, window).is_some();
     let notice = live_notice(run, header_sheet, cx);
     let messages = footer::messages(run, false, cx);
