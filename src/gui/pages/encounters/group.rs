@@ -61,9 +61,7 @@ pub(super) fn render(
         .map_or(page, |room| room.min(page));
     let narrow = content < NARROW;
     // The Add creatures column keeps its own width here: the group editor does not drag it.
-    let add_width = px(crate::design::side_panel_width(f32::from(content)))
-        .max(content - LIST_MEASURE)
-        .min(super::editor::ADD_PANE_MAX_WIDTH);
+    let add_width = super::editor::natural_add_width(content, window);
     let members_width = (content - add_width).clamp(PANEL_MIN_WIDTH, LIST_MEASURE);
     let head = head(
         &view,
@@ -82,7 +80,7 @@ pub(super) fn render(
                         fields(root, GroupAt::Open, &view.fields, cx).max_w(LIST_MEASURE),
                     ));
                 let room = if narrow { content } else { add_width - M };
-                let facts = super::editor::results_facts(root, &add, room, window);
+                let columns = super::editor::results_columns(root, &add, room, window);
                 if narrow {
                     let summary = view.summary.clone();
                     let side = add_column_with(
@@ -90,7 +88,7 @@ pub(super) fn render(
                         &[],
                         choices.as_ref(),
                         (focus_search, false, Some(&summary)),
-                        (&handle, facts),
+                        (&handle, columns),
                         cx,
                     );
                     narrow_body(root, &view, members, side.into_any_element(), cx)
@@ -113,7 +111,7 @@ pub(super) fn render(
                                 &[],
                                 choices.as_ref(),
                                 (focus_search, true, None),
-                                (&handle, facts),
+                                (&handle, columns),
                                 cx,
                             ),
                         ))

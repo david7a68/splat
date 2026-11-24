@@ -652,15 +652,24 @@ fn group_row(row: &GroupRow, columns: &Columns, cx: &mut Context<SplatRoot>) -> 
                 }),
             )
         };
+        // The list fits a fault's single repair beside its words, as a framed button
+        // (`BodyMessage::row_repair`); it wraps under them only when the line has no room.
         block = block.child(
-            kit::Message::new(kit::messages::tone(fault.tone), fault.words.clone())
-                .small()
-                .action(
-                    kit::Button::quiet(
+            div()
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .items_center()
+                .gap(S)
+                .child(div().min_w_0().child(
+                    kit::Message::new(kit::messages::tone(fault.tone), fault.words.clone()).small(),
+                ))
+                .child(
+                    kit::Button::secondary(
                         ElementId::Name(format!("group-fault:{key}:{index}").into()),
                         label,
                     )
-                    .plain()
+                    .density(Density::Read)
                     .on_click(cx.listener(move |root, _, _, cx| {
                         repair(root);
                         cx.notify();
