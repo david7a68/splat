@@ -991,7 +991,6 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/design/comparison.rs", 1),
             ("crates/campaign/src/encounter_run/undo.rs", 2),
-            ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
         ],
     ),
