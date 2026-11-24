@@ -10,7 +10,11 @@ use gpui::{AnyElement, Context, Window};
 
 /// This area's GPUI-only state, kept in `root.pages.lookup`.
 #[derive(Default)]
-pub struct State {}
+pub struct State {
+    /// The panel was open in the last frame: when it closes, its field's keyboard goes back to
+    /// the root.
+    was_open: bool,
+}
 
 /// Once, when the root is built.
 pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Context<SplatRoot>) {}
@@ -20,9 +24,11 @@ pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Contex
 pub(crate) fn poll(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) {
     // A press on a result row, or Lookup closing under its field, leaves nothing with the
     // keyboard: the root takes it back, so Escape, Ctrl+K and the page's keys still reach it.
-    if window.focused(cx).is_none() {
+    let open = root.app.lookup.open;
+    if window.focused(cx).is_none() || (root.pages.lookup.was_open && !open) {
         window.focus(&root.focus, cx);
     }
+    root.pages.lookup.was_open = open;
     let app = &mut root.app;
     if app.lookup.open && app.lookup.wants_written() {
         let written = app.sessions.written(&app.timeline);

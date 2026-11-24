@@ -65,3 +65,39 @@ fn packages_choose_and_discard() {
     let after = shell.read(|root| root.app.campaign_content.package_rows(&root.app.campaigns));
     assert_eq!(after[0].checked, checked, "Discard brings the saved choice back");
 }
+
+/// Rules and runs: an edit makes the form Unsaved; Discard brings the saved settings back with
+/// its Undo in the footer, and the Undo puts the edit back.
+#[test]
+fn rules_and_runs_discard_and_undo() {
+    let mut shell = campaign("campaign-rules");
+    shell.click("Rules and runs");
+    assert!(shell.read(|root| root.app.campaign_tab == CampaignTab::RunSettings));
+    for _ in 0..200 {
+        if shell.read(|root| root.app.encounters.run_form().is_some()) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    shell.capture("campaign-rules__01-rules-and-runs__1200x800");
+    let saved = shell.read(|root| root.app.encounters.run_form().expect("the form").folder);
+    let id = shell.read(|root| root.app.campaigns.active_campaign().expect("a campaign").id);
+    shell.click(&format!("id:run_folder-{id}"));
+    shell.type_text(" 2");
+    assert_eq!(
+        shell.read(|root| root.app.encounters.run_form().expect("the form").folder),
+        format!("{saved} 2")
+    );
+    shell.click("Discard");
+    assert_eq!(
+        shell.read(|root| root.app.encounters.run_form().expect("the form").folder),
+        saved
+    );
+    shell.capture("campaign-rules__02-discarded__1200x800");
+    shell.click("Undo discard of Rules and runs");
+    assert_eq!(
+        shell.read(|root| root.app.encounters.run_form().expect("the form").folder),
+        format!("{saved} 2")
+    );
+}

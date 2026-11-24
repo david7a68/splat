@@ -2,6 +2,7 @@
 //! `src/campaign_content/`). The shell draws the page's header and tabs (`SplatRoot::campaign_page`).
 mod link;
 mod packages;
+mod run_settings;
 #[cfg(test)]
 mod tests;
 
@@ -36,11 +37,11 @@ pub(crate) fn render_packages(
 
 /// Campaign → Rules and runs (`Encounters::run_settings`).
 pub(crate) fn render_run_settings(
-    _root: &mut SplatRoot,
-    _window: &mut Window,
-    _cx: &mut Context<SplatRoot>,
+    root: &mut SplatRoot,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
-    super::placeholder("", "Rules and runs")
+    run_settings::render(root, window, cx)
 }
 
 /// Campaign → Link and folder.
