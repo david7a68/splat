@@ -1,13 +1,14 @@
 # Splat: notes for agents
 
-Splat is a Rust and egui desktop app for D&D DMs. These notes hold only what you cannot find by looking.
+Splat is a Rust and GPUI desktop app for D&D DMs. These notes hold only what you cannot find by looking.
 
 ## Where things are
 
 - Code checks and commands: [Check a change](docs/development.md#check-a-change). Run Rust and app checks
   through `devenv shell -- <command>`.
 - UI rules: `docs/design-system.md` is the source of truth. When your change alters what it says, change it in
-  the same PR. Colours, sizes and type come from tokens (`src/design/lint.rs`).
+  the same PR. Colours, sizes and type come from tokens (`src/design/lint.rs`). Pages build from the kit
+  (`src/gui/kit/`); `docs/design-system.md` (Widgets) says which part to use.
 - Domain words: `CONTEXT.md`. UI text is plain English in short, active sentences.
 
 ## Choose code checks
@@ -35,8 +36,8 @@ Apply the rules below to the code and checks your trace reaches.
   clearance. Look at a new or wider menu at the narrowest size yourself.
 - **A proof must be able to fail.** Break the code once and see each new check go red; say so in the PR. Do the
   same for an existing check when you edit its setup. A check that also passes on the old code proves nothing.
-  Watch for a filtered assertion that passes on an empty match, `expect_same` with no asserted change before
-  it, and a fixture changed so that a check passes.
+  Watch for a filtered assertion that passes on an empty match, an assertion that reads state before
+  `settle()` lets the change land, and a fixture changed so that a check passes.
 - **Extend a test before you add one.** When an existing test has the same setup, add the case or the
   assertion there.
 - **A gate gets weaker only on purpose.** Delete or loosen an assertion, add `#[ignore]`, or move a check to
