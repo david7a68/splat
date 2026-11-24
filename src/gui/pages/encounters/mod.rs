@@ -27,6 +27,8 @@ pub(crate) mod tests;
 pub struct State {
     /// The list's Groups section is closed.
     pub groups_closed: bool,
+    /// The list's content issues are open (they start closed).
+    pub issues_open: bool,
     /// The list's History section is closed (an ended run read there opens it).
     pub history_closed: bool,
     /// The side choice whose `Other…` field is open, by its id.

@@ -257,18 +257,27 @@ fn the_roster_menu_ctrl_s_and_discard_with_undo() {
     );
 }
 
-/// A saved group opens from the list; a member's count changes; a member's removal has an Undo
-/// in the footer; Save group writes it; Back returns to the list.
+/// A saved group (Rival Team, as the egui scenario) opens from the list with its member's
+/// changes in one summary; a member's count changes; a member's removal has an Undo in the
+/// footer; Save group writes it; Back returns to the list.
 #[test]
 fn a_group_is_edited_and_saved() {
     let mut shell = Shell::new("encounter-groups", Seed::Groups);
     ready(&mut shell);
+    // The content issue is a closed warning disclosure, as egui's count.
+    assert!(shell.bounds("1 content issue to repair").is_some());
+    assert!(!shell.read(|root| root.pages.encounters.issues_open));
     shell.capture("encounter-groups__01-groups-in-the-list__1200x800");
-    let edit = first_target(&mut shell, "id:edit-group:");
-    shell.click(&edit);
+    shell.click("1 content issue to repair");
+    assert!(shell.read(|root| root.pages.encounters.issues_open));
+    open_group(&mut shell, "Rival Team");
     assert_eq!(
         shell.read(|root| root.app.encounters.group_open()),
         Some(false)
+    );
+    assert!(
+        shell.bounds("Changed · 1 to add by hand").is_some(),
+        "a member's changes stay in one summary until their editor opens"
     );
     shell.capture("encounter-groups__02-group-editor__1200x800");
     let members = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
@@ -300,7 +309,6 @@ fn a_group_is_edited_and_saved() {
         Some(false),
         "saved"
     );
-    shell.capture("encounter-groups__09-group-saved__1200x800");
     shell.click("id:group-back");
     assert_eq!(shell.read(|root| root.app.encounters.group_open()), None);
 }
@@ -311,7 +319,7 @@ fn a_new_group_needs_a_creature() {
     let mut shell = Shell::new("encounter-groups", Seed::Groups);
     ready(&mut shell);
     shell.click("New group");
-    shell.type_text("Ash Hounds");
+    shell.type_text("Ash Pack");
     assert!(
         shell.bounds("Save group").is_some(),
         "the group editor is open"
@@ -329,13 +337,12 @@ fn a_new_group_needs_a_creature() {
     );
     shell.click("Find a creature");
     shell.type_text("wolf");
-    let add = first_target(&mut shell, "id:add:");
-    shell.click(&add);
+    shell.capture("encounter-groups__08-group-find-creature__1200x800");
+    shell.click("Add Wolf");
     assert_eq!(
         shell.read(|root| root.app.encounters.group_members().map(|m| m.len())),
         Some(1)
     );
-    shell.capture("encounter-groups__08-group-find-creature__1200x800");
     shell.press("ctrl-s");
     let lines: Vec<String> = shell.update(|root, _, _| {
         let root_path = root.app.campaigns.active_campaign().unwrap().path;
@@ -351,6 +358,7 @@ fn a_new_group_needs_a_creature() {
         Some(false),
         "Ctrl+S saves: {lines:?}"
     );
+    shell.capture("encounter-groups__09-group-saved__1200x800");
 }
 
 /// Both editors at the smallest window.
@@ -544,6 +552,12 @@ fn a_members_changes_and_its_replacement() {
     assert!(shell.bounds("Maximum HP: how it changes").is_none());
     shell.click("id:group-back");
     open_group(&mut shell, "Lost");
+    // The member whose change cannot stand shows the change under its fault.
+    let change = first_target(&mut shell, "Maximum HP: ");
+    assert!(
+        change.contains("−28"),
+        "the change under the fault: {change}"
+    );
     let members = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
     let replace = first_target(&mut shell, "Replace ");
     shell.click(&replace);

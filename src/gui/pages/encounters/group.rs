@@ -528,11 +528,11 @@ fn member_row(
                 "Choose a replacement, check the packages it uses, or remove this member.",
             ))
             .action(
-                kit::Link::new(
+                kit::Button::secondary(
                     member_id(at, "member-packages", index),
                     "Campaign → Packages",
                 )
-                .small()
+                .density(Density::Read)
                 .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
                     root.ctx.set(crate::requests::OPEN_CAMPAIGN_PACKAGES, true);
                     cx.notify();
@@ -556,7 +556,9 @@ fn member_row(
         }
     }
     if let Some(words) = &member.change_fault {
-        block = block.child(kit::Message::new(kit::Tone::Error, words.clone()).small());
+        block = block
+            .child(kit::Message::new(kit::Tone::Error, words.clone()).small())
+            .child(changes::change_rows(&member.change_rows));
     }
     if member.open
         && let Some(form) = root

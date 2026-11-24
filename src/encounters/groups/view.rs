@@ -368,6 +368,9 @@ pub struct MemberRow {
     pub fault: Option<(String, bool)>,
     /// A change that cannot stand, while its form is closed.
     pub change_fault: Option<String>,
+    /// Under that fault, each change with the value it replaces (`change_rows`): its label,
+    /// what it does in the run's words, and whether the DM adds it by hand.
+    pub change_rows: Vec<(String, String, bool)>,
     /// `Replace…` for a missing creature, else `Edit`.
     pub edit_word: &'static str,
     /// The edit button's name: `Replace <name>` or `Changes for <name>`.
@@ -784,6 +787,24 @@ fn member_row(
             &override_error(error),
         ))
     });
+    // The changes that caused it, under the fault (`show_change_fault`).
+    let change_rows = entry
+        .zip(overrides)
+        .filter(|_| change_fault.is_some())
+        .map(|(entry, overrides)| {
+            overrides
+                .rows(&Base::of(entry, side))
+                .iter()
+                .map(|row| {
+                    (
+                        row.label.to_string(),
+                        crate::encounter_run::change_preview(row),
+                        row.by_hand,
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     MemberRow {
         index,
         number,
@@ -799,6 +820,7 @@ fn member_row(
         change_word,
         fault,
         change_fault,
+        change_rows,
         edit_word: if entry.is_none() {
             "Replace…"
         } else {
