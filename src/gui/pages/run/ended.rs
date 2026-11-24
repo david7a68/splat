@@ -25,6 +25,7 @@ pub(super) fn render(
         .unwrap_or_else(|| super::page_width(root, window));
     let window_width = window.viewport_size().width;
     let height = window.viewport_size().height;
+    let side = super::side_width(root, super::Side::Ended, room, window_width);
     let Some(run) = root.app.encounters.run() else {
         return div().into_any_element();
     };
@@ -33,11 +34,10 @@ pub(super) fn render(
         Phase::Ended { outcome } => outcome.clone(),
         _ => String::new(),
     };
-    let side = super::panel_width(room, window_width);
     let rows_width = if run.hide_panel {
         room
     } else {
-        room - side - theme::S
+        room - side - theme::M
     };
     let scale = RunScale::fit(
         f32::from(height) - 160.0,
@@ -109,9 +109,17 @@ pub(super) fn render(
                 .child(kit::gap(theme::L))
                 .children(loot_section(run, cx)),
         ));
-    let mut body = div().flex().flex_row().flex_1().min_h_0().child(left);
+    let mut body = div()
+        .flex()
+        .flex_row()
+        .flex_1()
+        .min_h_0()
+        .on_drag_move(super::on_panel_drag(cx))
+        .child(left);
     if !run.hide_panel {
-        body = body.child(ended_panel(run, side, cx));
+        body = body
+            .child(super::splitter(super::Side::Ended, cx))
+            .child(ended_panel(run, side, cx));
     }
     let messages = super::footer::messages(run, false, cx);
     div()

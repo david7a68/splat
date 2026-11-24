@@ -3394,22 +3394,7 @@ impl Run {
                 if let Some(id) = add {
                     this.add_group_from_panel(id);
                 }
-                let said = this
-                    .arrival_result_shown()
-                    .then(|| this.arrival_said())
-                    .flatten();
-                if let Some(said) = said
-                    && let Some(shown) = this.newest_step_result()
-                {
-                    messages.kept(shown.outcome(&frame, |_| said.into()));
-                }
-                for reason in this.arrival_reasons().iter() {
-                    // The group faults' words, named by their group, in the warning tone.
-                    if let Some(words) = outside_words(reason.clone()) {
-                        messages
-                            .outcome(design::outcome::FaultMessage::new(&RunFault::Total(words)));
-                    }
-                }
+                this.arrival_lines(messages, &frame);
                 this
             },
         );
@@ -3418,10 +3403,34 @@ impl Run {
         }
     }
 
+    /// The Arrivals footer's lines (both views): the newest arrival's result with a tie's Move,
+    /// then each group's reason its Add waits for.
+    pub fn arrival_lines<'f>(
+        &mut self,
+        messages: &mut design::outcome::Messages<'f, ArrivalPress>,
+        frame: &'f design::outcome::PaneFrame,
+    ) {
+        let said = self
+            .arrival_result_shown()
+            .then(|| self.arrival_said())
+            .flatten();
+        if let Some(said) = said
+            && let Some(shown) = self.newest_step_result()
+        {
+            messages.kept(shown.outcome(frame, |_| said.into()));
+        }
+        for reason in self.arrival_reasons().iter() {
+            // The group faults' words, named by their group, in the warning tone.
+            if let Some(words) = outside_words(reason.clone()) {
+                messages.outcome(design::outcome::FaultMessage::new(&RunFault::Total(words)));
+            }
+        }
+    }
+
     /// A press in the Arrivals footer. The tie's Move acts only while its line is the newest
     /// step's result: a step made in the same frame (the body added another arrival) ends it,
     /// and the press does nothing.
-    fn arrival_press(&mut self, press: design::outcome::Press<ArrivalPress>) {
+    pub fn arrival_press(&mut self, press: design::outcome::Press<ArrivalPress>) {
         let newest = self.history_steps.last().copied();
         let live = press.ticket.as_ref().is_some_and(|ticket| {
             self.step_results
@@ -4812,30 +4821,8 @@ impl Run {
             return;
         }
         let mut link = None;
-        let mut notice = None;
-        if let Some(content) = &self.content {
-            let at = content.position_of(&Reference::Id(definition.id));
-            let current = at.map(|at| &content.items[at].entry);
-            let unreadable = content
-                .errors
-                .iter()
-                .any(|error| error.contains(&definition.path));
-            notice = snapshot_notice(definition, current, unreadable).map(|words| {
-                // FD3: a file that cannot be read now is an error, as in every other view; a
-                // changed file is one to look at (warning). The kind decides the tone.
-                (
-                    SnapshotFault {
-                        words,
-                        severity: if unreadable {
-                            design::outcome::Severity::CannotRead
-                        } else {
-                            design::outcome::Severity::NeedsFixing
-                        },
-                    },
-                    at,
-                )
-            });
-        }
+        let frame = design::outcome::PaneFrame::new(ui);
+        let (messages, notice) = self.reference_messages(&frame, index, ui.available_width());
         // FD5 (iter-27-R): the notice comes and goes with the file, so it is in the panel's
         // footer and the stat block keeps its top. Its owner is this row's snapshot: the notice
         // is worked out again each frame from it and the campaign's read, and ends when the
@@ -4846,27 +4833,11 @@ impl Run {
             ui.add(
                 egui::Label::new(
                     Type::Small
-                        .rich(ui, snapshot_values_line(notice.is_some()))
+                        .rich(ui, snapshot_values_line(notice))
                         .color(colors().document.read_only),
                 )
                 .wrap(),
             );
-        }
-        let frame = design::outcome::PaneFrame::new(ui);
-        let mut messages = design::outcome::Messages::<ReferencePress>::new(
-            &frame,
-            ("run_reference_footer", self.id, &p.key),
-            ui.available_width(),
-        );
-        if let Some((fault, at)) = &notice {
-            let message = design::outcome::FaultMessage::new(fault);
-            messages.outcome(match at {
-                Some(at) => message.choice(design::outcome::Choice::new(
-                    design::outcome::MessageChoice::Choice("Read the new version"),
-                    ReferencePress::Read(*at),
-                )),
-                None => message,
-            });
         }
         let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
             changes_block(ui, p, true);
@@ -4918,12 +4889,71 @@ impl Run {
             }
         });
         if let Some(press) = paned.pressed {
-            match press.id {
-                ReferencePress::Read(at) => self.lookup_request = Some(at),
-            }
+            self.reference_press(press);
         }
         if link.is_some() {
             self.lookup_request = link;
+        }
+    }
+
+    /// The stat-block pane's footer (both views): a snapshot whose file changed, went or cannot
+    /// be read now, with `Read the new version` while the campaign has the entry. Also whether it
+    /// has that notice (a sheet's values line says so).
+    pub fn reference_messages<'f>(
+        &self,
+        frame: &'f design::outcome::PaneFrame,
+        index: usize,
+        width: f32,
+    ) -> (design::outcome::Messages<'f, ReferencePress>, bool) {
+        let p = &self.state.participants[index];
+        let definition = &p.definition;
+        let mut notice = None;
+        if let Some(content) = &self.content {
+            let at = content.position_of(&Reference::Id(definition.id));
+            let current = at.map(|at| &content.items[at].entry);
+            let unreadable = content
+                .errors
+                .iter()
+                .any(|error| error.contains(&definition.path));
+            notice = snapshot_notice(definition, current, unreadable).map(|words| {
+                // FD3: a file that cannot be read now is an error, as in every other view; a
+                // changed file is one to look at (warning). The kind decides the tone.
+                (
+                    SnapshotFault {
+                        words,
+                        severity: if unreadable {
+                            design::outcome::Severity::CannotRead
+                        } else {
+                            design::outcome::Severity::NeedsFixing
+                        },
+                    },
+                    at,
+                )
+            });
+        }
+        let mut messages = design::outcome::Messages::<ReferencePress>::new(
+            frame,
+            ("run_reference_footer", self.id, &p.key),
+            width,
+        );
+        let shown = notice.is_some();
+        if let Some((fault, at)) = &notice {
+            let message = design::outcome::FaultMessage::new(fault);
+            messages.outcome(match at {
+                Some(at) => message.choice(design::outcome::Choice::new(
+                    design::outcome::MessageChoice::Choice("Read the new version"),
+                    ReferencePress::Read(*at),
+                )),
+                None => message,
+            });
+        }
+        (messages, shown)
+    }
+
+    /// A press in the stat-block pane's footer.
+    pub fn reference_press(&mut self, press: design::outcome::Press<ReferencePress>) {
+        match press.id {
+            ReferencePress::Read(at) => self.lookup_request = Some(at),
         }
     }
 
@@ -6517,18 +6547,23 @@ impl Run {
         if fits(full) {
             return full.to_owned();
         }
+        self.undo_word_forms(full)
+            .into_iter()
+            .find(|words| fits(words))
+            .unwrap_or_else(|| "Undo".to_owned())
+    }
+
+    /// The shorter forms of Undo's words, longest first, for a view that measures them itself:
+    /// the one rule's target forms (`undo_forms`), then its forms without the target. After
+    /// them a view shows `Undo` alone.
+    pub fn undo_word_forms(&self, full: &str) -> Vec<String> {
         let forms = undo_forms(
             full,
             self.undo_target(),
             self.undo_from_sheet(),
             &self.state.participants,
         );
-        forms
-            .target
-            .into_iter()
-            .chain(forms.bare)
-            .find(|words| fits(words))
-            .unwrap_or_else(|| "Undo".to_owned())
+        forms.target.into_iter().chain(forms.bare).collect()
     }
 }
 
@@ -6651,7 +6686,7 @@ pub(crate) fn outside_words(words: String) -> Option<design::outcome::Sentence> 
 /// What the Arrivals footer can press: the tie's Move, by the arrival's first row and the row it
 /// moves before.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ArrivalPress {
+pub enum ArrivalPress {
     Move(usize, usize),
 }
 
@@ -6716,7 +6751,7 @@ impl design::outcome::Fault for RunFault {
 
 /// What the stat-block pane's footer can press.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ReferencePress {
+pub enum ReferencePress {
     /// `Read the new version`: the entry at this place in the campaign's content.
     Read(usize),
 }
@@ -6834,34 +6869,45 @@ pub fn change_origin(p: &Participant) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
-fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
-    let c = colors();
-    let heading = |ui: &mut egui::Ui| {
-        if let Some(origin) = change_origin(p) {
-            ui.add(egui::Label::new(Type::Small.rich(ui, origin).color(c.muted)).wrap());
-        }
-        if p.stat_changes() {
-            let word = p
-                .added_from
-                .as_ref()
-                .filter(|added| !added.group.is_empty())
-                .map_or_else(
-                    || "Changed".to_owned(),
-                    |added| format!("Changed · arrived with {}", added.group),
-                );
-            design::status(
-                ui,
-                Status {
-                    icon: icons::CHANGED,
-                    word: &word,
-                    color: c.participant.changed,
-                },
-            );
-        }
-    };
+/// What `changes_block` shows, as data for either view: what to add by hand (above a stat
+/// block), the origin line, the `Changed` status, the change rows and the by-hand note.
+pub struct ChangeLines {
+    /// `Add by hand: …`, in the changed colour, first (above a stat block only).
+    pub add_by_hand: Option<String>,
+    /// `Arrived with …`, `as …`, muted.
+    pub origin: Option<String>,
+    /// `Changed`, or `Changed · arrived with <group>`.
+    pub status: Option<String>,
+    /// The change rows to list (`change_rows`).
+    pub rows: Vec<Row>,
+    /// The note under the rows when some are done by hand.
+    pub note: Option<&'static str>,
+    /// The block ends with `S` (a creature the encounter or group changed).
+    pub gap: bool,
+}
+
+/// What the encounter or group changed on this creature, for `changes_block` and the GPUI
+/// panel. `above_stat_block` leaves out the vitals the stat block shows itself.
+pub fn change_lines(p: &Participant, above_stat_block: bool) -> ChangeLines {
+    let origin = change_origin(p);
+    let status = p.stat_changes().then(|| {
+        p.added_from
+            .as_ref()
+            .filter(|added| !added.group.is_empty())
+            .map_or_else(
+                || "Changed".to_owned(),
+                |added| format!("Changed · arrived with {}", added.group),
+            )
+    });
     let Some(changes) = p.changes.as_ref().filter(|_| p.stat_changes()) else {
-        heading(ui);
-        return;
+        return ChangeLines {
+            add_by_hand: None,
+            origin,
+            status,
+            rows: Vec::new(),
+            note: None,
+            gap: false,
+        };
     };
     let rows: Vec<_> = changes
         .overrides
@@ -6872,6 +6918,7 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
         })
         .filter(|row| !p.npc_identity() || row.label != "Name")
         .collect();
+    let note = (!above_stat_block && rows.iter().any(|row| row.by_hand)).then_some(BY_HAND);
     if above_stat_block {
         let by_hand = rows
             .iter()
@@ -6885,31 +6932,53 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
                 )
             })
             .collect::<Vec<_>>();
-        if !by_hand.is_empty() {
-            ui.add(
-                egui::Label::new(
-                    Type::Body
-                        .rich(ui, format!("Add by hand: {}", by_hand.join(", ")))
-                        .color(c.participant.changed),
-                )
-                .wrap(),
-            );
+        ChangeLines {
+            add_by_hand: (!by_hand.is_empty())
+                .then(|| format!("Add by hand: {}", by_hand.join(", "))),
+            origin,
+            status,
+            rows: rows.into_iter().filter(|row| !row.by_hand).collect(),
+            note,
+            gap: true,
         }
-        heading(ui);
-        change_rows(
-            ui,
-            &rows
-                .iter()
-                .filter(|row| !row.by_hand)
-                .cloned()
-                .collect::<Vec<_>>(),
-        );
     } else {
-        heading(ui);
-        change_rows(ui, &rows);
+        ChangeLines {
+            add_by_hand: None,
+            origin,
+            status,
+            rows,
+            note,
+            gap: true,
+        }
     }
-    let note = (!above_stat_block && rows.iter().any(|row| row.by_hand)).then_some(BY_HAND);
-    if let Some(note) = note {
+}
+
+fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
+    let c = colors();
+    let lines = change_lines(p, above_stat_block);
+    if let Some(words) = &lines.add_by_hand {
+        ui.add(
+            egui::Label::new(Type::Body.rich(ui, words).color(c.participant.changed)).wrap(),
+        );
+    }
+    if let Some(origin) = &lines.origin {
+        ui.add(egui::Label::new(Type::Small.rich(ui, origin).color(c.muted)).wrap());
+    }
+    if let Some(word) = &lines.status {
+        design::status(
+            ui,
+            Status {
+                icon: icons::CHANGED,
+                word,
+                color: c.participant.changed,
+            },
+        );
+    }
+    if !lines.gap {
+        return;
+    }
+    change_rows(ui, &lines.rows);
+    if let Some(note) = lines.note {
         ui.add(egui::Label::new(Type::Small.rich(ui, note).color(c.muted)).wrap());
     }
     design::gap(ui, design::Gap::S);

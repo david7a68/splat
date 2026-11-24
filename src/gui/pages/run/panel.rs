@@ -8,7 +8,7 @@ use crate::gui::{SplatRoot, bridge, icons, kit, theme};
 use crate::rolls::{self, ArmedAction, Ask, Mode};
 use gpui::{
     AnyElement, ClickEvent, Context, ElementId, InteractiveElement, IntoElement, ParentElement,
-    Pixels, SharedString, Styled, div, prelude::*, px,
+    Pixels, SharedString, Styled, Window, div, prelude::*, px,
 };
 use splat_party::combat_sync::SyncState;
 use theme::{Density, Type, TypeExt, colors};
@@ -18,6 +18,7 @@ pub(super) fn render(
     root: &SplatRoot,
     run: &Run,
     width: Pixels,
+    window: &Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
@@ -39,6 +40,10 @@ pub(super) fn render(
         p.name.clone()
     };
     let is_sheet = p.definition.fields.contains_key("splat_external");
+    // The panel's own room: its width less the gutter before its words.
+    let inner = width - theme::L - theme::HAIRLINE_WIDTH;
+    // A long name gives up whole words, keeping its copy number (egui `dock_name`).
+    let shown = super::measure::fit_name(window, Type::Title, &title, inner);
     let mut top = div()
         .flex()
         .flex_col()
@@ -49,10 +54,16 @@ pub(super) fn render(
                 .ty(Type::Title)
                 .text_color(c.text)
                 .truncate()
-                .child(title.clone())
-                .with_tooltip_words(title),
+                .child(shown)
+                .with_tooltip_words(title.clone()),
         )
-        .child(tabs(run, if is_sheet { "Sheet" } else { "Stat block" }, cx))
+        .child(tabs(
+            run,
+            if is_sheet { "Sheet" } else { "Stat block" },
+            inner,
+            window,
+            cx,
+        ))
         .child(kit::rule());
     if run.state.phase == Phase::Setup {
         top = top.children(sync_block(run, cx));
@@ -67,6 +78,15 @@ pub(super) fn render(
     {
         body = body.child(conflicts(index, None, sync, cx));
     }
+    // The stat block's notice is the panel's footer, so the stat block keeps its top.
+    let stat_block = run.panel == Panel::Reference
+        && !(run.sheet.is_some() && run.sheet_for == Some(index))
+        && p.definition.path != "Made up in this fight";
+    let footer = if stat_block {
+        super::stat_block::footer(run, index, cx)
+    } else {
+        Vec::new()
+    };
     body = match run.panel {
         Panel::Reference => body.child(reference(root, run, index, cx)),
         Panel::Conditions => body.child(conditions(run, index, cx)),
@@ -77,6 +97,11 @@ pub(super) fn render(
         Panel::Encounter => body.child(prep(run, cx)),
         Panel::Keys => body.child(keys(run)),
         Panel::Groups => body.child(arrivals(run, cx)),
+    };
+    let footer = if run.panel == Panel::Groups {
+        arrivals_footer(cx)
+    } else {
+        footer
     };
     div()
         .flex()
@@ -93,8 +118,25 @@ pub(super) fn render(
                 .flex_1()
                 .min_h_0()
                 .pt(theme::S)
-                .child(kit::scroll_column("run-panel-body", body)),
+                .child(kit::scroll_column(
+                    ElementId::Name(format!("run-panel-body-{:?}-{}", run.panel, p.key).into()),
+                    body,
+                )),
         )
+        .when(!footer.is_empty(), |panel| {
+            panel.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_none()
+                    .gap(theme::S)
+                    .pt(theme::S)
+                    .pb(theme::S)
+                    .border_t(theme::HAIRLINE_WIDTH)
+                    .border_color(c.hairline)
+                    .children(footer),
+            )
+        })
         .into_any_element()
 }
 
@@ -109,33 +151,78 @@ pub(super) fn fight_title(panel: Panel) -> &'static str {
     }
 }
 
-/// The participant's tabs, then the fight's (`panel_tabs`).
-fn tabs(run: &Run, reference: &'static str, cx: &mut Context<SplatRoot>) -> impl IntoElement {
+/// The participant's tabs, then the fight's (`panel_tabs`). When both do not fit in `room`, the
+/// fight's tabs become a `Fight` menu, underlined in the accent while one of them shows.
+fn tabs(
+    run: &Run,
+    reference: &'static str,
+    room: Pixels,
+    window: &Window,
+    cx: &mut Context<SplatRoot>,
+) -> impl IntoElement {
     const PARTICIPANT: [Panel; 3] = [Panel::Reference, Panel::Conditions, Panel::Record];
-    const FIGHT: [Panel; 2] = [Panel::Log, Panel::Encounter];
+    const FIGHT: [(Panel, &str); 2] = [(Panel::Log, "Log"), (Panel::Encounter, "Prep")];
     let chosen = |list: &[Panel]| {
         list.iter()
             .position(|panel| *panel == run.panel)
             .unwrap_or(usize::MAX)
     };
-    let participant = kit::Segmented::new(
-        "run-panel-tabs",
-        [reference, "Conditions", "Correct"],
-        chosen(&PARTICIPANT),
-    )
-    .on_select(cx.listener(|root: &mut SplatRoot, at: &usize, _, cx| {
-        if let Some(run) = root.app.encounters.run_mut() {
-            run.panel = PARTICIPANT[*at];
-        }
-        cx.notify();
-    }));
-    let fight = kit::Segmented::new("run-panel-fight-tabs", ["Log", "Prep"], chosen(&FIGHT))
+    let participant_words = [reference, "Conditions", "Correct"];
+    let width = |words: &mut dyn Iterator<Item = &str>| {
+        words
+            .map(|label| super::measure::width(window, Type::Strong, label) + theme::L)
+            .fold(px(0.0), |sum, one| sum + one)
+    };
+    let fits = width(&mut participant_words.iter().copied())
+        + width(&mut FIGHT.iter().map(|(_, label)| *label))
+        + theme::L
+        <= room;
+    let participant = kit::Segmented::new("run-panel-tabs", participant_words, chosen(&PARTICIPANT))
         .on_select(cx.listener(|root: &mut SplatRoot, at: &usize, _, cx| {
             if let Some(run) = root.app.encounters.run_mut() {
-                run.panel = FIGHT[*at];
+                run.panel = PARTICIPANT[*at];
             }
             cx.notify();
         }));
+    let fight: AnyElement = if fits {
+        let panels: Vec<Panel> = FIGHT.iter().map(|(panel, _)| *panel).collect();
+        kit::Segmented::new(
+            "run-panel-fight-tabs",
+            FIGHT.map(|(_, label)| label),
+            chosen(&panels),
+        )
+        .on_select(cx.listener(|root: &mut SplatRoot, at: &usize, _, cx| {
+            if let Some(run) = root.app.encounters.run_mut() {
+                run.panel = FIGHT[*at].0;
+            }
+            cx.notify();
+        }))
+        .into_any_element()
+    } else {
+        let current = FIGHT.iter().any(|(panel, _)| *panel == run.panel);
+        let mut menu = kit::MenuButton::new(
+            "run-panel-fight-menu",
+            kit::Button::quiet("run-panel-fight", "Fight")
+                .icon(icons::DOWN)
+                .name("Fight menu")
+                .density(Density::Read),
+        );
+        for (panel, label) in FIGHT {
+            menu = menu.item(
+                kit::MenuItem::new(label)
+                    .checked(run.panel == panel)
+                    .on_click(on_run(cx, move |run| run.panel = panel)),
+            );
+        }
+        div()
+            .flex()
+            .flex_col()
+            .child(menu)
+            .when(current, |menu| {
+                menu.child(div().h(theme::HAIRLINE_WIDTH).w_full().bg(colors().accent))
+            })
+            .into_any_element()
+    };
     div()
         .flex()
         .flex_row()
@@ -143,6 +230,13 @@ fn tabs(run: &Run, reference: &'static str, cx: &mut Context<SplatRoot>) -> impl
         .gap(theme::L)
         .child(div().flex_none().child(participant))
         .child(div().flex_none().child(fight))
+}
+
+/// The Arrivals footer: the newest arrival's result with a tie's `Move`, and each group's
+/// reason its Add waits for (`groups_tab`'s footer).
+fn arrivals_footer(cx: &mut Context<SplatRoot>) -> Vec<AnyElement> {
+    let _ = cx;
+    Vec::new()
 }
 
 /// Death saves: the counts, `+ Success`, `+ Failure` and a roll (`death_saves`).
@@ -378,25 +472,9 @@ fn sync_block(run: &Run, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
     Some(block.child(kit::rule()).into_any_element())
 }
 
-/// What the encounter or group changed on this creature (`changes_block`): its origin line.
+/// What the encounter or group changed on this creature (`changes_block`).
 fn changes_block(p: &Participant) -> Option<AnyElement> {
-    let c = colors();
-    let origin = view::change_origin(p)?;
-    Some(
-        div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(theme::XS)
-            .pb(theme::S)
-            .child(kit::icon(
-                icons::CHANGED,
-                Type::Small,
-                c.participant.changed,
-            ))
-            .child(kit::text(Type::Small, c.participant.changed, origin))
-            .into_any_element(),
-    )
+    super::stat_block::changes(p, false)
 }
 
 /// AC, HP and initiative in columns (`vital_columns`).
@@ -491,77 +569,8 @@ fn reference(root: &SplatRoot, run: &Run, index: usize, cx: &mut Context<SplatRo
             .child(tiles(run, index, cx));
         return column.into_any_element();
     }
-    // A stat block whose file changed, went or cannot be read since the run copied it.
-    let mut notice = None;
-    if let Some(content) = &run.content {
-        let at = content.position_of(&splat::content::Reference::Id(definition.id));
-        let current = at.map(|at| &content.items[at].entry);
-        let unreadable = content
-            .errors
-            .iter()
-            .any(|error| error.contains(&definition.path));
-        notice = view::snapshot_notice(definition, current, unreadable)
-            .map(|words| (words.to_string(), unreadable, at));
-    }
-    if definition.fields.contains_key("splat_external") {
-        column = column.child(kit::text(
-            Type::Small,
-            c.document.read_only,
-            view::snapshot_values_line(notice.is_some()),
-        ));
-    }
-    let speed = p.changes.as_ref().and_then(|changes| {
-        changes
-            .overrides
-            .rows(&changes.base)
-            .into_iter()
-            .find(|row| row.label == "Speed")
-            .map(|row| row.changed)
-    });
-    column =
-        column
-            .children(changes_block(p))
-            .child(vitals(&[
-                ("ARMOR CLASS", display(p.armor_class)),
-                (
-                    "HIT POINTS",
-                    splat_party::combat_sync::fraction(display(p.hp), display(p.max_hp)),
-                ),
-                (
-                    "INITIATIVE",
-                    p.initiative_bonus
-                        .map_or_else(|| "—".to_owned(), crate::design::signed),
-                ),
-            ]))
-            .children(speed.map(|speed| {
-                kit::text(Type::Small, c.participant.changed, format!("Speed {speed}"))
-            }))
-            .child(tiles(run, index, cx))
-            .child(
-                kit::markdown::Markdown::new(
-                    ElementId::Name(format!("run-stat-block-{}", p.key).into()),
-                    definition.body.clone(),
-                )
-                .compact(),
-            );
-    if let Some((words, unreadable, at)) = notice {
-        let tone = if unreadable {
-            kit::Tone::Error
-        } else {
-            kit::Tone::Warning
-        };
-        let mut message = kit::Message::new(tone, words).small();
-        if let Some(at) = at {
-            message = message.action(
-                kit::Button::secondary("run-read-new-version", "Read the new version")
-                    .density(Density::Read)
-                    .on_click(on_run(cx, move |run| run.lookup_request = Some(at))),
-            );
-        }
-        column = column.child(kit::gap(theme::S)).child(message);
-    }
     let _ = root;
-    column.into_any_element()
+    super::stat_block::render(run, index, cx)
 }
 
 /// The participant's actions as tiles: a press arms an attack, a save or damage, or rolls a

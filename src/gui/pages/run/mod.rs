@@ -15,9 +15,11 @@ mod footer;
 mod header;
 mod keys;
 mod live;
+mod measure;
 mod panel;
 mod roster;
 mod setup;
+mod stat_block;
 mod strip;
 #[cfg(test)]
 mod tests;
@@ -53,6 +55,7 @@ pub(crate) fn poll(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<S
     if root.app.page != Page::Run {
         return;
     }
+    stat_block::poll(root, cx);
     root.app.run_page_end(false);
     if let Some(run) = root.app.encounters.run_mut() {
         run.refresh_portraits();
@@ -145,11 +148,123 @@ fn page_width(root: &SplatRoot, window: &Window) -> Pixels {
     width - rail - theme::M * 2.0 - side
 }
 
-/// The run panel's width beside the roster (egui `panel_width`): the stat block's share of the
-/// window, or more when the roster would pass its largest width.
+/// The run panel's natural width beside the roster (egui `panel_width`): the stat block's share
+/// of the window, or more when the roster would pass its largest width.
 fn panel_width(room: Pixels, window: Pixels) -> Pixels {
     let share = px(design::side_panel_width(f32::from(window)));
     share.max(room - px(theme::RUN_LARGE.max_width) - theme::M)
+}
+
+/// The run panel's columns, by the ids egui saves their widths under (`design::Column::panel`).
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum Side {
+    /// The live view's panel.
+    Live,
+    /// Setup's panel.
+    Setup,
+    /// The ended view's Log.
+    Ended,
+}
+
+impl Side {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Live => "run_panel",
+            Self::Setup => "run_setup_panel",
+            Self::Ended => "run_ended_log",
+        }
+    }
+}
+
+/// The range a panel can be dragged in (egui `Column::bounds` with `page_keeps(RUN_LIST_KEEPS)`):
+/// at least `PANEL_MIN_WIDTH`, at most `PANEL_DRAG_MAX_WIDTH`, and the run's list keeps 454 px.
+fn side_bounds(natural: Pixels, room: Pixels) -> (Pixels, Pixels) {
+    let min = theme::PANEL_MIN_WIDTH.min(natural);
+    let max = theme::PANEL_DRAG_MAX_WIDTH
+        .max(natural)
+        .min((room - theme::RUN_LIST_KEEPS).max(theme::PANEL_MIN_WIDTH));
+    (min, max.max(min))
+}
+
+/// The panel's width: the DM's dragged width (here and after a restart, `column_widths`), else
+/// the natural width, inside its range and the page.
+pub(super) fn side_width(root: &SplatRoot, side: Side, room: Pixels, window: Pixels) -> Pixels {
+    let natural = panel_width(room, window);
+    let (min, max) = side_bounds(natural, room);
+    root.column_widths
+        .get(side.id())
+        .map_or(natural, |width| px(*width))
+        .clamp(min, max)
+        .min(room)
+}
+
+/// What a drag of the panel's edge carries.
+#[derive(Clone)]
+pub(super) struct PanelDrag(Side);
+
+impl gpui::Render for PanelDrag {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
+
+/// The handle between the roster and the panel (egui's splitter of `Column::panel`): drag it, or
+/// focus it and press Left or Right (`L` a press) or Home (the natural width again). The width
+/// is saved with the window's other column widths.
+pub(super) fn splitter(side: Side, cx: &mut Context<SplatRoot>) -> impl IntoElement {
+    let c = colors();
+    div()
+        .id(gpui::SharedString::new_static(match side {
+            Side::Live => "run-panel-splitter",
+            Side::Setup => "run-setup-panel-splitter",
+            Side::Ended => "run-ended-splitter",
+        }))
+        .w(theme::M)
+        .h_full()
+        .flex_none()
+        .cursor_col_resize()
+        .focusable()
+        .focus_visible(|s| s.bg(c.hover))
+        .hover(|s| s.bg(c.hover))
+        .on_drag(PanelDrag(side), |drag, _, _, cx| cx.new(|_| drag.clone()))
+        .on_key_down(cx.listener(move |root: &mut SplatRoot, event: &gpui::KeyDownEvent, window, cx| {
+            let key = event.keystroke.key.as_str();
+            if event.keystroke.modifiers.modified() || !matches!(key, "left" | "right" | "home") {
+                return;
+            }
+            let room = root.pages.run.width.unwrap_or_else(|| page_width(root, window));
+            let viewport = window.viewport_size().width;
+            let width = side_width(root, side, room, viewport);
+            if key == "home" {
+                root.column_widths.remove(side.id());
+            } else {
+                // The panel is on the right: Left widens it.
+                let step = if key == "left" { theme::L } else { -theme::L };
+                let (min, max) = side_bounds(panel_width(room, viewport), room);
+                root.column_widths.insert(
+                    side.id().to_owned(),
+                    f32::from((width + step).clamp(min, max)),
+                );
+            }
+            cx.stop_propagation();
+            cx.notify();
+        }))
+}
+
+/// The page's part of a drag of the panel's edge: the panel's width is from the pointer to the
+/// page's right edge.
+pub(super) fn on_panel_drag(
+    cx: &mut Context<SplatRoot>,
+) -> impl Fn(&gpui::DragMoveEvent<PanelDrag>, &mut Window, &mut App) + 'static {
+    cx.listener(|root: &mut SplatRoot, event: &gpui::DragMoveEvent<PanelDrag>, window, cx| {
+        let side = event.drag(cx).0;
+        let room = root.pages.run.width.unwrap_or_else(|| page_width(root, window));
+        let (min, max) = side_bounds(panel_width(room, window.viewport_size().width), room);
+        let width = (event.bounds.right() - event.event.position.x).clamp(min, max);
+        root.column_widths
+            .insert(side.id().to_owned(), f32::from(width));
+        cx.notify();
+    })
 }
 
 /// A click handler that acts on the run, then draws again.
@@ -232,13 +347,24 @@ fn save_status(run: &Run) -> impl IntoElement {
 /// An Undo action with the run's rules: its key while the keys work, blocked with the reason
 /// when there is nothing to undo (`undo_action`).
 fn undo_button(run: &Run, id: &'static str, words: String, density: theme::Density) -> kit::Button {
+    undo_button_keyed(run, id, words, density, true)
+}
+
+/// `undo_button`, whose key letter may give up its room (`key` false) before its words shorten.
+fn undo_button_keyed(
+    run: &Run,
+    id: &'static str,
+    words: String,
+    density: theme::Density,
+    key: bool,
+) -> kit::Button {
     let label = run.undo_label();
     let button = kit::Button::secondary(id, words)
         .icon(crate::gui::icons::UNDO)
         .density(density)
         .name(label.clone())
         .hint(label);
-    let button = if matches!(run.state.phase, Phase::Running) && !run.lookup_open {
+    let button = if key && matches!(run.state.phase, Phase::Running) && !run.lookup_open {
         button.key("U")
     } else {
         button

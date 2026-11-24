@@ -1,7 +1,7 @@
 //! The Running phase (egui `view::live_view`): the header, the roster with its notices and
 //! message footer, the action line while the panel is hidden, the dock and the footer, with the
 //! run's panel beside them.
-use super::{dock, footer, header, on_run, panel, panel_width, roster};
+use super::{Side, dock, footer, header, on_run, panel, roster};
 use crate::encounter_run::{Panel, view};
 use crate::gui::{SplatRoot, icons, kit, theme};
 use gpui::{
@@ -26,11 +26,11 @@ pub(super) fn render(
         .unwrap_or_else(|| super::page_width(root, window));
     let window_width = window.viewport_size().width;
     let height = window.viewport_size().height - theme::S * 2.0;
+    let side = super::side_width(root, Side::Live, room, window_width);
     let Some(run) = root.app.encounters.run() else {
         return div().into_any_element();
     };
     let hide_panel = run.hide_panel;
-    let side = panel_width(room, window_width);
     let roster_width = if hide_panel {
         (room - theme::M).min(px(theme::RUN_LARGE.max_width))
     } else {
@@ -70,7 +70,7 @@ pub(super) fn render(
         .h_full()
         .w(roster_width)
         .flex_none()
-        .child(header::live(run, roster_width, scale, cx))
+        .child(header::live(run, roster_width, scale, window, cx))
         .child(
             div()
                 .flex()
@@ -97,11 +97,16 @@ pub(super) fn render(
         .children(compact)
         .child(dock::render(run, roster_width, cx))
         .child(footer::live(run, cx));
-    let mut page = div().flex().flex_row().size_full().child(main);
+    let mut page = div()
+        .flex()
+        .flex_row()
+        .size_full()
+        .on_drag_move(super::on_panel_drag(cx))
+        .child(main);
     if !hide_panel {
         page = page
-            .child(div().w(theme::M).flex_none())
-            .child(panel::render(root, run, side, cx));
+            .child(super::splitter(Side::Live, cx))
+            .child(panel::render(root, run, side, window, cx));
     }
     page.into_any_element()
 }
