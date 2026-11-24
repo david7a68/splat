@@ -37,14 +37,7 @@ fn catalogue() -> &'static OptionRegistry {
     })
 }
 pub(in crate::character) fn option_fingerprint(source: &Value) -> String {
-    let values: BTreeMap<_, _> = ["id", "label", "description", "sourceId"]
-        .into_iter()
-        .map(|key| (key, source[key].clone()))
-        .collect();
-    format!(
-        "{:x}",
-        Sha256::digest(serde_json::to_vec(&values).expect("JSON option"))
-    )
+    crate::character::pin(source, &["id", "label", "description", "sourceId"])
 }
 pub(super) fn is_system_choice(choice: &Value) -> bool {
     choice["componentTypeId"] == 1088085227_u64

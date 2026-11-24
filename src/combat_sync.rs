@@ -414,10 +414,19 @@ struct Mutation {
     expected: Value,
 }
 fn mutations(remote: &Remote, key: &str, target: &Value) -> Result<Vec<Mutation>, String> {
-    let current = remote
+    // Both in field order. serde_json's map keeps insertion order when a crate in the build turns
+    // on `preserve_order` (GPUI does). The shape check compares the two field lists, and the
+    // writes and their read-backs go in one order.
+    let mut current = remote
         .groups
         .get(key)
-        .ok_or("This combat stat is unavailable on the sheet.")?;
+        .ok_or("This combat stat is unavailable on the sheet.")?
+        .clone();
+    current.sort_all_objects();
+    let current = &current;
+    let mut target = target.clone();
+    target.sort_all_objects();
+    let target = &target;
     let mut body = target
         .as_object()
         .cloned()
@@ -526,11 +535,7 @@ fn mutations(remote: &Remote, key: &str, target: &Value) -> Result<Vec<Mutation>
     if key == "currency" || key.starts_with("item/") {
         let mut expected = old.clone();
         let mut changes = Vec::new();
-        // In field order: serde_json's map keeps insertion order when a crate in the build turns
-        // on `preserve_order` (GPUI does), and the writes and their read-backs go in one order.
-        let mut fields: Vec<_> = body.iter().collect();
-        fields.sort_by_key(|(field, _)| *field);
-        for (field, value) in fields {
+        for (field, value) in &body {
             if old.get(field) == Some(value) {
                 continue;
             }
@@ -2731,6 +2736,14 @@ mod tests {
             json!({"characterId":123,"id":4,"level":2,"totalHp":30})
         );
         assert_eq!(changes.last().unwrap().expected, target);
+        // The writes go in one order whatever order the target's fields are in.
+        let bodies = |changes: Vec<Mutation>| changes.into_iter().map(|m| m.body).collect::<Vec<_>>();
+        assert_eq!(
+            bodies(mutations(&r, "conditions", &json!({"12":null,"4":2})).unwrap()),
+            bodies(changes)
+        );
+        // A run saved by an older build holds its fields in sorted order, not the sheet's.
+        assert!(mutations(&r, "death", &json!({"failCount": 1, "successCount": 0})).is_ok());
         assert!(mutations(&r, "conditions", &json!({"4":7})).is_err());
     }
     #[test]
@@ -3073,6 +3086,8 @@ mod tests {
         );
         // The sheet works maximums out itself, so the stat block's numbers are not limits.
         assert!(mutations(&r, "item/8", &wand(1, 8)).is_ok());
+        // A run saved by an older build holds its fields in sorted order, not the sheet's.
+        assert!(mutations(&r, "item/8", &json!({"charges": 8, "id": 8, "quantity": 1})).is_ok());
         let summon = json!({"id": 9, "removedHitPoints": 12, "temporaryHitPoints": 0});
         assert!(mutations(&r, "creature/9", &summon).is_ok());
         assert!(mutations(&r, "hp_bonus", &json!({"bonusHitPoints": 1000})).is_err());

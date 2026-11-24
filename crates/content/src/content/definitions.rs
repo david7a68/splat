@@ -327,6 +327,9 @@ fn attach_reports(
         for key in ["key", "id", "path", "source", "sha256"] {
             metadata.remove(key);
         }
+        // In the same order in every build, whatever order the report file and serde_json's
+        // `preserve_order` feature (which GPUI turns on) give its keys.
+        metadata.sort_keys();
         if field(&entry.fields, "splat_conversion").is_some()
             || field(&entry.fields, "splat_contracts").is_some()
         {
