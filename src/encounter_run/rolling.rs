@@ -9,7 +9,6 @@ use super::{Command, Run};
 use crate::rolls::{
     self, ArmedAction, ArmedView, Ask, Chip, Mode, Outcome, Rolled, SpellOccurrence,
 };
-use eframe::egui;
 use splat::content::Entry;
 use splat::content::dice_text::{self, D20, DamagePart, RollLink, When};
 use splat::content::inspiration::Inspiration;
@@ -121,10 +120,6 @@ fn parts_words(parts: &[DamagePart]) -> String {
 
 /// The most dice a row's menu offers to reroll. A roll of many dice lists its lowest.
 const REROLL_CHOICES: usize = 8;
-
-/// The height of the action bar above the dock while Lookup or Notes hide the panel: its
-/// buttons, then an `XS` gap, so the bar sits apart from the dock.
-pub(crate) const STRIP_HEIGHT: f32 = rolls::BAR_BUTTONS + crate::design::XS;
 
 /// Why nothing rolls once the encounter has ended.
 const ENDED: &str = "This encounter has ended. Undo the ending to continue.";
@@ -562,57 +557,6 @@ impl Run {
         }
     }
 
-    /// The right-click menu of a run row, and the question that waits on it. Shows nothing
-    /// when the row has nothing to offer.
-    pub fn row_menu(&self, response: &egui::Response, row: usize) -> Option<RowChoice> {
-        // Before any early return: a row whose last choice went away still owns its menu.
-        rolls::keep_menu_owner(response);
-        let mut chosen = None;
-        if let Some(asking) = self.asking.as_ref().filter(|asking| asking.row == row) {
-            let shown = crate::design::menu_popup(&response.ctx, response)
-                .open(true)
-                .show(|ui| {
-                    ui.set_width(320.0);
-                    rolls::menu_text(ui, &asking.question, crate::design::colors().text);
-                    // The choices start at the question's words.
-                    for (index, (words, _)) in asking.choices.iter().enumerate() {
-                        if rolls::menu_choice(ui, words) {
-                            chosen = Some(RowChoice::Damage(index));
-                        }
-                    }
-                    if rolls::menu_choice(ui, "Cancel") {
-                        chosen = Some(RowChoice::Cancel);
-                    }
-                });
-            if chosen.is_none() && shown.is_some_and(|shown| shown.response.clicked_elsewhere()) {
-                chosen = Some(RowChoice::Cancel);
-            }
-            return chosen;
-        }
-        let sections = self.row_menu_sections(row);
-        if sections.is_empty() {
-            return None;
-        }
-        // Under the row, so the row it is about stays in view. Shift+F10 on the focused row
-        // opens it too.
-        let open = rolls::menu_open_command(response);
-        crate::design::menu_popup(&response.ctx, response)
-            .open_memory(open)
-            .show(|ui| {
-                for (heading, items) in &sections {
-                    rolls::menu_text(ui, heading, crate::design::colors().muted);
-                    for (words, choice) in items {
-                        // Under a heading, the choices start at its words.
-                        if rolls::menu_choice(ui, words) {
-                            chosen = Some(choice.clone());
-                            ui.close();
-                        }
-                    }
-                }
-            });
-        chosen
-    }
-
     /// What a row's right-click menu offers now: each section is a heading and its choices.
     pub fn row_menu_sections(&self, row: usize) -> Vec<(String, Vec<(String, RowChoice)>)> {
         let mut sections: Vec<(String, Vec<(String, RowChoice)>)> = Vec::new();
@@ -1040,25 +984,6 @@ impl Run {
             .collect()
     }
 
-    /// Publish the armed action for the tiles drawn next, and whether the panel's character
-    /// can expend inspiration for advantage.
-    pub fn armed_tiles_begin(&self, ctx: &egui::Context) {
-        rolls::set_armed(ctx, self.armed_view());
-        rolls::set_inspired(ctx, self.can_buy_advantage(self.panel_row()));
-        // The roller's tiles show the numbers Splat rolls, with the run's changes in them.
-        if let Some(row) = self.existing(rolls::roller(ctx)) {
-            rolls::set_changes(ctx, row, self.changes(row));
-        }
-    }
-
-    /// Handle what was pressed under the armed tile.
-    pub fn armed_tiles_end(&mut self, ctx: &egui::Context) {
-        rolls::set_inspired(ctx, false);
-        if let Some(action) = rolls::take_armed_action(ctx) {
-            self.armed_action(action);
-        }
-    }
-
     /// What was pressed under the armed tile.
     pub fn armed_action(&mut self, action: ArmedAction) {
         let Some(armed) = self.armed.clone() else {
@@ -1382,71 +1307,12 @@ impl Run {
         crate::library::spells::ordered_actions(definition, links)
     }
 
-    /// The room above the dock for the action bar: only while the panel is hidden.
-    pub fn strip_height(&self) -> f32 {
-        if self.hide_panel { STRIP_HEIGHT } else { 0.0 }
-    }
-
-    /// The panel's action tiles, as one line above the dock while the panel is hidden.
-    pub fn compact_actions(&mut self, ui: &mut egui::Ui) {
-        let row = self.panel_row();
-        let chips = self.chips(row);
-        rolls::set_roller(ui.ctx(), Some(row));
-        rolls::set_entry(ui.ctx(), &self.state.participants[row].name.clone());
-        self.armed_tiles_begin(ui.ctx());
-        // X65: notes and Lookup hide the panel with the saves, so one word leads there. It is
-        // first on this line, so no control of the dock moves and the selected name keeps
-        // its slot when a row drops to 0 HP.
-        // FK5 (iter-29 G130): the word leads only where the panel has death saves to show
-        // (`shows_death_saves`): an enemy at 0 HP with no save recorded has none.
-        let death_saves = self.state.participants[self.selected].shows_death_saves();
-        let open_side = ui
-            .horizontal(|ui| {
-                // FK7: a quiet action that starts the line; its word starts at the dock's text
-                // edge, `S` in from this line's edge (the padding hangs in the gap).
-                let open = death_saves && {
-                    crate::design::gap(ui, crate::design::Gap::S);
-                    crate::design::Action::quiet("Death saves")
-                        .density(crate::design::Density::Read)
-                        .line_start()
-                        .show(ui)
-                        .clicked()
-                };
-                rolls::compact_tiles(ui, &chips);
-                open
-            })
-            .inner;
-        if open_side {
-            self.close_lookup = true;
-        }
-        rolls::set_roller(ui.ctx(), None);
-        rolls::set_inspired(ui.ctx(), false);
-    }
-
     /// Ctrl+1 to Ctrl+9 arm the panel's participant's actions, in tile order.
     pub fn arm_by_number(&mut self, number: usize) {
         let row = self.panel_row();
         if let Some(chip) = self.chips(row).into_iter().nth(number.saturating_sub(1)) {
             self.arm(row, chip.link, chip.spell_occurrence, Mode::Normal, false);
         }
-    }
-
-    /// Escape stops an armed action first.
-    pub fn disarm_on_escape(&mut self, ui: &egui::Ui) -> bool {
-        // A question waiting on a target closes first.
-        if self.asking.is_some()
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
-        {
-            self.asking = None;
-            return true;
-        }
-        if self.armed.is_some()
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
-        {
-            self.disarm();
-            return true;
-        }
-        false
     }
 
     /// Next turn ends the armed action and its rows' results.
@@ -1510,40 +1376,6 @@ mod tests {
         }
         run.apply(Command::Begin).unwrap();
         run
-    }
-
-    /// FK5 (iter-29 G130): the compact line's `Death saves` leads to the panel's death saves,
-    /// so it shows only where the panel has them: a party row at 0 HP, not an enemy at 0 HP
-    /// with no save recorded.
-    #[test]
-    fn the_compact_line_offers_death_saves_only_where_the_panel_has_them() {
-        use crate::design::test_harness::ThemedPage as _;
-        use egui_kittest::kittest::Queryable;
-        use std::{cell::RefCell, rc::Rc};
-        let mut run = live();
-        // The fixture's creature starts with a recorded success; this enemy has none.
-        let p = &mut run.state.participants[0];
-        (p.hp, p.successes, p.failures) = (Some(0), 0, 0);
-        run.selected = 0;
-        let run = Rc::new(RefCell::new(run));
-        let shown = run.clone();
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(960.0, 200.0))
-            .themed(move |ctx| {
-                egui::CentralPanel::default()
-                    .show(ctx, |ui| shown.borrow_mut().compact_actions(ui));
-            });
-        harness.run_steps(2);
-        assert!(
-            harness.query_by_label("Death saves").is_none(),
-            "iter-29-R1-G130: an enemy at 0 HP"
-        );
-        run.borrow_mut().state.participants[0].side = "party".into();
-        harness.run_steps(2);
-        assert!(
-            harness.query_by_label("Death saves").is_some(),
-            "a party row at 0 HP"
-        );
     }
 
     fn attack() -> RollLink {

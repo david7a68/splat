@@ -13,7 +13,7 @@ use splat_content_ui::{
     session_notes as sessions, world,
 };
 
-use splat_party::{combat_sync, party, party_sync};
+use splat_party::{combat_sync, party};
 use splat_session_records::{difficulty, timeline};
 #[path = "../../encounter_run.rs"]
 pub mod encounter_run;

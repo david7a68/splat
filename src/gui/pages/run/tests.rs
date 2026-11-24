@@ -239,6 +239,41 @@ fn run_end_undo_and_close() {
         shell.read(|root| root.app.encounters.run().unwrap().state.phase.clone()),
         Phase::Running
     );
+    // A run that cannot close quietly (here its file changed on disk) asks first; Keep running
+    // and Escape, the safe choice, keep the run at every opening (egui
+    // `iter_1_b_unsaved_close_still_asks_and_keeps_the_run`).
+    let conflict = |shell: &mut Shell, on: bool| {
+        shell.update(|root, _, cx| {
+            root.app.encounters.run_mut().unwrap().disk_conflict = on;
+            cx.notify();
+        });
+    };
+    conflict(&mut shell, true);
+    let closing = |shell: &mut Shell| {
+        shell.read(|root| {
+            root.app
+                .encounters
+                .run()
+                .is_some_and(|run| run.closing.is_open())
+        })
+    };
+    for keep in ["Keep running", "escape", "Keep running"] {
+        shell.click("id:run-close");
+        assert!(closing(&mut shell), "Close run asks first");
+        assert!(shell.bounds("Keep running").is_some(), "{:?}", names());
+        if keep == "escape" {
+            shell.press("escape");
+        } else {
+            shell.click(keep);
+        }
+        assert!(!closing(&mut shell), "{keep} closes the dialog");
+        assert!(
+            shell.read(|root| root.app.encounters.has_run()),
+            "{keep} keeps the run"
+        );
+        assert_eq!(shell.read(|root| root.app.page), Page::Run);
+    }
+    conflict(&mut shell, false);
     shell.click("id:run-close");
     assert!(
         shell.read(|root| !root.app.encounters.has_run()),
@@ -585,6 +620,94 @@ fn run_effects_on_rows() {
             .any(|name| name.starts_with("Shield of Faith")),
         "U takes the effect off the row"
     );
+    // The dock's Effect field belongs to its row (egui `the_effect_field_belongs_to_its_row`):
+    // its words wait while another row is selected, and Enter adds them to that row only.
+    let cultist = participant(&mut shell, "Ember Cultist").key;
+    let other = shell.read(|root| {
+        let run = root.app.encounters.run().unwrap();
+        run.state
+            .participants
+            .iter()
+            .find(|p| p.name != "Ember Cultist" && p.present)
+            .unwrap()
+            .name
+            .clone()
+    });
+    let waiting = |shell: &mut Shell| {
+        shell.read(|root| {
+            let run = root.app.encounters.run().unwrap();
+            run.effect_fields
+                .get(&cultist)
+                .map(|field| field.words.clone())
+        })
+    };
+    shell.click("Effect: words for this row");
+    shell.type_text("Bless 10 rounds");
+    shell.click(&other);
+    assert_eq!(waiting(&mut shell).as_deref(), Some("Bless 10 rounds"));
+    let field = format!("id:run-effect-{cultist}");
+    assert!(
+        shell.bounds(&field).is_none(),
+        "another row's dock has no open field: {:?}",
+        names()
+    );
+    shell.click("Ember Cultist");
+    assert!(
+        shell.bounds(&field).is_some(),
+        "its field is open again with its row"
+    );
+    shell.click(&field);
+    shell.press("enter");
+    let blessed = |shell: &mut Shell, name: &str| {
+        participant(shell, name)
+            .conditions
+            .iter()
+            .any(|c| c.name().contains("Bless"))
+    };
+    assert!(blessed(&mut shell, "Ember Cultist"), "Enter adds the words");
+    assert!(!blessed(&mut shell, &other), "to their own row only");
+    assert_eq!(waiting(&mut shell), None);
+    assert!(shell.read(|root| root.app.encounters.run().unwrap().effect_open.is_none()));
+    // Exhaustion moves one level a press, each its own Undo step, and stops at 6 with the reason
+    // (egui `iter9_b_exhaustion_stepper_uses_scan_and_keeps_undo`,
+    // `iter10_b_exhaustion_limit_says_why`).
+    shell.update(|root, _, cx| {
+        root.app.encounters.run_mut().unwrap().panel = Panel::Conditions;
+        cx.notify();
+    });
+    let level = |shell: &mut Shell| {
+        participant(shell, "Ember Cultist")
+            .conditions
+            .iter()
+            .find(|c| c.name().starts_with("Exhaustion"))
+            .map(|c| crate::encounter_run::view::exhaustion_level(c.name()))
+    };
+    let steps =
+        |shell: &mut Shell| shell.read(|root| root.app.encounters.run().unwrap().history.len());
+    shell.click("Exhaustion");
+    assert_eq!(level(&mut shell), Some(1));
+    for _ in 0..5 {
+        shell.click("Raise exhaustion");
+    }
+    assert_eq!(level(&mut shell), Some(6));
+    let at_six = steps(&mut shell);
+    shell.click("Raise exhaustion");
+    assert_eq!(level(&mut shell), Some(6), "a press at 6 changes nothing");
+    assert_eq!(steps(&mut shell), at_six);
+    assert_eq!(
+        shell
+            .read(|root| root.app.encounters.run().unwrap().error.clone())
+            .as_deref(),
+        Some("Exhaustion stops at 6.")
+    );
+    shell.click("Lower exhaustion");
+    assert_eq!(level(&mut shell), Some(5));
+    assert_eq!(steps(&mut shell), at_six + 1, "one step a press");
+    shell.update(|root, _, cx| {
+        root.app.encounters.run_mut().unwrap().undo();
+        cx.notify();
+    });
+    assert_eq!(level(&mut shell), Some(6), "Undo takes back one level");
 }
 
 /// A creature the encounter changed (egui `run-overrides`): its card says what to add by hand

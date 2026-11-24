@@ -13,6 +13,12 @@ use theme::{Density, Type, colors};
 /// The footer's height (egui `FOOTER_HEIGHT`).
 pub(super) const FOOTER_HEIGHT: f32 = 28.0 + 7.0;
 
+#[cfg(test)]
+thread_local! {
+    /// How many roster rows the last frame built (a test of the virtual list).
+    pub(super) static ROWS_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// The Running phase.
 pub(super) fn render(
     root: &mut SplatRoot,
@@ -73,22 +79,6 @@ pub(super) fn render(
         window,
     );
     let scale = plan.scale;
-    let rows: Vec<AnyElement> = order
-        .iter()
-        .enumerate()
-        .map(|(at, &index)| {
-            roster::row(
-                root,
-                run,
-                index,
-                roster::TurnMark::of(index, current, next_up),
-                &plan,
-                at,
-                roster::Use::Live,
-                cx,
-            )
-        })
-        .collect();
     let handle = root.pages.run.roster_scroll.clone();
     let spans = plan.spans(&order);
     let list_height = if plan.overflow {
@@ -121,76 +111,98 @@ pub(super) fn render(
             handle.set_offset(gpui::point(px(0.0), px(-wanted)));
         }
     }
+    // Only the rows in view (and a view's height each side) are built: a long roster costs a
+    // frame what a short one does (`kit::placed_rows`).
+    let places: Vec<(f32, f32)> = spans
+        .iter()
+        .map(|&(top, bottom, _)| (top, bottom))
+        .collect();
+    #[cfg(test)]
+    ROWS_BUILT.with(|built| built.set(0));
+    let rows = kit::placed_rows(&places, &handle, list_height, |at| {
+        #[cfg(test)]
+        ROWS_BUILT.with(|built| built.set(built.get() + 1));
+        let index = order[at];
+        roster::row(
+            root,
+            run,
+            index,
+            roster::TurnMark::of(index, current, next_up),
+            &plan,
+            at,
+            roster::Use::Live,
+            cx,
+        )
+    });
     let overflow_line = overflow_note(run, &handle, &spans, list_height);
     let header_sheet = header::sheet_in_header(run, roster_width, window).is_some();
     let notice = live_notice(run, header_sheet, cx);
     let messages = footer::messages(run, false, cx);
     let compact = hide_panel.then(|| panel::compact_actions(run, cx));
-    let main = div()
-        .flex()
-        .flex_col()
-        .h_full()
-        .w(roster_width)
-        .flex_none()
-        .child(header::live(run, roster_width, scale, window, cx))
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .flex_1()
-                .min_h_0()
-                .child(
-                    // The rows' box: its height is the room the next frame fits them to.
-                    div()
-                        .relative()
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .min_h_0()
-                        .child(
-                            gpui::canvas(
-                                move |bounds, window, _| {
-                                    let height = f32::from(bounds.size.height);
-                                    if (roster_box.get() - height).abs() > 0.5 {
-                                        roster_box.set(height);
-                                        window.on_next_frame(|window, _| window.refresh());
-                                    }
-                                },
-                                |_, _, _, _| {},
-                            )
-                            .absolute()
-                            .size_full(),
-                        )
-                        .child(
-                            panel::group_drop_zone(
-                                div().flex().flex_col().flex_1().min_h_0(),
-                                "run-roster-drop",
-                                cx,
-                            )
-                            .child(kit::scroll::scroll_column_with(
-                                "run-roster",
-                                &handle,
-                                div().flex().flex_col().w_full().children(rows),
-                            )),
-                        )
-                        .children(overflow_line),
-                )
-                .children(notice)
-                .when(!messages.is_empty(), |body| {
-                    body.child(
+    let main =
+        div()
+            .flex()
+            .flex_col()
+            .h_full()
+            .w(roster_width)
+            .flex_none()
+            .child(header::live(run, roster_width, scale, window, cx))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .child(
+                        // The rows' box: its height is the room the next frame fits them to.
                         div()
+                            .relative()
                             .flex()
                             .flex_col()
-                            .flex_none()
-                            .gap(theme::S)
-                            .pt(theme::S)
-                            .children(messages),
+                            .flex_1()
+                            .min_h_0()
+                            .child(
+                                gpui::canvas(
+                                    move |bounds, window, _| {
+                                        let height = f32::from(bounds.size.height);
+                                        if (roster_box.get() - height).abs() > 0.5 {
+                                            roster_box.set(height);
+                                            window.on_next_frame(|window, _| window.refresh());
+                                        }
+                                    },
+                                    |_, _, _, _| {},
+                                )
+                                .absolute()
+                                .size_full(),
+                            )
+                            .child(
+                                panel::group_drop_zone(
+                                    div().flex().flex_col().flex_1().min_h_0(),
+                                    "run-roster-drop",
+                                    cx,
+                                )
+                                .child(
+                                    kit::scroll::scroll_column_with("run-roster", &handle, rows),
+                                ),
+                            )
+                            .children(overflow_line),
                     )
-                }),
-        )
-        .children(compact)
-        .child(dock::render(run, roster_width, cx))
-        .child(footer::live(run, cx));
+                    .children(notice)
+                    .when(!messages.is_empty(), |body| {
+                        body.child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .flex_none()
+                                .gap(theme::S)
+                                .pt(theme::S)
+                                .children(messages),
+                        )
+                    }),
+            )
+            .children(compact)
+            .child(dock::render(run, roster_width, cx))
+            .child(footer::live(run, cx));
     let mut page = div().flex().flex_row().size_full().child(main);
     if !hide_panel {
         let panel = panel::render(root, run, side, arrivals, window, cx);

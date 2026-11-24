@@ -907,6 +907,79 @@ fn run_large_roster() {
     open_saved(&mut shell, RUN_20);
     assert_eq!(count(&mut shell), 20);
     shell.capture("run-large-roster__02-roster-of-20__960x640");
+
+    // A roster far longer than its room builds only the rows in view and a view's height each
+    // side (`kit::placed_rows`), so a frame costs what a short roster's does; it still scrolls
+    // to the selection and says what is out of view.
+    let mut shell = Shell::new("run-large-roster", Seed::LargeRosters);
+    open_saved(&mut shell, RUN_20);
+    let built = || super::live::ROWS_BUILT.with(std::cell::Cell::get);
+    let twenty = shell.frame_cost(10);
+    let twenty_built = built();
+    on_run(&mut shell, |run| {
+        let model = run.state.participants[run.state.order[0]].clone();
+        for at in 0..280 {
+            let mut copy = model.clone();
+            copy.key = format!("copy-{at}");
+            copy.name = format!("Copy {at}");
+            run.state.order.push(run.state.participants.len());
+            run.state.participants.push(copy);
+        }
+    });
+    assert_eq!(count(&mut shell), 300);
+    let many = shell.frame_cost(10);
+    eprintln!(
+        "run-large-roster frame cost: 20 rows {twenty:?} ({twenty_built} built), 300 rows {many:?} ({} built)",
+        built()
+    );
+    assert!(
+        (1..80).contains(&built()),
+        "only the rows near the view are built: {}",
+        built()
+    );
+    shell.capture("run-large-roster__04-roster-of-300__1200x800");
+    assert!(
+        !has_target(&mut shell, "Copy 279"),
+        "a row far out of view is not built"
+    );
+    let last = index(&mut shell, "Copy 279");
+    // A selection (a click on a row, the panel's, a step) brings its row into view.
+    on_run(&mut shell, |run| run.select(last));
+    shell.settle();
+    // The last row is in view: the roster is scrolled to its end.
+    let (offset, end) = shell.read(|root| {
+        let handle = &root.pages.run.roster_scroll;
+        (
+            -f32::from(handle.offset().y),
+            f32::from(handle.max_offset().y),
+        )
+    });
+    assert!(
+        offset > 1000.0 && (end - offset).abs() < 1.0,
+        "{offset} of {end}"
+    );
+    assert!(
+        has_target(&mut shell, "Copy 279"),
+        "the selected row is built once it is in view"
+    );
+    assert!(
+        (1..80).contains(&built()),
+        "the view at the end builds its own rows only: {}",
+        built()
+    );
+    shell.capture("run-large-roster__05-last-row-selected__1200x800");
+    // The keys step the selection through rows that were never built; each comes into view.
+    let first = with_run(&mut shell, |run| run.state.order[0]);
+    on_run(&mut shell, |run| run.select(first));
+    assert!(!has_target(&mut shell, "Copy 50"));
+    for _ in 0..70 {
+        shell.press("down");
+    }
+    assert_eq!(selected(&mut shell), "Copy 50");
+    assert!(
+        has_target(&mut shell, "Copy 50"),
+        "the row the keys reached is built"
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
