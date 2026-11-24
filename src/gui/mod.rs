@@ -153,6 +153,9 @@ pub struct SplatRoot {
     /// What `remember` last wrote, so an unchanged frame writes nothing.
     remembered: Option<crate::ui_state::UiState>,
     _poll: Option<Task<()>>,
+    /// The keyboard comes back to the root when the focused element leaves the window
+    /// (`SplatRoot::new`), and the root's Escape runs before any page's own Escape binding.
+    _keys: Vec<gpui::Subscription>,
     /// Tests only: the kit gallery in place of the page.
     #[cfg(test)]
     pub(crate) gallery: Option<gallery::Gallery>,
@@ -171,6 +174,7 @@ impl SplatRoot {
             remembered: None,
             shell_widths: (theme::RAIL_WIDTH, None),
             _poll: None,
+            _keys: Vec::new(),
             #[cfg(test)]
             gallery: None,
         };
@@ -179,7 +183,41 @@ impl SplatRoot {
         pages::init(&mut root, window, cx);
         root.watch_close(window, cx);
         root._poll = Some(root.start_poll(window, cx));
+        root._keys = root.watch_keys(window, cx);
         root
+    }
+
+    /// The window's keys reach the root wherever the keyboard was:
+    /// - When the focused element leaves the window (a closed panel, a field a keyboard act
+    ///   took away), GPUI sends keys to no view of Splat's. The root takes the keyboard back in
+    ///   that draw, so Escape, Ctrl+K and the page's keys still work (egui read the global keys
+    ///   whatever had focus).
+    /// - Escape: the root's own order (an open menu, a dialog, the notes panel, Lookup) runs
+    ///   before any binding of a page or a part, as egui's root consumed Escape before the page
+    ///   drew. What the root does not take goes on to the page's binding, then to the focused
+    ///   field's `on_escape`.
+    fn watch_keys(&self, window: &mut Window, cx: &mut Context<Self>) -> Vec<gpui::Subscription> {
+        let lost = cx.on_focus_lost(window, |root, window, cx| {
+            window.focus(&root.focus, cx);
+        });
+        let root = cx.entity().downgrade();
+        let this_window = window.window_handle();
+        let escape = cx.intercept_keystrokes(move |event, window, cx| {
+            let keystroke = &event.keystroke;
+            if keystroke.key != "escape"
+                || keystroke.modifiers.modified()
+                || window.window_handle() != this_window
+            {
+                return;
+            }
+            let took = root
+                .update(cx, |root, cx| root.take_escape(window, cx))
+                .unwrap_or(false);
+            if took {
+                cx.stop_propagation();
+            }
+        });
+        vec![lost, escape]
     }
 
     /// The timer task between frames: when background work reported a change through the
@@ -287,8 +325,12 @@ impl SplatRoot {
         self.remember(cx);
     }
 
-    /// Save what this computer remembers, when it changed.
+    /// Save what this computer remembers, when it changed. A drag (a splitter's) writes the file
+    /// once, when it ends, and not on each frame of it.
     fn remember(&mut self, cx: &App) {
+        if cx.has_active_drag() {
+            return;
+        }
         let now = self.app.ui_state_now(kit::edge::column_widths(cx));
         if self.remembered.as_ref() != Some(&now) {
             self.app.ui_store.save(&now);
@@ -418,16 +460,29 @@ impl SplatRoot {
         cx.notify();
     }
 
-    /// Escape: an open menu first; then the notes panel (not on Sessions, not over the run
-    /// footer's second step); then Lookup, unless its view takes Escape itself or a Library form
-    /// is open. A dialog takes Escape before all of these (`kit::Dialog`).
+    /// Escape as a binding (a part that dispatches `Dismiss`): the root's order
+    /// (`take_escape`), else the focused view's own key listener gets it.
     fn dismiss(&mut self, _: &Dismiss, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.take_escape(window, cx) {
+            // Nothing of the root's took the Escape: the focused view's own key listener gets it
+            // (a field's `on_escape`, a page's keys). Bindings run before key listeners, so
+            // without this no listener under the root would ever see Escape.
+            cx.propagate();
+        }
+    }
+
+    /// The root's Escape, before any page's (`watch_keys`): an open menu first; then the notes
+    /// panel (not on Sessions, not over the run footer's second step); then Lookup, unless its
+    /// view takes Escape itself or a Library form is open. A dialog takes Escape before all of
+    /// these but the menu (`kit::Dialog`); under the close prompt or the copy dialog nothing
+    /// else gets it. True when the root took it.
+    fn take_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if kit::menu::close_open_popup(window, cx) || kit::dialog::escape_open_dialog(window, cx) {
             cx.notify();
-            return;
+            return true;
         }
         if self.app.copy_dialog.is_some() || self.app.confirm_close {
-            return;
+            return true;
         }
         let app = &mut self.app;
         if app.sessions.notes_open
@@ -440,14 +495,14 @@ impl SplatRoot {
         {
             app.sessions.notes_open = false;
             cx.notify();
-            return;
+            return true;
         }
         let view_takes_escape = if app.lookup.on_trackers() {
             // Escape ends a typed amount, not Lookup (the field loses focus).
             if app.trackers.takes_escape() {
                 app.trackers.end_asking(false, 0);
                 cx.notify();
-                return;
+                return true;
             }
             false
         } else {
@@ -459,12 +514,9 @@ impl SplatRoot {
         {
             app.lookup.close();
             cx.notify();
-            return;
+            return true;
         }
-        // Nothing of the root's took the Escape: the focused view's own key listener gets it (a
-        // field's `on_escape`, a page's keys). Bindings run before key listeners, so without
-        // this no listener under the root would ever see Escape.
-        cx.propagate();
+        false
     }
 
     /// The page's own place: the no-campaign state where a page needs a campaign, else the page
@@ -670,6 +722,7 @@ impl Render for SplatRoot {
         #[cfg(test)]
         kit::probe::clear();
         kit::dialog::begin_frame(cx);
+        kit::menu::begin_frame(window, cx);
         self.frame_logic(window, cx);
         // After the frame logic, which can open or close a panel or change page.
         self.measure_shell(window, cx);
