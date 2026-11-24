@@ -232,3 +232,26 @@ pub(super) fn side_choice(
     }
     row
 }
+
+/// An empty layer over its parent that keeps the width its parent is laid out at in `room`,
+/// and draws again when it changed: an editor's narrow layout follows the room it has (beside
+/// Lookup, inside the session plan), as egui's `ui.available_width()` does.
+pub(super) fn room_probe(room: std::rc::Rc<std::cell::Cell<Option<Pixels>>>) -> impl gpui::IntoElement {
+    gpui::canvas(
+        move |bounds, window, _| {
+            let width = bounds.size.width;
+            if room
+                .get()
+                .is_none_or(|old| (f32::from(old) - f32::from(width)).abs() > 0.5)
+            {
+                room.set(Some(width));
+                window.refresh();
+            }
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
+}

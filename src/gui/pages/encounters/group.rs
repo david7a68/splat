@@ -50,7 +50,12 @@ pub(super) fn render(
         .then(|| root.app.encounters.filter_choices());
     let focus_name = root.app.encounters.take_focus_name();
     let focus_search = root.app.encounters.take_focus_search();
-    let content = content_width(window);
+    let content = root
+        .pages
+        .encounters
+        .room
+        .get()
+        .unwrap_or_else(|| content_width(window));
     let narrow = content < NARROW;
     // The Add creatures column keeps its own width here (egui's group editor does not drag).
     let add_width = px(crate::design::side_panel_width(f32::from(content)))
@@ -110,9 +115,11 @@ pub(super) fn render(
     };
     let footer_lines = footer("group-editor-footer", lines, cx);
     div()
+        .relative()
         .flex()
         .flex_col()
         .size_full()
+        .child(super::common::room_probe(root.pages.encounters.room.clone()))
         .child(head)
         .child(kit::rule())
         .child(div().flex_1().min_h_0().pt(S).child(body))

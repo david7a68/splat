@@ -44,6 +44,8 @@ pub struct State {
     pub loot: std::collections::HashMap<String, loot::LootState>,
     /// Each Changes form's Other effect being typed, by the form's key.
     pub other_effects: std::collections::HashMap<String, String>,
+    /// The width the open editor is laid out at (`common::room_probe`).
+    pub room: std::rc::Rc<std::cell::Cell<Option<gpui::Pixels>>>,
     /// The search results' scroll (`kit::virtual_list::uniform_column`).
     pub results_scroll: gpui::UniformListScrollHandle,
     /// The results' facts width, by the ranking it was measured for (`editor::results_facts`).

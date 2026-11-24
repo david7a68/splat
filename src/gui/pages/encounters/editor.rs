@@ -91,7 +91,12 @@ pub(super) fn render(
     let focus_name = root.app.encounters.take_focus_name();
     let focus_search = root.app.encounters.take_focus_search();
 
-    let content = content_width(window);
+    let content = root
+        .pages
+        .encounters
+        .room
+        .get()
+        .unwrap_or_else(|| content_width(window));
     let narrow = content < NARROW;
     let add_width = add_width(root, content);
     let roster_width = (content - add_width).clamp(PANEL_MIN_WIDTH, LIST_MEASURE);
@@ -143,9 +148,11 @@ pub(super) fn render(
     };
     let footer_lines = footer("encounter-editor-footer", lines, cx);
     div()
+        .relative()
         .flex()
         .flex_col()
         .size_full()
+        .child(super::common::room_probe(root.pages.encounters.room.clone()))
         .child(head)
         .child(kit::rule())
         .child(div().flex_1().min_h_0().pt(S).child(body))

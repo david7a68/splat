@@ -588,6 +588,15 @@ fn plan_group_assembly() {
         "an unsaved group holds Back"
     );
     shell.click("Discard");
+    // The saved group's link comes with the campaign's next read of its groups (a background
+    // read after the save), which a loaded machine finishes later.
+    for _ in 0..200 {
+        if shell.bounds("Edit group Ash Pack").is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+        shell.wait(Duration::from_millis(50));
+    }
     shell.click("Edit group Ash Pack");
     assert!(shell.read(|root| root.app.encounters.group_open_in_plan()));
     shell.click("id:group-back");
