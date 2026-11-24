@@ -48,6 +48,21 @@ fn library_browse() {
         shell.read(|root| root.app.library.search_text().to_owned()),
         "dragon"
     );
+    // Round 25 FF5: a duplicate row's folder ends its second line, whole; the words before it
+    // shorten (`list::folder_last`). A line with no folder is one part.
+    assert_eq!(
+        super::list::folder_last(
+            "Same entry in two files · Creature · CR 1 · Ashen Marches · ashen-marches-copy/"
+        ),
+        (
+            "Same entry in two files · Creature · CR 1 · Ashen Marches",
+            Some(" · ashen-marches-copy/")
+        )
+    );
+    assert_eq!(
+        super::list::folder_last("Creature · CR 1 · Ashen Marches"),
+        ("Creature · CR 1 · Ashen Marches", None)
+    );
 }
 
 #[test]

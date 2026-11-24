@@ -967,7 +967,7 @@ pub fn iter14_e_changed_files_end_every_undo_result(
     );
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(feature = "test-support")]
 impl Library {
     /// The registration's Undo, pressed on its line: by its entry's ticket.
     pub(super) fn undo_registration_of(

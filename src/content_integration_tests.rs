@@ -60,11 +60,7 @@ fn iter14_e_changed_files_end_every_undo_result() {
             *campaigns = std::mem::take(&mut app.campaigns);
             std::mem::take(&mut app.library)
         },
-        |library, campaigns| {
-            let _ = frame_context.run(eframe::egui::RawInput::default(), |ctx| {
-                eframe::egui::CentralPanel::default().show(ctx, |ui| library.show(ui, campaigns));
-            });
-        },
+        |library, campaigns| library.begin(&frame_context, campaigns),
     );
 }
 
