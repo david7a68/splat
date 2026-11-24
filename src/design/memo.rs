@@ -266,23 +266,7 @@ pub struct Measure {
     scale: u32,
 }
 
-impl Measure {
-    /// A text measured in `font` for `room` points, in this `Ui`'s context.
-    pub fn of(ui: &egui::Ui, room: f32, font: &egui::FontId) -> Self {
-        Self {
-            room: room.to_bits(),
-            size: font.size.to_bits(),
-            family: font.family.clone(),
-            fonts: super::theme::font_generation(ui.ctx()),
-            scale: ui.ctx().pixels_per_point().to_bits(),
-        }
-    }
-
-    /// A text's own width in `font`: measured with no room to fit.
-    pub fn whole(ui: &egui::Ui, font: &egui::FontId) -> Self {
-        Self::of(ui, f32::INFINITY, font)
-    }
-}
+impl Measure {}
 
 mod sealed {
     pub trait Sealed {}

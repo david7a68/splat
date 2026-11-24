@@ -45,22 +45,16 @@ mod design;
 mod fixtures;
 mod gui;
 // The layout parts are public only so that their `compile_fail` doc tests can name them.
-#[doc(hidden)]
-pub use design::extras;
-pub use design::layout;
-// The pane is public only so that its `compile_fail` doc tests can name it.
 /// The shared fact part (ruling M5), public only so that its doc tests can name it.
 #[doc(hidden)]
 pub use design::fact;
-#[doc(hidden)]
-pub use design::pane;
-pub use design::value_block;
+pub use design::layout;
 /// The ownership and cost parts of `design` (kept results, the save row, per-change caches),
 /// public only so that their compile-fail doc tests can name them. The app uses them through
 /// `design`.
 #[doc(hidden)]
 pub mod ownership {
-    pub use crate::design::components::{Footer, ResultOrder};
+    pub use crate::design::components::ResultOrder;
     pub use crate::design::memo::{Changed, Key, Memo, Revised, Revision};
     pub use crate::design::results::{
         AtLimit, Cause, Change, DiskChanged, Ends, FailedAct, Fallback, File, Folder, Gone, Kept,
@@ -109,7 +103,7 @@ mod world {
 
 use design::{Status, colors, icons};
 use eframe::egui;
-pub use splat_design::{choice, create_reasons, field_id, key, lead, sentence, word};
+pub use splat_design::{choice, create_reasons, lead, sentence, word};
 
 /// Start Splat: a command when there are arguments, else the app's window.
 pub fn run() {

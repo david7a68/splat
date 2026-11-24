@@ -2,21 +2,13 @@
 //!
 //! The index is kept in the egui context, so the one Reader and the Markdown view can find
 //! art wherever they are shown, without each page passing it down.
-use crate::{
-    design::{self, Type, colors},
-    persistence::Module,
-};
-use eframe::egui::{self, Id, Rect, Vec2, vec2};
+use crate::persistence::Module;
+use eframe::egui::{self, Id};
 use splat::content::{Entry, art::ArtIndex};
 use std::{
-    collections::{HashMap, VecDeque},
     path::{Path, PathBuf},
     sync::{Arc, mpsc},
 };
-
-/// Decoded images kept ready. Older ones are dropped, so browsing does not fill video memory.
-const KEEP_DECODED: usize = 32;
-const FIGURE_HEIGHT: f32 = 520.0;
 
 pub fn install(ctx: &egui::Context) {
     egui_extras::install_image_loaders(ctx);
@@ -94,96 +86,6 @@ pub fn link_art(ctx: &egui::Context, url: &str) -> Option<PathBuf> {
     index(ctx)?.link(url).map(Path::to_path_buf)
 }
 
-fn uri(path: &Path) -> String {
-    format!("file://{}", path.display())
-}
-
-/// Note that an image is in use, and drop the oldest if too many are decoded.
-fn remember(ctx: &egui::Context, uri: &str) {
-    let dropped = ctx.data_mut(|data| {
-        let recent =
-            data.get_temp_mut_or_default::<VecDeque<String>>(Id::new("art_recently_shown"));
-        recent.retain(|known| known != uri);
-        recent.push_back(uri.to_owned());
-        (recent.len() > KEEP_DECODED)
-            .then(|| recent.pop_front())
-            .flatten()
-    });
-    if let Some(uri) = dropped {
-        ctx.forget_image(&uri);
-        // egui treats each WebP as an animation and keeps its texture under the frame's address.
-        ctx.forget_image(&format!("{uri}#0"));
-    }
-}
-
-/// An image's size, from its file header. Knowing it lets the page keep its layout while
-/// the image loads, and leave images out of view undecoded.
-fn dimensions(ctx: &egui::Context, path: &Path) -> Option<Vec2> {
-    let id = Id::new("art_dimensions");
-    if let Some(known) = ctx.data_mut(|data| {
-        data.get_temp_mut_or_default::<HashMap<PathBuf, Option<Vec2>>>(id)
-            .get(path)
-            .copied()
-    }) {
-        return known;
-    }
-    let size = image::image_dimensions(path)
-        .ok()
-        .map(|(width, height)| vec2(width as f32, height as f32));
-    ctx.data_mut(|data| {
-        data.get_temp_mut_or_default::<HashMap<PathBuf, Option<Vec2>>>(id)
-            .insert(path.to_path_buf(), size);
-    });
-    size
-}
-
-/// The size to draw an image at. A small image is not enlarged.
-fn fitted(size: Vec2, max: Vec2) -> Vec2 {
-    size * (max.x / size.x).min(max.y / size.y).min(1.0)
-}
-
-fn picture(ui: &mut egui::Ui, path: &Path, name: &str, max: Vec2) {
-    let Some(size) = dimensions(ui.ctx(), path).filter(|size| size.min_elem() > 0.0) else {
-        return;
-    };
-    let (rect, response) = ui.allocate_exact_size(fitted(size, max), egui::Sense::click());
-    response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), name));
-    if ui.is_rect_visible(rect) {
-        let uri = uri(path);
-        remember(ui.ctx(), &uri);
-        egui::Image::from_uri(uri)
-            .corner_radius(design::RADIUS_CONTROL)
-            .paint_at(ui, rect);
-        if response.has_focus() {
-            design::focus_ring(ui, rect);
-        }
-    }
-    let response = response
-        .on_hover_text("View full size")
-        .on_hover_cursor(egui::CursorIcon::ZoomIn);
-    if response.clicked() {
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(viewing_id(), Some((path.to_path_buf(), name.to_owned())));
-        });
-    }
-}
-
-/// A reader thumbnail retains the full-size picture action.
-pub fn thumbnail(ui: &mut egui::Ui, path: &Path, name: &str) {
-    picture(ui, path, name, Vec2::splat(design::XXL * 2.0));
-}
-
-/// An image in the flow of a note, as wide as the text.
-pub fn figure(ui: &mut egui::Ui, path: &Path, caption: &str) {
-    let name = match caption.trim() {
-        "" => "Image",
-        caption => caption,
-    };
-    picture(ui, path, name, vec2(ui.available_width(), FIGURE_HEIGHT));
-    design::gap(ui, design::Gap::XS);
-}
-
 fn viewing_id() -> Id {
     Id::new("art_viewing")
 }
@@ -195,64 +97,6 @@ fn viewing(ctx: &egui::Context) -> Option<(PathBuf, String)> {
 /// True while an image fills the window. Global shortcuts must leave Escape to it.
 pub fn viewer_open(ctx: &egui::Context) -> bool {
     viewing(ctx).is_some()
-}
-
-/// The full-window view of the image the DM clicked, if any. Its size comes from the file's
-/// header, so the viewer does not grow when the texture arrives.
-pub fn show_viewer(ctx: &egui::Context) {
-    if let Some((path, name)) = viewing(ctx) {
-        let uri = uri(&path);
-        remember(ctx, &uri);
-        let size =
-            dimensions(ctx, &path).map_or(design::ImageSize::Unknown, design::ImageSize::Known);
-        if design::popups::image_viewer(ctx, &name, &uri, size) {
-            ctx.data_mut(|data| data.remove::<Option<(PathBuf, String)>>(viewing_id()));
-        }
-    }
-}
-
-/// The square of an image to show in a round picture. A tall image keeps its top, where a
-/// creature's head usually is.
-fn square_crop(size: Vec2) -> Rect {
-    let side = size.min_elem();
-    let width = side / size.x;
-    let height = side / size.y;
-    Rect::from_min_size(egui::pos2((1.0 - width) / 2.0, 0.0), vec2(width, height))
-}
-
-/// A round picture of a character or creature, or the first letter of the name if there is
-/// no picture. `dim` darkens it, for someone who is not present.
-pub fn portrait(
-    ui: &egui::Ui,
-    rect: Rect,
-    path: Option<&Path>,
-    name: &str,
-    dim: Option<egui::Color32>,
-) {
-    let c = colors();
-    if let Some(path) = path {
-        let uri = uri(path);
-        remember(ui.ctx(), &uri);
-        let mut image = egui::Image::from_uri(uri).corner_radius(rect.width() / 2.0);
-        if let Some(size) = dimensions(ui.ctx(), path).filter(|size| size.min_elem() > 0.0) {
-            image = image.uv(square_crop(size));
-        }
-        if let Some(dim) = dim {
-            image = image.tint(dim);
-        }
-        image.paint_at(ui, rect);
-    } else {
-        ui.painter()
-            .circle_filled(rect.center(), rect.width() / 2.0, c.hover);
-        let initial = name.chars().next().map(char::to_uppercase);
-        ui.painter().text(
-            rect.center(),
-            egui::Align2::CENTER_CENTER,
-            initial.map_or_else(String::new, |letters| letters.collect()),
-            Type::Name.font(ui),
-            c.muted,
-        );
-    }
 }
 
 /// Whether a modal is open over the app: one of its own dialogs (`app_dialog`: the copy dialog,
@@ -313,33 +157,6 @@ mod tests {
     }
 
     #[test]
-    fn the_image_used_longest_ago_is_dropped_first() {
-        let ctx = egui::Context::default();
-        for number in 0..KEEP_DECODED {
-            remember(&ctx, &number.to_string());
-        }
-        remember(&ctx, "0");
-        remember(&ctx, "new");
-        let recent = ctx.data_mut(|data| {
-            data.get_temp_mut_or_default::<VecDeque<String>>(Id::new("art_recently_shown"))
-                .clone()
-        });
-        assert_eq!(recent.len(), KEEP_DECODED);
-        assert!(recent.contains(&"0".to_owned()));
-        assert!(!recent.contains(&"1".to_owned()));
-    }
-
-    #[test]
-    fn a_round_picture_shows_the_top_of_a_tall_image_and_the_middle_of_a_wide_one() {
-        let tall = square_crop(vec2(100.0, 400.0));
-        assert_eq!(tall.min, egui::pos2(0.0, 0.0));
-        assert_eq!(tall.max, egui::pos2(1.0, 0.25));
-        let wide = square_crop(vec2(400.0, 100.0));
-        assert_eq!(wide.min, egui::pos2(0.375, 0.0));
-        assert_eq!(wide.max, egui::pos2(0.625, 1.0));
-    }
-
-    #[test]
     fn a_creature_falls_back_to_its_origin_and_then_to_its_type() {
         let root = tempfile::tempdir().unwrap();
         for name in ["own.png", "origin.png", "beast.png"] {
@@ -385,21 +202,5 @@ mod tests {
         );
         assert_eq!(art(beast).as_deref(), Some("beast.png"));
         assert_eq!(art("splat_creature: {size: medium, type: ooze}\n"), None);
-    }
-
-    #[test]
-    fn a_large_image_shrinks_to_fit_and_a_small_one_keeps_its_size() {
-        assert_eq!(
-            fitted(vec2(1000.0, 500.0), vec2(500.0, 500.0)),
-            vec2(500.0, 250.0)
-        );
-        assert_eq!(
-            fitted(vec2(500.0, 1000.0), vec2(500.0, 250.0)),
-            vec2(125.0, 250.0)
-        );
-        assert_eq!(
-            fitted(vec2(100.0, 50.0), vec2(500.0, 500.0)),
-            vec2(100.0, 50.0)
-        );
     }
 }

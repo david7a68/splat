@@ -1,13 +1,11 @@
 //! The Timeline page: the whole campaign in story order, apart from any one session.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
-use super::{
-    Book, Event, EventDisplay, Kind, checks, clock_now, clock_words, day_numbers, kind_icon,
-};
+use super::{Book, Event, EventDisplay, Kind, checks, clock_now, clock_words, day_numbers};
 use crate::design::{
-    self, Action, Density, Status, colors, icons,
+    self, Status, colors, icons,
     outcome::{
-        BodyMessage, Choice, Fault, FaultMessage, FileLine, KeptOutcome, MessageChoice, Messages,
-        Notice, PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
+        Choice, Fault, FaultMessage, FileLine, KeptOutcome, MessageChoice, Messages, Notice,
+        PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
     },
 };
 use eframe::egui;
@@ -238,62 +236,6 @@ pub const ADD_KINDS: [Kind; 6] = [
     Kind::Event,
 ];
 
-/// One button for each of these kinds of event. Returns the new event's ID.
-pub fn quick_add(
-    ui: &mut egui::Ui,
-    book: &mut Book,
-    session: Option<Uuid>,
-    kinds: &[Kind],
-    first: impl FnOnce(&mut egui::Ui),
-) -> Option<String> {
-    quick_add_with(ui, book, session, kinds, Vec::new(), first).and_then(|chosen| chosen.ok())
-}
-
-/// `quick_add`, with lines of the strip's More menu alone, after the kinds. A new event's ID
-/// comes back as `Ok`, and a chosen line of `more` as `Err` with its index there.
-pub fn quick_add_with(
-    ui: &mut egui::Ui,
-    book: &mut Book,
-    session: Option<Uuid>,
-    kinds: &[Kind],
-    more: Vec<Action<'_>>,
-    first: impl FnOnce(&mut egui::Ui),
-) -> Option<Result<String, usize>> {
-    let blocked = book.unreadable.is_some();
-    let names: Vec<_> = kinds
-        .iter()
-        .map(|kind| format!("Add {}", kind.word()))
-        .collect();
-    let actions = kinds
-        .iter()
-        .zip(&names)
-        .map(|(kind, name)| {
-            Action::quiet(kind.word())
-                .icon(kind_icon(*kind))
-                .name(name)
-                .density(Density::Read)
-                .blocked_if(blocked, "The timeline file must be repaired first.")
-        })
-        .collect();
-    // Fight and Long rest stay visible; the rarer kinds share More when space is short.
-    let always_visible: Vec<usize> = kinds
-        .iter()
-        .enumerate()
-        .filter(|(_, kind)| matches!(kind, Kind::Encounter | Kind::LongRest))
-        .map(|(index, _)| index)
-        .collect();
-    design::hanging_add_strip(ui, first, actions, &always_visible, more).map(|index| {
-        let Some(&kind) = kinds.get(index) else {
-            return Err(index - kinds.len());
-        };
-        Ok(if kind == Kind::LongRest {
-            book.add_long_rest(session)
-        } else {
-            book.add(kind, session)
-        })
-    })
-}
-
 /// What the DM chose in the Timeline list's message footer, done after the footer is drawn.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ListAct {
@@ -347,16 +289,11 @@ impl design::results::Kept for JustAdded {
 type AddedInputs = (design::memo::Revision, design::memo::Revision);
 
 /// A fault of the Timeline: a save that failed, a removal that notes still link to, a flag of
-/// the file, or a second timeline file (in the footer); the file that cannot be read or that
-/// changed under the draft (in the page's place, `problems`). The kind gives the tone.
+/// the file, or a second timeline file (in the footer). The kind gives the tone.
 enum FileFault {
     /// Notes still link to the removed event: the DM checks them.
     Linked(Sentence),
     NotSaved(Sentence),
-    /// Timeline.md cannot be read, is gone, or its comparison cannot be made.
-    Unread(Sentence),
-    /// Timeline.md changed on disk under the DM's unsaved edit.
-    Changed,
     /// A line of the file that Splat read its own way (`Line 9: “Day 5” is day 1 in order. …`).
     Flag(Sentence),
     /// Another timeline file in the Timeline's folder.
@@ -366,18 +303,13 @@ enum FileFault {
 impl Fault for FileFault {
     fn severity(&self) -> Severity {
         match self {
-            Self::Linked(_) | Self::Flag(_) | Self::Copy | Self::Changed => Severity::NeedsFixing,
+            Self::Linked(_) | Self::Flag(_) | Self::Copy => Severity::NeedsFixing,
             Self::NotSaved(_) => Severity::NotSaved,
-            Self::Unread(_) => Severity::CannotRead,
         }
     }
     fn cause(&self) -> Sentence {
         match self {
-            Self::Linked(words)
-            | Self::NotSaved(words)
-            | Self::Flag(words)
-            | Self::Unread(words) => words.clone(),
-            Self::Changed => as_sentence(crate::timeline::CHANGED_UNDER_DRAFT),
+            Self::Linked(words) | Self::NotSaved(words) | Self::Flag(words) => words.clone(),
             Self::Copy => crate::sentence!(
                 "Another timeline file exists. Compare its events with Timeline.md before removing either file."
             ),
@@ -414,36 +346,6 @@ pub fn long_rest_status(restores: bool) -> Status<'static> {
             colors().muted
         },
     }
-}
-
-pub fn rest_ruling(ui: &mut egui::Ui, event: &Event) -> Option<RestRulingAction> {
-    rest_ruling_line(ui, event)
-}
-
-/// The ruling now in force and the action that changes it. The action changes data, so it is a
-/// quiet button after the status, never a link.
-pub fn rest_ruling_line(ui: &mut egui::Ui, event: &Event) -> Option<RestRulingAction> {
-    if event.kind != Kind::LongRest {
-        return None;
-    }
-    let mut action = None;
-    ui.horizontal_wrapped(|ui| {
-        design::status(ui, long_rest_status(event.restores));
-        // The line's item gap (`S`, the theme's) and this `S` make `L`.
-        design::gap(ui, design::Gap::S);
-        if Action::quiet(if event.restores {
-            "Mark not at full"
-        } else {
-            "Mark everyone at full"
-        })
-        .density(Density::Read)
-        .show(ui)
-        .clicked()
-        {
-            action = Some(RestRulingAction::Set(!event.restores));
-        }
-    });
-    action
 }
 
 /// The ruling's result in a pane's typed footer, while its rest is the one open: a finished
@@ -623,76 +525,6 @@ pub fn file_act(book: &mut Book, act: FileAct, ticket: Option<design::results::T
     }
 }
 
-/// What stops the timeline from saving. The DM must choose, so this cannot be dismissed.
-/// Returns true when the comparison needs the rest of the pane.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "ruling M20: Timeline.md’s problems in the page’s place, typed (`Ban::Body`)"
-)]
-pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
-    #[derive(Clone, Copy, PartialEq, Eq)]
-    enum Repair {
-        ReadAgain,
-        SaveAgain,
-        Overwrite,
-        Reload,
-    }
-    if let Some(error) = book.unreadable.clone() {
-        // Its choices start at its words; a gone file can also be saved there again.
-        let mut message =
-            FaultMessage::new(&FileFault::Unread(as_sentence(&error))).choice(Choice::new(
-                MessageChoice::Choice("Read the file again"),
-                Repair::ReadAgain,
-            ));
-        if book.gone {
-            message = message.choice(Choice::new(
-                MessageChoice::Choice("Save this timeline there again"),
-                Repair::SaveAgain,
-            ));
-        }
-        match BodyMessage::from(message).show(ui) {
-            Some(Repair::ReadAgain) => book.reload(),
-            Some(Repair::SaveAgain) => book.save_again(),
-            _ => {}
-        }
-    } else if book.conflict {
-        // The safe choice first, then the red one `L` after it (the part's).
-        let pressed = BodyMessage::from(
-            FaultMessage::new(&FileFault::Changed)
-                .choice(Choice::new(
-                    MessageChoice::Choice("Overwrite with my timeline"),
-                    Repair::Overwrite,
-                ))
-                .choice(Choice::new(
-                    MessageChoice::Lose("Reload and lose my timeline"),
-                    Repair::Reload,
-                )),
-        )
-        .show(ui);
-        match pressed {
-            Some(Repair::Overwrite) => book.overwrite(),
-            Some(Repair::Reload) => book.reload_keeping_undo(),
-            _ => {}
-        }
-        if book.conflict {
-            match book.conflict_comparison() {
-                Ok((draft, disk)) => {
-                    let face = egui::TextStyle::Monospace.resolve(ui.style());
-                    let height = ui.fonts_mut(|fonts| fonts.row_height(&face));
-                    let id = ("timeline_conflict", book.path(), &disk);
-                    design::draft_comparison_styled(ui, &draft, &disk, id, face, height);
-                }
-                Err(error) => {
-                    let fault = FileFault::Unread(as_sentence(&error));
-                    let _ = BodyMessage::<()>::from(FaultMessage::new(&fault)).show(ui);
-                }
-            }
-            return true;
-        }
-    }
-    false
-}
-
 impl TimelinePage {
     /// Show one event, whatever the filters were hiding.
     pub fn reveal(&mut self, id: &str, book: &Book) {
@@ -762,13 +594,6 @@ impl TimelinePage {
                 std::sync::Arc::new(ListView::make(book, &filters.0))
             })
             .clone()
-    }
-
-    /// Tests: a reveal left pending by a roll in `journey` at `at`, as when the DM leaves that
-    /// journey before its next draw.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn simulate_pending_reveal(&mut self, journey: &str, at: u64) {
-        self.reveal_checks = Some((journey.to_owned(), at));
     }
 
     pub fn reopen(&mut self) {
@@ -1316,29 +1141,6 @@ pub fn short_session(label: &str) -> &str {
     label.split(':').next().unwrap_or(label)
 }
 
-#[cfg(test)]
-pub(crate) fn check_long_rest_add(kinds: &'static [Kind]) {
-    use crate::design::test_harness::Themed as _;
-    use egui_kittest::kittest::Queryable;
-    let session = Some(Uuid::new_v4());
-    let mut harness = egui_kittest::Harness::builder().themed_state(
-        move |ctx, book: &mut Book| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                quick_add(ui, book, session, kinds, |_| {});
-            });
-        },
-        Book::default(),
-    );
-    harness.run_steps(2);
-    harness.get_by_label("Add Long rest").click();
-    harness.run_steps(2);
-    assert_eq!(harness.state().events.len(), 1);
-    assert!(super::party_state(&harness.state().events, session).rested);
-    let id = harness.state().events[0].id.clone();
-    harness.state_mut().remove(&id);
-    assert!(!super::party_state(&harness.state().events, session).rested);
-}
-
 /// The kind's word before the open event's title, after its icon: none for a day or an untitled
 /// event, whose label already says its kind, so the header says the kind once.
 pub fn header_kind(event: &Event) -> &'static str {
@@ -1378,11 +1180,6 @@ mod tests {
             assert_eq!(header.matches(word).count(), 1, "{header}");
             assert!(!event.facts().contains(word), "{}", event.facts());
         }
-    }
-
-    #[test]
-    fn long_rest_added_on_timeline_restores_and_undo_removes_its_ruling() {
-        check_long_rest_add(&Kind::ALL);
     }
 
     #[test]

@@ -129,22 +129,6 @@ impl Party {
         self.combat.enabled && self.combat.state() == crate::combat_sync::SyncState::Conflict
     }
 
-    /// A read of the selected sheet, in D&D Beyond's own fields. Test builds have no route
-    /// to a live one, so a visual test shows the sync panel's editable values this way.
-    /// For visual tests: swap in a party's members and its read error, and get the old ones back
-    /// (an empty party whose read failed, then the party as it was).
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn swap_members_and_error(
-        &mut self,
-        members: Vec<crate::party_sync::Member>,
-        error: Option<String>,
-    ) -> (Vec<crate::party_sync::Member>, Option<String>) {
-        (
-            std::mem::replace(&mut self.reader.members, members),
-            std::mem::replace(&mut self.reader.error, error),
-        )
-    }
-
     #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_sheet_read(&mut self, max_hp: i64, sheet: &Value) {
         let id = self

@@ -27,4 +27,3 @@ zeroize = "1"
 directories = "6"
 tempfile = "3"
 splat-content-ui = { path = "../content_ui", features = ["test-support"] }
-egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }

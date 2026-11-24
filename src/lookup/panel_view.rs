@@ -446,11 +446,6 @@ impl Lookup {
     pub fn follow_nav(&mut self, nav: world::Nav) {
         self.follow(nav);
     }
-
-    /// A scroll of the reader closes the result list.
-    pub fn reader_scrolled(&mut self) {
-        self.results_open = false;
-    }
 }
 
 /// The search field's placeholder for the panel's width.

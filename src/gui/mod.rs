@@ -271,7 +271,6 @@ impl SplatRoot {
             app.campaign_content.tick(ctx, &app.campaigns);
             let (epoch, session) = app.poll_background(ctx);
             let modal = app.copy_dialog.is_some() || app.confirm_close;
-            crate::design::save_row::set_modal(ctx, modal);
             app.sync_party(ctx, epoch, session.clone());
             app.sessions.on_page = app.page == Page::Sessions;
             app.sessions.modal = modal;

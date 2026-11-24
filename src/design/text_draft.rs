@@ -9,28 +9,19 @@
 //! - **Words.** A draft has no `==`: a host compares words with `as_str()`, so each compare of
 //!   the whole text is in plain sight (layout PR 9b: a quiet frame should compare none).
 //! - **Revision.** Each change of the bytes is a new [`Revision`] (`design::memo`), new in this
-//!   run. Per buffer operation:
-//!   - `insert_text`: a new revision when it inserted at least one character;
-//!   - `delete_char_range`: a new revision when it removed at least one character (egui asks
-//!     past the end for Delete at the end; that removes nothing and keeps the key);
-//!   - egui's default `replace_with`, `clear` and `take` run through those two, so a clear then
-//!     an insert of the same words gives two new revisions: the words end equal, the key does
-//!     not;
-//!   - [`TextDraft::replace`] (the program's change: a reload, a discard): always a new
-//!     revision, also for equal words, so its layout is made again. (The field guard compares
-//!     words: other words drop egui's history, equal words keep it, as for a plain text.)
-//!
-//!   A no-op event (an empty paste, Delete at the end) keeps the revision, even when egui says
-//!   `changed()`: the callers keep egui's `changed()` for their events; the key is only for the
-//!   parts' kept work.
+//!   run:
+//!   - [`TextDraft::push_str`]: a new revision when it adds at least one character;
+//!   - [`TextDraft::replace`], [`TextDraft::edit`] and [`TextDraft::clear`] (the program's
+//!     change: a reload, a discard, a command's insert): always a new revision, also for equal
+//!     words, so its layout is made again.
 //!
 //! ```
 //! use splat_design::text_draft::TextDraft;
 //! let mut draft = TextDraft::new("Line 1");
 //! let first = draft.key();
-//! assert_eq!(egui::TextBuffer::insert_text(&mut draft, "", 0), 0);
+//! draft.push_str("");
 //! assert_eq!(draft.key(), first, "a no-op keeps the key");
-//! egui::TextBuffer::insert_text(&mut draft, "!", 6);
+//! draft.push_str("!");
 //! assert_ne!(draft.key(), first);
 //! let copy = draft.copy_as_new();
 //! assert_ne!(copy.key().draft(), draft.key().draft());
@@ -247,109 +238,35 @@ impl std::ops::Deref for TextDraft {
     }
 }
 
-impl egui::TextBuffer for TextDraft {
-    fn is_mutable(&self) -> bool {
-        true
-    }
-
-    fn as_str(&self) -> &str {
-        &self.text
-    }
-
-    fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
-        let inserted = self.text.insert_text(text, char_index);
-        if inserted > 0 {
-            self.revise();
-        }
-        inserted
-    }
-
-    fn delete_char_range(&mut self, char_range: std::ops::Range<usize>) {
-        // egui asks past the end (Delete at the end asks for `len..len + 1`), and `String`
-        // clamps that to nothing: only a deletion that removed bytes is a new revision.
-        let before = self.text.len();
-        self.text.delete_char_range(char_range);
-        if self.text.len() != before {
-            self.revise();
-        }
-    }
-
-    fn type_id(&self) -> std::any::TypeId {
-        std::any::TypeId::of::<Self>()
-    }
-}
-
-/// A draft lent to egui's `TextEdit` for one draw (`layout::FieldId::editor`): each change
-/// reaches `live`, so the part's layouter reads the live key on every call (egui lays out
-/// again after each edit in its own pass, also several in one frame).
-pub(in crate::design) struct Lent<'a> {
-    pub draft: &'a mut TextDraft,
-    pub live: &'a std::cell::Cell<DraftKey>,
-}
-
-impl egui::TextBuffer for Lent<'_> {
-    fn is_mutable(&self) -> bool {
-        true
-    }
-
-    fn as_str(&self) -> &str {
-        &self.draft.text
-    }
-
-    fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
-        let inserted = self.draft.insert_text(text, char_index);
-        self.live.set(self.draft.key);
-        inserted
-    }
-
-    fn delete_char_range(&mut self, char_range: std::ops::Range<usize>) {
-        self.draft.delete_char_range(char_range);
-        self.live.set(self.draft.key);
-    }
-
-    fn type_id(&self) -> std::any::TypeId {
-        std::any::TypeId::of::<TextDraft>()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui::TextBuffer;
 
     /// The revision rule per operation (module comment), and identity.
     #[test]
     fn each_byte_change_is_a_new_revision_and_nothing_else_is() {
         let mut draft = TextDraft::new("Ash road");
         let start = draft.key();
-        draft.delete_char_range(3..3);
-        assert_eq!(draft.key(), start, "an empty delete keeps the key");
-        draft.insert_text("", 0);
-        assert_eq!(draft.key(), start, "an empty insert keeps the key");
-        draft.delete_char_range(8..9);
-        assert_eq!(
-            draft.key(),
-            start,
-            "a delete past the end (Delete at the end) removes nothing and keeps the key"
-        );
-        draft.delete_char_range(0..3);
-        let deleted = draft.key();
-        assert_ne!(deleted, start);
-        draft.insert_text("Ash", 0);
-        assert_eq!(draft.as_str(), "Ash road");
+        draft.push_str("");
+        assert_eq!(draft.key(), start, "an empty addition keeps the key");
+        draft.push_str("s");
+        let added = draft.key();
+        assert_ne!(added, start);
+        draft.edit(|text| text.truncate(3));
+        assert_eq!(draft.as_str(), "Ash");
+        assert_ne!(draft.key(), added, "an edit in place is new");
+        let before = draft.key();
+        draft.replace("Ash");
         assert_ne!(
             draft.key(),
-            deleted,
-            "clear then insert of equal words: a new key"
+            before,
+            "a program replacement of equal words is new"
         );
-        assert_ne!(draft.key(), start);
-        let before = draft.key();
-        draft.replace("Ash road");
-        assert_ne!(draft.key(), before, "a program replacement is always new");
         assert_eq!(draft.key().draft(), start.draft(), "the same document");
-        let taken = draft.take();
-        assert_eq!(taken, "Ash road");
+        let before = draft.key();
+        draft.clear();
         assert!(draft.as_str().is_empty());
+        assert_ne!(draft.key(), before, "a clear is new");
         let other = TextDraft::new("Ash road");
         assert_ne!(other.key().draft(), draft.key().draft());
     }

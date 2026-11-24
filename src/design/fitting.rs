@@ -17,3 +17,44 @@ pub fn first_fit<C: Copy, R>(
         .filter(|candidate| legal(*candidate))
         .find_map(|candidate| measure(candidate).map(|fit| (candidate, fit)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The selector alone (not evidence for the plan row, whose recipe is a later pull request):
+    /// an order whose later candidate is wider than an earlier one. It takes the first that fits,
+    /// measures each legal candidate at most once in order, and never skips ahead by width.
+    #[test]
+    fn the_selector_takes_the_first_fit_in_order() {
+        const ORDER: [u32; 5] = [70, 60, 66, 40, 12];
+        for room in [80, 65, 61, 45, 10] {
+            let mut measured = Vec::new();
+            let chosen = first_fit(
+                ORDER,
+                |_| true,
+                |width| {
+                    measured.push(width);
+                    (width <= room).then_some(())
+                },
+            );
+            let first = ORDER.iter().position(|width| *width <= room);
+            assert_eq!(
+                chosen.map(|(width, ())| width),
+                first.map(|at| ORDER[at]),
+                "room {room}"
+            );
+            assert_eq!(
+                measured,
+                ORDER[..first.map_or(ORDER.len(), |at| at + 1)].to_vec(),
+                "room {room}: each candidate measured once, in order"
+            );
+        }
+        let skip = first_fit(
+            ORDER,
+            |width| width != 60,
+            |width| (width <= 65).then_some(()),
+        );
+        assert_eq!(skip.map(|(width, ())| width), Some(40));
+    }
+}

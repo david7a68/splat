@@ -6,10 +6,10 @@
 use super::{Command, Panel, Participant, PartySync, Phase, Run, SHEET_SOURCE};
 use crate::{
     combat_sync::SyncState,
-    design::{self, Action, Density, RunScale, Status, Type, colors, icons, reader as style},
+    design::{self, RunScale, Status, colors, icons, reader as style},
     encounter_settings::{Grouping, GroupingWords},
 };
-use eframe::egui::{self, vec2};
+use eframe::egui::{self};
 use splat::content::overrides::{BY_HAND, Row};
 use splat::content::{Entry, Reference};
 use std::sync::Arc;
@@ -36,41 +36,6 @@ pub const OTHER_EFFECT_TIMED: &str = "Other effect, such as Bless 10 rounds";
 /// X7: what the Conditions tab records, and what Splat does with a time the DM types.
 pub const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9. Other effects stay local and do not sync.";
 
-/// Run toggles use a selected surface; the turn action keeps the accent fill.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-pub fn toggle(
-    ui: &mut egui::Ui,
-    label: &str,
-    icon: &str,
-    selected: bool,
-    name: &str,
-    density: Density,
-) -> egui::Response {
-    let button = egui::Button::new(
-        Type::Body
-            .rich(ui, format!("{icon} {label}"))
-            .color(colors().text),
-    )
-    .selected(selected)
-    .min_size(vec2(0.0, density.control()));
-    // FH1, FI3: an off toggle keeps the frame's padding, with nothing painted, so turning it
-    // on moves no word and no neighbour.
-    let button = if selected {
-        button.fill(colors().selected)
-    } else {
-        button
-            .frame(true)
-            .fill(egui::Color32::TRANSPARENT)
-            .stroke(egui::Stroke::NONE)
-    };
-    let response = ui.add(button);
-    design::named(ui, &response, name);
-    response
-}
-
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many times a group row scanned the run's participants for that group's joins.
@@ -83,12 +48,6 @@ thread_local! {
     /// unchanged frame works out none of them.
     pub(super) static PREPARED: std::cell::Cell<(usize, usize)> =
         const { std::cell::Cell::new((0, 0)) };
-}
-
-#[cfg(any(test, feature = "test-support"))]
-thread_local! {
-    /// How many toggle widths the conditions grid measured.
-    static CONDITION_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Where an official condition is among a participant's conditions (Exhaustion at any level).
@@ -427,12 +386,6 @@ pub const KEYS: [(&str, &str); 13] = [
 ];
 
 impl Run {
-    /// The egui Run page is gone (the GPUI page draws the run). Kept, drawing nothing, only so
-    /// the Encounters page's egui `show_run` builds until that area's strip deletes it.
-    pub fn show(&mut self, _ui: &mut egui::Ui) -> bool {
-        false
-    }
-
     pub fn run_command(&mut self, command: Command) {
         let follow = matches!(command, Command::Next | Command::Begin | Command::Continue);
         // A field that reports each key keeps the keyboard, or the next digit lands in the
@@ -989,27 +942,6 @@ impl Run {
         }
     }
 
-    /// One action for the whole party (T3.3). The run works fully without it.
-    pub fn party_sync_action(&self) -> Option<Action<'static>> {
-        if self.linked_participants().is_empty() {
-            return None;
-        }
-        let stopping = matches!(self.party_sync_plan(), PartySync::Stop(_));
-        Some(Action::quiet(if stopping { "Stop sync" } else { "Sync party" })
-            .icon(icons::SYNC_ON)
-            .density(Density::Read)
-            .name(if stopping {
-                "Stop party sync"
-            } else {
-                "Sync party"
-            })
-            .hint("Read every linked character’s sheet. A value you changed stays, and you choose.")
-            .blocked_if(
-                !self.connected && !self.simulate_connection,
-                "Connect to D&D Beyond in Settings to sync.",
-            ))
-    }
-
     pub fn toggle_party_sync(&mut self) {
         let plan = self.party_sync_plan();
         self.keep_party_synced = matches!(plan, PartySync::Start(_));
@@ -1034,17 +966,6 @@ impl Run {
     }
 
     // ---- Side panel -------------------------------------------------------------
-
-    /// Add to fight opens Arrivals. It is beside the fight's own controls, not among the
-    /// panel's tabs, so that the DM finds it when something arrives. It takes the height of
-    /// the controls in its row. Narrow layouts keep the icon and the word Add.
-    pub fn add_to_fight(&self, words: bool, density: Density) -> Action<'static> {
-        design::turn_heading::add_to_fight(
-            words,
-            density,
-            self.panel == Panel::Groups && !self.hide_panel,
-        )
-    }
 
     /// The Arrivals footer's lines (both views): the newest arrival's result with a tie's Move,
     /// then each group's reason its Add waits for.

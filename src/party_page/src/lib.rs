@@ -1,5 +1,5 @@
 //! Party page for the desktop app.
-pub use splat_design::{field_id, sentence, word};
+pub use splat_design::{sentence, word};
 
 use splat_content_ui::design;
 #[cfg(test)]

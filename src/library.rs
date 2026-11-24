@@ -655,16 +655,6 @@ impl Library {
         })
     }
 
-    /// The footer order of the open entry's link result: the order its own update issued
-    /// (review of PR 298), for the check that proves it.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn open_link_result_order(&self) -> Option<design::ResultOrder> {
-        let owner = self.open_link_owner()?;
-        self.link_edits
-            .get(&owner)
-            .map(|shown| shown.order_for_caller_test())
-    }
-
     /// The open entry as the owner of its link offer and link result.
     fn open_link_owner(&self) -> Option<LinkOwner> {
         let (id, root) = self.open_entry_key()?;
@@ -1117,26 +1107,6 @@ impl Library {
         Ok(())
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn repairing_package_about(&self) -> bool {
-        self.selected
-            .and_then(|at| self.loaded.as_ref()?.notes.get(at))
-            .is_some_and(|note| {
-                note.is_manifest()
-                    && note.error.is_some()
-                    && self.source
-                    && self.scope == Scope::Package(note.owner.id().unwrap())
-                    && self.section == Section::All
-            })
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn selected_name(&self) -> Option<&str> {
-        self.selected
-            .and_then(|i| self.loaded.as_ref()?.notes.get(i))
-            .map(Note::name)
-    }
-
     pub fn report_error(&mut self, error: String) {
         self.error = Some(error.into());
     }
@@ -1378,16 +1348,6 @@ impl Library {
         }
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn repair_lookups(&self) -> usize {
-        REPAIR_LOOKUPS.with(std::cell::Cell::get)
-    }
-
-    /// The broken-link scans: an unchanged frame does none.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn broken_line_scans(&self) -> usize {
-        BROKEN_LINE_SCANS.with(std::cell::Cell::get)
-    }
     pub fn repair_file_link(
         &mut self,
         path: PathBuf,
@@ -3030,9 +2990,9 @@ mod tests {
                 "src/campaigns.rs",
                 &[
                     ("kept_result", 0),
-                    (".blocked(", 4),
+                    (".blocked(", 0),
                     ("blocked_if(", 0),
-                    ("design::locked(", 1),
+                    ("design::locked(", 0),
                     ("undo_message(", 0),
                 ],
             ),

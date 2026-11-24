@@ -5,7 +5,7 @@ use crate::design::memo::Revised;
 use crate::design::text_draft::{DraftKey, KeptCompare, TextDraft};
 use crate::{
     design::{
-        self, colors,
+        self,
         outcome::{
             Fault, FaultMessage, KeptOutcome, Messages, Notice, PaneFrame, Sentence, Severity,
             UndoStep, Verb,
@@ -14,110 +14,12 @@ use crate::{
     library::write_note,
     persistence::Campaign,
 };
-use eframe::egui;
 use uuid::Uuid;
 
 /// The repair editor's accessible name. It names the file, so a DM who tabs between two open
 /// repairs hears which is which. Selectors that ask for `Note text` still find it.
 pub fn editor_name(path: &str) -> String {
     format!("Note text: {path}")
-}
-
-/// The repair editor's field. A broken note has no identity that the app can read (its text
-/// does not parse), so its path is its owner: two repairs open at once are two fields.
-const REPAIR_TEXT: design::layout::FieldName = crate::field_id!("world_repair_text");
-
-/// The source editor's face: the note's text in monospace, as wide as its room.
-/// The source editor's face: the note's text in monospace, laid out once per change (layout
-/// PR 9b).
-fn source_face(ui: &egui::Ui) -> design::pane::Face {
-    design::pane::Face::Font(egui::TextStyle::Monospace.resolve(ui.style()))
-}
-
-fn source_style(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
-    edit.font(egui::TextStyle::Monospace)
-        .desired_width(f32::INFINITY)
-}
-
-/// The part of the error line's mark (`from` to `to`, screen y) that lies in the editor's view:
-/// none when it lies outside it.
-fn mark_in_view(from: f32, to: f32, view: egui::Rangef) -> Option<(f32, f32)> {
-    let (from, to) = (from.max(view.min), to.min(view.max));
-    (from < to).then_some((from, to))
-}
-
-/// The source editor itself: the note's text in the editor's face, named for its file, with the
-/// error line marked. One closed editor viewport (layout PR 9): its fixed frame keeps all four
-/// edges in view, and the text and its lane scroll inside it, up to `most` tall in the page's
-/// scroll (Campaign). Its two events (changed, gained focus), its outside frame and its id.
-fn source_editor(
-    ui: &mut egui::Ui,
-    most: f32,
-    path: &str,
-    draft: &mut TextDraft,
-    error_line: Option<usize>,
-) -> ((bool, bool), egui::Rect, egui::Id) {
-    let field = REPAIR_TEXT.of(design::TextKey::from_data(path));
-    let face = source_face(ui);
-    let output = design::pane::editor_view(
-        ui,
-        design::pane::ViewHeight::AtMost(most),
-        field,
-        draft,
-        face,
-        source_style,
-    );
-    design::named(ui, &output.response, &editor_name(path));
-    let active = (output.response.changed(), output.response.gained_focus());
-    if let Some(line) = error_line {
-        let position = draft
-            .lines()
-            .take(line.saturating_sub(1))
-            .map(|line| line.chars().count() + 1)
-            .sum();
-        let row = output
-            .galley
-            .pos_from_cursor(egui::text::CCursor::new(position));
-        let y = output.galley_pos.y + row.top();
-        // The mark is in the frame's left margin, and only where the text is in view.
-        if let Some((from, to)) = mark_in_view(y, y + row.height(), output.view.y_range()) {
-            ui.painter().vline(
-                output.frame.left() + design::XS,
-                from..=to,
-                egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
-            );
-        }
-    }
-    (active, output.frame, output.response.id)
-}
-
-/// The source editor, with its two events apart: the DM changed the text, and focus moved into
-/// it. A caller that keeps a result for one draft ends it on a change, not on focus. Campaign's
-/// repair keeps it in a viewport of its own, up to six rows high, which the page scrolls whole.
-pub fn editor_events(
-    ui: &mut egui::Ui,
-    path: &str,
-    draft: &mut TextDraft,
-    error_line: Option<usize>,
-) -> (bool, bool) {
-    const MAX_HEIGHT: f32 = design::XXL * 6.0 + design::L + design::S + design::XS;
-    let (active, _frame, id) = source_editor(ui, MAX_HEIGHT, path, draft, error_line);
-    // The page brings the editor's whole fixed frame into view through its focus clearance
-    // (`pane::reveal_focus`: an editor viewport's block is its frame), never by a raw scroll of
-    // its own, so a press on a partly shown editor moves nothing while the pointer is down
-    // (layout step 11c, review of PR 719). A screen reader's request to show it gives it the
-    // keyboard, which the clearance then follows.
-    let reveal = ui.input(|input| {
-        input.events.iter().any(|event| {
-            matches!(event, egui::Event::AccessKitActionRequest(request)
-                if request.action == egui::accesskit::Action::ScrollIntoView
-                    && request.target == egui::accesskit::NodeId::from(id.value()))
-        })
-    });
-    if reveal {
-        ui.memory_mut(|memory| memory.request_focus(id));
-    }
-    active
 }
 
 /// Why Save would not write this draft: a path outside its folder, a fault in its text and the
@@ -557,23 +459,6 @@ mod tests {
     use super::*;
     use crate::design::memo::Changed;
     use crate::design::save_row::{DraftState, Primary};
-
-    /// The error line's mark shows only where the text is in view, as the clip it replaced cut it:
-    /// whole when inside, cut at the view's edge, nothing when outside (view 100 to 200).
-    #[test]
-    fn the_error_mark_is_cut_at_the_editors_view() {
-        let view = egui::Rangef::new(100.0, 200.0);
-        for (mark, shown) in [
-            ((120.0, 138.0), Some((120.0, 138.0))),
-            ((90.0, 108.0), Some((100.0, 108.0))),
-            ((192.0, 210.0), Some((192.0, 200.0))),
-            ((60.0, 80.0), None),
-            ((210.0, 228.0), None),
-            ((80.0, 100.0), None),
-        ] {
-            assert_eq!(mark_in_view(mark.0, mark.1, view), shown, "mark {mark:?}");
-        }
-    }
 
     fn campaign(root: &std::path::Path) -> Campaign {
         Campaign {

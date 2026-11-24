@@ -1,4 +1,3 @@
-use eframe::egui;
 use splat::content::{
     Entry,
     overrides::{Base, Overrides, Resolved, Row},
@@ -219,72 +218,12 @@ impl RunGroup {
         }
     }
 
-    /// The member summary for a line `width` wide in `font`: it wraps between members, never
-    /// inside one. A member wider than the line breaks at its own spaces, first before its
-    /// `(as …)`, and never inside a word.
-    pub fn member_summary_wrapped(&self, ui: &egui::Ui, font: &egui::FontId, width: f32) -> String {
-        self.member_summary_fit(ui, font, width).0
-    }
-
-    /// `member_summary_wrapped`, and whether `Will add:` had to stand apart from its first
-    /// member because the two do not fit one line `width` wide (FI8).
-    pub fn member_summary_fit(
-        &self,
-        ui: &egui::Ui,
-        font: &egui::FontId,
-        width: f32,
-    ) -> (String, bool) {
-        let summary = self.member_summary();
-        let (lead, members) = match summary.strip_prefix("Will add: ") {
-            Some(members) => ("Will\u{a0}add:", members),
-            None => ("", summary.as_str()),
-        };
-        let mut members: Vec<_> = members
-            .split(", ")
-            .map(|member| keep_whole(ui, font, member, width))
-            .collect();
-        if lead.is_empty() {
-            return (members.join(", "), false);
-        }
-        // FC6: `Will add:` stays on a line with its first member when the two fit one line;
-        // only a member too wide for that takes a line of its own.
-        let first = members.first().cloned().unwrap_or_default();
-        let together = format!("{lead}\u{a0}{first}");
-        if crate::design::number_width(ui, &together, font) <= width {
-            members[0] = together;
-            (members.join(", "), false)
-        } else {
-            (format!("{lead} {}", members.join(", ")), true)
-        }
-    }
-
     /// Every creature the note names, whether or not it can be found now.
     pub fn creature_count(&self) -> u64 {
         self.members
             .iter()
             .map(|member| member.count)
             .fold(self.unavailable, u64::saturating_add)
-    }
-}
-/// `words` with no-break spaces when they fit one line `width` wide. Too wide, they break
-/// first before `(as …)`, each part whole when it fits; a part that still does not fit breaks
-/// at its own spaces.
-pub fn keep_whole(ui: &egui::Ui, font: &egui::FontId, words: &str, width: f32) -> String {
-    let whole = |part: &str| {
-        let joined = part.replace(' ', "\u{a0}");
-        if crate::design::number_width(ui, &joined, font) <= width {
-            joined
-        } else {
-            part.to_owned()
-        }
-    };
-    let joined = whole(words);
-    if joined != words || !words.contains(' ') {
-        return joined;
-    }
-    match words.split_once(" (as ") {
-        Some((name, base)) => format!("{} {}", whole(name), whole(&format!("(as {base}"))),
-        None => words.to_owned(),
     }
 }
 

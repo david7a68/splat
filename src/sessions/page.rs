@@ -66,13 +66,6 @@ crate::create_reasons! {
     }
 }
 
-crate::create_reasons! {
-    /// Why the New template form's Create waits.
-    enum TemplateReason {
-        NoName => "Type a name first.",
-    }
-}
-
 /// Why `form` cannot be made now, judged on its words and on the templates the page lists.
 fn form_reason(form: &Form, templates: &[Template]) -> Option<FormReason> {
     if form.number.trim().parse::<u32>().is_err() {
@@ -125,12 +118,6 @@ struct FolderScan {
 thread_local! {
     /// The session folder listing's end events (`refresh`) on this thread.
     static FOLDER_SCAN_ENDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-/// How often `refresh` ended the session folder's listing on this thread.
-#[cfg(any(test, feature = "test-support"))]
-pub fn folder_scan_ends() -> usize {
-    FOLDER_SCAN_ENDS.with(std::cell::Cell::get)
 }
 
 pub use splat_content_ui::session_notes::FolderFault;
@@ -2474,12 +2461,6 @@ impl Sessions {
         }))
     }
 
-    /// A reveal that waits for its next draw, as one does just after an add or a travel act.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn simulate_pending_reveal(&mut self, row: &str, pass: u64) {
-        self.row_reveal = Some((row.to_owned(), 0, pass));
-    }
-
     /// Why the last link update or its Undo did not finish.
     pub fn event_link_problem(&self) -> Option<&str> {
         self.link_problem.as_deref()
@@ -4597,17 +4578,6 @@ impl Sessions {
         self.job.as_ref().is_some_and(|(job, _)| !job.is_held())
     }
 
-    /// The disk check that otherwise runs once a second of wall time (`CHECK_DISK_EVERY`): the
-    /// next `poll` runs it.
-    pub fn simulate_disk_check(&mut self) {
-        self.last_check = None;
-    }
-
-    /// The folder scan that otherwise runs every few seconds of wall time.
-    pub fn simulate_folder_scan(&mut self) {
-        self.scan_folder();
-    }
-
     /// A processing failure for the open session, as the job would raise it.
     pub fn simulate_alert(&mut self, words: &str) {
         let session = self.selected.expect("an open session");
@@ -4630,116 +4600,11 @@ impl Sessions {
         draft.save();
     }
 
-    /// The disk refuses the open note's writes, as a full disk would: the DM has typed, and every
-    /// write fails at its result with the system's full-disk error (code 28), before anything is
-    /// written, until `simulate_failed_save_ends`. A direct retry fails too.
-    pub fn simulate_failed_save(&mut self) {
-        let draft = self.draft.as_mut().expect("an open note");
-        draft.failing_write = Some(28);
-        draft.body.push_str("\nTyped while the disk was full.\n");
-        draft.edited();
-        draft.save();
-    }
-
-    /// The disk takes writes again.
-    pub fn simulate_failed_save_ends(&mut self) {
-        if let Some(draft) = &mut self.draft {
-            draft.failing_write = None;
-        }
-    }
-
-    /// The open note's file leaves the folder outside Splat while the DM has unsaved words,
-    /// and the next save finds it gone. Returns where the file went, to put it back.
-    pub fn simulate_note_gone(&mut self) -> (PathBuf, PathBuf) {
-        let draft = self.draft.as_mut().expect("an open note");
-        let path = draft.path.clone();
-        let folder = path.parent().expect("the session folder");
-        let away = folder
-            .parent()
-            .expect("the parent of the folder")
-            .join("note-gone-for-a-while.md");
-        fs::rename(&path, &away).expect("the note moves away");
-        draft.body.push_str("\nTyped after the file went.\n");
-        draft.edited();
-        draft.save();
-        (path, away)
-    }
-
-    /// Processing of the open session finishes now, as the background job would.
-    pub fn simulate_job_finished(&mut self) {
-        let session = self.selected.expect("an open session");
-        self.finish_job(Ok(None), session);
-    }
-
-    /// The open note's name, as its warnings and its draft's Undo name it.
-    pub fn open_note_name(&self) -> Option<String> {
-        self.note_name()
-    }
-
-    /// The open note's draft, to put back after a step that a scenario proves aside.
-    pub fn draft_snapshot(&self) -> Option<Draft> {
-        self.draft.clone()
-    }
-
-    pub fn restore_draft(&mut self, draft: Draft) {
-        self.draft = Some(draft);
-    }
-
-    /// The open note's file is renamed outside Splat, as Obsidian can do.
-    pub fn simulate_file_renamed(&mut self) {
-        let draft = self.draft.as_ref().expect("an open note");
-        let new = draft.path.with_file_name("Renamed in Obsidian.md");
-        fs::rename(&draft.path, new).expect("the note");
-    }
-
-    /// The open note's file, for a scenario that reads what an act wrote.
-    pub fn selected_path(&self) -> Option<&std::path::Path> {
-        self.draft.as_ref().map(|draft| draft.path.as_path())
-    }
-
     /// The open note changes outside Splat, as when Obsidian edits the same file.
     pub fn simulate_disk_change(&mut self) {
         let draft = self.draft.as_ref().expect("an open note");
         let text = fs::read_to_string(&draft.path).expect("the note");
         fs::write(&draft.path, format!("{text}\nWritten in Obsidian.\n")).expect("the note");
-    }
-
-    /// A job that stays in progress, for a capture of that state.
-    pub fn simulate_job(&mut self, progress: processing::Progress) {
-        self.end_notice();
-        self.processed_session = None;
-        self.processed_recording = None;
-        self.job_done = false;
-        self.job_warned = false;
-        let session = self.selected.expect("an open session");
-        let path = self.recordings[0].path.clone();
-        if let processing::Progress::Transcribing { part, of } = &progress {
-            fs::write(processing::transcript_path(&path), format!(
-                "---\ntranscript_parts_done: {part}\ntranscript_parts: {of}\n---\n\nThe party held the bridge.\n"
-            )).expect("a partial raw transcript before cancellation");
-            self.refresh_recordings();
-        }
-        if matches!(progress, processing::Progress::Asking { .. }) {
-            let transcript = processing::transcript_path(&path);
-            fs::write(transcript,
-                "---\ntranscript_parts_done: 1\ntranscript_parts: 1\n---\n\nThe party held the bridge.\n")
-                .expect("a complete raw transcript before the LLM pass");
-            self.refresh_recordings();
-        }
-        self.job = Some((Job::held(path, progress), session));
-    }
-
-    /// A job that ends with a warning, stored as a real one is.
-    pub fn simulate_job_end_warned(&mut self, words: &str) {
-        let (job, session) = self.job.as_ref().expect("a job");
-        let session = *session;
-        fs::write(processing::warning_path(&job.recording), words).expect("the warning");
-        self.finish_job(Ok(Some(words.to_owned())), session);
-    }
-
-    pub fn simulate_job_end(&mut self, result: Result<Option<String>, String>) {
-        let session = self.job.as_ref().expect("a job").1;
-        self.finish_job(result, session);
     }
 
     pub fn simulate_recorder_health(&mut self, health: Health) {

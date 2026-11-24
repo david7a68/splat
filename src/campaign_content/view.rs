@@ -263,13 +263,6 @@ impl CampaignContent {
         })
     }
 
-    /// The choices changed: Discard's result and the Saved result end.
-    pub fn choices_edited(&mut self, campaign: Uuid) {
-        end_results(&mut self.results, campaign, |payload| {
-            matches!(payload, Payload::Discarded { .. })
-        });
-    }
-
     /// `Discard` beside the changed choices: Campaign.md's choices come back, with an Undo.
     pub fn discard_choices(&mut self) {
         let Some(snapshot) = self.snapshot.as_mut() else {

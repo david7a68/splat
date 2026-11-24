@@ -354,9 +354,6 @@ macro_rules! no_check {
 pub const NO_CHECK_WARNING: &str =
     concat!(no_check!(), ", so the clean transcript was not checked.");
 
-/// The warning's own words, beside Raw transcript while the warning line is hidden.
-pub const NO_CHECK_LABEL: &str = no_check!();
-
 /// What a person must know about the result, beside it, for as long as it stands.
 pub fn warning_path(recording: &Path) -> PathBuf {
     recording.with_extension("warning.md")
@@ -1266,13 +1263,6 @@ pub fn start(
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static LAST_CONTEXT: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
-}
-
-/// The context words of the last job started on this thread in a test build: what the real
-/// build sends to the model with the transcript.
-#[cfg(any(test, feature = "test-support"))]
-pub fn last_context() -> Option<String> {
-    LAST_CONTEXT.with(|last| last.borrow().clone())
 }
 
 /// No service in a test build: fixed words, written where the real ones go.

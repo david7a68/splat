@@ -6,7 +6,7 @@ rust-version = "1.95"
 publish = false
 
 [features]
-test-support = ["dep:egui_kittest"]
+test-support = []
 
 [dependencies]
 egui = { version = "0.33", default-features = false, features = ["accesskit", "default_fonts"] }
@@ -15,15 +15,11 @@ splat-assets = { path = "../../crates/assets" }
 splat-campaign = { path = "../../crates/campaign" }
 unicode-segmentation = "1.13"
 url = "2.5"
-# Test builds only (`test-support`): the themed harness builders (`design::test_harness`).
-egui_kittest = { version = "0.33", optional = true }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [dev-dependencies]
 # The quiet-text harness reads the parts' test counters.
 splat-design = { path = ".", features = ["test-support"] }
-egui_extras = { version = "0.33", default-features = false, features = ["file", "image"] }
-egui_kittest = { version = "0.33", features = ["wgpu"] }
 proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
 serde_json = "1"
 syn = { version = "2.0.119", features = ["full", "visit", "extra-traits"] }
@@ -32,8 +28,3 @@ tempfile = "3"
 # them with a fixed seed and case count. No `fork` or `timeout` feature: no child process, no clock.
 proptest = { version = "1", default-features = false, features = ["std", "bit-set"] }
 proptest-state-machine = "0.3"
-
-# Layout PR 9b: a counting global allocator needs a process of its own.
-[[test]]
-name = "quiet_text"
-harness = false

@@ -928,17 +928,8 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
 ///
 /// - `ResultOrder::issue(`: only [`Results::record`] issues an order. Elsewhere, an order
 ///   issued by hand can be keyed by kind, or issued while drawing (reviews of PR 298).
-/// - `save_row_state(`: a save row whose word, Save weight and reasons the caller decides
-///   (`design::save_row` decides them from a `DraftState`).
-/// - `consume_key(… Key::S)`: a page's own take of `Ctrl+S`, with its own order and its own modal
-///   test. `design::save_row::save_key` is the one rule (issues #513, #514).
 /// - `ptr_eq(`: a cache keyed by a pointer address. Key it by a `Revision` in a
 ///   `design::memo::Memo`, which takes no other key.
-/// - `TitleLine::back(`: the old back link part, which a caller can place inside a row and block
-///   with its reason on hover only. Its five page sites (Sessions 4, Timeline 1) keep it; an
-///   editor uses `design::EditorHead` (R38).
-/// - `BackEdge::Segments`: the Recordings row's named escape (its back link in one row with
-///   `Add to notes`); its one use is counted, so a second row back link fails.
 /// - `UndoStep::verb(`: an Undo with no object (`Undo remove`), whose words cannot name what it
 ///   takes back even where the line has room (ruling M9). The 23 production calls move to
 ///   `UndoStep::of` in their caller lanes, or stay as named exceptions; `outcome.rs` keeps its
@@ -960,7 +951,6 @@ pub(crate) const STAGED: &[Staged] = &[
         "Answer a refused act with a typed `Refusal` on its entry (`Results::undo_or_refuse`): it names the thing, the cause and a next step, and ranks as an act (M1).",
         &[
             ("src/design/outcome.rs", 1),
-            ("src/design/pane.rs", 5),
             ("src/sessions/plan.rs", 1),
             ("src/timeline/page.rs", 1),
             ("src/world.rs", 1),
@@ -969,52 +959,21 @@ pub(crate) const STAGED: &[Staged] = &[
     (
         "ResultOrder::issue(",
         "Record the result in a `design::Results` store: it issues the order at the action.",
-        &[("src/design/components.rs", 15)],
-    ),
-    (
-        "save_row_state(",
-        "Use `design::save_row` with a `DraftState`: it decides the word, Save's weight and its reason.",
-        &[
-            ("src/campaign_content.rs", 1),
-            ("src/campaigns.rs", 1),
-            ("src/design/components.rs", 1),
-        ],
-    ),
-    (
-        "consume_key(egui::Modifiers::COMMAND, egui::Key::S)",
-        "A page's Ctrl+S is `design::save_row::save_key`: one rule for its order and for modals (issues #513, #514).",
-        &[("src/design/save_row.rs", 1)],
+        &[],
     ),
     (
         "ptr_eq(",
         "Key the cache by a `Revision` in a `design::memo::Memo`; a pointer address is not a change.",
         &[
-            ("src/design/comparison.rs", 1),
             ("crates/campaign/src/encounter_run/undo.rs", 2),
             ("src/rolls.rs", 1),
-        ],
-    ),
-    (
-        "TitleLine::back(",
-        "An editor's back is `design::EditorHead` (R38); a new page's back link that starts a line asks the lead for a row here.",
-        &[
-            ("src/design/layout.rs", 2),
-            ("src/design/layout/tests.rs", 2),
-        ],
-    ),
-    (
-        "BackEdge::Segments",
-        "The Recordings row's escape: its back link and `Add to notes` share one row. No other back link is drawn inside a row.",
-        &[
-            ("src/design/layout.rs", 1),
-            ("src/design/layout/tests.rs", 1),
         ],
     ),
     (
         "UndoStep::verb(",
         "Give the Undo the object its result names, `UndoStep::of(verb, object)`: a lone Undo shows it whenever it fits (M9). An Undo with no object is a named exception the lead rules on.",
         &[
-            ("src/design/outcome.rs", 7),
+            ("src/design/outcome.rs", 4),
             ("src/encounters.rs", 1),
             ("src/sessions/plan.rs", 1),
             ("src/timeline/page.rs", 1),

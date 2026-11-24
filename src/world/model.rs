@@ -168,11 +168,6 @@ pub fn obsidian_link(path: &Path) -> String {
     obsidian_url(path)
 }
 
-/// The words of a place link that matches `count` notes.
-pub fn place_choices_text(name: &str, count: usize) -> String {
-    place_choices_words(name, count)
-}
-
 /// A missing link's words: the name and ` · Not found`.
 pub fn missing_text(name: &str) -> String {
     missing_name(name)

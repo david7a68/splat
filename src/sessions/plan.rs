@@ -2075,20 +2075,6 @@ impl Sessions {
         session.is_some_and(|note| self.plan_entry(Some(note), |_| ()).is_some())
     }
 
-    /// Tests: no disk check runs until `release_disk_check`, however long the frames take
-    /// (the last check is set an hour ahead; `poll` reads the time since it as zero), so a
-    /// scenario's outside change meets the DM's next press before `poll` reads it.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn hold_disk_check(&mut self) {
-        self.last_check = Some(Instant::now() + Duration::from_secs(3600));
-    }
-
-    /// Tests: the disk checks run again, from now.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn release_disk_check(&mut self) {
-        self.last_check = Some(Instant::now());
-    }
-
     /// Row 123, final review: the one place where the note's own events act on the plan line's
     /// result. `poll` calls it every frame on every page, so an edit, a save with other words, an
     /// outside change seen by the disk check, a discard or a move is met as it happens, with no

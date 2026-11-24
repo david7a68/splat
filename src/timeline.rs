@@ -3086,6 +3086,11 @@ mod tests {
         assert_eq!(party_state(&book.events, session), before);
         book.remove(&id);
         assert_eq!(party_state(&book.events, session), before);
+        // A Long rest from the Add strip restores; removing it takes the ruling back.
+        let added = book.add_long_rest(session);
+        assert!(party_state(&book.events, session).rested);
+        book.remove(&added);
+        assert_eq!(party_state(&book.events, session), before);
     }
 
     #[test]

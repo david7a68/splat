@@ -18,9 +18,3 @@ pub use egui_phosphor::regular::{
     USERS_FOUR as GROUP, USERS_THREE as PARTY, WARNING as WARN, WARNING_OCTAGON as ERROR,
     WAVEFORM as AUDIO, X as CLOSE,
 };
-
-/// The arrow of the step back through a reader's history, before its word `Back`
-/// (`Action::history_back`). Only the design system draws it, never without the word: a back
-/// link that starts a line is `design::TitleLine::back`, and an editor's back is
-/// `design::EditorHead`.
-pub(crate) const HISTORY_BACK: &str = egui_phosphor::regular::ARROW_LEFT;

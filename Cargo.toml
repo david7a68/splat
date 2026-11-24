@@ -71,7 +71,6 @@ base64 = "0.22"
 rfd = "0.15"
 egui-phosphor = "0.11"
 libc = "0.2"
-egui_extras = { version = "0.33", default-features = false, features = ["file", "image"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 # `file:` URLs by the platform's rules (`design::outcome::file_url`).
 url = "2.5"
@@ -102,7 +101,6 @@ splat-trackers = { path = "src/trackers", features = ["test-support"] }
 # The source checks read Rust with a real parser (`design::attributes`), never by hand.
 syn = { version = "2.0.119", features = ["full", "visit", "extra-traits"] }
 proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
-egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }
 ab_glyph = "0.2"
 epaint_default_fonts = "0.33"
 # Model tests of a page against a shared part's state machine model (ruling M29; see

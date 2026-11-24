@@ -863,19 +863,6 @@ impl CampaignContent {
             self.fail(Cause::Failed, words);
         }
     }
-    /// A repair's draft, by its path, for checks of who owns a result.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn repair_draft(&self, path: &str) -> Option<&str> {
-        self.repairs
-            .iter()
-            .find(|repair| repair.path == path)
-            .map(|repair| repair.draft.as_str())
-    }
-    /// The words of the newest failed answer the page holds (ruling Q-x), if any.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn answer_words(&self) -> Option<&str> {
-        self.answer.as_ref().map(|answer| answer.words.as_str())
-    }
     /// How often a frame checked a repair draft again.
     #[cfg(any(test, feature = "test-support"))]
     pub fn repair_checks(&self) -> usize {

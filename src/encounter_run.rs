@@ -92,8 +92,6 @@ impl Opening {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
-pub use splat_content_ui::roster::keep_whole;
 pub use splat_content_ui::roster::{FaultKind, GroupMember, MemberFault, RunGroup, grouped_number};
 /// A campaign's groups, as one run sorts them.
 #[derive(Debug, Default)]
@@ -365,9 +363,6 @@ pub struct Run {
     /// this run's own, so they die with it and no other run reads them.
     pub arrival_lines:
         crate::difficulty::Kept<Uuid, Option<crate::difficulty::Fitted>, ArrivalLineKey>,
-    /// The turn heading's one kept candidate (M5): this run's own, so it ends with the run.
-    /// The part chooses again when the heading's data or metrics change.
-    pub turn_heading: crate::design::KeptTurnHeading,
     /// The groups' revision that `arrival_lines` was last trimmed to.
     pub arrival_lines_seen: Option<crate::design::memo::Revision>,
     /// How often frames asked for the Arrivals words, and how often they were worked out.
@@ -877,7 +872,6 @@ impl Run {
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
-            turn_heading: crate::design::KeptTurnHeading::new(),
             arrival_lines_seen: None,
             #[cfg(any(test, feature = "test-support"))]
             arrival_counts: (0, 0),
@@ -3998,7 +3992,6 @@ impl Run {
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
-            turn_heading: crate::design::KeptTurnHeading::new(),
             arrival_lines_seen: None,
             #[cfg(any(test, feature = "test-support"))]
             arrival_counts: (0, 0),

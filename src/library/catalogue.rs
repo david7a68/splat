@@ -15,7 +15,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue},
     design::{
-        self, Tone, colors, icons,
+        self, Tone, icons,
         outcome::{Choice, FaultMessage, MessageChoice, Messages, Notice, Sentence, UndoStep},
     },
     matching::{Rank, Typed, with_other},
@@ -262,17 +262,6 @@ pub enum LibraryPress {
     SeparateEntries(usize),
     /// `Copy <entry> to <package>`: the campaign entry the open package entry links to.
     CopyDependency(Uuid),
-}
-
-/// A disk conflict's choice in the editor pane (its placeholder's ids).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DiskChoice {
-    /// Read the file again (`Try again`).
-    Again,
-    /// Keep the draft (`Overwrite with my draft`, `Save my draft again`, `Save my draft to …`).
-    Overwrite,
-    /// Let the draft go (`Reload and lose my draft`, `Remove entry and lose draft`).
-    Reload,
 }
 
 /// The heading fix's result: its Undo.
@@ -756,11 +745,6 @@ pub fn scope_name(campaigns: &Campaigns, scope: Scope) -> String {
 
 /// The action after an empty search or filter that keeps the words in the widest scope.
 pub const SEARCH_EVERYTHING: &str = "Search Everything";
-
-#[cfg(any(test, feature = "test-support"))]
-thread_local! {
-    pub static SCOPE_LABEL_FITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
 
 /// What the catalogue shows. The default is what the active campaign can use.
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq)]
@@ -2382,52 +2366,6 @@ pub fn row_line_without_fault(line: &str) -> String {
     }
 }
 
-/// One line of row words in which each warning or error mark has its own tone, as a status
-/// is an icon, a word and a colour. The line ends with `…` where it does not fit.
-pub fn marked_line(
-    ui: &egui::Ui,
-    text: &str,
-    font: egui::FontId,
-    words: egui::Color32,
-    max_width: f32,
-) -> std::sync::Arc<egui::Galley> {
-    let c = colors();
-    let mut job = egui::text::LayoutJob::default();
-    let format = |color| egui::TextFormat {
-        font_id: font.clone(),
-        color,
-        ..Default::default()
-    };
-    let text = text.replace(['\n', '\r'], " ");
-    let mut rest = text.as_str();
-    while !rest.is_empty() {
-        let next = [
-            (icons::WARN, c.result.warning),
-            (icons::ERROR, c.result.error),
-        ]
-        .into_iter()
-        .filter_map(|(mark, color)| rest.find(mark).map(|at| (at, mark, color)))
-        .min_by_key(|(at, _, _)| *at);
-        match next {
-            Some((at, mark, color)) => {
-                if at > 0 {
-                    job.append(&rest[..at], 0.0, format(words));
-                }
-                job.append(mark, 0.0, format(color));
-                rest = &rest[at + mark.len()..];
-            }
-            None => {
-                job.append(rest, 0.0, format(words));
-                rest = "";
-            }
-        }
-    }
-    job.wrap.max_width = max_width.max(1.0);
-    job.wrap.max_rows = 1;
-    job.wrap.break_anywhere = true;
-    ui.fonts_mut(|fonts| fonts.layout_job(job))
-}
-
 pub fn local_module(path: &Path) -> Result<Module, String> {
     let path = path.canonicalize().map_err(|e| e.to_string())?;
     let (entries, _) = content::read_directory(&path)?;
@@ -2595,21 +2533,6 @@ fn visit_folders(root: &Path, path: &Path, folders: &mut Vec<String>) {
         }
     }
 }
-
-pub const PACKAGE_FOLDER: design::FieldId =
-    crate::field_id!("package_folder").once(design::Once::CreateForm);
-pub const COPY_NAME: design::FieldId =
-    crate::field_id!("package_copy_name").once(design::Once::CreateForm);
-pub const NEW_PACKAGE_NAME: design::FieldId =
-    crate::field_id!("new_package_name").once(design::Once::CreateForm);
-pub const NEW_PACKAGE_FOLDER: design::FieldId =
-    crate::field_id!("new_package_folder").once(design::Once::CreateForm);
-pub const ADD_FOLDER: design::Word = crate::word!("Add folder");
-pub const REGISTER: design::Word = crate::word!("Register");
-pub const CREATE_PACKAGE: design::Word = crate::word!("Create package");
-pub const BROWSE: design::Word = crate::word!("Browse…");
-pub const CANCEL: design::Word = crate::word!("Cancel");
-pub const CLEAR: design::Word = crate::word!("Clear");
 
 pub fn create_module(path: &Path, name: &str, namespace: &str) -> Result<Module, String> {
     if !path.is_absolute()

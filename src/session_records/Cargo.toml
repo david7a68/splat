@@ -23,4 +23,3 @@ uuid = { version = "1", features = ["v4", "serde"] }
 
 [dev-dependencies]
 splat-content-ui = { path = "../content_ui", features = ["test-support"] }
-egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }

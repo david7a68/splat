@@ -436,11 +436,6 @@ impl Sessions {
     pub fn gv_draft_press(&mut self, press: FooterPress, template: bool) {
         self.draft_press(press, template);
     }
-
-    /// Where the session's folder is, if one is set.
-    pub fn gv_folder(&self) -> Option<&PathBuf> {
-        self.folder.as_ref()
-    }
 }
 
 /// The record control beside the title (`record_control`).

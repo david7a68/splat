@@ -1646,41 +1646,8 @@ fn member_key(path: &str, member: &MemberDraft) -> String {
 
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
-    /// (frames that reached `members_are_saved`, comparisons it made)
-    static MEMBER_COMPARISONS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
-}
-#[cfg(any(test, feature = "test-support"))]
-thread_local! {
     /// (frames that asked for the open group's check, checks that ran in `GroupDraft::check`)
     static GROUP_CHECKS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
-}
-/// The counts of Save's check of a group, for `CachedWork`.
-#[cfg(any(test, feature = "test-support"))]
-pub fn group_checks() -> (usize, usize) {
-    GROUP_CHECKS.with(std::cell::Cell::get)
-}
-#[cfg(any(test, feature = "test-support"))]
-thread_local! {
-    /// How often the member loop copied a member's change map (review of PR 299).
-    static CHANGE_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-/// A member's change map, copied and counted. The editor makes no such copy on a frame; a test
-/// that puts one back (its mutation proof) goes through here, so the scenario counts it.
-#[cfg(any(test, feature = "test-support"))]
-#[allow(dead_code)]
-fn counted_changes_copy(changes: &Mapping) -> Mapping {
-    CHANGE_COPIES.with(|copies| copies.set(copies.get() + 1));
-    changes.clone()
-}
-/// How often the member loop copied a member's change map.
-#[cfg(any(test, feature = "test-support"))]
-pub fn change_copies() -> usize {
-    CHANGE_COPIES.with(std::cell::Cell::get)
-}
-/// The counts of `members_are_saved`, for `CachedWork`.
-#[cfg(any(test, feature = "test-support"))]
-pub fn member_comparisons() -> (usize, usize) {
-    MEMBER_COMPARISONS.with(std::cell::Cell::get)
 }
 
 /// A new revision for a group draft (`GroupDraft::touch`): larger than every one before it.
@@ -1958,32 +1925,6 @@ impl Encounters {
         if let Some(draft) = self.group_draft.as_mut() {
             edit(&mut GroupEdit(draft));
         }
-    }
-
-    /// A member's change from its row: its place, its count, or its removal (with its Undo).
-    pub fn member_act(&mut self, act: MemberAct) {
-        let Some(snapshot) = self.snapshot.as_ref() else {
-            return;
-        };
-        let Some(draft) = self.group_draft.as_mut() else {
-            return;
-        };
-        let total = draft.setup.members.len();
-        match act {
-            MemberAct::Up(index) if index > 0 && index < total => {
-                draft.setup.members.swap(index, index - 1);
-            }
-            MemberAct::Down(index) if index + 1 < total => {
-                draft.setup.members.swap(index, index + 1);
-            }
-            MemberAct::Remove(index) if index < total => remove_member(draft, index, snapshot),
-            MemberAct::Count(index, count) if index < total => {
-                draft.setup.members[index].count = count.clamp(1, 99);
-            }
-            _ => return,
-        }
-        draft.touch();
-        self.expanded = None;
     }
 
     /// The group editor's footer lines (`group_editor_view`'s `then`), for both views: the
