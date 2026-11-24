@@ -72,8 +72,7 @@ pub(super) fn page_width(root: &SplatRoot, window: &Window) -> Pixels {
 }
 
 /// Run `act` with the page's state and what the rest of the app tells it about fights
-/// (`sessions::page::Plan`), as `Splat::show_page` builds it for the egui page. `None` without a
-/// campaign.
+/// (`sessions::page::Plan`). `None` without a campaign.
 pub(super) fn with_plan<R>(
     app: &mut Splat,
     act: impl FnOnce(&mut Sessions, &ProcessingSettings, &mut Book, &Plan<'_>) -> R,
@@ -97,7 +96,6 @@ pub(super) fn with_plan<R>(
         .unwrap_or_default();
     // The group editor in the plan is the Encounters page area's view; the GPUI plan draws its
     // own place for it (`plan::group_editor`), so this one draws nothing.
-    let mut no_editor = |_: &mut eframe::egui::Ui| {};
     let group_discard: &crate::sessions::page::GroupDiscardLine<'_> =
         &|frame| encounters.group_discard_line(frame);
     let party = app.party.order();
@@ -114,7 +112,6 @@ pub(super) fn with_plan<R>(
         group_open,
         group_discard,
         arrivals_open,
-        group_editor: std::cell::RefCell::new(&mut no_editor),
         blocked,
         run_directory,
         open_run: app.run_fact.as_ref().map(|fact| fact.id),

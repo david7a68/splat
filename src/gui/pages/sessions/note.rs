@@ -1,4 +1,4 @@
-//! The session's note (`Sessions::note_pane`, `note_editor`, `read_tab`): words to write in an
+//! The session's note: words to write in an
 //! editor that saves a moment after the DM stops (and at Ctrl+S), or the same words to read;
 //! and, while the file changed on disk, the draft beside the file (`grouped_draft_comparison`).
 //! The editor keeps one GPUI state per session and place (page or panel), so its caret and its

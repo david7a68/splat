@@ -74,7 +74,7 @@ pub(super) fn render(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyEl
                 cx.notify();
             }));
         }
-        // A row's height follows its wrapped title (`session_row`), at least a Glance target.
+        // A row's height follows its wrapped title, at least a Glance target.
         div()
             .w_full()
             .child(item)

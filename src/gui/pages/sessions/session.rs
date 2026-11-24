@@ -13,7 +13,7 @@ use gpui::{
 use std::rc::Rc;
 use theme::{Density, L, LIST_MEASURE, READER_MEASURE, S, Type, XS, colors};
 
-/// What the pane shows, worked out before anything draws (`session_layout`).
+/// What the pane shows, worked out before anything draws.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Shown {
     Plan,
@@ -240,7 +240,7 @@ pub(super) fn render(
         .into_any_element()
 }
 
-/// `Details`, with the note's state before it (`session_details_action`).
+/// `Details`, with the note's state before it.
 fn details(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
     let status = root
         .app
@@ -297,7 +297,7 @@ pub(super) fn record_control(
     }
 }
 
-/// The live recording's state, or the step before it (`record_line_body`).
+/// The live recording's state, or the step before it.
 pub(super) fn record_line(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
     let c = colors();
     match root.app.sessions.gv_record_line() {
