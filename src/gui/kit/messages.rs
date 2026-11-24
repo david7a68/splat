@@ -59,18 +59,40 @@ pub fn lines<A: Clone + 'static>(
         .into_iter()
         .enumerate()
         .map(|(at, line)| {
-            message(
-                ElementId::NamedChild(
-                    std::sync::Arc::new(id.clone()),
-                    SharedString::from(format!("line-{at}")),
-                ),
-                line,
-                on_press.clone(),
-                false,
-            )
-            .into_any_element()
+            message(line_id(&id, at, &line), line, on_press.clone(), false).into_any_element()
         })
         .collect()
+}
+
+/// A line's id under `id`: a kept result's by its ticket, so its controls (and the keyboard on
+/// its Undo) stay with that result when the footer's order changes; a line with no ticket by
+/// its place.
+fn line_id<A>(id: &ElementId, at: usize, line: &PlainLine<A>) -> ElementId {
+    let name = match line.ticket_order() {
+        Some(order) => format!("kept-{order:?}"),
+        None => format!("line-{at}"),
+    };
+    ElementId::NamedChild(std::sync::Arc::new(id.clone()), SharedString::from(name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::design::ResultOrder;
+
+    /// A kept result's controls keep their id when the footer puts a newer result before it, so
+    /// the keyboard on its Undo never lands on another result's Undo.
+    #[test]
+    fn a_kept_line_keeps_its_id_when_the_footer_order_changes() {
+        let footer = ElementId::Name("footer".into());
+        let (older, newer) = (ResultOrder::issue(), ResultOrder::issue());
+        let ash = PlainLine::<()>::for_test("Removed Ash.", Some(older));
+        let rook = PlainLine::<()>::for_test("Added Rook.", Some(newer));
+        assert_eq!(line_id(&footer, 0, &ash), line_id(&footer, 1, &ash));
+        assert_ne!(line_id(&footer, 0, &ash), line_id(&footer, 0, &rook));
+        let notice = PlainLine::<()>::for_test("A notice.", None);
+        assert_ne!(line_id(&footer, 0, &notice), line_id(&footer, 1, &notice));
+    }
 }
 
 /// One line as a message: its words, its file line and help, its Undo first, then its choices

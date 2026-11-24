@@ -4,7 +4,7 @@
 //! scroll bar's lane (`kit::Pane`), a side column (`kit::EdgeColumn`: the rail, Lookup, the notes
 //! panel), else the window one `S` inside its edges. A layer taller than its room scrolls; one
 //! wider than its room is as wide as the room. While the trigger is scrolled out of its room, the
-//! layer is not drawn.
+//! layer is not drawn, and it closes (`menu::begin_frame`).
 //!
 //! The room: each owner pushes its bounds as it lays out its children and pops them after
 //! (`room_start`, `room_end`), so a trigger finds the innermost owner's room. The layer is drawn
@@ -108,6 +108,7 @@ pub fn attach(
         )
         .child(
             deferred(Placed {
+                id: id.clone(),
                 anchor,
                 match_width,
                 build: Some(Box::new(layer)),
@@ -156,6 +157,8 @@ fn out_of_view(anchor: &Anchor) -> bool {
 /// The layer, sized in layout from the last frame's anchor and placed in prepaint from this
 /// frame's.
 struct Placed {
+    /// The layer's id: drawn in view, it tells the menu state so (`menu::mark_drawn`).
+    id: ElementId,
     anchor: Rc<Cell<Option<Anchor>>>,
     match_width: bool,
     build: Option<Build>,
@@ -268,6 +271,7 @@ impl Element for Placed {
             child.prepaint(window, cx)
         });
         self.shown = true;
+        super::menu::mark_drawn(&self.id, cx);
     }
 
     fn paint(

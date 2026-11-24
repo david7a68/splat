@@ -26,15 +26,42 @@ use std::rc::Rc;
 /// The drop-down frame's padding above and below its words (a two-line name fills 39 px).
 const DROPDOWN_PADDING: Pixels = px(2.5);
 
-/// Which layer is open, and where the press that last closed one was (so that press, when it
-/// lands on the same trigger, does not open it again).
+/// Which layer is open, and the layer that the last press outside closed with that press's
+/// place (so that press, when it lands on the same layer's trigger, does not open it again; on
+/// another trigger it opens that one).
 #[derive(Default)]
 pub struct OpenPopup {
     open: Option<ElementId>,
-    closed_at: Option<Point<Pixels>>,
+    closed: Option<(ElementId, Point<Pixels>)>,
+    /// The open layer was drawn from its trigger, in view, in the last frame.
+    drawn: bool,
+    /// The open layer opened since the last frame began, so it has not been drawn yet.
+    fresh: bool,
 }
 
 impl Global for OpenPopup {}
+
+/// As each frame starts (the root calls it): a layer that stayed open but was not drawn in the
+/// last frame closes. Its trigger left the window (a row a reload removed, a form that closed)
+/// or was scrolled out of its room, and an egui popup closed when its button was not drawn. So
+/// no invisible menu keeps the global keys refused or eats the next press.
+pub fn begin_frame(window: &mut Window, cx: &mut App) {
+    let popup = cx.default_global::<OpenPopup>();
+    if popup.open.is_some() && !popup.fresh && !popup.drawn {
+        popup.open = None;
+        window.refresh();
+    }
+    popup.drawn = false;
+    popup.fresh = false;
+}
+
+/// The open layer `id` was placed in view in this frame (`kit::layer`).
+pub(super) fn mark_drawn(id: &ElementId, cx: &mut App) {
+    let popup = cx.default_global::<OpenPopup>();
+    if popup.open.as_ref() == Some(id) {
+        popup.drawn = true;
+    }
+}
 
 /// Whether the layer of `id` is open.
 pub fn is_open(id: &ElementId, cx: &App) -> bool {
@@ -60,7 +87,9 @@ pub fn close_open_popup(window: &mut Window, cx: &mut App) -> bool {
 
 /// Open the layer of `id` from code (a key that opens a menu).
 pub fn open_popup(id: impl Into<ElementId>, window: &mut Window, cx: &mut App) {
-    cx.default_global::<OpenPopup>().open = Some(id.into());
+    let popup = cx.default_global::<OpenPopup>();
+    popup.open = Some(id.into());
+    popup.fresh = true;
     window.refresh();
 }
 
@@ -68,9 +97,9 @@ fn toggle(id: &ElementId, event: &ClickEvent, window: &mut Window, cx: &mut App)
     let popup = cx.default_global::<OpenPopup>();
     let this_press = event.down_position();
     if popup
-        .closed_at
+        .closed
         .take()
-        .is_some_and(|at| Some(at) == this_press)
+        .is_some_and(|(closed, at)| closed == *id && Some(at) == this_press)
     {
         // The press that closed this layer: it stays closed.
         window.refresh();
@@ -79,6 +108,7 @@ fn toggle(id: &ElementId, event: &ClickEvent, window: &mut Window, cx: &mut App)
     popup.open = if popup.open.as_ref() == Some(id) {
         None
     } else {
+        popup.fresh = true;
         Some(id.clone())
     };
     window.refresh();
@@ -106,6 +136,7 @@ impl DownPosition for ClickEvent {
 /// it scrolls past that. A press outside it closes it.
 fn frame(id: ElementId, content: AnyElement, widest: Pixels, tallest: Pixels) -> AnyElement {
     let c = colors();
+    let layer = id.clone();
     div()
         .id(ElementId::NamedChild(
             std::sync::Arc::new(id),
@@ -122,10 +153,10 @@ fn frame(id: ElementId, content: AnyElement, widest: Pixels, tallest: Pixels) ->
         .shadow_lg()
         .occlude()
         .role(gpui::Role::Menu)
-        .on_mouse_down_out(|event, window, cx| {
+        .on_mouse_down_out(move |event, window, cx| {
             let popup = cx.default_global::<OpenPopup>();
             popup.open = None;
-            popup.closed_at = Some(event.position);
+            popup.closed = Some((layer.clone(), event.position));
             window.refresh();
         })
         .child(content)
@@ -390,6 +421,7 @@ pub struct Dropdown {
     extra: Vec<MenuItem>,
     groups: Vec<usize>,
     locks: Vec<(usize, SharedString)>,
+    locked_look: bool,
     on_select: Option<super::OnIndex>,
 }
 
@@ -412,6 +444,7 @@ impl Dropdown {
             extra: Vec::new(),
             groups: Vec::new(),
             locks: Vec::new(),
+            locked_look: false,
             on_select: None,
         }
     }
@@ -445,6 +478,14 @@ impl Dropdown {
     /// A fixed width (default: its parent's).
     pub fn width(mut self, width: Pixels) -> Self {
         self.width = Some(width);
+        self
+    }
+
+    /// While blocked, it shows a lock in place of its caret and keeps its words in the text
+    /// colour, so the DM reads the value and sees that it cannot change now (the campaign
+    /// switcher during a run or a draft). The reason stays on hover.
+    pub fn lock_when_blocked(mut self) -> Self {
+        self.locked_look = true;
         self
     }
 
@@ -508,21 +549,27 @@ impl RenderOnce for Dropdown {
                     .text_color(words_color)
                     .child(words.clone()),
             )
-            .child(
+            .child({
+                let locked = !enabled && self.locked_look;
                 div()
                     .flex_none()
                     .icon_font(Type::Body)
-                    .text_color(c.text)
-                    .child(SharedString::new_static(icons::DOWN)),
-            );
+                    .text_color(if locked { c.muted } else { c.text })
+                    .child(SharedString::new_static(if locked {
+                        icons::READ_ONLY
+                    } else {
+                        icons::DOWN
+                    }))
+            });
         trigger = match self.width {
             Some(width) => trigger.w(width),
             None => trigger.w_full(),
         };
         if let Some(reason) = self.blocked.clone() {
-            trigger = trigger
-                .opacity(super::button::DISABLED_OPACITY)
-                .tooltip(tip(reason));
+            if !self.locked_look {
+                trigger = trigger.opacity(super::button::DISABLED_OPACITY);
+            }
+            trigger = trigger.tooltip(tip(reason));
         } else {
             trigger = trigger
                 .cursor_pointer()
@@ -531,6 +578,12 @@ impl RenderOnce for Dropdown {
         }
         let trigger = target(trigger, self.name.clone());
         let trigger = target(trigger, element_name(&self.id));
+        // The harness finds a locked drop-down by its name and `(locked)`.
+        let trigger = if !enabled && self.locked_look {
+            target(trigger, format!("{} (locked)", self.name))
+        } else {
+            trigger
+        };
         let mut choices: Vec<MenuItem> = self
             .options
             .iter()

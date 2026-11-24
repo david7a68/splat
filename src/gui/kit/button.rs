@@ -49,6 +49,7 @@ pub struct Button {
     plain: bool,
     line_start: bool,
     full_width: bool,
+    focus: Option<gpui::FocusHandle>,
     on_click: Option<OnClick>,
 }
 
@@ -69,8 +70,16 @@ impl Button {
             plain: false,
             line_start: false,
             full_width: false,
+            focus: None,
             on_click: None,
         }
+    }
+
+    /// Keep its keyboard focus in `handle`, so the caller can give it the keyboard (a dialog's
+    /// safe action when the dialog opens).
+    pub fn focus_handle(mut self, handle: &gpui::FocusHandle) -> Self {
+        self.focus = Some(handle.clone());
+        self
     }
 
     /// The one main action of a view: accent fill, `Heading` words.
@@ -275,6 +284,9 @@ impl RenderOnce for Button {
             .overflow_hidden()
             .focusable()
             .tab_stop(enabled)
+            .when_some(self.focus.clone(), |button, handle| {
+                button.track_focus(&handle.tab_stop(enabled))
+            })
             .role(gpui::Role::Button)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(name.clone())
@@ -307,7 +319,14 @@ impl RenderOnce for Button {
             );
         }
         if let Some(key) = self.key.clone() {
-            button = button.child(div().pl(S).ty(Type::Small).text_color(c.faint).child(key));
+            // On the accent fill the key takes the words' colour, a little lighter, so it reads
+            // (faint on the accent did not); elsewhere it is faint.
+            let key_color = if self.kind == Kind::Primary && enabled && !self.selected {
+                look.words.opacity(KEY_ON_ACCENT_OPACITY)
+            } else {
+                c.faint
+            };
+            button = button.child(div().pl(S).ty(Type::Small).text_color(key_color).child(key));
         }
         if let Some(words) = hover_words {
             button = button.tooltip(tip(words));
@@ -337,6 +356,9 @@ impl RenderOnce for Button {
 
 /// A disabled control is drawn at this opacity.
 pub const DISABLED_OPACITY: f32 = 0.6;
+
+/// A primary button's key (`Ctrl+S`) in its words' colour at this opacity.
+const KEY_ON_ACCENT_OPACITY: f32 = 0.8;
 
 /// The harness name of an element id (`id:<id>`).
 pub fn element_name(id: &ElementId) -> SharedString {

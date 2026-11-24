@@ -4,9 +4,10 @@
 //! Its look: a raised layer `XXL` from the window's top, `FORM_WIDTH` wide at most, a dim backdrop
 //! that takes every press, the title in `Section` type, the body, then one action line: the
 //! destructive action at the left, then at least `L`, then the safe action and the commit at the
-//! right, commit last. The dialog takes the keyboard when it opens and keeps Tab and Shift+Tab
-//! inside it (gpui-component's focus trap, which the window root's Tab honours); Escape is the
-//! safe action (`on_escape`). Draw it as the last child of the page or the root while it is open; it covers
+//! right, commit last. When it opens, the keyboard goes to its first action at the right, the
+//! safe one, so Enter keeps the DM's work (egui's `Keep editing`); with no such action the frame
+//! takes it. Tab and Shift+Tab stay inside it (gpui-component's focus trap, which the window
+//! root's Tab honours); Escape is the safe action (`on_escape`). Draw it as the last child of the page or the root while it is open; it covers
 //! the window wherever it is drawn.
 use crate::gui::theme::{
     DIALOG_INSET, FORM_WIDTH, HAIRLINE_WIDTH, L, RADIUS_LAYER, S, Type, XS, colors,
@@ -103,9 +104,11 @@ impl ParentElement for Dialog {
     }
 }
 
-/// The dialog's kept keyboard focus, and whether it has taken the keyboard yet.
+/// The dialog's kept keyboard focus (its frame's, and its safe action's), and whether it has
+/// taken the keyboard yet.
 struct Keyboard {
     focus: FocusHandle,
+    safe: FocusHandle,
     taken: bool,
 }
 
@@ -114,12 +117,27 @@ impl RenderOnce for Dialog {
         let c = colors();
         let keyboard = window.use_keyed_state(self.id.clone(), cx, |_, cx| Keyboard {
             focus: cx.focus_handle(),
+            safe: cx.focus_handle(),
             taken: false,
         });
         let focus = keyboard.read(cx).focus.clone();
+        let safe = keyboard.read(cx).safe.clone();
+        let actions: Vec<super::Button> = self
+            .actions
+            .into_iter()
+            .enumerate()
+            .map(|(at, action)| {
+                if at == 0 {
+                    action.focus_handle(&safe)
+                } else {
+                    action
+                }
+            })
+            .collect();
         if !keyboard.read(cx).taken {
             keyboard.update(cx, |keyboard, _| keyboard.taken = true);
-            window.focus(&focus, cx);
+            let first = if actions.is_empty() { &focus } else { &safe };
+            window.focus(first, cx);
         }
         let viewport = window.viewport_size();
         let width = (viewport.width - DIALOG_INSET * 2.0).min(FORM_WIDTH);
@@ -145,7 +163,7 @@ impl RenderOnce for Dialog {
                     .justify_end()
                     .items_center()
                     .gap(S)
-                    .children(self.actions),
+                    .children(actions),
             );
         let frame = div()
             .id(self.id.clone())
