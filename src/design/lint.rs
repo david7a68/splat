@@ -71,8 +71,11 @@ fn violations(line: &str) -> Vec<&'static str> {
     }
     if RAW_COLOURS.iter().any(|pattern| {
         code.match_indices(pattern).any(|(at, _)| {
-            // A name that ends in the pattern (`to_rgb(`) is another function.
-            !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_')
+            let before = &code[..at];
+            // A name that ends in the pattern (`to_rgb(`) is another function, and a return
+            // type (`-> Hsla {`) makes no colour.
+            !before.ends_with(|c: char| c.is_alphanumeric() || c == '_')
+                && !before.trim_end().ends_with("->")
         })
     }) {
         found.push("raw-colour");
@@ -948,6 +951,7 @@ fn the_lint_finds_what_it_should() {
     assert!(violations("Type::Body.size()").is_empty());
     assert!(violations("div().text_size(Type::Body.size())").is_empty());
     assert!(violations("let channels = gpui.to_rgb();").is_empty());
+    assert!(violations("fn hp_color(state: HpState) -> Hsla {").is_empty());
     assert!(violations("// rgb(0x000000) in a comment").is_empty());
     assert!(violations("div().bg(gpui::transparent_black())").is_empty());
     assert!(violations("font_id.size = prose.size();").is_empty());
