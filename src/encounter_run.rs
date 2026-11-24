@@ -92,8 +92,6 @@ impl Opening {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
-pub use splat_content_ui::roster::keep_whole;
 pub use splat_content_ui::roster::{FaultKind, GroupMember, MemberFault, RunGroup, grouped_number};
 /// A campaign's groups, as one run sorts them.
 #[derive(Debug, Default)]

@@ -1,8 +1,6 @@
 //! Class reading layout. Keep source wording and raw definitions available.
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::{presentation, view::Links};
-use crate::design::{self, Type, colors, reader as style};
-use eframe::egui;
 use splat::content::{Entry, Reference};
 
 fn category(entry: &Entry) -> Option<&str> {
@@ -163,27 +161,6 @@ pub fn core_traits(source: &str, name: &str) -> Option<CoreTraits> {
     Some(traits)
 }
 
-/// Draw a class's imported core traits, if its source text has them (`core_traits`).
-pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
-    let Some(traits) = core_traits(source, name) else {
-        return false;
-    };
-    design::heading(ui, design::Heading::Section("Core traits"));
-    style::facts(ui, &traits.facts);
-    if let Some((words, options)) = &traits.equipment {
-        design::heading(ui, design::Heading::Section("Starting equipment"));
-        for part in words {
-            style::markdown(ui, part);
-        }
-        style::facts(ui, options);
-    }
-    if let Some((title, body)) = &traits.rest {
-        design::heading(ui, design::Heading::Section(title));
-        style::markdown(ui, body);
-    }
-    true
-}
-
 /// A class's or subclass's feature: its level, its name, and the entry it opens.
 pub struct Feature {
     pub level: Option<u32>,
@@ -266,61 +243,4 @@ pub fn related(entry: &Entry, links: &dyn Links) -> Vec<(usize, String)> {
     .into_iter()
     .filter_map(|key| links.find(&Reference::Key(key)))
     .collect()
-}
-
-pub(super) fn show_features(ui: &mut egui::Ui, entry: &Entry, links: &dyn Links) -> Option<usize> {
-    let features = features(entry, links);
-    let related = related(entry, links);
-    let mut selected = None;
-    if !related.is_empty() {
-        design::heading(ui, design::Heading::Section("Related"));
-        for (target, name) in related {
-            if design::link(ui, &name).clicked() {
-                selected = Some(target);
-            }
-        }
-    }
-    if features.is_empty() {
-        return selected;
-    }
-    design::heading(
-        ui,
-        design::Heading::Section(if supports(entry) {
-            "Class features"
-        } else {
-            "Subclass features"
-        }),
-    );
-    for feature in features {
-        ui.horizontal_top(|ui| {
-            let (rect, _) = ui.allocate_exact_size(
-                egui::vec2(60.0, Type::Stat.line().max(24.0)),
-                egui::Sense::hover(),
-            );
-            let level = feature
-                .level
-                .map_or("—".into(), |level| format!("Level {level}"));
-            let galley = design::one_line(ui, &level, Type::Stat.font(ui), colors().muted, 60.0);
-            ui.painter().galley(
-                egui::pos2(rect.left(), rect.center().y - galley.size().y / 2.0),
-                galley,
-                colors().muted,
-            );
-            if let Some(target) = feature.target {
-                if design::link(ui, &feature.name).clicked() {
-                    selected = Some(target);
-                }
-            } else {
-                ui.add(
-                    egui::Label::new(
-                        Type::Stat
-                            .rich(ui, format!("{} (unavailable)", feature.name))
-                            .color(colors().muted),
-                    )
-                    .wrap(),
-                );
-            }
-        });
-    }
-    selected
 }

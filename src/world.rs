@@ -22,10 +22,10 @@ pub mod repair;
 use crate::{
     content_workspace::{EntryRef, patch_fields},
     design::{
-        self, Action, Density, Type, colors,
+        self,
         outcome::{
-            BodyFault, Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, Notice,
-            Outcome, PaneFrame, Repair, Said, Sentence, Severity, UndoStep, Verb,
+            Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, Notice, Outcome,
+            PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
         },
         reader as style,
     },
@@ -36,7 +36,6 @@ use crate::{
     roster::{GroupMember, RunGroup},
     session_notes as sessions,
 };
-use eframe::egui;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use serde_yaml_ng::{Mapping, Value};
 use splat::character::stable_id;
@@ -560,58 +559,6 @@ fn missing_name(name: &str) -> String {
 /// The state part of a missing link, in `Small` after the name.
 const NOT_FOUND: &str = " · Not found";
 
-/// A field of the reader. World's page and Lookup's compact reader can show one entry at once, so
-/// each has its own name; the entry's id tells the entries apart.
-#[derive(Clone, Copy)]
-struct ReaderField {
-    page: design::FieldName,
-    compact: design::FieldName,
-}
-
-impl ReaderField {
-    fn id(self, compact: bool, entry: Uuid) -> design::FieldId {
-        (if compact { self.compact } else { self.page }).of(entry)
-    }
-}
-
-// One search field name for each picker kind, so the kinds of one entry keep their own text and
-// text history.
-const PICK_PLACE_SEARCH: ReaderField = ReaderField {
-    page: crate::field_id!("world_pick_place_search"),
-    compact: crate::field_id!("lookup_pick_place_search"),
-};
-const PICK_GROUP_SEARCH: ReaderField = ReaderField {
-    page: crate::field_id!("world_pick_group_search"),
-    compact: crate::field_id!("lookup_pick_group_search"),
-};
-const PICK_STAT_BLOCK_SEARCH: ReaderField = ReaderField {
-    page: crate::field_id!("world_pick_stat_block_search"),
-    compact: crate::field_id!("lookup_pick_stat_block_search"),
-};
-const NEW_LOCATION_NAME: ReaderField = ReaderField {
-    page: crate::field_id!("world_new_location_name"),
-    compact: crate::field_id!("lookup_new_location_name"),
-};
-const EDIT_STATUS: ReaderField = ReaderField {
-    page: crate::field_id!("world_edit_status"),
-    compact: crate::field_id!("lookup_edit_status"),
-};
-const EDIT_TEXT: ReaderField = ReaderField {
-    page: crate::field_id!("world_edit_text"),
-    compact: crate::field_id!("lookup_edit_text"),
-};
-
-/// `line_start` for a quiet action that starts a line: the first in its row, or a later one that
-/// wraps to a line of its own. A later one on the same line keeps its normal target, so the two
-/// targets never overlap.
-pub(crate) fn starts_line<'a>(ui: &egui::Ui, action: Action<'a>, first: bool) -> Action<'a> {
-    if first || action.natural_width(ui) > ui.available_size_before_wrap().x {
-        action.line_start()
-    } else {
-        action
-    }
-}
-
 /// The words of a place link that matches more than one note.
 fn place_choices_words(name: &str, count: usize) -> String {
     format!("{name} · {count} matches")
@@ -619,32 +566,6 @@ fn place_choices_words(name: &str, count: usize) -> String {
 
 fn empty_optional(value: &Value) -> bool {
     value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty())
-}
-
-/// An unread value's warning with its repair, `Edit in Obsidian`, in the reader's body (M0580,
-/// rulings M20 and M23: round 9 FD4's quiet link beside the words is now a repair under them).
-/// Its words keep the whole sentence on hover and for a screen reader (round 25 FD4).
-#[allow(
-    clippy::disallowed_methods,
-    reason = "a body fault in the reader, with its repair (ruling M20)"
-)]
-fn unread_groups_message(
-    ui: &mut egui::Ui,
-    campaign: &Campaign,
-    path: &str,
-    reason: &str,
-    whole: &str,
-) {
-    let open = BodyFault::new(&ReaderFault::Fix(said(reason)))
-        .whole(whole)
-        .repair(Repair::new("Edit in Obsidian", ()))
-        .show(ui)
-        .is_some();
-    if open {
-        ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
-            &campaign.path.join(path),
-        )));
-    }
 }
 
 fn reference(value: &Value) -> Option<Reference> {
@@ -1358,114 +1279,6 @@ pub fn npc_group(npc: &Entry, stat_block: &Entry, side: &str) -> Arc<RunGroup> {
         warnings: Vec::new(),
         problem,
     })
-}
-
-/// A file line under a title that is the entry's name: the file's path, then the links.
-pub fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
-    entry_file_line(ui, root, relative, obsidian, false);
-}
-
-/// `entry_file_actions`, for a note whose name another note shares (`keep_folder`): its folder
-/// is the part that tells the two apart, so it is never cut. A path too wide for the line beside
-/// the links takes its own row and wraps whole (ruling Q-l: in a duplicate, the part that
-/// differs is cut last).
-fn entry_file_line(
-    ui: &mut egui::Ui,
-    root: &Path,
-    relative: &str,
-    obsidian: bool,
-    keep_folder: bool,
-) {
-    let font = Type::Small.font(ui);
-    if keep_folder
-        && design::number_width(ui, relative, &font)
-            > ui.available_width() - entry_file_links_width(ui, obsidian) - design::L
-    {
-        let path = root.join(relative);
-        let response =
-            ui.add(egui::Label::new(Type::Small.rich(ui, relative).color(colors().muted)).wrap());
-        design::named(ui, &response, &path.display().to_string());
-        response.on_hover_text(path.display().to_string());
-        ui.horizontal(|ui| entry_file_links(ui, &path, obsidian));
-        return;
-    }
-    // When even `…/<file name>` does not fit beside the links, the path takes its own row and
-    // the links the row below, as in Library: the file name is never cut (FA4).
-    let budget = ui.available_width() - entry_file_links_width(ui, obsidian) - design::L;
-    let filename = relative.rsplit('/').next().unwrap_or(relative);
-    if design::number_width(ui, &format!("…/{filename}"), &Type::Small.font(ui)) > budget {
-        let path = root.join(relative);
-        let font = Type::Small.font(ui);
-        let shown = if design::number_width(ui, relative, &font) <= ui.available_width() {
-            relative.to_owned()
-        } else {
-            format!("…/{filename}")
-        };
-        ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width(), Density::Read.control()),
-            egui::Layout::left_to_right(egui::Align::Center),
-            |ui| {
-                let response = ui.add(
-                    egui::Label::new(Type::Small.rich(ui, shown).color(colors().muted)).wrap(),
-                );
-                design::named(ui, &response, &path.display().to_string());
-                response.on_hover_text(path.display().to_string());
-            },
-        );
-        ui.horizontal(|ui| entry_file_links(ui, &path, obsidian));
-    } else {
-        ui.horizontal_wrapped(|ui| entry_file_parts(ui, root, relative, obsidian));
-    }
-}
-
-pub fn entry_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
-    let path = root.join(relative);
-    let action_width = entry_file_links_width(ui, obsidian);
-    let budget = (ui.available_width() - action_width - design::L).max(0.0);
-    let font = Type::Small.font(ui);
-    let mut shown = relative.to_owned();
-    if design::number_width(ui, &shown, &font) > budget {
-        let filename = relative.rsplit('/').next().unwrap_or(relative);
-        shown = format!("…/{filename}");
-        if design::number_width(ui, &shown, &font) > budget {
-            shown = design::words_that_fit(ui, filename, &font, budget);
-            shown = shown.trim_end_matches('…').to_owned();
-            while !shown.is_empty()
-                && design::number_width(ui, &format!("{shown}…"), &font) > budget
-            {
-                shown.pop();
-            }
-            shown.push('…');
-        }
-    }
-    let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
-    design::named(ui, &response, &path.display().to_string());
-    response.on_hover_text(path.display().to_string());
-    entry_file_links(ui, &path, obsidian);
-}
-
-/// The width of a file line's links, with the gap between them.
-pub fn entry_file_links_width(ui: &egui::Ui, obsidian: bool) -> f32 {
-    design::number_width(ui, "Show file", &Type::Body.font(ui))
-        + if obsidian {
-            design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui)) + design::S
-        } else {
-            0.0
-        }
-}
-
-/// `Edit in Obsidian` and `Show file` for a file at this full path.
-pub fn entry_file_links(ui: &mut egui::Ui, path: &Path, obsidian: bool) {
-    if obsidian && design::link(ui, "Edit in Obsidian").clicked() {
-        ui.ctx()
-            .open_url(egui::OpenUrl::new_tab(obsidian_url(path)));
-    }
-    if design::link(ui, "Show file").clicked() {
-        ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
-            "file://{}",
-            encode_path(path)
-        )));
-    }
 }
 
 fn encode_path(path: &Path) -> String {
@@ -2310,22 +2123,6 @@ pub fn title_line_rows(room: f32, line: f32, title: f32, widths: &[f32]) -> Opti
     }
 }
 
-/// Draw one action in its target, which the caller has already allocated or which lies on a
-/// line already allocated: a child that takes no room from `ui`, so a top-down layout never
-/// moves its cursor back up to the target.
-pub fn in_rect(
-    ui: &mut egui::Ui,
-    rect: egui::Rect,
-    add: impl FnOnce(&mut egui::Ui) -> bool,
-) -> bool {
-    let mut child = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(rect)
-            .layout(egui::Layout::left_to_right(egui::Align::Center)),
-    );
-    add(&mut child)
-}
-
 /// What a reader pane's footer can press. A kept result's press comes with its ticket, and the
 /// store it came from acts by it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2354,8 +2151,6 @@ pub enum FooterAct {
 
 /// Trackers can draw in Lookup and in a note's reader without giving those screens its state.
 pub trait TrackerUi {
-    fn show(&mut self, ui: &mut egui::Ui, from_top: bool);
-    fn history(&mut self, ui: &mut egui::Ui, note: &Entry);
     fn history_footer<'f>(
         &self,
         note: Uuid,
@@ -2869,20 +2664,6 @@ impl Reader {
             .map(|unread| unread.reason.clone())
     }
 
-    /// A change result on this note. It is newer than the page's repair result, so it takes
-    /// the one place for results.
-    pub fn has_change_result(&self, campaign: &Campaign, path: &str) -> bool {
-        let on = |slot| match self.result(slot) {
-            Some(ReaderResult::Change(change) | ReaderResult::Name(change)) => {
-                change.shows_on(campaign, path)
-            }
-            _ => false,
-        };
-        on(Slot::Change)
-            || on(Slot::Name)
-            || self.kept.as_ref().is_some_and(|(kept, _)| kept == path)
-    }
-
     pub fn clear_notice(&mut self) {
         self.end(Slot::Change);
         self.kept = None;
@@ -3107,140 +2888,6 @@ impl Reader {
             }
             Err(design::results::ByTicket::Gone) => None,
         }
-    }
-
-    /// The open picker. Returns the value the DM chose, or `Value::Null` to clear it.
-    fn pick(
-        &mut self,
-        ui: &mut egui::Ui,
-        item: &Item,
-        index: &ContentIndex,
-        campaign: &Campaign,
-        draft_groups: Option<&[Value]>,
-    ) -> Option<Value> {
-        let compact = self.compact;
-        let picker = self.picker.as_mut()?;
-        let key = picker.key;
-        let label = match key {
-            "in" => "Find a location",
-            "part_of" => "Find a group",
-            _ => "Find a stat block",
-        };
-        let groups: Vec<Value> = draft_groups.map_or_else(
-            || part_of(&item.entry).into_iter().cloned().collect(),
-            <[Value]>::to_vec,
-        );
-        let joined: Vec<usize> = groups
-            .iter()
-            .filter_map(|value| index.world_value_target(value))
-            .collect();
-        let width = ui.available_width();
-        let search_field = match key {
-            "in" => PICK_PLACE_SEARCH,
-            "part_of" => PICK_GROUP_SEARCH,
-            _ => PICK_STAT_BLOCK_SEARCH,
-        };
-        let response = search_field
-            .id(compact, item.entry.id)
-            .search(ui, label, &mut picker.search, label, width)
-            .field;
-        if std::mem::take(&mut picker.focus) {
-            response.request_focus();
-        }
-        let matches = if key == "creature" {
-            index.creatures_matching(&picker.search, 5)
-        } else {
-            // Anything can hold a place or a member. Locations come first for a place.
-            let wanted = picker.search.to_lowercase();
-            let mut found: Vec<(bool, usize)> = index
-                .items
-                .iter()
-                .enumerate()
-                .filter(|(at, i)| {
-                    i.is_private()
-                        && i.entry.kind == "world"
-                        && i.entry.id != item.entry.id
-                        && !(key == "part_of" && joined.contains(at))
-                        && i.entry.name.to_lowercase().contains(&wanted)
-                })
-                .map(|(at, i)| (key == "in" && world_type(&i.entry) != "location", at))
-                .collect();
-            found.sort_by_key(|&(later, _)| later);
-            found.into_iter().map(|(_, at)| at).take(5).collect()
-        };
-        let mut chosen = None;
-        let mut cancel = false;
-        for at in matches {
-            let entry = &index.items[at].entry;
-            if design::link(ui, &index.shown_name(at)).clicked() {
-                chosen = if key == "part_of" {
-                    let mut groups = groups.clone();
-                    groups.push(index.link_to(at).into());
-                    Some(Value::Sequence(groups))
-                } else {
-                    serde_yaml_ng::to_value(EntryRef::id(entry.id)).ok()
-                };
-            }
-        }
-        if key == "part_of" {
-            for (at, group) in groups.iter().enumerate() {
-                let name = format!("Remove {}", link_name(group, "group"));
-                if Action::quiet(&name).line_start().show(ui).clicked() {
-                    let mut groups = groups.clone();
-                    groups.remove(at);
-                    chosen = Some(Value::Sequence(groups));
-                }
-            }
-        }
-        if key == "in" {
-            design::quiet_section(ui, "New location…", |ui| {
-                design::labelled_field(
-                    ui,
-                    NEW_LOCATION_NAME.id(compact, item.entry.id),
-                    "Location name",
-                    &mut picker.new_location,
-                    None,
-                    None,
-                );
-                let reason = picker
-                    .new_location
-                    .trim()
-                    .is_empty()
-                    .then_some("Type a name first.");
-                ui.horizontal_wrapped(|ui| {
-                    if Action::secondary("Create location here")
-                        .blocked(reason)
-                        .show(ui)
-                        .clicked()
-                    {
-                        match create_entry(campaign, &picker.new_location, "location") {
-                            Ok(id) => {
-                                let mut target = EntryRef::id(id);
-                                target.link = Some(picker.new_location.trim().to_owned());
-                                chosen = serde_yaml_ng::to_value(target).ok();
-                            }
-                            Err(error) => self.error = Some(error),
-                        }
-                    }
-                    design::blocked_reason(ui, reason);
-                });
-            });
-        }
-        ui.horizontal_wrapped(|ui| {
-            if key != "part_of" && Action::quiet("Clear value").line_start().show(ui).clicked() {
-                chosen = Some(Value::Null);
-            }
-            cancel = starts_line(ui, Action::quiet("Cancel"), key == "part_of")
-                .show(ui)
-                .clicked();
-        });
-        if chosen.is_some()
-            || cancel
-            || ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
-        {
-            self.picker = None;
-        }
-        chosen
     }
 }
 

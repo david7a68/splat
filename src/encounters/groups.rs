@@ -1664,14 +1664,6 @@ thread_local! {
     /// How often the member loop copied a member's change map (review of PR 299).
     static CHANGE_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
-/// A member's change map, copied and counted. The editor makes no such copy on a frame; a test
-/// that puts one back (its mutation proof) goes through here, so the scenario counts it.
-#[cfg(any(test, feature = "test-support"))]
-#[allow(dead_code)]
-fn counted_changes_copy(changes: &Mapping) -> Mapping {
-    CHANGE_COPIES.with(|copies| copies.set(copies.get() + 1));
-    changes.clone()
-}
 /// How often the member loop copied a member's change map.
 #[cfg(any(test, feature = "test-support"))]
 pub fn change_copies() -> usize {

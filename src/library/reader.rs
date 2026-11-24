@@ -1,8 +1,7 @@
 //! A common reading layout for all non-creature entries.
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
-use super::presentation::{self, ReadingSection};
+use super::presentation::{self};
 use crate::design::reader as style;
-use eframe::egui;
 use splat::content::Entry;
 
 const LABELS: &[&str] = &[
@@ -190,19 +189,6 @@ pub fn item_summary_parts(entry: &Entry, printed: Option<&str>) -> Option<ItemSu
     })
 }
 
-fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
-    let Some(summary) = item_summary_parts(entry, printed) else {
-        return;
-    };
-    if !summary.identity.is_empty() {
-        style::identity(ui, &summary.identity);
-    }
-    style::facts(ui, &summary.facts);
-    for (label, value) in &summary.details {
-        style::detail(ui, label, value);
-    }
-}
-
 pub fn remaining_item_detail(
     _entry: &Entry,
     key: &serde_yaml_ng::Value,
@@ -215,19 +201,6 @@ pub fn remaining_item_detail(
         equipment.remove("attunement");
     }
     value
-}
-
-pub(super) fn item_details(ui: &mut egui::Ui, entry: &Entry) {
-    if let Some(item) = entry.fields.get("splat_item").and_then(|v| v.as_mapping()) {
-        for (key, value) in item {
-            let value = remaining_item_detail(entry, key, value);
-            if !blank(&value) && (value.is_mapping() || value.is_sequence()) {
-                crate::design::quiet_section(ui, &style::human_label(&display_value(key)), |ui| {
-                    structured_value(ui, &value);
-                });
-            }
-        }
-    }
 }
 
 pub fn has_item_details(entry: &Entry) -> bool {
@@ -252,29 +225,6 @@ pub fn blank(value: &serde_yaml_ng::Value) -> bool {
         serde_yaml_ng::Value::Sequence(values) => values.iter().all(blank),
         serde_yaml_ng::Value::Mapping(values) => values.values().all(blank),
         _ => false,
-    }
-}
-
-fn structured_value(ui: &mut egui::Ui, value: &serde_yaml_ng::Value) {
-    if let Some(fields) = value.as_mapping() {
-        for (key, value) in fields {
-            let key = display_value(key);
-            if value.is_mapping() || value.is_sequence() {
-                crate::design::heading(
-                    ui,
-                    crate::design::Heading::Section(&style::human_label(&key)),
-                );
-                structured_value(ui, value);
-            } else {
-                style::detail(ui, &key, &display_value(value));
-            }
-        }
-    } else if let Some(values) = value.as_sequence() {
-        for value in values {
-            structured_value(ui, value);
-        }
-    } else {
-        ui.label(display_value(value));
     }
 }
 
@@ -351,16 +301,6 @@ pub fn preparation_parts(
     (groups, completion)
 }
 
-fn preparation_summary(ui: &mut egui::Ui, entry: &Entry, has_source: bool) {
-    let (groups, completion) = preparation_parts(entry, has_source);
-    for facts in &groups {
-        style::facts(ui, facts);
-    }
-    if let Some(mode) = completion {
-        style::detail(ui, "Completion", &mode);
-    }
-}
-
 /// Generated item source tables contain JSON. Hide it only if it exactly
 /// matches the item fields displayed above; unmatched source always stays.
 pub fn represented_item_source(entry: &Entry, source: &str) -> bool {
@@ -372,141 +312,6 @@ pub fn represented_item_source(entry: &Entry, source: &str) -> bool {
             .ok()
             .as_ref()
             .is_some_and(|value| Some(value) == entry.fields.get("splat_item"))
-}
-
-/// `after_stat_head`: a stat head is drawn just above. Its gap `S` comes before the first prose,
-/// and a section heading takes none (the heading part owns its space; d-rows L).
-pub(super) fn show(
-    ui: &mut egui::Ui,
-    entry: Option<&Entry>,
-    sections: &[ReadingSection<'_>],
-    builtin: bool,
-    has_summary: bool,
-    lead_gap: bool,
-    after_stat_head: bool,
-) {
-    let mut after_stat_head = after_stat_head;
-    let mut settle = |ui: &mut egui::Ui, heading: bool| {
-        if std::mem::take(&mut after_stat_head) && !heading {
-            crate::design::gap(ui, crate::design::Gap::S);
-        }
-    };
-    let table_stats = entry.is_some_and(|e| ["spell", "item"].contains(&e.kind.as_str()));
-    // This reader also receives already-split sections. Restore their headings
-    // before filtering, because table ownership is defined by the named section.
-    let clean_body = entry.filter(|_| table_stats).map(|entry| {
-        let body = sections
-            .iter()
-            .map(|section| {
-                if section.title == "Overview" {
-                    section.body.to_owned()
-                } else {
-                    format!("## {}\n\n{}", section.title, section.body)
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        splat::content::stat_blocks::reading_body(entry, &body)
-    });
-    let clean_sections;
-    let sections = if let Some(body) = &clean_body {
-        clean_sections = presentation::reading_sections(body, "");
-        clean_sections.as_slice()
-    } else {
-        sections
-    };
-    if !has_summary && lead_gap {
-        crate::design::gap(ui, crate::design::Gap::L);
-    }
-    if let Some(entry) = entry {
-        let printed = sections
-            .iter()
-            .find(|section| section.title == "Source text")
-            .filter(|_| builtin && !table_stats)
-            .and_then(|section| {
-                source_facts(section.body)
-                    .0
-                    .into_iter()
-                    .find(|(label, _)| label == "Identity")
-                    .map(|(_, identity)| identity)
-            });
-        item_summary(ui, entry, printed.as_deref());
-        preparation_summary(
-            ui,
-            entry,
-            !table_stats && sections.iter().any(|s| s.title == "Source text"),
-        );
-    }
-    for section in sections
-        .iter()
-        .filter(|section| presentation::visible_reading_section(section))
-    {
-        if section.title == "Source text" && has_summary {
-            continue;
-        }
-        if section.body.contains("<!-- splat:") {
-            continue;
-        } else {
-            settle(
-                ui,
-                section.title != "Source text" && section.title != "Overview",
-            );
-            if section.title == "Source text"
-                && let Some(entry) = entry.filter(|entry| super::class::supports(entry))
-                && super::class::show_source(ui, section.body, &entry.name)
-            {
-                continue;
-            }
-            if section.title == "Source text"
-                && entry.is_some_and(|e| represented_item_source(e, section.body))
-            {
-                continue;
-            }
-            if section.title == "Source text" && (builtin || table_stats) {
-                let (mut facts, prose) = source_facts(section.body);
-                if table_stats {
-                    facts.clear();
-                }
-                if let Some(index) = facts.iter().position(|(label, _)| label == "Identity") {
-                    let identity = facts.remove(index).1;
-                    // An item's is already its identity line, above.
-                    if !entry.is_some_and(|e| e.fields.contains_key("splat_item")) {
-                        style::identity(ui, &identity);
-                    }
-                }
-                let has_facts = !facts.is_empty();
-                if has_facts {
-                    ui.scope(|ui| {
-                        ui.spacing_mut().item_spacing.y = crate::design::XS / 2.0;
-                        for (label, value) in facts {
-                            style::detail(ui, &label, &value);
-                        }
-                    });
-                    crate::design::gap(ui, crate::design::Gap::M);
-                }
-                style::source_prose(ui, &presentation::overview_markdown(&prose));
-            } else {
-                // An intro has no printed heading, so the reader adds none.
-                if section.title != "Overview" {
-                    // The same typed jump as the reader's (ruling M18).
-                    if crate::markdown_view::wanted_heading(ui.ctx(), &section.title) {
-                        crate::design::reveal::jump(
-                            ui,
-                            ui.cursor().top(),
-                            crate::design::reveal::JumpTo::LinkedHeading,
-                        );
-                    }
-                    crate::design::heading(ui, crate::design::Heading::Section(&section.title));
-                }
-                // A hand-written stat block's actions read as the book's do.
-                if let Some(entry) = entry.filter(|entry| super::creature::has_stats(entry)) {
-                    super::creature::rules_text(ui, &entry.name, &entry.body, section.body);
-                } else {
-                    style::markdown(ui, section.body);
-                }
-            }
-        }
-    }
 }
 
 #[cfg(test)]

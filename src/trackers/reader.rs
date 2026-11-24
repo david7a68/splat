@@ -4,12 +4,6 @@ use uuid::Uuid;
 pub(crate) struct Reader<'a>(pub &'a mut Trackers);
 
 impl crate::world::TrackerUi for Reader<'_> {
-    // The egui panel and history are gone (the GPUI pages draw them); World's strip removes
-    // these two trait methods with their egui callers.
-    fn show(&mut self, _: &mut eframe::egui::Ui, _: bool) {}
-
-    fn history(&mut self, _: &mut eframe::egui::Ui, _: &splat_content::content::Entry) {}
-
     fn history_footer<'f>(
         &self,
         note: Uuid,

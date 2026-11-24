@@ -222,12 +222,6 @@ thread_local! {
     static STORAGE_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// How often `storage_files` scanned a folder on this thread.
-#[cfg(any(test, feature = "test-support"))]
-pub fn storage_scans() -> usize {
-    STORAGE_SCANS.with(std::cell::Cell::get)
-}
-
 /// A scan before a storage move that the system refused, in plain words from the error's kind
 /// (round 30 B7e): the file or folder by its name, and the recovery. Never the system's words.
 fn scan_fault(path: &Path, error: &std::io::Error) -> String {

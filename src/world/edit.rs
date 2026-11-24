@@ -2,22 +2,19 @@
 //! the text. Save writes them together, with one Undo. Lookup and World show the same form.
 #![warn(deprecated)] // Its old message functions are gone; the parent file still allows them.
 use super::{
-    Change, ChangeKind, Go, Nav, Picker, Reader, link_name, reference, status, stored_link,
-    world_field,
+    Change, ChangeKind, Go, Nav, Reader, link_name, reference, status, stored_link, world_field,
 };
 use crate::design::text_draft::{KeptCompare, TextDraft};
 use crate::{
     design::{
-        self, Action, Density, Type, colors,
+        self,
         outcome::{Choice, Done, FaultMessage, Lost, MessageChoice, Messages, PaneFrame, Verb},
-        reader as style,
     },
     library::write_note,
     lookup::{ContentIndex, Item},
     persistence::Campaign,
     session_notes as sessions,
 };
-use eframe::egui;
 use serde_yaml_ng::Value;
 use splat::content::{Entry, Fields as EntryFields, layout::Flag};
 use uuid::Uuid;
@@ -203,7 +200,6 @@ enum Saved {
 /// Where a disk change under the draft stands.
 enum Conflict {
     None,
-    Waiting,
     /// The DM chose their draft: save it now.
     Overwrite,
 }
@@ -535,56 +531,6 @@ impl EditDraft {
         effects
     }
 
-    /// The note changed on disk under the draft. The DM keeps it, or reloads with an Undo.
-    fn conflict(&mut self, ui: &mut egui::Ui, index: &ContentIndex) -> Conflict {
-        let Some((disk, theirs)) = self.disk.take() else {
-            return Conflict::None;
-        };
-        let choice = design::disk_conflict_choices(
-            ui,
-            design::ConflictSubject::Named {
-                name: &self.name,
-                noun: "note",
-            },
-        );
-        if let Some(theirs) = &theirs {
-            let effects = self.overwrite_effects(theirs, index);
-            if !effects.is_empty() {
-                design::gap(ui, design::Gap::S);
-            }
-            for (label, words) in effects {
-                ui.horizontal_top(|ui| {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(design::XXL * 3.0 + design::S, 0.0),
-                        egui::Layout::left_to_right(egui::Align::Min),
-                        |ui| {
-                            ui.set_min_width(design::XXL * 3.0 + design::S);
-                            ui.label(Type::Small.rich(ui, label).color(colors().muted));
-                        },
-                    );
-                    ui.add(egui::Label::new(Type::Small.rich(ui, words)).wrap());
-                });
-            }
-        }
-        let their_text = theirs.as_ref().map_or("", |theirs| theirs.text.as_str());
-        let same = match &theirs {
-            Some(theirs) => {
-                self.now
-                    .text
-                    .same_as(theirs.text.revision(), &theirs.text, &self.same_disk)
-            }
-            None => self.now.text.is_empty(),
-        };
-        if !same {
-            design::grouped_draft_comparison(ui, &self.now.text, their_text, &self.path, false);
-        }
-        let Some(choice) = choice else {
-            self.disk = Some((disk, theirs));
-            return Conflict::Waiting;
-        };
-        self.resolve(disk, theirs, choice, index)
-    }
-
     /// Apply the DM's choice between the draft and the file on disk.
     fn resolve(
         &mut self,
@@ -637,11 +583,6 @@ fn index_campaign(index: &ContentIndex) -> Uuid {
         .campaign
         .as_ref()
         .map_or(Uuid::nil(), |campaign| campaign.id)
-}
-
-/// The edit form's text in the reader's face, unframed inside the form's well.
-fn edit_text_style(edit: egui::TextEdit<'_>, font: egui::FontId) -> egui::TextEdit<'_> {
-    edit.font(font).desired_rows(8)
 }
 
 /// A gone Log line's notice: the entry's name and the DM's words, as they typed them.
@@ -1056,314 +997,6 @@ impl Reader {
         self.edits.insert(id, draft);
         None
     }
-
-    /// The form, in place of the entry's rows and text.
-    pub fn edit_form(
-        &mut self,
-        ui: &mut egui::Ui,
-        item: &Item,
-        index: &ContentIndex,
-        campaign: &Campaign,
-        region: Option<crate::design::pane::EditorRegion<'_>>,
-    ) -> Option<Go> {
-        let id = item.entry.id;
-        // The draft leaves the map while the form draws, and goes back unless it closes.
-        let mut draft = self.edits.remove(&id)?;
-        if draft.campaign != campaign.id {
-            self.edits.insert(id, draft);
-            return None;
-        }
-        self.follow_file(&mut draft, item, campaign);
-        design::gap(ui, design::Gap::M);
-        let had_conflict = draft.disk.is_some();
-        let overwrite = match draft.conflict(ui, index) {
-            Conflict::Waiting => {
-                self.edits.insert(id, draft);
-                return None;
-            }
-            Conflict::Overwrite => true,
-            Conflict::None => false,
-        };
-        // The DM chose Reload: its result, with `Undo reload`, is kept in the reader's store from
-        // this act, in the pane's footer.
-        if had_conflict && draft.disk.is_none() && !overwrite && draft.reloaded.is_some() {
-            self.held.results.record(super::ReaderResult::Reloaded(id));
-        }
-        let mut focused = false;
-        // The Read order: Stat block, In, Part of, then Status.
-        let npc = super::fights(&item.entry);
-        let groups_error = draft
-            .start
-            .groups_unread
-            .as_ref()
-            .map(|unread| unread.reason.clone());
-        if groups_error.is_some()
-            && self
-                .picker
-                .as_ref()
-                .is_some_and(|picker| picker.key == "part_of")
-        {
-            self.picker = None;
-        }
-        // Each value as the form draws it, with its colour and size, as Read draws it: a set value
-        // is `Body` in the text colour, also a group (round 27 FF2); `not set` is muted `Small`
-        // and `not read` a `Small` warning, not names (FF3).
-        let slot_words = |slot: &Option<Value>, label: &str| match slot {
-            Some(value) if !super::empty_optional(value) => {
-                (value_name(index, value, label), colors().text, Type::Body)
-            }
-            _ => ("not set".to_owned(), colors().muted, Type::Small),
-        };
-        let group_words = if groups_error.is_some() {
-            ("not read".to_owned(), colors().result.warning, Type::Small)
-        } else if draft.now.groups.is_empty() {
-            ("not set".to_owned(), colors().muted, Type::Small)
-        } else {
-            (
-                draft
-                    .now
-                    .groups
-                    .iter()
-                    .map(|value| value_name(index, value, "group"))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                colors().text,
-                Type::Body,
-            )
-        };
-        let words = [
-            npc.then(|| slot_words(&draft.now.creature, "Stat block")),
-            Some(slot_words(&draft.now.place, "Place")),
-            Some(group_words.clone()),
-        ];
-        // One Change column for Stat block, In and Part of (AI1): an `L` gap after the widest
-        // value, which wraps within the column when the form is narrow.
-        let change_width = Action::quiet("Change")
-            .density(Density::Read)
-            .natural_width(ui);
-        let value_width = words
-            .iter()
-            .flatten()
-            .map(|(words, _, role)| design::number_width(ui, words, &role.font(ui)))
-            .fold(0.0_f32, f32::max)
-            .min(
-                (ui.available_width().min(design::FORM_WIDTH) - change_width - design::L)
-                    .max(design::XXL),
-            );
-        let value_and_change = |ui: &mut egui::Ui,
-                                (words, color, role): (String, egui::Color32, Type),
-                                change: Action<'_>| {
-            ui.horizontal(|ui| {
-                ui.allocate_ui_with_layout(
-                    egui::vec2(value_width, Density::Read.control()),
-                    egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
-                    |ui| {
-                        ui.set_width(value_width);
-                        ui.add(egui::Label::new(role.rich(ui, words).color(color)).wrap());
-                    },
-                );
-                design::gap_to_next(ui, design::Gap::L);
-                change.show(ui).clicked()
-            })
-            .inner
-        };
-        for (key, label, slot, words) in [
-            (
-                "creature",
-                "Stat block",
-                npc.then_some(&mut draft.now.creature),
-                words[0].clone(),
-            ),
-            ("in", "Place", Some(&mut draft.now.place), words[1].clone()),
-        ] {
-            let (Some(slot), Some(words)) = (slot, words) else {
-                continue;
-            };
-            design::field(ui, label, None, None, |ui| {
-                if value_and_change(
-                    ui,
-                    words,
-                    Action::quiet("Change")
-                        .density(Density::Read)
-                        .name(&format!("Change {label}")),
-                ) {
-                    self.picker = Some(Picker {
-                        key,
-                        focus: true,
-                        ..Default::default()
-                    });
-                }
-            });
-            if self.picker.as_ref().is_some_and(|picker| picker.key == key)
-                && let Some(chosen) = self.pick(ui, item, index, campaign, None)
-            {
-                *slot = Some(chosen).filter(|value| !value.is_null());
-            }
-        }
-        design::field(ui, "Part of", None, None, |ui| {
-            if value_and_change(
-                ui,
-                group_words,
-                Action::quiet("Change")
-                    .density(Density::Read)
-                    .name("Change Part of")
-                    .blocked(groups_error.as_deref()),
-            ) {
-                self.picker = Some(Picker {
-                    key: "part_of",
-                    focus: true,
-                    ..Default::default()
-                });
-            }
-        });
-        if let Some(reason) = &groups_error {
-            // The warning keeps the form's right edge.
-            ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-                let whole = draft
-                    .start
-                    .groups_unread
-                    .as_ref()
-                    .map_or(reason.as_str(), |unread| unread.whole.as_str());
-                super::unread_groups_message(ui, campaign, &draft.path, reason, whole);
-            });
-        }
-        if self
-            .picker
-            .as_ref()
-            .is_some_and(|picker| picker.key == "part_of")
-            && let Some(Value::Sequence(groups)) =
-                self.pick(ui, item, index, campaign, Some(&draft.now.groups))
-        {
-            draft.now.groups = groups;
-        }
-        // The shared text field, with a faint example of the one rule the value has.
-        focused |= design::field(ui, "Status", None, None, |ui| {
-            let width = ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S;
-            let hint = design::placeholder(ui, STATUS_HINT);
-            let response = super::EDIT_STATUS.id(self.compact, id).single_line(
-                ui,
-                &mut draft.now.status,
-                |edit| {
-                    edit.desired_width(width)
-                        .min_size(egui::vec2(0.0, Density::Read.control()))
-                        .margin(egui::vec2(design::S, 5.0))
-                        .hint_text(hint)
-                },
-            );
-            design::named(ui, &response, "Status");
-            response
-        })
-        .has_focus();
-        // A Log field of this note waits for this form. The save row says so in its one
-        // sentence, so one cause is said once (ruling Q-t, FC10); a clean form says Cancel.
-        // The draft is out of `edits` while the form draws, so the form asks for the Log
-        // fields alone: it is the form (review of 1f560778).
-        let log_waits = super::takes_log(item, index) && self.log_waits((campaign.id, id));
-        self.form_drawn = Some((id, ui.ctx().cumulative_pass_nr()));
-        let clean_reason = log_waits.then_some(super::LOG_WAITS_FOR_CANCEL);
-        let text = design::field(ui, "Text", None, None, |ui| {
-            let font = style::prose_type(ui).font(ui);
-            ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-                // One fixed field frame holds the editor's text and its scroll lane: the
-                // editor viewport draws it (layout PR 9).
-                let field = super::EDIT_TEXT.id(self.compact, id);
-                let text = &mut draft.now.text;
-                let editor = match region {
-                    // The pane's editor region (round 28, P2): it grows with the text and gives
-                    // way, so Save stays in view under a long note.
-                    Some(region) => region.editor(
-                        ui,
-                        field,
-                        text,
-                        design::pane::Face::Font(font.clone()),
-                        |edit| edit_text_style(edit, font),
-                    ),
-                    // No pane gave a region (a check that draws the reader alone).
-                    None => {
-                        let most = ui.available_height();
-                        design::pane::editor_view(
-                            ui,
-                            design::pane::ViewHeight::AtMost(most),
-                            field,
-                            text,
-                            design::pane::Face::Font(font.clone()),
-                            |edit| edit_text_style(edit, font),
-                        )
-                    }
-                };
-                // The frame's own node, as checks find the field's whole frame by it.
-                ui.interact(
-                    editor.frame,
-                    editor.response.id.with("frame"),
-                    egui::Sense::hover(),
-                )
-                .widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::Other,
-                        ui.is_enabled(),
-                        "Text field",
-                    )
-                });
-                editor.response
-            })
-            .inner
-        });
-        design::named(ui, &text, "Text");
-        focused |= text.has_focus();
-        self.form_focused = focused;
-        // Right after Reload the form matches the disk. Any edit ends Undo reload.
-        if draft.reloaded.is_some() && !draft.now_is_start() {
-            draft.reloaded = None;
-            self.end(super::Slot::Reloaded);
-        }
-        let dirty = draft.dirty();
-        // M0600: the shared save row decides the word, Save's weight and why it waits,
-        // `Discard` or (a clean form) `Cancel`, and where the reasons stand: on the row when
-        // they fit, else on a line under it that keeps its room, so the first edit moves
-        // nothing. Save is primary unless a live run owns Next turn on this screen.
-        let state = design::DraftState::new(
-            // The form edits a note that is on disk.
-            design::save_row::DraftOrigin::Saved,
-            if dirty {
-                design::save_row::Changed::Yes
-            } else {
-                design::save_row::Changed::No
-            },
-            if self.live {
-                design::save_row::Primary::Elsewhere
-            } else {
-                design::save_row::Primary::Draft
-            },
-        )
-        .locks_campaign()
-        .cancels(clean_reason);
-        let state = if log_waits {
-            state.holds(super::LOG_WAITS_FOR_SAVE)
-        } else {
-            state
-        };
-        design::gap(ui, design::Gap::S);
-        let row = ui
-            .scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-                design::save_row(ui, &state, "Save changes")
-            })
-            .inner;
-        let save =
-            overwrite || row.save || design::save_row::save_key(ui, state.can_save() && focused);
-        let cancel = row.discard || row.cancel;
-        if cancel {
-            self.discard_taken(id, draft);
-            return None;
-        }
-        if save {
-            return self.save_taken(id, draft, campaign, index);
-        }
-        self.edits.insert(id, draft);
-        None
-    }
 }
 
 #[cfg(test)]
@@ -1384,6 +1017,7 @@ impl Saved {
 mod tests {
     use super::*;
     use crate::content_workspace::EntryRef;
+    use crate::world::Picker;
     use splat::content::layout::{Field, FlagKind};
     use std::fs;
 

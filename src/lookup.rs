@@ -5,7 +5,7 @@
 use crate::{
     campaigns::Campaigns,
     content_workspace::Catalogue,
-    design::{self, Action, Density, Tone, Type, colors, icons, reader as style},
+    design::{self, icons},
     history::{Step, Trail},
     library::{presentation, view},
     persistence::{Campaign, Module},
@@ -274,21 +274,6 @@ thread_local! {
 #[cfg(any(test, feature = "test-support"))]
 static SHARED_NAME_SEARCHES: std::sync::Mutex<BTreeMap<std::path::PathBuf, usize>> =
     std::sync::Mutex::new(BTreeMap::new());
-
-/// How often `shown_name` ran on this thread, and how often the shared-name search ran for
-/// the campaign in this folder.
-#[cfg(any(test, feature = "test-support"))]
-pub fn shown_name_counts(campaign: &std::path::Path) -> crate::test_support::Counts {
-    crate::test_support::Counts {
-        reached: SHOWN_NAMES.with(std::cell::Cell::get),
-        work: SHARED_NAME_SEARCHES
-            .lock()
-            .unwrap()
-            .get(campaign)
-            .copied()
-            .unwrap_or(0),
-    }
-}
 
 /// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -790,19 +775,6 @@ impl ContentIndex {
         index.place_loop = in_loop;
         index.errors.extend(loops);
         Ok(index)
-    }
-
-    /// The rule for an official condition, by the name on a run's row.
-    pub fn condition_rule(&self, condition: &str) -> Option<usize> {
-        let name = condition.split(" (").next()?.trim().to_lowercase();
-        if !splat_campaign::encounter_run::effect::CONDITIONS
-            .iter()
-            .any(|(_, official)| official.eq_ignore_ascii_case(&name))
-        {
-            return None;
-        }
-        let wanted = format!("{name} [condition]");
-        self.items.iter().position(|item| item.lower == wanted)
     }
 
     /// The campaign's tables for the NPC generator, from its world notes and entries. Paths
@@ -2420,184 +2392,14 @@ fn typed_name(typed: &str) -> String {
     })
 }
 
-/// How a generator card says that it uses the built-in names.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NamesHelp {
-    /// The World page, where the DM prepares: the table marker in full.
-    Marker,
-    /// Lookup: short words and a quiet link to the World page's card.
-    Link,
-    /// A session note's card keeps the note's keyboard, so it only says so.
-    Plain,
-}
-
 /// The World page's words for using the campaign's own names. The marker itself is copied, not
 /// shown, because the DM types it in another program.
 pub const OWN_NAMES_HELP: &str = "Built-in names. To use your own, add a table of names to a note. Paste the marker on the line above the table.";
 /// The exact line that marks a table of names, for `Copy the marker`.
 pub(crate) const NAMES_MARKER: &str = "<!-- splat:rolls key=npc-name dice=1d6 -->";
 pub const COPY_MARKER: &str = "Copy the marker";
-/// After the copy: what the DM changes in the pasted line. The dice are the marker's own.
-/// The words of the card's copy result, for the checks: World's footer says them with a checked
-/// `sentence!` of the same words.
-#[cfg(any(test, feature = "test-support"))]
-pub const MARKER_COPIED: &str = "Copied. Change 1d6 to the number of names.";
 pub const BUILT_IN_NAMES: &str = "Built-in names.";
 pub const USE_OWN_NAMES: &str = "Use your own names";
-
-/// What the DM chose on a generator card.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct CardChoice {
-    pub save: bool,
-    pub again: bool,
-    pub discard: bool,
-    /// Lookup's `Use your own names`: show this NPC on the World page with the full help.
-    pub own_names: bool,
-    /// `Copy the marker` copied the names marker: the page's footer says what to change.
-    pub copied_marker: bool,
-}
-
-/// What the generator rolled, with its choices. Returns save, reroll and discard. A session
-/// note's card says only that the names are built in.
-pub fn generated_card(
-    ui: &mut egui::Ui,
-    npc: &crate::npc_generator::Generated,
-    problems: &[crate::npc_generator::TableProblem],
-    sources: &[String],
-    run_open: bool,
-    save_path: &str,
-) -> (bool, bool, bool) {
-    let choice = generator_card(
-        ui,
-        npc,
-        problems,
-        sources,
-        run_open,
-        NamesHelp::Plain,
-        save_path,
-    );
-    (choice.save, choice.again, choice.discard)
-}
-
-/// What the generator rolled, with its choices and the names help for this place.
-pub fn generator_card(
-    ui: &mut egui::Ui,
-    npc: &crate::npc_generator::Generated,
-    problems: &[crate::npc_generator::TableProblem],
-    sources: &[String],
-    run_open: bool,
-    help: NamesHelp,
-    save_path: &str,
-) -> CardChoice {
-    let mut choice = CardChoice::default();
-    design::heading(ui, design::Heading::Label("Generated NPC"));
-    ui.add(egui::Label::new(Type::Strong.rich(ui, &npc.name).color(colors().text)).wrap());
-    for (label, text) in crate::npc_generator::ATTRIBUTES.iter().zip(&npc.attributes) {
-        ui.add(
-            egui::Label::new(
-                Type::Body
-                    .rich(ui, format!("{label}: {text}"))
-                    .color(colors().text),
-            )
-            .wrap(),
-        );
-    }
-    if sources.is_empty() && problems.is_empty() {
-        match help {
-            NamesHelp::Marker => {
-                // Help keeps the reader measure, so it wraps above Copy the marker (round 25
-                // AE1, FE2, AD2).
-                design::help(ui, OWN_NAMES_HELP);
-                // The action stays, so the DM can copy again. Its result, which says what to
-                // change in the pasted line, is in the page's footer (round 27 FG2).
-                // A quiet action that starts a line, outside a message, has no icon: its words
-                // start at the card's text edge.
-                let response = Action::quiet(COPY_MARKER)
-                    .density(Density::Read)
-                    .line_start()
-                    .show(ui)
-                    .on_hover_text(NAMES_MARKER);
-                if response.clicked() {
-                    ui.ctx().copy_text(NAMES_MARKER.to_owned());
-                    choice.copied_marker = true;
-                }
-            }
-            NamesHelp::Plain => {
-                ui.label(Type::Small.rich(ui, BUILT_IN_NAMES).color(colors().muted));
-            }
-            NamesHelp::Link => {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(Type::Small.rich(ui, BUILT_IN_NAMES).color(colors().muted));
-                    choice.own_names = design::link(ui, USE_OWN_NAMES).clicked();
-                });
-            }
-        }
-    }
-    for source in sources {
-        let (kind, path) = source.split_once(": ").unwrap_or(("npc-name", source));
-        let label = if kind == "npc-name" {
-            "Names".to_owned()
-        } else {
-            style::human_label(kind)
-        };
-        ui.horizontal_wrapped(|ui| {
-            ui.label(
-                Type::Small
-                    .rich(ui, format!("{label} from"))
-                    .color(colors().muted),
-            );
-            if design::link(ui, path).clicked() {
-                ui.ctx().data_mut(|data| {
-                    data.insert_temp(egui::Id::new("markdown_clicked_note"), path.to_owned())
-                });
-            }
-        });
-    }
-    ui.scope(|ui| {
-        ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-        for problem in problems {
-            let opened = ui.scope(|ui| {
-                design::message_with_action(
-                    ui,
-                    Tone::Warning,
-                    &problem.message,
-                    &format!("Open {}", problem.path),
-                )
-            });
-            opened.response.on_hover_text(&problem.marker);
-            if opened.inner {
-                ui.ctx().data_mut(|data| {
-                    data.insert_temp(egui::Id::new("markdown_clicked_note"), problem.path.clone())
-                });
-            }
-        }
-    });
-    ui.label(
-        Type::Small
-            .rich(ui, format!("Will save {save_path}"))
-            .color(colors().muted),
-    );
-    ui.horizontal_wrapped(|ui| {
-        choice.save = (if run_open {
-            Action::secondary("Save NPC")
-        } else {
-            Action::primary("Save NPC")
-        })
-        .density(Density::Read)
-        .show(ui)
-        .clicked();
-        choice.again = Action::secondary("Reroll")
-            .icon(icons::DICE)
-            .density(Density::Read)
-            .show(ui)
-            .clicked();
-        choice.discard = Action::quiet("Discard")
-            .density(Density::Read)
-            .show(ui)
-            .clicked();
-    });
-    choice
-}
 
 impl splat_campaign::trackers::RuleSource for ContentIndex {
     fn manifest(&self, campaign: &Campaign) -> Result<String, String> {

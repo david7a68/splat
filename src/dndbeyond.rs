@@ -180,15 +180,6 @@ impl DndBeyond {
         }
     }
 
-    /// Give one remote campaign another name, as a new list from D&D Beyond would. Tests only:
-    /// the test list is fixed (`fetch`).
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn rename_remote(&mut self, id: &str, name: &str) {
-        for remote in self.campaigns.iter_mut().filter(|remote| remote.id == id) {
-            remote.name = name.to_owned();
-        }
-    }
-
     /// A list is on its way, so what is on screen is due to change.
     #[cfg(any(test, feature = "test-support"))]
     pub fn busy(&self) -> bool {

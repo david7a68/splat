@@ -7,7 +7,7 @@ use crate::design::text_draft::{KeptCompare, TextDraft};
 use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
-    design::{self, Tone, Type, colors, icons},
+    design::{self, Tone, colors, icons},
     library::{note_path, write_note},
     party::Party,
     persistence::{Campaign, Module},
@@ -526,11 +526,6 @@ thread_local! {
     /// (frames that asked for the owned-group check, groups that the check or its key read)
     static OWNED_GROUP_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
 }
-/// The counts of the owned-group check, for `CachedWork` (F5).
-#[cfg(any(test, feature = "test-support"))]
-pub fn owned_group_work() -> (usize, usize) {
-    OWNED_GROUP_WORK.with(std::cell::Cell::get)
-}
 
 /// The next step for a group's member row that blocks Save (N2): `Fix the Cinder Wolf row of
 /// Ash Hounds before you save.`
@@ -744,10 +739,6 @@ fn unread_note(
 }
 
 pub use splat_content_ui::content_actions::content_issue_count;
-
-pub use splat_content_ui::content_actions::issue_count_title;
-
-pub use splat_content_ui::content_actions::file_line;
 
 /// The encounter file's flags (`unread_notes`), the unread roster rows among them (`faults`) and
 /// the file's path in the campaign.
@@ -1714,84 +1705,9 @@ struct Creature {
     /// Habitat, type, size and the other facts that search and the filter use.
     facets: Option<Facets>,
 }
-/// A result's stats, each in its own place, so that they can be compared down the list. The
-/// first place holds a party copy's word, which has no challenge rating. The package follows
-/// if the row has room for it.
-/// `hp_missing` comes from the creature's stats: the HP fault is data, never found in the words.
-pub fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>, hp_missing: bool) {
-    if hp_missing {
-        ui.horizontal_wrapped(|ui| {
-            for part in detail_parts(detail, hp_missing) {
-                if part.hp_fault {
-                    design::status(
-                        ui,
-                        design::Status {
-                            icon: design::icons::WARN,
-                            word: HP_NOT_SET,
-                            color: part.color(),
-                        },
-                    );
-                } else {
-                    ui.label(Type::Small.rich(ui, part.words).color(part.color()));
-                }
-            }
-        });
-        return;
-    }
-    const COLUMNS: [(&str, &str); 3] = [("CR ", "CR 1/8"), ("HP ", "HP 999"), ("AC ", "AC 25")];
-    let parts: Vec<&str> = detail.split(" · ").collect();
-    let other = parts
-        .iter()
-        .find(|part| !COLUMNS.iter().any(|(prefix, _)| part.starts_with(prefix)));
-    // A row of plain words: it sits close under its name, not at a control's height.
-    ui.spacing_mut().interact_size.y = 0.0;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        for (prefix, widest) in COLUMNS {
-            let gap = if prefix == "CR " {
-                design::M
-            } else {
-                design::S
-            };
-            let width = design::number_width(ui, widest, &Type::Small.font(ui)) + gap;
-            let part = parts
-                .iter()
-                .find(|part| part.starts_with(prefix))
-                .or(other.filter(|_| prefix == COLUMNS[0].0));
-            ui.allocate_ui_with_layout(
-                egui::vec2(width, Type::Small.line()),
-                egui::Layout::left_to_right(egui::Align::Center),
-                |ui| {
-                    ui.set_min_width(width);
-                    if let Some(part) = part {
-                        ui.label(Type::Small.rich(ui, *part).color(colors().muted));
-                    }
-                },
-            );
-        }
-        if detail.starts_with("NPC · as ") {
-            design::gap(ui, design::Gap::XS);
-            ui.label(
-                Type::Small
-                    .rich(ui, parts[..2].join(" · "))
-                    .color(colors().muted),
-            );
-        }
-        // Only whole: a cut name says nothing, and Read always shows it.
-        if let Some(source) = source
-            && design::number_width(ui, source, &Type::Small.font(ui)) + design::M - design::S
-                <= ui.available_width()
-        {
-            design::gap(ui, design::Gap::XS);
-            ui.label(Type::Small.rich(ui, source).color(colors().muted));
-        }
-    });
-}
 
 const STILL_READING: &str = "Still reading this campaign.";
 const ADD_PARTICIPANTS_FIRST: &str = "Add participants first.";
-
-pub use splat_content_ui::content_actions::creature_name_link;
 
 /// `changed` holds this creature's values when a slot or member changes them.
 /// The creature's hit points, after its changes. None is the `HP not set` fault.
@@ -2349,10 +2265,6 @@ thread_local! {
 
 // Kept pickers the replacement pickers' sweep visited on this thread, for a test that it runs
 // once per frame (review of PR 473, P3).
-#[cfg(any(test, feature = "test-support"))]
-thread_local! {
-    static REPLACEMENT_SWEPT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
 
 /// The replacement's result for its Undo message.
 fn replacement_words(old: &str, rows: usize, new: &str) -> String {
@@ -2508,8 +2420,6 @@ impl SearchRanked {
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static SEARCH_RANKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    /// How many times the search's results columns were measured on this thread (#565).
-    static RESULT_COLUMNS_MEASURED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// How many times a search copied the roster's creatures for its ranking (issue #518).
     static ROSTER_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -3617,22 +3527,6 @@ impl Encounters {
         self.refused(invalid);
         self.start_refused = answer;
     }
-    /// N1: Save's checks of the open encounter's changed groups as one ranked diagnosis: the
-    /// first refused change (named `Group <name>: …`, as Save says it) outranks the first missing
-    /// part, whose group's origin comes with it. Checked again only when the campaign's read or a
-    /// changed group's own revision changes.
-    /// F5 (B3b): the owned-group check's key inputs now, and whether a campaign read is still
-    /// pending: a test holds them fixed and names the input that changed.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn owned_group_inputs(&self) -> Option<(Uuid, usize, u64, bool)> {
-        let (snapshot, draft) = (self.snapshot.as_ref()?, self.draft.as_ref()?);
-        Some((
-            snapshot.revision,
-            draft.groups.len(),
-            groups::revisions_issued(),
-            self.pending.is_some(),
-        ))
-    }
     fn owned_groups_diagnosis(&mut self) -> OwnedGroupsFound {
         let (Some(snapshot), Some(draft)) = (self.snapshot.as_ref(), self.draft.as_ref()) else {
             return OwnedGroupsFound {
@@ -3747,15 +3641,6 @@ impl Encounters {
             .as_mut()
             .expect("an open run")
             .simulate_read(name, more_damage);
-    }
-
-    /// Running syncs react to the session from now on, as real ones do.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn simulate_session_end(&mut self) {
-        self.run
-            .as_mut()
-            .expect("an open run")
-            .stop_simulating_sync();
     }
 
     /// Show an error line. An empty message clears it.
@@ -4258,11 +4143,6 @@ impl Encounters {
                 .is_some_and(|snapshot| snapshot.groups.iter().any(|g| g.id == group));
         self.plan_refusal_check = Some((key, stands));
         stands
-    }
-    /// Test only: the campaign read's revision, which keys the plan refusal's check.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn snapshot_revision(&self) -> Option<Uuid> {
-        self.snapshot.as_ref().map(|snapshot| snapshot.revision)
     }
     /// Test only: whether the campaign read offers a creature of this name to the encounter
     /// search (the creatures the campaign's package choices use).
@@ -5120,18 +5000,6 @@ impl Encounters {
                 ));
             }
         }
-    }
-    /// The Run page's egui view (the Run area's strip removes it). Returns true when the run
-    /// has just closed. Its `run_reads` come first.
-    pub fn show_run(&mut self, ui: &mut egui::Ui, active: &Campaign) -> bool {
-        let Some(run) = &mut self.run else {
-            return false;
-        };
-        if !run.show(ui) {
-            return false;
-        }
-        self.close_shown_run(active);
-        true
     }
     /// What the run reads from this page before the Run page draws (egui and GPUI): the
     /// campaign's creature names, groups, scale and creatures, and tonight's planned groups.
@@ -6553,36 +6421,6 @@ mod tests {
             if let (Some(reason), Some(sentence)) = (reason, sentence) {
                 assert!(reason.ends_with(sentence), "{reason}");
             }
-        }
-    }
-
-    #[test]
-    fn creature_detail_columns_reserve_room_for_their_widest_values() {
-        let ctx = egui::Context::default();
-        design::theme::install(&ctx);
-        let output = ctx.run(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                detail_columns(ui, "CR 1/8 · HP 999 · AC 25", Some("Ashen Marches"), false);
-            });
-        });
-        let bounds = |word| {
-            output
-                .shapes
-                .iter()
-                .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == word => {
-                        Some(egui::Rect::from_min_size(text.pos, text.galley.size()))
-                    }
-                    _ => None,
-                })
-                .expect("the stat and source text must be painted")
-        };
-        for (before, after, gap) in [
-            ("CR 1/8", "HP 999", design::S),
-            ("HP 999", "AC 25", design::S),
-            ("AC 25", "Ashen Marches", design::M),
-        ] {
-            assert!(bounds(after).left() - bounds(before).right() >= gap - 0.5);
         }
     }
 
