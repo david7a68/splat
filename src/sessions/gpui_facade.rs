@@ -2924,3 +2924,132 @@ impl Sessions {
 }
 
 pub use crate::sessions::slash_plain as slash;
+
+/// The Session folder block (`folder_block`), as the Campaign page's Link and folder tab
+/// draws it.
+pub struct FolderView {
+    pub text: String,
+    /// `Now: <folder>`.
+    pub now: Option<PathBuf>,
+    /// The typed folder differs from the saved one.
+    pub changed: bool,
+    /// Why Save folder waits (a lock, a recording, unsaved words, nothing changed).
+    pub waits: Option<String>,
+    /// Files in the current folder: Save folder waits for the choice below.
+    pub elsewhere: bool,
+    /// Its messages: the fault, the move offer, the move's result.
+    pub messages: Vec<FolderMessage>,
+}
+
+pub struct FolderMessage {
+    pub tone: crate::design::Tone,
+    pub words: String,
+    /// `Move files and save` and `Save without moving`, with why they wait.
+    pub choices: Vec<(&'static str, super::FolderAct, Option<String>)>,
+}
+
+impl Sessions {
+    /// The Session folder block's state now.
+    pub fn gv_folder_block(&mut self, book: &Book, locked: Option<&str>) -> Option<FolderView> {
+        use super::{FolderAct, FolderFault, FolderWait};
+        let campaign = self.campaign.clone()?;
+        if let Some(FolderFault::FilesChanged | FolderFault::FilesGone) = &self.folder_error {
+            let files = self.folder_files();
+            let offered = self.folder_move_counts(book, &files).is_some();
+            let gone = matches!(self.folder_error, Some(FolderFault::FilesGone));
+            if offered == gone {
+                self.folder_error = None;
+            }
+        }
+        let changed = crate::sessions::resolve(&campaign, &self.folder_text).ok()
+            != self.folder.clone();
+        let files = self.folder_files();
+        let counts = self.folder_move_counts(book, &files);
+        let wait = self.folder_wait(book, changed, &files);
+        let waits = locked
+            .map(str::to_owned)
+            .or(wait.filter(|wait| *wait != FolderWait::NoChanges).map(|wait| wait.words().to_owned()))
+            .or((!changed).then(|| FolderWait::NoChanges.words().to_owned()));
+        let mut messages = Vec::new();
+        if let Some(fault) = &self.folder_error {
+            messages.push(FolderMessage {
+                tone: match fault {
+                    FolderFault::NotSaved(_) | FolderFault::CannotRead(_) => {
+                        crate::design::Tone::Error
+                    }
+                    _ => crate::design::Tone::Warning,
+                },
+                words: crate::design::outcome::fault_words(fault).as_str().to_owned(),
+                choices: Vec::new(),
+            });
+        }
+        if let Some(counts) = &counts {
+            let mut choices = Vec::new();
+            if locked.is_none() {
+                let reason = wait.map(|wait| wait.words().to_owned());
+                choices.push((super::MOVE_FILES, FolderAct::Move, reason.clone()));
+                choices.push(("Save without moving", FolderAct::WithoutMoving, reason));
+            }
+            messages.push(FolderMessage {
+                tone: crate::design::Tone::Warning,
+                words: super::folder_keeps(counts).as_str().to_owned(),
+                choices,
+            });
+        }
+        if let Some(words) = self.folder_link().and_then(|link| {
+            self.folder_moves.get(&link).map(|shown| {
+                let moved = shown.value();
+                format!("Moved {} to {}.", moved.counts, moved.typed)
+            })
+        }) {
+            messages.push(FolderMessage {
+                tone: crate::design::Tone::Success,
+                words,
+                choices: Vec::new(),
+            });
+        }
+        Some(FolderView {
+            text: self.folder_text.clone(),
+            now: self.folder.clone(),
+            changed,
+            waits,
+            elsewhere: counts.is_some(),
+            messages,
+        })
+    }
+
+    /// The DM's edit of the folder's name (`folder_fields`).
+    pub fn gv_set_folder_text(&mut self, words: &str) {
+        use super::FolderFault;
+        if self.folder_text == words {
+            return;
+        }
+        words.clone_into(&mut self.folder_text);
+        if matches!(
+            self.folder_error,
+            Some(FolderFault::FilesChanged | FolderFault::FilesGone)
+        ) {
+            self.folder_error = None;
+        }
+        if let Some(link) = self.folder_link() {
+            self.folder_moves.owner_changed(&link);
+        }
+    }
+
+    /// The save row's discard: the saved folder's name again.
+    pub fn gv_discard_folder_text(&mut self) {
+        if let Some(campaign) = &self.campaign
+            && let Ok(saved) = crate::sessions::folder_setting(campaign)
+        {
+            self.folder_text = saved;
+        }
+        self.folder_error = None;
+    }
+
+    /// Save folder, Move files and save, or Save without moving (`save_folder_act`).
+    pub fn gv_folder_act(&mut self, book: &Book, act: super::FolderAct) {
+        if let Some(campaign) = self.campaign.clone() {
+            self.save_folder_act(&campaign, book, act);
+        }
+    }
+}

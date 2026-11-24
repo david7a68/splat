@@ -5,6 +5,7 @@
 //! egui page draws. The view reads it through `Sessions::gv_*` (`src/sessions/gpui_facade.rs`)
 //! and acts through the same methods the egui page calls; this folder keeps only GPUI state.
 mod banner;
+mod folder;
 mod footer;
 mod form;
 mod list;
@@ -407,6 +408,18 @@ fn notes_view(
         .column(LIST_WIDTH, LIST_MIN..LIST_MAX, list)
         .rest(div().size_full().pl(S).child(body))
         .into_any_element()
+}
+
+/// The Session folder block, for the Campaign page's Link and folder tab
+/// (`Sessions::folder_block`). `locked`: why the campaign's link waits, and with it this block.
+#[allow(dead_code, reason = "the Link and folder tab of the Campaigns page area calls it")]
+pub(crate) fn render_folder_block(
+    root: &mut SplatRoot,
+    locked: Option<&str>,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    folder::render_folder_block(root, locked, window, cx)
 }
 
 /// The note in the side panel beside another page (`Sessions::notes_panel`).
