@@ -140,9 +140,10 @@ pub(super) fn sections_column(
 fn subtitle(words: &str) -> impl IntoElement {
     let c = colors();
     let (mark, rest) = match words.strip_prefix(icons::WARN) {
-        Some(rest) => (true, rest.trim_start().to_owned()),
-        None => (false, words.to_owned()),
+        Some(rest) => (true, rest.trim_start()),
+        None => (false, words),
     };
+    let (head, folder) = folder_last(rest);
     div()
         .flex()
         .flex_row()
@@ -154,11 +155,29 @@ fn subtitle(words: &str) -> impl IntoElement {
         })
         .child(
             div()
+                .flex()
+                .flex_row()
+                .min_w_0()
                 .ty(Type::Small)
                 .text_color(c.muted)
-                .truncate()
-                .child(rest),
+                .child(div().min_w_0().truncate().child(head.to_owned()))
+                .children(folder.map(|folder| {
+                    div()
+                        .flex_none()
+                        .whitespace_nowrap()
+                        .child(folder.to_owned())
+                })),
         )
+}
+
+/// A row's second line split before the folder that ends it (`Same entry in two files · … ·
+/// ashen-marches-copy/`): the folder tells two files apart, so the words before it shorten and
+/// the folder stays whole (round 25 FF5). No folder: the whole line.
+pub(super) fn folder_last(words: &str) -> (&str, Option<&str>) {
+    match words.rfind(" · ") {
+        Some(at) if words.ends_with('/') => (&words[..at], Some(&words[at..])),
+        _ => (words, None),
+    }
 }
 
 /// The entries column: a compact page's drop-downs, the search, the heading and the rows.
