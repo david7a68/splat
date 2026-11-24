@@ -1,5 +1,4 @@
-//! The encounter editor (egui: `Encounters::editor_view`, `editor_panes`, `roster`,
-//! `add_pane`, `creature_search`): the back line, the name and its actions, the save row, the
+//! The encounter editor: the back line, the name and its actions, the save row, the
 //! roster column (its rows with their Changes and replacement, options, loot, notes and the
 //! encounter's own groups), Add participants or the creature made yours, and the footer. Below
 //! 760 px the roster and Add participants take turns under tabs. While the encounter's file (or
@@ -11,7 +10,7 @@ use crate::gui::theme::{
     Density, HAIRLINE_WIDTH, L, LIST_MEASURE, M, PANEL_MIN_WIDTH, S, Type, TypeExt, XS, colors,
 };
 use crate::gui::{SplatRoot, icons, kit};
-use eframe::egui;
+use crate::state_context::{Slot, StateContext};
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
     AnyElement, Context, Div, ElementId, InteractiveElement, IntoElement, ParentElement, Pixels,
@@ -23,13 +22,14 @@ use splat_encounters_ui::encounters::model::{
 };
 use std::sync::Arc;
 
-/// The id of the page's creature filter, shared by the roster and a group (as in egui).
-pub(super) const FILTER_ID: &str = "creature_search_filter";
-/// Add participants' column, by the id egui saves its dragged width under (`ADD_PANE`).
+/// The page's creature filter, shared by the roster and a group.
+pub(super) const FILTER: Slot<splat_content::content::creature_filter::Filter> =
+    Slot::new("creature_search_filter");
+/// Add participants' column, by the id its dragged width is saved under (`ADD_PANE`).
 pub(super) const ADD_PANE: &str = "encounter_add";
 /// The widest Add participants takes by itself (`ADD_PANE_MAX_WIDTH`).
 pub(super) const ADD_PANE_MAX_WIDTH: Pixels = px(640.0);
-/// Below this the roster and Add participants take turns under tabs (egui `compact`).
+/// Below this the roster and Add participants take turns under tabs.
 pub(super) const NARROW: Pixels = px(760.0);
 
 /// Add participants' width: the DM's dragged width, else its own (`editor_columns`).
@@ -67,7 +67,7 @@ pub(super) fn render(
     let Some(view) = root.app.encounters.editor_frame(&active) else {
         return div().into_any_element();
     };
-    let ctx = root.bridge.ctx().clone();
+    let ctx = root.ctx.clone();
     let linked = active.dndbeyond_campaign_id.is_some();
     let roster = root
         .app
@@ -78,7 +78,7 @@ pub(super) fn render(
     let unused = root.app.encounters.unused_creatures(&ctx);
     let creature = root.app.encounters.creature_view();
     let owned = root.app.encounters.owned_groups(&ctx);
-    let lines = root.app.encounters.editor_footer(&ctx, &active.path);
+    let lines = root.app.encounters.editor_footer(&active.path);
     let choices = kit::menu::is_open(&super::filter::menu_id(), cx)
         .then(|| root.app.encounters.filter_choices());
     let focus_name = root.app.encounters.take_focus_name();
@@ -258,10 +258,9 @@ fn narrow_body(
         .into_any_element()
 }
 
-/// The page's creature filter, kept in the bridge's egui context as the egui page keeps it.
-pub(super) fn filter(ctx: &egui::Context) -> splat_content::content::creature_filter::Filter {
-    ctx.data(|data| data.get_temp(egui::Id::new(FILTER_ID)))
-        .unwrap_or_default()
+/// The page's creature filter, kept in the state context so the roster and a group share it.
+pub(super) fn filter(ctx: &StateContext) -> splat_content::content::creature_filter::Filter {
+    ctx.get(FILTER).unwrap_or_default()
 }
 
 /// The back line: the destination's link and, while a draft holds it, that draft's reason.
@@ -417,7 +416,7 @@ fn head(
         .child(kit::status(&kit::Status::new(
             icon.clone(),
             word.clone(),
-            crate::gui::bridge::color(*color),
+            crate::gui::theme::color(*color),
         )));
     if let Some(blocked) = view.discard {
         row = row.child(
@@ -522,9 +521,7 @@ fn roster_column(
                     kit::Link::new("encounter-connect", "Connect to sync")
                         .small()
                         .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
-                            root.bridge.ctx().data_mut(|data| {
-                                data.insert_temp(egui::Id::new("open_account_settings"), true)
-                            });
+                            root.ctx.set(crate::requests::OPEN_ACCOUNT_SETTINGS, true);
                             cx.notify();
                         })),
                 );
@@ -790,7 +787,7 @@ fn roster_row(
         } else {
             line = line.child(
                 div()
-                    .text_color(crate::gui::bridge::color(*color))
+                    .text_color(crate::gui::theme::color(*color))
                     .child(words.clone()),
             );
         }
@@ -798,7 +795,7 @@ fn roster_row(
     if let Some((icon, color, _)) = &row.missing {
         line = line
             .child(div().child(" · "))
-            .child(small_icon(icon, crate::gui::bridge::color(*color)));
+            .child(small_icon(icon, crate::gui::theme::color(*color)));
     }
     if let Some(word) = &row.changed {
         let open = key.clone();
@@ -871,9 +868,8 @@ fn roster_row(
             )
             .density(Density::Read)
             .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                root.bridge.ctx().data_mut(|data| {
-                    data.insert_temp(egui::Id::new("open_library_repair"), path.clone())
-                });
+                root.ctx
+                    .set(crate::requests::OPEN_LIBRARY_REPAIR, path.clone());
                 cx.notify();
             }))
             .into_any_element()
@@ -1161,12 +1157,8 @@ pub(super) fn add_head(
                         .small()
                         .name(format!("Use it: {}", unused.words))
                         .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                            root.bridge.ctx().data_mut(|data| {
-                                data.insert_temp(
-                                    egui::Id::new("use_package_entry"),
-                                    (package, entry),
-                                )
-                            });
+                            root.ctx
+                                .set(crate::requests::USE_PACKAGE_ENTRY, (package, entry));
                             cx.notify();
                         })),
                 ),
@@ -1338,9 +1330,7 @@ pub(super) fn results(
                     .child(
                         kit::Link::new("encounter-packages", "Campaign → Packages").on_click(
                             cx.listener(|root: &mut SplatRoot, _, _, cx| {
-                                root.bridge.ctx().data_mut(|data| {
-                                    data.insert_temp(egui::Id::new("open_campaign_packages"), true)
-                                });
+                                root.ctx.set(crate::requests::OPEN_CAMPAIGN_PACKAGES, true);
                                 cx.notify();
                             }),
                         ),
@@ -1431,9 +1421,8 @@ fn result_row(
                 )
                 .density(Density::Read)
                 .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                    root.bridge.ctx().data_mut(|data| {
-                        data.insert_temp(egui::Id::new("reveal_encounter_npc"), creature)
-                    });
+                    root.ctx
+                        .set(crate::requests::REVEAL_ENCOUNTER_NPC, creature);
                     cx.notify();
                 })),
             );

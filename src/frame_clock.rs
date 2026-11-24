@@ -1,24 +1,21 @@
 //! The app's one clock for words that end by themselves (round 30 B7d): `Recording saved` on the
 //! rail, `Hearing sound`, and the Add results of the plan and the Timeline with their Undo. It is
-//! egui's frame time (`egui::InputState::time`), read once at the start of each frame (`tick`).
-//! In the app it moves with real seconds, so every timing stays as it was. Under the test
-//! harness each frame moves it by the harness's fixed step, so the frames a test runs, not the
-//! machine's speed, decide when such a word ends, and two runs of one scenario show the same
-//! words. A timer that reads `Instant` instead shows different words in different captures.
-use egui;
+//! the time since the app started, set once at the start of each pass of the frame logic
+//! (`tick`, from `StateContext::begin_pass`). It moves with real seconds, so every timing stays
+//! as it was. A unit test sets it (`set`), so the steps a test takes, not the machine's speed,
+//! decide when such a word ends.
 use std::{cell::Cell, time::Duration};
 
 thread_local! {
     static NOW: Cell<f64> = const { Cell::new(0.0) };
 }
 
-/// Read the frame clock: at the start of each frame, before anything reads `now`.
-pub fn tick(ctx: &egui::Context) {
-    let time = ctx.input(|input| input.time);
-    NOW.with(|now| now.set(time));
+/// Set the frame clock to `seconds`: at the start of each pass, before anything reads `now`.
+pub fn tick(seconds: f64) {
+    NOW.with(|now| now.set(seconds));
 }
 
-/// The frame clock, in seconds, as the frame's `tick` read it.
+/// The frame clock, in seconds, as the pass's `tick` set it.
 pub fn now() -> f64 {
     NOW.with(Cell::get)
 }

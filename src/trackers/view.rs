@@ -490,12 +490,8 @@ pub fn line_words(
 /// then the last act of the session being played with `Undo: <label>` and `Add to Timeline`, or,
 /// after `Add to Timeline`, `Added to the Timeline.` with `Undo add`. Nothing shows while
 /// `Trackers.md` cannot be read.
-pub fn messages<'f>(
-    frame: &'f PaneFrame,
-    trackers: &Trackers,
-    width: f32,
-) -> Messages<'f, TrackerPress> {
-    let mut messages = Messages::new(frame, "trackers_footer", width);
+pub fn messages<'f>(frame: &'f PaneFrame, trackers: &Trackers) -> Messages<'f, TrackerPress> {
+    let mut messages = Messages::new();
     if trackers.unreadable.is_some() {
         return messages;
     }

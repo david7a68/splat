@@ -1,10 +1,9 @@
-//! A journey's encounter checks in the open event's form (egui: `timeline::checks::header`,
-//! `lines`): `Encounter checks` over the table menu and its dice words, the result of the last
+//! A journey's encounter checks in the open event's form: `Encounter checks` over the table menu and its dice words, the result of the last
 //! act with its Undo, one line for each check (`Roll`, a typed roll, or its result with its plan
 //! offers and `Clear`), `Roll all`, and the results that are no longer on a line. The rows come
 //! from `checks::block`.
 //!
-//! Two places draw the block, as egui's two callers of `header` and `lines` do (`Host`): the
+//! Two places draw the block (`Host`): the
 //! Timeline's open event, whose presses go through `TimelinePage::apply_detail`, and an open
 //! Travel row of the session plan, whose presses go through the plan's `travel_act`. Each keeps
 //! its own typed rolls, fault and last result.

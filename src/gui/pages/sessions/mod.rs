@@ -1,9 +1,9 @@
-//! The Session page, the notes panel beside other pages, and the session banner (egui:
+//! The Session page, the notes panel beside other pages, and the session banner (state:
 //! `src/sessions/`, `src/sessions.rs`, `src/sessions_ui/`, `src/session_records/`).
 //!
-//! The page's state is `root.app.sessions` (`crate::sessions::page::Sessions`), the same the
-//! egui page draws. The view reads it through `Sessions::gv_*` (`src/sessions/gpui_facade.rs`)
-//! and acts through the same methods the egui page calls; this folder keeps only GPUI state.
+//! The page's state is `root.app.sessions` (`crate::sessions::page::Sessions`). The view reads
+//! it through `Sessions::gv_*` (`src/sessions/gpui_facade.rs`) and acts through its methods; this
+//! folder keeps only GPUI state.
 mod banner;
 mod footer;
 mod form;
@@ -213,7 +213,7 @@ fn header(
             kit::Button::quiet("header-stop-recording", "Stop recording")
                 .icon(icons::STOP_RECORDING)
                 .on_click(cx.listener(|root, _, _, cx| {
-                    let ctx = root.bridge.ctx().clone();
+                    let ctx = root.ctx.clone();
                     root.app.sessions.gv_stop_recording(&ctx);
                     cx.notify();
                 }))

@@ -1,7 +1,7 @@
 //! The session list (`Sessions::list_pane`): one row per note, its title wrapping over its date
 //! or recording state, `Playing` on the current session's row. It waits while the open note's
 //! unsaved words need a choice.
-use crate::gui::{SplatRoot, bridge, icons, kit, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, div,
     prelude::*,
@@ -30,8 +30,8 @@ pub(super) fn render(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyEl
         }
         let mut spoken = row.detail.clone();
         if let Some(state) = row.state {
-            let look = kit::Status::new(state.icon, state.word, bridge::color(state.word_color()))
-                .icon_color(bridge::color(state.icon_color()));
+            let look = kit::Status::new(state.icon, state.word, theme::color(state.word_color()))
+                .icon_color(theme::color(state.icon_color()));
             detail = detail.child(kit::status(&look));
             spoken = row.spoken.clone().unwrap_or_else(|| state.word.to_owned());
         } else {

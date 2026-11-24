@@ -1,7 +1,6 @@
 //! Campaign → Rules and runs, free of any toolkit, for the GPUI tab
-//! (`src/gui/pages/campaigns/run_settings.rs`). The footer is `run_settings_footer`, which the
-//! egui tab (`Encounters::run_settings`) calls too, as it calls the save row's rule
-//! (`run_row_of`).
+//! (`src/gui/pages/campaigns/run_settings.rs`). The footer is `run_settings_footer`; the save
+//! row's rule is `run_row_of`.
 #![warn(deprecated)]
 use super::{
     CHOOSE_MOVE, Encounters, FooterPress, KeptResult, OptionsCommit, commit_options, rule_choices,
@@ -11,7 +10,7 @@ use crate::design;
 use crate::design::outcome::plain::PlainLine;
 use crate::encounter_settings::{Grouping, GroupingWords as _};
 use crate::persistence::Campaign;
-use eframe::egui;
+use crate::state_context::StateContext;
 use uuid::Uuid;
 
 /// The form's values as the tab shows them.
@@ -40,7 +39,7 @@ pub struct RunRow<'a> {
 
 impl Encounters {
     /// The tab's work before it draws: the campaign's encounters and settings are read.
-    pub fn run_settings_prepare(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    pub fn run_settings_prepare(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         self.poll(ctx, campaigns);
     }
 
@@ -119,9 +118,9 @@ impl Encounters {
         }
     }
 
-    /// The save row (the egui tab's rule): the word, the repair of an unread choice, Save's
+    /// The save row: the word, the repair of an unread choice, Save's
     /// weight and why it waits. It ends the last Save's `Saved` and the discard's draft at the
-    /// form's first edit, as the egui tab does.
+    /// form's first edit.
     pub fn run_row<'a>(&mut self, active: &Campaign) -> Option<RunRow<'a>> {
         let run_open = self.has_run();
         let draft_open = self.draft_dirty();
@@ -154,7 +153,7 @@ impl Encounters {
     /// `Save run settings` (or Ctrl+S).
     pub fn save_run_settings(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         active: &Campaign,
         campaigns: &Campaigns,
     ) {
@@ -168,14 +167,14 @@ impl Encounters {
     /// The tab's footer lines (`run_settings_footer`).
     pub fn run_settings_lines(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         active: &Campaign,
         campaigns: &Campaigns,
     ) -> Vec<PlainLine<FooterPress>> {
         let run_open = self.has_run();
         let draft_open = self.draft_dirty();
-        let frame = design::outcome::PaneFrame::plain();
-        let mut messages = design::outcome::Messages::new(&frame, "run_settings_footer", 0.0);
+        let frame = design::outcome::PaneFrame::new();
+        let mut messages = design::outcome::Messages::new();
         self.run_settings_footer(
             ctx,
             &frame,
@@ -193,7 +192,7 @@ impl Encounters {
     /// A press in the tab's footer: the discard's Undo, or the folder warning's choices.
     pub fn run_settings_press(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         active: &Campaign,
         campaigns: &Campaigns,
         press: design::outcome::Press<FooterPress>,
@@ -219,8 +218,7 @@ impl Encounters {
     }
 }
 
-/// The save row's rule of Rules and runs, which both tabs call (`run_row`, egui's
-/// `Encounters::run_settings`): the word (`Unsaved`, `Saved` while the last Save's settings
+/// The save row's rule of Rules and runs (`run_row`): the word (`Unsaved`, `Saved` while the last Save's settings
 /// hold, `No changes`), the repair of an unread choice, Save's weight and why it waits, Discard
 /// and the campaign lock. It ends the last Save's `Saved` at the form's first edit, at another
 /// campaign and when the file's settings changed outside Splat, and the discard's result at

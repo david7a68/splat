@@ -1,7 +1,6 @@
 //! What the run's views read and do (the GPUI views are `gui::pages::run`): the words, sizes and
 //! columns of the rows, the presses of the run's messages, the Arrivals words, the close
-//! dialog's words, the Undo forms and the keys. The condition grid and the other-effect field
-//! stay here for the Encounters page's egui group form until that page's strip.
+//! dialog's words, the Undo forms and the keys, and the other effects of a participant.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Command, Panel, Participant, PartySync, Phase, Run, SHEET_SOURCE};
 use crate::{
@@ -9,7 +8,6 @@ use crate::{
     design::{self, RunScale, Status, colors, icons, reader as style},
     encounter_settings::{Grouping, GroupingWords},
 };
-use eframe::egui::{self};
 use splat::content::overrides::{BY_HAND, Row};
 use splat::content::{Entry, Reference};
 use std::sync::Arc;
@@ -554,12 +552,11 @@ impl Run {
         &self,
         frame: &'f design::outcome::PaneFrame,
         setup: bool,
-        width: f32,
     ) -> design::outcome::Messages<'f, RunPress> {
         use design::outcome::{
             Choice, FaultMessage, Lost, MessageChoice, Messages, Notice, Said, UndoStep,
         };
-        let mut messages = Messages::new(frame, ("run_messages", self.id), width);
+        let mut messages = Messages::new();
         let disk = self.has_disk_conflict();
         let rest = setup && self.rest_filled_saved_hp();
         let used = setup && !rest && self.saved_hp_used();
@@ -1468,7 +1465,7 @@ impl Run {
     }
 
     /// A group's `Cannot join` faults in Arrivals, each with its repair, as plain lines for a
-    /// view that is not egui (`group_row`'s `member_fault_row` rows): the members' faults, then
+    /// view (the group row's member fault rows): the members' faults, then
     /// the group's own reasons. When every fault points to packages, the last also offers the
     /// group editor.
     pub fn arrival_faults(
@@ -1554,12 +1551,10 @@ impl Run {
     /// The stat-block pane's footer (both views): a snapshot whose file changed, went or cannot
     /// be read now, with `Read the new version` while the campaign has the entry. Also whether it
     /// has that notice (a sheet's values line says so).
-    pub fn reference_messages<'f>(
+    pub fn reference_messages(
         &self,
-        frame: &'f design::outcome::PaneFrame,
         index: usize,
-        width: f32,
-    ) -> (design::outcome::Messages<'f, ReferencePress>, bool) {
+    ) -> (design::outcome::Messages<'static, ReferencePress>, bool) {
         let p = &self.state.participants[index];
         let definition = &p.definition;
         let mut notice = None;
@@ -1586,11 +1581,7 @@ impl Run {
                 )
             });
         }
-        let mut messages = design::outcome::Messages::<ReferencePress>::new(
-            frame,
-            ("run_reference_footer", self.id, &p.key),
-            width,
-        );
+        let mut messages = design::outcome::Messages::<ReferencePress>::new();
         let shown = notice.is_some();
         if let Some((fault, at)) = &notice {
             let message = design::outcome::FaultMessage::new(fault);
@@ -2383,7 +2374,7 @@ pub fn death_save_words(successes: u8, failures: u8) -> String {
 
 /// Concentration, as a run row marks it and History's Final state repeats it: its icon and
 /// `Conc`, in its own colour.
-pub fn concentration_mark() -> (String, egui::Color32) {
+pub fn concentration_mark() -> (String, crate::design::Color) {
     (
         format!("{} Conc", icons::CONCENTRATING),
         colors().participant.concentrating,

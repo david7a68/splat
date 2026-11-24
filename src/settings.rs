@@ -1,9 +1,9 @@
+use crate::state_context::StateContext;
 use crate::{
     auth::Session,
     credentials::{Action, Worker},
     design::{self, Status, colors, icons},
 };
-use eframe::egui;
 use std::{
     sync::mpsc,
     time::{Duration, Instant},
@@ -198,7 +198,7 @@ impl Settings {
         (self.account_epoch, self.session.clone())
     }
 
-    fn send(&mut self, action: Action, ctx: &egui::Context) {
+    fn send(&mut self, action: Action, ctx: &StateContext) {
         self.restoring = matches!(&action, Action::Restore);
         self.connecting = matches!(&action, Action::Connect { .. });
         self.forgetting = matches!(&action, Action::Forget);
@@ -215,14 +215,14 @@ impl Settings {
         self.error = None;
         self.connect_failed = false;
         self.busy = true;
-        let worker = self.worker.get_or_insert_with(|| Worker::new(ctx.clone()));
+        let worker = self.worker.get_or_insert_with(|| Worker::new(ctx.waker()));
         if let Err(error) = worker.send(self.generation, action) {
             self.error = Some(error);
             self.busy = false;
         }
     }
 
-    pub fn poll(&mut self, ctx: &egui::Context) {
+    pub fn poll(&mut self, ctx: &StateContext) {
         if !self.initialized {
             self.initialized = true;
             self.send(Action::Restore, ctx);
@@ -311,7 +311,7 @@ impl Settings {
         }
     }
 
-    fn disconnect(&mut self, ctx: &egui::Context) {
+    fn disconnect(&mut self, ctx: &StateContext) {
         self.session = None;
         self.cookie_input.zeroize();
         self.warning = None;
@@ -375,11 +375,11 @@ mod tests {
         expires_in: Duration,
     ) -> (
         Settings,
-        egui::Context,
+        StateContext,
         mpsc::Receiver<(u64, Action)>,
         mpsc::Sender<Reply>,
     ) {
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let (worker, commands, results) = Worker::test_channels();
         let mut settings = Settings::default();
         settings.initialized = true;
@@ -390,7 +390,7 @@ mod tests {
 
     #[test]
     fn a_failed_removal_keeps_disconnect_until_it_works() {
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let (worker, commands, results) = Worker::test_channels();
         let mut settings = Settings::default();
         settings.initialized = true;
@@ -409,9 +409,7 @@ mod tests {
         // error stays in the footer, with Disconnect to try again. Only a failed Connect's cause
         // moves to the slot beside Connect.
         assert!(settings.cookie_input.is_empty());
-        let frame = design::outcome::PaneFrame::plain();
-        let mut messages =
-            design::outcome::Messages::<design::outcome::NoPress>::new(&frame, "footer", 0.0);
+        let mut messages = design::outcome::Messages::<design::outcome::NoPress>::new();
         settings.footer_messages(&mut messages);
         assert!(
             messages
@@ -441,8 +439,7 @@ mod tests {
             "test-cookie",
             "the cookie stays for a retry"
         );
-        let mut messages =
-            design::outcome::Messages::<design::outcome::NoPress>::new(&frame, "footer", 0.0);
+        let mut messages = design::outcome::Messages::<design::outcome::NoPress>::new();
         settings.footer_messages(&mut messages);
         assert!(messages.into_plain().is_empty());
         settings.disconnect(&ctx);
@@ -531,7 +528,7 @@ mod tests {
 
     #[test]
     fn disconnect_clears_input_and_ignores_late_auth_results() {
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let (worker, commands, results) = Worker::test_channels();
         let mut settings = Settings::default();
         settings.initialized = true;

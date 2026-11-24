@@ -1,7 +1,6 @@
-//! The common reading layout of entries that are not styled stat blocks (egui
-//! `library::reader::show`): an item's summary, a spell's or an encounter's facts, the source
+//! The common reading layout of entries that are not styled stat blocks: an item's summary, a spell's or an encounter's facts, the source
 //! text's labelled facts and prose, each section under its heading; and a class's core traits
-//! and features (egui `library::class`).
+//! and features.
 use super::Out;
 use super::parts::{detail, facts, identity, item};
 use crate::gui::kit;

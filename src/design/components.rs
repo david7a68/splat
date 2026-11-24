@@ -1,8 +1,7 @@
 //! Shared UI parts. Screens compose these instead of styling widgets themselves.
 use super::{comparison::Comparison, icons, tokens::*};
-use egui::{self, Color32};
 
-/// [`words_that_fit`] with any measure of a line's width (a view that does not draw with egui).
+/// [`words_that_fit`] with any measure of a line's width (the GPUI text system's).
 pub fn words_that_fit_by(text: &str, width: f32, measure: impl Fn(&str) -> f32) -> String {
     let mut words: Vec<_> = text.split_whitespace().collect();
     let full = words.join(" ");
@@ -92,12 +91,12 @@ pub struct Suggestions<T> {
 pub struct Status<'a> {
     pub icon: &'a str,
     pub word: &'a str,
-    pub color: Color32,
+    pub color: Color,
 }
 
 /// The word that goes with an HP colour, as an icon, a word and a colour. Colour is never the
 /// only sign. Healthy and damaged HP need no word.
-pub fn hp_word(hp: Option<i64>, max: Option<i64>) -> Option<(&'static str, &'static str, Color32)> {
+pub fn hp_word(hp: Option<i64>, max: Option<i64>) -> Option<(&'static str, &'static str, Color)> {
     let c = colors();
     match hp_state(hp, max) {
         HpState::Zero => Some((icons::ZERO_HP, "0 HP", c.hp.zero)),
@@ -127,7 +126,7 @@ pub fn hp_state(hp: Option<i64>, max: Option<i64>) -> HpState {
     }
 }
 
-pub fn hp_color(state: HpState) -> Color32 {
+pub fn hp_color(state: HpState) -> Color {
     let hp = colors().hp;
     match state {
         HpState::Unknown => hp.unknown,
@@ -203,7 +202,7 @@ pub enum Tone {
 }
 
 impl Tone {
-    pub(super) fn parts(self) -> (&'static str, Color32) {
+    pub(super) fn parts(self) -> (&'static str, Color) {
         let result = colors().result;
         match self {
             Self::Info => (icons::INFO, result.info),

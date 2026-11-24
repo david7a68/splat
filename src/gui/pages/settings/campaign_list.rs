@@ -1,5 +1,4 @@
-//! The campaign list, the campaign forms and the remove dialog (egui: `Campaigns::show`, `form`,
-//! `remove_dialog`, `form_error_inline`, and `DndBeyond::show_import`). Campaign → Link and folder
+//! The campaign list, the campaign forms, the remove dialog and D&D Beyond's import. Campaign → Link and folder
 //! draws the details form from here too.
 use crate::auth::Session;
 use crate::gui::kit::{
@@ -566,9 +565,9 @@ fn import(
         return section.into_any_element();
     }
     {
-        let SplatRoot { app, bridge, .. } = root;
+        let SplatRoot { app, ctx, .. } = root;
         if app.dndbeyond.wants_first_list() {
-            app.dndbeyond.refresh_list(session.clone(), bridge.ctx());
+            app.dndbeyond.refresh_list(session.clone(), ctx);
         }
     }
     let refreshing = root.app.dndbeyond.refreshing();
@@ -578,9 +577,8 @@ fn import(
             .density(Density::Read)
             .blocked(refreshing.then_some("Already refreshing."))
             .on_click(cx.listener(move |root, _, _, cx| {
-                let SplatRoot { app, bridge, .. } = root;
-                app.dndbeyond
-                    .refresh_list(refresh_session.clone(), bridge.ctx());
+                let SplatRoot { app, ctx, .. } = root;
+                app.dndbeyond.refresh_list(refresh_session.clone(), ctx);
                 cx.notify();
             })),
     );
@@ -677,7 +675,7 @@ pub(crate) fn link_dropdown(
         .map(|(id, _, lock)| (id, lock.is_some()))
         .collect();
     // A campaign already linked elsewhere is a blocked choice with its reason on its row, as
-    // egui's `blocked_choice` draws it.
+    // `Dropdown::blocked` draws it.
     let mut dropdown = Dropdown::new(
         id("ddb_link", campaign.id),
         "D&D Beyond campaign link",

@@ -1,11 +1,10 @@
-//! The party at a glance, above the Session page while a session is played (egui:
-//! `party_bar::show`, `Splat::party_bar`). Each member is a portrait, a first name, HP with its
+//! The party at a glance, above the Session page while a session is played. Each member is a portrait, a first name, HP with its
 //! bar and a few numbers; a press opens the sheet. When the line is short of room, the optional
 //! numbers go first, then the portraits, then the names shorten to an initial; no item is cut,
 //! and `N more` names the rest.
 use crate::gui::kit::{self, IconButton, WithTooltip as _};
 use crate::gui::theme::{Density, L, M, S, Type, TypeExt, XS, colors};
-use crate::gui::{SplatRoot, bridge, icons};
+use crate::gui::{SplatRoot, icons, theme};
 use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, Pixels, SharedString, Styled,
     Window, div, prelude::*, px,
@@ -68,8 +67,7 @@ fn measure(window: &Window, glance: &Glance) -> Measured {
     }
 }
 
-/// The bar: each member measured by GPUI's text layout and fitted as egui's bar is
-/// (`party_bar::fit`). While a fight is open, the bar holds its level and its item widths until
+/// The bar: each member measured by GPUI's text layout and fitted (`party_bar::fit`). While a fight is open, the bar holds its level and its item widths until
 /// the fight ends, so nothing moves back as HP changes.
 pub(super) fn render(
     root: &mut SplatRoot,
@@ -174,7 +172,7 @@ pub(super) fn render(
             .child(kit::status(&kit::Status::new(
                 source.icon,
                 words,
-                bridge::color(source.color),
+                theme::color(source.color),
             )))
             .with_tooltip(source.word.clone())
     });

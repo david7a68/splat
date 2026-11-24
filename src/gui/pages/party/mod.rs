@@ -1,4 +1,4 @@
-//! The Party page and the party bar on the Session page (egui: `src/party.rs` (`PartyPage`),
+//! The Party page and the party bar on the Session page (state: `src/party.rs` (`PartyPage`),
 //! `src/party_support/sheets.rs`, `src/party_bar.rs`, `Splat::party_bar`).
 mod bar;
 mod list;
@@ -78,8 +78,8 @@ pub(crate) fn render(
                 .blocked(header.refresh_reason.clone())
                 .on_click(cx.listener(move |root, _, _, cx| {
                     if let Some(session) = refresh_session.clone() {
-                        let SplatRoot { app, bridge, .. } = root;
-                        app.party.reader.refresh_by_hand(session, bridge.ctx());
+                        let SplatRoot { app, ctx, .. } = root;
+                        app.party.reader.refresh_by_hand(session, ctx);
                     }
                     cx.notify();
                 }))
@@ -210,7 +210,7 @@ fn body(
         return div().into_any_element();
     }
     let tonight = splat_party_page::tonight_words(&root.app.party).map(kit::help);
-    // The list takes about half the page beside its portraits, as the egui column does.
+    // The list takes about half the page beside its portraits.
     let room = window.viewport_size().width - crate::gui::theme::RAIL_WIDTH;
     let list_width = (room * 0.46 + px(54.0)).clamp(px(384.0), px(624.0));
     let list = list::list(root, list_width, cx);
@@ -230,7 +230,7 @@ fn body(
 }
 
 /// The party bar on the Session page while a session is played (`Splat::party_bar`), or `None`.
-/// It also sets `sessions.party_hidden` as the egui bar does.
+/// It also sets `sessions.party_hidden`.
 pub(crate) fn render_bar(
     root: &mut SplatRoot,
     window: &mut Window,

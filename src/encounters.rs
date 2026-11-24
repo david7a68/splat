@@ -4,6 +4,7 @@
 use crate::content_workspace::patch_fields;
 use crate::design::memo::Revised;
 use crate::design::text_draft::{KeptCompare, TextDraft};
+use crate::state_context::StateContext;
 use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
@@ -12,7 +13,6 @@ use crate::{
     party::Party,
     persistence::{Campaign, Module},
 };
-use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use splat::content::{
@@ -562,11 +562,6 @@ fn empty_group_words(name: &str) -> String {
         "" => "Add a creature to the new group first.".to_owned(),
         name => format!("Add a creature to {name} first."),
     }
-}
-
-/// Where the editor leaves the roster's unread rows, for the roster to show in their places.
-fn roster_fault_rows_id(draft: Uuid) -> egui::Id {
-    egui::Id::new(("roster_fault_rows", draft))
 }
 
 /// Save's reason for the encounter's unread roster rows (`reason`), as its typed diagnosis.
@@ -1926,7 +1921,7 @@ pub(crate) struct DetailPart<'a> {
 
 impl DetailPart<'_> {
     /// The fault has the warning status colour, icon and words; every other part is muted.
-    pub fn color(&self) -> egui::Color32 {
+    pub fn color(&self) -> crate::design::Color {
         if self.hp_fault {
             colors().result.warning
         } else {
@@ -2037,7 +2032,7 @@ pub(super) fn creature_unreadable(
 /// The icon and colour of that tone inside the row's muted words, as `design::message` draws it.
 fn missing_creature_mark(
     unreadable: Option<&crate::content_workspace::UnreadableNote>,
-) -> (&'static str, egui::Color32) {
+) -> (&'static str, crate::design::Color) {
     match missing_creature_tone(unreadable) {
         Tone::Error => (icons::ERROR, colors().result.error),
         _ => (icons::WARN, colors().result.warning),
@@ -2182,8 +2177,8 @@ thread_local! {
 }
 
 /// A note's identity changed (a separation or its Undo): the shell reads the campaign again.
-fn note_identity_changed(ctx: &egui::Context) {
-    ctx.data_mut(|data| data.insert_temp(egui::Id::new("encounter_identity_changed"), true));
+fn note_identity_changed(ctx: &StateContext) {
+    ctx.set(crate::requests::ENCOUNTER_IDENTITY_CHANGED, true);
 }
 
 /// A separation's change, with the note's text before and after it.
@@ -3185,13 +3180,9 @@ pub struct Encounters {
     /// A Save or a start was refused for the draft at `validation_path`, so its check runs again
     /// when that draft or the campaign changes. It ends with another draft.
     refusal_watch: bool,
-    /// B4c: the plan refusal's check, keyed by the snapshot revision and `plan_epoch`: whether
-    /// the refusal for that group still stands. An unchanged frame does not compare the drafts.
+    /// B4c: the plan refusal's check, keyed by the snapshot revision: whether the refusal for
+    /// that group still stands. An unchanged campaign read does not compare the drafts.
     plan_refusal_check: Option<(PlanRefusalKey, bool)>,
-    /// Bumped on each frame with an editing input and the frame after it, while a plan refusal
-    /// is stored (as `edit_epoch`, for every page).
-    plan_epoch: u64,
-    plan_edited_last_frame: bool,
     /// Test only: while set, `poll` takes no new read of the campaign (a load in flight waits),
     /// so a proof's window of unchanged frames keeps one snapshot revision.
     #[cfg(any(test, feature = "test-support"))]
@@ -3355,28 +3346,6 @@ thread_local! {
     static KEY_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// Whether this frame has an input that can change a draft: a key, text, a press, a wheel, a
-/// held pointer (a drag), a dropped file or an accessibility action. Hover alone cannot.
-fn edit_input(ctx: &egui::Context) -> bool {
-    ctx.input(|i| {
-        i.pointer.any_down()
-            || !i.raw.dropped_files.is_empty()
-            || i.events.iter().any(|event| {
-                matches!(
-                    event,
-                    egui::Event::Key { .. }
-                        | egui::Event::Text(_)
-                        | egui::Event::Paste(_)
-                        | egui::Event::Cut
-                        | egui::Event::Ime(_)
-                        | egui::Event::PointerButton { .. }
-                        | egui::Event::MouseWheel { .. }
-                        | egui::Event::AccessKitActionRequest(_)
-                )
-            })
-    })
-}
-
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 /// The open encounter's draft holds the page (the same words as its back line's reason).
 const BLOCKED_BY_DRAFT: &str = design::Unsaved::Encounter.reason();
@@ -3386,9 +3355,9 @@ pub const GROUP_DRAFT: &str = "Group draft";
 pub const CREATURE_DRAFT: &str = "Creature draft";
 pub const RUN_SETTINGS_DRAFT: &str = "Run settings draft";
 const BLOCKED_BY_CREATURE: &str = design::Unsaved::Creature.reason();
-/// The key of the plan refusal's cached check: the campaign read's revision, the edit epoch and
-/// the refused group's id.
-type PlanRefusalKey = (Option<Uuid>, u64, Uuid);
+/// The key of the plan refusal's cached check: the campaign read's revision and the refused
+/// group's id.
+type PlanRefusalKey = (Option<Uuid>, Uuid);
 
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
@@ -4103,17 +4072,10 @@ impl Encounters {
     }
     /// B4c: whether the plan's refusal for `group` still stands: a draft is unsaved and the
     /// campaign still has the group. Read only while a refusal is stored; the drafts are
-    /// compared again only when the campaign was read again or a frame had an editing input
-    /// (or follows one: a click's change lands late in its frame).
-    pub fn plan_refusal_stands(&mut self, ctx: &egui::Context, group: Uuid) -> bool {
-        let edited = edit_input(ctx);
-        let edited_before = std::mem::replace(&mut self.plan_edited_last_frame, edited);
-        if edited || edited_before {
-            self.plan_epoch += 1;
-        }
+    /// compared again only when the campaign was read again.
+    pub fn plan_refusal_stands(&mut self, group: Uuid) -> bool {
         let key = (
             self.snapshot.as_ref().map(|snapshot| snapshot.revision),
-            self.plan_epoch,
             group,
         );
         if let Some((cached, stands)) = self.plan_refusal_check
@@ -4427,7 +4389,7 @@ impl Encounters {
             .as_ref()
             .is_some_and(crate::encounter_run::Run::pending_sync)
     }
-    fn reload(&mut self, ctx: &egui::Context, campaign: Campaign, modules: Vec<Module>) {
+    fn reload(&mut self, ctx: &StateContext, campaign: Campaign, modules: Vec<Module>) {
         // A reload is a disk event too: a separated copy changed by another program ends.
         self.refresh_separations();
         self.creature = None;
@@ -4460,10 +4422,10 @@ impl Encounters {
         self.ready_lines = crate::difficulty::Kept::default();
         self.ready_lines_seen = None;
     }
-    fn start_load(&mut self, ctx: &egui::Context, campaign: Campaign, modules: Vec<Module>) {
+    fn start_load(&mut self, ctx: &StateContext, campaign: Campaign, modules: Vec<Module>) {
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         std::thread::spawn(move || {
             let _ = tx.send(Snapshot::load(&campaign, &modules));
             ctx.request_repaint();
@@ -4472,7 +4434,7 @@ impl Encounters {
     /// New content on disk. The open draft stays, however unsaved (T8.1).
     pub fn refresh_content(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         campaigns: &Campaigns,
         root: &std::path::Path,
     ) {
@@ -4490,7 +4452,7 @@ impl Encounters {
         }
     }
     /// Keep the snapshot current. The shell calls this every frame.
-    pub fn poll(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    pub fn poll(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         self.poll_reads(ctx, campaigns);
         self.note_run_facts();
     }
@@ -4520,7 +4482,7 @@ impl Encounters {
         self.run_facts.0.set(facts);
     }
 
-    fn poll_reads(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    fn poll_reads(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         #[cfg(any(test, feature = "test-support"))]
         if self.hold_reads {
             return;
@@ -4584,7 +4546,7 @@ impl Encounters {
     }
     /// The page's Ctrl+S: the open creature while it has changes, else the open group, else the
     /// encounter draft.
-    fn save_by_key(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
+    fn save_by_key(&mut self, ctx: &StateContext, active: &Campaign, modules: &[Module]) {
         if !std::mem::take(&mut self.save_key) {
             return;
         }
@@ -4597,7 +4559,7 @@ impl Encounters {
             self.save_draft(ctx, active, modules);
         }
     }
-    fn save_draft(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
+    fn save_draft(&mut self, ctx: &StateContext, active: &Campaign, modules: &[Module]) {
         let Some(draft) = self.draft.as_mut() else {
             return;
         };
@@ -4934,7 +4896,7 @@ impl Encounters {
     }
     pub fn tick_sync(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         session: Option<crate::auth::Session>,
         epoch: u64,
         active: Option<&Campaign>,
@@ -4968,7 +4930,7 @@ impl Encounters {
             }
         }
     }
-    /// What the run reads from this page before the Run page draws (egui and GPUI): the
+    /// What the run reads from this page before the Run page draws: the
     /// campaign's creature names, groups, scale and creatures, and tonight's planned groups.
     pub fn run_reads(&mut self) {
         let Some(run) = &mut self.run else {
@@ -4981,7 +4943,7 @@ impl Encounters {
         }
         run.planned.clone_from(&self.planned_groups);
     }
-    /// The DM closed the run on the Run page (egui and GPUI): it goes, and the list reads its
+    /// The DM closed the run on the Run page: it goes, and the list reads its
     /// runs again.
     pub fn close_shown_run(&mut self, active: &Campaign) {
         let Some(run) = &self.run else {
@@ -5449,7 +5411,7 @@ impl Encounters {
     /// from, by its ticket. A result that was replaced or ended since is `Gone`: nothing happens.
     fn editor_press(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         press: design::outcome::Press<FooterPress>,
         active: &Campaign,
         modules: &[Module],
@@ -5596,7 +5558,7 @@ impl Encounters {
     /// failed Undo keeps the separation and says why.
     fn undo_separation(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         ticket: design::results::Ticket,
         active: &Campaign,
     ) {
@@ -5720,7 +5682,7 @@ impl Encounters {
 
     pub fn clear_notice(&mut self) {}
 
-    /// A row action of the list (`ListAction`), for both views: the egui list and the GPUI page.
+    /// A row action of the list (`ListAction`).
     pub fn list_act(&mut self, action: ListAction, active: &Campaign, campaigns: &Campaigns) {
         self.clear_notice();
         match action {
@@ -5850,7 +5812,7 @@ impl Encounters {
     /// The encounter file's flags and unread roster rows, from its source and the campaign's
     /// creature names. FC3: the roster shows each row that blocks Start fight in its place: the
     /// faults move there (kept for this draft in `ctx`); nothing is copied.
-    fn unread_rows(&self, ctx: &egui::Context) -> Option<UnreadRows> {
+    fn unread_rows(&self) -> Option<UnreadRows> {
         let no_names = BTreeMap::new();
         let names = self
             .snapshot
@@ -5863,8 +5825,6 @@ impl Encounters {
             .unwrap_or_default();
         let notes = unread_notes(&draft.path, &draft.flags, &faults);
         let count = faults.len();
-        let rows: Arc<Vec<RosterFault>> = Arc::new(faults);
-        ctx.data_mut(|data| data.insert_temp(roster_fault_rows_id(draft.id), rows));
         (!notes.is_empty()).then(|| UnreadRows {
             notes,
             faults: count,
@@ -5882,7 +5842,7 @@ impl Encounters {
     )]
     fn run_settings_footer<'f>(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         frame: &'f design::outcome::PaneFrame,
         messages: &mut design::outcome::Messages<'f, FooterPress>,
         active: &Campaign,
@@ -6013,7 +5973,7 @@ impl Encounters {
     /// is the footer's error.
     fn options_committed(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         active: &Campaign,
         modules: Vec<Module>,
         result: Result<Option<String>, String>,
@@ -6609,7 +6569,7 @@ mod tests {
     fn undo_discard_stays_in_its_campaign() {
         let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         let (first, second) = (campaign(a.path()), campaign(b.path()));
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut encounters = Encounters {
             discarded: Some(Draft::new()),
             active: Some(first.clone()),
@@ -6680,7 +6640,7 @@ mod tests {
             OptionsCommit::Save,
         );
         assert!(result.is_ok(), "the folder saves: {result:?}");
-        encounters.options_committed(&egui::Context::default(), &active, Vec::new(), result);
+        encounters.options_committed(&StateContext::new(), &active, Vec::new(), result);
         let reread = Snapshot::load(&active, &[]).unwrap();
         assert_eq!(
             encounters.options_saved.map(|(_, saved)| saved),
@@ -7333,7 +7293,7 @@ mod tests {
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
             ..Default::default()
         };
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let view = editor.encounter_disk().expect("the gone file's conflict");
         assert!(view.disk.is_none());
         assert_eq!(view.lose, "Remove encounter and lose draft");
@@ -7479,7 +7439,7 @@ mod tests {
         assert!(combat.0.is_some() && combat.1.contains(&"Prone".to_owned()));
         assert_ne!(run.prep().0, "The bridge groans.");
         editor.draft.as_mut().unwrap().body = "The bridge groans.".into();
-        editor.save_draft(&egui::Context::default(), &campaign, &[]);
+        editor.save_draft(&StateContext::new(), &campaign, &[]);
         let saved = fs::read_to_string(&path).unwrap();
         assert!(saved.contains("The bridge groans.") && saved.contains("Hero"));
         let run = editor.run.as_ref().unwrap();

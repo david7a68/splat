@@ -355,7 +355,7 @@ impl Repair {
     }
 }
 
-/// The repair as data, for a view that is not egui (the GPUI port).
+/// The repair as data, for the GPUI reader.
 pub struct RepairView {
     /// The file's name, the pane's title.
     pub file: String,
@@ -398,8 +398,8 @@ impl Repair {
         campaign: &Campaign,
     ) -> Vec<design::outcome::plain::PlainLine<RepairAct>> {
         let (problem, _) = refusal(campaign, &self.path, &self.draft);
-        let frame = design::outcome::PaneFrame::plain();
-        let mut messages = Messages::new(&frame, "plain", 0.0);
+        let frame = design::outcome::PaneFrame::new();
+        let mut messages = Messages::new();
         self.footer_lines(&frame, &mut messages, problem.as_deref());
         messages.into_plain()
     }

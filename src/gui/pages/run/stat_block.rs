@@ -1,4 +1,4 @@
-//! The Stat block tab (egui `reference_tab`'s stat block, `view::show_run`): the Reader's entry
+//! The Stat block tab: the Reader's entry
 //! view in run mode, so the run's creature reads as it does in the Library and Lookup, with the
 //! run's live AC, HP and initiative over the printed ones, and its actions as tiles that arm
 //! (Ctrl+1 to 9) and roll for its row. Above it: the loot on the card, a sheet's read-only line
@@ -9,7 +9,7 @@ use crate::gui::pages::reader::entry::{self, EntryView, Source};
 use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::library::view::{NoLinks, RunValues};
 use crate::rolls::{self, ArmedView};
-use eframe::egui;
+use crate::state_context::StateContext;
 use gpui::{
     AnyElement, App, Context, ElementId, InteractiveElement, IntoElement, ParentElement,
     RenderOnce, Styled, Window, div,
@@ -17,7 +17,7 @@ use gpui::{
 use std::rc::Rc;
 use theme::{Type, colors};
 
-/// Where the run's copy of a stat block comes from (egui's `Origin` in `reference_tab`).
+/// Where the run's copy of a stat block comes from.
 const OWNER: &str = "Starting snapshot, saved with this run";
 
 /// The tab's body for a stat block (not a sheet, and not a creature made up in the fight).
@@ -28,8 +28,7 @@ pub(super) fn render(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> An
     let mut column = div().flex().flex_col().gap(theme::XS).w_full();
     column = column.children(super::ended::card_loot(run, index, cx));
     if definition.fields.contains_key("splat_external") {
-        let frame = crate::design::outcome::PaneFrame::plain();
-        let (_, notice) = run.reference_messages(&frame, index, 0.0);
+        let (_, notice) = run.reference_messages(index);
         column = column.child(kit::text(
             Type::Small,
             c.document.read_only,
@@ -92,8 +91,7 @@ pub(super) fn render(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> An
 
 /// The tab's footer: the snapshot's notice and `Read the new version`, as kit messages.
 pub(super) fn footer(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> Vec<AnyElement> {
-    let frame = crate::design::outcome::PaneFrame::plain();
-    let (messages, _) = run.reference_messages(&frame, index, 0.0);
+    let (messages, _) = run.reference_messages(index);
     kit::messages::lines(
         ElementId::Name(format!("run-reference-footer-{index}").into()),
         messages.into_plain(),
@@ -169,8 +167,8 @@ pub(super) fn changes(p: &Participant, above_stat_block: bool) -> Option<AnyElem
     any.then(|| block.into_any_element())
 }
 
-/// The Reader's entry view as the run's row reads it (egui: `set_roller`, `armed_tiles_begin`
-/// around `show_run`). While it builds, the row is the roller in the app's egui context: its
+/// The Reader's entry view as the run's row reads it. While it builds, the row is the roller in
+/// the app's state context (`rolls::set_roller`): its
 /// tiles show their `Ctrl+n`, the armed action and the numbers the run rolls. A press inside it
 /// asks with the row as its roller, so the run rolls it (`Splat::route_rolls`); the same press in
 /// Lookup stays a preview.
@@ -213,14 +211,14 @@ impl RenderOnce for RunReader {
     }
 }
 
-/// The app's egui context, where rolls wait for the frame logic.
-fn host(cx: &App) -> Option<egui::Context> {
+/// The app's state context, where rolls wait for the frame logic.
+fn host(cx: &App) -> Option<StateContext> {
     cx.try_global::<kit::markdown::Host>()
         .map(|host| host.0.clone())
 }
 
 /// Each frame on the Run page, before anything draws: what was pressed under an armed tile
-/// (egui `armed_tiles_end`), and no roller left from a press.
+///, and no roller left from a press.
 pub(super) fn poll(root: &mut SplatRoot, cx: &App) {
     let Some(ctx) = host(cx) else {
         return;

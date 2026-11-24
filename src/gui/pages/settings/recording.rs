@@ -1,4 +1,4 @@
-//! Settings → Recording and processing (egui: `ProcessingSettings::pane`, `show`): the recorder
+//! Settings → Recording and processing: the recorder
 //! and its input, the speech service, the transcript and summary service with their keys, and
 //! the two prompts; the tab's notices in its footer.
 use crate::credentials::KeySlot;
@@ -333,8 +333,8 @@ fn key_row(
                 .name(format!("Save key: {label}"))
                 .blocked(empty.then_some("Paste a key first."))
                 .on_click(cx.listener(move |root, _, _, cx| {
-                    let SplatRoot { app, bridge, .. } = root;
-                    app.processing.save_key(slot, bridge.ctx());
+                    let SplatRoot { app, ctx, .. } = root;
+                    app.processing.save_key(slot, ctx);
                     cx.notify();
                 })),
         );
@@ -372,8 +372,8 @@ fn key_row(
                 .line_start()
                 .name(format!("{}: {label}", key.remove))
                 .on_click(cx.listener(move |root, _, _, cx| {
-                    let SplatRoot { app, bridge, .. } = root;
-                    app.processing.remove_key(slot, bridge.ctx());
+                    let SplatRoot { app, ctx, .. } = root;
+                    app.processing.remove_key(slot, ctx);
                     cx.notify();
                 })),
         );

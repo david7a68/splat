@@ -1,10 +1,10 @@
-//! The live run's header (egui `notice::live_header`, `design::TurnHeading`): the round and whose
+//! The live run's header: the round and whose
 //! turn it is, `Add to fight` and `Next turn`; under them the notice line (what sync needs, the
 //! next turn, the turn's reminders, a sheet's changes) and Undo.
 use super::measure;
 use super::{on_command, on_run};
 use crate::encounter_run::{Command, NOBODY_PRESENT, Panel, Run};
-use crate::gui::{SplatRoot, bridge, icons, kit, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use gpui::{
     Context, InteractiveElement, IntoElement, ParentElement, Pixels, Styled, Window, div, px,
 };
@@ -17,14 +17,14 @@ struct SyncAlert {
     color: gpui::Hsla,
 }
 
-/// The sync alert the notice line shows, if any, in the egui order.
+/// The sync alert the notice line shows, if any, by its order of importance.
 fn sync_alert(run: &Run) -> Option<SyncAlert> {
     let c = colors();
     let strip = run.strip();
     let party_sync_off = run.party_sync_off();
     let offline = run
         .account_status
-        .map_or(c.connection.offline, |status| bridge::color(status.color));
+        .map_or(c.connection.offline, |status| theme::color(status.color));
     let alert = |icon, words: String, color| Some(SyncAlert { icon, words, color });
     if let Some(name) = &strip.conflict {
         alert(
@@ -51,7 +51,7 @@ fn sync_alert(run: &Run) -> Option<SyncAlert> {
     }
 }
 
-/// The turn heading's one fitted candidate (egui `turn_heading::fit`, ruling R22): the name's
+/// The turn heading's one fitted candidate (`turn_heading::fit`, ruling R22): the name's
 /// words and size, and whether `Next turn` shows its key letter.
 struct Fitted {
     name: String,
@@ -72,7 +72,7 @@ enum Words {
     Letters,
 }
 
-/// The gap between the heading's parts (egui `turn_heading::GAP`, `2 × S`).
+/// The gap between the heading's parts.
 const GAP: Pixels = px(16.0);
 
 /// Choose the heading's candidate in R22's order: the suffix gives way first, then the key
@@ -188,7 +188,7 @@ fn fit_turn(
 }
 
 /// The most letters of the name's first word that `fit` allows, then `…`, then the copy mark of
-/// a numbered name (`Seraph… 12`). At least one letter (egui `turn_heading::letters`).
+/// a numbered name (`Seraph… 12`). At least one letter.
 fn letters(name: &str, fit: impl Fn(&str) -> bool) -> Option<String> {
     let words: Vec<&str> = name.split_whitespace().collect();
     let first: Vec<char> = words.first().copied().unwrap_or(name).chars().collect();
@@ -444,7 +444,7 @@ fn sheet_width(window: &Window, form: &str) -> Pixels {
 }
 
 /// The form of a sheet's changes that the notice line has room for, beside its notice and
-/// Undo's shortest form (egui `live_header`'s `header_sheet_forms`); none when it shows under
+/// Undo's shortest form; none when it shows under
 /// the roster, or when there is no such notice.
 pub(super) fn sheet_in_header(run: &Run, width: Pixels, window: &Window) -> Option<String> {
     let summary = run
@@ -466,7 +466,7 @@ pub(super) fn sheet_in_header(run: &Run, width: Pixels, window: &Window) -> Opti
         .find(|form| sheet_width(window, form) <= room)
 }
 
-/// The room Undo has on the notice line (egui `live_header`'s slot): the line less its notice's
+/// The room Undo has on the notice line: the line less its notice's
 /// words and `L`. A state notice stays whole; only `Next: …` gives way, down to Undo's shortest
 /// form with its target.
 fn undo_room(run: &Run, width: Pixels, window: &Window) -> Pixels {

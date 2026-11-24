@@ -1,6 +1,7 @@
 //! What a campaign uses: package selections, and the repair of invalid notes. This is
 //! a rare setup task, so it stays calm, with one scrolling list at 2,000+ rows.
 pub use crate::content_workspace::repair_problem;
+use crate::state_context::StateContext;
 use crate::{
     campaigns::Campaigns,
     content_workspace::{
@@ -10,7 +11,6 @@ use crate::{
     library::{note_path, write_note},
     persistence::{Campaign, Module},
 };
-use eframe::egui;
 use splat::character::campaign_package::{self, Proposal};
 use std::{
     collections::BTreeSet,
@@ -561,9 +561,6 @@ struct Answer {
     campaign: Uuid,
     cause: Cause,
     words: String,
-    /// The footer line whose press this answers (a failed Undo): the answer stands under it
-    /// while the footer follows the page, so that line keeps its place (`Messages::answer`).
-    under: Option<design::outcome::PressedLine>,
 }
 
 /// The newest failed answer of an act in the `active` campaign.
@@ -572,7 +569,6 @@ fn answer_in(active: &Option<Campaign>, cause: Cause, words: String) -> Option<A
         campaign: active.as_ref().map_or(Uuid::nil(), |active| active.id),
         cause,
         words,
-        under: None,
     })
 }
 
@@ -928,7 +924,7 @@ impl CampaignContent {
     }
 
     /// Runs on every frame, on any page, so the sidebar can say when the DM has moves to review.
-    pub fn tick(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    pub fn tick(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         let active = campaigns.active_campaign();
         self.finish_check(active.as_ref().map(|campaign| campaign.id));
         // Round 26: a campaign change ends the Undos of the campaign that was open, at the
@@ -1023,7 +1019,6 @@ impl CampaignContent {
                     campaign: owner.unwrap_or(Uuid::nil()),
                     cause: Cause::Failed,
                     words: error,
-                    under: None,
                 });
             }
             None => {}
@@ -1032,7 +1027,7 @@ impl CampaignContent {
     /// With `keys`, carries out those proposals first. The check itself changes nothing.
     fn start_check(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         campaigns: &Campaigns,
         campaign: Campaign,
         keys: Option<BTreeSet<String>>,
@@ -1042,7 +1037,7 @@ impl CampaignContent {
         self.reconcile.pending = Some(rx);
         self.reconcile.applying = keys.is_some();
         let modules = campaigns.modules().to_vec();
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         std::thread::spawn(move || {
             let destinations = crate::content_workspace::destinations(&campaign.path, &modules);
             let records = campaign.dndbeyond_campaign_id.as_ref().map_or_else(
@@ -1141,7 +1136,7 @@ impl CampaignContent {
             });
         }
     }
-    fn reload(&mut self, ctx: &egui::Context, campaigns: &Campaigns, campaign: Campaign) {
+    fn reload(&mut self, ctx: &StateContext, campaigns: &Campaigns, campaign: Campaign) {
         self.forget_discards_of_other_campaigns(Some(&campaign));
         // A write whose file changed since is stale: its Undo would only refuse. A switch back
         // to a campaign reloads it, so its own writes are checked here.
@@ -1164,7 +1159,7 @@ impl CampaignContent {
         self.end_plain(PageResult::Saved);
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         std::thread::spawn(move || {
             let _ = tx.send(load_snapshot(&campaign, &modules));
             ctx.request_repaint();
@@ -1233,11 +1228,9 @@ impl CampaignContent {
         repair_open: &dyn Fn(&str) -> bool,
         campaigns: &Campaigns,
         active: &Campaign,
-        width: f32,
     ) -> design::outcome::Messages<'f, ContentPress> {
         use design::outcome::{Choice, ChoiceKind, FaultMessage, MessageChoice};
-        let mut messages =
-            design::outcome::Messages::new(frame, ("campaign_page_footer", active.id), width);
+        let mut messages = design::outcome::Messages::new();
         let locked = self.dirty();
         let warnings = self.package_warnings_of(campaigns);
         // Ruling Q-x: the newest failed answer first, while its cause stands. A repair's failure
@@ -1270,7 +1263,7 @@ impl CampaignContent {
                 }
             };
             // The one counted use (`Ban::Answer`, exactly one call).
-            messages.answer(fault, answer.under);
+            messages.answer(fault);
         }
         for shown in self.results.newest_first(&active.id) {
             let line = shown.outcome(frame, |kept| outcome_of(&kept.payload, locked));
@@ -1356,34 +1349,21 @@ impl CampaignContent {
     /// page's errors.
     fn press_result(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         campaigns: &Campaigns,
         pressed: Option<design::outcome::Press<ContentPress>>,
     ) {
         let Some(press) = pressed else {
             return;
         };
-        let line = press.line();
         let design::outcome::Press { id, ticket } = press;
         match (id, ticket) {
             (ContentPress::Undo, Some(ticket)) => {
-                // An answer that already stands first in the footer (a refused pick) keeps that
-                // place for the next one, so the lines below it move by no more than the change
-                // of its height.
-                // Astra's re-check of PR 619: the place of an answer that already stands (first,
-                // or under the line an earlier failed press answered) is kept for the next one,
-                // so a second failure of the same Undo moves nothing either.
-                let standing = self.answer.as_ref().map(|answer| answer.under);
+                // A failed Undo keeps its result and its Undo; its failure is the footer's answer
+                // (`Messages::answer`), first in the footer.
                 let mut results = std::mem::take(&mut self.results);
-                let undone = results.undo_by(ticket, |kept| self.undo_result(&kept.payload));
+                let _ = results.undo_by(ticket, |kept| self.undo_result(&kept.payload));
                 self.results = results;
-                // A failed Undo keeps its result and its Undo; its failure answers that press
-                // under its line (`Messages::answer`), or takes the standing answer's place.
-                if undone.is_err()
-                    && let Some(answer) = &mut self.answer
-                {
-                    answer.under = standing.unwrap_or(line);
-                }
             }
             // An encounter opens in Lookup by its id, whatever the page holds now.
             (ContentPress::OpenEntry(id), _) => self.open_lookup = Some(id),
@@ -1731,7 +1711,7 @@ impl CampaignContent {
 
     /// Do a package fault's choice from the footer: on the state this frame reads, by the
     /// package's id or the selection's place.
-    fn package_press(&mut self, ctx: &egui::Context, campaigns: &Campaigns, press: ContentPress) {
+    fn package_press(&mut self, ctx: &StateContext, campaigns: &Campaigns, press: ContentPress) {
         let unavailable = self.package_warnings_of(campaigns).unavailable;
         let Some(snapshot) = self.snapshot.as_mut() else {
             return;
@@ -1752,12 +1732,10 @@ impl CampaignContent {
                 };
                 let path = entry.entry.path.clone();
                 if press == ContentPress::OpenManifest(id) {
-                    ctx.data_mut(|data| {
-                        data.insert_temp(
-                            egui::Id::new("open_library_repair"),
-                            module.path.join(&path),
-                        )
-                    });
+                    ctx.set(
+                        crate::requests::OPEN_LIBRARY_REPAIR,
+                        module.path.join(&path),
+                    );
                     return;
                 }
                 let exists = manifest_on_disk(module, &path, problem);

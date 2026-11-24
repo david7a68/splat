@@ -1,4 +1,4 @@
-//! A reveal (`design::reveal`, egui's `scroll_to_rect`): an invisible box over its parent that,
+//! A reveal: an invisible box over its parent that,
 //! in the frame it is laid out, scrolls a column the page keeps (`scroll::scroll_column_with`) so
 //! the parent comes into view. Give it for one frame: the frame after an add or an act whose
 //! result the DM must see (a plan row after an add, a check's result after a roll).

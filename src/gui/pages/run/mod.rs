@@ -1,8 +1,8 @@
-//! The live run: the Run page and the run strip on other pages (egui: `src/encounter_run.rs`,
+//! The live run: the Run page and the run strip on other pages (state: `src/encounter_run.rs`,
 //! `src/encounter_run/`, `src/combat_sync.rs`, `src/rolls.rs`, `src/roll_table.rs`).
 //!
 //! The run's state is `encounter_run::Run` in `root.app.encounters`; this view reads it and calls
-//! the methods the egui view calls. Each phase has its own body: `setup` (Setup), `live`
+//! its methods. Each phase has its own body: `setup` (Setup), `live`
 //! (Running) and `ended` (Ended), with the run's own panel (`panel`) beside them. The keys are in
 //! `keys`; the footer's second steps and the close dialog are in `footer`.
 //!
@@ -27,7 +27,7 @@ mod strip;
 mod tests;
 
 use crate::encounter_run::{Command, Phase, Run, view};
-use crate::gui::{SplatRoot, bridge, kit, theme};
+use crate::gui::{SplatRoot, kit, theme};
 use crate::{Page, design};
 use gpui::{
     AnyElement, App, ClickEvent, Context, FocusHandle, InteractiveElement, IntoElement,
@@ -74,7 +74,7 @@ pub(crate) fn poll(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<S
         run.autosave();
     }
     // When Lookup or Notes closes, the keyboard comes back to the run, so its letters work
-    // again (egui: the closed panel's field no longer holds it); a hidden editor keeps no key.
+    // again (the closed panel's field no longer holds it); a hidden editor keeps no key.
     let side_open = root.app.lookup.open || root.app.sessions.notes_open;
     let closed = std::mem::replace(&mut root.pages.run.side_open, side_open) && !side_open;
     if let Some(focus) = &root.pages.run.focus
@@ -122,7 +122,7 @@ pub(crate) fn render(
         Phase::Ended { .. } => ended::render(root, window, cx),
     };
     let dialog = footer::close_dialog(root, window, cx);
-    // Each focus request is for the frame that drew its field (egui takes them as it draws).
+    // Each focus request is for the frame that drew its field.
     if let Some(run) = root.app.encounters.run_mut() {
         run.focus_amount = false;
         run.focus_outcome = false;
@@ -153,14 +153,14 @@ fn page_width(root: &SplatRoot, window: &Window) -> Pixels {
     root.page_width(window)
 }
 
-/// The run panel's natural width beside the roster (egui `panel_width`): the stat block's share
+/// The run panel's natural width beside the roster: the stat block's share
 /// of the window, or more when the roster would pass its largest width.
 fn panel_width(room: Pixels, window: Pixels) -> Pixels {
     let share = px(design::side_panel_width(f32::from(window)));
     share.max(room - px(theme::RUN_LARGE.max_width) - theme::M)
 }
 
-/// The run panel's columns, by the ids egui saves their widths under (`design::Column::panel`).
+/// The run panel's columns, by the ids their widths are saved under (`ui_state`).
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum Side {
     /// The live view's panel.
@@ -181,7 +181,7 @@ impl Side {
     }
 }
 
-/// The run panel's column (egui `Column::panel` with `page_keeps(RUN_LIST_KEEPS)`): at least
+/// The run panel's column (`page_keeps(RUN_LIST_KEEPS)`): at least
 /// `PANEL_MIN_WIDTH`, at most `PANEL_DRAG_MAX_WIDTH`, and the run's list keeps 454 px. The DM's
 /// width is kept with the other columns' (`kit::edge`), here and after a restart; its splitter
 /// takes a drag, Left and Right (`L` a press) and Home (the natural width again).
@@ -217,8 +217,8 @@ fn arrivals_prepare(
     };
     run.keep_offered_lines();
     let _ = run.arrival_words();
-    let frame = design::outcome::PaneFrame::plain();
-    let mut messages = design::outcome::Messages::new(&frame, ("arrival_footer", run.id()), 0.0);
+    let frame = design::outcome::PaneFrame::new();
+    let mut messages = design::outcome::Messages::new();
     run.arrival_lines(&mut messages, &frame);
     messages.into_plain()
 }
@@ -241,7 +241,7 @@ type OnPlain = Box<dyn Fn(&mut Window, &mut App)>;
 /// A boxed click handler: it borrows nothing, so a builder can make several in one chain.
 type OnClick = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
-/// A click handler that runs one command, as the egui view's buttons do (`run_command`).
+/// A click handler that runs one command (`run_command`).
 fn on_command(cx: &mut Context<SplatRoot>, command: Command) -> OnClick {
     on_run(cx, move |run| run.run_command(command.clone()))
 }
@@ -277,7 +277,7 @@ fn portrait(path: Option<std::path::PathBuf>, name: &str, size: Pixels, dim: boo
 
 /// The design status as the kit's.
 fn status(status: &design::Status<'_>) -> kit::Status {
-    bridge::status(status)
+    kit::Status::of(status)
 }
 
 /// The save state beside Keys and at the end of each footer: `Saved`, `Not saved`, the copy's
@@ -289,7 +289,7 @@ fn save_status(run: &Run) -> impl IntoElement {
         |copy| format!("{} · {copy}", value.word),
     );
     let hover = run.path().map(|path| path.display().to_string());
-    let shown = kit::Status::new(value.icon, word, bridge::color(value.color));
+    let shown = kit::Status::new(value.icon, word, theme::color(value.color));
     let mut element = div()
         .id("run-save-status")
         .flex_none()

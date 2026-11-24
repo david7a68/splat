@@ -32,6 +32,15 @@ impl Status {
         }
     }
 
+    /// A state method's status (`design::Status`) in the theme's colours.
+    pub fn of(status: &crate::design::Status<'_>) -> Self {
+        Self::new(
+            status.icon.to_owned(),
+            status.word.to_owned(),
+            crate::gui::theme::color(status.color),
+        )
+    }
+
     /// The icon in its own colour.
     pub fn icon_color(mut self, color: Hsla) -> Self {
         self.icon_color = Some(color);

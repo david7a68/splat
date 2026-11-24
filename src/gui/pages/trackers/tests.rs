@@ -1,6 +1,6 @@
 //! Trackers in Lookup's panel: the empty state's route, the Tournament's note in play beside the
 //! Session page, a quick action and its Undo, a Due row and `Done`, an amount typed for an action
-//! that asks, and the panel's captures (`trackers__*`, paired with the egui references).
+//! that asks, and the panel's captures (`trackers__*`, paired with the references).
 use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
 use gpui::{px, size};
@@ -138,7 +138,7 @@ fn quick_actions_notices_and_amounts() {
     assert_eq!(value(&mut shell, "race_clock", None), 0);
 
     // A seal raises its notice; Done ends it. The Due row comes above the action, and the
-    // action stays under the still pointer (egui `ContentScroll::holds_presses`).
+    // action stays under the still pointer.
     let before = shell.bounds("Take seal: Party").expect("the action");
     shell.click("Take seal: Party");
     shell.settle();
@@ -190,8 +190,8 @@ fn quick_actions_notices_and_amounts() {
         3,
         "Escape presses nothing"
     );
-    // The note's reader in Lookup has each tracker's folded history under the note (egui
-    // `TrackerUi::history`, drawn by the shared World reader).
+    // The note's reader in Lookup has each tracker's folded history under the note, drawn by
+    // the shared World reader.
     shell.update(|root, _, cx| {
         root.app.lookup.back_from_trackers();
         assert!(root.app.lookup.open_name("Tournament"), "the note opens");

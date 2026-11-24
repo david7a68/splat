@@ -156,12 +156,14 @@ opens the GPUI app (`gui::run`). The code is in `src/gui/`:
 visible to `src/gui/`. `root.pages.<area>` is an area's GPUI-only state: input entities, scroll handles,
 focus handles. Logic stays in the state types. The view reads the state and calls its methods.
 
-**The context.** Some state methods take a small context for data only: typed temp data (requests that one
-page leaves for another), the time, and repaint requests from background threads. The root keeps it, and
-pages pass it to those methods. A background thread's repaint request wakes the GPUI window.
-TODO(3b): name the toolkit-free context and say where the root keeps it. On the lead head it is
-`root.bridge.ctx()` (`src/gui/bridge.rs`), with `bridge::color` and `bridge::status` to turn a state
-method's colour or status into the kit's.
+**The context.** Some state methods take the state context (`state_context::StateContext`, in
+`src/state_context.rs`) for data only. It has typed slots (`Slot<T>`: requests that one page leaves for
+another, listed in `src/requests.rs`, and values a part keeps for one view), the pass (`begin_pass` moves
+the frame clock and counts passes) and repaint requests. The root keeps it as `root.ctx` and pages pass
+`&root.ctx` to those methods. It is a cheap handle for the UI thread; a background thread takes its
+`Waker` (`ctx.waker()`) and asks for a frame with it, which wakes the GPUI window. A state method's colour
+is a `design::Color` token: `theme::color` turns it into a GPUI colour, and `kit::Status::of` turns a
+`design::Status` into the kit's.
 
 **Each frame.** `SplatRoot::render` first runs `frame_logic`, which draws nothing, in this order: the
 shared background polls (`Splat::poll_background`), `sync_party`, each area's `poll`, the tracker acts,

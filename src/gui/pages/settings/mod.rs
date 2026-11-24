@@ -1,5 +1,5 @@
-//! Settings → Account and campaigns, and Recording and processing (egui: `src/settings.rs`,
-//! `Campaigns::show`, the Settings branch of `Splat::page`). The shell draws the header, the tabs
+//! Settings → Account and campaigns, and Recording and processing (state: `src/settings.rs`,
+//! `src/campaigns.rs`). The shell draws the header, the tabs
 //! and Touchpad (`SplatRoot::settings_page`).
 //!
 //! Wide (1000 px and more), the tab has two panes, each with its own footer: the campaigns
@@ -44,7 +44,7 @@ pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Contex
 
 /// Once per frame, before anything draws.
 pub(crate) fn poll(root: &mut SplatRoot, _window: &mut Window, _cx: &mut Context<SplatRoot>) {
-    // The account column is the one place that tells the egui form whether a campaign form is
+    // The account column is the one place that tells the account form whether a campaign form is
     // open (its Connect stays secondary then).
     root.app.settings.campaign_form_open = root.app.campaigns.form_open();
 }
@@ -60,8 +60,8 @@ pub(crate) fn campaign_lines(
     link: Option<uuid::Uuid>,
     blocked: Option<&str>,
 ) -> Vec<PlainLine<CampaignAct>> {
-    let frame = PaneFrame::plain();
-    let mut messages = Messages::<CampaignAct>::new(&frame, "campaign_footer", 0.0);
+    let frame = PaneFrame::new();
+    let mut messages = Messages::<CampaignAct>::new();
     root.app
         .campaigns
         .footer_messages(&frame, &mut messages, list, blocked);
@@ -76,8 +76,7 @@ pub(crate) fn campaign_lines(
 
 /// The account's footer lines (`Settings::footer_messages`).
 fn account_lines(root: &SplatRoot) -> Vec<PlainLine<CampaignAct>> {
-    let frame = PaneFrame::plain();
-    let mut messages = Messages::<CampaignAct>::new(&frame, "account_footer", 0.0);
+    let mut messages = Messages::<CampaignAct>::new();
     root.app.settings.footer_messages(&mut messages);
     messages.into_plain()
 }

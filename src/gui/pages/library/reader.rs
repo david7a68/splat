@@ -8,7 +8,7 @@ use crate::gui::pages::reader::entry::{EntryView, Source};
 use crate::gui::theme::{
     Density, HAIRLINE_WIDTH, L, M, READER_MEASURE, S, Type, TypeExt, XS, colors,
 };
-use crate::gui::{SplatRoot, bridge, icons, kit};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::library::model::ReaderView;
 use crate::library::view::NoLinks;
 use crate::lookup::ContentIndex;
@@ -166,7 +166,7 @@ fn file_line(view: &ReaderView) -> AnyElement {
         .child(kit::status(&kit::Status::new(
             *icon,
             words.clone(),
-            bridge::color(*color),
+            theme::color(*color),
         )));
     if let Some((folder, relative)) = &line.file {
         let path = folder.join(relative);
@@ -253,7 +253,7 @@ fn save_row(
             .child(kit::status(&kit::Status::new(
                 SharedString::from(icon.clone()),
                 word.clone(),
-                bridge::color(*color),
+                theme::color(*color),
             )))
             .when(row.discard, |line| {
                 line.child(
@@ -274,7 +274,7 @@ fn save_row(
 
 /// The reason on the save row (`save_row_with`): its long form when it fits whole beside the
 /// widest state word, Discard and Save, else its short form, else none. Measured in the type
-/// each part is set in, as egui measures them.
+/// each part is set in.
 fn row_reason(window: &mut Window, width: f32, long: &str, short: &str) -> Option<String> {
     use crate::design::save_row::{InvalidCause, SaveWord};
     let gap = f32::from(S);
@@ -340,7 +340,7 @@ fn notice(
             .blocked(blocked.clone())
             .on_click(cx.listener(move |root, _, _, cx| {
                 if again {
-                    let ctx = root.bridge.ctx().clone();
+                    let ctx = root.ctx.clone();
                     root.app.library.read_again(&ctx, &root.app.campaigns);
                 } else {
                     root.app.library.repair();
@@ -475,7 +475,7 @@ fn entry(
 }
 
 /// Read: the title with the entry's picture, the body's notices, then the entry as the reader
-/// shows it (egui `view::title_with_art` and `view::show_with_related`): a stat block, a spell's
+/// shows it: a stat block, a spell's
 /// or an item's facts, class features, related entries and the closed end sections. Its related,
 /// feature and spell links open their entries here; a note link in its words opens its entry, or
 /// offers its choices.
@@ -514,7 +514,7 @@ fn read_body(
         if let Some(index) = &link_index
             && let crate::world::Go::Item(_, heading) = index.resolve_link(note, from)
         {
-            crate::markdown_view::want_heading(root.bridge.ctx(), heading);
+            crate::markdown_view::want_heading(&root.ctx, heading);
         }
         root.app.library.follow_link(note, link_index.as_deref());
         cx.notify();
@@ -568,7 +568,7 @@ fn disk_body(
                 .density(Density::Read)
                 .on_click(cx.listener(move |root, _, _, cx| {
                     if unread {
-                        let ctx = root.bridge.ctx().clone();
+                        let ctx = root.ctx.clone();
                         root.app.library.read_again(&ctx, &root.app.campaigns);
                     } else {
                         root.app.library.overwrite_with_draft();

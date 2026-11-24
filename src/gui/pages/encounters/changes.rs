@@ -1,4 +1,4 @@
-//! A creature's Changes (egui: `groups::overrides_form`), for a roster row and a group's member:
+//! A creature's Changes, for a roster row and a group's member:
 //! its heading with Done, the display name, each number with how it changes and its preview, the
 //! side, the starting conditions, the note and the creature's own loot. Every edit goes to
 //! `Encounters::edit_changes`, which keeps the block one the form can read.

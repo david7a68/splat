@@ -80,7 +80,7 @@ pub(crate) fn button_width(window: &Window, words: &str, icon: bool) -> Pixels {
 }
 
 /// `words` as a column of `room` shows them: whole, or cut at a whole word with `…` (`…` alone
-/// when the first word does not fit), as egui's `words_that_fit`.
+/// when the first word does not fit).
 pub(crate) fn fit_words(window: &Window, ty: Type, words: &str, room: Pixels) -> String {
     if width(window, ty, words) <= room {
         return words.to_owned();

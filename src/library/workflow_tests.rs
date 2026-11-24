@@ -1,4 +1,5 @@
 use super::*;
+use crate::state_context::StateContext;
 
 #[cfg(feature = "test-support")]
 pub fn copy_registration_and_undo_keep_campaign_choices_and_later_edits(
@@ -61,7 +62,7 @@ pub fn copy_registration_and_undo_keep_campaign_choices_and_later_edits(
 pub fn iter14_e_changed_files_end_every_undo_result(
     temp: &tempfile::TempDir,
     campaigns: &mut Campaigns,
-    mut route: impl FnMut(&mut Campaigns, Library, &egui::Context) -> Library,
+    mut route: impl FnMut(&mut Campaigns, Library, &StateContext) -> Library,
     mut frame: impl FnMut(&mut Library, &mut Campaigns),
 ) {
     use crate::content_workspace::ContentEdits;
@@ -551,13 +552,11 @@ pub fn iter14_e_changed_files_end_every_undo_result(
                 // the one producer of this event that no Library draft locks (Lookup's
                 // `Open in Library` and Library's `Choose for this campaign` wait for the
                 // draft). Its act is this insert; `route` is the app's own consumer.
-                let ctx = egui::Context::default();
-                ctx.data_mut(|data| {
-                    data.insert_temp(
-                        egui::Id::new("use_package_entry"),
-                        (module.id, entry_of(&module)),
-                    )
-                });
+                let ctx = StateContext::new();
+                ctx.set(
+                    crate::requests::USE_PACKAGE_ENTRY,
+                    (module.id, entry_of(&module)),
+                );
                 library = route(campaigns, library, &ctx);
                 assert!(
                     crate::content_workspace::CampaignDocument::load(&campaign)

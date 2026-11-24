@@ -1,4 +1,4 @@
-//! The loot list (egui: `loot_editor::show`, `show_cell`): each line a row (a roll on a table with
+//! The loot list: each line a row (a roll on a table with
 //! its count and table menu, a Library item that opens, or words in a field), each with its `⋯`
 //! and Remove; the Undo of the last removal; the add field with the campaign's tables and items
 //! offered as the DM types, and `Roll on a table` beside it. For an encounter the lines are its
@@ -105,7 +105,7 @@ fn change(
 
 /// The campaign's tables and items, from the index every page shares.
 fn sources(root: &SplatRoot) -> Option<Arc<Sources>> {
-    loot_editor::sources(root.bridge.ctx())
+    loot_editor::sources(&root.ctx)
 }
 
 /// The list and its add field. `key` keys its fields and its kept state (an encounter draft's id,
@@ -306,7 +306,7 @@ fn line_row(
                         .on_click(cx.listener(
                             move |root: &mut SplatRoot, _, _, cx| {
                                 crate::markdown_view::send_note_link(
-                                    root.bridge.ctx(),
+                                    &root.ctx,
                                     target.clone(),
                                     None,
                                 );

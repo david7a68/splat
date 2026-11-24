@@ -1,9 +1,9 @@
-//! The World page (egui: `src/world.rs`, `src/world/`, `src/world_page/`): one list of the
+//! The World page: one list of the
 //! campaign's notes and entries, and the reader of the one that is open.
 //!
-//! The view keeps no World state of its own. It reads `root.app.world_page` (the egui page's own
-//! state, `world::page::WorldPage`) through its view API, draws it, and calls the same acts the
-//! egui page calls (`WorldPage::press_note`, `Reader::press_title`, …). What only GPUI needs (the
+//! The view keeps no World state of its own. It reads `root.app.world_page` (the page's state,
+//! `world::page::WorldPage`) through its view API, draws it, and calls its acts
+//! (`WorldPage::press_note`, `Reader::press_title`, …). What only GPUI needs (the
 //! list's virtual state) is in `State`.
 use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::lookup::ContentIndex;
@@ -23,7 +23,7 @@ mod tests;
 
 actions!(world, [Escape]);
 
-/// The width the list column starts at, and its range (egui's `list_column`).
+/// The width the list column starts at, and its range.
 const LIST_WIDTH: f32 = 260.0;
 const LIST_RANGE: std::ops::Range<f32> = 190.0..480.0;
 
@@ -194,7 +194,7 @@ pub(crate) fn save_key(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) {
 
 /// The header (M0603): the title and its count, `New ▾`, the count of notes that need fixing
 /// with its menu of them, and the count that cannot be read, which opens the first one's
-/// repair. The actions follow the title, as egui's title line places them.
+/// repair. The actions follow the title.
 fn header(
     _root: &mut SplatRoot,
     index: Option<&ContentIndex>,

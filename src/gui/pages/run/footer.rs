@@ -1,4 +1,4 @@
-//! The run's footers and second steps (egui `view::live_footer`, `close_dialog`, `run_messages`):
+//! The run's footers and second steps:
 //! the live footer's Close run, End encounter…, Sync party, Keys and the save state; the end
 //! step's outcome field; the close dialog; and the message footer under each body.
 use super::{on_run, save_status};
@@ -185,11 +185,11 @@ fn end_step(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
         )
 }
 
-/// The footer messages under a body (`run_messages`, the egui footer's typed lines), drawn by
-/// `kit::messages`; a press goes through `run_press` with its ticket, as in egui.
+/// The footer messages under a body (`run_messages`, the footer's typed lines), drawn by
+/// `kit::messages`; a press goes through `run_press` with its ticket.
 pub(super) fn messages(run: &Run, setup: bool, cx: &mut Context<SplatRoot>) -> Vec<AnyElement> {
-    let frame = crate::design::outcome::PaneFrame::plain();
-    let lines = run.run_messages(&frame, setup, 0.0).into_plain();
+    let frame = crate::design::outcome::PaneFrame::new();
+    let lines = run.run_messages(&frame, setup).into_plain();
     kit::messages::lines(
         "run-messages",
         lines,
@@ -357,7 +357,7 @@ pub(super) fn close_dialog(
         ))
     };
     if cannot_save {
-        // egui's order: the safe choice before the commit.
+        // The safe choice before the commit.
         dialog = dialog.action(keep_running());
         dialog = dialog.action(
             kit::Button::primary("run-close-save-new", "Save as a new run and close")

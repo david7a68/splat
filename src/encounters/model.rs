@@ -1,6 +1,6 @@
-//! The Encounters page as plain data, and its acts, for a view that does not draw with egui (the
-//! GPUI page, `src/gui/pages/encounters/`). The egui view keeps its own drawing; both views call
-//! the acts here and in `Encounters`, so the logic has one home. Nothing here draws or measures:
+//! The Encounters page as plain data, and its acts, for the GPUI page
+//! (`src/gui/pages/encounters/`). The page calls the acts here and in `Encounters`, so the logic
+//! has one home. Nothing here draws or measures:
 //! a view fits the words itself.
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::*;
@@ -152,7 +152,7 @@ pub struct FinalRow {
     pub name: String,
     pub hp: String,
     pub temp: Option<String>,
-    pub rest: Vec<(String, egui::Color32)>,
+    pub rest: Vec<(String, crate::design::Color)>,
 }
 
 const NEW_GROUP_HINT: &str = "A reusable set of creatures to add to a running encounter";
@@ -184,7 +184,7 @@ impl Encounters {
 
     /// Ctrl+S from the page: the open creature while it has changes, else the open group or
     /// encounter (`save_by_key`). Only while an editor is open.
-    pub fn save_by_key_now(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
+    pub fn save_by_key_now(&mut self, ctx: &StateContext, active: &Campaign, modules: &[Module]) {
         if self.creature.is_some() || self.draft.is_some() || self.group_draft.is_some() {
             self.save_key = true;
             self.save_by_key(ctx, active, modules);
@@ -284,7 +284,7 @@ impl Encounters {
     /// Reload from disk: a run stays open through it, so only the content is read again.
     pub fn reload_from_disk(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         active: &Campaign,
         campaigns: &Campaigns,
     ) {
@@ -364,10 +364,8 @@ impl Encounters {
 
     /// The list's footer lines (`list_lines`), in the footer's order.
     pub fn list_footer(&mut self) -> Vec<Line> {
-        let frame = design::outcome::PaneFrame::plain();
-        let id = self.active.as_ref().map(|active| active.id);
-        let mut messages =
-            design::outcome::Messages::new(&frame, ("encounters_list_footer", id), 0.0);
+        let frame = design::outcome::PaneFrame::new();
+        let mut messages = design::outcome::Messages::new();
         self.list_lines(&mut messages, &frame);
         messages.into_plain()
     }
@@ -376,7 +374,7 @@ impl Encounters {
     /// only the entry its line showed, by its ticket; one replaced or ended since does nothing.
     pub fn footer_press(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         press: design::outcome::Press<FooterPress>,
         active: &Campaign,
         campaigns: &Campaigns,
@@ -704,7 +702,7 @@ pub struct EditorView {
     /// An open run holds Start: its reason shows before Save.
     pub run_open: bool,
     /// The save row: the state's icon, word and colour; Discard (shown, and why it waits).
-    pub state: (String, String, egui::Color32),
+    pub state: (String, String, crate::design::Color),
     pub discard: Option<Option<&'static str>>,
     /// The campaign-switch reason and the row's other reason.
     pub lock_reason: Option<&'static str>,
@@ -741,9 +739,9 @@ pub struct RosterRow {
     /// The row's unread roster rows above it (`Line N: …`).
     pub faults_before: Vec<String>,
     /// The second line's parts: words, colour, and whether it is the Bloodied state.
-    pub parts: Vec<(String, egui::Color32, bool)>,
+    pub parts: Vec<(String, crate::design::Color, bool)>,
     /// A missing or unreadable creature: the fault's icon, colour and the duplicate's hover.
-    pub missing: Option<(&'static str, egui::Color32, Option<String>)>,
+    pub missing: Option<(&'static str, crate::design::Color, Option<String>)>,
     /// The change link's words (`Changed · …`), while the row is closed.
     pub changed: Option<String>,
     pub open: bool,
@@ -895,7 +893,7 @@ impl Encounters {
     /// A press in the encounter editor's head (`editor_view`). True when the editor closed.
     pub fn editor_head_act(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         active: &Campaign,
         modules: &[Module],
         act: HeadAct,
@@ -944,7 +942,7 @@ impl Encounters {
     }
 
     /// The encounter editor's head and save row (`editor_view`), as data, with the frame's
-    /// checks that the egui editor makes before it draws: Save's refusal for Ctrl+S, the
+    /// checks that the editor makes before it draws: Save's refusal for Ctrl+S, the
     /// encounter's groups read once, and the last refusal checked again.
     pub fn editor_frame(&mut self, active: &Campaign) -> Option<EditorView> {
         // After a load in progress, so that a group just saved is among them.
@@ -1116,15 +1114,13 @@ impl Encounters {
     }
 
     /// The encounter editor's footer (`editor_lines`), in the footer's order.
-    pub fn editor_footer(&mut self, ctx: &egui::Context, root: &std::path::Path) -> Vec<Line> {
+    pub fn editor_footer(&mut self, root: &std::path::Path) -> Vec<Line> {
         let dirty = self.encounter_dirty();
         let groups = self.owned_groups_diagnosis();
         let groups_reason = groups.footer.zip(groups.cause).filter(|_| dirty);
-        let unread = self.unread_rows(ctx);
-        let frame = design::outcome::PaneFrame::plain();
-        let draft_id = self.draft.as_ref().map(|draft| draft.id);
-        let mut messages =
-            design::outcome::Messages::new(&frame, ("encounter_editor_footer", draft_id), 0.0);
+        let unread = self.unread_rows();
+        let frame = design::outcome::PaneFrame::new();
+        let mut messages = design::outcome::Messages::new();
         self.editor_lines(&mut messages, &frame, root, groups_reason, unread);
         messages.into_plain()
     }
@@ -1132,7 +1128,7 @@ impl Encounters {
     /// The roster column (`roster_column`), as data.
     pub fn roster_view(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         party: &Party,
         linked: bool,
     ) -> Option<RosterView> {
@@ -1538,7 +1534,7 @@ impl DraftEdit<'_> {
 /// One roster row (`Encounters::roster`), as data.
 #[allow(clippy::too_many_arguments)]
 fn roster_row(
-    ctx: &egui::Context,
+    ctx: &StateContext,
     (i, count): (usize, usize),
     slot: &Slot,
     snapshot: &Snapshot,
@@ -1615,7 +1611,7 @@ fn roster_row(
         }
     });
     let lead = format!("{side_icon} {side}");
-    let mut parts: Vec<(String, egui::Color32, bool)> = Vec::new();
+    let mut parts: Vec<(String, crate::design::Color, bool)> = Vec::new();
     if missing {
         parts.push((lead, muted, false));
         parts.push((fault_words.to_owned(), muted, false));

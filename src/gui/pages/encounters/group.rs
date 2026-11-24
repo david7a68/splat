@@ -1,4 +1,4 @@
-//! The group editor (egui: `Encounters::group_editor_view`, `group_fields`, `members`): the back
+//! The group editor: the back
 //! line, the name with Save group, the save row, Default side, Belongs to, the members with their
 //! counts, Changes and replacements, the notes, Add creatures, and the footer. Below 760 px the
 //! members and Add creatures take turns under tabs. While its file changed on disk, the conflict
@@ -39,7 +39,7 @@ pub(super) fn render(
             cx,
         );
     }
-    let ctx = root.bridge.ctx().clone();
+    let ctx = root.ctx.clone();
     let sources = splat_encounters_ui::loot_editor::sources(&ctx);
     let Some(view) = root.app.encounters.group_frame(sources.as_deref()) else {
         return div().into_any_element();
@@ -60,7 +60,7 @@ pub(super) fn render(
         .get()
         .map_or(page, |room| room.min(page));
     let narrow = content < NARROW;
-    // The Add creatures column keeps its own width here (egui's group editor does not drag).
+    // The Add creatures column keeps its own width here: the group editor does not drag it.
     let add_width = px(crate::design::side_panel_width(f32::from(content)))
         .max(content - LIST_MEASURE)
         .min(super::editor::ADD_PANE_MAX_WIDTH);
@@ -239,7 +239,7 @@ fn head(view: &GroupView, column: gpui::Pixels, focus: bool, cx: &mut Context<Sp
         .child(kit::status(&kit::Status::new(
             icon.clone(),
             word.clone(),
-            crate::gui::bridge::color(*color),
+            crate::gui::theme::color(*color),
         )));
     if view.discard {
         row = row.child(
@@ -394,7 +394,7 @@ fn act(
     })
 }
 
-/// The member's element ids: the open group's keep egui's plain names (`member-more-0`), an
+/// The member's element ids: the open group's keep plain names (`member-more-0`), an
 /// encounter's own group's add its place.
 fn member_id(at: GroupAt, words: &str, index: usize) -> ElementId {
     match at {
@@ -448,7 +448,7 @@ fn member_row(
         .child(reason("Count"))
         .child(
             // The shared stepper for a count, with − and + and typing, up to `MAX_COUNT`
-            // (egui `grouped_stepper`).
+            //.
             kit::Stepper::new(
                 member_id(at, "member-count", index),
                 format!("How many of {}", member.name),
@@ -536,9 +536,7 @@ fn member_row(
                 )
                 .small()
                 .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
-                    root.bridge.ctx().data_mut(|data| {
-                        data.insert_temp(eframe::egui::Id::new("open_campaign_packages"), true)
-                    });
+                    root.ctx.set(crate::requests::OPEN_CAMPAIGN_PACKAGES, true);
                     cx.notify();
                 })),
             ),

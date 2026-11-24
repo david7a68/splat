@@ -1,9 +1,9 @@
-//! The D&D Beyond account (egui: `Settings::show`, `show_compact`, `show_account`): its status,
+//! The D&D Beyond account: its status,
 //! its help, the sign-in form, and Disconnect. Wide, it is the Settings tab's right column;
 //! narrow, a compact group under (or, during a run, above) the campaigns.
+use crate::gui::SplatRoot;
 use crate::gui::kit::{self, Button, Checkbox, Link, Message, Section, TextField, Tone};
 use crate::gui::theme::{Density, Type, XS, colors};
-use crate::gui::{SplatRoot, bridge};
 use crate::settings::Account;
 use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div, prelude::*, px};
 
@@ -70,7 +70,7 @@ pub(super) fn compact(
         Account::NotConnected | Account::Failed | Account::RefreshFailing
     );
     let c = colors();
-    let status = bridge::status(&settings.connection_status());
+    let status = kit::Status::of(&settings.connection_status());
     let line = div()
         .flex()
         .flex_row()
@@ -132,7 +132,7 @@ fn body(
     let account = settings.account_now();
     let mut column = div().flex().flex_col().gap(XS);
     if status {
-        column = column.child(kit::status(&bridge::status(&settings.connection_status())));
+        column = column.child(kit::status(&kit::Status::of(&settings.connection_status())));
     }
     match account {
         Account::Connected if settings.remembered() => {
@@ -270,8 +270,8 @@ fn body(
         }
         .blocked(reason)
         .on_click(cx.listener(|root, _, _, cx| {
-            let SplatRoot { app, bridge, .. } = root;
-            app.settings.connect(bridge.ctx());
+            let SplatRoot { app, ctx, .. } = root;
+            app.settings.connect(ctx);
             cx.notify();
         }));
         column = column.child(
@@ -325,8 +325,8 @@ fn body(
             .line_start()
             .density(Density::Read)
             .on_click(cx.listener(|root, _, _, cx| {
-                let SplatRoot { app, bridge, .. } = root;
-                app.settings.forget(bridge.ctx());
+                let SplatRoot { app, ctx, .. } = root;
+                app.settings.forget(ctx);
                 root.pages.settings.compact_open = false;
                 cx.notify();
             })),

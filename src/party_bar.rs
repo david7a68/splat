@@ -1,8 +1,8 @@
 //! The party at a glance, above the Session page while a session is played. Each member is a
 //! portrait, HP and a few numbers, with the parts the roster uses. The rest is on hover, and a
 //! click opens the sheet.
+use crate::design::Color;
 use crate::design::{self, Density};
-use eframe::egui::Color32;
 use splat_campaign::encounter_run::effect::Condition;
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -31,7 +31,7 @@ pub struct Source {
     pub icon: &'static str,
     pub word: String,
     pub short: &'static str,
-    pub color: Color32,
+    pub color: Color,
 }
 
 /// The bar holds one line of items, so that what is below it does not move.

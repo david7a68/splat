@@ -1,4 +1,4 @@
-//! The one entry reader (egui: `library::view`): the Library, Lookup, the run's side panel and
+//! The one entry reader: the Library, Lookup, the run's side panel and
 //! campaign entries call [`EntryView`], so an entry looks the same everywhere.
 //!
 //! ```ignore
@@ -15,14 +15,15 @@
 //! a reading's related entries, and then the closed end sections: Source text, Technical details,
 //! Source and identifiers.
 //!
-//! A pressed dice number asks for its roll in the app's egui context (`rolls::take_ask`, taken
+//! A pressed dice number asks for its roll in the app's state context (`rolls::take_ask`, taken
 //! by the run or the preview stream); a pressed note link goes to Lookup through the frame logic,
 //! as the Markdown view's do. A followed related, feature or spell link calls `on_open` with its
-//! place in `links` (egui's returned `Option<usize>`).
+//! place in `links`.
 #![allow(
     dead_code,
     reason = "the Library, Lookup and Run pages call the entry view when their ports merge; tests call it now"
 )]
+use crate::state_context::StateContext;
 mod details;
 pub mod parts;
 mod stat_block;
@@ -32,7 +33,6 @@ use crate::gui::kit;
 use crate::gui::theme::{L, M, READER_MEASURE, Type, XXL, colors};
 use crate::library::view::{Links, Origin, RunValues};
 use crate::library::{class, creature, presentation, reader};
-use eframe::egui;
 use gpui::{
     AnyElement, App, ElementId, IntoElement, ObjectFit, ParentElement, RenderOnce, ScrollHandle,
     SharedString, Styled, StyledImage, Window, div, img, prelude::*,
@@ -47,7 +47,7 @@ pub type OnOpen = Rc<dyn Fn(usize, &mut Window, &mut App)>;
 /// A pressed note link in the entry's words, with the note it names.
 pub type OnNote = Rc<dyn Fn(&str, &mut Window, &mut App)>;
 
-/// Where an entry comes from, owned (egui `view::Origin`).
+/// Where an entry comes from, owned.
 #[derive(Clone, Debug, Default)]
 pub struct Source {
     pub path: String,
@@ -142,7 +142,7 @@ impl EntryView {
     }
 
     /// Let the entry's tables take the parent's whole width while its prose and stat block keep
-    /// the reader's measure (egui `markdown_view::with_wide_tables` around the reader).
+    /// the reader's measure.
     pub fn wide_tables(mut self) -> Self {
         self.wide = true;
         self
@@ -155,14 +155,14 @@ impl EntryView {
         self
     }
 
-    /// Values from an open run (egui `show_run`): the vitals show them, and the printed values
+    /// Values from an open run: the vitals show them, and the printed values
     /// under them where they differ. The saved entry stays unchanged.
     pub fn run(mut self, values: RunValues) -> Self {
         self.values = Some(values);
         self
     }
 
-    /// The caller's related entries, after the entry's own content (egui `show_with_related`).
+    /// The caller's related entries, after the entry's own content.
     pub fn related(mut self, related: impl IntoElement) -> Self {
         self.related = Some(related.into_any_element());
         self
@@ -174,8 +174,7 @@ impl EntryView {
         self
     }
 
-    /// A pressed note link in the entry's words goes to `handler` (egui: the reader's caller
-    /// takes `markdown_view::take_note_link`), not to Lookup. Web links, bold names and dice keep
+    /// A pressed note link in the entry's words goes to `handler`, not to Lookup. Web links, bold names and dice keep
     /// the reader's routing.
     pub fn on_note(mut self, handler: impl Fn(&str, &mut Window, &mut App) + 'static) -> Self {
         self.on_note = Some(Rc::new(handler));
@@ -195,8 +194,8 @@ impl EntryView {
     }
 }
 
-/// The app's egui context, where rolls and note links are left for the frame logic.
-fn host(cx: &App) -> Option<egui::Context> {
+/// The app's state context, where rolls and note links are left for the frame logic.
+fn host(cx: &App) -> Option<StateContext> {
     cx.try_global::<kit::markdown::Host>()
         .map(|host| host.0.clone())
 }
@@ -205,7 +204,7 @@ fn host(cx: &App) -> Option<egui::Context> {
 pub(super) struct Out<'w> {
     pub id: ElementId,
     pub window: &'w Window,
-    pub ctx: Option<egui::Context>,
+    pub ctx: Option<StateContext>,
     pub document: Option<uuid::Uuid>,
     pub on_open: Option<OnOpen>,
     pub on_note: Option<OnNote>,
@@ -621,8 +620,7 @@ fn reference(
     out.push(section);
 }
 
-/// An entry's title and subtitle, with its picture beside them when it has one (egui
-/// `view::title_with_art`): the rarity is left out of an item's subtitle (its identity line says
+/// An entry's title and subtitle, with its picture beside them when it has one: the rarity is left out of an item's subtitle (its identity line says
 /// it), and so is a flagged entry's warning mark.
 pub fn title_with_art(title: &str, subtitle: &str, entry: Option<&Entry>, cx: &App) -> AnyElement {
     let subtitle = if let Some(entry) = entry {

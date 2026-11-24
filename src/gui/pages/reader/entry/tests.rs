@@ -156,21 +156,21 @@ fn creature_stat_block_and_its_dice() {
     let check = RollLink::d20(D20::Check, 6, "Strength");
     shell.click(&format!("{} +6", crate::rolls::link_label(&check)));
     let rolled = shell.read(|root| {
-        crate::rolls::plain::preview_words(root.bridge.ctx(), "Adult Black Dragon", &[&check])
+        crate::rolls::plain::preview_words(&root.ctx, "Adult Black Dragon", &[&check])
     });
     assert!(
         rolled.is_some_and(|parts| !parts.is_empty()),
         "the Strength check was rolled for the Adult Black Dragon"
     );
     // In a run, the armed action's tile row says what to do now and offers what can follow; a
-    // press on a follow-up goes to the run (egui `rolls::tile_row` under `show_run`).
+    // press on a follow-up goes to the run.
     let dragon = builtin("definitions/creatures/adult_black_dragon.md");
     let armed = crate::rolls::plain::actions_of(&dragon.body)[0]
         .1
         .link
         .clone();
     shell.update(|root, _, cx| {
-        let ctx = root.bridge.ctx();
+        let ctx = &root.ctx;
         crate::rolls::set_roller(ctx, Some(0));
         crate::rolls::set_armed(
             ctx,
@@ -194,7 +194,7 @@ fn creature_stat_block_and_its_dice() {
     shell.capture("reader-armed-tile__01-armed-action-in-a-run__1200x800");
     shell.click("Stop");
     assert_eq!(
-        shell.read(|root| crate::rolls::take_armed_action(root.bridge.ctx())),
+        shell.read(|root| crate::rolls::take_armed_action(&root.ctx)),
         Some(crate::rolls::ArmedAction::Stop),
         "Stop goes to the run"
     );

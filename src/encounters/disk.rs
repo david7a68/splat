@@ -1,10 +1,10 @@
 //! The same disk comparison for encounter, group and creature drafts.
 #![warn(deprecated)] // Its parent allows old message functions; this file uses none.
+use crate::state_context::StateContext;
 use crate::{
     design::{self, outcome::Sentence},
     library::note_path,
 };
-use eframe::egui;
 use std::{fs, path::Path};
 
 #[derive(Clone, Default)]
@@ -43,7 +43,7 @@ pub(super) fn changed_on_disk(what: &str, name: &str) -> Sentence {
     }
 }
 
-/// A draft's disk conflict (`Recovery::show`), as data for a view that does not draw with egui.
+/// A draft's disk conflict, as data for the GPUI page.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DiskView {
     /// The facts before the last one (another file claims this identity).
@@ -392,7 +392,7 @@ impl super::Encounters {
     /// draft, else the draft goes (with Undo) and the file's text comes back.
     pub fn encounter_disk_choice(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         campaign: &crate::persistence::Campaign,
         modules: &[crate::persistence::Module],
         keep: bool,

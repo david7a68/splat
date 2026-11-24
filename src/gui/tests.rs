@@ -1,4 +1,4 @@
-//! The shell's screenshots and interaction tests (`docs/gpui-port.md`, Kit guide). Captures go to
+//! The shell's screenshots and interaction tests (`docs/development.md`, GUI tests). Captures go to
 //! `artifacts/screenshots/gpui/`, named `<scenario>__<step>__<width>x<height>`.
 use super::gallery::Gallery;
 use super::harness::Shell;
@@ -214,7 +214,7 @@ fn the_kit_parts_work() {
 /// The rail, the side panel and a page's columns keep the widths the DM drags them to
 /// (`design::Column`): the side panel's natural width is the window's share (`side_panel_width`,
 /// 432 px at 1200), a drag stops at the column's range, the widths are saved for the next start
-/// under egui's column ids, and Home on a splitter gives the natural width back.
+/// under their column ids, and Home on a splitter gives the natural width back.
 #[test]
 fn columns_keep_the_widths_the_dm_drags() {
     let mut shell = Shell::new("gpui-columns", Seed::Campaign);
@@ -291,7 +291,7 @@ fn columns_keep_the_widths_the_dm_drags() {
     );
 }
 
-/// A menu keeps inside the pane that holds its trigger (egui `popups`): near the pane's foot it
+/// A menu keeps inside the pane that holds its trigger: near the pane's foot it
 /// opens above its trigger, and in a narrow pane it is no wider than the pane's body, clear of
 /// the scroll bar's lane, with its words wrapped.
 #[test]

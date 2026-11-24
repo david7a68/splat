@@ -1,18 +1,15 @@
-//! Draws art: images from registered packages, and cached character portraits.
+//! Finds art: images from registered packages, and cached character portraits.
 //!
-//! The index is kept in the egui context, so the one Reader and the Markdown view can find
-//! art wherever they are shown, without each page passing it down.
+//! The index is kept in the state context, so the one Reader and the Markdown view can find
+//! art wherever they are shown, without each page passing it down. The GPUI views load and
+//! cache the images themselves (`gpui::img`).
 use crate::persistence::Module;
-use eframe::egui::{self, Id};
+use crate::state_context::{Slot, StateContext};
 use splat::content::{Entry, art::ArtIndex};
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, mpsc},
 };
-
-pub fn install(ctx: &egui::Context) {
-    egui_extras::install_image_loaders(ctx);
-}
 
 /// Keeps the art index in step with the registered packages.
 #[derive(Default)]
@@ -27,36 +24,35 @@ impl Loader {
         self.pending.is_some()
     }
 
-    pub fn poll(&mut self, ctx: &egui::Context, modules: &[Module]) {
+    pub fn poll(&mut self, ctx: &StateContext, modules: &[Module]) {
         if !modules.iter().map(|m| &m.path).eq(self.roots.iter()) {
             self.roots = modules.iter().map(|m| m.path.clone()).collect();
             let roots = self.roots.clone();
             let (tx, rx) = mpsc::channel();
             self.pending = Some(rx);
-            let ctx = ctx.clone();
+            let waker = ctx.waker();
             std::thread::spawn(move || {
                 let _ = tx.send(ArtIndex::load(roots.iter().map(PathBuf::as_path)));
-                ctx.request_repaint();
+                waker.request_repaint();
             });
         }
         if let Some(index) = self.pending.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.pending = None;
-            ctx.data_mut(|data| data.insert_temp(index_id(), Arc::new(index)));
+            ctx.set(INDEX, Arc::new(index));
         }
     }
 }
 
-fn index_id() -> Id {
-    Id::new("art_index")
-}
+/// The art index in use.
+const INDEX: Slot<Arc<ArtIndex>> = Slot::new("art_index");
 
-fn index(ctx: &egui::Context) -> Option<Arc<ArtIndex>> {
-    ctx.data(|data| data.get_temp(index_id()))
+fn index(ctx: &StateContext) -> Option<Arc<ArtIndex>> {
+    ctx.get(INDEX)
 }
 
 /// The art for an entry: its own, the art of what it was copied from, or for a creature, the
 /// default picture for its type.
-pub fn entry_art(ctx: &egui::Context, entry: &Entry) -> Option<PathBuf> {
+pub fn entry_art(ctx: &StateContext, entry: &Entry) -> Option<PathBuf> {
     let index = index(ctx)?;
     let origin = entry
         .fields
@@ -77,33 +73,13 @@ pub fn entry_art(ctx: &egui::Context, entry: &Entry) -> Option<PathBuf> {
 
 /// The generation of the art index in use (`ArtIndex::generation`), for a reader that keeps its
 /// figures (layout PR 9b-R1a); `None` before an index is loaded.
-pub fn generation(ctx: &egui::Context) -> Option<u64> {
+pub fn generation(ctx: &StateContext) -> Option<u64> {
     index(ctx).map(|index| index.generation())
 }
 
 /// The local copy of the image at a link in a note.
-pub fn link_art(ctx: &egui::Context, url: &str) -> Option<PathBuf> {
+pub fn link_art(ctx: &StateContext, url: &str) -> Option<PathBuf> {
     index(ctx)?.link(url).map(Path::to_path_buf)
-}
-
-fn viewing_id() -> Id {
-    Id::new("art_viewing")
-}
-
-fn viewing(ctx: &egui::Context) -> Option<(PathBuf, String)> {
-    ctx.data(|data| data.get_temp(viewing_id())).flatten()
-}
-
-/// True while an image fills the window. Global shortcuts must leave Escape to it.
-pub fn viewer_open(ctx: &egui::Context) -> bool {
-    viewing(ctx).is_some()
-}
-
-/// Whether a modal is open over the app: one of its own dialogs (`app_dialog`: the copy dialog,
-/// the close confirmation), the full-window image, or any egui modal layer. The one test every
-/// global and page shortcut asks, so no key acts beneath a modal.
-pub fn modal_open(ctx: &egui::Context, app_dialog: bool) -> bool {
-    app_dialog || viewer_open(ctx) || ctx.memory(|memory| memory.top_modal_layer()).is_some()
 }
 
 #[cfg(test)]
@@ -130,7 +106,7 @@ mod tests {
     #[test]
     fn the_loader_follows_the_registered_packages() {
         let (root, _) = package();
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut loader = Loader::default();
         let module = Module {
             id: uuid::Uuid::new_v4(),
@@ -169,9 +145,9 @@ mod tests {
             "```json\n{\"splat_art\":1,\"entries\":{\"pack:creatures/own\":\"own.png\",\"pack:creatures/origin\":\"origin.png\"},\"creature_types\":{\"beast\":\"beast.png\"}}\n```\n",
         )
         .unwrap();
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let index = Arc::new(ArtIndex::load([root.path()]));
-        ctx.data_mut(|data| data.insert_temp(index_id(), index));
+        ctx.set(INDEX, index);
         let creature = |fields: &str| {
             let text = splat::content::formats::fixture(
                 "Fixture.md",

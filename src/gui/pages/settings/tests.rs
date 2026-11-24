@@ -1,4 +1,4 @@
-//! Settings: screenshots of the egui `settings` and `empty` scenarios' main states, and the
+//! Settings: screenshots of the `settings` and `empty` scenarios' main states, and the
 //! account tab's flows (Connect's reason, Edit details with Discard and its Undo, Remove with
 //! its confirm, Add campaign).
 use crate::fixtures::Seed;
@@ -169,10 +169,10 @@ fn recording_tab() {
     shell.capture("settings-recording__01-tab__1200x800");
 }
 
-/// Signed in (egui `signed-in` 02, 03): Add from D&D Beyond lists the account's campaigns, an
+/// Signed in (scenario `signed-in` 02, 03): Add from D&D Beyond lists the account's campaigns, an
 /// added one as Added and the others with Add…, which opens the import form under its row.
 /// On Link and folder, a D&D Beyond campaign linked to another campaign is a blocked choice
-/// with its reason, as egui's `blocked_choice` shows it: choosing it changes nothing.
+/// with its reason: choosing it changes nothing.
 #[test]
 fn signed_in_remote_list_and_link() {
     let mut shell = settings("signed-in", Seed::Campaign);

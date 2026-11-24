@@ -37,7 +37,7 @@ pub(crate) fn capture_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("artifacts/screenshots/gpui")
 }
 
-/// The character cache of this test process: one folder for every shell, as the egui suite has
+/// The character cache of this test process: one folder for every shell
 /// (`hermetic::closed::use_cache_root` takes one root per process). Each campaign's characters
 /// are kept apart inside it by the campaign's id.
 pub(crate) fn character_cache() -> PathBuf {
@@ -95,7 +95,7 @@ impl Shell {
                 cx.new(|cx| gpui_component::Root::new(view, window, cx))
             })
             .expect("a headless window");
-        // One device pixel per pixel, as the egui references (`egui-reference/*__1200x800.png`).
+        // One device pixel per pixel, as the reference captures (`*__1200x800.png`).
         cx.simulate_window_scale_factor_change(handle.into(), 1.0);
         let mut shell = Self {
             cx,

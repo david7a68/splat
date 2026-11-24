@@ -802,7 +802,7 @@ impl Reader {
 
     /// Hand the other reader what it needs of this one: the edit forms open here, the Log
     /// fields open here, and the note whose edit form this reader drew in the last pass (its
-    /// save row is on screen). `pass` is this pass's `cumulative_pass_nr`.
+    /// save row is on screen). `pass` is this pass's `StateContext::pass`.
     pub fn share_with(&self, other: &mut super::Reader, pass: u64) {
         self.edit_forms_into(&mut other.edited_elsewhere);
         // Copied again only when a field here opened or closed (its stamp), not each pass.
@@ -1975,7 +1975,7 @@ pub struct ConflictView {
     pub texts: Option<(String, String)>,
 }
 
-/// The edit form as data, for a view that is not egui (the GPUI port).
+/// The edit form as data, for the GPUI reader.
 pub struct DraftView {
     pub path: String,
     /// Stat block, for an NPC; Place; Part of.

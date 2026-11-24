@@ -1,4 +1,4 @@
-//! A number that rolls (egui `rolls::link`): an ability's modifier, a save, a skill, a sheet's
+//! A number that rolls: an ability's modifier, a save, a skill, a sheet's
 //! bonus. Accent words with a quiet underline, at least 24 px each way, the focus colour on hover
 //! and the roll's words (`rolls::hint`) as its hover words. A press asks for the roll through the
 //! same rolls API as a Markdown dice link (`rolls::ask_pressed`, Shift for advantage, Ctrl for
@@ -45,13 +45,13 @@ impl RollNumber {
         }
     }
 
-    /// Who rolls, as the result names them (egui's `rolls::set_entry`): the sheet's name.
+    /// Who rolls, as the result names them: the sheet's name.
     pub fn entry(mut self, entry: impl Into<String>) -> Self {
         self.entry = Some(entry.into());
         self
     }
 
-    /// The run's row that rolls it (egui's `rolls::set_roller`), or `None` for a preview.
+    /// The run's row that rolls it, or `None` for a preview.
     pub fn roller(mut self, roller: Option<usize>) -> Self {
         self.roller = roller;
         self

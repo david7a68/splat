@@ -8,7 +8,7 @@ use crate::design::{
         PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
     },
 };
-use eframe::egui;
+use crate::state_context::StateContext;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
@@ -321,7 +321,7 @@ impl Fault for FileFault {
 /// the Timeline builds from the events. The one place this file takes them as a sentence.
 #[allow(
     clippy::disallowed_methods,
-    reason = "words of a file, of the system or of the events, as text (design::results::STAGED_ALLOWS)"
+    reason = "words of a file, of the system or of the events, as text (design::results::STAGED)"
 )]
 pub fn as_sentence(words: &str) -> Sentence {
     Sentence::outside(words).unwrap_or(crate::sentence!("Something changed."))
@@ -565,7 +565,7 @@ impl TimelinePage {
     /// the book that lost its event ends it, checked only when the book's revision changed (an
     /// unreadable book keeps the events it had, so its Add stands until its life ends; a book
     /// of another file is another owner, so its Add shows no more); another selection ends it.
-    pub fn settle_added(&mut self, ctx: &egui::Context, book: &Book) {
+    pub fn settle_added(&mut self, ctx: &StateContext, book: &Book) {
         self.added.expire(ctx);
         let revision = book.revision();
         if self.added_seen != Some(revision) {
@@ -757,7 +757,7 @@ impl TimelinePage {
 
     /// An event the DM just added (with the buttons or `Start with day 1`): it opens, its Title
     /// takes the keyboard, and its result keeps its Undo for `UNDO_ADD_FOR`.
-    pub fn record_added(&mut self, id: String, book: &Book, ctx: &egui::Context) {
+    pub fn record_added(&mut self, id: String, book: &Book, ctx: &StateContext) {
         self.reveal(&id, book);
         self.focus_title = true;
         self.added.record_timed(
@@ -822,13 +822,12 @@ impl TimelinePage {
     pub fn list_messages<'f>(
         &mut self,
         frame: &'f PaneFrame,
-        width: f32,
         book: &Book,
         notes: &mut crate::sessions::page::Sessions,
         open: Option<&str>,
         offer: Option<&crate::sessions::page::LinkOffer>,
     ) -> Messages<'f, ListAct> {
-        let mut messages = Messages::new(frame, "timeline_list_footer", width);
+        let mut messages = Messages::new();
         if let Some(line) = notes.event_link_line(frame, ListAct::UndoLinks) {
             messages.kept(line);
         }
@@ -911,7 +910,7 @@ impl TimelinePage {
     /// new place, and Remove.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+        reason = "staged: raw calls that a design part replaces (design::results::STAGED)"
     )]
     pub fn apply_detail(
         &mut self,
@@ -1251,8 +1250,8 @@ mod tests {
         notes: &mut crate::sessions::page::Sessions,
         open: Option<&str>,
     ) -> Vec<design::outcome::plain::PlainLine<ListAct>> {
-        let frame = PaneFrame::plain();
-        page.list_messages(&frame, 0.0, book, notes, open, None)
+        let frame = PaneFrame::new();
+        page.list_messages(&frame, book, notes, open, None)
             .into_plain()
     }
 
@@ -1279,7 +1278,7 @@ mod tests {
     /// is opened. Unchanged settles build the kept line no more.
     #[test]
     fn the_add_result_ends_by_the_frame_clock() {
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let dir = tempfile::tempdir().unwrap();
         let mut book = Book::default();
         book.open(Some(dir.path()));

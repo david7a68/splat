@@ -1,10 +1,10 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
+use crate::state_context::StateContext;
 use crate::{
     campaigns::Campaigns,
     content_workspace::{Catalogue, CopyPlan, CopySource, check_destination},
     persistence::Campaign,
 };
-use eframe::egui;
 use std::{path::PathBuf, sync::mpsc};
 use uuid::Uuid;
 
@@ -39,11 +39,11 @@ impl CopyDialog {
         self.pending.is_some()
     }
 
-    pub fn new(source: CopySource, campaigns: &Campaigns, ctx: &egui::Context) -> Self {
+    pub fn new(source: CopySource, campaigns: &Campaigns, ctx: &StateContext) -> Self {
         let modules = campaigns.modules().to_vec();
         let campaign = source.campaign.clone();
         let (tx, rx) = mpsc::channel();
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         std::thread::spawn(move || {
             let _ = tx.send(Catalogue::load(&modules, campaign.as_ref()));
             ctx.request_repaint();
@@ -258,7 +258,7 @@ impl CopyDialog {
 /// A copy's destination: is a campaign, its id, its words, its folder, the campaign.
 pub type Destination = (bool, Uuid, String, PathBuf, Option<Campaign>);
 
-/// The dialog as data, for a UI that draws it itself (the GPUI port, `docs/gpui-port.md`).
+/// The dialog as data, for the GPUI dialog (`gui::pages::library::copy`).
 impl CopyDialog {
     pub fn source_name(&self) -> &str {
         &self.source.entry.name

@@ -1,4 +1,4 @@
-//! The list column (egui: `WorldPage::list`, `check_rows`, `broken_row`, `marked_row`): the search
+//! The list column: the search
 //! field, the two check rows, the notes by group, the notes that cannot be read and the repair
 //! drafts.
 //!

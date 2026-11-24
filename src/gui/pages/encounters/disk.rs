@@ -1,4 +1,4 @@
-//! A draft whose file changed on disk (egui: `disk::Recovery::show`): in the editor's place, its
+//! A draft whose file changed on disk: in the editor's place, its
 //! facts as warnings, the choices after the last one (`Overwrite with my draft`, then the red
 //! one), what differs part by part, then the draft beside the file.
 use crate::gui::theme::{Density, S, Type, XXL, colors};

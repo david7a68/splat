@@ -1,4 +1,4 @@
-//! The roster's rows (egui `view::roster`, `paint_row`, `RowLayout`): the initiative and the turn
+//! The roster's rows: the initiative and the turn
 //! mark, the side's shape, the picture, the name over its conditions, AC, temporary HP, the HP
 //! readout and bar, and the HP word and sync state. A live row selects on click, adds a target
 //! on Ctrl+click, opens its initiative on a click of the number, and offers its menu on a
@@ -9,7 +9,7 @@ use crate::design::{hp_state, hp_word};
 use crate::encounter_run::rolling::RowChoice;
 use crate::encounter_run::view::{self, RowColumns};
 use crate::encounter_run::{Command, Participant, Phase, Run};
-use crate::gui::{SplatRoot, bridge, icons, kit, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::rolls::Mode;
 use gpui::{
     AnyElement, ClickEvent, Context, ElementId, Hsla, InteractiveElement, IntoElement, MouseButton,
@@ -88,7 +88,7 @@ fn side_mark(side: &str, size: f32) -> AnyElement {
     }
 }
 
-/// How a roster fits its room (egui `RowFit`).
+/// How a roster fits its room.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum Fit {
     /// Every row at its scale's height, with the spare room shared out.
@@ -99,7 +99,7 @@ pub(super) enum Fit {
     Summary,
 }
 
-/// How many of a row's changed-stat bonuses its second line shows (egui `BonusFit`).
+/// How many of a row's changed-stat bonuses its second line shows.
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Bonuses {
     All,
@@ -131,7 +131,7 @@ struct Part {
     mark: bool,
 }
 
-/// A row's second line as it fits (egui `RowLayout::measured`'s line).
+/// A row's second line as it fits.
 #[derive(Clone, Debug, Default)]
 struct Line {
     parts: Vec<Part>,
@@ -169,7 +169,7 @@ pub(super) struct Plan {
 }
 
 impl Plan {
-    /// Each row's top and bottom in the list, with its participant (egui's `spans`).
+    /// Each row's top and bottom in the list, with its participant.
     pub(super) fn spans(&self, order: &[usize]) -> Vec<(f32, f32, usize)> {
         let mut top = 0.0;
         order
@@ -184,7 +184,7 @@ impl Plan {
     }
 }
 
-/// The run's list of rows in `width` (inside the scroll column's lane) and `room` (egui `Run::roster`): its scale, then each row
+/// The run's list of rows in `width` (inside the scroll column's lane) and `room`: its scale, then each row
 /// laid out in the measured columns; spare room goes to the rows; a list that needs the height
 /// compresses, then summarises, and the rest scrolls under a line that counts it.
 pub(super) fn plan(run: &Run, order: &[usize], width: f32, room: f32, window: &Window) -> Plan {
@@ -237,7 +237,7 @@ pub(super) fn plan(run: &Run, order: &[usize], width: f32, room: f32, window: &W
     }
 }
 
-/// The columns every row of the list shares (egui `RowLayout::measured`'s columns).
+/// The columns every row of the list shares.
 fn columns(run: &Run, scale: RunScale, fit: Fit, width: f32, window: &Window) -> RowColumns {
     let narrow = fit != Fit::Natural || scale.row <= theme::RUN_COMPACT.row;
     let name = |words: &str| {
@@ -287,13 +287,13 @@ fn to_design(scale: RunScale) -> crate::design::RunScale {
     }
 }
 
-/// The name line's height (egui `RowLayout::name_line`).
+/// The name line's height.
 fn name_line(scale: RunScale, fit: Fit) -> f32 {
     scale.name + if fit == Fit::Natural { 4.0 } else { 2.0 }
 }
 
 /// One row's layout: its second line folded to fit, its name's lines, its height and where its
-/// name line sits (egui `RowLayout::height`, `line_y`).
+/// name line sits.
 fn row_plan(
     run: &Run,
     index: usize,
@@ -367,7 +367,7 @@ fn row_plan(
 }
 
 /// The parts of a row's second line, showing `conditions` of its conditions and its changes as
-/// `bonuses` says, in egui's order: the state words when they have no column, Absent, No
+/// `bonuses` says, in this order: the state words when they have no column, Absent, No
 /// initiative, Conc, the conditions and the count of the rest, the side, `as <stat block>`, the
 /// changes, Loot, the sync state when it has no column, and the save DC.
 fn parts(run: &Run, index: usize, inline: bool, conditions: usize, bonuses: Bonuses) -> Vec<Part> {
@@ -384,7 +384,7 @@ fn parts(run: &Run, index: usize, inline: bool, conditions: usize, bonuses: Bonu
     if inline && let Some((icon, word, color)) = hp_word(p.hp, p.max_hp) {
         parts.push(part(
             format!("{icon} {word}"),
-            bridge::color(color),
+            theme::color(color),
             Act::None,
         ));
     }
@@ -538,7 +538,7 @@ fn line_width(window: &Window, parts: &[Part], ty: Type, size: Pixels) -> f32 {
     f32::from(measure::width_at(window, ty, Some(size), &words.join(DOT)))
 }
 
-/// The second line folded to its room (egui `RowLayout::measured`): the changes give way first
+/// The second line folded to its room: the changes give way first
 /// (all, then one and a count, then the count), then the conditions down to one and `N more`;
 /// then the line takes the small type; then it wraps and the row grows. The roll words follow
 /// the line, or take their own line when they have no room after it.
@@ -947,8 +947,7 @@ pub(super) fn row(
         };
         if live && run.state.phase == Phase::Running && (!selected || run.also.is_empty()) {
             let key = p.key.clone();
-            // The number's own press: the row under it does not also select (egui drops the
-            // row's click), so the keyboard goes to the field, not to Amount.
+            // The number's own press: the row under it does not also select, so the keyboard goes to the field, not to Amount.
             let column = column.cursor_pointer().on_click(cx.listener(
                 move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
                     cx.stop_propagation();
@@ -977,7 +976,7 @@ pub(super) fn row(
         }
     };
     let picture = px(columns.picture.min(layout.height - 4.0).max(16.0));
-    let art = run.row_art(root.bridge.ctx(), p);
+    let art = run.row_art(&root.ctx, p);
     let name = div()
         .w(px(columns.name_width))
         .flex_none()
@@ -1058,7 +1057,7 @@ pub(super) fn row(
             let color = if current && word == "HP unknown" {
                 c.muted
             } else {
-                bridge::color(color)
+                theme::color(color)
             };
             words = words.child(state_word(icon, word, color, scale));
         }

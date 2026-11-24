@@ -3,7 +3,7 @@
 //! tokens and rules (`docs/design-system.md`).
 //!
 //! One file per part. A page agent that needs a new part adds a new file here and a line below.
-//! See `docs/gpui-port.md`, Kit guide, for each part's signature and when to use it.
+//! See `docs/design-system.md` (Widgets, The kit) for each part and when to use it.
 //!
 //! Every interactive part takes a stable element id (`impl Into<ElementId>`) and its words; its
 //! click handler is `Fn(&ClickEvent, &mut Window, &mut App)`, which `cx.listener` makes from a

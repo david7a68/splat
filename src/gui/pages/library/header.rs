@@ -2,7 +2,7 @@
 //! `Packages` menu and the issues count with its menu; then the line a page with no campaign
 //! shows under it.
 use crate::gui::theme::{Density, L, LINE_GAP, READER_MEASURE, S, Type, XL, XS, colors};
-use crate::gui::{SplatRoot, bridge, icons, kit};
+use crate::gui::{SplatRoot, icons, kit};
 use crate::lookup::ContentIndex;
 use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, Styled, Window, div, prelude::*, px,
@@ -45,7 +45,7 @@ pub(super) fn render(
         kit::MenuItem::new("Reload from disk")
             .icon(icons::REFRESH)
             .on_click(cx.listener(|root, _, _, cx| {
-                let ctx = root.bridge.ctx().clone();
+                let ctx = root.ctx.clone();
                 root.app.library.reload(&ctx, &root.app.campaigns);
                 cx.notify();
             })),
@@ -113,7 +113,7 @@ pub(super) fn render(
         );
     }
     // The shared title line (M0327-M0329): the title and its count, then the actions after
-    // them, as egui's `TitleLine::page` places them.
+    // them, as `TitleLine::page` places them.
     let mut title = div()
         .flex()
         .flex_row()
@@ -161,6 +161,5 @@ pub(super) fn render(
                 ),
         );
     }
-    let _ = bridge::color;
     column.child(kit::gap(XS)).into_any_element()
 }

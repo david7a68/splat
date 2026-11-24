@@ -1,11 +1,10 @@
-//! The run's own panel beside the roster (egui `view::side_panel`, `setup_panel`, `panel_tabs`,
-//! `panel_body`): the selected participant's name or `This fight · …`, the tabs, the death
+//! The run's own panel beside the roster: the selected participant's name or `This fight · …`, the tabs, the death
 //! saves and a sync conflict, then the tab's body: the stat block or sheet with its action
 //! tiles, Conditions, Correct, Log, Prep, Keys, or Arrivals.
 use super::{on_command, on_run};
 use crate::design::outcome::plain::PlainLine;
 use crate::encounter_run::{Command, MAX_FROM_SHEET, Panel, Participant, Phase, Run, view};
-use crate::gui::{SplatRoot, bridge, icons, kit, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::rolls::{self, ArmedAction, Ask, Mode};
 use gpui::{
     AnyElement, ClickEvent, Context, ElementId, InteractiveElement, IntoElement, ParentElement,
@@ -45,7 +44,7 @@ pub(super) fn render(
     let is_sheet = p.definition.fields.contains_key("splat_external");
     // The panel's own room: its width less the gutter before its words.
     let inner = width - theme::L - theme::HAIRLINE_WIDTH;
-    // A long name gives up whole words, keeping its copy number (egui `dock_name`).
+    // A long name gives up whole words, keeping its copy number.
     let shown = super::measure::fit_name(window, Type::Title, &title, inner);
     let mut top = div()
         .flex()
@@ -607,7 +606,7 @@ fn sheet(
         .get(&index)
         .is_some_and(|sync| sync.state() == SyncState::Conflict)
     {
-        let art = run.row_art(root.bridge.ctx(), p);
+        let art = run.row_art(&root.ctx, p);
         column = column.child(
             div()
                 .flex()
@@ -632,7 +631,7 @@ fn sheet(
                         .child(kit::status(&kit::Status::new(
                             freshness.icon,
                             word,
-                            bridge::color(freshness.color),
+                            theme::color(freshness.color),
                         )))
                         .child(kit::text(Type::Small, c.muted, facts)),
                 ),
@@ -1377,12 +1376,7 @@ pub(super) fn prep(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                             .line_start()
                             .on_click(cx.listener(
                                 move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
-                                    root.bridge.ctx().data_mut(|data| {
-                                        data.insert_temp(
-                                            eframe::egui::Id::new("edit_run_encounter"),
-                                            id,
-                                        );
-                                    });
+                                    root.ctx.set(crate::requests::EDIT_RUN_ENCOUNTER, id);
                                     if let Some(run) = root.app.encounters.run_mut() {
                                         run.prep_refusal = None;
                                     }
@@ -1552,7 +1546,7 @@ fn arrivals(run: &Run, room: Pixels, window: &Window, cx: &mut Context<SplatRoot
 }
 
 /// What a drag of an Arrivals group carries: the group, and its name for the ghost. A group
-/// whose Add waits carries none; its ghost still follows the pointer (egui `drag_source`).
+/// whose Add waits carries none; its ghost still follows the pointer.
 #[derive(Clone)]
 pub(super) struct GroupDrag {
     pub(super) id: Option<uuid::Uuid>,

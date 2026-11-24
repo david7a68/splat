@@ -1,11 +1,11 @@
 //! Character viewer, with combat sync on from the time Splat connects to D&D Beyond.
 use crate::rolls::Chip;
+use crate::state_context::StateContext;
 use crate::{
     auth::Session,
     design::{self, Status, colors, icons},
     party_sync::{Reader, Stored},
 };
-use eframe::egui;
 use serde_json::Value;
 use splat::character::EntitySnapshot;
 use splat::content::dice_text::{D20, DamagePart, RollLink};
@@ -39,7 +39,7 @@ impl Party {
     /// Keeps every sheet current, whichever page is showing. The shell calls this every frame.
     pub fn sync(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         epoch: u64,
         campaign: Option<(uuid::Uuid, String, std::path::PathBuf)>,
         session: Option<Session>,
@@ -73,7 +73,7 @@ impl Party {
 
     /// Combat sync for the selected character. Away from this page the reader keeps the sheet
     /// current, so this runs only to finish what the DM changed here.
-    fn tick_combat(&mut self, ctx: &egui::Context, session: Option<Session>, visible: bool) {
+    fn tick_combat(&mut self, ctx: &StateContext, session: Option<Session>, visible: bool) {
         self.combat.keep_all_unsent();
         let Some((id, campaign)) = self.reader.selected.clone().and_then(|id| {
             let campaign = self.reader.sheets.get(&id)?.source.campaign_id.clone();
@@ -115,8 +115,7 @@ impl Party {
         }
     }
 
-    /// `Sync this sheet with D&D Beyond`, ticked or cleared by the DM (the GPUI panel; egui's
-    /// is `show_combat_sync`): sync stays off here until they turn it on.
+    /// `Sync this sheet with D&D Beyond`, ticked or cleared by the DM (the sync panel): sync stays off here until they turn it on.
     pub fn set_combat_sync(&mut self, enabled: bool) {
         if enabled != self.combat.enabled {
             self.combat.set_enabled(enabled);
@@ -441,7 +440,7 @@ pub fn party_line(sheets: &[&EntitySnapshot], connected: bool) -> Option<String>
 pub struct Freshness {
     pub word: String,
     pub icon: &'static str,
-    pub color: egui::Color32,
+    pub color: crate::design::Color,
 }
 
 pub fn freshness(record: &EntitySnapshot, connected: bool) -> Freshness {

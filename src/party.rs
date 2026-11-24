@@ -18,7 +18,7 @@ impl PartyPage {
         connected: bool,
         linked: bool,
     ) -> Vec<design::outcome::plain::PlainLine<PartyPress>> {
-        let frame = design::outcome::PaneFrame::plain();
+        let frame = design::outcome::PaneFrame::new();
         Party { view: self, party }
             .page_footer(&frame, connected, linked)
             .into_plain()
@@ -140,8 +140,7 @@ impl Party<'_> {
     ) -> design::outcome::Messages<'f, PartyPress> {
         use design::outcome::{Choice, FaultMessage, Lost, MessageChoice, Said};
         let reader = &self.party.reader;
-        let mut messages =
-            design::outcome::Messages::new(frame, "party_page_footer", design::LIST_MEASURE);
+        let mut messages = design::outcome::Messages::new();
         let show_file = |path: &std::path::Path| {
             Choice::new(
                 MessageChoice::Link {
@@ -379,8 +378,8 @@ pub fn compare_values(record: Option<&EntitySnapshot>) -> [String; 3] {
     ]
 }
 
-/// The technical details' words, free of any toolkit: egui's `source_and_parity` and the GPUI
-/// sheet (`src/gui/pages/party/sheet.rs`) both show them.
+/// The technical details' words, free of any toolkit, for the sheet
+/// (`src/gui/pages/party/sheet.rs`).
 pub mod technical {
     use splat_character::character;
     use splat_content::content;

@@ -1,4 +1,4 @@
-//! Lookup's panel (egui: `Lookup::panel`, `written_reader`, `generator_card`): its title line
+//! Lookup's panel: its title line
 //! with Back, the open action and Close; the search field; the result list; New NPC, New location
 //! and Generate NPC; the held NPC's card; then what the reader shows.
 use crate::gui::kit::{self, Button, IconButton, Link, Message, Row, TextField, Tone};
@@ -77,7 +77,7 @@ pub(super) fn render(
             root.app.lookup.close_results();
             cx.notify();
         }));
-    // Up and Down move the highlight from the field, as egui's field does.
+    // Up and Down move the highlight from the field.
     let search = div()
         .capture_key_down(cx.listener(|root, event: &gpui::KeyDownEvent, _, cx| {
             let key = event.keystroke.key.as_str();

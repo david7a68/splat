@@ -1,10 +1,9 @@
-//! D&D Beyond's remote list and the active campaign's link, free of any toolkit, so the egui
-//! import list and link block (`DndBeyond::show_import`, `show_link`) and the GPUI pages
-//! (`src/gui/pages/settings/`, `src/gui/pages/campaigns/`) share them.
+//! D&D Beyond's remote list and the active campaign's link, free of any toolkit, for the GPUI
+//! pages (`src/gui/pages/settings/`, `src/gui/pages/campaigns/`).
 #![warn(deprecated)]
 use super::{DndBeyond, LinkSaved};
+use crate::state_context::StateContext;
 use crate::{auth::Session, campaigns::Campaigns};
-use eframe::egui;
 
 /// One remote campaign as a page shows it.
 pub struct Remote<'a> {
@@ -41,7 +40,7 @@ impl DndBeyond {
     }
 
     /// `Refresh from D&D Beyond`.
-    pub fn refresh_list(&mut self, session: Session, ctx: &egui::Context) {
+    pub fn refresh_list(&mut self, session: Session, ctx: &StateContext) {
         self.refresh(session, ctx);
     }
 
@@ -64,7 +63,7 @@ impl DndBeyond {
 
     /// `Refresh list` on Link and folder: the list comes again, and with it the linked
     /// campaign's name.
-    pub fn refresh_link(&mut self, session: Session, local: &Campaigns, ctx: &egui::Context) {
+    pub fn refresh_link(&mut self, session: Session, local: &Campaigns, ctx: &StateContext) {
         let Some(campaign) = local.active_campaign() else {
             return;
         };
@@ -82,7 +81,7 @@ impl DndBeyond {
         &mut self,
         session: Option<Session>,
         local: &Campaigns,
-        ctx: &egui::Context,
+        ctx: &StateContext,
     ) {
         self.visible_last_frame = true;
         let Some(campaign) = local.active_campaign() else {

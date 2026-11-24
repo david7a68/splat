@@ -9,7 +9,7 @@ use std::path::Path;
 
 pub(super) use crate::gui::kit::messages::tone;
 
-/// A file's `file://` address, as egui's file links open it.
+/// A file's `file://` address, as file links open it (`design::outcome::file_url`).
 pub(super) fn file_url(path: &Path) -> String {
     format!("file://{}", encode(path))
 }
@@ -45,7 +45,7 @@ pub(super) fn render(
                 let Some(press) = pressed.take() else {
                     return;
                 };
-                let ctx = root.bridge.ctx().clone();
+                let ctx = root.ctx.clone();
                 let app = &mut root.app;
                 app.library.press_footer(press, &ctx, &mut app.campaigns);
                 cx.notify();

@@ -1,5 +1,4 @@
-//! The width words take on one line, measured by GPUI's text system in a type role (egui's
-//! `layout_no_wrap(..).size().x`). For a part that fits its contents to the room it has (the
+//! The width words take on one line, measured by GPUI's text system in a type role. For a part that fits its contents to the room it has (the
 //! party bar) or lines numbers up in a column (a stepper's well).
 use crate::gui::icons;
 use crate::gui::theme::{Type, colors};

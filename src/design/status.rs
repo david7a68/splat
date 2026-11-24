@@ -2,7 +2,7 @@
 //!
 //! `Status` has one colour for its icon and its word. A [`StatusKind`] decides both colours and
 //! the icon: a closed set, so no caller passes a free colour.
-use egui::Color32;
+use super::Color;
 
 use super::{colors, icons};
 
@@ -21,13 +21,13 @@ impl StatusKind {
         }
     }
 
-    pub fn icon_color(self) -> Color32 {
+    pub fn icon_color(self) -> Color {
         match self {
             Self::Recording => colors().recording,
         }
     }
 
-    pub fn word_color(self) -> Color32 {
+    pub fn word_color(self) -> Color {
         match self {
             Self::Recording => colors().text,
         }

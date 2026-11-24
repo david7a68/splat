@@ -3,7 +3,7 @@ extern crate self as splat;
 use splat_content::content;
 
 pub use splat_design::design::layout;
-pub use splat_design::{choice, create_reasons, frame_clock, lead, sentence, word};
+pub use splat_design::{choice, create_reasons, frame_clock, lead, sentence, state_context, word};
 
 use splat_content_ui::{
     auth, content_workspace, design, hermetic, library, lookup, npc_generator, persistence,

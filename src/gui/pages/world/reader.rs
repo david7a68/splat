@@ -1,4 +1,4 @@
-//! The note reader (egui: `world::Reader::read_in_pane` and `draw`): the title line and its
+//! The note reader: the title line and its
 //! actions, the Log field, the file line, the note's faults with their repairs, the value rows
 //! with Change and their pickers, the note's text, what other notes say about it, and the pane's
 //! footer. Every act is the reader's own (`world::model`).
@@ -16,10 +16,10 @@ use gpui::{
 };
 use uuid::Uuid;
 
-/// The label column of a value row (egui: `XXL * 3 + S`).
+/// The label column of a value row.
 const LABEL_COLUMN: f32 = 104.0;
 
-/// The widest value column (egui: `relationship_width`, `XXL * 7 + L`).
+/// The widest value column.
 const VALUE_COLUMN: gpui::Pixels = px(240.0);
 
 /// The width of `words` set in `ty`.
@@ -117,7 +117,7 @@ pub(super) fn render(
     pane.child(body).into_any_element()
 }
 
-/// Whose note reader a view draws (egui: one `world::Reader` each): the World page's, or
+/// Whose note reader a view draws (one `world::Reader` each): the World page's, or
 /// Lookup's compact one beside any page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Host {
@@ -152,8 +152,8 @@ impl Host {
     }
 }
 
-/// A reader's scroll column and the heading a link asked it to show (egui: `want_heading` for
-/// one draw).
+/// A reader's scroll column and the heading a link asked it to show (`want_heading`, for one
+/// draw).
 #[derive(Default)]
 pub(crate) struct Jump {
     pub scroll: gpui::ScrollHandle,
@@ -176,7 +176,7 @@ pub(crate) fn render_reader(
     let id = item.entry.id;
     // A followed link's heading: the text scrolls to it in this frame (`read_in_pane`).
     let heading = host.reader(root).take_heading_for(id);
-    let ctx = root.bridge.ctx().clone();
+    let ctx = root.ctx.clone();
     let jump = host.jump(root);
     if let Some(old) = jump.pending.take() {
         let _ = crate::markdown_view::wanted_heading(&ctx, &old);
@@ -275,7 +275,7 @@ pub(crate) fn render_reader(
 }
 
 #[allow(clippy::too_many_arguments)]
-/// An entry's text as the reader shows every entry (egui `view::show_with_related`): its stat
+/// An entry's text as the reader shows every entry: its stat
 /// block or facts, its sections, then the tracker history of a house rule note in play and what
 /// other notes say about it, then the closed end sections. Its related, feature and spell links
 /// open their notes here; a note link in its words follows from this note; a dice number rolls.
@@ -646,7 +646,7 @@ fn values(
     let reader = &mut host.reader(root);
     let rows = reader.value_rows(item, index);
     // One Change column (AI1): `L` after the widest value, which wraps in the column when it is
-    // wider than the reader's value room (egui: `relationship_value_width`).
+    // wider than the reader's value room.
     let body = |words: &str| words_width(window, theme::Type::Body, words);
     let small = |words: &str| words_width(window, theme::Type::Small, words);
     let column_width = rows
@@ -1229,7 +1229,7 @@ fn duplicate_values(
 }
 
 /// A plain note's text, by its sections (the first heading is the title), at the reader
-/// measure (egui `show_document`). A note link follows from this note (a link to several notes
+/// measure. A note link follows from this note (a link to several notes
 /// waits for the DM's choice); a web link opens, a bold name goes to Lookup, a dice number rolls;
 /// a followed link's heading scrolls into view.
 fn note_text(

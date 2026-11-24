@@ -1,4 +1,4 @@
-//! The run's keys (egui `view::live_keys`, `back_out_on_escape`, the Ctrl+G of `Run::show`).
+//! The run's keys: the live keys, Escape backing out, and Ctrl+G.
 //!
 //! Single letters work while no field has the keyboard, and in Amount, which takes only
 //! digits; beside Lookup or Notes a letter is the next word typed, never a command. Enter and

@@ -9,7 +9,7 @@
 //! caller keeps no open flag: a press on the trigger opens or closes it, a press outside closes
 //! it, a choice closes it, and the root's Escape closes it (`close_open_popup`). The layer opens
 //! under its trigger, or above it when there is more room there, inside the pane or column that
-//! holds the trigger (`kit::layer`, egui's `popups`); a long one scrolls.
+//! holds the trigger (`kit::layer`); a long one scrolls.
 use super::{OnClick, button::element_name, target, tooltip::tip};
 use crate::gui::icons;
 use crate::gui::theme::{
@@ -23,8 +23,7 @@ use gpui::{
 };
 use std::rc::Rc;
 
-/// The drop-down frame's padding above and below its words (egui's combo box: a two-line name
-/// fills 39 px).
+/// The drop-down frame's padding above and below its words (a two-line name fills 39 px).
 const DROPDOWN_PADDING: Pixels = px(2.5);
 
 /// Which layer is open, and where the press that last closed one was (so that press, when it
@@ -43,7 +42,7 @@ pub fn is_open(id: &ElementId, cx: &App) -> bool {
         .is_some_and(|popup| popup.open.as_ref() == Some(id))
 }
 
-/// Whether any kit layer is open (a modal test, as egui's `Popup::is_any_open`).
+/// Whether any kit layer is open (a modal test).
 pub fn any_open(cx: &App) -> bool {
     cx.try_global::<OpenPopup>()
         .is_some_and(|popup| popup.open.is_some())
@@ -178,7 +177,7 @@ impl MenuItem {
         }
     }
 
-    /// A rule above this item: it starts a new group (egui's `Dropdown::group`).
+    /// A rule above this item: it starts a new group.
     pub fn rule_before(mut self) -> Self {
         self.rule_before = true;
         self
@@ -255,7 +254,7 @@ impl MenuItem {
                 )
             })
             // The words keep one line while the layer's room allows; a narrow room wraps them
-            // (egui's `choice_wrapped_height`).
+            //.
             .child(
                 div()
                     .flex_1()
@@ -417,15 +416,15 @@ impl Dropdown {
         }
     }
 
-    /// The choices from `index` on start a new group, under a rule (egui's `Dropdown::group`:
-    /// `Everything` apart from `D&D 2024` and the packages).
+    /// The choices from `index` on start a new group, under a rule (`Everything` apart from
+    /// `D&D 2024` and the packages).
     pub fn group_at(mut self, index: usize) -> Self {
         self.groups.push(index);
         self
     }
 
-    /// The choice at `index` cannot be chosen now, with its reason on its row (egui's
-    /// `blocked_choice`: `Already linked to another campaign.`).
+    /// The choice at `index` cannot be chosen now, with its reason on its row (`Already linked
+    /// to another campaign.`).
     pub fn blocked_choice(mut self, index: usize, reason: impl Into<SharedString>) -> Self {
         self.locks.push((index, reason.into()));
         self

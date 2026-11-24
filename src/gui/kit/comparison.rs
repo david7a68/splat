@@ -5,7 +5,7 @@
 //! selection fill with an accent edge. It opens on the first change, and `Next difference` moves
 //! from change to change (a run of differing lines is one change), wrapping to the first.
 //!
-//! The alignment (`design::aligned`, the egui comparison's) is kept under the part's id and made
+//! The alignment (`design::aligned`) is kept under the part's id and made
 //! again only when either text changes; the rows are a measured virtual list, so a long note
 //! costs a frame no more than a short one.
 use super::button::Button;
@@ -212,7 +212,7 @@ impl RenderOnce for DraftComparison {
             );
         let ty = if self.source { Type::Mono } else { Type::Prose };
         let rows = aligned.clone();
-        // egui's room after the rows: prose keeps three lines of the texts in view at the end;
+        // The room after the rows: prose keeps three lines of the texts in view at the end;
         // source, one line.
         let after = if self.source {
             ty.line()

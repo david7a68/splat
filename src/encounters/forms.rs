@@ -1,9 +1,8 @@
-//! The encounter editor's other views as plain data and acts, for a view that does not draw with
-//! egui (the GPUI page): the creature pane that `Make it yours` opens, a missing row's
-//! replacement picker, the search's `Use it` lines, and the narrow layout's tabs. The egui editor
-//! draws the same state and calls the same acts (`replace_missing`).
+//! The encounter editor's other views as plain data and acts, for the GPUI page: the creature pane that `Make it yours` opens, a missing row's
+//! replacement picker, the search's `Use it` lines, and the narrow layout's tabs (`replace_missing`).
 #![warn(deprecated)]
 use super::*;
+use crate::state_context::StateContext;
 use model::ResultRow;
 
 /// The creature open beside the roster (`creature_pane`), as data.
@@ -15,7 +14,7 @@ pub struct CreatureView {
     pub body: String,
     pub dirty: bool,
     /// The save row's word (`DraftState`): its icon, words and colour.
-    pub state: (String, String, egui::Color32),
+    pub state: (String, String, crate::design::Color),
     /// Why Save waits (`Nothing to save` while unchanged).
     pub save_blocked: Option<String>,
     /// `Discard creature changes` shows.
@@ -264,16 +263,14 @@ impl Encounters {
     /// The search's lines for creatures in packages this campaign does not use, while no
     /// creature matches as typed (`creature_search_with_summary`). Kept by the link index for
     /// the words.
-    pub fn unused_creatures(&self, ctx: &egui::Context) -> Vec<UnusedCreature> {
+    pub fn unused_creatures(&self, ctx: &StateContext) -> Vec<UnusedCreature> {
         let Some((ranked, _)) = self.search_ranked.as_ref() else {
             return Vec::new();
         };
         if ranked.as_typed > 0 || self.search.trim().is_empty() {
             return Vec::new();
         }
-        let Some(index) = ctx.data(|data| {
-            data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
-        }) else {
+        let Some(index) = ctx.get(crate::requests::LINK_INDEX) else {
             return Vec::new();
         };
         let query = self.search.to_lowercase();
@@ -283,11 +280,7 @@ impl Encounters {
         }
         let parsed = Query::parse(&query);
         index
-            .unused_creatures_kept(
-                ctx,
-                egui::Id::new("encounter_creature_search"),
-                &parsed.words,
-            )
+            .unused_creatures_kept(ctx, "encounter_creature_search", &parsed.words)
             .iter()
             .map(|(package, entry, name, owner)| UnusedCreature {
                 package: *package,
@@ -298,7 +291,7 @@ impl Encounters {
     }
 }
 
-/// Whether the search's words find a creature note with a twin file (the egui search's repair
+/// Whether the search's words find a creature note with a twin file (the search's repair
 /// messages, `duplicate_creature_results`).
 fn hidden_duplicates(index: &crate::lookup::ContentIndex, query: &str) -> bool {
     index.campaign.is_some()

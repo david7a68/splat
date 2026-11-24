@@ -1,5 +1,5 @@
 //! The creature that `Make it yours` opened, beside the roster in Add participants' place
-//! (egui: `Encounters::creature_pane`): `This campaign’s creature` with Done while nothing is
+//!: `This campaign’s creature` with Done while nothing is
 //! changed, the save row (its state word, `Discard creature changes`, `Save creature`), the
 //! name, hit points and armour class, and its text as Markdown under a quiet section. A failed
 //! Save says why in the pane's footer. While its file changed on disk, the conflict shows here.
@@ -75,7 +75,7 @@ pub(super) fn pane(view: &CreatureView, cx: &mut Context<SplatRoot>) -> AnyEleme
         .child(kit::status(&kit::Status::new(
             icon.clone(),
             word.clone(),
-            crate::gui::bridge::color(*color),
+            crate::gui::theme::color(*color),
         )));
     if view.discard {
         state = state.child(

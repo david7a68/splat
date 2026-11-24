@@ -1,4 +1,4 @@
-//! A creature's stat block (egui `library::creature`): identity, vitals, the ability table with
+//! A creature's stat block: identity, vitals, the ability table with
 //! its dice cells, the detail rows, then the rules prose with its actions as tiles and its
 //! Spellcasting lists as spell tiles.
 use super::parts::{self, detail_row, heavy_rule, identity, item, stat_detail};

@@ -3,14 +3,14 @@
 //! width, which can follow the window. After that it has the DM's width, here and after a
 //! restart, and the page beside it takes what is left.
 //!
-//! The DM's widths, by egui's column id (`navigation`, `lookup`, `library_sections`, …), live in
-//! one GPUI global (`ColumnWidths`), as egui keeps them in its memory, so a column deep in a page
+//! The DM's widths, by column id (`navigation`, `lookup`, `library_sections`, …), live in one
+//! GPUI global (`ColumnWidths`), so a column deep in a page
 //! needs no path back to the root. The root restores them at the start and saves them with
 //! `ui_state` when they change. `kit::Columns` keeps its splitters' widths there too
 //! (`Columns::saved`).
 //!
 //! The splitter on the column's inner edge drags it; with the keyboard on it, Left and Right move
-//! the edge by `L` and Home gives back the natural width, as egui's handle does.
+//! the edge by `L` and Home gives back the natural width.
 use crate::gui::theme::{FOCUS_WIDTH, L, SPLITTER_WIDTH, colors};
 use gpui::{
     AnyElement, App, CursorStyle, ElementId, FocusHandle, Global, InteractiveElement, IntoElement,
@@ -103,7 +103,7 @@ pub struct EdgeColumn {
 }
 
 impl EdgeColumn {
-    /// The column `key` (egui's id, which `ui_state` keeps), its natural width and the range a drag
+    /// The column `key` (the id that `ui_state` keeps), its natural width and the range a drag
     /// keeps it in.
     pub fn new(
         key: &'static str,

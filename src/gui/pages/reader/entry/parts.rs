@@ -1,9 +1,9 @@
-//! The Reader's typographic parts (egui `design::reader`): a title and its subtitle, the heavy
+//! The Reader's typographic parts: a title and its subtitle, the heavy
 //! rule that opens and closes a stat block, an identity line, labelled detail rows, a table of
 //! facts, a section heading with its hairline, and a block of rules prose with its run-in titles.
 //!
-//! egui leaves `LINE_GAP` after every item of a column; these parts end with that gap themselves
-//! where egui's item did, so a column of them keeps egui's pitch with no gap of its own.
+//! A column of entry parts leaves `LINE_GAP` after every item: each part ends with that gap
+//! itself, so a column of them keeps one pitch with no gap of its own.
 use crate::design::reader::{human_label, run_in_markdown};
 use crate::gui::kit;
 use crate::gui::theme::{LINE_GAP, S, Type, TypeExt, XL, XS, colors};
@@ -18,7 +18,7 @@ pub const LABEL_WIDTH: Pixels = px(112.0);
 /// About 70 characters of a fact's value, in stat type.
 pub const DETAIL_MEASURE: Pixels = px(330.0);
 
-/// An item of a column: `content`, then the gap egui leaves after an item.
+/// An item of a column: `content`, then the gap after an item (`LINE_GAP`).
 pub fn item(content: impl IntoElement) -> Div {
     div().flex().flex_col().pb(LINE_GAP).child(content)
 }
@@ -48,7 +48,7 @@ pub fn identity(text: impl Into<SharedString>) -> Div {
     item(kit::text(Type::ProseItalic, colors().muted, text)).pb(LINE_GAP + S)
 }
 
-/// A reader's section heading (egui `Heading::Section`): `XL` above it unless it is `first`, its
+/// A reader's section heading: `XL` above it unless it is `first`, its
 /// words, a hairline 2 px under them, then `XS`.
 pub fn section_heading(title: impl Into<SharedString>, first: bool) -> Div {
     div()
@@ -68,7 +68,7 @@ trait Above: Styled + Sized {
 }
 impl<T: Styled> Above for T {}
 
-/// Muted `Small` help words at most the reader's measure wide (egui `design::help`).
+/// Muted `Small` help words at most the reader's measure wide.
 pub fn help(text: impl Into<SharedString>) -> Div {
     item(kit::text(Type::Small, colors().muted, text))
 }

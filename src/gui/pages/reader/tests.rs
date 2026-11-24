@@ -1,5 +1,5 @@
 //! The Reader's screenshots and interaction tests: the Markdown view and the entry views, drawn
-//! in place of the page (`State::preview`) at the widths the egui scenarios show them.
+//! in place of the page (`State::preview`) at the widths the scenarios show them.
 use super::Preview;
 use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
@@ -8,7 +8,7 @@ use crate::gui::theme::{L, READER_MEASURE, colors};
 use gpui::{IntoElement, ParentElement, Styled, div, px};
 use std::rc::Rc;
 
-/// The egui gallery's note (`design::gallery::NOTE`), as its Read column shows it.
+/// The gallery's note, as its Read column shows it.
 const NOTE: &str = "# Session 4: The Old Mill
 
 2026-11-02, The Emberfall Marches
@@ -156,11 +156,10 @@ fn a_dice_link_and_a_roll_table_roll() {
     show_scrolled(&mut shell, f32::from(READER_MEASURE), move |_| {
         kit::markdown("gate", source.clone()).into_any_element()
     });
-    shell.update(|root, _, _| crate::rolls::set_entry(root.bridge.ctx(), "Gate Mechanics"));
+    shell.update(|root, _, _| crate::rolls::set_entry(&root.ctx, "Gate Mechanics"));
     press_words(&mut shell, "+6");
-    let rolled = shell.read(|root| {
-        crate::rolls::plain::preview_words(root.bridge.ctx(), "Gate Mechanics", &[&link])
-    });
+    let rolled = shell
+        .read(|root| crate::rolls::plain::preview_words(&root.ctx, "Gate Mechanics", &[&link]));
     assert!(rolled.is_some(), "the dice link asked for its roll");
     assert!(
         shell
@@ -240,7 +239,7 @@ fn a_typed_jump_scrolls_to_its_heading() {
     assert_eq!(scroll.offset().y, px(0.0));
     let prepares = crate::gui::kit::markdown::PREPARES.with(std::cell::Cell::get);
     shell.update(|root, _, cx| {
-        crate::markdown_view::want_heading(root.bridge.ctx(), Some("Later that night".into()));
+        crate::markdown_view::want_heading(&root.ctx, Some("Later that night".into()));
         cx.notify();
     });
     shell.settle();

@@ -2,7 +2,7 @@
 //! state, live lines, results and actions, its marked events, and the text being read
 //! (`reading_view`); and the dialog that deletes a recording (`delete_dialog`).
 use crate::design::outcome::plain::ChoiceForm as Kind;
-use crate::gui::{SplatRoot, bridge, icons, kit, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::sessions::page::gpui_facade::{ReadingView, RecordingAct, RecordingRow};
 use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
@@ -21,7 +21,7 @@ fn on(
     act: RecordingAct,
 ) -> impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) + 'static {
     cx.listener(move |root, _, _, cx| {
-        let ctx = root.bridge.ctx().clone();
+        let ctx = root.ctx.clone();
         let app = &mut root.app;
         app.sessions
             .gv_recording_act(&path, act.clone(), &app.processing, &mut app.timeline, &ctx);
@@ -147,8 +147,8 @@ fn row(row: RecordingRow, cx: &mut Context<SplatRoot>) -> AnyElement {
         });
     } else if let Some(status) = status {
         column = column.child(
-            kit::Status::new(status.icon, status.word, bridge::color(status.word_color()))
-                .icon_color(bridge::color(status.icon_color()))
+            kit::Status::new(status.icon, status.word, theme::color(status.word_color()))
+                .icon_color(theme::color(status.icon_color()))
                 .into_element(),
         );
     }
@@ -159,7 +159,7 @@ fn row(row: RecordingRow, cx: &mut Context<SplatRoot>) -> AnyElement {
                 .flex_row()
                 .child(kit::text(
                     Type::Small,
-                    bridge::color(status.word_color()),
+                    theme::color(status.word_color()),
                     time,
                 ))
                 .child(kit::text(Type::Small, c.muted, sound)),

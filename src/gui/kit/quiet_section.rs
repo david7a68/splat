@@ -1,6 +1,6 @@
 //! A quiet section (`design::quiet_section`): a caret and `Small` muted words that open or close
-//! the section's content under them. It keeps its own open state under its id, as egui's
-//! collapsing header does, and starts closed. Use it for what most readers skip: Technical
+//! the section's content under them. It keeps its own open state under its id and starts
+//! closed. Use it for what most readers skip: Technical
 //! details, Source and identifiers, a form that waits (`New location…`). A caller that keeps the
 //! open state itself (to build a costly body only while open, or to remember it per record)
 //! gives `.open(bool)` and `.on_toggle(f)`.

@@ -22,8 +22,8 @@
 //! - `Revised::new` made again on every frame (for example around a frame counter) gives a new
 //!   revision every frame. Make a `Revised` where its value is made, and keep it; a reviewer
 //!   checks this.
-//! - `revise` trusts its closure's [`Changed`]. For an egui field, use
-//!   `Changed::from(response.changed())`.
+//! - `revise` trusts its closure's [`Changed`]. For a field, use `Changed::from(edited)` with
+//!   the field's own answer.
 //!
 //! Caller duties left: keep each input that the cached work reads in a [`Revised`] (or take the
 //! revision of the [`Revised`] that holds it).
@@ -175,7 +175,7 @@ pub enum Changed {
 }
 
 impl From<bool> for Changed {
-    /// For a test that already answers the question, such as egui's `response.changed()`.
+    /// For a test that already answers the question, such as a field's own edit event.
     fn from(changed: bool) -> Self {
         if changed { Self::Yes } else { Self::No }
     }
@@ -261,7 +261,7 @@ impl<T: Sync> std::ops::Deref for Revised<T> {
 pub struct Measure {
     room: u32,
     size: u32,
-    family: egui::FontFamily,
+    family: &'static str,
     fonts: u64,
     scale: u32,
 }
@@ -404,7 +404,7 @@ mod tests {
         let copy = draft.clone();
         assert_eq!(*memo.get_or(copy.revision(), || count(&copy)), 1);
         assert_eq!(builds.get(), 1, "unchanged reads and a clone do no work");
-        // A revise on every frame that changes nothing (an egui field with no edit) keeps the
+        // A revise on every frame that changes nothing (a field with no edit) keeps the
         // revision (review of PR 301: a bare `edit` advanced it every frame).
         let before = draft.revision();
         for _ in 0..3 {

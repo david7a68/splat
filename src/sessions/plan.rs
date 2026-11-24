@@ -2,6 +2,7 @@
 //! Add strip, a row's menu and its opened detail.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Plan, Sessions, kept, kept::PlanKind};
+use crate::state_context::StateContext;
 use crate::{
     design::{
         self, Tone,
@@ -23,7 +24,6 @@ use crate::{
         removed_event_words,
     },
 };
-use eframe::egui;
 use std::{
     collections::BTreeMap,
     path::Path,
@@ -86,7 +86,7 @@ fn pressed(act: FooterAct) -> super::SessionAct {
 /// from a file or the system. The one place this file takes them as a sentence.
 #[allow(
     clippy::disallowed_methods,
-    reason = "words built from the data of the plan, or from a file or the system, as text (design::results::STAGED_ALLOWS)"
+    reason = "words built from the data of the plan, or from a file or the system, as text (design::results::STAGED)"
 )]
 fn as_sentence(words: &str) -> Sentence {
     Sentence::outside(words).unwrap_or(crate::sentence!("Something changed."))
@@ -2644,7 +2644,7 @@ impl Sessions {
 
     /// An event the plan's Add strip just added: its title is its kind's word, and its result
     /// (`kept::PlanAdded`) keeps one step of Undo (both UIs).
-    pub(super) fn record_plan_add(&mut self, id: &str, book: &mut Book, ctx: &egui::Context) {
+    pub(super) fn record_plan_add(&mut self, id: &str, book: &mut Book, ctx: &StateContext) {
         let session = self.selected;
         if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
             event.title = event.kind.word().to_owned();
@@ -2873,7 +2873,6 @@ impl Sessions {
             &crate::sessions::Note,
         )>,
         (shown, planned_results): (Shown, &[(String, bool)]),
-        width: f32,
     ) -> Messages<'f, super::SessionAct> {
         // Round 26 FL1, round 28: the plan's results, reasons and notices sit in its pane's
         // message footer, which the part places `S` below the rows (pinned only when the rows
@@ -2883,10 +2882,8 @@ impl Sessions {
         let here = self.group_session == session;
         self.end_plan_marks();
         let mut messages = match page {
-            Some((settings, note)) => {
-                self.session_messages(frame, settings, book, plan, note, width)
-            }
-            None => Messages::new(frame, ("session_plan_footer", session), width),
+            Some((settings, note)) => self.session_messages(frame, settings, book, plan, note),
+            None => Messages::new(),
         };
         if plan.group_open && self.not_being_played().is_none() {
             let label = self
@@ -2976,7 +2973,7 @@ impl Sessions {
         self.scenes.typing || self.scenes.field.as_ref().is_some_and(|field| field.focus)
     }
 
-    /// The scenes' fold for a view that is not egui's (the GPUI plan): whether they fold now,
+    /// The scenes' fold for the plan view: whether they fold now,
     /// and whether the heading offers `N scenes`.
     pub(super) fn scene_fold(&mut self, count: usize) -> (bool, bool) {
         let hold = self.fold_holds();
@@ -2988,7 +2985,7 @@ impl Sessions {
         self.scenes.fold.open = Some(folded);
     }
 
-    /// What a view that is not egui's measured in a frame, for the next frame's fold (`Fold`):
+    /// What the plan view measured in a frame, for the next frame's fold (`Fold`):
     /// the pane's room for the rows, the closed rows without the scenes, the scenes, the opened
     /// rows' details, and the next fight still to come (its bottom, and the details and the
     /// scenes above it). Returns whether the fold changes in the next frame.
@@ -3473,7 +3470,7 @@ fn fight_row_detail(row: &crate::encounter_run::FightRow) -> String {
     detail
 }
 
-/// One player of a played fight's block, for a view that is not egui's: the first name, HP and
+/// One player of a played fight's block, for the plan view: the first name, HP and
 /// its max, temporary HP, and the whole line (`fight_row_detail`).
 pub struct FightCell {
     pub first: String,
@@ -3505,8 +3502,8 @@ pub(super) fn fight_cells(
         .collect()
 }
 
-/// The plain line of a played fight's fault, as its block says it (`fight_block`), for a view
-/// that is not egui's: the folder's cause in Encounters' words and tone (R41), or that the run
+/// The plain line of a played fight's fault, as its block says it (`fight_block`), for the plan
+/// view: the folder's cause in Encounters' words and tone (R41), or that the run
 /// cannot be read.
 pub(super) fn fight_fault_line(fault: &FightFault) -> design::outcome::plain::PlainLine<()> {
     match fault {
@@ -4717,7 +4714,7 @@ mod tests {
         let frame = |sessions: &mut Sessions| {
             sessions.last_scan = Some(Instant::now());
             sessions.poll(
-                &egui::Context::default(),
+                &StateContext::new(),
                 home_campaign.as_ref(),
                 &mut Book::default(),
             );
@@ -4879,7 +4876,7 @@ mod tests {
         // R45 (e): both readers' lines, made on unchanged frames, walk no entry either; the
         // refused line offers no Undo, the other line does.
         let draw = |sessions: &mut Sessions| {
-            let frame = PaneFrame::plain();
+            let frame = PaneFrame::new();
             let timeline = sessions.plan_line_kept(&frame, None, ());
             let plan = sessions.plan_line_kept(&frame, Some(Some(b)), ());
             assert_eq!((timeline.len(), plan.len()), (2, 1));
@@ -5101,7 +5098,7 @@ mod tests {
     /// that keep their saved HP. Its kept line follows the saved runs' facts by their own
     /// revision: the DM deletes the saved run (the book does not change), and the clause goes
     /// while the rest's result and its Undo stay; Undo of the deletion brings the clause back.
-    /// Ported from the egui plan test to the plan's acts and plain footer lines.
+    /// The plan's acts and plain footer lines.
     #[test]
     fn long_rest_added_on_plan_restores_and_undo_removes_its_ruling() {
         use crate::design::memo::{Changed, Revised};
@@ -5129,7 +5126,7 @@ mod tests {
             ..Default::default()
         };
         let settings = ProcessingSettings::default();
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut runs = Revised::new(vec![saved.clone()]);
         // The app's frame: the owner update, then the plan's footer.
         let footer = |page: &mut Sessions, book: &mut Book, runs: &Revised<Vec<SavedRunInfo>>| {
@@ -5194,8 +5191,7 @@ mod tests {
 
     /// A Timeline fight resumes by its run's ID, with no planned source: the row offers its
     /// paused run, and `Resume` asks for that run's file (not another run of the same fight).
-    /// An ended or unreadable run, or the run already open, offers none. Ported from the egui
-    /// plan test to the plan's rows and acts.
+    /// An ended or unreadable run, or the run already open, offers none. The plan's rows and acts.
     #[test]
     fn iter5_c_timeline_fight_resumes_by_run_id_without_a_planned_source() {
         use crate::encounter_run::{SavedRunInfo, Standing};
@@ -5226,7 +5222,7 @@ mod tests {
             ..Default::default()
         };
         let mut runs = vec![other, saved.clone()];
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut revisions = crate::design::memo::Revised::new(());
         let resume = |page: &mut Sessions,
                       book: &mut Book,

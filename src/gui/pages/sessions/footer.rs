@@ -1,4 +1,4 @@
-//! The Session page's pane footers: the egui page's own footer lines (`Messages::into_plain`)
+//! The Session page's pane footers: the page's own footer lines (`Messages::into_plain`)
 //! drawn by `kit::messages`, each press handed to the page's own press method
 //! (`session_press`, `draft_press`, …) with its ticket.
 use crate::gui::{SplatRoot, kit};

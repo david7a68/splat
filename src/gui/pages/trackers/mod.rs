@@ -1,8 +1,8 @@
-//! Trackers, a view of Lookup (egui: `src/trackers/view.rs`, `src/trackers/history.rs`). Lookup's
+//! Trackers, a view of Lookup. Lookup's
 //! panel draws it while `root.app.lookup.on_trackers()`: the Due rows, the pinned trackers in the
 //! note's order, then `More trackers`, in one scroll area, with the results in the panel's
 //! message footer. Every press is one act, which the shell applies after the frame's draw
-//! (`Splat::apply_tracker_act`), as egui does.
+//! (`Splat::apply_tracker_act`).
 //!
 //! The words come from the trackers crate (`view::due_parts`, `view::line_words`,
 //! `view::messages`); this view lays them out and keeps what it worked out by the trackers'
@@ -43,7 +43,7 @@ pub struct State {
     /// The view's scroll, which opens at its top when Trackers comes into view.
     scroll: ScrollHandle,
     /// The quick action pressed last, held under a still pointer while a Due row comes or goes
-    /// above it (egui `ContentScroll::holds_presses`).
+    /// above it.
     hold: Rc<Hold>,
     /// The open sections of tracker histories in a reader, by note and member key.
     #[allow(
@@ -66,7 +66,7 @@ struct Hold {
 struct Held {
     action: String,
     top: Pixels,
-    /// Frames left in which a change is still the press's own (egui `CHANGE_FRAMES`).
+    /// Frames left in which a change is still the press's own.
     frames: u8,
 }
 
@@ -388,8 +388,8 @@ pub(crate) fn render_body(
 /// The footer's messages (`view::messages`): why the last act recorded nothing, then the last
 /// act with `Undo: <label>` and `Add to Timeline`, or `Added to the Timeline.` with `Undo add`.
 fn footer(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Vec<AnyElement> {
-    let frame = PaneFrame::plain();
-    let lines = crate::trackers::view::messages(&frame, &root.app.trackers, 0.0).into_plain();
+    let frame = PaneFrame::new();
+    let lines = crate::trackers::view::messages(&frame, &root.app.trackers).into_plain();
     kit::messages::lines(
         "trackers-footer",
         lines,
@@ -901,8 +901,5 @@ pub(crate) fn act(
 }
 
 /// The history of a house rule note in its reader (World's hook): see `history::render`.
-#[allow(
-    unused_imports,
-    reason = "World’s reader calls these (docs/gpui-port.md)"
-)]
+#[allow(unused_imports, reason = "World’s reader calls these")]
 pub(crate) use history::{footer as history_footer, render as render_history};

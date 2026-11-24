@@ -1,4 +1,4 @@
-//! The entry Lookup shows (egui: the reader part of `Lookup::panel`): Lookup's own `world::Reader`,
+//! The entry Lookup shows: Lookup's own `world::Reader`,
 //! compact, drawn by the same view as World's reader (`world::reader::render_reader` with
 //! `Host::Lookup`): the title line with Edit, Start fight or Add to fight and Add to Log, the Log
 //! field, the faults and their repairs, the value rows with Change, the NPC's edit form, the
@@ -35,8 +35,8 @@ pub(super) fn render(
     app.lookup.reader.open_item(item);
     app.lookup.reader.check_disk(&index, Some(&campaign));
     let lines = {
-        let frame = PaneFrame::plain();
-        let mut messages = Messages::new(&frame, ("lookup_reader", id), 0.0);
+        let frame = PaneFrame::new();
+        let mut messages = Messages::new();
         app.lookup
             .reader
             .footer(&frame, &mut messages, item, &index, Some(&campaign));
@@ -96,8 +96,8 @@ fn without_campaign(
         cx.notify();
     });
     let follow = cx.listener(move |root: &mut SplatRoot, note: &str, _, cx| {
-        let SplatRoot { app, bridge, .. } = root;
-        app.lookup.open_note_link(note, Some(id), bridge.ctx());
+        let SplatRoot { app, ctx, .. } = root;
+        app.lookup.open_note_link(note, Some(id), ctx);
         cx.notify();
     });
     let reader = crate::gui::pages::reader::entry::EntryView::new(
@@ -133,8 +133,8 @@ fn without_campaign(
 pub(super) fn gone_lines(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Vec<AnyElement> {
     let campaign = root.app.lookup.campaign().map(|campaign| campaign.id);
     let lines = {
-        let frame = PaneFrame::plain();
-        let mut messages = Messages::new(&frame, "lookup_footer", 0.0);
+        let frame = PaneFrame::new();
+        let mut messages = Messages::new();
         root.app
             .lookup
             .reader
@@ -155,7 +155,7 @@ pub(super) fn gone_lines(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> V
 }
 
 /// A press in the reader's footer: the trackers take their Undo, the reader every other press
-/// (egui: `Lookup::panel` after its pane); what it opens next goes to Lookup.
+/// after its pane; what it opens next goes to Lookup.
 fn footer_press(
     root: &mut SplatRoot,
     press: Press<FooterAct>,

@@ -1,14 +1,13 @@
-//! The recording settings' reads and acts, free of any toolkit, so the egui tab
-//! (`ProcessingSettings::show`) and the GPUI tab (`src/gui/pages/settings/recording.rs`) share
-//! them.
+//! The recording settings' reads and acts, free of any toolkit, for the GPUI tab
+//! (`src/gui/pages/settings/recording.rs`).
 use super::{
     KeySlot, LLM_CHOICES, OTHER_SERVICE, ProcessingSettings, Provider, Reply, SPEECH_CHOICES,
     SettingsFault, Text, key_service_name,
 };
 use crate::credentials;
-use crate::design::outcome::{Fault as _, NoPress, PaneFrame, plain::PlainLine};
+use crate::design::outcome::{Fault as _, NoPress, plain::PlainLine};
 use crate::recording::Probe;
-use eframe::egui;
+use crate::state_context::StateContext;
 use zeroize::{Zeroize as _, Zeroizing};
 
 /// Which text setting a page edits.
@@ -293,7 +292,7 @@ impl ProcessingSettings {
     }
 
     /// `Save key`: the key is usable at once and saves to the keyring in the background.
-    pub fn save_key(&mut self, slot: KeySlot, ctx: &egui::Context) {
+    pub fn save_key(&mut self, slot: KeySlot, ctx: &StateContext) {
         match slot {
             KeySlot::Speech => self.config.speech_key_for = self.config.speech_url.clone(),
             KeySlot::Llm => self.config.llm_key_for = self.config.llm_url.clone(),
@@ -305,7 +304,7 @@ impl ProcessingSettings {
         // Usable at once, even if the keyring is locked.
         *self.held(slot) = Some(key.clone());
         if let Some(tx) = self.replies.as_ref().map(|(tx, _)| tx.clone()) {
-            let ctx = ctx.clone();
+            let ctx = ctx.waker();
             credentials::in_background(move || {
                 let result = credentials::save_key(slot, &key);
                 let _ = tx.send(Reply::Saved(slot, result));
@@ -315,10 +314,10 @@ impl ProcessingSettings {
     }
 
     /// `Remove … key`.
-    pub fn remove_key(&mut self, slot: KeySlot, ctx: &egui::Context) {
+    pub fn remove_key(&mut self, slot: KeySlot, ctx: &StateContext) {
         *self.held(slot) = None;
         if let Some(tx) = self.replies.as_ref().map(|(tx, _)| tx.clone()) {
-            let ctx = ctx.clone();
+            let ctx = ctx.waker();
             credentials::in_background(move || {
                 let result = credentials::forget_key(slot);
                 let _ = tx.send(Reply::Forgot(slot, result));
@@ -329,7 +328,6 @@ impl ProcessingSettings {
 
     /// The tab's footer (`messages`), as plain lines.
     pub fn footer_lines(&self) -> Vec<PlainLine<NoPress>> {
-        let frame = PaneFrame::plain();
-        self.messages(&frame, 0.0).into_plain()
+        self.messages().into_plain()
     }
 }

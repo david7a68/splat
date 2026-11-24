@@ -1,4 +1,4 @@
-//! The Setup phase (egui `view::setup_view`, `setup_body`, `setup_row`): the title, Roll NPCs
+//! The Setup phase: the title, Roll NPCs
 //! and Begin combat with its reason, Add to fight and Undo; each participant's row with its
 //! initiative, Roll, tie moves, place, Absent and menu; the message footer; Close run.
 use super::{Side, on_command, on_run, panel, plain, run_title, save_status};
@@ -525,7 +525,7 @@ fn detail_line(run: &Run, p: &Participant) -> Vec<(String, gpui::Hsla)> {
     numbers.push_str(&format!(" · AC {}", display(p.armor_class)));
     parts.push((numbers, c.muted));
     if let Some((_, word, color)) = crate::design::hp_word(p.hp, p.max_hp) {
-        parts.push((word.to_owned(), crate::gui::bridge::color(color)));
+        parts.push((word.to_owned(), crate::gui::theme::color(color)));
     }
     if p.stat_changes() {
         parts.push(("Changed".to_owned(), c.participant.changed));

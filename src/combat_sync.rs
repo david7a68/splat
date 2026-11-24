@@ -1,7 +1,7 @@
 //! Conflict-aware combat sheet synchronization with D&D Beyond.
 //! Writes use source identities and absolute values, followed by a raw read-back.
 use crate::auth::Session;
-use eframe::egui;
+use crate::state_context::StateContext;
 use reqwest::{Method, blocking::Client, redirect::Policy};
 use serde_json::{Value, json};
 use splat::character::EntitySnapshot;
@@ -1186,7 +1186,7 @@ impl CombatSync {
     }
     pub fn tick(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         session: Option<Session>,
         epoch: u64,
         campaign: &str,
@@ -1291,7 +1291,7 @@ impl CombatSync {
                 sent: desired.clone(),
                 action: action.as_ref().map(SheetAction::name),
             });
-            let ctx = ctx.clone();
+            let ctx = ctx.waker();
             std::thread::spawn(move || {
                 static LOCKS: OnceLock<Mutex<BTreeMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
                 let result = (|| {

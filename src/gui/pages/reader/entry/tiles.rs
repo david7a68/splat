@@ -1,4 +1,4 @@
-//! An entry's actions as tiles (egui `rolls::tile_row`): each tile its icon, name and key number,
+//! An entry's actions as tiles: each tile its icon, name and key number,
 //! then its numbers and where it lands; its rules text on hover. A press asks for the roll (Shift
 //! for advantage, Ctrl for disadvantage), which the run or the preview stream takes
 //! (`rolls::take_ask`); a spell's open tile opens its entry. Under the tiles, in a run, the armed
@@ -8,7 +8,7 @@ use crate::gui::kit;
 use crate::gui::theme::{HAIRLINE_WIDTH, RADIUS_CONTROL, S, Type, TypeExt, XS, colors};
 use crate::rolls::plain::{self, TileView};
 use crate::rolls::{Chip, SpellOccurrence};
-use eframe::egui;
+use crate::state_context::StateContext;
 use gpui::{
     AnyElement, ElementId, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled, div, px,
@@ -31,7 +31,7 @@ pub enum Press {
 /// say whether one of them is armed or was previewed.
 pub fn tile_row(
     id: &ElementId,
-    ctx: Option<&egui::Context>,
+    ctx: Option<&StateContext>,
     entry: &str,
     tiles: Vec<(TileView, Press)>,
     chips: &[Chip],
@@ -110,7 +110,7 @@ fn tile(
     id: ElementId,
     view: TileView,
     press: Press,
-    ctx: Option<egui::Context>,
+    ctx: Option<StateContext>,
     on_open: Option<OnOpen>,
 ) -> AnyElement {
     let c = colors();

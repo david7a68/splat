@@ -2,7 +2,7 @@
 //! (a built-in template read-only with `Customize`; a campaign template in an editor that saves
 //! after a pause, with its menu's `Delete`), and the New template form.
 use super::footer;
-use crate::gui::{SplatRoot, bridge, icons, kit, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use gpui::{
     AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, SharedString,
     Styled, Window, div, prelude::*, px,
@@ -127,7 +127,7 @@ fn editor(
             .child(kit::text(Type::Section, c.text, template.name.clone()).flex_1());
         let words: AnyElement = if let Some((path, words, state, word)) = template.file {
             let status = crate::sessions::page::Sessions::gv_template_status(&state);
-            line = line.child(kit::status(&bridge::status(&status))).child(
+            line = line.child(kit::status(&kit::Status::of(&status))).child(
                 kit::MenuButton::new(
                     "template-more",
                     kit::Button::quiet("template-more-button", "More")

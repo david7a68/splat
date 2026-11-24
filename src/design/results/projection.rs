@@ -28,7 +28,7 @@
 //!     let projection = app.view.refresh(&app.store, &Link, book, |_| {
 //!         Said::new(splat_design::sentence!("Campaign link saved.")).into()
 //!     });
-//!     let frame = PaneFrame::plain();
+//!     let frame = PaneFrame::new();
 //!     let line: Option<KeptLine<NoPress>> = app.store.present(&frame, projection, &Link, book).ok().flatten();
 //!     let _ = line;
 //! }
@@ -73,7 +73,7 @@
 //! }
 //! fn frame(app: &mut App, book: Revision) {
 //!     let projection = app.view.refresh(&app.store, &Link, book, |_| Said::new(splat_design::sentence!("Saved.")).into());
-//!     let frame = PaneFrame::plain();
+//!     let frame = PaneFrame::new();
 //!     app.kept = app.store.present(&frame, projection, &Link, book).ok().flatten(); // <- kept past its frame
 //! }
 //! ```

@@ -439,7 +439,7 @@ pub(super) fn entries_column(
         .into_any_element()
 }
 
-/// Up (`by` -1) or Down (+1) in the entry list, as egui's list region moves the keyboard: the
+/// Up (`by` -1) or Down (+1) in the entry list: the
 /// keyboard goes to the next row, which scrolls into view whole. With no row holding it yet, the
 /// open entry's row (or the first) takes it.
 pub(super) fn move_row(

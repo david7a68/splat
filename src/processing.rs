@@ -7,6 +7,7 @@
 //!
 //! Test builds have no route to a service from the app (`start`). The HTTP code is tested
 //! against a server on the loopback address.
+use crate::state_context::StateContext;
 #[path = "processing/settings.rs"]
 pub mod settings;
 
@@ -1224,7 +1225,7 @@ impl Job {
 }
 
 pub fn start(
-    ctx: &eframe::egui::Context,
+    ctx: &StateContext,
     mut request: Request,
     load_keys: impl FnOnce(&mut Request) -> Result<(), String> + Send + 'static,
 ) -> Job {
@@ -1237,7 +1238,7 @@ pub fn start(
     let cancel = Arc::new(AtomicBool::new(false));
     let recording = request.recording.clone();
     let flag = cancel.clone();
-    let ctx = ctx.clone();
+    let ctx = ctx.waker();
     std::thread::spawn(move || {
         let report = {
             let (tx, ctx) = (tx.clone(), ctx.clone());

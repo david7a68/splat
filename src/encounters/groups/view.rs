@@ -1,9 +1,9 @@
 //! A group's fields, a creature's Changes, a missing member's replacement and the encounter's
-//! own groups, as plain data and acts for a view that does not draw with egui (the GPUI page).
-//! The egui editor keeps its own drawing (`overrides_form`, `members`, `of_encounter`); the rules
-//! (ranges, which rows show, how a change is written) are the ones those functions use.
+//! own groups, as plain data and acts for the GPUI page: the rules
+//! (ranges, which rows show, how a change is written) and the words.
 #![warn(deprecated)]
 use super::*;
+use crate::state_context::StateContext;
 use std::ops::RangeInclusive;
 
 /// Where a group draft is: the group editor's, or the open encounter's own group at `index`.
@@ -842,7 +842,7 @@ pub enum OwnedAct {
 
 impl Encounters {
     /// The open encounter's own groups, once they are read.
-    pub fn owned_groups(&mut self, ctx: &egui::Context) -> Option<OwnedGroups> {
+    pub fn owned_groups(&mut self, ctx: &StateContext) -> Option<OwnedGroups> {
         let sources = crate::loot_editor::sources(ctx);
         let draft = self.draft.as_ref()?;
         if !draft.groups_read {

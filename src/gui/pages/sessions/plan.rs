@@ -1,15 +1,15 @@
 //! The session's plan (`Sessions::plan_pane`): its heading and count, the Add strip (Fight,
 //! Group, Long rest and the rarer kinds under `⋯`), its rows (the session's events, the planned
 //! fights with the scenes before them, the planned groups), the Scene field, and the plan's
-//! message footer. The rows' words and acts are the egui plan's (`Sessions::gv_plan`,
+//! message footer. The rows' words and acts are the plan's (`Sessions::gv_plan`,
 //! `gv_plan_act`); the open row shows the event's fields, a journey's checks or how a played
 //! fight ended.
 //!
-//! What egui measures as it draws, this view measures in each frame for the next (`Probes`):
+//! This view measures in each frame for the next (`Probes`):
 //! the rows' heights for the scenes' fold (`Sessions::note_fold_measure`), and the rows' width
 //! for a planned fight's line, which keeps the party's size while the row has room for it.
 use super::{footer, with_plan};
-use crate::gui::{SplatRoot, bridge, icons, kit, theme};
+use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::sessions::page::gpui_facade::{
     EventRow, FightRow, GroupRow, PlanAct, PlanRow, PlanView, SceneRow,
 };
@@ -122,7 +122,7 @@ fn id(words: impl std::fmt::Display) -> ElementId {
 
 /// Do a plan act through the page's state.
 pub(super) fn act(root: &mut SplatRoot, act: PlanAct) {
-    let ctx = root.bridge.ctx().clone();
+    let ctx = root.ctx.clone();
     let index = root.app.lookup.index();
     with_plan(&mut root.app, |sessions, _, book, plan| {
         sessions.gv_plan_act(act, book, plan, index.as_deref(), &ctx);
@@ -168,7 +168,7 @@ pub(super) fn render(
         let editor = crate::gui::pages::encounters::render_group_in_plan(root, window, cx);
         return pane(editor, footer, None);
     }
-    // The last frame's measures feed this frame's fold, as egui's do.
+    // The last frame's measures feed this frame's fold.
     let probes = root.pages.sessions.plan.probes.clone();
     let last = {
         let mut probes = probes.borrow_mut();
@@ -236,7 +236,7 @@ fn pane(
 ) -> AnyElement {
     let c = colors();
     // The pane's probe draws last: after every row wrote its measure, a frame that measured
-    // other heights or another width than the last asks for one more (as egui's fold settles).
+    // other heights or another width than the last asks for one more (until the fold settles).
     let pane_probe = probes.map(|probes| {
         let probes = probes.clone();
         canvas(
@@ -507,8 +507,7 @@ impl AddMenu {
     };
 }
 
-/// The menu's width and its list's greatest height (egui `FIGHT_MENU_WIDTH`,
-/// `FIGHT_MENU_HEIGHT`).
+/// The menu's width and its list's greatest height.
 const MENU_WIDTH: gpui::Pixels = gpui::px(240.0);
 const MENU_LIST_HEIGHT: gpui::Pixels = gpui::px(240.0);
 
@@ -604,7 +603,7 @@ fn add_menu(
     kit::Popover::new(menu_id, trigger, content).into_any_element()
 }
 
-/// A Timeline kind's icon, as the egui plan names it.
+/// A Timeline kind's icon in the plan.
 fn bridge_icon(kind: Kind) -> &'static str {
     crate::timeline::kind_icon(kind)
 }
@@ -823,7 +822,7 @@ fn event_row(
             if !summary.is_empty() {
                 line = line.child(small("·"));
             }
-            line = line.child(kit::status(&bridge::status(&status)));
+            line = line.child(kit::status(&kit::Status::of(&status)));
         }
         line.into_any_element()
     };
@@ -1026,7 +1025,7 @@ fn event_details(
                     .flex_row()
                     .items_center()
                     .gap(L)
-                    .child(kit::status(&bridge::status(&status)))
+                    .child(kit::status(&kit::Status::of(&status)))
                     .child(
                         kit::Button::quiet(
                             id(format!("plan-rest-ruling-{event}")),

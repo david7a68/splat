@@ -54,7 +54,7 @@ impl Layout {
     }
 }
 
-/// Two texts' lines aligned for a side-by-side comparison, as the egui comparison draws them: each
+/// Two texts' lines aligned for a side-by-side comparison: each
 /// row's line on each side (`None`: no line there), how many rows differ, and the first row of
 /// each run of differing rows (a `Next difference` stop). For a view that keeps it between
 /// frames itself (the GPUI comparison keeps it until either text changes).
@@ -82,8 +82,8 @@ pub fn aligned(text: [&str; 2]) -> Aligned {
 }
 
 impl<'a> Comparison<'a> {
-    /// Uncached: the egui app uses `cached`; a UI that keeps its own copy of the result (the
-    /// GPUI port's `compared_lines`) calls this once per pair of texts.
+    /// Uncached: a UI that keeps its own copy of the result (`kit::comparison`) calls this once
+    /// per pair of texts.
     pub fn new(text: [&'a str; 2]) -> Self {
         let lines = text.map(|text| text.lines().collect::<Vec<_>>());
         Self::from_layout(&lines, Layout::of(&lines))
@@ -211,7 +211,7 @@ mod tests {
                     .map(|row| [row[0].as_deref(), row[1].as_deref()])
                     .collect::<Vec<_>>(),
                 expected,
-                "the shared alignment is the egui one"
+                "the shared alignment is the comparison's"
             );
             assert_eq!(
                 (shared.changed, shared.groups),

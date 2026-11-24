@@ -1,4 +1,4 @@
-//! One value of a settings pane, as one block (egui `design::value_block`, ruling R24): its
+//! One value of a settings pane, as one block (ruling R24): its
 //! heading row, its field, its save row, then its own messages `S` below the save row. The order
 //! is the type's: each slot is a method of the stage before it, so a block cannot put its save row
 //! above its field, or its warning anywhere but under its save row.

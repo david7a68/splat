@@ -1,11 +1,11 @@
-//! A sheet's labelled fact (egui `design::fact`, ruling M5): one form, `Label: value`, its values
+//! A sheet's labelled fact (`design::fact`, ruling M5): one form, `Label: value`, its values
 //! joined by the middle dot (`Coins: 12 cp · 40 sp`). The part owns the colon, the separator and
 //! how a joined line wraps; a caller gives a label and its values, never a separator.
 //!
 //! - [`fact_line`]: a fact on a line of its own. A line breaks only at a space that does not follow
 //!   a middle dot, so every dot stays with the word after it; a word too long for a line breaks
 //!   between whole characters (graphemes). So no line ends at a dot.
-//! - [`words`] and [`tile_label`]: the same form as words (`Str: 8`), from the egui part.
+//! - [`words`] and [`tile_label`]: the same form as words (`Str: 8`), from `design::fact`.
 //! - [`roll_tile`]: a stat tile whose value rolls: its muted label line over the caller's link.
 use crate::gui::theme::{Type, TypeExt, colors};
 use gpui::{Div, IntoElement, ParentElement, Styled, div};

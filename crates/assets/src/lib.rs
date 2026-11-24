@@ -52,8 +52,8 @@ pub static FONTS: [(&str, &[u8]); 10] = [
 /// Phosphor Regular icons (MIT, `assets/fonts/Phosphor-MIT.txt`), for the GPUI UI's `gui::icons`.
 pub static PHOSPHOR: &[u8] = include_bytes!("../../../assets/fonts/Phosphor-Regular.ttf");
 
-/// Hack Regular (MIT and Bitstream Vera, `assets/fonts/Hack-MIT.txt`): the monospace egui bundles,
-/// for the GPUI UI's code and source text, so it reads the same on every computer.
+/// Hack Regular (MIT and Bitstream Vera, `assets/fonts/Hack-MIT.txt`): the monospace font for the
+/// GPUI UI's code and source text, so it reads the same on every computer.
 pub static MONO: &[u8] = include_bytes!("../../../assets/fonts/Hack-Regular.ttf");
 
 /// Built-in reports without layout whitespace.

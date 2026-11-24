@@ -1,5 +1,5 @@
 //! The Timeline page: add, name, rule, remove and their Undos, the filters, Ctrl+S, a journey's
-//! encounter checks, and the captures (`<egui-scenario>__<step>`, paired with the references).
+//! encounter checks, and the captures (`<scenario>__<step>`, paired with the references).
 use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
 use crate::timeline::Kind;
@@ -237,7 +237,7 @@ fn a_journeys_checks() {
 }
 
 /// The Add strip keeps Fight and Long rest on its line; when the line has no room for every
-/// kind, the rarer ones share `More Add actions` (egui `hanging_add_strip`).
+/// kind, the rarer ones share `More Add actions`.
 #[test]
 fn the_add_strip_shares_more_when_short() {
     let mut wide = Shell::new("timeline-add-strip", Seed::Campaign);

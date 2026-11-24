@@ -1,11 +1,11 @@
-//! The Library page and the copy dialog (egui: `src/library.rs`, `src/library/`,
+//! The Library page and the copy dialog (state: `src/library.rs`, `src/library/`,
 //! `src/copy_dialog.rs`, `src/library_page/`).
 //!
 //! The page reads `crate::library::Library` through its model (`library::model`): the header, the
 //! sections and entries columns, the reader (Read, Edit Markdown, a changed file), the New entry and
-//! Manage packages forms and the unregister confirmation. Every act calls a model method; the egui
-//! page shares the list's logic with it. The footer of each pane draws the same typed lines as
-//! egui's (`design::outcome::plain`), and a press goes back to `Library::press_footer`.
+//! Manage packages forms and the unregister confirmation. Every act calls a model method. The
+//! footer of each pane draws the model's typed lines (`design::outcome::plain`), and a press goes
+//! back to `Library::press_footer`.
 mod copy;
 mod footer;
 mod forms;
@@ -50,8 +50,8 @@ pub struct State {
     list_scroll: UniformListScrollHandle,
     /// The reader's scroll, which a typed jump to a heading moves.
     reader_scroll: gpui::ScrollHandle,
-    /// The row of the entry list that Up and Down gave the keyboard to (egui's region: the
-    /// keyboard moves row to row and the row shows whole), and its focus.
+    /// The row of the entry list that Up and Down gave the keyboard to (the keyboard moves row
+    /// to row and the row shows whole), and its focus.
     pub(super) row: Option<usize>,
     pub(super) row_focus: Option<FocusHandle>,
     /// The entry list's row count and the open entry's row, as the list drew them.
@@ -83,7 +83,7 @@ pub(crate) fn init(root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<
 }
 
 /// Once per frame, before anything draws: what the Library asked of the app (`Splat::show`'s
-/// Library arm after `library.show`), handled as egui does after the page draws.
+/// Library arm after `library.show`), handled after the page draws.
 pub(crate) fn poll(root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
     if root.app.page != Page::Library {
         return;
@@ -105,19 +105,15 @@ pub(crate) fn poll(root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<
     if let Some(folder) = app.library.content_changed.take() {
         app.campaign_content.refresh_destination(&folder);
         app.encounters
-            .refresh_content(root.bridge.ctx(), &app.campaigns, &folder);
+            .refresh_content(&root.ctx, &app.campaigns, &folder);
         app.lookup.refresh();
     }
 }
 
-/// The link index the reader and the list read (`reader_link_index`), as the Encounters page's
-/// content refresh leaves it.
+/// The link index the reader and the list read (`requests::LINK_INDEX`), as the frame logic
+/// leaves it.
 pub(crate) fn link_index(root: &SplatRoot) -> Option<Arc<crate::lookup::ContentIndex>> {
-    root.bridge.ctx().data(|data| {
-        data.get_temp::<Arc<crate::lookup::ContentIndex>>(eframe::egui::Id::new(
-            "reader_link_index",
-        ))
-    })
+    root.ctx.get(crate::requests::LINK_INDEX)
 }
 
 /// The page's width: the window less the rail, the page's padding and a side panel.
@@ -131,7 +127,7 @@ pub(crate) fn render(
     window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
-    let ctx = root.bridge.ctx().clone();
+    let ctx = root.ctx.clone();
     {
         let app = &mut root.app;
         app.library.begin(&ctx, &mut app.campaigns);
@@ -231,7 +227,7 @@ pub(crate) fn save_key(root: &mut SplatRoot, _: &mut Context<SplatRoot>) {
     app.library.save(&app.campaigns);
 }
 
-/// Escape on the page: a form takes it (it closes), as in egui; else the root's Escape.
+/// Escape on the page: a form takes it (it closes); else the root's Escape.
 fn dismiss(
     root: &mut SplatRoot,
     _: &crate::gui::Dismiss,

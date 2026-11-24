@@ -1,27 +1,26 @@
-//! A pane footer's messages as plain data, for a UI that does not draw with egui (the GPUI port,
-//! `docs/gpui-port.md`). The same `Messages` a page builds for egui gives its lines here, in the
-//! footer's one order (`footer_order`), with each line's tone, words, Undo, choices and file
-//! line, and the press each control makes. A kept line's press carries its store's ticket, so it
-//! reaches only the entry the line showed, as in egui.
+//! A pane footer's messages as plain data, for the GPUI footer (`gui::kit::messages`). The
+//! `Messages` a page builds gives its lines here, in the footer's one order (`footer_order`),
+//! with each line's tone, words, Undo, choices and file line, and the press each control makes.
+//! A kept line's press carries its store's ticket, so it reaches only the entry the line showed.
 //!
 //! ```ignore
-//! let frame = PaneFrame::plain();
-//! let mut messages = Messages::new(&frame, "footer", 0.0);
+//! let frame = PaneFrame::new();
+//! let mut messages = Messages::new();
 //! messages.outcome(Notice::new(sentence!("Sync is off.")));
 //! for line in messages.into_plain() {
 //!     // Draw line.words in line.tone; a press of its Undo gives `line.press_undo()`.
 //! }
 //! ```
 use super::{
-    FaultMessage, FooterRank, KeptLine, Lost, MessageChoice, Messages, Outcome, PaneFrame, Press,
-    Tone, Typed, footer_order, holding, refusal_rank,
+    FaultMessage, FooterRank, KeptLine, Lost, MessageChoice, Messages, Outcome, Press, Tone, Typed,
+    footer_order, holding, refusal_rank,
 };
 use crate::design::results::Ticket;
 
 /// What a choice of a message is: its look and what it does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChoiceForm {
-    /// A safe choice: bordered (secondary), as egui draws it.
+    /// A safe choice: bordered (secondary).
     Choice,
     /// The message's one commit.
     Primary,
@@ -180,15 +179,6 @@ impl<A> PlainLine<A> {
             undo_id: undo,
             choice_ids: choices,
             ticket,
-        }
-    }
-}
-
-impl PaneFrame {
-    /// The frame token for a pane that a UI other than egui draws in this frame.
-    pub fn plain() -> Self {
-        Self {
-            _not_static: std::marker::PhantomData,
         }
     }
 }

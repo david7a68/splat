@@ -1,9 +1,8 @@
-//! A whole number with − and + (egui `design::stepper`): `Decrease <name>`, the number in a well
+//! A whole number with − and +: `Decrease <name>`, the number in a well
 //! the DM can type in, then `Increase <name>`. At a limit the − or + is disabled. A typed number
 //! keeps to the range; a value already outside it only steps back towards it, never further, as
-//! the egui stepper does. `.change()` shows a change (`+3`, `−1`) whose steps skip 0 (egui
-//! `change_stepper`); `.grouped()` a count with its digits grouped (`1,000`, egui
-//! `grouped_stepper`).
+//! the stepper does. `.change()` shows a change (`+3`, `−1`) whose steps skip 0; `.grouped()` a
+//! count with its digits grouped (`1,000`).
 //!
 //! ```ignore
 //! kit::Stepper::new(("hp", id), "Current HP", hp, 0..=max)
@@ -20,12 +19,12 @@ use gpui::{
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
-/// The narrowest well, egui's `interact_size.x`.
+/// The narrowest well: a control's least width.
 pub const MIN_WELL: Pixels = px(40.0);
 
 type OnValue = Rc<dyn Fn(&i64, &mut Window, &mut App)>;
 
-/// How the well shows its number (egui `Shown`).
+/// How the well shows its number.
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Shown {
     /// `3`
@@ -82,15 +81,14 @@ impl Stepper {
         self
     }
 
-    /// A change (`+3`, `−1`): its − and + step over 0, which changes nothing (egui
-    /// `change_stepper`).
+    /// A change (`+3`, `−1`): its − and + step over 0, which changes nothing.
     pub fn change(mut self) -> Self {
         self.shown = Shown::Change;
         self
     }
 
     /// A count that can reach the thousands (a group's member count): `1,000`, typed with or
-    /// without the commas (egui `grouped_stepper`).
+    /// without the commas.
     pub fn grouped(mut self) -> Self {
         self.shown = Shown::Grouped;
         self

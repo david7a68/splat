@@ -6,6 +6,7 @@ use super::*;
 use crate::design::outcome::Fault as _;
 pub use crate::design::outcome::plain::PlainLine as FooterLine;
 pub use crate::matching::CLOSE_NAMES;
+use crate::state_context::StateContext;
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------------------------
@@ -180,8 +181,8 @@ pub fn list_empty_words(
     (text, wider)
 }
 
-/// A tone's icon and colour (egui's, for `bridge::color`).
-pub fn tone_parts(tone: Tone) -> (&'static str, egui::Color32) {
+/// A tone's icon and colour token (`gui::theme::color` turns it into a GPUI colour).
+pub fn tone_parts(tone: Tone) -> (&'static str, crate::design::Color) {
     let result = colors().result;
     match tone {
         Tone::Info => (icons::INFO, result.info),
@@ -316,8 +317,8 @@ pub enum ReaderAct {
 
 /// The owner and file line.
 pub struct FileLine {
-    /// The owner's status: icon, words, colour (egui's, for `bridge::color`).
-    pub status: (&'static str, String, egui::Color32),
+    /// The owner's status: icon, words, colour token.
+    pub status: (&'static str, String, crate::design::Color),
     /// The folder and the shown path, when the owner has a folder.
     pub file: Option<(PathBuf, String)>,
     /// `moved from <folder>/`.
@@ -329,7 +330,7 @@ pub struct FileLine {
 
 /// The save row.
 pub struct SaveRowView {
-    pub word: (String, String, egui::Color32),
+    pub word: (String, String, crate::design::Color),
     pub discard: bool,
     /// Why other acts wait for this draft: its long and short form (the long one when it fits).
     pub reason: Option<(String, String)>,
@@ -380,7 +381,7 @@ pub struct ReaderView {
     pub link_choices: Vec<(usize, String)>,
     /// The entry as the reader reads it (the draft's words while one is open), or None when
     /// they cannot be parsed; with the note's name and where it comes from, for the entry
-    /// reader (egui `view::show_with_related`).
+    /// reader.
     pub entry: Option<Entry>,
     pub name: String,
     pub origin: ReaderOrigin,
@@ -389,7 +390,7 @@ pub struct ReaderView {
     pub repair_line: Option<usize>,
 }
 
-/// Where the open entry comes from (egui `view::Origin`): its path, its owner's label, and
+/// Where the open entry comes from: its path, its owner's label, and
 /// whether it is built in.
 pub struct ReaderOrigin {
     pub path: String,
@@ -646,7 +647,7 @@ impl Library {
     }
 
     /// `Reload from disk`.
-    pub fn reload(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    pub fn reload(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         self.start_load(ctx, campaigns);
     }
 
@@ -1169,16 +1170,15 @@ impl Library {
 
     /// The footer of a pane with no reader (a form, the empty campaign scope): `form_messages`.
     pub fn form_footer(&self, campaigns: &Campaigns) -> Vec<FooterLine<LibraryPress>> {
-        let frame = PaneFrame::plain();
-        self.form_messages(&frame, design::READER_MEASURE, campaigns)
-            .into_plain()
+        let frame = PaneFrame::new();
+        self.form_messages(&frame, campaigns).into_plain()
     }
 
     /// The empty reader's footer: Remove's notice and the page's results and error.
     pub fn empty_reader_footer(&self, campaigns: &Campaigns) -> Vec<FooterLine<LibraryPress>> {
-        let frame = PaneFrame::plain();
+        let frame = PaneFrame::new();
         let results = self.reader_results(campaigns);
-        let mut messages = Messages::new(&frame, "library_footer", design::READER_MEASURE);
+        let mut messages = Messages::new();
         if !self.dirty()
             && let Some(line) = self.kept.outcome(&frame, KeptKind::Removed, || {
                 self.outcome_of(KeptKind::Removed, &results)
@@ -1218,7 +1218,7 @@ impl Library {
     pub fn press_footer(
         &mut self,
         press: Press<LibraryPress>,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         campaigns: &mut Campaigns,
     ) {
         let kind = press
@@ -1858,8 +1858,8 @@ impl Library {
         if !self.saved_is_draft(note) {
             let _ = self.kept.take_discarded();
         }
-        let frame = PaneFrame::plain();
-        let mut messages = Messages::new(&frame, "library_footer", design::READER_MEASURE);
+        let frame = PaneFrame::new();
+        let mut messages = Messages::new();
         let undo = |step: UndoStep| step.pressed_as(LibraryPress::Undo);
         if discard_is_for(self.kept.discarded(), note)
             && let Some(line) = self.kept.outcome(&frame, KeptKind::Discarded, || {
@@ -1954,7 +1954,7 @@ impl Library {
         }
         if !duplicate_indices.is_empty() {
             messages.outcome(duplicate_notice(
-                &egui::Context::default(),
+                &StateContext::new(),
                 self.loaded.as_ref().unwrap(),
                 note,
                 &duplicate_indices,
@@ -2210,7 +2210,7 @@ impl Library {
     }
 
     /// Try again: the open file is read again.
-    pub fn read_again(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    pub fn read_again(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         if let Some(root) = self
             .open_note()
             .and_then(|note| note.owner.root().map(Path::to_path_buf))
@@ -2276,8 +2276,8 @@ impl Library {
 
 /// What the reader computes from the open entry before it draws: its title and subtitle, the
 /// draft's state, the owner's fault and words, the repair, the save row's state and the
-/// toolbar's extras. Both readers take it from `reader_prep` (egui's `editor_pane` and the
-/// GPUI port's `reader_view`), so the rule has one copy.
+/// toolbar's extras. The reader takes it from `reader_prep` (`reader_view`), so the rule has
+/// one copy.
 pub(super) struct ReaderPrep {
     pub draft_lock: Option<Sentence>,
     pub parsed_draft: ParsedDraft,

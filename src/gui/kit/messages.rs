@@ -1,11 +1,11 @@
-//! A pane footer's messages as the egui pages build them (`design::outcome::Messages`), drawn as
-//! `kit::Message`s. A page builds its `Messages` with `PaneFrame::plain()` as egui does, takes
+//! A pane footer's messages as the pages build them (`design::outcome::Messages`), drawn as
+//! `kit::Message`s. A page builds its `Messages` with `PaneFrame::new()`, takes
 //! the lines with `into_plain()`, and gives them here with one press handler. A press carries
 //! the line's id and, for a kept result, its store's ticket (`Press`), so it reaches only the
 //! entry the line showed.
 //!
 //! ```ignore
-//! let frame = PaneFrame::plain();
+//! let frame = PaneFrame::new();
 //! let messages = page.list_messages(&frame, …);
 //! let lines = kit::messages::lines("timeline-footer", messages.into_plain(),
 //!     cx.listener(|root, pressed: &kit::messages::Pressed<ListAct>, _, cx| {

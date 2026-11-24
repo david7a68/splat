@@ -1,11 +1,11 @@
-//! The combat sync panel's reads and acts, free of any toolkit, so the egui panel
-//! (`CombatSync::show`) and the GPUI sync editor (`src/gui/pages/party/sync_editor.rs`, on the
-//! Party page's sheet and in the run's Correct tab) share them.
+//! The combat sync panel's reads and acts, free of any toolkit, for the sync editor
+//! (`src/gui/pages/party/sync_editor.rs`, on the Party page's sheet and in the run's Correct
+//! tab).
 //!
 //! [`CombatSync::editor`] says what the panel shows after a read: each value with − and +, its
-//! label, its limits and its note, in the egui panel's blocks and order. [`CombatSync::step`],
-//! [`CombatSync::set_inspiration`] and [`CombatSync::set_condition`] change one value as the
-//! egui panel's controls do: the values' revision moves and the change goes half a second after
+//! label, its limits and its note, in the panel's blocks and order. [`CombatSync::step`],
+//! [`CombatSync::set_inspiration`] and [`CombatSync::set_condition`] change one value: the
+//! values' revision moves and the change goes half a second after
 //! the DM stops. [`CombatSync::rest`] and its acts are the panel's rests and recovery.
 use super::{
     COINS, CONDITIONS, CombatSync, HitDice, MAX_COUNT, MAX_HP_BONUS, RestForm, SheetAction,

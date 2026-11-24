@@ -1,4 +1,4 @@
-//! Where a raised layer opens (egui `design::popups`, `Dropdown::list`): under its trigger, or
+//! Where a raised layer opens: under its trigger, or
 //! above it when it does not fit below and there is more room above, `XS` from the trigger, and
 //! always inside the room that owns the trigger: a pane's body above its footer and clear of its
 //! scroll bar's lane (`kit::Pane`), a side column (`kit::EdgeColumn`: the rail, Lookup, the notes
@@ -251,8 +251,8 @@ impl Element for Placed {
         let size = window.layout_bounds(id).size;
         let (below, above) = spaces(&anchor);
         let room = anchor.room;
-        // Under the trigger when it fits there, or when there is no more room above (egui:
-        // `below >= whole_row && (natural <= below || below >= above)`).
+        // Under the trigger when it fits there, or when there is no more room above
+        // (`below >= whole_row && (natural <= below || below >= above)`).
         let y = if size.height <= below || below >= above {
             anchor.trigger.bottom() + XS
         } else {

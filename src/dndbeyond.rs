@@ -1,6 +1,6 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
+use crate::state_context::StateContext;
 use crate::{auth::Session, campaigns::Campaigns};
-use eframe::egui;
 use reqwest::{blocking::Client, redirect::Policy};
 use serde::Deserialize;
 use std::{
@@ -198,13 +198,7 @@ impl DndBeyond {
         self.message.end_unreachable(|_| false);
     }
 
-    pub fn poll(
-        &mut self,
-        ctx: &egui::Context,
-        epoch: u64,
-        connected: bool,
-        local: &mut Campaigns,
-    ) {
+    pub fn poll(&mut self, ctx: &StateContext, epoch: u64, connected: bool, local: &mut Campaigns) {
         let open = local.active_campaign().map(|campaign| campaign.id);
         if open != self.open {
             self.open = open;
@@ -262,12 +256,12 @@ impl DndBeyond {
         }
     }
 
-    fn refresh(&mut self, session: Session, ctx: &egui::Context) {
+    fn refresh(&mut self, session: Session, ctx: &StateContext) {
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.error = None;
         self.end_link_result();
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         thread::spawn(move || {
             let _ = tx.send(fetch(session));
             ctx.request_repaint();
@@ -356,12 +350,7 @@ mod tests {
             pending: Some(rx),
             ..Default::default()
         };
-        campaigns.poll(
-            &egui::Context::default(),
-            1,
-            false,
-            &mut Campaigns::default(),
-        );
+        campaigns.poll(&StateContext::new(), 1, false, &mut Campaigns::default());
         assert!(tx.send(Ok(Vec::new())).is_err());
         assert!(campaigns.campaigns.is_empty());
     }

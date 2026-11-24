@@ -1,4 +1,4 @@
-//! The dock under the live roster (egui `dock::dock`): the one home of the entry controls,
+//! The dock under the live roster: the one home of the entry controls,
 //! labelled with the row they act on, so no row moves when the selection changes. Line one:
 //! Amount, Damage, Heal, Temp HP, the dice and Roll. Line two: the selected name, Conditions,
 //! Conc, Absent and Effect; the effect field for that row while it is open; or how to give half
@@ -13,7 +13,7 @@ use gpui::{
 use kit::WithTooltip as _;
 use theme::{Density, Type, TypeExt, colors};
 
-/// Under this width the dock gives up the hint and an icon (egui `DOCK_ALL_WORDS_FROM`).
+/// Under this width the dock gives up the hint and an icon.
 const ALL_WORDS_FROM: f32 = view::DOCK_ALL_WORDS_FROM;
 
 /// The dock's width from which Effect has its word, and from which it has its icon.

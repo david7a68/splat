@@ -1,11 +1,11 @@
-//! The open event's form (egui: `TimelinePage::detail`): its title line (the kind, the title, Copy
+//! The open event's form: its title line (the kind, the title, Copy
 //! link, the save state and the `⋯` menu with `Roll for encounters` and `Remove`), its Title, then
 //! the form that scrolls: Kind, How long (with a journey's encounter checks under it), the rest
 //! ruling, Starts and Ends, Where (with the locations it could be), Session, From the run,
 //! Notes, the file's other fields, Link text, the notes that mention it, and Place after.
 use super::checks;
 use crate::gui::theme::{Density, L, M, S, Type, TypeExt, XS, colors};
-use crate::gui::{SplatRoot, bridge, icons, kit};
+use crate::gui::{SplatRoot, icons, kit};
 use crate::timeline::page::{
     DetailActs, PlaceHelp, event_labels, saving_blocked, saving_now, saving_states,
 };
@@ -85,7 +85,7 @@ pub(crate) fn render(
         .unwrap_or_default();
     // The title line: the kind before the title, Copy link, the save state, the `⋯` menu.
     let saving = saving_states();
-    let now = bridge::status(&saving[saving_now(book, id)]);
+    let now = kit::Status::of(&saving[saving_now(book, id)]);
     let copy = {
         let link = link.clone();
         let owner = id.to_owned();
@@ -98,7 +98,7 @@ pub(crate) fn render(
         .on_click(cx.listener(move |root, _, _, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(link.clone()));
             root.app.timeline_page.copied = Some((owner.clone(), Instant::now()));
-            root.bridge.ctx().request_repaint_after(COPIED_FOR);
+            root.ctx.request_repaint_after(COPIED_FOR);
             cx.notify();
         }))
     };
@@ -364,7 +364,7 @@ fn form(
     }
     // The rest ruling: the status now in force and the action that changes it.
     if event.kind == Kind::LongRest {
-        let status = bridge::status(&crate::timeline::page::long_rest_status(event.restores));
+        let status = kit::Status::of(&crate::timeline::page::long_rest_status(event.restores));
         let restores = event.restores;
         let owner = id.to_owned();
         form = form.child(

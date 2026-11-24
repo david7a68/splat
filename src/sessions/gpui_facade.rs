@@ -1,16 +1,15 @@
 //! What the GPUI Session page (`src/gui/pages/sessions/`) reads from the page's state and the
-//! acts it asks for. Toolkit-free: no egui `Ui` here. Each act is the same state change the egui
-//! page makes for the same press, by the same methods, so the two UIs share one behaviour. The
-//! GPUI view holds no copy of the page's logic; what it needs from a private field is read here.
+//! acts it asks for. Toolkit-free. Each act calls the page's own methods, so a press makes one
+//! state change wherever it comes from. The GPUI view holds no copy of the page's logic; what it needs from a private field is read here.
 use super::{
     DraftState, Form, Note, Plan, ProcessingSettings, SessionAct, Sessions, Tab, Template, View,
     form_reason,
 };
 use crate::design::CreateReasons as _;
 use crate::design::outcome::{PaneFrame, Press, plain};
+use crate::state_context::StateContext;
 use crate::timeline::Book;
 use crate::timeline::EventDisplay as _;
-use eframe::egui;
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -143,7 +142,7 @@ impl Sessions {
     }
 
     /// `Stop recording`, from the header or a record control.
-    pub fn gv_stop_recording(&mut self, ctx: &egui::Context) {
+    pub fn gv_stop_recording(&mut self, ctx: &StateContext) {
         self.finish_recording(ctx);
     }
 
@@ -416,8 +415,8 @@ impl Sessions {
         let Some(note) = self.gv_selected_note().cloned() else {
             return Vec::new();
         };
-        let frame = PaneFrame::plain();
-        let messages = self.session_messages(&frame, settings, book, plan, &note, 0.0);
+        let frame = PaneFrame::new();
+        let messages = self.session_messages(&frame, settings, book, plan, &note);
         messages.into_plain()
     }
 
@@ -428,8 +427,8 @@ impl Sessions {
 
     /// The footer of a pane whose body is the draft's editor (`draft_messages`).
     pub fn gv_draft_footer(&mut self, template: bool) -> Vec<FooterLine> {
-        let frame = PaneFrame::plain();
-        let messages = self.draft_messages(&frame, "gpui_draft_footer", template, 0.0);
+        let frame = PaneFrame::new();
+        let messages = self.draft_messages(&frame, template);
         messages.into_plain()
     }
 
@@ -1120,7 +1119,7 @@ impl Sessions {
     pub fn gv_banner_act(
         &mut self,
         act: BannerAct,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         settings: &ProcessingSettings,
         book: &Book,
     ) {
@@ -1466,8 +1465,8 @@ impl Sessions {
     }
 
     pub fn gv_panel_footer(&mut self) -> Vec<FooterLine> {
-        let frame = PaneFrame::plain();
-        let messages = self.panel_messages(&frame, 0.0);
+        let frame = PaneFrame::new();
+        let messages = self.panel_messages(&frame);
         messages.into_plain()
     }
 
@@ -1514,7 +1513,7 @@ pub struct EventRow {
     pub details: Option<EventDetails>,
 }
 
-/// An open event's details (a simpler form of the egui plan's open row).
+/// An open event's details (a simple form of the plan's open row).
 pub struct EventDetails {
     pub title: String,
     pub notes: String,
@@ -1968,14 +1967,13 @@ impl Sessions {
             .then_some(())
             .and(note.as_ref())
             .map(|note| (settings, note));
-        let frame = PaneFrame::plain();
+        let frame = PaneFrame::new();
         let messages = self.plan_footer_messages(
             &frame,
             book,
             plan,
             page,
             (shown, &projection.planned_results),
-            0.0,
         );
         messages.into_plain()
     }
@@ -2066,7 +2064,7 @@ impl Sessions {
         book: &mut Book,
         plan: &Plan<'_>,
         index: Option<&crate::lookup::ContentIndex>,
-        ctx: &egui::Context,
+        ctx: &StateContext,
     ) {
         use super::plan::{RewardsAct, SceneAct};
         let session = self.selected;
@@ -2101,7 +2099,7 @@ impl Sessions {
                     book.add(kind, session)
                 };
                 // The row after the new one comes into view.
-                self.row_reveal = Some((id.clone(), 0, ctx.cumulative_pass_nr()));
+                self.row_reveal = Some((id.clone(), 0, ctx.pass()));
                 self.record_plan_add(&id, book, ctx);
             }
             PlanAct::OpenScene => {
@@ -2230,7 +2228,7 @@ impl Sessions {
                 self.end_plan_add();
             }
             PlanAct::Travel(id, act) => {
-                self.row_reveal = Some((id.clone(), 0, ctx.cumulative_pass_nr()));
+                self.row_reveal = Some((id.clone(), 0, ctx.pass()));
                 self.travel_act(book, session, &id, act, plan);
             }
             PlanAct::TravelUndo(id) => self.travel.done.undo(&id, book),
@@ -2238,7 +2236,7 @@ impl Sessions {
             PlanAct::FightLog => self.show_fight_log = !self.show_fight_log,
             PlanAct::WholeRun(path) => self.wants_saved_run = Some(path),
             PlanAct::RollForEncounters(id) => {
-                self.row_reveal = Some((id.clone(), 0, ctx.cumulative_pass_nr()));
+                self.row_reveal = Some((id.clone(), 0, ctx.pass()));
                 self.travel_act(
                     book,
                     session,
@@ -2750,7 +2748,7 @@ impl Sessions {
         act: RecordingAct,
         settings: &ProcessingSettings,
         book: &mut Book,
-        ctx: &egui::Context,
+        ctx: &StateContext,
     ) {
         let Some(recording) = self
             .recordings
@@ -3134,8 +3132,8 @@ impl Sessions {
 
     /// The templates list's footer (`list_messages`): a deleted template's Undo.
     pub fn gv_template_list_footer(&self) -> Vec<FooterLine> {
-        let frame = PaneFrame::plain();
-        let messages = self.list_messages(&frame, "gpui_template_list_footer", 0.0);
+        let frame = PaneFrame::new();
+        let messages = self.list_messages(&frame);
         messages.into_plain()
     }
 }
@@ -3163,7 +3161,7 @@ mod tests {
     /// Round 30 review F4 of PR 400: every warning of the session note that the banner shows on
     /// any page names its note, with its cause: the conflict, the missing note, the discarded
     /// and missing note, and the failed save. A template's warning (no name) keeps `This note`.
-    /// Ported from the egui banner test to the banner's data (`draft_warning`).
+    /// The banner's data (`draft_warning`).
     #[test]
     fn a_session_note_warning_names_its_note_in_every_state() {
         let folder = tempfile::tempdir().unwrap();

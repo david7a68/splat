@@ -3,7 +3,7 @@
 //! line. No rail target moves when a state comes or goes: the Run slot keeps one height in every
 //! state, and the bottom group keeps its place whatever the statuses say
 //! (`docs/design-system.md`, Space, shape and density).
-use super::{SplatRoot, bridge, icons, kit, theme};
+use super::{SplatRoot, icons, kit, theme};
 use crate::{NO_FIGHT_OPEN, Page, SettingsTab, draft_page, encounters, world};
 use gpui::{
     Context, Div, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::*, px,
@@ -246,8 +246,8 @@ fn status_slot(
                 .recording_hover()
                 .unwrap_or_else(|| state.to_owned())
         };
-        let shown = kit::Status::new(status.icon, words, bridge::color(status.word_color()))
-            .icon_color(bridge::color(status.icon_color()));
+        let shown = kit::Status::new(status.icon, words, theme::color(status.word_color()))
+            .icon_color(theme::color(status.icon_color()));
         slot = slot.child(
             kit::status_link("rail-recording", shown)
                 .hint(full)
@@ -292,9 +292,7 @@ fn status_slot(
         let status = kit::Status::new(
             attention.map_or(icons::ERROR, |state| state.icon),
             word,
-            attention.map_or(colors().document.invalid, |state| {
-                bridge::color(state.color)
-            }),
+            attention.map_or(colors().document.invalid, |state| theme::color(state.color)),
         );
         let hint = if target == Page::Sessions && app.sessions.notes_changed_on_disk() {
             "Notes changed on disk"
@@ -397,7 +395,7 @@ fn rail_status(
         || draft_page(word).is_some();
     if word == "Connected · not remembered" {
         // Two lines: the connection, then `Not remembered` under its word.
-        let status = bridge::status(&crate::design::Status {
+        let status = kit::Status::of(&crate::design::Status {
             word: "Connected",
             ..state
         });
@@ -413,7 +411,7 @@ fn rail_status(
             )))
             .into_any_element();
     }
-    let status = bridge::status(&state);
+    let status = kit::Status::of(&state);
     if !links {
         let line = div()
             .flex()

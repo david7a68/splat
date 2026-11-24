@@ -1,25 +1,18 @@
 //! The GPUI app: the window, the root view (`SplatRoot`) and the shell around the pages (the rail,
 //! the page switch, the run strip, the side panels, the close prompt, the global keys and the
-//! background poll). `docs/gpui-port.md` has the plan and the Kit guide.
+//! background poll). `docs/development.md` (How the app runs) and `docs/design-system.md` (Kit)
+//! describe it.
 //!
-//! The root owns the app's state (`crate::Splat`, the same state the egui app draws) and the GPUI
-//! state of each page (`pages::States`). Pages read the state and call its methods from event
-//! handlers (`cx.listener`); the logic stays in the state types.
+//! The root owns the app's state (`crate::Splat`), its state context
+//! (`crate::state_context::StateContext`) and the GPUI state of each page (`pages::States`).
+//! Pages read the state and call its methods from event handlers (`cx.listener`); the logic stays
+//! in the state types.
 //!
-//! Each frame (`SplatRoot::render`) first runs the frame logic that draws nothing, in the order the
-//! egui `update` runs it: background polls, the pages' `poll` hooks, cross-page requests
-//! (`Splat::route`), the party sync, the run's place in the Timeline, the page change. Between
-//! frames one timer task polls the background work and asks for a frame only when it reported a
-//! change (`bridge::Bridge`).
+//! Each frame (`SplatRoot::render`) first runs the frame logic that draws nothing: background
+//! polls, the pages' `poll` hooks, cross-page requests (`Splat::route`), the party sync, the run's
+//! place in the Timeline, the page change. Between frames one timer task reads the context's
+//! waker and runs the frame logic only when background work asked for a frame.
 
-// The kit, the theme, the icons and the bridge are the foundation that the page ports (wave 2 of
-// `docs/gpui-port.md`) build on: parts no page calls yet are not dead. The cleanup wave removes
-// these allows.
-#[allow(
-    dead_code,
-    reason = "foundation for the page ports (docs/gpui-port.md)"
-)]
-pub mod bridge;
 mod close;
 #[cfg(test)]
 mod gallery;
@@ -27,13 +20,13 @@ mod gallery;
 pub(crate) mod harness;
 #[allow(
     dead_code,
-    reason = "foundation for the page ports (docs/gpui-port.md)"
+    reason = "the foundation of the kit: parts that no page calls yet"
 )]
 pub mod icons;
 #[allow(
     dead_code,
     unused_imports,
-    reason = "foundation for the page ports (docs/gpui-port.md)"
+    reason = "the foundation of the kit: parts that no page calls yet"
 )]
 pub mod kit;
 pub mod pages;
@@ -42,13 +35,13 @@ mod rail;
 mod tests;
 #[allow(
     dead_code,
-    reason = "foundation for the page ports (docs/gpui-port.md)"
+    reason = "the foundation of the kit: parts that no page calls yet"
 )]
 pub mod theme;
 mod touchpad;
 
+use crate::state_context::StateContext;
 use crate::{CampaignTab, Page, SettingsTab, Splat};
-use bridge::Bridge;
 use gpui::{
     AnyElement, App, AppContext, Bounds, Context, FocusHandle, InteractiveElement, IntoElement,
     KeyBinding, ParentElement, Render, Styled, Task, TitlebarOptions, Window, WindowBounds,
@@ -141,16 +134,16 @@ fn connection(app: &Splat, session: bool) -> crate::Connection {
     }
 }
 
-/// The root view: the app's state, the egui bridge, and every page's GPUI state.
+/// The root view: the app's state, its state context, and every page's GPUI state.
 pub struct SplatRoot {
-    /// The app's state, shared with the egui app (`crate::Splat`).
+    /// The app's state (`crate::Splat`).
     pub app: Splat,
-    /// The egui context that state methods still take (`bridge`).
-    pub bridge: Bridge,
+    /// The context that the state's methods take: typed slots, the pass and the waker.
+    pub ctx: StateContext,
     /// Each page's GPUI-only state (`pages::States`).
     #[allow(
         dead_code,
-        reason = "each page port keeps its GPUI state here (docs/gpui-port.md)"
+        reason = "each page keeps its GPUI state here; some fields wait for their page"
     )]
     pub pages: pages::States,
     /// The root's keyboard focus, so the global keys reach it with nothing else focused.
@@ -172,7 +165,7 @@ impl SplatRoot {
         let saved = app.restore();
         let mut root = Self {
             app,
-            bridge: Bridge::new(),
+            ctx: StateContext::new(),
             pages: pages::States::default(),
             focus: cx.focus_handle(),
             remembered: None,
@@ -190,13 +183,13 @@ impl SplatRoot {
     }
 
     /// The timer task between frames: when background work reported a change through the
-    /// bridge, run the frame logic and ask for a frame.
+    /// context's waker, run the frame logic and ask for a frame.
     fn start_poll(&self, window: &Window, cx: &mut Context<Self>) -> Task<()> {
-        let signal = self.bridge.signal();
+        let waker = self.ctx.waker();
         cx.spawn_in(window, async move |this, cx| {
             loop {
                 cx.background_executor().timer(POLL_EVERY).await;
-                if !signal.take_due() {
+                if !waker.take_due() {
                     continue;
                 }
                 let alive = this.update_in(cx, |root, window, cx| {
@@ -220,7 +213,7 @@ impl SplatRoot {
         });
     }
 
-    /// Whether the window may close now (egui's `close_requested` branch of `update`).
+    /// Whether the window may close now.
     pub fn should_close(&mut self, _: &mut Window, cx: &mut Context<Self>) -> bool {
         let app = &mut self.app;
         app.sessions.flush();
@@ -262,37 +255,35 @@ impl SplatRoot {
         cx.notify();
     }
 
-    /// The frame logic that draws nothing, in egui's `update` order. Runs at the start of every
-    /// frame and from the background poll.
+    /// The frame logic that draws nothing. Runs at the start of every frame and from the
+    /// background poll. Its two passes (`StateContext::begin_pass`) are before and after the
+    /// pages' polls.
     pub fn frame_logic(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Self { app, bridge, .. } = self;
-        bridge.pass(|ctx| {
-            crate::frame_clock::tick(ctx);
-            app.campaign_content.tick(ctx, &app.campaigns);
-            let (epoch, session) = app.poll_background(ctx);
-            let modal = app.copy_dialog.is_some() || app.confirm_close;
-            app.sync_party(ctx, epoch, session.clone());
-            app.sessions.on_page = app.page == Page::Sessions;
-            app.sessions.modal = modal;
-            if !app.sessions.on_page {
-                app.sessions.left_page();
-            }
-        });
+        let Self { app, ctx, .. } = self;
+        ctx.begin_pass();
+        app.campaign_content.tick(ctx, &app.campaigns);
+        let (epoch, session) = app.poll_background(ctx);
+        let modal = app.copy_dialog.is_some() || app.confirm_close;
+        app.sync_party(ctx, epoch, session.clone());
+        app.sessions.on_page = app.page == Page::Sessions;
+        app.sessions.modal = modal;
+        if !app.sessions.on_page {
+            app.sessions.left_page();
+        }
         // The pages' own polls (their GPUI state follows the app's).
         pages::poll(self, window, cx);
-        let Self { app, bridge, .. } = self;
-        bridge.pass(|ctx| {
-            if app.notes_gave_way && !app.lookup.open {
-                app.notes_gave_way = false;
-                app.sessions.notes_come_back();
-            }
-            app.apply_tracker_act();
-            app.add_tracker_act_to_timeline();
-            // A pressed dice number: the run rolls it, or it is a preview (egui's `update`).
-            app.route_rolls(ctx);
-            app.route(ctx);
-            app.follow_page_change();
-        });
+        let Self { app, ctx, .. } = self;
+        ctx.begin_pass();
+        if app.notes_gave_way && !app.lookup.open {
+            app.notes_gave_way = false;
+            app.sessions.notes_come_back();
+        }
+        app.apply_tracker_act();
+        app.add_tracker_act_to_timeline();
+        // A pressed dice number: the run rolls it, or it is a preview.
+        app.route_rolls(ctx);
+        app.route(ctx);
+        app.follow_page_change();
         self.remember(cx);
     }
 
@@ -408,8 +399,8 @@ impl SplatRoot {
         }
     }
 
-    /// Ctrl+S, with one owner for the whole window, in egui's order (`update` draws the side
-    /// panels before the page, and each takes the key with `design::save_row::save_key`): nothing
+    /// Ctrl+S, with one owner for the whole window, side panels before the page (each takes the
+    /// key with `design::save_row::save_key`): nothing
     /// under a modal (the close prompt, the copy dialog, a kit dialog or menu); the Notes panel's
     /// note when it had the keyboard; else the page shown (`pages::save_key`). No page binds
     /// Ctrl+S itself, so the key saves the same thing wherever the keyboard is.
@@ -452,7 +443,7 @@ impl SplatRoot {
             return;
         }
         let view_takes_escape = if app.lookup.on_trackers() {
-            // Escape ends a typed amount, not Lookup (egui: the field loses focus).
+            // Escape ends a typed amount, not Lookup (the field loses focus).
             if app.trackers.takes_escape() {
                 app.trackers.end_asking(false, 0);
                 cx.notify();

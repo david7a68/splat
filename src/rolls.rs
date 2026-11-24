@@ -3,7 +3,7 @@
 //! save, a skill) also roll. A right-click on a tile or a number chooses how its d20 rolls. A
 //! roll changes nothing: in a run it goes to the Log, and its damage goes into Amount.
 use crate::design::{self};
-use eframe::egui::{self, Id};
+use crate::state_context::{Slot, StateContext};
 use splat::content::dice_text::{self, D20, DamagePart, RollLink};
 use splat::execution::dice::{Dice, Random, Roll};
 use splat::memo::Memo;
@@ -47,57 +47,47 @@ pub struct Ask {
     pub inspired: bool,
 }
 
-fn ask_id() -> Id {
-    Id::new("roll_ask")
-}
-fn roller_id() -> Id {
-    Id::new("roll_roller")
-}
-fn entry_id() -> Id {
-    Id::new("roll_entry")
-}
-fn inspired_id() -> Id {
-    Id::new("roll_inspired")
-}
-fn preview_id() -> Id {
-    Id::new("roll_preview_random")
-}
-fn outcome_id(entry: &str) -> Id {
-    Id::new(("roll_preview_outcome", entry))
+/// The roll the DM asked for, for the run or the preview to roll.
+const ASK: Slot<Ask> = Slot::new("roll_ask");
+/// The run row whose stat block or sheet is drawn now.
+const ROLLER: Slot<usize> = Slot::new("roll_roller");
+/// The entry whose rolls are drawn now.
+const ENTRY: Slot<String> = Slot::new("roll_entry");
+/// Whether the roller drawn now has inspiration.
+const INSPIRED: Slot<bool> = Slot::new("roll_inspired");
+/// The preview's own dice.
+const PREVIEW: Slot<Random> = Slot::new("roll_preview_random");
+
+/// An entry's last preview.
+fn outcome_slot(entry: &str) -> Slot<Outcome> {
+    Slot::new("roll_preview_outcome").with(entry)
 }
 
 /// The press of this frame, for the run or the preview stream.
-pub fn take_ask(ctx: &egui::Context) -> Option<Ask> {
-    ctx.data_mut(|data| {
-        let ask = data.get_temp::<Ask>(ask_id());
-        data.remove::<Ask>(ask_id());
-        ask
-    })
+pub fn take_ask(ctx: &StateContext) -> Option<Ask> {
+    ctx.take(ASK)
 }
 
 /// Who rolls from what is drawn next: a run row, or nobody. Set it around a run's reader.
-pub fn set_roller(ctx: &egui::Context, roller: Option<usize>) {
-    ctx.data_mut(|data| match roller {
-        Some(row) => data.insert_temp(roller_id(), row),
-        None => data.remove::<usize>(roller_id()),
-    });
+pub fn set_roller(ctx: &StateContext, roller: Option<usize>) {
+    ctx.put(ROLLER, roller);
 }
 
 /// Whether the roller drawn next can expend inspiration for advantage before a roll. Set it
 /// around a run's reader, by the campaign's inspiration rule and the character's sheet.
-pub fn set_inspired(ctx: &egui::Context, inspired: bool) {
-    ctx.data_mut(|data| data.insert_temp(inspired_id(), inspired));
+pub fn set_inspired(ctx: &StateContext, inspired: bool) {
+    ctx.set(INSPIRED, inspired);
 }
 
 /// The entry whose numbers are drawn next, to name its rolls.
-pub fn set_entry(ctx: &egui::Context, name: &str) {
-    ctx.data_mut(|data| data.insert_temp(entry_id(), name.to_owned()));
+pub fn set_entry(ctx: &StateContext, name: &str) {
+    ctx.set(ENTRY, name.to_owned());
 }
 
-/// A press on a rollable number in a view that is not egui (the GPUI reader), with the keys
+/// A press on a rollable number in the reader, with the keys
 /// held: Shift rolls a d20 with advantage, Ctrl with disadvantage, as a click here does. The ask
 /// waits in `ctx` for whoever owns the dice ([`take_ask`]).
-pub fn ask_pressed(ctx: &egui::Context, link: &RollLink, shift: bool, command: bool) {
+pub fn ask_pressed(ctx: &StateContext, link: &RollLink, shift: bool, command: bool) {
     ask(
         ctx,
         link.clone(),
@@ -109,29 +99,25 @@ pub fn ask_pressed(ctx: &egui::Context, link: &RollLink, shift: bool, command: b
 
 /// Ask for `link`, from the roller and entry set for what is drawn now.
 fn ask(
-    ctx: &egui::Context,
+    ctx: &StateContext,
     link: RollLink,
     occurrence: Option<SpellOccurrence>,
     mode: Mode,
     inspired: bool,
 ) {
-    let roller = ctx.data(|data| data.get_temp::<usize>(roller_id()));
-    let entry = ctx
-        .data(|data| data.get_temp::<String>(entry_id()))
-        .unwrap_or_default();
-    ctx.data_mut(|data| {
-        data.insert_temp(
-            ask_id(),
-            Ask {
-                link,
-                occurrence,
-                mode,
-                roller,
-                entry,
-                inspired,
-            },
-        );
-    });
+    let roller = ctx.get(ROLLER);
+    let entry = ctx.get(ENTRY).unwrap_or_default();
+    ctx.set(
+        ASK,
+        Ask {
+            link,
+            occurrence,
+            mode,
+            roller,
+            entry,
+            inspired,
+        },
+    );
 }
 
 /// How a right-click on a d20 roll can roll it: the mode, and whether inspiration pays for
@@ -827,30 +813,26 @@ pub fn reroll(
 
 /// A preview outside a run, on its own stream, kept for the entry's action line. Tests use a
 /// fixed seed.
-pub fn preview(ctx: &egui::Context, ask: &Ask) {
-    let mut random = ctx
-        .data(|data| data.get_temp::<Random>(preview_id()))
-        .unwrap_or_else(|| {
-            #[cfg(any(test, feature = "test-support"))]
-            let seed = 20_261_110;
-            #[cfg(not(any(test, feature = "test-support")))]
-            let seed = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(1, |since| since.as_nanos() as u64);
-            Random::seeded(seed)
-        });
-    let outcome = make(&ask.entry, &ask.link, ask.mode, (0, 0), None, &mut random);
-    ctx.data_mut(|data| {
-        data.insert_temp(preview_id(), random);
-        if let Ok(outcome) = outcome {
-            data.insert_temp(outcome_id(&ask.entry), outcome);
-        }
+pub fn preview(ctx: &StateContext, ask: &Ask) {
+    let mut random = ctx.get(PREVIEW).unwrap_or_else(|| {
+        #[cfg(any(test, feature = "test-support"))]
+        let seed = 20_261_110;
+        #[cfg(not(any(test, feature = "test-support")))]
+        let seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(1, |since| since.as_nanos() as u64);
+        Random::seeded(seed)
     });
+    let outcome = make(&ask.entry, &ask.link, ask.mode, (0, 0), None, &mut random);
+    ctx.set(PREVIEW, random);
+    if let Ok(outcome) = outcome {
+        ctx.set(outcome_slot(&ask.entry), outcome);
+    }
 }
 
 /// An entry's last preview, for its action line.
-fn preview_outcome(ctx: &egui::Context, entry: &str) -> Option<Outcome> {
-    ctx.data(|data| data.get_temp::<Outcome>(outcome_id(entry)))
+fn preview_outcome(ctx: &StateContext, entry: &str) -> Option<Outcome> {
+    ctx.get(outcome_slot(entry))
 }
 
 /// The run's armed action, for the tiles to mark it and say what can follow.
@@ -889,28 +871,19 @@ pub enum ArmedAction {
 
 impl ArmedAction {}
 
-fn armed_id() -> Id {
-    Id::new("roll_armed")
-}
-fn armed_action_id() -> Id {
-    Id::new("roll_armed_action")
-}
+/// The run's armed action, for the tiles.
+const ARMED: Slot<ArmedView> = Slot::new("roll_armed");
+/// What the DM pressed under an armed tile.
+const ARMED_ACTION: Slot<ArmedAction> = Slot::new("roll_armed_action");
 
 /// Show the run's armed action on the tiles drawn next, or none.
-pub fn set_armed(ctx: &egui::Context, view: Option<ArmedView>) {
-    ctx.data_mut(|data| match view {
-        Some(view) => data.insert_temp(armed_id(), view),
-        None => data.remove::<ArmedView>(armed_id()),
-    });
+pub fn set_armed(ctx: &StateContext, view: Option<ArmedView>) {
+    ctx.put(ARMED, view);
 }
 
 /// What the DM pressed under an armed tile this frame.
-pub fn take_armed_action(ctx: &egui::Context) -> Option<ArmedAction> {
-    ctx.data_mut(|data| {
-        let action = data.get_temp::<ArmedAction>(armed_action_id());
-        data.remove::<ArmedAction>(armed_action_id());
-        action
-    })
+pub fn take_armed_action(ctx: &StateContext) -> Option<ArmedAction> {
+    ctx.take(ARMED_ACTION)
 }
 
 /// A tile's icon: a sword for an attack, a shield for a save, fire for damage.
@@ -922,25 +895,24 @@ fn icon(link: &RollLink) -> &'static str {
     }
 }
 
-fn changes_id() -> Id {
-    Id::new("roll_changes")
-}
+/// A run row's attack and damage changes.
+const CHANGES: Slot<(usize, (i64, i64))> = Slot::new("roll_changes");
 
 /// The run row whose stat block or sheet is drawn now, if any.
-pub fn roller(ctx: &egui::Context) -> Option<usize> {
-    ctx.data(|data| data.get_temp::<usize>(roller_id()))
+pub fn roller(ctx: &StateContext) -> Option<usize> {
+    ctx.get(ROLLER)
 }
 
 /// A run's attack and damage changes for `row`, so that row's tiles show the numbers Splat
 /// rolls. Set it with the roller, around a run's reader.
-pub fn set_changes(ctx: &egui::Context, row: usize, changes: (i64, i64)) {
-    ctx.data_mut(|data| data.insert_temp(changes_id(), (row, changes)));
+pub fn set_changes(ctx: &StateContext, row: usize, changes: (i64, i64)) {
+    ctx.set(CHANGES, (row, changes));
 }
 
 /// The changes of the roller drawn now: none outside a run, and none for another row.
-fn roller_changes(ctx: &egui::Context) -> (i64, i64) {
+fn roller_changes(ctx: &StateContext) -> (i64, i64) {
     let roller = roller(ctx);
-    ctx.data(|data| data.get_temp::<(usize, (i64, i64))>(changes_id()))
+    ctx.get(CHANGES)
         .filter(|(row, _)| Some(*row) == roller)
         .map_or((0, 0), |(_, changes)| changes)
 }
@@ -1462,8 +1434,7 @@ mod tests {
     }
 }
 
-/// Action tiles for a view that is not egui (the GPUI reader): the words and state `tile_row`
-/// paints, without painting them. Presses go back through [`ask_pressed_at`].
+/// Action tiles for the reader: the words and state of each tile, without painting them. Presses go back through [`ask_pressed_at`].
 pub mod plain {
     use super::*;
 
@@ -1502,15 +1473,13 @@ pub mod plain {
     /// The tiles of an entry's actions: each with its place in the whole list (its number).
     /// `entry` names the rolls, as `tile_row` sets it.
     pub fn roll_tiles(
-        ctx: &egui::Context,
+        ctx: &StateContext,
         entry: &str,
         chips: &[(Option<usize>, Chip)],
     ) -> Vec<TileView> {
         set_entry(ctx, entry);
         let in_run = roller(ctx).is_some();
-        let armed = ctx
-            .data(|data| data.get_temp::<ArmedView>(armed_id()))
-            .filter(|_| in_run);
+        let armed = ctx.get(ARMED).filter(|_| in_run);
         let changes = if in_run { roller_changes(ctx) } else { (0, 0) };
         chips
             .iter()
@@ -1577,7 +1546,7 @@ pub mod plain {
 
     /// A press on a tile or a dice link, with the keys held and the spell it casts, if any.
     pub fn ask_pressed_at(
-        ctx: &egui::Context,
+        ctx: &StateContext,
         link: &RollLink,
         occurrence: Option<SpellOccurrence>,
         shift: bool,
@@ -1594,21 +1563,21 @@ pub mod plain {
 
     /// Under an entry's tiles in a run: the armed action's status and what can follow it, when
     /// one of these tiles is armed.
-    pub fn armed_under(ctx: &egui::Context, chips: &[&Chip]) -> Option<ArmedView> {
+    pub fn armed_under(ctx: &StateContext, chips: &[&Chip]) -> Option<ArmedView> {
         roller(ctx)?;
-        ctx.data(|data| data.get_temp::<ArmedView>(armed_id()))
+        ctx.get(ARMED)
             .filter(|view| chips.iter().any(|chip| view.marks(chip)))
     }
 
     /// A press on one of the armed action's follow-up buttons.
-    pub fn send_armed_action(ctx: &egui::Context, action: ArmedAction) {
-        ctx.data_mut(|data| data.insert_temp(armed_action_id(), action));
+    pub fn send_armed_action(ctx: &StateContext, action: ArmedAction) {
+        ctx.set(ARMED_ACTION, action);
     }
 
     /// Outside a run, the last preview's result under the tiles that rolled it: its totals,
     /// each part's words, joined by a muted dot.
     pub fn preview_words(
-        ctx: &egui::Context,
+        ctx: &StateContext,
         entry: &str,
         links: &[&RollLink],
     ) -> Option<Vec<String>> {
