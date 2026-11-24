@@ -14,6 +14,7 @@ pub mod button;
 pub mod checkbox;
 pub mod dialog;
 pub mod empty;
+pub mod fact;
 pub mod field;
 pub mod list;
 pub mod markdown;
@@ -27,6 +28,7 @@ pub mod tabs;
 pub mod text;
 pub mod title;
 pub mod tooltip;
+pub mod value_block;
 
 pub use button::{Button, IconButton};
 pub use checkbox::{Checkbox, Switch};
@@ -34,7 +36,7 @@ pub use dialog::Dialog;
 pub use empty::empty_state;
 pub use field::{TextEditor, TextField, field, help};
 pub use list::{Row, two_line_row};
-pub use markdown::markdown;
+pub use markdown::{Markdown, markdown};
 pub use menu::{Dropdown, MenuButton, MenuItem, Popover};
 pub use nav::{NavItem, NavToggle};
 pub use outcome::{Message, Tone};
@@ -45,6 +47,7 @@ pub use tabs::Segmented;
 pub use text::{Heading, gap, heading, icon, label, rule, text};
 pub use title::page_header;
 pub use tooltip::WithTooltip;
+pub use value_block::{HeadingNote, HeadingRow, ValueBlock};
 
 use gpui::{IntoElement, ParentElement, SharedString};
 

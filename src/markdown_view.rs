@@ -29,6 +29,11 @@ pub fn take_lookup_link(ctx: &egui::Context) -> Option<String> {
     ctx.data_mut(|data| data.remove_temp::<String>(egui::Id::new("markdown_clicked_lookup")))
 }
 
+/// Give a pressed bold reference to Lookup, as a press in the Reader does ([`take_lookup_link`]).
+pub fn send_lookup_link(ctx: &egui::Context, words: String) {
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new("markdown_clicked_lookup"), words));
+}
+
 /// Ask the next draw to scroll to this heading. `None` ends the request.
 pub fn want_heading(ctx: &egui::Context, heading: Option<String>) {
     ctx.data_mut(|data| match heading {
@@ -2110,7 +2115,7 @@ struct Targets {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum LinkTarget {
+pub enum LinkTarget {
     Missing,
     Note(String),
     Lookup(String),
@@ -2121,7 +2126,7 @@ pub(crate) enum LinkTarget {
 
 impl LinkTarget {
     /// Where a Markdown link's destination goes, if it can be followed.
-    pub(crate) fn from_destination(destination: &str) -> Option<Self> {
+    pub fn from_destination(destination: &str) -> Option<Self> {
         if let Some(note) = destination.strip_prefix(NOTE_LINK) {
             Some(Self::Note(note.to_owned()))
         } else if let Some(link) =
@@ -2370,9 +2375,7 @@ fn follow(ui: &egui::Ui, pressed: &egui::Response, destination: &LinkTarget) {
             let from = reader_document(ui);
             send_note_link(ui.ctx(), note.clone(), from);
         }
-        Some(LinkTarget::Lookup(words)) => ui.ctx().data_mut(|data| {
-            data.insert_temp(egui::Id::new("markdown_clicked_lookup"), words.clone());
-        }),
+        Some(LinkTarget::Lookup(words)) => send_lookup_link(ui.ctx(), words.clone()),
         _ => {}
     }
 }

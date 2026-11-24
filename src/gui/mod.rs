@@ -392,6 +392,10 @@ impl SplatRoot {
         if self.gallery.is_some() {
             return gallery::render(self, window, cx);
         }
+        #[cfg(test)]
+        if let Some(preview) = pages::reader::render_preview(self, window, cx) {
+            return preview;
+        }
         let needs_campaign = matches!(
             self.app.page,
             Page::Sessions

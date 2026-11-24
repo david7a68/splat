@@ -86,7 +86,7 @@ pub fn roll_control(
             match design::parse_signed(&state.typed) {
                 Some(value) => request = Some(Some(value)),
                 None if state.typed.trim().is_empty() => {}
-                None => state.result = Some("Type a whole number.".to_owned()),
+                None => state.result = Some(TYPED_NOT_A_NUMBER.to_owned()),
             }
             state.typed.clear();
         }
@@ -152,8 +152,19 @@ pub fn matched_row(
     marker: &Result<Marker, String>,
     table: &[Vec<String>],
 ) -> Option<usize> {
+    matched_in(ui.ctx(), reader, marker, table)
+}
+
+/// The rolled row of a table in one reader (its header is row 0), for any view: the state is
+/// kept in `ctx` under the reader's id, as [`roll_control`] keeps it.
+pub fn matched_in(
+    ctx: &egui::Context,
+    reader: egui::Id,
+    marker: &Result<Marker, String>,
+    table: &[Vec<String>],
+) -> Option<usize> {
     let Marker { key, dice, .. } = marker.as_ref().ok()?;
-    let value = ui
+    let value = ctx
         .data(|data| data.get_temp::<RollState>(roll_state_id(reader, key)))?
         .value?;
     table_rows(dice, table)
@@ -162,6 +173,52 @@ pub fn matched_row(
         .position(|row| (row.min..=row.max).contains(&value))
         .map(|row| row + 1)
 }
+
+/// The last result line of a table in one reader, for a view that is not egui.
+pub fn result_in(ctx: &egui::Context, reader: egui::Id, key: &str) -> Option<String> {
+    ctx.data(|data| data.get_temp::<RollState>(roll_state_id(reader, key)))?
+        .result
+}
+
+/// Ask for a roll of a marked table from a view that is not egui: `typed` is a roll the DM
+/// typed, `None` to roll the dice. Its result comes back to this reader (`settle_roll`). The
+/// error is the warning a bad table shows under itself.
+pub fn ask_in(
+    ctx: &egui::Context,
+    reader: egui::Id,
+    marker: &Result<Marker, String>,
+    table: &[Vec<String>],
+    typed: Option<i64>,
+) -> Result<(), String> {
+    let marker = marker.as_ref().map_err(String::clone)?;
+    let rows = table_rows(&marker.dice, table)?;
+    let id = roll_state_id(reader, &marker.key);
+    let roll = TableRoll {
+        key: marker.key.clone(),
+        dice: marker.dice.clone(),
+        typed,
+        rows,
+    };
+    ctx.data_mut(|data| {
+        data.insert_temp(request_id(), roll);
+        data.insert_temp(requester_id(), id);
+    });
+    Ok(())
+}
+
+/// A typed roll that is not a whole number, from a view that is not egui: its result line says
+/// so, as [`roll_control`]'s does.
+pub fn typed_not_a_number_in(ctx: &egui::Context, reader: egui::Id, key: &str) {
+    let id = roll_state_id(reader, key);
+    ctx.data_mut(|data| {
+        let mut state: RollState = data.get_temp(id).unwrap_or_default();
+        state.result = Some(TYPED_NOT_A_NUMBER.to_owned());
+        data.insert_temp(id, state);
+    });
+}
+
+/// The result line of a typed roll that is not a whole number.
+const TYPED_NOT_A_NUMBER: &str = "Type a whole number.";
 
 /// With no run open, a result only shows. It uses dice of its own.
 pub fn roll_alone(roll: &TableRoll) -> Result<String, String> {
