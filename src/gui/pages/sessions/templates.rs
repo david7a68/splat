@@ -30,7 +30,7 @@ pub(super) fn render(
     let sessions = &mut root.app.sessions;
     let template = sessions.gv_template();
     if narrow && sessions.gv_templates_list_only() {
-        return list(root, cx);
+        return list(root, true, cx);
     }
     let editor = editor(root, template, cx);
     if narrow {
@@ -48,15 +48,16 @@ pub(super) fn render(
             .child(div().flex_1().min_h_0().child(editor))
             .into_any_element();
     }
-    let list = list(root, cx);
+    let list = list(root, false, cx);
     kit::Columns::new("template-columns")
         .column(super::LIST_WIDTH, super::LIST_MIN..super::LIST_MAX, div().size_full().pr(S).child(list))
         .rest(div().size_full().pl(S).child(editor))
         .into_any_element()
 }
 
-/// `Sessions` back to the notes, and the templates' rows.
-fn list(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
+/// `Sessions` back to the notes, and the templates' rows. `alone`: the narrow page shows the
+/// list in place of the template, so the list's footer holds a deleted template's Undo.
+fn list(root: &mut SplatRoot, alone: bool, cx: &mut Context<SplatRoot>) -> AnyElement {
     let rows = root.app.sessions.gv_template_rows();
     let rows: Vec<_> = rows
         .into_iter()
@@ -74,7 +75,11 @@ fn list(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
             }))
         })
         .collect();
-    let lines = root.app.sessions.gv_template_list_footer();
+    let lines = if alone {
+        root.app.sessions.gv_template_list_footer()
+    } else {
+        Vec::new()
+    };
     let footer = footer::lines(
         "template-list-footer",
         lines,
