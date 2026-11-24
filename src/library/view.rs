@@ -258,19 +258,6 @@ pub struct RunValues {
     pub speed: Option<String>,
 }
 
-/// Draw an entry's content. Returns the index of a link the DM followed.
-#[cfg(test)]
-pub(crate) fn show(
-    ui: &mut egui::Ui,
-    name: &str,
-    entry: Option<&Entry>,
-    body: &str,
-    origin: &Origin<'_>,
-    links: &dyn Links,
-) -> Option<usize> {
-    show_inner(ui, name, entry, body, origin, links, None, false, |_| None)
-}
-
 /// `empty_value_block`: the caller drew a value block above the entry, and that block drew
 /// no row. The prose then starts without the reader's own gap, where a plain note's prose
 /// starts. Line warnings keep the gap after them.

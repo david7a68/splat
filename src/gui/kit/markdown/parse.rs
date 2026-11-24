@@ -277,8 +277,16 @@ pub(crate) fn local_figure_links(markdown: &str, local: impl Fn(&str) -> bool) -
     Cow::Owned(output)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times a document was prepared (a test reads it: a repaint prepares none).
+    pub(crate) static PREPARES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// The blocks of `markdown` as the reader draws them.
 pub(crate) fn prepare(markdown: &str, inputs: &Inputs<'_>) -> Vec<Block> {
+    #[cfg(test)]
+    PREPARES.with(|prepares| prepares.set(prepares.get() + 1));
     let c = colors();
     let dense = inputs.mode == Mode::Dense;
     let row = match inputs.mode {
@@ -730,15 +738,60 @@ mod tests {
     use super::*;
 
     fn read(source: &str, mode: Mode) -> Vec<Block> {
+        read_in(source, mode, None, &|_| None)
+    }
+
+    fn read_in(
+        source: &str,
+        mode: Mode,
+        index: Option<&crate::lookup::ContentIndex>,
+        art: &dyn Fn(&str) -> Option<PathBuf>,
+    ) -> Vec<Block> {
         prepare(
             source,
             &Inputs {
                 mode,
-                index: None,
+                index,
                 from: None,
-                art: &|_| None,
+                art,
             },
         )
+    }
+
+    fn paragraphs(blocks: &[Block]) -> impl Iterator<Item = &Paragraph> {
+        blocks.iter().filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(&**paragraph),
+            _ => None,
+        })
+    }
+
+    /// Every paragraph's links, by their words.
+    fn links_of(blocks: &[Block]) -> Vec<(String, LinkTarget)> {
+        paragraphs(blocks)
+            .flat_map(|paragraph| {
+                paragraph.links.iter().map(|(range, target)| {
+                    (
+                        paragraph.words.text[range.clone()].to_owned(),
+                        target.clone(),
+                    )
+                })
+            })
+            .collect()
+    }
+
+    /// The look of the stretch that is exactly `words`.
+    fn look_of(blocks: &[Block], words: &str) -> Look {
+        paragraphs(blocks)
+            .flat_map(|paragraph| {
+                paragraph
+                    .words
+                    .looks
+                    .iter()
+                    .filter(|(range, _)| &paragraph.words.text[range.clone()] == words)
+                    .map(|(_, look)| *look)
+            })
+            .next()
+            .unwrap_or_else(|| panic!("no stretch {words:?}"))
     }
 
     fn kinds(blocks: &[Block]) -> Vec<String> {
@@ -842,6 +895,28 @@ mod tests {
                 ),
             ]
         );
+        // Only a list item's leading `[ ]` or `[x]` is a task: anywhere else it is words.
+        let blocks = read(
+            "- Keep [ ] and [x] in this line.\n\n[ ] A paragraph, not a task.\n\n`[x] Code stays text.`\n",
+            Mode::Reader,
+        );
+        let words: Vec<_> = paragraphs(&blocks)
+            .map(|paragraph| (paragraph.task, paragraph.words.text.as_str()))
+            .collect();
+        assert_eq!(
+            words,
+            [
+                (None, "Keep [ ] and [x] in this line."),
+                (None, "[ ] A paragraph, not a task."),
+                (None, "[x] Code stays text."),
+            ]
+        );
+        // A task's words keep their link.
+        let blocks = read("- [ ] [Read the note](splat-note:Rook)", Mode::Reader);
+        assert_eq!(
+            links_of(&blocks),
+            [("Read the note".into(), LinkTarget::Note("Rook".into()))]
+        );
     }
 
     #[test]
@@ -855,6 +930,163 @@ mod tests {
         assert_eq!(kinds(&blocks), ["• one", "  • inner"]);
         assert_eq!(display_field_value(r#"["a","b"]"#), "a, b");
         assert_eq!(display_field_value("true"), "Yes");
+        // An inventory shows each item by its name, never by its storage key or id.
+        let blocks = read(
+            "<!-- splat:inventory -->\n\n| Key | Item | Quantity | Equipment | Attuned | Link |\n| --- | --- | --- | --- | --- | --- |\n| item_123 | `3302150c-7356-5633-9215-20d96c893348` | 2 | carried | false | Dagger |\n\n## Abilities\n\n| Ability | Score |\n| --- | --- |\n| Strength | 17 |\n",
+            Mode::Reader,
+        );
+        let tables: Vec<_> = blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::Table(table) => Some(table),
+                _ => None,
+            })
+            .collect();
+        let [inventory, abilities] = tables[..] else {
+            panic!("two tables: {blocks:?}");
+        };
+        let shown = |table: &Table, row: usize| -> Vec<String> {
+            (0..table.columns.len())
+                .map(|at| table.cell(row, at).to_owned())
+                .collect()
+        };
+        assert_eq!(
+            (shown(inventory, 0), shown(inventory, 1)),
+            (
+                vec![
+                    "Item".into(),
+                    "Quantity".into(),
+                    "Equipment".into(),
+                    "Attuned".into()
+                ],
+                vec!["Dagger".into(), "2".into(), "carried".into(), "—".into()]
+            )
+        );
+        assert_eq!(shown(abilities, 1), ["Strength", "17"]);
+    }
+
+    /// Bold words that name one entry link to Lookup; other bold words stay emphasis. A link
+    /// written in the note keeps its own target inside bold words, and headings and code never
+    /// link. Only a link is in the accent and underlined.
+    #[test]
+    fn bold_names_link_to_lookup_and_written_links_keep_their_targets() {
+        let index = crate::lookup::ContentIndex::load(&[], None).unwrap();
+        assert!(matches!(
+            index.resolve_link("Fireball", None),
+            crate::world::Go::Item(..)
+        ));
+        let indexed = |source: &str| read_in(source, Mode::Reader, Some(&index), &|_| None);
+        // Without an index, as a reader before its index loads: no bold word resolves.
+        let plain = |source: &str| read(source, Mode::Reader);
+        let c = colors();
+        for (source, words) in [
+            ("**Oren** speaks.", "Oren"),
+            ("***nobody*** answers.", "nobody"),
+            ("__Véldo & Sons__ arrive.", "Véldo & Sons"),
+            ("**Docket __the clerk__ arrives**.", " arrives"),
+        ] {
+            let blocks = indexed(source);
+            assert_eq!(links_of(&blocks), [], "{source}");
+            let look = look_of(&blocks, words);
+            assert_eq!((look.color, look.underline), (c.text, false), "{source}");
+        }
+        assert_eq!(
+            look_of(&plain("**Oren** speaks."), "Oren").role,
+            Type::ProseStrong
+        );
+        for source in ["Cast **Fireball**.", "Cast ***Fireball***."] {
+            assert_eq!(links_of(&plain(source)), [], "{source}: no index");
+            let blocks = indexed(source);
+            assert_eq!(
+                links_of(&blocks),
+                [("Fireball".into(), LinkTarget::Lookup("Fireball".into()))],
+                "{source}"
+            );
+            let look = look_of(&blocks, "Fireball");
+            assert_eq!((look.color, look.underline), (c.accent, true), "{source}");
+        }
+        assert_eq!(
+            links_of(&indexed("Cast [[Fireball]].")),
+            [("Fireball".into(), LinkTarget::Note("Fireball".into()))]
+        );
+        for source in [
+            "**[the clerk](splat-note:Docket)**",
+            "[**the clerk**](splat-note:Docket)",
+        ] {
+            assert_eq!(
+                links_of(&plain(source)),
+                [("the clerk".into(), LinkTarget::Note("Docket".into()))],
+                "{source}"
+            );
+        }
+        let blocks = indexed("**Fireball** reads [**the rules**](https://example.com).");
+        assert_eq!(
+            links_of(&blocks)[1..],
+            [(
+                "the rules".into(),
+                LinkTarget::Url("https://example.com".into())
+            )]
+        );
+        assert_eq!(look_of(&blocks, " reads ").color, c.text);
+        for source in [
+            "## **Fireball**\n",
+            "`**Fireball**`",
+            "```\n**Fireball**\n```",
+            "**`Fireball`**",
+        ] {
+            assert_eq!(links_of(&indexed(source)), [], "{source}");
+        }
+        // Code sits on its fill; struck words are struck, and only they.
+        let blocks = plain("Roll `1d20` ~~old~~ now\n");
+        let code = look_of(&blocks, "1d20");
+        assert_eq!((code.role, code.fill.is_some()), (Type::Mono, true));
+        assert!(look_of(&blocks, "old").struck);
+        assert!(!look_of(&blocks, " now").struck);
+    }
+
+    /// A note's `*caption* ([image](url))` shows the image in place, captioned, when the link
+    /// has a local copy; without one it stays a link in brackets.
+    #[test]
+    fn a_linked_image_shows_in_place_only_with_a_local_copy() {
+        let text =
+            "*A map* ([image](https://a/map.png)) and *a lost one* ([image](https://a/lost.png)).";
+        assert_eq!(
+            local_figure_links(text, |url| url.ends_with("map.png")),
+            "*A map* [image](https://a/map.png) and *a lost one* ([image](https://a/lost.png))."
+        );
+        assert_eq!(local_figure_links(text, |_| false), text);
+        let art =
+            |url: &str| (url == "https://a/map.png").then(|| PathBuf::from("Figures/map.png"));
+        let blocks = read_in(
+            "*The keep* ([image](https://a/map.png))",
+            Mode::Reader,
+            None,
+            &art,
+        );
+        assert!(
+            matches!(&blocks[0], Block::Figures(paths, caption)
+                if paths == &[PathBuf::from("Figures/map.png")] && caption.trim() == "The keep"),
+            "{blocks:?}"
+        );
+        let blocks = read_in(
+            "*The moat* ([image](https://a/moat.png))",
+            Mode::Reader,
+            None,
+            &art,
+        );
+        assert!(
+            !blocks
+                .iter()
+                .any(|block| matches!(block, Block::Figures(..)))
+        );
+        assert_eq!(
+            links_of(&blocks),
+            [("image".into(), LinkTarget::Url("https://a/moat.png".into()))]
+        );
+        assert_eq!(
+            paragraphs(&blocks).next().unwrap().words.text,
+            "The moat (image)"
+        );
     }
 
     #[test]

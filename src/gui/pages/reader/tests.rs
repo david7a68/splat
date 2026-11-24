@@ -238,6 +238,7 @@ fn a_typed_jump_scrolls_to_its_heading() {
             .into_any_element()
     });
     assert_eq!(scroll.offset().y, px(0.0));
+    let prepares = crate::gui::kit::markdown::PREPARES.with(std::cell::Cell::get);
     shell.update(|root, _, cx| {
         crate::markdown_view::want_heading(root.bridge.ctx(), Some("Later that night".into()));
         cx.notify();
@@ -247,5 +248,11 @@ fn a_typed_jump_scrolls_to_its_heading() {
         scroll.offset().y < px(-200.0),
         "the column scrolled down to the heading: {:?}",
         scroll.offset()
+    );
+    // The jump and the scroll draw the note again; its links are not resolved again.
+    assert_eq!(
+        crate::gui::kit::markdown::PREPARES.with(std::cell::Cell::get),
+        prepares,
+        "a repaint of an unchanged note prepares it again"
     );
 }
