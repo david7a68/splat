@@ -335,7 +335,7 @@ fn run_arrivals_add_tie_and_drag() {
         "a heading says the fight after its group joins: {:?}",
         names()
     );
-    shell.capture("run-add-creature__10-arrivals-groups__1200x800");
+    shell.capture("run-arrivals__01-groups-with-fight-after__1200x800");
 
     // A total that ties a present row: Enter adds the group, and the footer offers the Move.
     let (before_count, tie) = shell.read(|root| {
@@ -359,7 +359,7 @@ fn run_arrivals_add_tie_and_drag() {
         .into_iter()
         .find(|name| name.starts_with("Move "))
         .unwrap_or_else(|| panic!("the tie offers Move: {:?}", names()));
-    shell.capture("run-add-creature__12-arrival-tie-move__1200x800");
+    shell.capture("run-arrivals__02-tie-move__1200x800");
     shell.click(&mover);
     assert!(
         shell.read(|root| root
@@ -414,7 +414,6 @@ fn run_effects_on_rows() {
         "the row's second line shows the effect: {:?}",
         names()
     );
-    shell.capture("run-effects__02-effects-on-rows__1200x800");
     shell.press("u");
     assert!(
         !names().iter().any(|name| name.starts_with("Shield of Faith")),
@@ -443,7 +442,6 @@ fn run_overrides_card_and_row() {
         "the row marks the change: {:?}",
         names()
     );
-    shell.capture("run-overrides__01-overridden-participant__1200x800");
 }
 
 /// The keyboard comes back to the run when Lookup or Notes close (egui: the run's letters work

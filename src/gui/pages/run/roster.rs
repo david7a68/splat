@@ -329,6 +329,12 @@ fn row_plan(
         let top = ((scale.row - name_line - second_height) / 2.0).max(1.0);
         scale.row.max(top + name_line + name_extra + second + 3.0)
     };
+    // The current turn's frame is inside the row: its rows keep their words clear of it.
+    let height = if !tight && run.current() == Some(index) {
+        height + 2.0 * f32::from(theme::FOCUS_WIDTH)
+    } else {
+        height
+    };
     let line_y = if fit != Fit::Natural && lines > 0 {
         let content = name_line + name_extra + second;
         ((height - content) / 2.0).max(hairline / 2.0) + name_line / 2.0
