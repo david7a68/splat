@@ -5,9 +5,9 @@
 //! takes the editor's place. An encounter's own groups draw their fields here too (`fields`).
 use super::changes;
 use super::common::{egui_color, footer, on_page, reason, row_menu, with_page};
-use super::editor::{NARROW, add_column_with, back_line, button_width, content_width, filter};
+use super::editor::{NARROW, add_column_with, back_line, content_width, filter};
 use crate::gui::theme::{
-    Density, HAIRLINE_WIDTH, L, LIST_MEASURE, M, PANEL_MIN_WIDTH, S, Type, XS, colors,
+    Density, HAIRLINE_WIDTH, LIST_MEASURE, M, PANEL_MIN_WIDTH, S, Type, XS, colors,
 };
 use crate::gui::{SplatRoot, icons, kit};
 use gpui::prelude::FluentBuilder as _;
@@ -50,12 +50,12 @@ pub(super) fn render(
         .then(|| root.app.encounters.filter_choices());
     let focus_name = root.app.encounters.take_focus_name();
     let focus_search = root.app.encounters.take_focus_search();
-    let content = root
-        .pages
-        .encounters
-        .room
-        .get()
-        .unwrap_or_else(|| content_width(window));
+    // The room the editor is laid out in (beside Lookup, in the session plan), never more than
+    // the window gives the page: content wider than the room must not widen it.
+    let content = root.pages.encounters.room.get().map_or_else(
+        || content_width(window),
+        |room| room.min(content_width(window)),
+    );
     let narrow = content < NARROW;
     // The Add creatures column keeps its own width here (egui's group editor does not drag).
     let add_width = px(crate::design::side_panel_width(f32::from(content)))
@@ -65,9 +65,7 @@ pub(super) fn render(
     let head = head(
         &view,
         if narrow { content } else { members_width },
-        content,
         focus_name,
-        window,
         cx,
     );
     let handle = root.pages.encounters.results_scroll.clone();
@@ -127,6 +125,8 @@ pub(super) fn render(
         .flex()
         .flex_col()
         .size_full()
+        .min_w_0()
+        .overflow_hidden()
         .child(super::common::room_probe(
             root.pages.encounters.room.clone(),
         ))
@@ -191,14 +191,7 @@ fn narrow_body(
         .into_any_element()
 }
 
-fn head(
-    view: &GroupView,
-    column: gpui::Pixels,
-    line: gpui::Pixels,
-    focus: bool,
-    window: &mut Window,
-    cx: &mut Context<SplatRoot>,
-) -> Div {
+fn head(view: &GroupView, column: gpui::Pixels, focus: bool, cx: &mut Context<SplatRoot>) -> Div {
     let back = back_line(
         "group-back",
         view.back.word,
@@ -218,9 +211,7 @@ fn head(
     .on_click(on_page(cx, |page, ctx, active, campaigns| {
         page.group_head_act(ctx, active, campaigns.modules(), HeadAct::Save);
     }));
-    let (name_width, beside) =
-        super::editor::head_plan(column, line, button_width(window, "Save group"));
-    let name = div().w(name_width).flex_none().child(
+    let name = super::editor::head_name(column).child(
         kit::TextField::new(
             ElementId::Name(format!("group-name:{}", view.id).into()),
             view.name.clone(),
@@ -234,23 +225,7 @@ fn head(
             cx.notify();
         })),
     );
-    let names: Vec<AnyElement> = if beside {
-        vec![
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(L)
-                .child(name)
-                .child(save)
-                .into_any_element(),
-        ]
-    } else {
-        vec![
-            name.into_any_element(),
-            div().flex().child(save).into_any_element(),
-        ]
-    };
+    let name_row = super::editor::head_row(name, save);
     let (icon, word, color) = &view.state;
     let mut row = div()
         .flex()
@@ -284,7 +259,7 @@ fn head(
         .gap(XS)
         .pb(S)
         .child(back)
-        .children(names)
+        .child(name_row)
         .child(row)
 }
 

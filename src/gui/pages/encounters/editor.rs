@@ -91,22 +91,16 @@ pub(super) fn render(
     let focus_name = root.app.encounters.take_focus_name();
     let focus_search = root.app.encounters.take_focus_search();
 
-    let content = root
-        .pages
-        .encounters
-        .room
-        .get()
-        .unwrap_or_else(|| content_width(window));
+    // The room the editor is laid out in (beside Lookup, in the session plan), never more than
+    // the window gives the page: content wider than the room must not widen it.
+    let content = root.pages.encounters.room.get().map_or_else(
+        || content_width(window),
+        |room| room.min(content_width(window)),
+    );
     let narrow = content < NARROW;
     let add_width = add_width(root, content);
     let roster_width = (content - add_width).clamp(PANEL_MIN_WIDTH, LIST_MEASURE);
-    let head = head(
-        &view,
-        (roster_width, content, narrow),
-        focus_name,
-        window,
-        cx,
-    );
+    let head = head(&view, (roster_width, content, narrow), focus_name, cx);
     let body: AnyElement = match (roster, add, view.reading) {
         (Some(roster), Some(add), false) => {
             let roster_column = roster_column(root, &view, &roster, owned, !narrow, window, cx);
@@ -164,6 +158,8 @@ pub(super) fn render(
         .flex()
         .flex_col()
         .size_full()
+        .min_w_0()
+        .overflow_hidden()
         .child(super::common::room_probe(
             root.pages.encounters.room.clone(),
         ))
@@ -311,19 +307,28 @@ pub(super) fn back_line(
         .children(held.map(|(long, _)| reason(long).whitespace_nowrap()))
 }
 
-/// The head's plan (`save_row::head_plan`): the name ends at the roster column's edge, and its
-/// actions stand `L` after it while the name keeps at least `NAME_LEAST`; else the actions take
-/// a line of their own at the text edge. The plan comes from widths only, so nothing moves while
-/// the DM types.
-pub(super) fn head_plan(column: Pixels, line: Pixels, actions: Pixels) -> (Pixels, bool) {
-    let least = Density::Scan.control();
-    let full = (column - S * 2.0).max(least);
-    let beside = line - S * 2.0 - L - actions;
-    if beside >= full.min(px(crate::design::save_row::NAME_LEAST)) {
-        (full.min(beside).max(least), true)
-    } else {
-        (line, false)
-    }
+/// The name field's place in the head (`save_row::head_plan`): it ends at the roster column's
+/// edge, and gives way to its actions down to `NAME_LEAST`.
+pub(super) fn head_name(column: Pixels) -> Div {
+    div()
+        .flex_1()
+        .min_w(px(crate::design::save_row::NAME_LEAST))
+        .max_w((column - S * 2.0).max(Density::Scan.control()))
+}
+
+/// The name and its actions: the actions stand `L` after the name while the name keeps at least
+/// `NAME_LEAST`, else they take a line of their own at the text edge. Widths alone decide it, so
+/// nothing moves while the DM types.
+pub(super) fn head_row(name: Div, actions: impl IntoElement) -> Div {
+    div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .items_center()
+        .gap_x(L)
+        .gap_y(XS)
+        .child(name)
+        .child(actions)
 }
 
 /// A button's width in its wider form, as the head measures it.
@@ -336,7 +341,6 @@ fn head(
     view: &EditorView,
     (roster_width, content, narrow): (Pixels, Pixels, bool),
     focus: bool,
-    window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> Div {
     let c = colors();
@@ -377,10 +381,7 @@ fn head(
         .items_center()
         .gap(S)
         .child(save);
-    let mut actions_width =
-        button_width(window, "Save encounter") + S + button_width(window, view.start_word);
     if view.run_open {
-        actions_width += text_width(window, Type::Small, "Close the open run first.") + L + S;
         actions = actions.child(
             reason("Close the open run first.")
                 .whitespace_nowrap()
@@ -389,7 +390,6 @@ fn head(
     }
     actions = actions.child(start);
     if let Some(blocked) = view.start_another.clone() {
-        actions_width += Density::Read.control() + S;
         actions = actions.child(row_menu(
             "encounter-start-another",
             &view.name,
@@ -409,8 +409,7 @@ fn head(
         ));
     }
     let column = if narrow { content } else { roster_width };
-    let (name_width, beside) = head_plan(column, content, actions_width);
-    let name = div().w(name_width).flex_none().child(
+    let name = head_name(column).child(
         kit::TextField::new(
             ElementId::Name(format!("encounter-name:{}", view.draft).into()),
             view.name.clone(),
@@ -427,20 +426,7 @@ fn head(
             root.app.encounters.ask_focus_search();
         })),
     );
-    let name_rows: Vec<AnyElement> = if beside {
-        vec![
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(L)
-                .child(name)
-                .child(actions)
-                .into_any_element(),
-        ]
-    } else {
-        vec![name.into_any_element(), actions.into_any_element()]
-    };
+    let name_row = head_row(name, actions);
     let (icon, word, color) = &view.state;
     let mut row = div()
         .flex()
@@ -481,7 +467,7 @@ fn head(
         .gap(XS)
         .pb(S)
         .child(back)
-        .children(name_rows)
+        .child(name_row)
         .child(row)
         .children(view.unfinished_note.map(reason))
 }
