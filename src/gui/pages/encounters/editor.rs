@@ -1100,7 +1100,7 @@ pub(super) fn add_head(
     head = head.child(kit::help(if group {
         "From this campaign and the packages it uses. Party members go on an encounter’s roster."
     } else {
-        "Party members come from the sheets Splat saved last."
+        splat_encounters_ui::encounters::PARTY_SOURCE
     }));
     head = match add.party {
         PartyButton::None => head,

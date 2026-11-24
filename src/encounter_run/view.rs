@@ -273,17 +273,6 @@ fn condition_column_widths(ui: &egui::Ui, columns: usize) -> Vec<f32> {
     widths
 }
 
-/// The official conditions as toggles in fixed columns, `S` apart: the run's Conditions tab
-/// and a group member's Starting conditions. `on` says whether a condition is on. Returns
-/// the condition the DM pressed.
-pub(crate) fn conditions_grid(
-    ui: &mut egui::Ui,
-    salt: &str,
-    on: impl Fn(&str) -> bool,
-) -> Option<&'static str> {
-    conditions_grid_counted(ui, salt, &|name| on(name).then(|| name.to_owned())).0
-}
-
 /// The grid of `conditions_grid`, where `label` gives an on condition's words. X11: a
 /// condition with a time shows its count on its tick, `✓ Frightened 10`, while every column
 /// still fits the room; its column grows by the count. Else each tick shows its name only.
@@ -13647,7 +13636,6 @@ mod tests {
         use crate::encounters::{MemberFaultView, MemberRepair};
         use egui_kittest::kittest::Queryable;
         for view in [
-            MemberFaultView::EncounterList,
             MemberFaultView::Arrivals { edit_too: false },
             MemberFaultView::Arrivals { edit_too: true },
         ] {
