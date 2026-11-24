@@ -1043,9 +1043,8 @@ fn event_details(
     }
     // A played fight's block has its own `Timeline` among its links.
     let timeline = (details.fight.is_none()).then(|| {
-        kit::Button::quiet(id(format!("plan-event-timeline-{event}")), "Timeline")
-            .plain()
-            .line_start()
+        // A link that goes to another page (egui: a link under the open row).
+        kit::Link::new(id(format!("plan-event-timeline-{event}")), "Timeline")
             .on_click(on(cx, PlanAct::OpenEventOnTimeline(event.to_owned())))
     });
     column.children(timeline).into_any_element()
@@ -1306,10 +1305,13 @@ fn fight_row(
     actions.push(row_menu(&name, items));
     let details = open.then(|| {
         (
-            kit::Button::quiet(id(format!("plan-read-encounter-{path}")), "Read encounter")
-                .plain()
-                .line_start()
-                .on_click(on(cx, PlanAct::ReadEncounter(name.clone())))
+            // It opens the encounter in Lookup (egui: a link under the open row).
+            div()
+                .flex()
+                .child(
+                    kit::Link::new(id(format!("plan-read-encounter-{path}")), "Read encounter")
+                        .on_click(on(cx, PlanAct::ReadEncounter(name.clone()))),
+                )
                 .into_any_element(),
             (probes, at),
         )
