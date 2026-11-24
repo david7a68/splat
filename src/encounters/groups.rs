@@ -3148,55 +3148,8 @@ impl Encounters {
                 // FI1's family: the editor's results with a live Undo (the discard, the newest
                 // member result), then Save's reason, then the file's warnings sit in one footer
                 // pinned below the members and the search, so none of them moves a member or a
-                // field: the member result, the discard, the copies' separations, newest first by
-                // their stores, then the reasons and warnings.
-                this.record_member_results();
-                let kinds = this.kept_results(false);
-                if let Some(root) = this.active.as_ref().map(|active| active.path.clone())
-                    && let Some(draft) = this.group_draft.as_ref()
-                    && let Some(shown) = this.member_results.get(&super::MemberOwner {
-                        root,
-                        draft: draft.results_key(),
-                    })
-                {
-                    messages.kept(shown.outcome(&frame, super::MemberMark::outcome));
-                }
-                for line in this.kept_lines(&frame, &kinds) {
-                    messages.kept(line);
-                }
-                for line in this.separation_lines(&frame, &active.path) {
-                    messages.kept(line);
-                }
-                // Save's reason: the last refusal, or the check's fault when the editor shows it
-                // at no other place (a member row or the reason beside Save already says
-                // theirs). R41: a refusal's words take the refusal's tone; a failed write is an
-                // error.
-                let live = refusal
-                    .as_ref()
-                    .and_then(|refusal| refusal.footer().map(|words| (words, refusal.diagnosis())));
-                let reason = match (this.error.clone(), live) {
-                    (Some(error), Some((words, found))) if error == words => {
-                        Some(super::EncounterFault::refusal(error, found))
-                    }
-                    (Some(error), _) => Some(super::EncounterFault::Failed(error)),
-                    (None, Some((words, found))) => {
-                        Some(super::EncounterFault::refusal(words.to_owned(), found))
-                    }
-                    (None, None) => None,
-                };
-                if let Some(fault) = reason {
-                    messages.outcome(design::outcome::FaultMessage::new(&fault));
-                }
-                if let Some(error) = this.separation_failure() {
-                    messages.outcome(design::outcome::FaultMessage::new(
-                        &super::EncounterFault::SeparationFailed(error),
-                    ));
-                }
-                for warning in file_warnings {
-                    messages.outcome(design::outcome::FaultMessage::new(
-                        &super::EncounterFault::FileWarning(warning),
-                    ));
-                }
+                // field.
+                this.group_lines(messages, &frame, &active.path, refusal.as_ref(), file_warnings);
                 this
             },
         );
@@ -4500,6 +4453,394 @@ fn save_row_diagnosis(refusal: Option<&Refusal>, empty: bool) -> design::save_ro
 /// The repair form's reason. It names the words it could not read in curly quotation marks.
 fn unread_changes(raw: &str) -> String {
     format!("Changes “{raw}” not read. Set the changes below, then save the group.")
+}
+
+// ------------------------------------------------------------------------------------------------
+// The group editor as plain data, for the GPUI page (`encounters::model`).
+
+/// The group editor, as data.
+pub struct GroupView {
+    pub id: Uuid,
+    pub name: String,
+    pub back: super::model::BackLine,
+    pub save_primary: bool,
+    pub save_blocked: Option<String>,
+    pub state: (String, String, egui::Color32),
+    pub discard: bool,
+    /// `Add a creature first.` beside Save, and the campaign-switch reason.
+    pub empty_reason: Option<&'static str>,
+    pub lock_reason: Option<&'static str>,
+    /// The words beside Save while its refusal is said in a row or under Belongs to.
+    pub elsewhere: Option<&'static str>,
+    pub side: String,
+    /// Belongs to: `Any encounter`, then each encounter; the chosen one; its help or fault.
+    pub belongs: Vec<(Option<Uuid>, String)>,
+    pub belongs_chosen: Option<usize>,
+    pub belongs_help: Option<&'static str>,
+    pub belongs_fault: Option<&'static str>,
+    pub count: usize,
+    pub heading: String,
+    pub members: Vec<MemberRow>,
+    /// Members whose rows cannot be read, as their words.
+    pub unread: Vec<String>,
+    pub notes: String,
+    pub reading: bool,
+}
+
+/// One member of the open group.
+pub struct MemberRow {
+    pub index: usize,
+    pub name: String,
+    pub detail: String,
+    pub hp_missing: bool,
+    pub count: u64,
+    pub missing: bool,
+    pub first: bool,
+    pub last: bool,
+}
+
+/// A change to a group's member from its row.
+#[derive(Clone, Copy, Debug)]
+pub enum MemberAct {
+    Up(usize),
+    Down(usize),
+    Remove(usize),
+    Count(usize, u64),
+}
+
+/// The edits a view makes to the open group draft.
+pub struct GroupEdit<'a>(&'a mut GroupDraft);
+
+impl GroupEdit<'_> {
+    pub fn name(&mut self, words: &str) {
+        self.0.name = words.to_owned();
+        self.0.touch();
+    }
+    pub fn side(&mut self, side: &str) {
+        if !side.trim().is_empty() {
+            self.0.setup.side = side.trim().to_lowercase();
+            self.0.touch();
+        }
+    }
+    pub fn belongs(&mut self, encounter: Option<Uuid>) {
+        self.0.setup.encounter = encounter.map(EntryRef::id);
+        self.0.touch();
+    }
+    pub fn notes(&mut self, words: &str) {
+        self.0.notes = words.to_owned().into();
+        self.0.touch();
+    }
+}
+
+impl Encounters {
+    /// The group editor's head, save row and body (`group_editor_view`), as data.
+    pub fn group_frame(&mut self) -> Option<GroupView> {
+        let dirty = self.draft_dirty();
+        let has_run = self.has_run();
+        let refusal = self.group_refusal();
+        let snapshot = self.snapshot.as_ref();
+        let draft = self.group_draft.as_ref()?;
+        let empty = draft.setup.members.is_empty();
+        let changed = if dirty {
+            design::memo::Changed::Yes
+        } else {
+            design::memo::Changed::No
+        };
+        let primary = if has_run {
+            design::save_row::Primary::Elsewhere
+        } else {
+            design::save_row::Primary::Draft
+        };
+        let mut state = design::DraftState::new(draft.origin(), changed, primary).locks_campaign();
+        state = state.check(save_row_diagnosis(refusal.as_ref(), empty));
+        if self.message.is_some() {
+            state = state.just_saved();
+        }
+        let head = design::EditorHead::new(design::EditorKind::Group { in_plan: false }, &*self);
+        let (word, back_name) = head.back_words();
+        let status = state.status();
+        let elsewhere = refusal.as_ref().and_then(|refusal| match refusal.place() {
+            RefusalPlace::BelongsTo => Some(GONE_BESIDE_SAVE),
+            RefusalPlace::Member(_) => Some(MEMBER_BESIDE_SAVE),
+            _ => None,
+        });
+        let mut belongs: Vec<(Option<Uuid>, String)> = vec![(None, ANY_ENCOUNTER.to_owned())];
+        if let Some(snapshot) = snapshot {
+            belongs.extend(
+                snapshot
+                    .encounter_choices()
+                    .map(|(id, name)| (Some(id), name.to_owned())),
+            );
+        }
+        let current = draft.setup.encounter.as_ref().and_then(|reference| reference.id);
+        let mut belongs_chosen = belongs.iter().position(|(id, _)| *id == current);
+        let gone = current.is_some() && belongs_chosen.is_none();
+        if gone {
+            belongs.push((current, MISSING_ENCOUNTER.to_owned()));
+            belongs_chosen = Some(belongs.len() - 1);
+        }
+        let unread = splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
+        let members = snapshot.map_or_else(Vec::new, |snapshot| {
+            let total = draft.setup.members.len();
+            draft
+                .setup
+                .members
+                .iter()
+                .enumerate()
+                .map(|(index, member)| {
+                    let parsed = Overrides::parse(&member.overrides);
+                    let assessed = assess_member(
+                        &snapshot.catalogue,
+                        &snapshot.creatures,
+                        &member.creature,
+                        &draft.setup.side,
+                        parsed.as_ref().map_err(String::as_str),
+                    );
+                    let entry = assessed.entry;
+                    let base = entry.map_or_else(
+                        || missing_member_name(None, member.creature.link.as_deref()),
+                        |entry| entry.name.clone(),
+                    );
+                    let name = entry
+                        .and(parsed.as_ref().ok())
+                        .and_then(|overrides| overrides.name.as_deref())
+                        .map_or(base, |changed| changed.trim().to_owned());
+                    let (detail, hp_missing) = entry
+                        .zip(assessed.creature)
+                        .map(|(entry, creature)| {
+                            let changed = assessed.changed.as_ref().ok().and_then(Option::as_ref);
+                            let (mut detail, hp_missing) = changed.map_or_else(
+                                || (creature.detail.clone(), creature.hp_missing),
+                                |changed| {
+                                    (
+                                        super::creature_detail(entry, creature.party, Some(changed)),
+                                        changed.max_hp.is_none(),
+                                    )
+                                },
+                            );
+                            if member.overrides.contains_key("name") {
+                                detail.push_str(&format!(" · as {}", entry.name));
+                            }
+                            (detail, hp_missing)
+                        })
+                        .unwrap_or_default();
+                    MemberRow {
+                        index,
+                        name,
+                        detail,
+                        hp_missing,
+                        count: member.count,
+                        missing: entry.is_none(),
+                        first: index == 0,
+                        last: index + 1 == total,
+                    }
+                })
+                .collect()
+        });
+        let count = draft.setup.members.iter().map(|member| member.count).sum::<u64>()
+            + unread.iter().filter_map(|member| member.count).sum::<u64>();
+        Some(GroupView {
+            id: draft.id(),
+            name: draft.name.clone(),
+            back: super::model::BackLine {
+                word,
+                name: back_name,
+                held: head
+                    .held_by()
+                    .map(|draft| (draft.reason(), draft.short_reason())),
+            },
+            save_primary: matches!(state.save_weight(), design::save_row::SaveWeight::Primary),
+            save_blocked: state.save_blocked().map(str::to_owned),
+            state: (status.icon.to_owned(), status.word.to_owned(), status.color),
+            discard: state.discard_shown(),
+            empty_reason: empty.then_some(EMPTY_REASON),
+            lock_reason: state.lock_reason(),
+            elsewhere,
+            side: draft.setup.side.clone(),
+            belongs,
+            belongs_chosen,
+            belongs_help: match current {
+                None => Some("A run of any encounter offers this group."),
+                Some(_) if gone => None,
+                Some(_) => Some("Only runs of this encounter offer this group."),
+            },
+            belongs_fault: gone.then_some(GONE_ENCOUNTER),
+            count: count as usize,
+            heading: if draft.setup.members.is_empty() {
+                String::new()
+            } else {
+                snapshot.map_or_else(String::new, |snapshot| members_heading(draft, snapshot))
+            },
+            members,
+            unread: unread.iter().map(|member| member.flag.message.clone()).collect(),
+            notes: draft.notes.to_string(),
+            reading: snapshot.is_none(),
+        })
+    }
+
+    /// A press in the group editor's head: Back, Discard or Save. True when it closed.
+    pub fn group_head_act(
+        &mut self,
+        ctx: &egui::Context,
+        active: &Campaign,
+        modules: &[Module],
+        act: super::model::HeadAct,
+    ) -> bool {
+        match act {
+            super::model::HeadAct::Back => {
+                self.clear_notice();
+                self.close_group_in_plan();
+                self.error = None;
+                true
+            }
+            super::model::HeadAct::Discard => {
+                self.discard_group_draft(active);
+                true
+            }
+            _ => {
+                if self.group_draft.as_ref().is_some_and(GroupDraft::dirty) {
+                    self.save_group_draft(ctx, active, modules);
+                }
+                false
+            }
+        }
+    }
+
+    /// The open group draft's members, each by its creature's link words and its count.
+    pub fn group_members(&self) -> Option<Vec<(String, u64)>> {
+        let draft = self.group_draft.as_ref()?;
+        Some(
+            draft
+                .setup
+                .members
+                .iter()
+                .map(|member| (member.creature.label(), member.count))
+                .collect(),
+        )
+    }
+
+    /// Whether a group editor is open, and its draft has changes.
+    pub fn group_open(&self) -> Option<bool> {
+        self.group_draft.as_ref().map(GroupDraft::dirty)
+    }
+
+    /// Change the open group draft.
+    pub fn edit_group(&mut self, edit: impl FnOnce(&mut GroupEdit<'_>)) {
+        if let Some(draft) = self.group_draft.as_mut() {
+            edit(&mut GroupEdit(draft));
+        }
+    }
+
+    /// A member's change from its row: its place, its count, or its removal (with its Undo).
+    pub fn member_act(&mut self, act: MemberAct) {
+        let Some(snapshot) = self.snapshot.as_ref() else {
+            return;
+        };
+        let Some(draft) = self.group_draft.as_mut() else {
+            return;
+        };
+        let total = draft.setup.members.len();
+        match act {
+            MemberAct::Up(index) if index > 0 && index < total => {
+                draft.setup.members.swap(index, index - 1);
+            }
+            MemberAct::Down(index) if index + 1 < total => {
+                draft.setup.members.swap(index, index + 1);
+            }
+            MemberAct::Remove(index) if index < total => remove_member(draft, index, snapshot),
+            MemberAct::Count(index, count) if index < total => {
+                draft.setup.members[index].count = count.clamp(1, 99);
+            }
+            _ => return,
+        }
+        draft.touch();
+        self.expanded = None;
+    }
+
+    /// The group editor's footer lines (`group_editor_view`'s `then`), for both views: the
+    /// member result, the discard, the copies' separations, newest first by their stores, each
+    /// with its ticket; then Save's reason, a failed separation and the file's warnings.
+    pub(super) fn group_lines<'f>(
+        &mut self,
+        messages: &mut design::outcome::Messages<'f, super::FooterPress>,
+        frame: &'f design::outcome::PaneFrame,
+        root: &std::path::Path,
+        refusal: Option<&Refusal>,
+        file_warnings: Vec<String>,
+    ) {
+        self.record_member_results();
+        let kinds = self.kept_results(false);
+        if let Some(draft) = self.group_draft.as_ref()
+            && let Some(shown) = self.member_results.get(&super::MemberOwner {
+                root: root.to_owned(),
+                draft: draft.results_key(),
+            })
+        {
+            messages.kept(shown.outcome(frame, super::MemberMark::outcome));
+        }
+        for line in self.kept_lines(frame, &kinds) {
+            messages.kept(line);
+        }
+        for line in self.separation_lines(frame, root) {
+            messages.kept(line);
+        }
+        // Save's reason: the last refusal, or the check's fault when the editor shows it at no
+        // other place (a member row or the reason beside Save already says theirs). R41: a
+        // refusal's words take the refusal's tone; a failed write is an error.
+        let live =
+            refusal.and_then(|refusal| refusal.footer().map(|words| (words, refusal.diagnosis())));
+        let reason = match (self.error.clone(), live) {
+            (Some(error), Some((words, found))) if error == words => {
+                Some(super::EncounterFault::refusal(error, found))
+            }
+            (Some(error), _) => Some(super::EncounterFault::Failed(error)),
+            (None, Some((words, found))) => {
+                Some(super::EncounterFault::refusal(words.to_owned(), found))
+            }
+            (None, None) => None,
+        };
+        if let Some(fault) = reason {
+            messages.outcome(design::outcome::FaultMessage::new(&fault));
+        }
+        if let Some(error) = self.separation_failure() {
+            messages.outcome(design::outcome::FaultMessage::new(
+                &super::EncounterFault::SeparationFailed(error),
+            ));
+        }
+        for warning in file_warnings {
+            messages.outcome(design::outcome::FaultMessage::new(
+                &super::EncounterFault::FileWarning(warning),
+            ));
+        }
+    }
+
+    /// The group editor's footer as plain lines, for the GPUI page (`group_lines`).
+    pub fn group_footer(
+        &mut self,
+        root: &std::path::Path,
+    ) -> Vec<design::outcome::plain::PlainLine<super::FooterPress>> {
+        let refusal = self.group_refusal();
+        let file_warnings: Vec<String> = self
+            .group_draft
+            .as_ref()
+            .map(|draft| {
+                let unread =
+                    splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
+                draft
+                    .flags
+                    .iter()
+                    .filter(|flag| !unread.iter().any(|member| member.flag.line == flag.line))
+                    .map(|flag| flag.message.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let frame = design::outcome::PaneFrame::plain();
+        let footer_id = self.group_draft.as_ref().map(|draft| draft.id());
+        let mut messages =
+            design::outcome::Messages::new(&frame, ("group_editor_footer", footer_id), 0.0);
+        self.group_lines(&mut messages, &frame, root, refusal.as_ref(), file_warnings);
+        messages.into_plain()
+    }
 }
 
 #[cfg(test)]

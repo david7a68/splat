@@ -335,6 +335,9 @@ mod groups;
 mod history;
 #[path = "encounters/results_key.rs"]
 mod results_key;
+/// The page as plain data and its acts, for the GPUI page (`src/gui/pages/encounters/`).
+#[path = "encounters/model.rs"]
+pub mod model;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
 pub(crate) use groups::{
@@ -3654,7 +3657,7 @@ impl Snapshot {
 }
 /// One of a draft's own results in the editor's footer.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum DraftResult {
+pub enum DraftResult {
     RemovedGroup,
     Replacement,
 }
@@ -3779,7 +3782,7 @@ impl design::results::Kept for EditorMark {
 /// `removed_saved_group`, `removed_encounter`) and ends with it (FI1, FJ4). Its footer order is
 /// issued when its action is done (`stamp_kept`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-enum KeptResult {
+pub enum KeptResult {
     Discarded,
     GroupDiscarded,
     RunDeleted,
@@ -3950,7 +3953,7 @@ fn outcome_words(words: &str) -> design::outcome::Sentence {
 
 /// What a press in an Encounters footer asks for. An Undo names its line by the press's ticket.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FooterPress {
+pub enum FooterPress {
     Undo,
     /// The Undo of the encounter draft's own result (`editor_results`).
     UndoEditor,
@@ -4215,6 +4218,9 @@ pub struct Encounters {
     member_results: design::Results<MemberOwner, MemberMark>,
     /// Each encounter draft's own results (a removed group, a replacement), for its editor.
     editor_results: design::Results<EditorOwner, EditorMark>,
+    /// The GPUI page's creature search: its ranking and its rows, kept until the ranking's key
+    /// or the roster it read changes (`model::Encounters::add_view`).
+    search_ranked: Option<(Arc<SearchRanked>, Arc<Vec<model::ResultRow>>)>,
 }
 pub use splat_session_records::encounters::PlanFight;
 /// What the page needs from the story: where each run's event is, and which sessions exist.
@@ -4228,7 +4234,8 @@ pub struct Story<'a> {
     pub revision: Option<(crate::design::memo::Revision, u64)>,
 }
 /// What the DM asked for from a row of the list. One press in a frame, so one of these.
-enum ListAction {
+#[derive(Clone, Debug)]
+pub enum ListAction {
     Resume(std::path::PathBuf),
     ReadHistory(std::path::PathBuf),
     ContinueFight(std::path::PathBuf),
@@ -6467,6 +6474,37 @@ impl Encounters {
             .collect()
     }
 
+    /// The list's footer lines, for both views: the kept results with their tickets, then why
+    /// the last act failed, then an unreadable run folder with `Choose folder`.
+    fn list_lines<'f>(
+        &mut self,
+        messages: &mut design::outcome::Messages<'f, FooterPress>,
+        frame: &'f design::outcome::PaneFrame,
+    ) {
+        let kinds = self.kept_results(true);
+        for line in self.kept_lines(frame, &kinds) {
+            messages.kept(line);
+        }
+        if let Some(error) = &self.error {
+            let fault = design::outcome::FaultMessage::new(&EncounterFault::Failed(error.clone()));
+            messages.outcome(fault);
+        }
+        if let Some(folder) = self
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.runs_unread.clone())
+        {
+            messages.outcome(
+                design::outcome::FaultMessage::new(&EncounterFault::RunFolder(folder)).choice(
+                    design::outcome::Choice::new(
+                        design::outcome::MessageChoice::Choice("Choose folder"),
+                        FooterPress::ChooseFolder,
+                    ),
+                ),
+            );
+        }
+    }
+
     /// The Undo of the kept result a footer press names by its ticket. A result that was
     /// replaced or ended since is `Gone`: nothing happens. A failed Undo keeps its result, with
     /// its order, and says why.
@@ -7233,21 +7271,13 @@ impl Encounters {
             return;
         }
         if new_group {
-            self.search.clear();
-            self.group_in_plan = false;
-            self.group_draft = Some(GroupDraft::new());
-            self.expanded = None;
-            self.focus_name = true;
-            self.error = None;
-            self.message = None;
+            self.new_group();
             return;
         }
         if reload {
-            if self.has_run() {
-                self.error = None;
-                self.refresh_content(ui.ctx(), campaigns, &active.path);
-            } else {
-                self.reload(ui.ctx(), active.clone(), campaigns.modules().to_vec());
+            let run = self.has_run();
+            self.reload_from_disk(ui.ctx(), active, campaigns);
+            if !run {
                 return;
             }
         }
@@ -7260,30 +7290,7 @@ impl Encounters {
             ("encounters_list_footer", active.id),
             ui.available_width(),
         );
-        let kinds = self.kept_results(true);
-        for line in self.kept_lines(&frame, &kinds) {
-            messages.kept(line);
-        }
-        let choose_folder = || {
-            design::outcome::Choice::new(
-                design::outcome::MessageChoice::Choice("Choose folder"),
-                FooterPress::ChooseFolder,
-            )
-        };
-        if let Some(error) = &self.error {
-            let fault = design::outcome::FaultMessage::new(&EncounterFault::Failed(error.clone()));
-            messages.outcome(fault);
-        }
-        if let Some(folder) = self
-            .snapshot
-            .as_ref()
-            .and_then(|snapshot| snapshot.runs_unread.clone())
-        {
-            messages.outcome(
-                design::outcome::FaultMessage::new(&EncounterFault::RunFolder(folder))
-                    .choice(choose_folder()),
-            );
-        }
+        self.list_lines(&mut messages, &frame);
         // R2: History's `Open` scrolls the list once.
         let reveal = std::mem::take(&mut self.history_reveal);
         let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
@@ -7309,6 +7316,11 @@ impl Encounters {
         let Some(action) = paned.body else {
             return;
         };
+        self.list_act(action, active, campaigns);
+    }
+
+    /// A row action of the list (`ListAction`), for both views: the egui list and the GPUI page.
+    pub fn list_act(&mut self, action: ListAction, active: &Campaign, campaigns: &Campaigns) {
         self.clear_notice();
         match action {
             ListAction::BackToRun => self.go_to_run = true,
@@ -7882,41 +7894,23 @@ impl Encounters {
             );
         }
         design::rule(ui);
-        if back {
-            self.clear_notice();
-            self.draft = None;
-            self.message = None;
-            self.error = None;
-            self.creature = None;
-            self.wants_session = std::mem::take(&mut self.from_session);
-            self.plan_on_save = false;
+        let act = if back {
+            Some(model::HeadAct::Back)
+        } else if discard {
+            Some(model::HeadAct::Discard)
+        } else if start_another {
+            Some(model::HeadAct::StartAnother { save: save || dirty })
+        } else if run_it {
+            Some(model::HeadAct::Start { save: save || dirty })
+        } else if save {
+            Some(model::HeadAct::Save)
+        } else {
+            None
+        };
+        if let Some(act) = act
+            && self.editor_head_act(ui.ctx(), active, campaigns.modules(), act)
+        {
             return;
-        }
-        if discard {
-            self.discard_draft(active);
-            return;
-        }
-        if save {
-            self.save_draft(ui.ctx(), active, campaigns.modules());
-        }
-        if run_it || start_another {
-            if dirty {
-                self.save_draft(ui.ctx(), active, campaigns.modules());
-            }
-            if !self.draft_dirty() {
-                if !start_another && let Some(run) = &unfinished {
-                    self.open_saved_run(&run.path, active);
-                } else {
-                    self.open_run(active, campaigns.modules());
-                }
-                // A fight started from the session goes back there, not to this editor.
-                if self.from_session.is_some() && self.run.is_some() {
-                    self.draft = None;
-                    self.from_session = None;
-                    self.run_from_session = true;
-                    return;
-                }
-            }
         }
         // After a load in progress, so that a group just saved is among them.
         if self.pending.is_none()
