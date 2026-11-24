@@ -51,3 +51,19 @@ pub fn sideways(id: impl Into<ElementId>, content: impl IntoElement) -> impl Int
         .overflow_x_scrollbar()
         .child(content)
 }
+
+/// A virtual list whose rows have their own heights (`gpui::list` over a `ListState` the page
+/// keeps), with the bar's lane kept as `scroll_column` keeps it. Use it for a list that can be
+/// long (a World of thousands of notes): only the rows in view are laid out.
+pub fn list_column(
+    id: impl Into<ElementId>,
+    state: &gpui::ListState,
+    list: gpui::List,
+) -> impl IntoElement {
+    div()
+        .id(id.into())
+        .size_full()
+        .min_h_0()
+        .child(list.size_full().pr(SCROLL_BAR_WIDTH))
+        .vertical_scrollbar(state)
+}

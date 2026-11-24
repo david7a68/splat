@@ -9648,3 +9648,150 @@ mod tests {
         );
     }
 }
+
+/// A pane's footer as plain data, for a view that is not egui (the GPUI port,
+/// `docs/gpui-port.md`). The lines come in the footer's one order (`footer_order`); each control
+/// carries its own [`Press`], with the store's ticket of a kept line, so a press acts on the entry
+/// its line showed and on no other, as the egui footer's does.
+pub mod plain {
+    use super::*;
+
+    /// One control of a [`Line`]: its words, its reason while it is blocked, and its press.
+    pub struct Act<A> {
+        /// The whole words (also its accessible name).
+        pub label: String,
+        /// Why it cannot be pressed now.
+        pub blocked: Option<String>,
+        /// It loses data: drawn destructive, after the others with `L` before it.
+        pub lose: bool,
+        /// It is a link (`Edit in Obsidian`), not a button.
+        pub link: bool,
+        /// It is the close icon of a message (`Dismiss this message`).
+        pub dismiss: bool,
+        /// Hover words.
+        pub hover: Option<String>,
+        /// Its help line under the choice.
+        pub help: Option<String>,
+        pub press: Press<A>,
+    }
+
+    /// One footer message: tone, words, the file it is about, and its Undo and choices.
+    pub struct Line<A> {
+        pub tone: Tone,
+        pub words: String,
+        /// What the system itself said, on hover over the words.
+        pub hover: Option<String>,
+        pub help: Vec<String>,
+        /// The file it is about: the whole path, the words that name it, and whether the line
+        /// offers `Edit in Obsidian` and `Show file`.
+        pub file: Option<(Option<std::path::PathBuf>, String, bool, bool)>,
+        pub undo: Option<Act<A>>,
+        pub choices: Vec<Act<A>>,
+    }
+
+    /// A token for a pane drawn by another toolkit, which has no egui `Ui`.
+    pub fn frame() -> PaneFrame {
+        PaneFrame {
+            _not_static: std::marker::PhantomData,
+        }
+    }
+
+    impl<A: Clone + 'static> Messages<'_, A> {
+        /// Its lines, in the footer's order, as data.
+        pub fn into_plain(self) -> Vec<Line<A>> {
+            let newest = self.newest;
+            let mut lines: Vec<_> = self
+                .lines
+                .into_iter()
+                .map(|line| {
+                    let rank = match (line.refused, line.order) {
+                        (true, Some(order)) => refusal_rank(order, newest),
+                        _ => line.rank,
+                    };
+                    (rank, line.order, line)
+                })
+                .collect();
+            lines.sort_by_key(|(rank, order, _)| (*rank, order.map(std::cmp::Reverse)));
+            lines
+                .into_iter()
+                .map(|(_, _, line)| plain_line(line))
+                .collect()
+        }
+    }
+
+    fn plain_line<A: Clone>(line: FooterLine<A>) -> Line<A> {
+        let order = line.ticket.as_ref().map(Ticket::order);
+        let press = |id: A| Press {
+            id,
+            ticket: order.map(Ticket::of),
+        };
+        let body = line.typed.body;
+        let undo = match (body.undo, line.typed.undo) {
+            (Some(step), Some(id)) => Some(Act {
+                label: step.label(),
+                blocked: holding(&body.undo_lock).map(str::to_owned),
+                lose: false,
+                link: false,
+                dismiss: false,
+                hover: None,
+                help: None,
+                press: press(id),
+            }),
+            _ => None,
+        };
+        let choices = body
+            .choices
+            .iter()
+            .zip(line.typed.choices)
+            .enumerate()
+            .map(|(at, (what, id))| {
+                let named = body.named.get(at).cloned().flatten();
+                let (label, lose, link, dismiss) = match (what, named) {
+                    (_, Some((kind, words))) => (words.label(), kind == ChoiceKind::Lose, false, false),
+                    (MessageChoice::Choice(word) | MessageChoice::Primary(word), None) => {
+                        ((*word).to_owned(), false, false, false)
+                    }
+                    (MessageChoice::Lose(word), None) => ((*word).to_owned(), true, false, false),
+                    (MessageChoice::Link { word, .. }, None) => {
+                        ((*word).to_owned(), false, true, false)
+                    }
+                    (MessageChoice::Dismiss(_), None) => {
+                        (DISMISS_NAME.to_owned(), false, false, true)
+                    }
+                };
+                let hover = match what {
+                    MessageChoice::Link {
+                        hover: Some(hover), ..
+                    } => Some((*hover).to_owned()),
+                    _ => body.hovers.get(at).cloned().flatten(),
+                };
+                Act {
+                    label,
+                    blocked: body.locks.get(at).and_then(holding).map(str::to_owned),
+                    lose,
+                    link,
+                    dismiss,
+                    hover,
+                    help: body
+                        .helps
+                        .get(at)
+                        .cloned()
+                        .flatten()
+                        .map(|help| help.as_str().to_owned()),
+                    press: press(id),
+                }
+            })
+            .collect();
+        Line {
+            tone: body.tone,
+            words: body.words.as_str().to_owned(),
+            hover: body.words_hover,
+            help: body.help.iter().map(|help| help.as_str().to_owned()).collect(),
+            file: body
+                .file
+                .map(|file| (file.path(), file.shown(), file.edit, file.show)),
+            undo,
+            choices,
+        }
+    }
+}

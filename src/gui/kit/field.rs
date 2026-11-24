@@ -106,6 +106,8 @@ pub struct TextField {
     width: Option<gpui::Pixels>,
     on_change: Option<OnChange>,
     on_enter: Option<super::OnAct>,
+    on_escape: Option<super::OnAct>,
+    focus_now: bool,
 }
 
 impl TextField {
@@ -120,6 +122,8 @@ impl TextField {
             width: None,
             on_change: None,
             on_enter: None,
+            on_escape: None,
+            focus_now: false,
         }
     }
 
@@ -132,6 +136,19 @@ impl TextField {
     /// The accessible name, when no `field` caption names it.
     pub fn name(mut self, name: impl Into<SharedString>) -> Self {
         self.name = Some(name.into());
+        self
+    }
+
+    /// Escape in the field (a picker's Cancel, a Log line's Cancel). The press stops here.
+    pub fn on_escape(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_escape = Some(Rc::new(handler));
+        self
+    }
+
+    /// Take the keyboard in this frame, with the words selected (a field that a press opened,
+    /// `design::focus_and_select`). Give it for one frame; the caller keeps the request.
+    pub fn focus_now(mut self, focus: bool) -> Self {
+        self.focus_now = focus;
         self
     }
 
@@ -182,6 +199,11 @@ impl RenderOnce for TextField {
         state.update(cx, |state, cx| state.follow(&value, on_change, window, cx));
         let input = state.read(cx).input.clone();
         input.update(cx, |input, cx| input.set_disabled(self.disabled, cx));
+        if self.focus_now {
+            let handle = input.read(cx).focus_handle(cx);
+            window.focus(&handle, cx);
+            window.dispatch_action(Box::new(gpui_component::input::SelectAll), cx);
+        }
         let focused = input.read(cx).focus_handle(cx).is_focused(window);
         let name = self
             .name
@@ -207,6 +229,14 @@ impl RenderOnce for TextField {
             frame = frame.on_key_down(move |event, window, cx| {
                 if event.keystroke.key == "enter" && !event.keystroke.modifiers.modified() {
                     enter(window, cx);
+                }
+            });
+        }
+        if let Some(escape) = self.on_escape.clone() {
+            frame = frame.on_key_down(move |event, window, cx| {
+                if event.keystroke.key == "escape" && !event.keystroke.modifiers.modified() {
+                    escape(window, cx);
+                    cx.stop_propagation();
                 }
             });
         }

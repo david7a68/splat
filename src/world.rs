@@ -12,8 +12,10 @@ mod fields;
 pub mod file_fault;
 #[path = "world/lines.rs"]
 pub mod lines;
+#[path = "world/model.rs"]
+pub mod model;
 #[path = "world/related.rs"]
-mod related;
+pub mod related;
 #[path = "world/repair.rs"]
 pub mod repair;
 
@@ -3010,37 +3012,8 @@ impl Reader {
         self.prepare(item);
         // The app loads the index again when a file changes, so a new load is when an outside
         // edit can have come (layout PR 9b-R1c: no file is read on a quiet frame).
-        if self.disk_checked != Some(index.generation()) {
-            self.disk_checked = Some(index.generation());
-            #[cfg(any(test, feature = "test-support"))]
-            let read = |path: std::path::PathBuf| {
-                READER_FILE_READS.with(|reads| reads.set(reads.get() + 1));
-                fs::read_to_string(path)
-            };
-            #[cfg(not(any(test, feature = "test-support")))]
-            let read = fs::read_to_string::<std::path::PathBuf>;
-            // A change's result ends when its file no longer holds what the change wrote.
-            if let Some(ReaderResult::Change(change)) = self.result(Slot::Change)
-                && campaign.is_none_or(|campaign| {
-                    read(campaign.path.join(&change.path)).ok().as_deref() != Some(&change.after)
-                })
-            {
-                self.end(Slot::Change);
-            }
-            if self.kept.as_ref().is_some_and(|(path, text)| {
-                campaign.is_none_or(|campaign| {
-                    read(campaign.path.join(path)).ok().as_deref() != Some(text)
-                })
-            }) {
-                self.kept = None;
-            }
-        }
-        let heading = if self.heading_document.is_none_or(|id| id == item.entry.id) {
-            self.heading_document = None;
-            self.heading.take()
-        } else {
-            None
-        };
+        self.check_disk(index, campaign);
+        let heading = self.take_heading_for(item.entry.id);
         crate::markdown_view::want_heading(ui.ctx(), heading);
         let go = self.draw(ui, item, index, campaign, trackers, region);
         // A request lasts one draw, so it cannot reach a heading on another page.
@@ -3068,49 +3041,16 @@ impl Reader {
         }
         ui.ctx()
             .data_mut(|data| data.insert_temp(egui::Id::new("reader_document"), item.entry.id));
-        let title = item
-            .entry
-            .reading()
-            .ok()
-            .flatten()
-            .map_or_else(|| index.name_of(item).to_owned(), |reading| reading.title);
         let id = item.entry.id;
-        let edit =
-            campaign.filter(|campaign| edit::editable(item, index) && !self.editing(id, campaign));
-        // Lookup has no file line. While the repair message names the fault, the kind line
-        // names the open file in place of the fault.
-        let duplicate = index.duplicate_world.contains_key(&item.entry.path);
-        let kind = ReaderStatus::of(item, index, campaign.is_some(), self.status_editing)
-            .kind_words(item, duplicate);
-        let kind_line = if self.compact && campaign.is_some() && duplicate {
-            format!("{kind} · {} · {}", item.owner, item.entry.path)
-        } else {
-            format!("{kind} · {}", item.owner)
-        };
-        // While a run is open, `Add to fight` takes the place of `Start fight`.
-        let start = (self.sides.is_none()
-            && !self.beside_editor
-            && !campaign.is_some_and(|c| self.editing(id, c)))
-        .then(|| start_fight(item, index))
-        .flatten();
-        // While a run is open, a creature or an NPC joins it from its reader's title line in
-        // one press (FJ5; round 28 FJ7, FF1: one form for both), through the run's own add. An
-        // NPC already in the fight has its status link instead, and an NPC in its edit form has
-        // none, as `Start fight`. An NPC with no stat block opens the form below that asks for
-        // one (also a package's NPC: the form adds them and writes nothing to the note); while
-        // that form is open it is the one way to add them, and the title line has no
-        // `Add to fight` until the form adds them or Cancel closes it (review of PR 355).
-        let editing_entry = campaign.is_some_and(|c| self.editing(id, c));
-        let add = self
-            .sides
-            .is_some()
-            .then(|| start_fight(item, index))
-            .flatten()
-            .filter(|fight| {
-                let form_open = fight.creature.is_none() && self.adding.is_some();
-                let elsewhere = self.in_run.contains_key(&id) || editing_entry || form_open;
-                !fight.npc || !elsewhere
-            });
+        // The title line's words and actions are the model's, as every reader view draws them.
+        let model::TitleFacts {
+            title,
+            kind_line,
+            edit,
+            start,
+            add,
+        } = self.title_facts(item, index, campaign);
+        let edit = campaign.filter(|_| edit);
         {
             let width = ui.available_width();
             let cell = ui
@@ -3336,58 +3276,14 @@ impl Reader {
                 let chosen = fault.show(ui);
                 let (note, rename_file) =
                     (chosen == Some(Rename::Note), chosen == Some(Rename::File));
-                if rename_file && let Some(to) = &file {
-                    // The whole file must still be the whole file the index read, which
-                    // produced the reader: a changed comment, line end or byte order mark
-                    // counts as a change. The move checks the same text again.
-                    let result =
-                        file_fault::read_note(&campaign.path, &item.entry.path).and_then(|text| {
-                            if item.source_text() == Some(crate::lookup::text_hash(&text)) {
-                                FileRename::apply(campaign, &item.entry.path, to, &text)
-                            } else {
-                                Err(format!(
-                                    "{} changed on disk. Nothing was renamed.",
-                                    item.entry.path
-                                ))
-                            }
-                        });
-                    match result {
-                        Ok(rename) => {
-                            self.held.results.record(ReaderResult::FileRename(rename));
-                            return Some(Go::Reload(item.entry.id));
-                        }
-                        Err(error) => self.error = Some(error),
-                    }
+                if rename_file
+                    && let Some(to) = &file
+                    && let Some(go) = self.file_renamed(campaign, item, to)
+                {
+                    return Some(go);
                 }
-                if note {
-                    let result = (|| {
-                        let before = file_fault::read_note(&campaign.path, &item.entry.path)?;
-                        let after = crate::content_workspace::patch_fields(
-                            &before,
-                            &[("splat_name", Some(stem.to_string().into()))],
-                        )?;
-                        let after = crate::content_workspace::rename_first_heading(
-                            after,
-                            &item.entry.name,
-                            &stem,
-                        );
-                        write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
-                        Ok::<_, String>(Change {
-                            campaign: campaign.id,
-                            path: item.entry.path.clone(),
-                            before,
-                            after,
-                            word: format!("Name changed to {stem}."),
-                            kind: ChangeKind::Name,
-                        })
-                    })();
-                    match result {
-                        Ok(change) => {
-                            self.held.results.record(ReaderResult::Name(change));
-                            return Some(Go::Reload(item.entry.id));
-                        }
-                        Err(error) => self.error = Some(error),
-                    }
+                if note && let Some(go) = self.note_renamed(campaign, item, &stem) {
+                    return Some(go);
                 }
             }
             if let Some(paths) = index.duplicate_world.get(&item.entry.path) {
@@ -3415,16 +3311,10 @@ impl Reader {
                     fault = fault.repair(repair);
                 }
                 let chosen = fault.show(ui).and_then(|at| paths.get(at));
-                if let Some(path) = chosen {
-                    match new_identity(campaign, path) {
-                        Ok((undo, id)) => {
-                            self.held
-                                .results
-                                .record(ReaderResult::Identity(campaign.id, undo));
-                            return Some(Go::Reload(id));
-                        }
-                        Err(error) => self.error = Some(error),
-                    }
+                if let Some(path) = chosen
+                    && let Some(go) = self.separated(campaign, path)
+                {
+                    return Some(go);
                 }
                 // A gap ends the choices, so the fields below do not read as a consequence.
                 design::gap_to_next(ui, design::Gap::M);
@@ -4613,9 +4503,49 @@ impl Reader {
         campaign: &Campaign,
     ) -> Option<Nav> {
         let go = match press.id {
-            FooterAct::Undo => {
-                let ticket = press.ticket?;
-                match self.held.results.undo_by(ticket, |result| match result {
+            FooterAct::Undo => self.undo_result(press.ticket?, open, campaign),
+            FooterAct::GoneCopy(id) => {
+                if let Some(gone) = self.held.gone_log_lines.iter().find(|gone| gone.id == id) {
+                    ctx.copy_text(gone.words.clone());
+                }
+                self.end_gone_log(id);
+                None
+            }
+            FooterAct::GoneDismiss(id) => {
+                self.dismiss_gone_log(id);
+                None
+            }
+            FooterAct::UndoDismiss => {
+                self.undo_dismiss(press.ticket?);
+                None
+            }
+            FooterAct::LostCopy(id) => {
+                self.copy_lost(ctx, id);
+                None
+            }
+            FooterAct::LostDiscard(id) => {
+                self.discard_lost(id);
+                None
+            }
+            FooterAct::OpenEditor(path) => {
+                ctx.open_url(egui::OpenUrl::new_tab(obsidian_url(&path)));
+                None
+            }
+            // The page takes its own result's Undo and its ticks, and the pane the trackers'.
+            FooterAct::Page | FooterAct::Trackers | FooterAct::Untick => None,
+        };
+        go.and_then(|go| self.settle(go))
+    }
+
+    /// `Undo` of a kept result of the reader's store, by its ticket: a replaced or ended result
+    /// (`Gone`) does nothing; a failed Undo keeps the result and says why.
+    pub(crate) fn undo_result(
+        &mut self,
+        ticket: design::results::Ticket,
+        open: Option<Uuid>,
+        campaign: &Campaign,
+    ) -> Option<Go> {
+        match self.held.results.undo_by(ticket, |result| match result {
                     ReaderResult::Change(change) | ReaderResult::Name(change) => {
                         change.undo(campaign)
                     }
@@ -4648,38 +4578,6 @@ impl Reader {
                     }
                     Err(design::results::ByTicket::Gone) => None,
                 }
-            }
-            FooterAct::GoneCopy(id) => {
-                if let Some(gone) = self.held.gone_log_lines.iter().find(|gone| gone.id == id) {
-                    ctx.copy_text(gone.words.clone());
-                }
-                self.end_gone_log(id);
-                None
-            }
-            FooterAct::GoneDismiss(id) => {
-                self.dismiss_gone_log(id);
-                None
-            }
-            FooterAct::UndoDismiss => {
-                self.undo_dismiss(press.ticket?);
-                None
-            }
-            FooterAct::LostCopy(id) => {
-                self.copy_lost(ctx, id);
-                None
-            }
-            FooterAct::LostDiscard(id) => {
-                self.discard_lost(id);
-                None
-            }
-            FooterAct::OpenEditor(path) => {
-                ctx.open_url(egui::OpenUrl::new_tab(obsidian_url(&path)));
-                None
-            }
-            // The page takes its own result's Undo and its ticks, and the pane the trackers'.
-            FooterAct::Page | FooterAct::Trackers | FooterAct::Untick => None,
-        };
-        go.and_then(|go| self.settle(go))
     }
 
     /// The value rows of a campaign entry: Stat block, Place and Part of, each with its Change

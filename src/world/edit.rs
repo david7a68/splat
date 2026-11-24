@@ -2,7 +2,8 @@
 //! the text. Save writes them together, with one Undo. Lookup and World show the same form.
 #![warn(deprecated)] // Its old message functions are gone; the parent file still allows them.
 use super::{
-    Change, ChangeKind, Go, Picker, Reader, link_name, reference, status, stored_link, world_field,
+    Change, ChangeKind, Go, Nav, Picker, Reader, link_name, reference, status, stored_link,
+    world_field,
 };
 use crate::design::text_draft::{KeptCompare, TextDraft};
 use crate::{
@@ -256,6 +257,11 @@ impl EditDraft {
             && now
                 .text
                 .same_as(start.text.revision(), &start.text, &self.same_start)
+    }
+
+    /// The draft's text now.
+    pub(super) fn now_text(&self) -> &str {
+        self.now.text.as_str()
     }
 
     pub fn dirty(&self) -> bool {
@@ -968,26 +974,10 @@ impl Reader {
         }
     }
 
-    /// The form, in place of the entry's rows and text.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
-    )]
-    pub fn edit_form(
-        &mut self,
-        ui: &mut egui::Ui,
-        item: &Item,
-        index: &ContentIndex,
-        campaign: &Campaign,
-        region: Option<crate::design::pane::EditorRegion<'_>>,
-    ) -> Option<Go> {
-        let id = item.entry.id;
-        // The draft leaves the map while the form draws, and goes back unless it closes.
-        let mut draft = self.edits.remove(&id)?;
-        if draft.campaign != campaign.id {
-            self.edits.insert(id, draft);
-            return None;
-        }
+    /// The draft follows its file: a rename in Obsidian keeps the identity, and a draft with no
+    /// changes takes a new load of the note; a file that changed again after Reload brings the
+    /// DM's held draft back with the choice.
+    fn follow_file(&mut self, draft: &mut EditDraft, item: &Item, campaign: &Campaign) {
         // A rename in Obsidian keeps the identity, so the draft follows the file.
         draft.path.clone_from(&item.entry.path);
         draft.name.clone_from(&item.entry.name);
@@ -1008,7 +998,7 @@ impl Reader {
                     draft.disk = Some((fresh.baseline, theirs));
                     draft.seen = fresh.seen;
                 }
-                Ok(fresh) => draft = fresh,
+                Ok(fresh) => *draft = fresh,
                 Err(error) => {
                     // Try again when the index next changes, not on every frame.
                     draft.seen = (
@@ -1020,6 +1010,81 @@ impl Reader {
                 }
             }
         }
+    }
+
+    /// Discard or Cancel of the form: a draft with changes waits for `Undo discard`.
+    fn discard_taken(&mut self, id: Uuid, draft: EditDraft) {
+        self.error = None;
+        self.picker = None;
+        self.form_focused = false;
+        if draft.dirty() {
+            self.held
+                .results
+                .record(super::ReaderResult::Discarded(id, Box::new(draft)));
+        }
+    }
+
+    /// Save of the form, with the draft out of `edits`: the write and its result, the note that
+    /// already held every change, or a disk change that the draft waits on. A failed write keeps
+    /// the draft and says why.
+    fn save_taken(
+        &mut self,
+        id: Uuid,
+        mut draft: EditDraft,
+        campaign: &Campaign,
+        index: &ContentIndex,
+    ) -> Option<Go> {
+        match draft.save(campaign, index, self.log_as().as_deref()) {
+                Ok(Saved::Written(change)) => {
+                    self.picker = None;
+                    self.form_focused = false;
+                    self.held
+                        .results
+                        .record(super::ReaderResult::Change(change));
+                    self.kept = None;
+                    return Some(Go::Reload(id));
+                }
+                Ok(Saved::Unchanged(disk)) => {
+                    self.picker = None;
+                    self.form_focused = false;
+                    self.end(super::Slot::Change);
+                    // A refused group change is not in the note. The note's own warning says why.
+                    self.kept = (!draft.groups_refused).then(|| (draft.path.clone(), disk));
+                    return Some(Go::Reload(id));
+                }
+                Ok(Saved::Waiting) => {
+                    // The note changed on disk. Read it again for its list row and header count,
+                    // as a refused Part of write does. The draft waits for the DM's choice.
+                    self.edits.insert(id, draft);
+                    return Some(Go::Reload(id));
+                }
+                Err(error) => self.error = Some(error),
+            }
+        self.edits.insert(id, draft);
+        None
+    }
+
+    /// The form, in place of the entry's rows and text.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
+    pub fn edit_form(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: &Campaign,
+        region: Option<crate::design::pane::EditorRegion<'_>>,
+    ) -> Option<Go> {
+        let id = item.entry.id;
+        // The draft leaves the map while the form draws, and goes back unless it closes.
+        let mut draft = self.edits.remove(&id)?;
+        if draft.campaign != campaign.id {
+            self.edits.insert(id, draft);
+            return None;
+        }
+        self.follow_file(&mut draft, item, campaign);
         design::gap(ui, design::Gap::M);
         let had_conflict = draft.disk.is_some();
         let overwrite = match draft.conflict(ui, index) {
@@ -1301,43 +1366,11 @@ impl Reader {
             overwrite || row.save || design::save_row::save_key(ui, state.can_save() && focused);
         let cancel = row.discard || row.cancel;
         if cancel {
-            self.error = None;
-            self.picker = None;
-            self.form_focused = false;
-            if draft.dirty() {
-                self.held
-                    .results
-                    .record(super::ReaderResult::Discarded(id, Box::new(draft)));
-            }
+            self.discard_taken(id, draft);
             return None;
         }
         if save {
-            match draft.save(campaign, index, self.log_as().as_deref()) {
-                Ok(Saved::Written(change)) => {
-                    self.picker = None;
-                    self.form_focused = false;
-                    self.held
-                        .results
-                        .record(super::ReaderResult::Change(change));
-                    self.kept = None;
-                    return Some(Go::Reload(id));
-                }
-                Ok(Saved::Unchanged(disk)) => {
-                    self.picker = None;
-                    self.form_focused = false;
-                    self.end(super::Slot::Change);
-                    // A refused group change is not in the note. The note's own warning says why.
-                    self.kept = (!draft.groups_refused).then(|| (draft.path.clone(), disk));
-                    return Some(Go::Reload(id));
-                }
-                Ok(Saved::Waiting) => {
-                    // The note changed on disk. Read it again for its list row and header count,
-                    // as a refused Part of write does. The draft waits for the DM's choice.
-                    self.edits.insert(id, draft);
-                    return Some(Go::Reload(id));
-                }
-                Err(error) => self.error = Some(error),
-            }
+            return self.save_taken(id, draft, campaign, index);
         }
         self.edits.insert(id, draft);
         None
@@ -2340,5 +2373,251 @@ mod tests {
         fs::write(&path, &after).unwrap();
         change.undo(&campaign).unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), before);
+    }
+}
+
+/// A value of the edit form as it reads: its words, and whether they are set (`Body` in the
+/// text colour), not set (muted `Small`) or not read (a `Small` warning).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DraftValue {
+    Set(String),
+    NotSet,
+    NotRead,
+}
+
+/// The note on disk changed under the draft: what Overwrite would do to the values, and the
+/// two texts when they differ.
+pub struct ConflictView {
+    /// `<name> changed on disk. Your draft is safe until you choose.`
+    pub words: String,
+    pub effects: Vec<(String, String)>,
+    /// The draft's text and the file's, when they differ.
+    pub texts: Option<(String, String)>,
+}
+
+/// The edit form as data, for a view that is not egui (the GPUI port).
+pub struct DraftView {
+    pub path: String,
+    /// Stat block, for an NPC; Place; Part of.
+    pub creature: Option<DraftValue>,
+    pub place: DraftValue,
+    pub groups: DraftValue,
+    /// Why Part of cannot change: its reason cut and whole.
+    pub groups_error: Option<(String, String)>,
+    pub status: String,
+    pub text: String,
+    pub conflict: Option<ConflictView>,
+    pub dirty: bool,
+    /// A Log field of this note waits for the form.
+    pub log_waits: bool,
+    /// A live run owns the screen's primary action.
+    pub live: bool,
+}
+
+impl Reader {
+    /// The open edit form of the note `item`, following its file first (`follow_file`). It
+    /// also ends `Undo reload` once the DM edits after a Reload.
+    pub fn draft_view(
+        &mut self,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: &Campaign,
+    ) -> Option<DraftView> {
+        let id = item.entry.id;
+        let mut draft = self.edits.remove(&id)?;
+        if draft.campaign != campaign.id {
+            self.edits.insert(id, draft);
+            return None;
+        }
+        self.follow_file(&mut draft, item, campaign);
+        if draft.reloaded.is_some() && !draft.now_is_start() {
+            draft.reloaded = None;
+            self.end(super::Slot::Reloaded);
+        }
+        let slot = |slot: &Option<Value>, label: &str| match slot {
+            Some(value) if !super::empty_optional(value) => {
+                DraftValue::Set(value_name(index, value, label))
+            }
+            _ => DraftValue::NotSet,
+        };
+        let groups_error = draft
+            .start
+            .groups_unread
+            .as_ref()
+            .map(|unread| (unread.reason.clone(), unread.whole.clone()));
+        if groups_error.is_some()
+            && self
+                .picker
+                .as_ref()
+                .is_some_and(|picker| picker.key == "part_of")
+        {
+            self.picker = None;
+        }
+        let groups = if groups_error.is_some() {
+            DraftValue::NotRead
+        } else if draft.now.groups.is_empty() {
+            DraftValue::NotSet
+        } else {
+            DraftValue::Set(
+                draft
+                    .now
+                    .groups
+                    .iter()
+                    .map(|value| value_name(index, value, "group"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            )
+        };
+        let conflict = draft.disk.as_ref().map(|(_, theirs)| {
+            let effects = theirs
+                .as_ref()
+                .map(|theirs| draft.overwrite_effects(theirs, index))
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(label, words)| (label.to_string(), words.to_string()))
+                .collect();
+            let their_text = theirs.as_ref().map_or("", |theirs| theirs.text.as_str());
+            let same = match theirs {
+                Some(theirs) => draft.now.text.same_as(
+                    theirs.text.revision(),
+                    &theirs.text,
+                    &draft.same_disk,
+                ),
+                None => draft.now.text.is_empty(),
+            };
+            ConflictView {
+                words: format!(
+                    "{} changed on disk. Your draft is safe until you choose.",
+                    draft.name
+                ),
+                effects,
+                texts: (!same)
+                    .then(|| (draft.now.text.as_str().to_owned(), their_text.to_owned())),
+            }
+        });
+        let view = DraftView {
+            path: draft.path.clone(),
+            creature: super::fights(&item.entry).then(|| slot(&draft.now.creature, "Stat block")),
+            place: slot(&draft.now.place, "Place"),
+            groups,
+            groups_error,
+            status: draft.now.status.clone(),
+            text: draft.now.text.as_str().to_owned(),
+            conflict,
+            dirty: draft.dirty(),
+            log_waits: super::takes_log(item, index) && self.log_waits((campaign.id, id)),
+            live: self.live,
+        };
+        self.edits.insert(id, draft);
+        Some(view)
+    }
+
+    /// The form's groups, while it is open for `id`.
+    pub fn draft_groups(&self, id: Uuid) -> Option<Vec<Value>> {
+        self.edits.get(&id).map(|draft| draft.now.groups.clone())
+    }
+
+    /// The form's Status words.
+    pub fn set_draft_status(&mut self, id: Uuid, words: &str) {
+        if let Some(draft) = self.edits.get_mut(&id) {
+            words.clone_into(&mut draft.now.status);
+        }
+    }
+
+    /// The form's Text words.
+    pub fn set_draft_text(&mut self, id: Uuid, words: &str) {
+        if let Some(draft) = self.edits.get_mut(&id) {
+            let _ = draft.now.text.replace(words);
+        }
+    }
+
+    /// `Change` of a value in the form: its picker opens (Part of waits while it is not read).
+    pub fn press_draft_change(&mut self, key: &'static str) {
+        self.picker = Some(super::Picker {
+            key,
+            focus: true,
+            ..Default::default()
+        });
+    }
+
+    /// A picker press in the edit form: the value it chooses goes to the form, not the note.
+    pub fn pick_into_draft(
+        &mut self,
+        act: super::model::PickAct,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: &Campaign,
+    ) {
+        let id = item.entry.id;
+        let Some(key) = self.picker.as_ref().map(|picker| picker.key) else {
+            return;
+        };
+        let groups = self.edits.get(&id).map(|draft| draft.now.groups.clone());
+        let Some(chosen) = self.pick_value(act, item, index, campaign, groups.as_deref()) else {
+            return;
+        };
+        let Some(draft) = self.edits.get_mut(&id) else {
+            return;
+        };
+        match key {
+            "creature" => draft.now.creature = Some(chosen).filter(|value| !value.is_null()),
+            "in" => draft.now.place = Some(chosen).filter(|value| !value.is_null()),
+            _ => {
+                if let Value::Sequence(groups) = chosen {
+                    draft.now.groups = groups;
+                }
+            }
+        }
+    }
+
+    /// The DM's choice between the draft and the note on disk: Overwrite saves the draft's own
+    /// changes over the file; Reload takes the file, with `Undo reload`.
+    pub fn resolve_conflict(
+        &mut self,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: &Campaign,
+        choice: crate::design::DiskConflictChoice,
+    ) -> Option<Nav> {
+        let id = item.entry.id;
+        let mut draft = self.edits.remove(&id)?;
+        let Some((disk, theirs)) = draft.disk.take() else {
+            self.edits.insert(id, draft);
+            return None;
+        };
+        let overwrite = matches!(draft.resolve(disk, theirs, choice, index), Conflict::Overwrite);
+        if !overwrite && draft.reloaded.is_some() {
+            self.held.results.record(super::ReaderResult::Reloaded(id));
+        }
+        if overwrite {
+            let go = self.save_taken(id, draft, campaign, index)?;
+            return self.settle(go);
+        }
+        self.edits.insert(id, draft);
+        None
+    }
+
+    /// `Save changes`.
+    pub fn save_draft(
+        &mut self,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: &Campaign,
+    ) -> Option<Nav> {
+        let id = item.entry.id;
+        let draft = self.edits.remove(&id)?;
+        if draft.campaign != campaign.id {
+            self.edits.insert(id, draft);
+            return None;
+        }
+        let go = self.save_taken(id, draft, campaign, index)?;
+        self.settle(go)
+    }
+
+    /// `Discard` (a form with changes, which waits for its Undo) or `Cancel` (a clean form).
+    pub fn discard_draft(&mut self, id: Uuid) {
+        if let Some(draft) = self.edits.remove(&id) {
+            self.discard_taken(id, draft);
+        }
     }
 }
