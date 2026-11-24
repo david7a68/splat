@@ -1849,8 +1849,7 @@ impl WorldPage {
         let fixing = faults.listed().len();
         (
             (count > 0).then(|| design::count(count, "note", "notes")),
-            (fixing > 0)
-                .then(|| design::count(fixing, "note needs fixing", "notes need fixing")),
+            (fixing > 0).then(|| design::count(fixing, "note needs fixing", "notes need fixing")),
             (broken > 0)
                 .then(|| format!("{} cannot be read", design::count(broken, "note", "notes"))),
         )
@@ -2188,8 +2187,7 @@ impl WorldPage {
                 self.error = None;
                 if listed {
                     self.open_repair(campaign, &path);
-                } else if let Some(item) = index.items.iter().find(|item| item.entry.path == path)
-                {
+                } else if let Some(item) = index.items.iter().find(|item| item.entry.path == path) {
                     self.open_note(item.entry.id);
                 }
                 return None;
@@ -2273,10 +2271,7 @@ impl WorldPage {
         item: Option<&crate::lookup::Item>,
         index: &ContentIndex,
         campaign: &Campaign,
-        more: impl for<'f> FnOnce(
-            &'f PaneFrame,
-            &mut Messages<'f, crate::world::FooterAct>,
-        ),
+        more: impl for<'f> FnOnce(&'f PaneFrame, &mut Messages<'f, crate::world::FooterAct>),
     ) -> Vec<design::outcome::plain::Line<crate::world::FooterAct>> {
         let frame = design::outcome::plain::frame();
         let mut messages = Messages::new(&frame, "plain", 0.0);
@@ -2416,7 +2411,11 @@ fn list_row(index: &ContentIndex, position: usize, depth: usize) -> ListRow {
             .to_string_lossy()
             .into_owned()
     };
-    let name = if duplicate { file() } else { entry.name.clone() };
+    let name = if duplicate {
+        file()
+    } else {
+        entry.name.clone()
+    };
     let fault = index.note_faults().of_note(position);
     let narrow = fault
         .and_then(crate::world::NoteFault::narrow_words)

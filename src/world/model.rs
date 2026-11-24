@@ -434,7 +434,12 @@ impl Reader {
     }
 
     /// `rename_note`, as the egui reader's body takes it.
-    pub(super) fn note_renamed(&mut self, campaign: &Campaign, item: &Item, stem: &str) -> Option<Go> {
+    pub(super) fn note_renamed(
+        &mut self,
+        campaign: &Campaign,
+        item: &Item,
+        stem: &str,
+    ) -> Option<Go> {
         let result = (|| {
             let before = file_fault::read_note(&campaign.path, &item.entry.path)?;
             let after = crate::content_workspace::patch_fields(
@@ -473,7 +478,12 @@ impl Reader {
     }
 
     /// `rename_file`, as the egui reader's body takes it.
-    pub(super) fn file_renamed(&mut self, campaign: &Campaign, item: &Item, to: &str) -> Option<Go> {
+    pub(super) fn file_renamed(
+        &mut self,
+        campaign: &Campaign,
+        item: &Item,
+        to: &str,
+    ) -> Option<Go> {
         let result = file_fault::read_note(&campaign.path, &item.entry.path).and_then(|text| {
             if item.source_text() == Some(crate::lookup::text_hash(&text)) {
                 FileRename::apply(campaign, &item.entry.path, to, &text)
@@ -612,8 +622,7 @@ impl Reader {
                 blocked: unread,
             });
         }
-        if !self.status_editing && ReaderStatus::of(item, index, true, false) == ReaderStatus::Row
-        {
+        if !self.status_editing && ReaderStatus::of(item, index, true, false) == ReaderStatus::Row {
             let value = status(&item.entry);
             rows.push(ValueRow {
                 key: "status",
@@ -632,7 +641,10 @@ impl Reader {
     }
 
     /// A duplicate note's values, read only: label, name and the note it opens.
-    pub fn duplicate_rows(item: &Item, index: &ContentIndex) -> Vec<(&'static str, String, Option<usize>)> {
+    pub fn duplicate_rows(
+        item: &Item,
+        index: &ContentIndex,
+    ) -> Vec<(&'static str, String, Option<usize>)> {
         [
             ("creature", "Stat block"),
             ("in", "Place"),
@@ -954,7 +966,14 @@ impl Reader {
     /// Enter (or `Add`) in the Log field: the line is added, or an empty field closes.
     pub fn log_enter(&mut self, item: &Item, campaign: &Campaign) -> Option<Nav> {
         let key = (campaign.id, item.entry.id);
-        let words = self.held.log_fields.get(&key)?.field.words.trim().to_owned();
+        let words = self
+            .held
+            .log_fields
+            .get(&key)?
+            .field
+            .words
+            .trim()
+            .to_owned();
         if words.is_empty() {
             self.held.log_fields.remove(&key);
             return None;
@@ -1180,7 +1199,10 @@ pub fn file_link(path: &Path) -> String {
 /// The words of a duplicate note's fault (`DuplicateIdentity`).
 pub fn duplicate_words() -> String {
     use design::outcome::Fault as _;
-    DuplicateIdentity(IdentityNoun::Note).cause().as_str().to_owned()
+    DuplicateIdentity(IdentityNoun::Note)
+        .cause()
+        .as_str()
+        .to_owned()
 }
 
 /// What a missing value adds after its name.

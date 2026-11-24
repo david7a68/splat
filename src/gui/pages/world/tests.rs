@@ -60,6 +60,18 @@ fn reload(shell: &mut Shell, id: Option<Uuid>) {
     panic!("the notes did not load again");
 }
 
+/// Wait, in real time, until `ready` holds (the app reads the notes again by itself).
+fn until(shell: &mut Shell, what: &str, ready: impl Fn(&crate::gui::SplatRoot) -> bool) {
+    for _ in 0..1500 {
+        if shell.read(&ready) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+        shell.wait(Duration::from_millis(50));
+    }
+    panic!("{what}: it did not happen");
+}
+
 /// The World page, with its notes loaded.
 fn world(name: &str, window: gpui::Size<gpui::Pixels>) -> Shell {
     let mut shell = Shell::with_size(name, Seed::World, window);
@@ -92,7 +104,10 @@ fn world_list_and_new_npc() {
     shell.click("New ▾");
     shell.capture("world__02-world-new-menu__1200x800");
     shell.click("NPC…");
-    assert_eq!(shell.read(|root| root.app.world_page.new_kind()), Some("npc"));
+    assert_eq!(
+        shell.read(|root| root.app.world_page.new_kind()),
+        Some("npc")
+    );
     shell.click("Name");
     shell.type_text("Watchkeeper");
     assert_eq!(
@@ -164,7 +179,11 @@ fn world_places_change_and_undo() {
     reload(&mut shell, None);
     shell.capture("world-places__02-npc-stat-block-changed__1200x800");
     shell.click("Undo change to Stat block");
-    assert_eq!(std::fs::read(&path).unwrap(), original, "Undo restores the bytes");
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        original,
+        "Undo restores the bytes"
+    );
 }
 
 /// The checks views open from their rows, and a press on a check row is the view.
@@ -178,7 +197,10 @@ fn world_check_rows_open_their_views() {
     .unwrap();
     reload(&mut shell, None);
     shell.click("Open questions · 1 question");
-    assert_eq!(shell.read(|root| root.app.world_page.view()), View::Questions);
+    assert_eq!(
+        shell.read(|root| root.app.world_page.view()),
+        View::Questions
+    );
     shell.capture("world-facts__13-open-questions__1200x800");
 }
 
@@ -260,10 +282,18 @@ fn world_edit_round_trip() {
         shell.bounds("Reload and lose my draft").is_some(),
         "a disk edit waits for the DM's choice"
     );
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), outside, "nothing written");
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        outside,
+        "nothing written"
+    );
     shell.capture("world-edit-round-trip__02-after-disk-edit__1200x800");
     shell.click("Reload and lose my draft");
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), outside, "Reload writes nothing");
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        outside,
+        "Reload writes nothing"
+    );
     assert!(shell.bounds("Reload and lose my draft").is_none());
 }
 
@@ -287,7 +317,9 @@ fn world_broken_note_repair() {
     shell.capture("world-broken-note__02-broken-note-repair__1200x800");
     let fixed = splat::content::formats::fixture(
         "World.md",
-        &format!("splat_id: {id}\nsplat_kind: world\nsplat_name: Broken\nsplat_world:\n  type: npc\n"),
+        &format!(
+            "splat_id: {id}\nsplat_kind: world\nsplat_name: Broken\nsplat_world:\n  type: npc\n"
+        ),
         "\n# Broken\n",
     )
     .unwrap();
@@ -310,20 +342,18 @@ fn world_broken_note_repair() {
 #[test]
 fn world_question_tick_and_undo() {
     let mut shell = world("world-facts-tick", default_size());
-    let id = entry(
-        &mut shell,
-        "Factions/Guild.md",
-        "Guild",
-        "faction",
-        "",
-    );
+    let id = entry(&mut shell, "Factions/Guild.md", "Guild", "faction", "");
     let path = root(&mut shell).join("Factions/Guild.md");
     let text = std::fs::read_to_string(&path).unwrap() + "\n- [ ] Who rules the Keep?\n";
     std::fs::write(&path, &text).unwrap();
     reload(&mut shell, Some(id));
     shell.click("Open questions · 1 question");
     shell.click("Open: Who rules the Keep?");
-    assert!(std::fs::read_to_string(&path).unwrap().contains("- [x] Who rules the Keep?"));
+    assert!(
+        std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("- [x] Who rules the Keep?")
+    );
     reload(&mut shell, None);
     shell.capture("world-facts__14-question-ticked__1200x800");
     let undo = undo_words(crate::design::outcome::Verb::Tick, "“Who rules the Keep?”");
@@ -346,5 +376,93 @@ fn world_escape_closes_a_picker() {
     assert!(shell.read(|root| root.app.world_page.reader.picker_view().is_some()));
     shell.press("escape");
     assert!(shell.read(|root| root.app.world_page.reader.picker_view().is_none()));
-    assert_eq!(shell.read(|root| root.app.world_page.selected()), Some(rook));
+    assert_eq!(
+        shell.read(|root| root.app.world_page.selected()),
+        Some(rook)
+    );
+}
+
+/// A file renamed outside Splat: the note offers both renames; `Rename the note` writes the
+/// file's name with an Undo (egui scenario `world-note-renamed`).
+#[test]
+fn world_note_renamed_takes_the_file_name() {
+    let mut shell = world("world-note-renamed", default_size());
+    let rook = entry(&mut shell, "NPCs/Rook Ambry.md", "Rook Ambry", "npc", "");
+    let root_path = root(&mut shell);
+    std::fs::rename(
+        root_path.join("NPCs/Rook Ambry.md"),
+        root_path.join("NPCs/Rook Vale.md"),
+    )
+    .unwrap();
+    reload(&mut shell, Some(rook));
+    shell.update(|root, _, _| root.app.world_page.press_note(rook));
+    assert!(shell.bounds("Rename the file to Rook Ambry.md").is_some());
+    shell.capture("world-note-renamed__01-renamed-npc-keeps-old-name-in-world__1200x800");
+    shell.click("Rename the note to Rook Vale");
+    let text = std::fs::read_to_string(root_path.join("NPCs/Rook Vale.md")).unwrap();
+    assert!(text.contains("splat_name: Rook Vale"), "{text}");
+    reload(&mut shell, None);
+    shell.capture("world-note-renamed__03-renamed-npc-name-updated__1200x800");
+}
+
+/// Two files with one identity: each has its repair (egui scenario `world-note-duplicated`).
+#[test]
+fn world_note_duplicated_offers_each_repair() {
+    let mut shell = world("world-note-duplicated", default_size());
+    entry(&mut shell, "NPCs/Rook Ambry.md", "Rook Ambry", "npc", "");
+    let root_path = root(&mut shell);
+    std::fs::copy(
+        root_path.join("NPCs/Rook Ambry.md"),
+        root_path.join("NPCs/Rook Ambry copy.md"),
+    )
+    .unwrap();
+    reload(&mut shell, None);
+    shell.click(&format!(
+        "Rook Ambry.md · {} Same note in two files",
+        crate::gui::icons::WARN
+    ));
+    shell.capture("world-note-duplicated__03-duplicate-world-files-and-repair__1200x800");
+    let before = shell.read(|root| root.app.lookup.index().unwrap().duplicate_world.len());
+    assert!(before > 0, "the index finds the duplicate");
+    shell.click("Make Rook Ambry copy.md a separate note");
+    until(
+        &mut shell,
+        "the repair gives the copy its own identity",
+        |root| {
+            root.app
+                .lookup
+                .index()
+                .is_some_and(|index| index.duplicate_world.is_empty())
+        },
+    );
+    shell.capture("world-note-duplicated__05-world-copy-repaired__1200x800");
+}
+
+/// The main states at the smallest window.
+#[test]
+fn world_at_960() {
+    let mut shell = world("world-places", small_size());
+    let rook = entry(
+        &mut shell,
+        "NPCs/Rook Ambry.md",
+        "Rook Ambry",
+        "npc",
+        "  in: '[[Ashfall Keep]]'\n",
+    );
+    entry(
+        &mut shell,
+        "Locations/Ashfall Keep.md",
+        "Ashfall Keep",
+        "location",
+        "",
+    );
+    reload(&mut shell, Some(rook));
+    shell.update(|root, _, _| root.app.world_page.press_note(rook));
+    shell.capture("world-places__01-npc-place__960x640");
+    shell.click("Edit Rook Ambry");
+    shell.capture("world-edit-round-trip__04-world-edit-without-run__960x640");
+    shell.press("escape");
+    shell.click("New ▾");
+    shell.click("Generate NPC");
+    shell.capture("world-held-npc__01-held-npc-card__960x640");
 }

@@ -233,7 +233,11 @@ fn row(flat: &Flat, at: usize, entity: &WeakEntity<SplatRoot>, cx: &mut App) -> 
                     .flex_row()
                     .gap(theme::XS)
                     .items_center()
-                    .child(kit::icon(icons::phosphor::FOLDER, theme::Type::Small, c.muted))
+                    .child(kit::icon(
+                        icons::phosphor::FOLDER,
+                        theme::Type::Small,
+                        c.muted,
+                    ))
                     .child(kit::text(
                         theme::Type::Small,
                         c.muted,
@@ -294,7 +298,11 @@ fn row(flat: &Flat, at: usize, entity: &WeakEntity<SplatRoot>, cx: &mut App) -> 
 
 /// A note's row: its name, and under it a muted detail whose warning mark has the warning's
 /// colour. A row with no detail is one `Read` row tall. Each level of depth sets it in by `S`.
-fn note_row(note: &ListRowData, selected: bool, entity: &WeakEntity<SplatRoot>) -> impl IntoElement {
+fn note_row(
+    note: &ListRowData,
+    selected: bool,
+    entity: &WeakEntity<SplatRoot>,
+) -> impl IntoElement {
     let c = theme::colors();
     let id = note.id;
     let name = if note.detail.is_empty() {

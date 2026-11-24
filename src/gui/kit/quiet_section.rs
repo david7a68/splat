@@ -71,16 +71,13 @@ impl RenderOnce for QuietSection {
                 open.update(cx, |open, _| *open = !*open);
                 window.refresh();
             })
-            .child(
-                div()
-                    .icon_font(Type::Small)
-                    .text_color(c.muted)
-                    .child(SharedString::new_static(if is_open {
-                        icons::DOWN
-                    } else {
-                        icons::phosphor::CARET_RIGHT
-                    })),
-            )
+            .child(div().icon_font(Type::Small).text_color(c.muted).child(
+                SharedString::new_static(if is_open {
+                    icons::DOWN
+                } else {
+                    icons::phosphor::CARET_RIGHT
+                }),
+            ))
             .child(super::text::text(Type::Small, c.muted, self.title.clone()));
         let header = target(header, self.title.clone());
         let header = target(header, element_name(&self.id));

@@ -695,7 +695,11 @@ impl Repair {
     }
 
     /// The choice after the file changed under the draft. True when an Overwrite saved.
-    pub fn press_choice(&mut self, campaign: &Campaign, choice: design::DiskConflictChoice) -> bool {
+    pub fn press_choice(
+        &mut self,
+        campaign: &Campaign,
+        choice: design::DiskConflictChoice,
+    ) -> bool {
         let Some(disk) = self.disk.clone() else {
             return false;
         };

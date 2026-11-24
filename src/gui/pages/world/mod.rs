@@ -52,15 +52,17 @@ pub(crate) fn poll(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Contex
 
 /// The page and what it acts on in a handler: the open campaign and the loaded notes.
 pub(crate) fn world(root: &SplatRoot) -> Option<(Campaign, Arc<ContentIndex>)> {
-    Some((root.app.campaigns.active_campaign()?, root.app.lookup.index()?))
+    Some((
+        root.app.campaigns.active_campaign()?,
+        root.app.lookup.index()?,
+    ))
 }
 
 /// A handler of `E` that acts on the page with the open campaign and the loaded notes, then
 /// draws again. It does nothing while either is missing.
 pub(crate) fn act<E: ?Sized + 'static>(
     cx: &mut Context<SplatRoot>,
-    f: impl Fn(&mut SplatRoot, &Campaign, &ContentIndex, &mut Window, &mut Context<SplatRoot>)
-    + 'static,
+    f: impl Fn(&mut SplatRoot, &Campaign, &ContentIndex, &mut Window, &mut Context<SplatRoot>) + 'static,
 ) -> Handler<E> {
     Box::new(cx.listener(move |root: &mut SplatRoot, _: &E, window, cx| {
         if let Some((campaign, index)) = world(root) {
@@ -81,17 +83,18 @@ pub(crate) fn on_words(
     cx: &mut Context<SplatRoot>,
     f: impl Fn(&mut SplatRoot, &str) + 'static,
 ) -> Handler<str> {
-    Box::new(cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-        f(root, words);
-        cx.notify();
-    }))
+    Box::new(
+        cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+            f(root, words);
+            cx.notify();
+        }),
+    )
 }
 
 /// A handler with no event (Enter or Escape in a field).
 pub(crate) fn on_key(
     cx: &mut Context<SplatRoot>,
-    f: impl Fn(&mut SplatRoot, &Campaign, &ContentIndex, &mut Window, &mut Context<SplatRoot>)
-    + 'static,
+    f: impl Fn(&mut SplatRoot, &Campaign, &ContentIndex, &mut Window, &mut Context<SplatRoot>) + 'static,
 ) -> KeyHandler {
     let handler = act::<()>(cx, f);
     Box::new(move |window, cx| handler(&(), window, cx))
@@ -237,9 +240,12 @@ fn header(
         );
         for &at in index.note_faults().listed() {
             let id = index.items[at].entry.id;
-            menu = menu.item(kit::MenuItem::new(index.items[at].entry.name.clone()).on_click(
-                act(cx, move |root, _, _, _, _| root.app.world_page.press_note(id)),
-            ));
+            menu = menu.item(
+                kit::MenuItem::new(index.items[at].entry.name.clone())
+                    .on_click(act(cx, move |root, _, _, _, _| {
+                        root.app.world_page.press_note(id)
+                    })),
+            );
         }
         line = line.child(menu);
     }
@@ -281,13 +287,13 @@ fn new_menu(id: &'static str, loading: bool, cx: &mut Context<SplatRoot>) -> Any
         ("Location…", "location"),
         ("Generate NPC", "generate"),
     ] {
-        menu = menu.item(
-            kit::MenuItem::new(word).on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+        menu = menu.item(kit::MenuItem::new(word).on_click(cx.listener(
+            move |root: &mut SplatRoot, _, _, cx| {
                 let index = root.app.lookup.index();
                 root.app.world_page.press_new(kind, index.as_deref());
                 cx.notify();
-            })),
-        );
+            },
+        )));
     }
     menu.into_any_element()
 }

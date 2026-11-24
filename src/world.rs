@@ -4546,38 +4546,36 @@ impl Reader {
         campaign: &Campaign,
     ) -> Option<Go> {
         match self.held.results.undo_by(ticket, |result| match result {
-                    ReaderResult::Change(change) | ReaderResult::Name(change) => {
-                        change.undo(campaign)
-                    }
-                    ReaderResult::Identity(_, change) => change.undo(campaign),
-                    ReaderResult::FileRename(rename) => rename.undo(campaign),
-                    ReaderResult::Discarded(..) | ReaderResult::Reloaded(_) => Ok(()),
-                }) {
-                    Ok((ReaderResult::Discarded(id, draft), ())) => {
-                        self.edits.insert(id, *draft);
-                        None
-                    }
-                    Ok((ReaderResult::Reloaded(id), ())) => {
-                        if let Some(draft) = self.edits.get_mut(&id) {
-                            draft.undo_reload();
-                        }
-                        None
-                    }
-                    Ok((ReaderResult::Identity(_, change), ())) => {
-                        // A finished Undo ends the reason an earlier action left.
-                        self.error = None;
-                        Some(Go::Reload(note_id(&change.path)))
-                    }
-                    Ok(_) => {
-                        self.error = None;
-                        open.map(Go::Reload)
-                    }
-                    Err(design::results::ByTicket::Failed(error)) => {
-                        self.error = Some(error);
-                        None
-                    }
-                    Err(design::results::ByTicket::Gone) => None,
+            ReaderResult::Change(change) | ReaderResult::Name(change) => change.undo(campaign),
+            ReaderResult::Identity(_, change) => change.undo(campaign),
+            ReaderResult::FileRename(rename) => rename.undo(campaign),
+            ReaderResult::Discarded(..) | ReaderResult::Reloaded(_) => Ok(()),
+        }) {
+            Ok((ReaderResult::Discarded(id, draft), ())) => {
+                self.edits.insert(id, *draft);
+                None
+            }
+            Ok((ReaderResult::Reloaded(id), ())) => {
+                if let Some(draft) = self.edits.get_mut(&id) {
+                    draft.undo_reload();
                 }
+                None
+            }
+            Ok((ReaderResult::Identity(_, change), ())) => {
+                // A finished Undo ends the reason an earlier action left.
+                self.error = None;
+                Some(Go::Reload(note_id(&change.path)))
+            }
+            Ok(_) => {
+                self.error = None;
+                open.map(Go::Reload)
+            }
+            Err(design::results::ByTicket::Failed(error)) => {
+                self.error = Some(error);
+                None
+            }
+            Err(design::results::ByTicket::Gone) => None,
+        }
     }
 
     /// The value rows of a campaign entry: Stat block, Place and Part of, each with its Change

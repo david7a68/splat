@@ -9747,7 +9747,9 @@ pub mod plain {
             .map(|(at, (what, id))| {
                 let named = body.named.get(at).cloned().flatten();
                 let (label, lose, link, dismiss) = match (what, named) {
-                    (_, Some((kind, words))) => (words.label(), kind == ChoiceKind::Lose, false, false),
+                    (_, Some((kind, words))) => {
+                        (words.label(), kind == ChoiceKind::Lose, false, false)
+                    }
                     (MessageChoice::Choice(word) | MessageChoice::Primary(word), None) => {
                         ((*word).to_owned(), false, false, false)
                     }
@@ -9786,7 +9788,11 @@ pub mod plain {
             tone: body.tone,
             words: body.words.as_str().to_owned(),
             hover: body.words_hover,
-            help: body.help.iter().map(|help| help.as_str().to_owned()).collect(),
+            help: body
+                .help
+                .iter()
+                .map(|help| help.as_str().to_owned())
+                .collect(),
             file: body
                 .file
                 .map(|file| (file.path(), file.shown(), file.edit, file.show)),

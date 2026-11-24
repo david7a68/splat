@@ -38,7 +38,12 @@ fn words_width(window: &Window, ty: theme::Type, words: &str) -> gpui::Pixels {
     };
     window
         .text_system()
-        .shape_line(SharedString::from(words.to_owned()), ty.size(), &[run], None)
+        .shape_line(
+            SharedString::from(words.to_owned()),
+            ty.size(),
+            &[run],
+            None,
+        )
         .width
 }
 
@@ -74,14 +79,16 @@ pub(super) fn render(
     page.reader.open_item(item);
     page.reader.check_disk(index, Some(campaign));
     let app = &mut root.app;
-    let lines = app.world_page.footer_plain(Some(item), index, campaign, |frame, messages| {
-        crate::world::TrackerUi::history_footer(
-            &crate::trackers::Reader(&mut app.trackers),
-            item.entry.id,
-            frame,
-            messages,
-        );
-    });
+    let lines = app
+        .world_page
+        .footer_plain(Some(item), index, campaign, |frame, messages| {
+            crate::world::TrackerUi::history_footer(
+                &crate::trackers::Reader(&mut app.trackers),
+                item.entry.id,
+                frame,
+                messages,
+            );
+        });
     let footer = footer::render(root, lines, cx);
     let body = render_reader(root, item, index, campaign, window, cx);
     let mut pane = kit::Pane::new(("world-reader", item.entry.id.as_u128() as u64)).flush();
@@ -149,11 +156,11 @@ pub fn render_reader(
         column = column.child(duplicate_values(item, index, cx));
     }
     if (item.entry.kind == "world" || item.is_world_note()) && !facts.has_prose {
-        column = column.child(
-            div()
-                .pt(theme::L)
-                .child(kit::text(theme::Type::Small, c.muted, "Nothing written yet.")),
-        );
+        column = column.child(div().pt(theme::L).child(kit::text(
+            theme::Type::Small,
+            c.muted,
+            "Nothing written yet.",
+        )));
     }
     column = column.child(text(item, index, &facts, heading, cx));
     column = column.child(related(item, index, cx));
@@ -330,7 +337,11 @@ fn faults(
 ) -> AnyElement {
     let c = theme::colors();
     let id = item.entry.id;
-    let mut column = div().flex().flex_col().gap(theme::S).max_w(theme::READER_MEASURE);
+    let mut column = div()
+        .flex()
+        .flex_col()
+        .gap(theme::S)
+        .max_w(theme::READER_MEASURE);
     if let Some(line) = &facts.file_line {
         let path = campaign.path.join(&line.path);
         let whole = path.display().to_string();
@@ -384,7 +395,10 @@ fn faults(
     if let Some((stem, file)) = &facts.rename {
         let mut message = kit::Message::new(
             kit::Tone::Warning,
-            format!("The file is {stem}.md, but the name is {}.", item.entry.name),
+            format!(
+                "The file is {stem}.md, but the name is {}.",
+                item.entry.name
+            ),
         );
         let to_note = stem.clone();
         message = message.action(
@@ -408,10 +422,14 @@ fn faults(
         column = column.child(message);
     }
     if !facts.duplicates.is_empty() {
-        let mut block = div().flex().flex_col().gap(theme::XS).child(kit::Message::new(
-            kit::Tone::Warning,
-            crate::world::model::duplicate_words(),
-        ));
+        let mut block = div()
+            .flex()
+            .flex_col()
+            .gap(theme::XS)
+            .child(kit::Message::new(
+                kit::Tone::Warning,
+                crate::world::model::duplicate_words(),
+            ));
         for (at, (path, words, help)) in facts.duplicates.iter().enumerate() {
             let path = path.clone();
             block = block.child(
@@ -419,6 +437,7 @@ fn faults(
                     .pl(theme::S + theme::ICON_SLOT)
                     .flex()
                     .flex_col()
+                    .items_start()
                     .gap(theme::XS)
                     .child(
                         kit::Button::secondary(("world-separate", at), words.clone())
@@ -486,9 +505,7 @@ fn values(
                 .iter()
                 .map(|(name, target)| match target {
                     Some(_) => body(name),
-                    None => {
-                        body(&missing_text(name)) + small(crate::world::model::NOT_FOUND_WORDS)
-                    }
+                    None => body(&missing_text(name)) + small(crate::world::model::NOT_FOUND_WORDS),
                 })
                 .fold(px(0.0), |a, b| a.max(b)),
         })
@@ -518,11 +535,15 @@ fn values(
                 )
                 .into_any_element(),
             ValueShown::Missing(name) => missing(&name).into_any_element(),
-            ValueShown::NotSet => kit::text(theme::Type::Small, c.muted, "not set").into_any_element(),
+            ValueShown::NotSet => {
+                kit::text(theme::Type::Small, c.muted, "not set").into_any_element()
+            }
             ValueShown::NotRead => {
                 kit::text(theme::Type::Small, c.result.warning, "not read").into_any_element()
             }
-            ValueShown::Words(words) => kit::text(theme::Type::Body, c.text, words).into_any_element(),
+            ValueShown::Words(words) => {
+                kit::text(theme::Type::Body, c.text, words).into_any_element()
+            }
             ValueShown::Groups(groups) => div()
                 .flex()
                 .flex_row()
@@ -543,12 +564,12 @@ fn values(
             gpui::ElementId::Name(format!("world-change-{key}").into()),
             "Change",
         )
-            .name(format!("Change {}", row.label))
-            .blocked(row.blocked)
-            .on_click(on_item(cx, id, move |page, item, _, _| {
-                page.reader.press_change(key, item);
-                None
-            }));
+        .name(format!("Change {}", row.label))
+        .blocked(row.blocked)
+        .on_click(on_item(cx, id, move |page, item, _, _| {
+            page.reader.press_change(key, item);
+            None
+        }));
         column = column.child(value_row(
             row.label,
             value,
@@ -572,11 +593,14 @@ fn values(
                 initiative.map_or_else(|| "unknown".to_owned(), |n| n.to_string())
             );
             column = column.child(
-                kit::status_link("world-in-run", kit::Status::new(icons::RUN, words, c.accent))
-                    .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                        root.app.world_page.reader.press_in_run(arrival);
-                        cx.notify();
-                    })),
+                kit::status_link(
+                    "world-in-run",
+                    kit::Status::new(icons::RUN, words, c.accent),
+                )
+                .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+                    root.app.world_page.reader.press_in_run(arrival);
+                    cx.notify();
+                })),
             );
         } else if let Some(join) = join_form(root, item, index, campaign, cx) {
             column = column.child(join);
@@ -614,14 +638,15 @@ fn value_row(
         .flex_row()
         .items_center()
         .min_h(theme::Density::Scan.row())
-        .child(
-            div()
-                .w(px(LABEL_COLUMN))
-                .flex_none()
-                .child(kit::text(theme::Type::Small, c.muted, label.to_owned())),
-        )
+        .child(div().w(px(LABEL_COLUMN)).flex_none().child(kit::text(
+            theme::Type::Small,
+            c.muted,
+            label.to_owned(),
+        )))
         .child(div().flex_none().w(width).child(value))
-        .when_some(change, |row, change| row.child(div().pl(theme::L).child(change)))
+        .when_some(change, |row, change| {
+            row.child(div().pl(theme::L).child(change))
+        })
 }
 
 /// The place link's chooser: each file it matches, with `Always use this one`.
@@ -647,8 +672,11 @@ fn place_chooser(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>)
                 .items_center()
                 .gap(theme::L)
                 .child(
-                    kit::Link::new(("world-place-file", at), path.clone())
-                        .on_click(on_item(cx, id, move |page, _, _, _| page.reader.go_to(at))),
+                    kit::Link::new(("world-place-file", at), path.clone()).on_click(on_item(
+                        cx,
+                        id,
+                        move |page, _, _, _| page.reader.go_to(at),
+                    )),
                 )
                 .child(
                     kit::Button::secondary(("world-place-use", at), "Always use this one")
@@ -689,10 +717,12 @@ pub(super) fn picker(
     let pick = move |cx: &mut Context<SplatRoot>, pick: PickAct| {
         on_item::<gpui::ClickEvent>(cx, id, move |page, item, index, campaign| {
             if in_form {
-                page.reader.pick_into_draft(pick.clone(), item, index, campaign);
+                page.reader
+                    .pick_into_draft(pick.clone(), item, index, campaign);
                 None
             } else {
-                page.reader.pick_and_change(pick.clone(), item, index, campaign)
+                page.reader
+                    .pick_and_change(pick.clone(), item, index, campaign)
             }
         })
     };
@@ -707,28 +737,27 @@ pub(super) fn picker(
                 gpui::ElementId::Name(format!("world-picker-{}", view.key).into()),
                 view.search,
             )
-                .placeholder(view.label)
-                .name(view.label)
-                .focus_now(view.focus)
-                .on_change(on_words(cx, |root, words| {
-                    root.app.world_page.reader.set_picker_search(words);
-                }))
-                .on_escape(on_key(cx, move |root, campaign, index, _, _| {
-                    if let Some(at) = index.position(id) {
-                        let _ = root.app.world_page.reader.pick_value(
-                            PickAct::Cancel,
-                            &index.items[at],
-                            index,
-                            campaign,
-                            None,
-                        );
-                    }
-                })),
+            .placeholder(view.label)
+            .name(view.label)
+            .focus_now(view.focus)
+            .on_change(on_words(cx, |root, words| {
+                root.app.world_page.reader.set_picker_search(words);
+            }))
+            .on_escape(on_key(cx, move |root, campaign, index, _, _| {
+                if let Some(at) = index.position(id) {
+                    let _ = root.app.world_page.reader.pick_value(
+                        PickAct::Cancel,
+                        &index.items[at],
+                        index,
+                        campaign,
+                        None,
+                    );
+                }
+            })),
         );
     for (at, name) in matches {
-        column = column.child(
-            kit::Link::new(("world-pick", at), name).on_click(pick(cx, PickAct::Match(at))),
-        );
+        column = column
+            .child(kit::Link::new(("world-pick", at), name).on_click(pick(cx, PickAct::Match(at))));
     }
     for (at, name) in removes.into_iter().enumerate() {
         column = column.child(
@@ -749,11 +778,14 @@ pub(super) fn picker(
                     "Location name",
                     None,
                     None,
-                    kit::TextField::new(("world-new-location-name", id.as_u128() as u64), view.new_location)
-                        .name("Location name")
-                        .on_change(on_words(cx, |root, words| {
-                            root.app.world_page.reader.set_new_location(words);
-                        })),
+                    kit::TextField::new(
+                        ("world-new-location-name", id.as_u128() as u64),
+                        view.new_location,
+                    )
+                    .name("Location name")
+                    .on_change(on_words(cx, |root, words| {
+                        root.app.world_page.reader.set_new_location(words);
+                    })),
                 ))
                 .child(
                     div()
@@ -767,16 +799,17 @@ pub(super) fn picker(
                                 .on_click(pick(cx, PickAct::CreateLocation)),
                         )
                         .when_some(reason, |line, reason| {
-                            line.child(kit::text(
-                                theme::Type::Small,
-                                theme::colors().muted,
-                                reason,
-                            ))
+                            line.child(kit::text(theme::Type::Small, theme::colors().muted, reason))
                         }),
                 ),
         );
     }
-    let mut actions = div().flex().flex_row().flex_wrap().items_center().gap(theme::S);
+    let mut actions = div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .items_center()
+        .gap(theme::S);
     if view.key != "part_of" {
         actions = actions.child(
             kit::Button::quiet("world-pick-clear", "Clear value")
@@ -784,7 +817,8 @@ pub(super) fn picker(
                 .on_click(pick(cx, PickAct::Clear)),
         );
     }
-    let cancel = kit::Button::quiet("world-pick-cancel", "Cancel").on_click(pick(cx, PickAct::Cancel));
+    let cancel =
+        kit::Button::quiet("world-pick-cancel", "Cancel").on_click(pick(cx, PickAct::Cancel));
     actions = actions.child(if view.key == "part_of" {
         cancel.line_start()
     } else {
@@ -861,7 +895,8 @@ fn join_form(
     let id = item.entry.id;
     let join = move |cx: &mut Context<SplatRoot>, act: JoinAct| {
         on_item::<gpui::ClickEvent>(cx, id, move |page, item, index, campaign| {
-            page.reader.join_act(act.clone(), item, index, Some(campaign))
+            page.reader
+                .join_act(act.clone(), item, index, Some(campaign))
         })
     };
     let words = move |cx: &mut Context<SplatRoot>, make: fn(String) -> JoinAct| {
@@ -959,10 +994,13 @@ fn join_form(
         "Initiative",
         Some("Leave empty to roll it.".into()),
         None,
-        kit::TextField::new(("world-join-initiative", id.as_u128() as u64), view.initiative)
-            .name("Initiative")
-            .width(theme::L * 5.0)
-            .on_change(words(cx, JoinAct::Initiative)),
+        kit::TextField::new(
+            ("world-join-initiative", id.as_u128() as u64),
+            view.initiative,
+        )
+        .name("Initiative")
+        .width(theme::L * 5.0)
+        .on_change(words(cx, JoinAct::Initiative)),
     ));
     let blocked = chosen_none.then_some("Choose a stat block first.");
     form = form.child(
@@ -996,7 +1034,9 @@ fn duplicate_values(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoo
             Some(at) => kit::Link::new(("world-dup-value", at), name)
                 .on_click(on_item(cx, id, move |page, _, _, _| page.reader.go_to(at)))
                 .into_any_element(),
-            None if label == "Status" => kit::text(theme::Type::Body, c.text, name).into_any_element(),
+            None if label == "Status" => {
+                kit::text(theme::Type::Body, c.text, name).into_any_element()
+            }
             None => missing(&name).into_any_element(),
         };
         column = column.child(value_row(label, value, VALUE_COLUMN, None));
@@ -1020,11 +1060,11 @@ fn text(
         crate::world::model::session_names(index),
     );
     let sections = crate::library::presentation::reading_sections(&body, &item.entry.name);
-    let mut column = div().flex().flex_col().gap(theme::S).pt(if facts.plain_note {
-        theme::S
-    } else {
-        theme::L
-    });
+    let mut column = div()
+        .flex()
+        .flex_col()
+        .gap(theme::S)
+        .pt(if facts.plain_note { theme::S } else { theme::L });
     for (at, section) in sections.iter().enumerate() {
         if section.title != "Overview" {
             column = column.child(kit::heading(kit::Heading::Section(&section.title), false));
@@ -1039,7 +1079,8 @@ fn text(
                         let target = target
                             .strip_prefix(crate::markdown_view::NOTE_LINK)
                             .unwrap_or(target);
-                        if let Some(nav) = page.reader.follow(&index.items[position], &index, target)
+                        if let Some(nav) =
+                            page.reader.follow(&index.items[position], &index, target)
                         {
                             page.take_nav(nav, &index);
                         }
@@ -1064,8 +1105,11 @@ fn related(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> An
             .flex()
             .flex_col()
             .child(
-                kit::Link::new(("world-related", at), page.name)
-                    .on_click(on_item(cx, id, move |page, _, _, _| page.reader.go_to(at))),
+                kit::Link::new(("world-related", at), page.name).on_click(on_item(
+                    cx,
+                    id,
+                    move |page, _, _, _| page.reader.go_to(at),
+                )),
             )
             .when(!page.detail.is_empty(), |row| {
                 row.child(kit::text(theme::Type::Small, c.muted, page.detail))
@@ -1108,14 +1152,21 @@ fn related(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> An
                             .w(px(120.0))
                             .flex_none()
                             .pt(theme::XS)
-                            .child(kit::text(theme::Type::Small, c.muted, date.unwrap_or_default())),
+                            .child(kit::text(
+                                theme::Type::Small,
+                                c.muted,
+                                date.unwrap_or_default(),
+                            )),
                     )
                     .child(page_row(cx, page)),
             );
         }
     }
     if !facts.from.is_empty() || !facts.also.is_empty() {
-        column = column.child(kit::heading(kit::Heading::Section("From other notes"), false));
+        column = column.child(kit::heading(
+            kit::Heading::Section("From other notes"),
+            false,
+        ));
         column = column.child(kit::rule());
     }
     for (group_at, group) in facts.from.into_iter().enumerate() {
@@ -1124,10 +1175,9 @@ fn related(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> An
             format!("{} {}", group.title.to_uppercase(), group.count),
         );
         for (source, name, lines, more) in group.pages {
-            section = section.child(
-                kit::Link::new(("world-from-page", source), name)
-                    .on_click(on_item(cx, id, move |page, _, _, _| page.reader.go_to(source))),
-            );
+            section = section.child(kit::Link::new(("world-from-page", source), name).on_click(
+                on_item(cx, id, move |page, _, _, _| page.reader.go_to(source)),
+            ));
             for (line_at, line) in lines.into_iter().enumerate() {
                 let heading = line.heading.clone();
                 section = section.child(
@@ -1169,8 +1219,11 @@ fn related(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> An
             .child(kit::text(theme::Type::Small, c.muted, "Also linked from"));
         for (source, name) in facts.also {
             line = line.child(
-                kit::Link::new(("world-also", source), name)
-                    .on_click(on_item(cx, id, move |page, _, _, _| page.reader.go_to(source))),
+                kit::Link::new(("world-also", source), name).on_click(on_item(
+                    cx,
+                    id,
+                    move |page, _, _, _| page.reader.go_to(source),
+                )),
             );
         }
         column = column.child(line);
@@ -1181,42 +1234,56 @@ fn related(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> An
 /// `Give this note a type`: Make NPC, Make location, or a type of the DM's own.
 fn make_type(root: &mut SplatRoot, item: &Item, cx: &mut Context<SplatRoot>) -> AnyElement {
     let id = item.entry.id;
-    let other = root.app.world_page.reader.other_type().trim().to_lowercase();
+    let other = root
+        .app
+        .world_page
+        .reader
+        .other_type()
+        .trim()
+        .to_lowercase();
     let make = move |cx: &mut Context<SplatRoot>, kind: String| {
         on_item::<gpui::ClickEvent>(cx, id, move |page, item, _, campaign| {
             page.reader.make_type(campaign, item, &kind)
         })
     };
-    let mut section = kit::QuietSection::new(("world-make-type", id.as_u128() as u64), "Give this note a type")
-        .child(kit::help(crate::world::TYPE_HELP))
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .flex_wrap()
-                .gap(theme::S)
-                .child(
-                    kit::Button::quiet("world-make-npc", "Make NPC")
-                        .density(theme::Density::Read)
-                        .line_start()
-                        .on_click(make(cx, "npc".to_owned())),
-                )
-                .child(
-                    kit::Button::quiet("world-make-location", "Make location")
-                        .density(theme::Density::Read)
-                        .on_click(make(cx, "location".to_owned())),
-                ),
-        )
-        .child(div().max_w(theme::FORM_WIDTH).child(kit::field(
+    let mut section = kit::QuietSection::new(
+        ("world-make-type", id.as_u128() as u64),
+        "Give this note a type",
+    )
+    .child(kit::help(crate::world::TYPE_HELP))
+    .child(
+        div()
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .gap(theme::S)
+            .child(
+                kit::Button::quiet("world-make-npc", "Make NPC")
+                    .density(theme::Density::Read)
+                    .line_start()
+                    .on_click(make(cx, "npc".to_owned())),
+            )
+            .child(
+                kit::Button::quiet("world-make-location", "Make location")
+                    .density(theme::Density::Read)
+                    .on_click(make(cx, "location".to_owned())),
+            ),
+    )
+    .child(
+        div().max_w(theme::FORM_WIDTH).child(kit::field(
             "Another type",
             Some("A word of your own, such as faction or quest.".into()),
             None,
-            kit::TextField::new(("world-other-type", id.as_u128() as u64), root.app.world_page.reader.other_type().to_owned())
-                .name("Another type")
-                .on_change(on_words(cx, |root, words| {
-                    root.app.world_page.reader.set_other_type(words);
-                })),
-        )));
+            kit::TextField::new(
+                ("world-other-type", id.as_u128() as u64),
+                root.app.world_page.reader.other_type().to_owned(),
+            )
+            .name("Another type")
+            .on_change(on_words(cx, |root, words| {
+                root.app.world_page.reader.set_other_type(words);
+            })),
+        )),
+    );
     if !other.is_empty() {
         section = section.child(
             kit::Button::quiet("world-make-other", format!("Make {other}"))
@@ -1226,8 +1293,11 @@ fn make_type(root: &mut SplatRoot, item: &Item, cx: &mut Context<SplatRoot>) -> 
         );
     }
     section = section.child(
-        kit::QuietSection::new(("world-type-storage", id.as_u128() as u64), "Technical details")
-            .child(kit::help(crate::world::TYPE_STORAGE)),
+        kit::QuietSection::new(
+            ("world-type-storage", id.as_u128() as u64),
+            "Technical details",
+        )
+        .child(kit::help(crate::world::TYPE_STORAGE)),
     );
     div().pt(theme::M).child(section).into_any_element()
 }
@@ -1244,14 +1314,21 @@ fn source(item: &Item, campaign: &Campaign) -> AnyElement {
         .child(kit::rule())
         .child(kit::gap(theme::M))
         .child(
-            kit::QuietSection::new(("world-source", item.entry.id.as_u128() as u64), "Source and identifiers")
-                .child(kit::text(theme::Type::Body, c.text, item.owner.clone()))
-                .child(kit::text(theme::Type::Body, c.text, item.entry.path.clone()))
-                .child(kit::text(
-                    theme::Type::Body,
-                    c.text,
-                    format!("{} · {}", item.entry.kind, item.entry.id),
-                )),
+            kit::QuietSection::new(
+                ("world-source", item.entry.id.as_u128() as u64),
+                "Source and identifiers",
+            )
+            .child(kit::text(theme::Type::Body, c.text, item.owner.clone()))
+            .child(kit::text(
+                theme::Type::Body,
+                c.text,
+                item.entry.path.clone(),
+            ))
+            .child(kit::text(
+                theme::Type::Body,
+                c.text,
+                format!("{} · {}", item.entry.kind, item.entry.id),
+            )),
         )
         .into_any_element()
 }

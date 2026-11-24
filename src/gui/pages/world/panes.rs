@@ -9,8 +9,8 @@ use crate::persistence::Campaign;
 use crate::world::edit::DraftValue;
 use crate::world::page::{CardAct, Pane, View};
 use gpui::{
-    AnyElement, Context, IntoElement, ParentElement, SharedString, Styled, Window, div,
-    prelude::*, px,
+    AnyElement, Context, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::*,
+    px,
 };
 
 /// The pane the page shows now.
@@ -69,7 +69,11 @@ fn held_row(name: &str, cx: &mut Context<SplatRoot>) -> AnyElement {
 }
 
 /// A pane with its footer lines.
-fn pane(id: impl Into<gpui::ElementId>, footer: Vec<AnyElement>, body: impl IntoElement) -> AnyElement {
+fn pane(
+    id: impl Into<gpui::ElementId>,
+    footer: Vec<AnyElement>,
+    body: impl IntoElement,
+) -> AnyElement {
     let mut pane = kit::Pane::new(id).flush();
     for line in footer {
         pane = pane.footer(line);
@@ -84,7 +88,10 @@ fn empty(
     index: &ContentIndex,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
-    let lines = root.app.world_page.footer_plain(None, index, campaign, |_, _| {});
+    let lines = root
+        .app
+        .world_page
+        .footer_plain(None, index, campaign, |_, _| {});
     let footer = footer::render(root, lines, cx);
     pane(
         "world-empty",
@@ -166,14 +173,18 @@ fn new_form(
         .on_click(act(cx, |root, campaign, _, _, _| {
             root.app.world_page.create(campaign);
         }));
-    let enter = on_key(cx, |root, campaign, _, _, _| root.app.world_page.create(campaign));
+    let enter = on_key(cx, |root, campaign, _, _, _| {
+        root.app.world_page.create(campaign)
+    });
     let name_field = kit::TextField::new(
         gpui::ElementId::Name(format!("world-new-name-{kind}").into()),
         name.clone(),
     )
-        .name("Name")
-        .on_change(on_words(cx, |root, words| root.app.world_page.set_new_name(words)))
-        .on_enter(enter);
+    .name("Name")
+    .on_change(on_words(cx, |root, words| {
+        root.app.world_page.set_new_name(words)
+    }))
+    .on_enter(enter);
     let field_line = |field: AnyElement, create: Option<kit::Button>| {
         div()
             .flex()
@@ -186,13 +197,7 @@ fn new_form(
     let mut form = div()
         .flex()
         .flex_col()
-        .child(kit::heading(
-            kit::Heading::Group {
-                title,
-                count: 0,
-            },
-            true,
-        ));
+        .child(kit::heading(kit::Heading::Group { title, count: 0 }, true));
     let named = kit::field("Name", None, None, name_field).into_any_element();
     if kind == "note" {
         form = form.child(field_line(named, None));
@@ -202,7 +207,9 @@ fn new_form(
             None,
             kit::TextField::new("world-new-type", note_type)
                 .name("Type (optional)")
-                .on_change(on_words(cx, |root, words| root.app.world_page.set_note_type(words))),
+                .on_change(on_words(cx, |root, words| {
+                    root.app.world_page.set_note_type(words)
+                })),
         )
         .into_any_element();
         form = form.child(field_line(type_field, Some(create)));
@@ -271,18 +278,31 @@ fn card_view(
             },
             true,
         ))
-        .child(kit::text(theme::Type::Strong, c.text, card.npc.name.clone()));
-    for (label, words) in splat_content_ui::npc_generator::ATTRIBUTES.iter().zip(&card.npc.attributes) {
-        column = column.child(kit::text(theme::Type::Body, c.text, format!("{label}: {words}")));
+        .child(kit::text(
+            theme::Type::Strong,
+            c.text,
+            card.npc.name.clone(),
+        ));
+    for (label, words) in splat_content_ui::npc_generator::ATTRIBUTES
+        .iter()
+        .zip(&card.npc.attributes)
+    {
+        column = column.child(kit::text(
+            theme::Type::Body,
+            c.text,
+            format!("{label}: {words}"),
+        ));
     }
     if card.sources.is_empty() && card.problems.is_empty() {
-        column = column.child(kit::help(crate::lookup::OWN_NAMES_HELP)).child(
-            kit::Button::quiet("world-copy-marker", crate::lookup::COPY_MARKER)
-                .density(theme::Density::Read)
-                .line_start()
-                .hint(crate::world::model::NAMES_MARKER)
-                .on_click(act_on(cx, CardAct::CopiedMarker)),
-        );
+        column = column
+            .child(kit::help(crate::lookup::OWN_NAMES_HELP))
+            .child(
+                kit::Button::quiet("world-copy-marker", crate::lookup::COPY_MARKER)
+                    .density(theme::Density::Read)
+                    .line_start()
+                    .hint(crate::world::model::NAMES_MARKER)
+                    .on_click(act_on(cx, CardAct::CopiedMarker)),
+            );
     }
     for (at, source) in card.sources.iter().enumerate() {
         let (kind, path) = source.split_once(": ").unwrap_or(("npc-name", source));
@@ -299,26 +319,35 @@ fn card_view(
                 .flex_wrap()
                 .items_center()
                 .gap(theme::XS)
-                .child(kit::text(theme::Type::Small, c.muted, format!("{label} from")))
-                .child(kit::Link::new(("world-card-source", at), path.clone()).on_click(
-                    cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                        root.app.world_page.ask_lookup = Some(path.clone());
-                        cx.notify();
-                    }),
-                )),
+                .child(kit::text(
+                    theme::Type::Small,
+                    c.muted,
+                    format!("{label} from"),
+                ))
+                .child(
+                    kit::Link::new(("world-card-source", at), path.clone()).on_click(cx.listener(
+                        move |root: &mut SplatRoot, _, _, cx| {
+                            root.app.world_page.ask_lookup = Some(path.clone());
+                            cx.notify();
+                        },
+                    )),
+                ),
         );
     }
     for (at, problem) in card.problems.iter().enumerate() {
         let path = problem.path.clone();
         column = column.child(
             kit::Message::new(kit::Tone::Warning, problem.message.clone()).action(
-                kit::Button::secondary(("world-card-problem", at), format!("Open {}", problem.path))
-                    .density(theme::Density::Read)
-                    .hint(problem.marker.clone())
-                    .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                        root.app.world_page.ask_lookup = Some(path.clone());
-                        cx.notify();
-                    })),
+                kit::Button::secondary(
+                    ("world-card-problem", at),
+                    format!("Open {}", problem.path),
+                )
+                .density(theme::Density::Read)
+                .hint(problem.marker.clone())
+                .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+                    root.app.world_page.ask_lookup = Some(path.clone());
+                    cx.notify();
+                })),
             ),
         );
     }
@@ -367,7 +396,10 @@ fn checks(
     view: View,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
-    let lines = root.app.world_page.footer_plain(None, index, campaign, |_, _| {});
+    let lines = root
+        .app
+        .world_page
+        .footer_plain(None, index, campaign, |_, _| {});
     let footer = footer::render(root, lines, cx);
     let c = theme::colors();
     let Some(checks) = root.app.world_page.checks() else {
@@ -380,7 +412,11 @@ fn checks(
             root.app.world_page.press_open(index, page, heading.clone());
         })
     };
-    let mut column = div().flex().flex_col().gap(theme::XS).max_w(theme::READER_MEASURE);
+    let mut column = div()
+        .flex()
+        .flex_col()
+        .gap(theme::XS)
+        .max_w(theme::READER_MEASURE);
     // One page's lines, then its name.
     let by_page = |column: gpui::Div,
                    found: &[crate::world::checks::Found],
@@ -430,15 +466,22 @@ fn checks(
                     .when(questions, |line| line.pl(theme::XXL))
                     .child(note("In ".to_owned()))
                     .child(
-                        kit::Link::new(("world-check-in", page), index.items[page].entry.name.clone())
-                            .small()
-                            .on_click(open(cx, page, None)),
+                        kit::Link::new(
+                            ("world-check-in", page),
+                            index.items[page].entry.name.clone(),
+                        )
+                        .small()
+                        .on_click(open(cx, page, None)),
                     )
                     .pb(theme::S),
             );
         }
         if groups.len() > ROWS {
-            column = column.child(note(crate::design::count(groups.len() - ROWS, "more", "more")));
+            column = column.child(note(crate::design::count(
+                groups.len() - ROWS,
+                "more",
+                "more",
+            )));
         }
         column
     };
@@ -471,9 +514,12 @@ fn checks(
             .items_center()
             .gap_x(theme::S)
             .children(pages.iter().map(|&page| {
-                kit::Link::new(("world-check-page", page), index.items[page].entry.name.clone())
-                    .on_click(open(cx, page, None))
-                    .into_any_element()
+                kit::Link::new(
+                    ("world-check-page", page),
+                    index.items[page].entry.name.clone(),
+                )
+                .on_click(open(cx, page, None))
+                .into_any_element()
             }))
     };
     if !checks.loose_dates.is_empty() {
@@ -495,12 +541,19 @@ fn checks(
                     .items_center()
                     .gap_x(theme::S)
                     .child(kit::text(theme::Type::Body, c.text, name.clone()))
-                    .child(note(format!("{} in", crate::design::count(*lines, "line", "lines"))))
+                    .child(note(format!(
+                        "{} in",
+                        crate::design::count(*lines, "line", "lines")
+                    )))
                     .child(pages(cx, from)),
             );
         }
         if checks.wanted.len() > ROWS {
-            column = column.child(note(crate::design::count(checks.wanted.len() - ROWS, "more", "more")));
+            column = column.child(note(crate::design::count(
+                checks.wanted.len() - ROWS,
+                "more",
+                "more",
+            )));
         }
     }
     for (title, words, found) in [
@@ -521,7 +574,11 @@ fn checks(
                 .child(note(words.to_owned()))
                 .child(pages(cx, &found[..found.len().min(ROWS)]));
             if found.len() > ROWS {
-                column = column.child(note(crate::design::count(found.len() - ROWS, "more", "more")));
+                column = column.child(note(crate::design::count(
+                    found.len() - ROWS,
+                    "more",
+                    "more",
+                )));
             }
         }
     }
@@ -554,7 +611,11 @@ fn checks(
                 );
             }
             if found.len() > ROWS {
-                column = column.child(note(crate::design::count(found.len() - ROWS, "more", "more")));
+                column = column.child(note(crate::design::count(
+                    found.len() - ROWS,
+                    "more",
+                    "more",
+                )));
             }
         }
     }
@@ -579,51 +640,52 @@ fn unread(
         .path
         .rsplit_once('/')
         .map(|(folder, _)| format!("{folder}/"));
-    let column = div()
-        .flex()
-        .flex_col()
-        .gap(theme::S)
-        .child(kit::text(theme::Type::Display, c.text, view.file))
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(theme::S)
-                .when_some(folder, |line, folder| {
-                    line.child(kit::text(theme::Type::Small, c.muted, folder))
-                })
-                .child(
-                    kit::Link::new("world-unread-show", "Show file")
-                        .hint(path.display().to_string())
-                        .on_click(move |_, _, cx| cx.open_url(&show)),
-                ),
-        )
-        .child(
-            div().max_w(theme::READER_MEASURE + px(40.0)).child(
-                kit::Message::new(kit::Tone::Error, view.words)
-                    .action(
-                        kit::Button::secondary("world-unread-again", "Try again")
-                            .density(theme::Density::Read)
-                            .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
-                                root.app.world_page.unread_again();
-                                cx.notify();
-                            })),
-                    )
-                    .action(
-                        kit::Button::secondary("world-unread-close", "Close note")
-                            .density(theme::Density::Read)
-                            .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
-                                root.app.world_page.cancel_error();
-                                cx.notify();
-                            })),
+    let column =
+        div()
+            .flex()
+            .flex_col()
+            .gap(theme::S)
+            .child(kit::text(theme::Type::Display, c.text, view.file))
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(theme::S)
+                    .when_some(folder, |line, folder| {
+                        line.child(kit::text(theme::Type::Small, c.muted, folder))
+                    })
+                    .child(
+                        kit::Link::new("world-unread-show", "Show file")
+                            .hint(path.display().to_string())
+                            .on_click(move |_, _, cx| cx.open_url(&show)),
                     ),
-            ),
-        )
-        .child(
-            kit::QuietSection::new("world-unread-details", "Technical details")
-                .child(kit::text(theme::Type::Small, c.muted, view.system)),
-        );
+            )
+            .child(
+                div().max_w(theme::READER_MEASURE + px(40.0)).child(
+                    kit::Message::new(kit::Tone::Error, view.words)
+                        .action(
+                            kit::Button::secondary("world-unread-again", "Try again")
+                                .density(theme::Density::Read)
+                                .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
+                                    root.app.world_page.unread_again();
+                                    cx.notify();
+                                })),
+                        )
+                        .action(
+                            kit::Button::secondary("world-unread-close", "Close note")
+                                .density(theme::Density::Read)
+                                .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
+                                    root.app.world_page.cancel_error();
+                                    cx.notify();
+                                })),
+                        ),
+                ),
+            )
+            .child(
+                kit::QuietSection::new("world-unread-details", "Technical details")
+                    .child(kit::text(theme::Type::Small, c.muted, view.system)),
+            );
     pane("world-unread", Vec::new(), column)
 }
 
@@ -734,15 +796,15 @@ fn repair(root: &mut SplatRoot, campaign: &Campaign, cx: &mut Context<SplatRoot>
                     gpui::ElementId::Name(format!("world-repair-text-{}", view.path).into()),
                     view.text,
                 )
-                    .name("Repair text")
-                    .rows(14)
-                    .mono()
-                    .fill()
-                    .on_change(on_words(cx, |root, words| {
-                        if let Some(repair) = root.app.world_page.repair_mut() {
-                            repair.set_text(words);
-                        }
-                    })),
+                .name("Repair text")
+                .rows(14)
+                .mono()
+                .fill()
+                .on_change(on_words(cx, |root, words| {
+                    if let Some(repair) = root.app.world_page.repair_mut() {
+                        repair.set_text(words);
+                    }
+                })),
             ),
         )
         .child(save_row(
@@ -908,15 +970,20 @@ pub(super) fn edit_form(
     let Some(view) = root.app.world_page.reader.draft_view(item, index, campaign) else {
         return div().into_any_element();
     };
-    let on_note = move |cx: &mut Context<SplatRoot>,
-                        f: fn(&mut crate::world::page::WorldPage, &Item, &ContentIndex, &Campaign)| {
-        act::<gpui::ClickEvent>(cx, move |root, campaign, index, _, _| {
-            if let Some(at) = index.position(id) {
-                f(&mut root.app.world_page, &index.items[at], index, campaign);
-            }
-        })
-    };
-    let mut form = div().flex().flex_col().pt(theme::M).max_w(theme::FORM_WIDTH);
+    let on_note =
+        move |cx: &mut Context<SplatRoot>,
+              f: fn(&mut crate::world::page::WorldPage, &Item, &ContentIndex, &Campaign)| {
+            act::<gpui::ClickEvent>(cx, move |root, campaign, index, _, _| {
+                if let Some(at) = index.position(id) {
+                    f(&mut root.app.world_page, &index.items[at], index, campaign);
+                }
+            })
+        };
+    let mut form = div()
+        .flex()
+        .flex_col()
+        .pt(theme::M)
+        .max_w(theme::FORM_WIDTH);
     if let Some(conflict) = &view.conflict {
         let choose = |cx: &mut Context<SplatRoot>, choice: DiskConflictChoice| {
             act::<gpui::ClickEvent>(cx, move |root, campaign, index, _, _| {
@@ -942,12 +1009,11 @@ pub(super) fn edit_form(
                     .flex()
                     .flex_row()
                     .gap(theme::S)
-                    .child(
-                        div()
-                            .w(px(104.0))
-                            .flex_none()
-                            .child(kit::text(theme::Type::Small, c.muted, label.clone())),
-                    )
+                    .child(div().w(px(104.0)).flex_none().child(kit::text(
+                        theme::Type::Small,
+                        c.muted,
+                        label.clone(),
+                    )))
                     .child(kit::text(theme::Type::Small, c.text, words.clone())),
             );
         }
@@ -961,11 +1027,12 @@ pub(super) fn edit_form(
         DraftValue::NotSet => kit::text(theme::Type::Small, c.muted, "not set"),
         DraftValue::NotRead => kit::text(theme::Type::Small, c.result.warning, "not read"),
     };
-    let change = |cx: &mut Context<SplatRoot>, key: &'static str, label: &str, blocked: Option<String>| {
-        kit::Button::quiet(
-            gpui::ElementId::Name(format!("world-draft-change-{key}").into()),
-            "Change",
-        )
+    let change =
+        |cx: &mut Context<SplatRoot>, key: &'static str, label: &str, blocked: Option<String>| {
+            kit::Button::quiet(
+                gpui::ElementId::Name(format!("world-draft-change-{key}").into()),
+                "Change",
+            )
             .density(theme::Density::Read)
             .name(format!("Change {label}"))
             .blocked(blocked)
@@ -973,8 +1040,13 @@ pub(super) fn edit_form(
                 root.app.world_page.reader.press_draft_change(key);
                 cx.notify();
             }))
-    };
-    let picker_key = root.app.world_page.reader.picker_view().map(|view| view.key);
+        };
+    let picker_key = root
+        .app
+        .world_page
+        .reader
+        .picker_view()
+        .map(|view| view.key);
     let mut rows: Vec<(&'static str, &'static str, &DraftValue, Option<String>)> = Vec::new();
     if let Some(creature) = &view.creature {
         rows.push(("creature", "Stat block", creature, None));
@@ -1005,13 +1077,12 @@ pub(super) fn edit_form(
             let url = crate::world::model::obsidian_link(&campaign.path.join(&view.path));
             form = form.child(
                 div().pb(theme::S).child(
-                    kit::Message::new(kit::Tone::Warning, reason.clone())
-                        .action(
-                            kit::Button::secondary("world-draft-unread-edit", "Edit in Obsidian")
-                                .density(theme::Density::Read)
-                                .hint(whole.clone())
-                                .on_click(move |_, _, cx| cx.open_url(&url)),
-                        ),
+                    kit::Message::new(kit::Tone::Warning, reason.clone()).action(
+                        kit::Button::secondary("world-draft-unread-edit", "Edit in Obsidian")
+                            .density(theme::Density::Read)
+                            .hint(whole.clone())
+                            .on_click(move |_, _, cx| cx.open_url(&url)),
+                    ),
                 ),
             );
         }
@@ -1024,12 +1095,15 @@ pub(super) fn edit_form(
             "Status",
             None,
             None,
-            kit::TextField::new(("world-draft-status", id.as_u128() as u64), view.status.clone())
-                .placeholder(crate::world::edit::STATUS_HINT)
-                .name("Status")
-                .on_change(on_words(cx, move |root, words| {
-                    root.app.world_page.reader.set_draft_status(id, words);
-                })),
+            kit::TextField::new(
+                ("world-draft-status", id.as_u128() as u64),
+                view.status.clone(),
+            )
+            .placeholder(crate::world::edit::STATUS_HINT)
+            .name("Status")
+            .on_change(on_words(cx, move |root, words| {
+                root.app.world_page.reader.set_draft_status(id, words);
+            })),
         ))
         .child(kit::field(
             "Text",

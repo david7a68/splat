@@ -1035,31 +1035,31 @@ impl Reader {
         index: &ContentIndex,
     ) -> Option<Go> {
         match draft.save(campaign, index, self.log_as().as_deref()) {
-                Ok(Saved::Written(change)) => {
-                    self.picker = None;
-                    self.form_focused = false;
-                    self.held
-                        .results
-                        .record(super::ReaderResult::Change(change));
-                    self.kept = None;
-                    return Some(Go::Reload(id));
-                }
-                Ok(Saved::Unchanged(disk)) => {
-                    self.picker = None;
-                    self.form_focused = false;
-                    self.end(super::Slot::Change);
-                    // A refused group change is not in the note. The note's own warning says why.
-                    self.kept = (!draft.groups_refused).then(|| (draft.path.clone(), disk));
-                    return Some(Go::Reload(id));
-                }
-                Ok(Saved::Waiting) => {
-                    // The note changed on disk. Read it again for its list row and header count,
-                    // as a refused Part of write does. The draft waits for the DM's choice.
-                    self.edits.insert(id, draft);
-                    return Some(Go::Reload(id));
-                }
-                Err(error) => self.error = Some(error),
+            Ok(Saved::Written(change)) => {
+                self.picker = None;
+                self.form_focused = false;
+                self.held
+                    .results
+                    .record(super::ReaderResult::Change(change));
+                self.kept = None;
+                return Some(Go::Reload(id));
             }
+            Ok(Saved::Unchanged(disk)) => {
+                self.picker = None;
+                self.form_focused = false;
+                self.end(super::Slot::Change);
+                // A refused group change is not in the note. The note's own warning says why.
+                self.kept = (!draft.groups_refused).then(|| (draft.path.clone(), disk));
+                return Some(Go::Reload(id));
+            }
+            Ok(Saved::Waiting) => {
+                // The note changed on disk. Read it again for its list row and header count,
+                // as a refused Part of write does. The draft waits for the DM's choice.
+                self.edits.insert(id, draft);
+                return Some(Go::Reload(id));
+            }
+            Err(error) => self.error = Some(error),
+        }
         self.edits.insert(id, draft);
         None
     }
@@ -2478,11 +2478,12 @@ impl Reader {
                 .collect();
             let their_text = theirs.as_ref().map_or("", |theirs| theirs.text.as_str());
             let same = match theirs {
-                Some(theirs) => draft.now.text.same_as(
-                    theirs.text.revision(),
-                    &theirs.text,
-                    &draft.same_disk,
-                ),
+                Some(theirs) => {
+                    draft
+                        .now
+                        .text
+                        .same_as(theirs.text.revision(), &theirs.text, &draft.same_disk)
+                }
                 None => draft.now.text.is_empty(),
             };
             ConflictView {
@@ -2491,8 +2492,7 @@ impl Reader {
                     draft.name
                 ),
                 effects,
-                texts: (!same)
-                    .then(|| (draft.now.text.as_str().to_owned(), their_text.to_owned())),
+                texts: (!same).then(|| (draft.now.text.as_str().to_owned(), their_text.to_owned())),
             }
         });
         let view = DraftView {
@@ -2585,7 +2585,10 @@ impl Reader {
             self.edits.insert(id, draft);
             return None;
         };
-        let overwrite = matches!(draft.resolve(disk, theirs, choice, index), Conflict::Overwrite);
+        let overwrite = matches!(
+            draft.resolve(disk, theirs, choice, index),
+            Conflict::Overwrite
+        );
         if !overwrite && draft.reloaded.is_some() {
             self.held.results.record(super::ReaderResult::Reloaded(id));
         }
