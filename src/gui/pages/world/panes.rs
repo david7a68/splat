@@ -328,7 +328,7 @@ fn card_view(
                     kit::Link::new(("world-card-source", at), path.clone())
                         .wrap()
                         .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                            root.app.world_page.ask_lookup = Some(path.clone());
+                            open_note(root, &path);
                             cx.notify();
                         })),
                 ),
@@ -345,7 +345,7 @@ fn card_view(
                 .density(theme::Density::Read)
                 .hint(problem.marker.clone())
                 .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                    root.app.world_page.ask_lookup = Some(path.clone());
+                    open_note(root, &path);
                     cx.notify();
                 })),
             ),
@@ -386,6 +386,12 @@ fn card_view(
                 ),
         )
         .into_any_element()
+}
+
+/// A card's table file opens as a note link does (egui: the card leaves `markdown_clicked_note`):
+/// the frame logic's `Splat::route` opens it in Lookup, by its path, not by a search.
+pub(crate) fn open_note(root: &mut SplatRoot, path: &str) {
+    crate::markdown_view::send_note_link(root.bridge.ctx(), path.to_owned(), None);
 }
 
 /// The checks views: Open questions (with a box to tick each) and Things to check.
@@ -814,6 +820,7 @@ fn repair(root: &mut SplatRoot, campaign: &Campaign, cx: &mut Context<SplatRoot>
                 blocked: reason,
                 lock: None,
                 cancel: None,
+                reason_under: false,
             },
             save,
             cx.listener(|root: &mut SplatRoot, _, _, cx| {
@@ -886,6 +893,8 @@ struct SaveRow {
     lock: Option<&'static str>,
     /// Cancel's reason while the form is clean, when Cancel waits.
     cancel: Option<Option<&'static str>>,
+    /// The reason goes on its own line under the row (Lookup's narrow panel), not beside Save.
+    reason_under: bool,
 }
 
 /// The save row: the draft's state word, Discard (or a clean form's Cancel), the reason, and
@@ -936,18 +945,28 @@ fn save_row(
     } else {
         None
     };
-    line.when_some(reason, |line, reason| {
-        line.child(kit::text(theme::Type::Small, c.muted, reason))
-    })
-    .child(div().flex_1())
-    .child(save)
-    .into_any_element()
+    let reason = reason.map(|reason| kit::text(theme::Type::Small, c.muted, reason));
+    if row.reason_under {
+        // In Lookup's narrow panel the reason has its own line under the row, so Save stays
+        // inside the pane (egui's narrow save row).
+        return div()
+            .flex()
+            .flex_col()
+            .child(line.child(div().flex_1()).child(save))
+            .children(reason)
+            .into_any_element();
+    }
+    line.children(reason)
+        .child(div().flex_1())
+        .child(save)
+        .into_any_element()
 }
 
 /// The edit form, in place of the note's rows and text: Stat block, Place and Part of with
 /// their Change, Status, Text, then the save row.
 pub(super) fn edit_form(
     root: &mut SplatRoot,
+    host: super::reader::Host,
     item: &Item,
     index: &ContentIndex,
     campaign: &Campaign,
@@ -955,18 +974,9 @@ pub(super) fn edit_form(
 ) -> AnyElement {
     let c = theme::colors();
     let id = item.entry.id;
-    let Some(view) = root.app.world_page.reader.draft_view(item, index, campaign) else {
+    let Some(view) = host.reader(root).draft_view(item, index, campaign) else {
         return div().into_any_element();
     };
-    let on_note =
-        move |cx: &mut Context<SplatRoot>,
-              f: fn(&mut crate::world::page::WorldPage, &Item, &ContentIndex, &Campaign)| {
-            act::<gpui::ClickEvent>(cx, move |root, campaign, index, _, _| {
-                if let Some(at) = index.position(id) {
-                    f(&mut root.app.world_page, &index.items[at], index, campaign);
-                }
-            })
-        };
     let mut form = div()
         .flex()
         .flex_col()
@@ -975,14 +985,15 @@ pub(super) fn edit_form(
     if let Some(conflict) = &view.conflict {
         let choose = |cx: &mut Context<SplatRoot>, choice: DiskConflictChoice| {
             act::<gpui::ClickEvent>(cx, move |root, campaign, index, _, _| {
-                if let Some(at) = index.position(id) {
-                    let page = &mut root.app.world_page;
-                    if let Some(nav) =
-                        page.reader
-                            .resolve_conflict(&index.items[at], index, campaign, choice)
-                    {
-                        page.take_nav(nav, index);
-                    }
+                if let Some(at) = index.position(id)
+                    && let Some(nav) = host.reader(root).resolve_conflict(
+                        &index.items[at],
+                        index,
+                        campaign,
+                        choice,
+                    )
+                {
+                    host.take_nav(root, nav, index);
                 }
             })
         };
@@ -1025,16 +1036,11 @@ pub(super) fn edit_form(
             .name(format!("Change {label}"))
             .blocked(blocked)
             .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                root.app.world_page.reader.press_draft_change(key);
+                host.reader(root).press_draft_change(key);
                 cx.notify();
             }))
         };
-    let picker_key = root
-        .app
-        .world_page
-        .reader
-        .picker_view()
-        .map(|view| view.key);
+    let picker_key = host.reader(root).picker_view().map(|view| view.key);
     let mut rows: Vec<(&'static str, &'static str, &DraftValue, Option<String>)> = Vec::new();
     if let Some(creature) = &view.creature {
         rows.push(("creature", "Stat block", creature, None));
@@ -1075,7 +1081,7 @@ pub(super) fn edit_form(
             );
         }
         if picker_key == Some(key) {
-            form = form.child(super::reader::picker(root, item, index, true, cx));
+            form = form.child(super::reader::picker(root, host, item, index, true, cx));
         }
     }
     form = form
@@ -1090,7 +1096,7 @@ pub(super) fn edit_form(
             .placeholder(crate::world::edit::STATUS_HINT)
             .name("Status")
             .on_change(on_words(cx, move |root, words| {
-                root.app.world_page.reader.set_draft_status(id, words);
+                host.reader(root).set_draft_status(id, words);
             })),
         ))
         .child(kit::field(
@@ -1103,7 +1109,7 @@ pub(super) fn edit_form(
                     .rows(8)
                     .fill()
                     .on_change(on_words(cx, move |root, words| {
-                        root.app.world_page.reader.set_draft_text(id, words);
+                        host.reader(root).set_draft_text(id, words);
                     })),
             ),
         ));
@@ -1125,14 +1131,19 @@ pub(super) fn edit_form(
             },
             lock: Some("Save or discard to switch campaign."),
             cancel: Some(cancel_reason),
+            reason_under: host == super::reader::Host::Lookup,
         },
-        on_note(cx, |page, item, index, campaign| {
-            if let Some(nav) = page.reader.save_draft(item, index, campaign) {
-                page.take_nav(nav, index);
+        act::<gpui::ClickEvent>(cx, move |root, campaign, index, _, _| {
+            if let Some(at) = index.position(id)
+                && let Some(nav) = host
+                    .reader(root)
+                    .save_draft(&index.items[at], index, campaign)
+            {
+                host.take_nav(root, nav, index);
             }
         }),
         cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-            root.app.world_page.reader.discard_draft(id);
+            host.reader(root).discard_draft(id);
             cx.notify();
         }),
     ))

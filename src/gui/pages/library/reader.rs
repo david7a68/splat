@@ -4,16 +4,17 @@
 //! choices and comparison; the pane's footer under it all.
 use super::{footer, forms};
 use crate::gui::kit::WithTooltip as _;
-use crate::gui::theme::{
-    Density, HAIRLINE_WIDTH, L, M, READER_MEASURE, S, Type, TypeExt, XS, colors,
-};
+use crate::gui::pages::reader::entry::{EntryView, Source};
+use crate::gui::theme::{Density, HAIRLINE_WIDTH, L, READER_MEASURE, S, Type, TypeExt, XS, colors};
 use crate::gui::{SplatRoot, bridge, icons, kit};
 use crate::library::model::ReaderView;
+use crate::library::view::NoLinks;
 use crate::lookup::ContentIndex;
 use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
     prelude::*, px,
 };
+use std::rc::Rc;
 use std::sync::Arc;
 
 /// The width the reader's lines keep (`view::WIDE_READER`).
@@ -333,7 +334,6 @@ fn entry(
     window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
-    let c = colors();
     let mut head = div()
         .flex()
         .flex_col()
@@ -370,40 +370,7 @@ fn entry(
             .child(editor)
             .into_any_element()
     } else {
-        let index = index.clone();
-        let mut reader = div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .max_w(READER_MEASURE)
-            .pt(XS)
-            .child(kit::text(Type::Title, c.text, view.title.clone()))
-            .when(!view.subtitle.is_empty(), |reader| {
-                reader.child(kit::text(Type::Small, c.muted, view.subtitle.clone()))
-            });
-        if !view.notices.is_empty() {
-            reader = reader.child(kit::gap(L));
-        }
-        for (at, item) in view.notices.iter().enumerate() {
-            reader = reader.child(notice(at, item, cx));
-        }
-        div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .child(reader)
-            .child(kit::gap(M))
-            .child(
-                kit::markdown::Markdown::new(
-                    ElementId::Name(format!("library-body-{}", view.note).into()),
-                    view.body.clone(),
-                )
-                .on_link(cx.listener(move |root, target: &str, _, cx| {
-                    root.app.library.follow_link(target, index.as_deref());
-                    cx.notify();
-                })),
-            )
-            .into_any_element()
+        read_body(root, &view, index, window, cx)
     };
     let choices = (!view.link_choices.is_empty()).then(|| {
         let mut line = div().flex().flex_row().flex_wrap().gap(S);
@@ -426,6 +393,7 @@ fn entry(
         format!("library-reader-{:?}-{}", view.key.0, view.key.1).into(),
     ))
     .flush()
+    .scroll(&root.pages.library.reader_scroll)
     .header(head)
     .children(choices)
     .child(body);
@@ -436,6 +404,84 @@ fn entry(
         pane = pane.footer(line);
     }
     pane.into_any_element()
+}
+
+/// Read: the title with the entry's picture, the body's notices, then the entry as the reader
+/// shows it (egui `view::title_with_art` and `view::show_with_related`): a stat block, a spell's
+/// or an item's facts, class features, related entries and the closed end sections. Its related,
+/// feature and spell links open their entries here; a note link in its words opens its entry, or
+/// offers its choices.
+fn read_body(
+    root: &mut SplatRoot,
+    view: &ReaderView,
+    index: &Option<Arc<ContentIndex>>,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    let mut head = div()
+        .flex()
+        .flex_col()
+        .w_full()
+        .max_w(READER_MEASURE)
+        .pt(XS)
+        .child(crate::gui::pages::reader::entry::title_with_art(
+            &view.title,
+            &view.subtitle,
+            view.entry.as_ref(),
+            cx,
+        ));
+    if !view.notices.is_empty() {
+        head = head.child(kit::gap(L));
+    }
+    for (at, item) in view.notices.iter().enumerate() {
+        head = head.child(notice(at, item, cx));
+    }
+    let open = cx.listener(|root, at: &usize, _, cx| {
+        root.app.library.open_link(*at);
+        cx.notify();
+    });
+    let link_index = index.clone();
+    let from = view.entry.as_ref().map(|entry| entry.id);
+    let follow = cx.listener(move |root, note: &str, _, cx| {
+        if let Some(index) = &link_index
+            && let crate::world::Go::Item(_, heading) = index.resolve_link(note, from)
+        {
+            crate::markdown_view::want_heading(root.bridge.ctx(), heading);
+        }
+        root.app.library.follow_link(note, link_index.as_deref());
+        cx.notify();
+    });
+    let reader = EntryView::new(
+        ElementId::Name(format!("library-body-{}", view.note).into()),
+        view.name.clone(),
+        view.entry.as_ref(),
+        view.entry
+            .as_ref()
+            .map_or_else(String::new, |entry| entry.body.clone()),
+        Source {
+            path: view.origin.path.clone(),
+            owner: view.origin.owner.clone(),
+            builtin: view.origin.builtin,
+        },
+        Rc::new(NoLinks),
+    )
+    .wide_tables()
+    // The Library draws no value block above the entry.
+    .empty_value_block(false)
+    .on_open(move |at, window, cx| open(&at, window, cx))
+    .on_note(follow)
+    .jump_in(&root.pages.library.reader_scroll);
+    let reader = match root.app.library.links() {
+        Some(links) => reader.render_with(links, window, cx),
+        None => reader.render_with(&NoLinks, window, cx),
+    };
+    div()
+        .flex()
+        .flex_col()
+        .w_full()
+        .child(head)
+        .child(reader)
+        .into_any_element()
 }
 
 /// A changed file: its warning with the two choices, then the comparison (or the draft alone

@@ -10,7 +10,6 @@ use crate::world::Nav;
 use crate::world::model::{
     BodyFacts, JoinAct, PickAct, TitleAct, ValueShown, file_link, missing_text, obsidian_link,
 };
-use crate::world::page::WorldPage;
 use gpui::{
     AnyElement, Context, Hsla, IntoElement, ParentElement, SharedString, Styled, Window, div,
     prelude::*, px,
@@ -47,20 +46,38 @@ fn words_width(window: &Window, ty: theme::Type, words: &str) -> gpui::Pixels {
         .width
 }
 
-/// A handler that acts on the note `id` with the page, its reader's item, the notes and the
-/// campaign; the `Nav` an act returns goes to the page.
+/// What an act on a note reaches: the host's reader, and where the act goes next.
+struct ReaderAct<'a> {
+    reader: &'a mut crate::world::Reader,
+    nav: Option<Nav>,
+}
+
+impl ReaderAct<'_> {
+    /// Go to `nav` after the act (the host takes it: World's page, or Lookup).
+    fn take_nav(&mut self, nav: Nav, _: &ContentIndex) {
+        self.nav = Some(nav);
+    }
+}
+
+/// A handler that acts on the note `id` with the host's reader, its item, the notes and the
+/// campaign; the `Nav` an act returns goes to the host.
 fn on_item<E: ?Sized + 'static>(
     cx: &mut Context<SplatRoot>,
+    host: Host,
     id: Uuid,
-    f: impl Fn(&mut WorldPage, &Item, &ContentIndex, &Campaign) -> Option<Nav> + 'static,
+    f: impl Fn(&mut ReaderAct<'_>, &Item, &ContentIndex, &Campaign) -> Option<Nav> + 'static,
 ) -> super::Handler<E> {
     act(cx, move |root, campaign, index, _, _| {
         let Some(at) = index.position(id) else {
             return;
         };
-        let page = &mut root.app.world_page;
-        if let Some(nav) = f(page, &index.items[at], index, campaign) {
-            page.take_nav(nav, index);
+        let mut page = ReaderAct {
+            reader: host.reader(root),
+            nav: None,
+        };
+        let nav = f(&mut page, &index.items[at], index, campaign);
+        if let Some(nav) = nav.or(page.nav) {
+            host.take_nav(root, nav, index);
         }
     })
 }
@@ -90,17 +107,65 @@ pub(super) fn render(
             );
         });
     let footer = footer::render(lines, cx);
-    let body = render_reader(root, item, index, campaign, window, cx);
-    let mut pane = kit::Pane::new(("world-reader", item.entry.id.as_u128() as u64)).flush();
+    let body = render_reader(root, Host::World, item, index, campaign, window, cx);
+    let mut pane = kit::Pane::new(("world-reader", item.entry.id.as_u128() as u64))
+        .flush()
+        .scroll(&root.pages.world.jump.scroll);
     for line in footer {
         pane = pane.footer(line);
     }
     pane.child(body).into_any_element()
 }
 
-/// The reader's body for the note `item`.
-pub fn render_reader(
+/// Whose note reader a view draws (egui: one `world::Reader` each): the World page's, or
+/// Lookup's compact one beside any page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Host {
+    World,
+    Lookup,
+}
+
+impl Host {
+    /// The host's reader.
+    pub(crate) fn reader(self, root: &mut SplatRoot) -> &mut crate::world::Reader {
+        match self {
+            Host::World => &mut root.app.world_page.reader,
+            Host::Lookup => &mut root.app.lookup.reader,
+        }
+    }
+
+    /// Go where a reader's act or link leads: World's page opens the note (or asks Lookup for a
+    /// missing one), Lookup shows it.
+    pub(crate) fn take_nav(self, root: &mut SplatRoot, nav: Nav, index: &ContentIndex) {
+        match self {
+            Host::World => root.app.world_page.take_nav(nav, index),
+            Host::Lookup => root.app.lookup.follow_nav(nav),
+        }
+    }
+
+    /// The host's scroll and its heading jump.
+    pub(crate) fn jump(self, root: &mut SplatRoot) -> &mut Jump {
+        match self {
+            Host::World => &mut root.pages.world.jump,
+            Host::Lookup => &mut root.pages.lookup.jump,
+        }
+    }
+}
+
+/// A reader's scroll column and the heading a link asked it to show (egui: `want_heading` for
+/// one draw).
+#[derive(Default)]
+pub(crate) struct Jump {
+    pub scroll: gpui::ScrollHandle,
+    /// The heading asked for in the last frame: its request ends in the next one, found or not,
+    /// so it cannot reach a heading on another page.
+    pending: Option<String>,
+}
+
+/// The reader's body for the note `item`, in `host`'s reader.
+pub(crate) fn render_reader(
     root: &mut SplatRoot,
+    host: Host,
     item: &Item,
     index: &ContentIndex,
     campaign: &Campaign,
@@ -109,8 +174,20 @@ pub fn render_reader(
 ) -> AnyElement {
     let c = theme::colors();
     let id = item.entry.id;
-    let heading = root.app.world_page.reader.take_heading_for(id);
-    let reader = &mut root.app.world_page.reader;
+    // A followed link's heading: the text scrolls to it in this frame (`read_in_pane`).
+    let heading = host.reader(root).take_heading_for(id);
+    let ctx = root.bridge.ctx().clone();
+    let jump = host.jump(root);
+    if let Some(old) = jump.pending.take() {
+        let _ = crate::markdown_view::wanted_heading(&ctx, &old);
+    }
+    if let Some(heading) = heading {
+        crate::markdown_view::want_heading(&ctx, Some(heading.clone()));
+        jump.pending = Some(heading);
+    }
+    let scroll = jump.scroll.clone();
+    let compact = host.reader(root).compact;
+    let reader = &mut host.reader(root);
     let mut column = div().flex().flex_col().w_full().pb(theme::L);
     // A link to several notes waits for the DM's choice, above the text.
     if !reader.link_choices().is_empty() {
@@ -127,34 +204,35 @@ pub fn render_reader(
                 )
                 .wrap()
                 .on_click(act(cx, move |root, _, index, _, _| {
-                    let page = &mut root.app.world_page;
-                    if let Some(nav) = page.reader.choose_many(index, position) {
-                        page.take_nav(nav, index);
+                    if let Some(nav) = host.reader(root).choose_many(index, position) {
+                        host.take_nav(root, nav, index);
                     }
                 })),
             );
         }
     }
-    column = column.child(title_line(root, item, index, campaign, cx));
-    if let Some(log) = log_field(root, item, index, campaign, cx) {
+    column = column.child(title_line(root, host, item, index, campaign, cx));
+    if let Some(log) = log_field(root, host, item, index, campaign, cx) {
         column = column.child(log);
     }
-    if root.app.world_page.reader.editing(id, campaign) {
+    if host.reader(root).editing(id, campaign) {
         return column
-            .child(super::panes::edit_form(root, item, index, campaign, cx))
+            .child(super::panes::edit_form(
+                root, host, item, index, campaign, cx,
+            ))
             .into_any_element();
     }
-    let facts = root
-        .app
-        .world_page
-        .reader
-        .body_facts(item, index, Some(campaign));
-    column = column.child(faults(&facts, item, campaign, cx));
+    let facts = host.reader(root).body_facts(item, index, Some(campaign));
+    column = column.child(faults(&facts, host, item, campaign, cx));
+    // A value block that draws no row adds no gap: in World, the prose then starts where a
+    // plain note's starts. Lookup's compact reader keeps the reader's gap.
+    let mut empty_value_block = false;
     if facts.values {
-        column = column.child(values(root, item, index, campaign, window, cx));
+        empty_value_block = !compact && host.reader(root).value_rows(item, index).is_empty();
+        column = column.child(values(root, host, item, index, campaign, window, cx));
     }
     if facts.duplicate_values {
-        column = column.child(duplicate_values(item, index, cx));
+        column = column.child(duplicate_values(host, item, index, cx));
     }
     if (item.entry.kind == "world" || item.is_world_note()) && !facts.has_prose {
         column = column.child(div().pt(theme::L).child(kit::text(
@@ -162,34 +240,112 @@ pub fn render_reader(
             c.muted,
             "Nothing written yet.",
         )));
+        empty_value_block = false;
     }
-    column = column.child(text(item, index, &facts, heading, cx));
-    column = column.child(related(item, index, cx));
-    if facts.make_type {
-        column = column.child(make_type(root, item, cx));
-    }
-    if !facts.plain_note {
-        column = column.child(source(item, campaign));
+    if facts.plain_note {
+        column = column.child(note_text(host, item, index, &facts, compact, &scroll, cx));
+        column = column.child(related(host, item, index, cx));
+        if facts.make_type {
+            column = column.child(make_type(root, host, item, cx));
+        }
+    } else {
+        let history = super::super::trackers::history::render(root, &item.entry, window, cx);
+        let related = div()
+            .flex()
+            .flex_col()
+            .children(history)
+            .child(related(host, item, index, cx));
+        let entry = host.reader(root).read_entry(item).clone();
+        let links = match root.app.lookup.index() {
+            Some(index) => crate::gui::pages::reader::entry::index_links(index),
+            None => std::rc::Rc::new(crate::library::view::NoLinks),
+        };
+        column = column.child(entry_text(
+            host,
+            item,
+            &entry,
+            links,
+            empty_value_block,
+            related,
+            &scroll,
+            cx,
+        ));
     }
     column.into_any_element()
+}
+
+#[allow(clippy::too_many_arguments)]
+/// An entry's text as the reader shows every entry (egui `view::show_with_related`): its stat
+/// block or facts, its sections, then the tracker history of a house rule note in play and what
+/// other notes say about it, then the closed end sections. Its related, feature and spell links
+/// open their notes here; a note link in its words follows from this note; a dice number rolls.
+fn entry_text(
+    host: Host,
+    item: &Item,
+    entry: &splat::content::Entry,
+    links: std::rc::Rc<dyn crate::library::view::Links>,
+    empty_value_block: bool,
+    related: impl IntoElement,
+    scroll: &gpui::ScrollHandle,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    let id = item.entry.id;
+    let go = cx.listener(move |root: &mut SplatRoot, at: &usize, _, cx| {
+        if let Some((_, index)) = super::world(root) {
+            let reader = host.reader(root);
+            if let Some(nav) = reader.go_to(*at) {
+                host.take_nav(root, nav, &index);
+            }
+        }
+        cx.notify();
+    });
+    let follow = cx.listener(move |root: &mut SplatRoot, note: &str, _, cx| {
+        if let Some((_, index)) = super::world(root)
+            && let Some(position) = index.position(id)
+        {
+            let reader = host.reader(root);
+            if let Some(nav) = reader.follow(&index.items[position], &index, note) {
+                host.take_nav(root, nav, &index);
+            }
+        }
+        cx.notify();
+    });
+    crate::gui::pages::reader::entry::EntryView::new(
+        ("world-entry", id.as_u128() as u64),
+        item.entry.name.clone(),
+        Some(entry),
+        item.entry.body.clone(),
+        crate::gui::pages::reader::entry::Source {
+            path: item.entry.path.clone(),
+            owner: item.owner.clone(),
+            builtin: item.is_builtin(),
+        },
+        links,
+    )
+    .empty_value_block(empty_value_block)
+    .related(related)
+    .on_open(move |at, window, cx| go(&at, window, cx))
+    .on_note(follow)
+    .jump_in(scroll)
+    .into_any_element()
 }
 
 /// The title, its kind line, and its actions on its line (Edit, Start fight or Add to fight,
 /// Add to Log). When they do not fit beside the title, they move under it together.
 fn title_line(
     root: &mut SplatRoot,
+    host: Host,
     item: &Item,
     index: &ContentIndex,
     campaign: &Campaign,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
-    let c = theme::colors();
-    let reader = &root.app.world_page.reader;
+    let reader = &host.reader(root);
     let facts = reader.title_facts(item, index, Some(campaign));
     let id = item.entry.id;
     let mut actions = Vec::new();
     let action = |cx: &mut Context<SplatRoot>, act: TitleAct| {
-        on_item::<gpui::ClickEvent>(cx, id, move |page, item, index, campaign| {
+        on_item::<gpui::ClickEvent>(cx, host, id, move |page, item, index, campaign| {
             page.reader.press_title(act, item, index, Some(campaign));
             None
         })
@@ -241,12 +397,15 @@ fn title_line(
         .items_start()
         .gap_x(theme::L)
         .child(
-            div()
-                .flex()
-                .flex_col()
-                .max_w(theme::LIST_MEASURE)
-                .child(kit::text(theme::Type::Display, c.text, facts.title))
-                .child(kit::text(theme::Type::Small, c.muted, facts.kind_line).pt(theme::XS)),
+            // The title and kind line, with the note's picture beside them when it has one.
+            div().max_w(theme::LIST_MEASURE).child(
+                crate::gui::pages::reader::entry::title_with_art(
+                    &facts.title,
+                    &facts.kind_line,
+                    Some(&item.entry),
+                    cx,
+                ),
+            ),
         )
         .child(
             div()
@@ -264,50 +423,47 @@ fn title_line(
 /// the line, Escape closes it.
 fn log_field(
     root: &mut SplatRoot,
+    host: Host,
     item: &Item,
     index: &ContentIndex,
     campaign: &Campaign,
     cx: &mut Context<SplatRoot>,
 ) -> Option<AnyElement> {
     let c = theme::colors();
-    let reader = &mut root.app.world_page.reader;
+    let reader = &mut host.reader(root);
     let view = reader.log_view(item, index, campaign)?;
     let (campaign_id, id) = (campaign.id, item.entry.id);
     if view.select {
         reader.log_selected(campaign_id, id);
     }
     let enter = on_key(cx, move |root, campaign, index, _, _| {
-        if let Some(at) = index.position(id) {
-            let page = &mut root.app.world_page;
-            if let Some(nav) = page.reader.log_enter(&index.items[at], campaign) {
-                page.take_nav(nav, index);
-            }
+        if let Some(at) = index.position(id)
+            && let Some(nav) = host.reader(root).log_enter(&index.items[at], campaign)
+        {
+            host.take_nav(root, nav, index);
         }
     });
     let escape = on_key(cx, move |root, _, _, _, _| {
-        root.app.world_page.reader.log_cancel(campaign_id, id);
+        host.reader(root).log_cancel(campaign_id, id);
     });
     let field = kit::TextField::new(("world-log", id.as_u128() as u64), view.words)
         .placeholder("What happened?")
         .name(view.name)
         .focus_selected(view.select)
         .on_change(on_words(cx, move |root, words| {
-            root.app
-                .world_page
-                .reader
-                .set_log_words(campaign_id, id, words);
+            host.reader(root).set_log_words(campaign_id, id, words);
         }))
         .on_enter(enter)
         .on_escape(escape);
     let add = kit::Button::secondary("world-log-add", "Add")
         .density(theme::Density::Read)
-        .on_click(on_item(cx, id, |page, item, _, campaign| {
+        .on_click(on_item(cx, host, id, |page, item, _, campaign| {
             page.reader.log_enter(item, campaign)
         }));
     let cancel = kit::Button::quiet("world-log-cancel", "Cancel")
         .density(theme::Density::Read)
         .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-            root.app.world_page.reader.log_cancel(campaign_id, id);
+            host.reader(root).log_cancel(campaign_id, id);
             cx.notify();
         }));
     Some(
@@ -332,6 +488,7 @@ fn log_field(
 /// The file line, then every warning and repair of the note, at the reader measure.
 fn faults(
     facts: &BodyFacts,
+    host: Host,
     item: &Item,
     campaign: &Campaign,
     cx: &mut Context<SplatRoot>,
@@ -405,7 +562,7 @@ fn faults(
         message = message.action(
             kit::Button::secondary("world-rename-note", format!("Rename the note to {stem}"))
                 .density(theme::Density::Read)
-                .on_click(on_item(cx, id, move |page, item, _, campaign| {
+                .on_click(on_item(cx, host, id, move |page, item, _, campaign| {
                     page.reader.rename_note(campaign, item, &to_note)
                 })),
         );
@@ -415,7 +572,7 @@ fn faults(
             message = message.action(
                 kit::Button::secondary("world-rename-file", format!("Rename the file to {name}"))
                     .density(theme::Density::Read)
-                    .on_click(on_item(cx, id, move |page, item, _, campaign| {
+                    .on_click(on_item(cx, host, id, move |page, item, _, campaign| {
                         page.reader.rename_file(campaign, item, &to)
                     })),
             );
@@ -444,9 +601,8 @@ fn faults(
                         kit::Button::secondary(("world-separate", at), words.clone())
                             .density(theme::Density::Read)
                             .on_click(act(cx, move |root, campaign, index, _, _| {
-                                let page = &mut root.app.world_page;
-                                if let Some(nav) = page.reader.separate(campaign, &path) {
-                                    page.take_nav(nav, index);
+                                if let Some(nav) = host.reader(root).separate(campaign, &path) {
+                                    host.take_nav(root, nav, index);
                                 }
                             })),
                     )
@@ -478,6 +634,7 @@ fn with_hint(
 /// place chooser, the Status field, the run's status and the join form.
 fn values(
     root: &mut SplatRoot,
+    host: Host,
     item: &Item,
     index: &ContentIndex,
     campaign: &Campaign,
@@ -486,7 +643,7 @@ fn values(
 ) -> AnyElement {
     let c = theme::colors();
     let id = item.entry.id;
-    let reader = &mut root.app.world_page.reader;
+    let reader = &mut host.reader(root);
     let rows = reader.value_rows(item, index);
     // One Change column (AI1): `L` after the widest value, which wraps in the column when it is
     // wider than the reader's value room (egui: `relationship_value_width`).
@@ -519,7 +676,9 @@ fn values(
         let value: AnyElement = match row.value {
             ValueShown::Link(at, name) => kit::Link::new(("world-value", at), name)
                 .wrap()
-                .on_click(on_item(cx, id, move |page, _, _, _| page.reader.go_to(at)))
+                .on_click(on_item(cx, host, id, move |page, _, _, _| {
+                    page.reader.go_to(at)
+                }))
                 .into_any_element(),
             ValueShown::PlaceChoices(words) => div()
                 .flex()
@@ -530,8 +689,8 @@ fn values(
                 .child(
                     kit::Link::new("world-place-choices", words)
                         .wrap()
-                        .on_click(cx.listener(|root: &mut SplatRoot, _, _, cx| {
-                            root.app.world_page.reader.toggle_place_choices();
+                        .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
+                            host.reader(root).toggle_place_choices();
                             cx.notify();
                         })),
                 )
@@ -556,7 +715,9 @@ fn values(
                     match target {
                         Some(at) => kit::Link::new(("world-group", n), name)
                             .wrap()
-                            .on_click(on_item(cx, id, move |page, _, _, _| page.reader.go_to(at)))
+                            .on_click(on_item(cx, host, id, move |page, _, _, _| {
+                                page.reader.go_to(at)
+                            }))
                             .into_any_element(),
                         None => missing(&name).into_any_element(),
                     }
@@ -569,7 +730,7 @@ fn values(
         )
         .name(format!("Change {}", row.label))
         .blocked(row.blocked)
-        .on_click(on_item(cx, id, move |page, item, _, _| {
+        .on_click(on_item(cx, host, id, move |page, item, _, _| {
             page.reader.press_change(key, item);
             None
         }));
@@ -579,17 +740,17 @@ fn values(
             column_width,
             Some(change.into_any_element()),
         ));
-        if key == "in" && root.app.world_page.reader.place_choices_open() {
-            column = column.child(place_chooser(item, index, cx));
+        if key == "in" && host.reader(root).place_choices_open() {
+            column = column.child(place_chooser(host, item, index, cx));
         }
     }
-    let reader = &mut root.app.world_page.reader;
+    let reader = &mut host.reader(root);
     if reader.picker_view().is_some() {
-        column = column.child(picker(root, item, index, false, cx));
+        column = column.child(picker(root, host, item, index, false, cx));
     }
-    column = column.child(status_field(root, item, cx));
+    column = column.child(status_field(root, host, item, cx));
     if crate::world::fights(&item.entry) {
-        let reader = &root.app.world_page.reader;
+        let reader = &host.reader(root);
         if let Some((arrival, initiative)) = reader.in_run_of(id) {
             let words = format!(
                 "In the run · initiative {}",
@@ -601,11 +762,11 @@ fn values(
                     kit::Status::new(icons::RUN, words, c.accent),
                 )
                 .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                    root.app.world_page.reader.press_in_run(arrival);
+                    host.reader(root).press_in_run(arrival);
                     cx.notify();
                 })),
             );
-        } else if let Some(join) = join_form(root, item, index, campaign, cx) {
+        } else if let Some(join) = join_form(root, host, item, index, campaign, cx) {
             column = column.child(join);
         }
     }
@@ -653,7 +814,12 @@ fn value_row(
 }
 
 /// The place link's chooser: each file it matches, with `Always use this one`.
-fn place_chooser(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn place_chooser(
+    host: Host,
+    item: &Item,
+    index: &ContentIndex,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = theme::colors();
     let id = item.entry.id;
     let mut column = div()
@@ -677,13 +843,15 @@ fn place_chooser(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>)
                 .child(
                     kit::Link::new(("world-place-file", at), path.clone())
                         .wrap()
-                        .on_click(on_item(cx, id, move |page, _, _, _| page.reader.go_to(at))),
+                        .on_click(on_item(cx, host, id, move |page, _, _, _| {
+                            page.reader.go_to(at)
+                        })),
                 )
                 .child(
                     kit::Button::secondary(("world-place-use", at), "Always use this one")
                         .density(theme::Density::Read)
                         .name(format!("Always use {path}"))
-                        .on_click(on_item(cx, id, move |page, item, index, campaign| {
+                        .on_click(on_item(cx, host, id, move |page, item, index, campaign| {
                             page.reader.choose_place(campaign, item, index, at)
                         })),
                 ),
@@ -697,12 +865,13 @@ fn place_chooser(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>)
 /// goes to the form (its groups), not to the note.
 pub(super) fn picker(
     root: &mut SplatRoot,
+    host: Host,
     item: &Item,
     index: &ContentIndex,
     in_form: bool,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
-    let reader = &mut root.app.world_page.reader;
+    let reader = &mut host.reader(root);
     let groups = in_form
         .then(|| reader.draft_groups(item.entry.id))
         .flatten();
@@ -716,7 +885,7 @@ pub(super) fn picker(
     let (matches, removes) = reader.picker_matches(item, index, draft);
     let id = item.entry.id;
     let pick = move |cx: &mut Context<SplatRoot>, pick: PickAct| {
-        on_item::<gpui::ClickEvent>(cx, id, move |page, item, index, campaign| {
+        on_item::<gpui::ClickEvent>(cx, host, id, move |page, item, index, campaign| {
             if in_form {
                 page.reader
                     .pick_into_draft(pick.clone(), item, index, campaign);
@@ -741,12 +910,12 @@ pub(super) fn picker(
             .placeholder(view.label)
             .name(view.label)
             .focus_selected(view.focus)
-            .on_change(on_words(cx, |root, words| {
-                root.app.world_page.reader.set_picker_search(words);
+            .on_change(on_words(cx, move |root, words| {
+                host.reader(root).set_picker_search(words);
             }))
             .on_escape(on_key(cx, move |root, campaign, index, _, _| {
                 if let Some(at) = index.position(id) {
-                    let _ = root.app.world_page.reader.pick_value(
+                    let _ = host.reader(root).pick_value(
                         PickAct::Cancel,
                         &index.items[at],
                         index,
@@ -787,8 +956,8 @@ pub(super) fn picker(
                         view.new_location,
                     )
                     .name("Location name")
-                    .on_change(on_words(cx, |root, words| {
-                        root.app.world_page.reader.set_new_location(words);
+                    .on_change(on_words(cx, move |root, words| {
+                        host.reader(root).set_new_location(words);
                     })),
                 ))
                 .child(
@@ -833,8 +1002,13 @@ pub(super) fn picker(
 
 /// The Status field while it is open: its words, and while they differ from the note's, the
 /// draft's `Unsaved` and `Save status`. Enter saves.
-fn status_field(root: &mut SplatRoot, item: &Item, cx: &mut Context<SplatRoot>) -> AnyElement {
-    let reader = &mut root.app.world_page.reader;
+fn status_field(
+    root: &mut SplatRoot,
+    host: Host,
+    item: &Item,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    let reader = &mut host.reader(root);
     let Some(words) = reader.status_field().map(str::to_owned) else {
         return div().into_any_element();
     };
@@ -842,7 +1016,7 @@ fn status_field(root: &mut SplatRoot, item: &Item, cx: &mut Context<SplatRoot>) 
     let unsaved = reader.status_unsaved(item);
     let id = item.entry.id;
     let save = move |cx: &mut Context<SplatRoot>| {
-        on_item::<gpui::ClickEvent>(cx, id, |page, item, index, campaign| {
+        on_item::<gpui::ClickEvent>(cx, host, id, |page, item, index, campaign| {
             page.reader.save_status(item, index, campaign)
         })
     };
@@ -850,8 +1024,8 @@ fn status_field(root: &mut SplatRoot, item: &Item, cx: &mut Context<SplatRoot>) 
     let field = kit::TextField::new(("world-status", id.as_u128() as u64), words)
         .name("Status")
         .focus_selected(select)
-        .on_change(on_words(cx, |root, words| {
-            root.app.world_page.reader.set_status_text(words);
+        .on_change(on_words(cx, move |root, words| {
+            host.reader(root).set_status_text(words);
         }))
         .on_enter(move |window, cx| enter(&gpui::ClickEvent::default(), window, cx));
     let mut block = div()
@@ -885,20 +1059,17 @@ fn status_field(root: &mut SplatRoot, item: &Item, cx: &mut Context<SplatRoot>) 
 /// The form that adds an NPC with no stat block to the run.
 fn join_form(
     root: &mut SplatRoot,
+    host: Host,
     item: &Item,
     index: &ContentIndex,
     campaign: &Campaign,
     cx: &mut Context<SplatRoot>,
 ) -> Option<AnyElement> {
     let c = theme::colors();
-    let view = root
-        .app
-        .world_page
-        .reader
-        .join_view(item, index, Some(campaign))?;
+    let view = host.reader(root).join_view(item, index, Some(campaign))?;
     let id = item.entry.id;
     let join = move |cx: &mut Context<SplatRoot>, act: JoinAct| {
-        on_item::<gpui::ClickEvent>(cx, id, move |page, item, index, campaign| {
+        on_item::<gpui::ClickEvent>(cx, host, id, move |page, item, index, campaign| {
             page.reader
                 .join_act(act.clone(), item, index, Some(campaign))
         })
@@ -908,7 +1079,7 @@ fn join_form(
             if let Some((campaign, index)) = super::world(root)
                 && let Some(at) = index.position(id)
             {
-                let _ = root.app.world_page.reader.join_act(
+                let _ = host.reader(root).join_act(
                     make(words.to_owned()),
                     &index.items[at],
                     &index,
@@ -984,7 +1155,7 @@ fn join_form(
                 if let (Some(side), Some((campaign, index))) = (sides.get(*at), super::world(root))
                     && let Some(position) = index.position(id)
                 {
-                    let _ = root.app.world_page.reader.join_act(
+                    let _ = host.reader(root).join_act(
                         JoinAct::Side(side.clone()),
                         &index.items[position],
                         &index,
@@ -1030,7 +1201,12 @@ fn join_form(
 }
 
 /// A duplicate note's values, read only.
-fn duplicate_values(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn duplicate_values(
+    host: Host,
+    item: &Item,
+    index: &ContentIndex,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = theme::colors();
     let id = item.entry.id;
     let mut column = div().flex().flex_col();
@@ -1038,7 +1214,9 @@ fn duplicate_values(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoo
         let value = match target {
             Some(at) => kit::Link::new(("world-dup-value", at), name)
                 .wrap()
-                .on_click(on_item(cx, id, move |page, _, _, _| page.reader.go_to(at)))
+                .on_click(on_item(cx, host, id, move |page, _, _, _| {
+                    page.reader.go_to(at)
+                }))
                 .into_any_element(),
             None if label == "Status" => {
                 kit::text(theme::Type::Body, c.text, name).into_any_element()
@@ -1050,57 +1228,77 @@ fn duplicate_values(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoo
     column.into_any_element()
 }
 
-/// The note's text, by its sections (the first heading is the title), at the reader measure. A
-/// link opens the note it names; a link to several notes waits for the DM's choice.
-fn text(
+/// A plain note's text, by its sections (the first heading is the title), at the reader
+/// measure (egui `show_document`). A note link follows from this note (a link to several notes
+/// waits for the DM's choice); a web link opens, a bold name goes to Lookup, a dice number rolls;
+/// a followed link's heading scrolls into view.
+fn note_text(
+    host: Host,
     item: &Item,
     index: &ContentIndex,
     facts: &BodyFacts,
-    _heading: Option<String>,
+    compact: bool,
+    scroll: &gpui::ScrollHandle,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let id = item.entry.id;
+    let ctx = cx
+        .try_global::<kit::markdown::Host>()
+        .map(|host| host.0.clone());
     let body = crate::world::with_named_links(
         &item.entry.body,
         &std::collections::HashMap::new(),
         crate::world::model::session_names(index),
     );
     let sections = crate::library::presentation::reading_sections(&body, &item.entry.name);
+    // In Lookup, a plain note's prose has the reader's gap below the kind line, as every
+    // entry's has. World's follows its file line.
     let mut column = div()
         .flex()
         .flex_col()
         .gap(theme::S)
-        .pt(if facts.plain_note { theme::S } else { theme::L });
+        .pt(if compact && facts.has_prose {
+            theme::L
+        } else {
+            theme::S
+        });
     for (at, section) in sections.iter().enumerate() {
         if section.title != "Overview" {
+            // A followed link's heading: the column scrolls it to its top.
+            if let Some(ctx) = &ctx
+                && crate::markdown_view::wanted_heading(ctx, &section.title)
+            {
+                column = column.child(kit::markdown::jump_here(scroll.clone()));
+            }
             column = column.child(kit::heading(kit::Heading::Section(&section.title), false));
         }
         column = column.child(
-            kit::markdown::Markdown::new(("world-text", at), section.body.to_owned()).on_link(
-                cx.listener(move |root: &mut SplatRoot, target: &str, _, cx| {
+            kit::markdown::Markdown::new(("world-text", at), section.body.to_owned())
+                .document(id)
+                .jump_in(scroll)
+                .on_note(cx.listener(move |root: &mut SplatRoot, note: &str, _, cx| {
                     if let Some((_, index)) = super::world(root)
                         && let Some(position) = index.position(id)
+                        && let Some(nav) =
+                            host.reader(root)
+                                .follow(&index.items[position], &index, note)
                     {
-                        let page = &mut root.app.world_page;
-                        let target = target
-                            .strip_prefix(crate::markdown_view::NOTE_LINK)
-                            .unwrap_or(target);
-                        if let Some(nav) =
-                            page.reader.follow(&index.items[position], &index, target)
-                        {
-                            page.take_nav(nav, &index);
-                        }
+                        host.take_nav(root, nav, &index);
                     }
                     cx.notify();
-                }),
-            ),
+                })),
         );
     }
     column.into_any_element()
 }
 
 /// What is here, its members, its history, and the lines other notes hold about it.
-fn related(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn related(
+    host: Host,
+    item: &Item,
+    index: &ContentIndex,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = theme::colors();
     let id = item.entry.id;
     let facts = crate::world::related::related_facts(item, index);
@@ -1113,7 +1311,9 @@ fn related(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> An
             .child(
                 kit::Link::new(("world-related", at), page.name)
                     .wrap()
-                    .on_click(on_item(cx, id, move |page, _, _, _| page.reader.go_to(at))),
+                    .on_click(on_item(cx, host, id, move |page, _, _, _| {
+                        page.reader.go_to(at)
+                    })),
             )
             .when(!page.detail.is_empty(), |row| {
                 row.child(kit::text(theme::Type::Small, c.muted, page.detail))
@@ -1182,7 +1382,7 @@ fn related(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> An
             section = section.child(
                 kit::Link::new(("world-from-page", source), name)
                     .wrap()
-                    .on_click(on_item(cx, id, move |page, _, _, _| {
+                    .on_click(on_item(cx, host, id, move |page, _, _, _| {
                         page.reader.go_to(source)
                     })),
             );
@@ -1200,7 +1400,7 @@ fn related(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> An
                             words.child(kit::text(theme::Type::Small, c.text, line.label.clone()))
                         })
                         .child(kit::text(theme::Type::Small, c.text, line.text))
-                        .on_click(on_item(cx, id, move |page, _, index, _| {
+                        .on_click(on_item(cx, host, id, move |page, _, index, _| {
                             page.reader.show_heading(heading.clone());
                             page.take_nav(Nav::Item(source), index);
                             None
@@ -1229,7 +1429,7 @@ fn related(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> An
             line = line.child(
                 kit::Link::new(("world-also", source), name)
                     .wrap()
-                    .on_click(on_item(cx, id, move |page, _, _, _| {
+                    .on_click(on_item(cx, host, id, move |page, _, _, _| {
                         page.reader.go_to(source)
                     })),
             );
@@ -1240,17 +1440,16 @@ fn related(item: &Item, index: &ContentIndex, cx: &mut Context<SplatRoot>) -> An
 }
 
 /// `Give this note a type`: Make NPC, Make location, or a type of the DM's own.
-fn make_type(root: &mut SplatRoot, item: &Item, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn make_type(
+    root: &mut SplatRoot,
+    host: Host,
+    item: &Item,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let id = item.entry.id;
-    let other = root
-        .app
-        .world_page
-        .reader
-        .other_type()
-        .trim()
-        .to_lowercase();
+    let other = host.reader(root).other_type().trim().to_lowercase();
     let make = move |cx: &mut Context<SplatRoot>, kind: String| {
-        on_item::<gpui::ClickEvent>(cx, id, move |page, item, _, campaign| {
+        on_item::<gpui::ClickEvent>(cx, host, id, move |page, item, _, campaign| {
             page.reader.make_type(campaign, item, &kind)
         })
     };
@@ -1284,11 +1483,11 @@ fn make_type(root: &mut SplatRoot, item: &Item, cx: &mut Context<SplatRoot>) -> 
             None,
             kit::TextField::new(
                 ("world-other-type", id.as_u128() as u64),
-                root.app.world_page.reader.other_type().to_owned(),
+                host.reader(root).other_type().to_owned(),
             )
             .name("Another type")
-            .on_change(on_words(cx, |root, words| {
-                root.app.world_page.reader.set_other_type(words);
+            .on_change(on_words(cx, move |root, words| {
+                host.reader(root).set_other_type(words);
             })),
         )),
     );
@@ -1308,37 +1507,6 @@ fn make_type(root: &mut SplatRoot, item: &Item, cx: &mut Context<SplatRoot>) -> 
         .child(kit::help(crate::world::TYPE_STORAGE)),
     );
     div().pt(theme::M).child(section).into_any_element()
-}
-
-/// The end section of an entry: where it comes from and its identity.
-fn source(item: &Item, campaign: &Campaign) -> AnyElement {
-    let c = theme::colors();
-    let _ = campaign;
-    div()
-        .flex()
-        .flex_col()
-        .max_w(theme::READER_MEASURE)
-        .pt(theme::L)
-        .child(kit::rule())
-        .child(kit::gap(theme::M))
-        .child(
-            kit::QuietSection::new(
-                ("world-source", item.entry.id.as_u128() as u64),
-                "Source and identifiers",
-            )
-            .child(kit::text(theme::Type::Body, c.text, item.owner.clone()))
-            .child(kit::text(
-                theme::Type::Body,
-                c.text,
-                item.entry.path.clone(),
-            ))
-            .child(kit::text(
-                theme::Type::Body,
-                c.text,
-                format!("{} · {}", item.entry.kind, item.entry.id),
-            )),
-        )
-        .into_any_element()
 }
 
 #[allow(dead_code, reason = "the colour a value takes, for a check")]

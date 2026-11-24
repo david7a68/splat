@@ -466,3 +466,185 @@ fn world_at_960() {
     shell.click("Generate NPC");
     shell.capture("world-held-npc__01-held-npc-card__960x640");
 }
+
+/// A malformed value is flagged on its line, below the file line and above the values, and
+/// reading never changes the file (egui scenario `file-formats`).
+#[test]
+fn file_formats_flagged_value() {
+    let mut shell = Shell::with_size("file-formats", Seed::Formats, default_size());
+    shell.update(|root, _, cx| root.show_page(Page::World, cx));
+    until(&mut shell, "the notes load", |root| {
+        root.app.lookup.index().is_some()
+    });
+    let path = root(&mut shell).join("NPCs/Malformed.md");
+    let before = std::fs::read(&path).unwrap();
+    let id = shell.read(|root| {
+        let index = root.app.lookup.index().unwrap();
+        index
+            .items
+            .iter()
+            .find(|item| item.entry.name == "Malformed")
+            .map(|item| item.entry.id)
+            .expect("the fixture's Malformed note")
+    });
+    shell.update(|root, _, _| root.app.world_page.press_note(id));
+    shell.settle();
+    let file = shell.bounds("Show file").expect("the file line");
+    let status = shell.bounds("Change Status").expect("the Status row");
+    assert!(file.bottom() < status.top());
+    shell.capture("file-formats__01-flagged-malformed-value__1200x800");
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        before,
+        "reading never writes"
+    );
+}
+
+/// An NPC is read as every entry is (`view::show_with_related`): its dice roll for it, and a
+/// note link in its words opens the note it names at the heading it names.
+#[test]
+fn world_entry_rolls_and_links_to_a_heading() {
+    let mut shell = world("world-entry-links", default_size());
+    let check = splat::content::dice_text::RollLink::d20(
+        splat::content::dice_text::D20::Check,
+        6,
+        "Strength",
+    );
+    let warden = splat::character::stable_id("NPCs/Gate Warden.md");
+    let file = root(&mut shell).join("NPCs/Gate Warden.md");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(
+        &file,
+        splat::content::formats::fixture(
+            "World.md",
+            &format!(
+                "splat_id: {warden}\nsplat_kind: world\nsplat_name: Gate Warden\nsplat_world:\n  type: npc\n"
+            ),
+            &format!(
+                "\n# Gate Warden\n\n{} to lift the gate.\n\n[[Night Watch#Later that night|Night roster]] is hers to keep.\n",
+                check.markdown("+6")
+            ),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        root(&mut shell).join("Night Watch.md"),
+        format!(
+            "# Night Watch\n\n{}## Later that night\n\nThe end.\n",
+            "Words on a line.\n\n".repeat(60)
+        ),
+    )
+    .unwrap();
+    reload(&mut shell, Some(warden));
+    shell.update(|root, _, _| root.app.world_page.press_note(warden));
+    shell.settle();
+    // The dice number rolls for this NPC.
+    let paragraph = |start: &str| {
+        crate::gui::kit::probe::names()
+            .into_iter()
+            .find(|name| name.starts_with(start))
+            .unwrap_or_else(|| panic!("no linked paragraph starts with {start:?}"))
+    };
+    let dice = shell.bounds(&paragraph("+6")).expect("the dice line");
+    shell.click_at(gpui::point(dice.left() + px(8.0), dice.top() + px(10.0)));
+    assert!(
+        shell
+            .read(|root| crate::rolls::plain::preview_words(
+                root.bridge.ctx(),
+                "Gate Warden",
+                &[&check]
+            ))
+            .is_some(),
+        "the dice link rolled for Gate Warden"
+    );
+    shell.capture("world-entry-links__01-npc-with-dice-and-link__1200x800");
+    // The note link opens Night Watch in World, scrolled to its heading.
+    let link = shell
+        .bounds(&paragraph("Night roster"))
+        .expect("the link line");
+    shell.click_at(gpui::point(link.left() + px(8.0), link.top() + px(10.0)));
+    let night = shell.read(|root| {
+        root.app
+            .lookup
+            .index()
+            .and_then(|index| {
+                index
+                    .items
+                    .iter()
+                    .find(|item| item.entry.name == "Night Watch")
+                    .map(|item| item.entry.id)
+            })
+            .expect("the Night Watch note")
+    });
+    assert_eq!(
+        shell.read(|root| root.app.world_page.selected()),
+        Some(night),
+        "the link opened Night Watch in World"
+    );
+    shell.settle();
+    let offset = shell.read(|root| root.pages.world.jump.scroll.offset().y);
+    assert!(
+        offset < px(-200.0),
+        "the reader scrolled to Later that night: {offset:?}"
+    );
+    shell.capture("world-entry-links__02-note-at-its-heading__1200x800");
+}
+
+/// The held NPC's card names the campaign's table it used; the table's link opens that note,
+/// and a bad table's `Open Names.md` does too (egui scenario `generator-tables`: the card leaves
+/// a note link, which the frame logic opens in Lookup by its path).
+#[test]
+fn world_card_table_links_open_the_note() {
+    let mut shell = world("generator-tables", default_size());
+    let names = root(&mut shell).join("Names.md");
+    std::fs::write(
+        &names,
+        "# Names\n\n<!-- splat:rolls key=npc-name dice=1d2 -->\n\n| d2 | Name |\n|---|---|\n| 1-2 | Tally |\n",
+    )
+    .unwrap();
+    reload(&mut shell, None);
+    shell.click("New ▾");
+    shell.click("Generate NPC");
+    assert_eq!(
+        shell.read(|root| root.app.world_page.held_npc().map(str::to_owned)),
+        Some("Tally".to_owned())
+    );
+    shell.capture("generator-tables__01-generator-campaign-table__1200x800");
+    let showing = |shell: &mut Shell| {
+        shell.read(|root| match root.app.lookup.showing() {
+            crate::lookup::panel_view::Showing::Entry(at) => root
+                .app
+                .lookup
+                .index()
+                .map(|index| index.items[at].entry.name.clone()),
+            _ => None,
+        })
+    };
+    shell.click("Names.md");
+    assert!(shell.read(|root| root.app.lookup.open), "Lookup opens");
+    assert_eq!(
+        showing(&mut shell).as_deref(),
+        Some("Names"),
+        "the table's note"
+    );
+    assert_eq!(
+        shell.read(|root| root.app.lookup.query().to_owned()),
+        "",
+        "the note opens by its path, not by a search"
+    );
+    shell.press("escape");
+    shell.click("Discard");
+    std::fs::write(
+        &names,
+        "# Names\n\n<!-- splat:rolls key=npc-name dice=1d6 -->\n\n| d6 | Name |\n|---|---|\n| 1 | Tally |\n",
+    )
+    .unwrap();
+    reload(&mut shell, None);
+    shell.click("New ▾");
+    shell.click("Generate NPC");
+    shell.capture("generator-tables__02-generator-bad-table__1200x800");
+    shell.click("Open Names.md");
+    assert!(shell.read(|root| root.app.lookup.open), "Lookup opens");
+    assert_eq!(showing(&mut shell).as_deref(), Some("Names"));
+}

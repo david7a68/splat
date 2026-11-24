@@ -202,13 +202,14 @@ pub(super) fn render(
         Showing::Written(at) => written(root, at, &query, cx),
         Showing::Entry(position) => super::entry::render(root, position, window, cx),
         Showing::Generated | Showing::Nothing => {
-            if query.is_empty() {
-                kit::help(crate::lookup::SEARCH_HELP)
-                    .pt(S)
-                    .into_any_element()
-            } else {
-                div().into_any_element()
+            let help = query
+                .is_empty()
+                .then(|| kit::help(crate::lookup::SEARCH_HELP).pt(S));
+            let mut pane = kit::Pane::new("lookup-nothing").flush().children(help);
+            for line in super::entry::gone_lines(root, cx) {
+                pane = pane.footer(line);
             }
+            pane.into_any_element()
         }
     };
     column
@@ -378,21 +379,51 @@ fn card(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
                 ),
         );
     }
-    for source in sources {
+    for (at, source) in sources.iter().enumerate() {
         let (kind, path) = source.split_once(": ").unwrap_or(("npc-name", source));
         let label = if kind == "npc-name" {
             "Names".to_owned()
         } else {
             crate::design::reader::human_label(kind)
         };
-        column = column.child(kit::text(
-            Type::Small,
-            c.muted,
-            format!("{label} from {path}"),
-        ));
+        let path = path.to_owned();
+        column = column.child(
+            div()
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .items_center()
+                .gap(XS)
+                .child(kit::text(Type::Small, c.muted, format!("{label} from")))
+                .child(
+                    Link::new(("lookup-card-source", at), path.clone())
+                        .wrap()
+                        .on_click(cx.listener(move |root, _, _, cx| {
+                            crate::gui::pages::world::panes::open_note(root, &path);
+                            cx.notify();
+                        })),
+                ),
+        );
     }
-    for problem in problems {
-        column = column.child(Message::new(Tone::Warning, problem.message.clone()));
+    // Each problem's table file opens from its message; the hover says the line to fix.
+    for (at, problem) in problems.iter().enumerate() {
+        let path = problem.path.clone();
+        column = column.child(
+            div().max_w(crate::gui::theme::READER_MEASURE).child(
+                Message::new(Tone::Warning, problem.message.clone()).action(
+                    Button::secondary(
+                        ("lookup-card-problem", at),
+                        format!("Open {}", problem.path),
+                    )
+                    .density(Density::Read)
+                    .hint(problem.marker.clone())
+                    .on_click(cx.listener(move |root, _, _, cx| {
+                        crate::gui::pages::world::panes::open_note(root, &path);
+                        cx.notify();
+                    })),
+                ),
+            ),
+        );
     }
     if let Some(path) = lookup.generated_path() {
         column = column.child(kit::text(Type::Small, c.muted, format!("Will save {path}")));

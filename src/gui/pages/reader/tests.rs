@@ -103,6 +103,8 @@ fn with_index(shell: &mut Shell) {
             return;
         }
         shell.wait(std::time::Duration::from_millis(100));
+        // The index loads on a real thread: give it real time too, as a loaded machine needs.
+        std::thread::sleep(std::time::Duration::from_millis(20));
     }
     panic!("the content index never loaded");
 }

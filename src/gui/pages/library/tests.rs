@@ -357,3 +357,67 @@ fn remove_package_in_use() {
         "Undo registers it again"
     );
 }
+
+/// Search the Library for `name` and open the found entry whose row starts with it.
+fn open_found(shell: &mut Shell, name: &str) {
+    shell.click("id:library-search");
+    shell.press("ctrl-a");
+    shell.type_text(name);
+    let row = crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|row| row.starts_with(&format!("{name} · ")))
+        .unwrap_or_else(|| panic!("no row for {name}"));
+    shell.click(&row);
+    assert_eq!(
+        shell.read(|root| root.app.library.open_name().map(str::to_owned)),
+        Some(name.to_owned())
+    );
+}
+
+/// The Library's Read is the entry reader (egui `view::show_with_related`): a campaign
+/// creature's stat block with its rolling ability table and its action tile, a flagged HP cell,
+/// a flagged spell cell and an item's facts (egui scenario `stat-formats`).
+#[test]
+fn stat_formats() {
+    let mut shell = Shell::with_size("stat-formats", Seed::Formats, size(px(960.0), px(640.0)));
+    library(&mut shell);
+    open_found(&mut shell, "Slate Wolf");
+    shell.capture("stat-formats__01-schema-2-creature-library__960x640");
+    let mut shell = Shell::new("stat-formats", Seed::Formats);
+    library(&mut shell);
+    open_found(&mut shell, "Slate Wolf");
+    // The stat block: Dexterity's modifier rolls its check, Bite is a tile, and the closed end
+    // sections follow.
+    let dexterity = splat::content::dice_text::RollLink::d20(
+        splat::content::dice_text::D20::Check,
+        2,
+        "Dexterity",
+    );
+    let modifier = format!("{} +2", crate::rolls::link_label(&dexterity));
+    assert!(
+        shell.bounds(&modifier).is_some(),
+        "the ability table's modifier rolls: {:?}",
+        crate::gui::kit::probe::names()
+    );
+    assert!(shell.bounds("Bite").is_some(), "Bite is an action tile");
+    assert!(shell.bounds("Source and identifiers").is_some());
+    shell.capture("stat-formats__01-schema-2-creature-library__1200x800");
+    // A press on the modifier rolls it for this creature, as the Reader's dice do.
+    shell.click(&modifier);
+    assert!(
+        shell
+            .read(|root| crate::rolls::plain::preview_words(
+                root.bridge.ctx(),
+                "Slate Wolf",
+                &[&dexterity]
+            ))
+            .is_some(),
+        "the check was rolled for Slate Wolf"
+    );
+    open_found(&mut shell, "Flagged Wolf");
+    shell.capture("stat-formats__02-flagged-hp-cell__1200x800");
+    open_found(&mut shell, "Flagged Spark");
+    shell.capture("stat-formats__03-flagged-spell-cell__1200x800");
+    open_found(&mut shell, "Bound Charm");
+    shell.capture("stat-formats__04-item-facts__1200x800");
+}

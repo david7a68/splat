@@ -367,6 +367,20 @@ pub struct ReaderView {
     pub draft: String,
     pub draft_revision: u64,
     pub link_choices: Vec<(usize, String)>,
+    /// The entry as the reader reads it (the draft's words while one is open), or None when
+    /// they cannot be parsed; with the note's name and where it comes from, for the entry
+    /// reader (egui `view::show_with_related`).
+    pub entry: Option<Entry>,
+    pub name: String,
+    pub origin: ReaderOrigin,
+}
+
+/// Where the open entry comes from (egui `view::Origin`): its path, its owner's label, and
+/// whether it is built in.
+pub struct ReaderOrigin {
+    pub path: String,
+    pub owner: String,
+    pub builtin: bool,
 }
 
 impl Library {
@@ -378,6 +392,14 @@ impl Library {
     /// Whether the catalogue is loaded.
     pub fn loaded(&self) -> bool {
         self.loaded.is_some()
+    }
+
+    /// What the reader's related, feature and spell links open: the Library's own notes, by
+    /// their place (`open_link`).
+    pub fn links(&self) -> Option<&dyn crate::library::view::Links> {
+        self.loaded
+            .as_ref()
+            .map(|loaded| loaded as &dyn crate::library::view::Links)
     }
 
     /// A failed load with nothing loaded: its fault's tone and words.
@@ -2071,6 +2093,13 @@ impl Library {
                 draft: self.draft.as_str().to_owned(),
                 draft_revision: self.draft_revision,
                 link_choices,
+                entry: parsed.as_ref().ok().cloned(),
+                name: note.name().to_owned(),
+                origin: ReaderOrigin {
+                    path: note.path.clone(),
+                    owner: note.owner.label(),
+                    builtin: note.owner == Owner::Builtin,
+                },
             },
             footer,
         ))
