@@ -974,11 +974,7 @@ pub(crate) const STAGED: &[Staged] = &[
     (
         "save_row_state(",
         "Use `design::save_row` with a `DraftState`: it decides the word, Save's weight and its reason.",
-        &[
-            ("src/campaign_content.rs", 1),
-            ("src/campaigns.rs", 1),
-            ("src/design/components.rs", 1),
-        ],
+        &[("src/design/components.rs", 1)],
     ),
     (
         "consume_key(egui::Modifiers::COMMAND, egui::Key::S)",

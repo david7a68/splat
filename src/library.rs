@@ -3030,9 +3030,9 @@ mod tests {
                 "src/campaigns.rs",
                 &[
                     ("kept_result", 0),
-                    (".blocked(", 4),
+                    (".blocked(", 0),
                     ("blocked_if(", 0),
-                    ("design::locked(", 1),
+                    ("design::locked(", 0),
                     ("undo_message(", 0),
                 ],
             ),

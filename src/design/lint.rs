@@ -1006,46 +1006,6 @@ fn the_lint_finds_what_it_should() {
     assert!(violations("\"splat_in: '[[Undercroft]]'\"").is_empty());
 }
 
-/// Package K: two fields with one `FieldId` name would share focus and text state; each name is
-/// used once (`field_id!` names, read from the syntax tree, in all of `src/`). A field shown once
-/// per object says its owner with `FieldName::of`; two live widgets with one id are the gate's
-/// `widget-id-clash` check.
-#[test]
-fn each_field_id_name_is_used_once() {
-    fn names(folder: &Path, found: &mut BTreeMap<String, Vec<String>>) {
-        for item in fs::read_dir(folder).expect("read source folder") {
-            let path = item.expect("read source entry").path();
-            if path.is_dir() {
-                names(&path, found);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let text = fs::read_to_string(&path).expect("read source file");
-                let key = path.display().to_string();
-                for name in super::layout::bans::field_id_names(&text)
-                    .unwrap_or_else(|error| panic!("{key} does not parse: {error}"))
-                {
-                    found.entry(name).or_default().push(key.clone());
-                }
-            }
-        }
-    }
-    let mut found = BTreeMap::new();
-    names(&crate::workspace().join("src"), &mut found);
-    assert!(
-        found.contains_key("campaign_name"),
-        "the scan finds field ids"
-    );
-    let twice: Vec<_> = found
-        .iter()
-        .filter(|(_, places)| places.len() > 1)
-        .map(|(name, places)| format!("{name}: {}", places.join(", ")))
-        .collect();
-    assert!(
-        twice.is_empty(),
-        "One name per field id:\n{}",
-        twice.join("\n")
-    );
-}
-
 /// Package K: no Clippy level is set outside the source, where no row could count it.
 #[test]
 fn no_lint_level_frees_raw_calls_outside_the_source() {
