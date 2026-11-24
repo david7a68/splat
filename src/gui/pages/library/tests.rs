@@ -886,3 +886,45 @@ fn creature_filter() {
     assert!(shell.bounds("Filter creatures").is_some());
     shell.capture("creature-filter__02-search-terms__1200x800");
 }
+
+/// Scenario `reader-tables`, step 01: a package rule whose table is wider than the reader, read
+/// in the Library at each size. Where it does not fit, the table scrolls sideways and says so.
+#[test]
+fn reader_tables_in_library() {
+    const TABLE: &str = "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n\
+| 5 | +3 | Memorize Spell | 4 | 9 | 4 | 3 | 2 | 0 | 0 | 0 | 0 | 0 | Ninth-slot |\n\n\
+The table leaves this note readable.\n\n\
+Read the row for your class level. A slot is spent when you cast a spell of that level or higher, and every slot comes back when you finish a Long Rest, so plan the hardest fights of the day around the slots you still have.\n";
+    for (w, h, scrolls) in [
+        (1200.0, 800.0, true),
+        (960.0, 640.0, true),
+        (1920.0, 1080.0, false),
+    ] {
+        let mut shell = Shell::with_size("reader-tables", Seed::Campaign, size(px(w), px(h)));
+        let folder = package_folder(&mut shell);
+        let note = splat::content::formats::fixture(
+            "Rule.md",
+            &format!(
+                "splat_id: {}\nsplat_kind: rule\nsplat_key: ashen_marches:rule/spell_progression\nsplat_name: Spell Progression\nsplat_rule: {{}}\n",
+                splat::character::stable_id("spell-progression")
+            ),
+            &format!("\n# Spell Progression\n\n{TABLE}"),
+        )
+        .unwrap();
+        std::fs::write(folder.join("Rules/Spell Progression.md"), note).unwrap();
+        library(&mut shell);
+        scope(&mut shell, "Ashen Marches");
+        open_row(&mut shell, "Spell Progression · ");
+        assert_eq!(open_name(&mut shell).as_deref(), Some("Spell Progression"));
+        let name = format!("reader-tables__01-wide-table-in-library__{w}x{h}");
+        assert_eq!(
+            shell
+                .bounds("More columns: scroll sideways or use Shift+wheel.")
+                .is_some(),
+            scrolls,
+            "{name}: a table scrolls sideways only where it does not fit"
+        );
+        shell.capture(&name);
+    }
+}
