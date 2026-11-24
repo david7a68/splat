@@ -1156,7 +1156,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "note_editor", &[Ban::Body]),
         (
             "src/timeline/page.rs",
-            "detail",
+            "apply_detail",
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
             &[Ban::ByOwner(1)],
         ),

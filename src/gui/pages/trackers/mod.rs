@@ -42,7 +42,7 @@ pub struct State {
     /// The view's scroll, which opens at its top when Trackers comes into view.
     scroll: ScrollHandle,
     /// The open sections of tracker histories in a reader, by note and member key.
-    #[allow(dead_code, reason = "World's reader draws the histories (`history::render`)")]
+    #[allow(dead_code, reason = "World’s reader draws the histories (`history::render`)")]
     pub(crate) history_open: HashSet<(uuid::Uuid, String)>,
 }
 
@@ -771,5 +771,5 @@ pub(crate) fn act(
 }
 
 /// The history of a house rule note in its reader (World's hook): see `history::render`.
-#[allow(unused_imports, reason = "World's reader calls these (docs/gpui-port.md)")]
+#[allow(unused_imports, reason = "World’s reader calls these (docs/gpui-port.md)")]
 pub(crate) use history::{footer as history_footer, render as render_history};

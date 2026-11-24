@@ -65,7 +65,8 @@ pub(crate) fn render(
     // The label, then the table menu and the dice words.
     let mut menu = kit::MenuButton::new(
         part(id, "table"),
-        kit::Button::quiet(part(id, "table-button"), format!("{word} ▾"))
+        kit::Button::quiet(part(id, "table-button"), word.clone())
+            .icon(icons::DOWN)
             .line_start()
             .density(Density::Read),
     );

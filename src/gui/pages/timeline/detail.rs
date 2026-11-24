@@ -46,6 +46,7 @@ fn edit(root: &mut SplatRoot, id: &str, edit: impl FnOnce(&mut crate::timeline::
 pub(crate) fn render(
     root: &mut SplatRoot,
     id: &str,
+    width: gpui::Pixels,
     window: &mut Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
@@ -133,10 +134,33 @@ pub(crate) fn render(
         event.kind.word()
     };
     let kind_icon = crate::timeline::kind_icon(event.kind);
+    // The title line keeps its title, its save state and its menu on one line; Copy link takes
+    // a line of its own under them when the column has no room for it there.
+    let measure = crate::gui::pages::trackers::measure::width;
+    let status_room = saving
+        .iter()
+        .map(|state| measure(window, Type::Small, state.word))
+        .fold(px(0.0), gpui::Pixels::max)
+        + crate::gui::theme::ICON_SLOT;
+    let need = measure(window, Type::Small, kind_word)
+        + crate::gui::theme::ICON_SLOT
+        + measure(window, Type::Heading, &title)
+        + crate::gui::pages::trackers::measure::button_width(
+            window,
+            if copied { "Copied" } else { "Copy link" },
+            true,
+        )
+        + status_room
+        + Density::Read.control()
+        + S * 5.0;
+    let (copy_inline, copy_below) = if need > width - M {
+        (None, Some(copy))
+    } else {
+        (Some(copy), None)
+    };
     let heading = div()
         .flex()
         .flex_row()
-        .flex_wrap()
         .items_center()
         .gap(S)
         .min_h(Density::Read.control())
@@ -146,18 +170,21 @@ pub(crate) fn render(
                 .flex_row()
                 .items_center()
                 .gap(XS)
-                .min_w(px(180.0))
+                .min_w_0()
                 .flex_1()
                 .child(kit::icon(kind_icon, Type::Small, c.muted))
                 .when(!kind_word.is_empty(), |line| {
-                    line.child(kit::text(Type::Small, c.muted, kind_word))
+                    line.child(kit::text(Type::Small, c.muted, kind_word).flex_none())
                 })
                 .child(kit::text::one_line(Type::Heading, c.text, title.clone()).min_w_0()),
         )
-        .child(copy)
-        .child(kit::status(&now))
+        .children(copy_inline)
+        .child(div().flex_none().w(status_room).child(kit::status(&now)))
         .child(menu);
     let mut header = div().flex().flex_col().gap(XS).pr(M).child(heading);
+    if let Some(copy) = copy_below {
+        header = header.child(div().flex().flex_row().child(copy));
+    }
     if let Some(reason) = saving_blocked(book) {
         header = header.child(kit::text(Type::Small, c.muted, reason));
     }

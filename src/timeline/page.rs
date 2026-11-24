@@ -413,7 +413,7 @@ impl Fault for FileFault {
     clippy::disallowed_methods,
     reason = "words of a file, of the system or of the events, as text (design::results::STAGED_ALLOWS)"
 )]
-fn as_sentence(words: &str) -> Sentence {
+pub fn as_sentence(words: &str) -> Sentence {
     Sentence::outside(words).unwrap_or(crate::sentence!("Something changed."))
 }
 
@@ -1507,10 +1507,6 @@ impl TimelinePage {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn detail(
         &mut self,
         ui: &mut egui::Ui,
@@ -1966,6 +1962,10 @@ impl TimelinePage {
     /// What the open event's form did in one frame, applied after it drew: the edit, the
     /// length its field gave the event, a journey's checks act, its Undo, the rest ruling, the
     /// new place, and Remove.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn apply_detail(
         &mut self,
         book: &mut Book,

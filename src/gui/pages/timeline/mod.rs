@@ -194,9 +194,7 @@ pub(crate) fn render(
     }
     page = page.child(add_strip(root, cx));
     if let Some(words) = root.app.timeline_page.dated.clone() {
-        let notice = Notice::warning(crate::design::outcome::Sentence::outside(words).unwrap_or(
-            crate::sentence!("This session looks like an old one."),
-        ))
+        let notice = Notice::warning(timeline::page::as_sentence(&words))
         .choice(Choice::new(MessageChoice::Choice("Play this one"), ()));
         page = page.child(div().pb(S).children(kit::messages::lines(
             "timeline-dated",
@@ -266,7 +264,7 @@ pub(crate) fn render(
                     root.app.timeline_page.select(None);
                     cx.notify();
                 }));
-            let form = detail::render(root, &id, window, cx);
+            let form = detail::render(root, &id, page_width, window, cx);
             let footer = list_footer(root, Some(&id), cx);
             return page
                 .child(back)
@@ -296,7 +294,7 @@ pub(crate) fn render(
     let content = page_width.min(LIST_MEASURE + width);
     let list = list::render(root, window, cx);
     let footer = list_footer(root, Some(&id), cx);
-    let form = detail::render(root, &id, window, cx);
+    let form = detail::render(root, &id, width - S, window, cx);
     page.child(
         div()
             .flex()
@@ -459,13 +457,8 @@ impl crate::design::outcome::Fault for Unread {
     fn severity(&self) -> crate::design::outcome::Severity {
         crate::design::outcome::Severity::CannotRead
     }
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the book's words about its file, as egui's `FileFault::Unread`"
-    )]
     fn cause(&self) -> crate::design::outcome::Sentence {
-        crate::design::outcome::Sentence::outside(self.0.clone())
-            .unwrap_or(crate::sentence!("Something changed."))
+        timeline::page::as_sentence(&self.0)
     }
 }
 
@@ -476,13 +469,8 @@ impl crate::design::outcome::Fault for Changed {
     fn severity(&self) -> crate::design::outcome::Severity {
         crate::design::outcome::Severity::NeedsFixing
     }
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the Timeline's own words, as egui's `FileFault::Changed`"
-    )]
     fn cause(&self) -> crate::design::outcome::Sentence {
-        crate::design::outcome::Sentence::outside(crate::timeline::CHANGED_UNDER_DRAFT)
-            .unwrap_or(crate::sentence!("Something changed."))
+        timeline::page::as_sentence(crate::timeline::CHANGED_UNDER_DRAFT)
     }
 }
 
@@ -537,7 +525,7 @@ fn add_strip(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> impl IntoElement 
         .items_center()
         .gap(S)
         .pb(S)
-        .child(kit::label("Add", 0))
+        .child(div().ty(Type::Label).text_color(colors().text).child("Add"))
         .children(ADD_KINDS.iter().map(|&kind| {
             kit::Button::quiet(
                 SharedString::from(format!("timeline-add-{}", kind.word())),

@@ -5,7 +5,7 @@
 //! stamp has `Remove` in its menu, whose result and one Undo stand in the footer.
 #![allow(
     dead_code,
-    reason = "World's reader of a house rule note calls these (docs/gpui-port.md)"
+    reason = "World’s reader of a house rule note calls these (docs/gpui-port.md)"
 )]
 use super::{TrackerFault, fault_message, measure, section_heading};
 use crate::design::outcome::{Messages, PaneFrame};
