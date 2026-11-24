@@ -621,12 +621,7 @@ impl Trackers {
         {
             self.manifest = Some(index.manifest(campaign));
             self.index = Some(index);
-            let rules = self.rules_now();
-            if !rules.same_definitions(&self.rules) {
-                // New definitions: the value column fits them afresh.
-                self.view.widest_value = 0.0;
-            }
-            self.rules = rules;
+            self.rules = self.rules_now();
             self.settle();
             self.last_check = None;
         }
@@ -733,8 +728,6 @@ impl Trackers {
     /// Work the values, the notices, the histories and the newest act out of the ledger again.
     fn settle(&mut self) {
         self.count_settle();
-        // Every row's words were fitted for the old revision: none is read again.
-        self.view.history_fits.retain(|_| false);
         self.state = replay(&self.rules, &self.ledger, &self.today);
         self.history = history::rows(&self.rules, &self.ledger, &self.state);
         self.problems = history::problems(&self.rules, &self.state);
@@ -847,7 +840,6 @@ impl Trackers {
         });
         let done = self.finish(failed, result);
         if changed {
-            self.view.widest_value = 0.0;
             self.rules = rules;
             self.settle();
         }
