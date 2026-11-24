@@ -117,6 +117,65 @@ fn the_global_keys_open_and_close_panels() {
     assert!(shell.read(|root| root.app.lookup.open && !root.app.sessions.notes_open));
     shell.press("escape");
     assert!(shell.read(|root| !root.app.lookup.open && root.app.sessions.notes_open));
+    // The keyboard in the notes panel's editor, then the panel closed by its own key: the
+    // editor's state lives on, but it left the window, so the keyboard comes back to the root
+    // and the global keys still work. (A session first, so the panel has a note.)
+    shell.press("ctrl-j");
+    shell.click("Session");
+    shell.click("id:session-empty-new");
+    shell.click("Session title");
+    shell.type_text("Ash night");
+    shell.press("enter");
+    wait_for(&mut shell, "the session is made", |root| {
+        !root.app.sessions.gv_form_open() && root.app.sessions.gv_selected().is_some()
+    });
+    shell.click("Encounters");
+    shell.press("ctrl-j");
+    assert!(shell.read(|root| root.app.sessions.notes_open));
+    shell.click("Note text");
+    shell.type_text("Ash");
+    shell.press("ctrl-j");
+    assert!(!shell.read(|root| root.app.sessions.notes_open));
+    shell.press("ctrl-k");
+    assert!(
+        shell.read(|root| root.app.lookup.open),
+        "Ctrl+K works after the focused panel closed"
+    );
+    shell.press("escape");
+    assert!(!shell.read(|root| root.app.lookup.open));
+}
+
+/// Escape: the root's order (an open menu, then Lookup) runs before a page's own Escape binding.
+/// The session form binds Escape to Cancel; a drop-down open in it, or Lookup open beside it,
+/// takes the Escape first and the DM's typed words stay.
+#[test]
+fn escape_takes_the_menu_and_lookup_before_the_page() {
+    let mut shell = Shell::new("gpui-escape", Seed::Campaign);
+    shell.click("Session");
+    shell.click("id:session-empty-new");
+    let form_open = |shell: &mut Shell| shell.read(|root| root.app.sessions.gv_form_open());
+    assert!(form_open(&mut shell), "New session opens the form");
+    shell.click("Session title");
+    shell.type_text("Bridge night");
+    shell.click("id:session-template");
+    let menu_open = |shell: &mut Shell| shell.update(|_, _, cx| super::kit::menu::any_open(cx));
+    assert!(menu_open(&mut shell), "the template list is open");
+    shell.press("escape");
+    assert!(!menu_open(&mut shell), "Escape closed the list");
+    assert!(form_open(&mut shell), "and not the form");
+    shell.press("ctrl-k");
+    assert!(shell.read(|root| root.app.lookup.open));
+    shell.click("Session title");
+    shell.press("escape");
+    assert!(
+        !shell.read(|root| root.app.lookup.open),
+        "Escape closed Lookup"
+    );
+    assert!(form_open(&mut shell), "and not the form");
+    // Nothing of the root's is open: the form's own Escape cancels it.
+    shell.click("Session title");
+    shell.press("escape");
+    assert!(!form_open(&mut shell), "Escape cancels the form");
 }
 
 /// The campaign switcher's menu opens from the rail and changes the campaign.
@@ -160,6 +219,22 @@ fn the_kit_parts_work() {
     shell.click("id:g-kind");
     shell.click("Spell");
     assert_eq!(gallery(&mut shell, |g| format!("{:?}", g.kind)), "Some(1)");
+    // A press on another menu's trigger while one is open closes the first and opens the second
+    // with the same press.
+    shell.click("Packages");
+    assert!(shell.bounds("Rename").is_some(), "the menu is open");
+    shell.click("id:g-kind");
+    assert!(shell.bounds("Rename").is_none(), "the menu closed");
+    assert!(
+        shell.bounds("Spell").is_some(),
+        "the drop-down opened with the same press"
+    );
+    shell.press("escape");
+    // A pane that overflows shows its scroll bar all the time, as egui's did.
+    assert_eq!(
+        shell.update(|_, _, cx| gpui_component::Theme::global(cx).scrollbar_mode),
+        gpui_component::scroll::ScrollbarMode::Always
+    );
     shell.click("Packages");
     shell.capture("gpui-kit__02-menu__1200x800");
     shell.click("Rename");
@@ -171,31 +246,31 @@ fn the_kit_parts_work() {
     assert_eq!(gallery(&mut shell, |g| g.tab.to_string()), "1");
     shell.click("Open dialog");
     shell.capture("gpui-kit__03-dialog__1200x800");
-    // The dialog took the keyboard, and Tab and Shift+Tab keep it inside: past its last action
-    // to its first, never to the page under it.
-    let dialog = shell
-        .update(|_, window, cx| window.focused(cx))
-        .expect("the dialog has the keyboard");
-    for keys in [
-        "tab",
-        "tab",
-        "tab",
-        "tab",
-        "tab",
-        "shift-tab",
-        "shift-tab",
-        "shift-tab",
-    ] {
-        shell.press(keys);
-        let (inside, moved) = shell.update(|_, window, cx| {
-            (
-                dialog.contains_focused(window, cx),
-                !dialog.is_focused(window),
-            )
-        });
+    // The safe action has the keyboard when the dialog opens: Enter keeps editing.
+    shell.press("enter");
+    assert_eq!(
+        gallery(&mut shell, |g| g.dialog.to_string()),
+        "false",
+        "Enter on the opened dialog pressed Keep editing"
+    );
+    shell.click("Open dialog");
+    // Tab and Shift+Tab keep the keyboard inside: past its last action to its first, never to
+    // the page under it. Its three actions come round again after three of either.
+    let focused = |shell: &mut Shell| {
+        shell
+            .update(|_, window, cx| window.focused(cx))
+            .expect("the dialog has the keyboard")
+    };
+    let start = focused(&mut shell);
+    for keys in ["tab", "shift-tab"] {
+        let mut seen = vec![start.clone()];
+        for _ in 0..3 {
+            shell.press(keys);
+            seen.push(focused(&mut shell));
+        }
         assert!(
-            inside && moved,
-            "after {keys}, the keyboard is on a control of the dialog"
+            seen[1] != seen[0] && seen[2] != seen[1] && seen[3] == seen[0],
+            "{keys} goes round the dialog's three actions"
         );
     }
     // The dialog covers the page: a press on the page's primary does nothing.
@@ -231,8 +306,16 @@ fn columns_keep_the_widths_the_dm_drags() {
         .bounds("Resize navigation column")
         .expect("the rail's splitter");
     let y = edge.center().y;
-    shell.drag(edge.center(), point(px(200.0), y));
+    // While the drag goes on the rail follows it, and nothing is written: the width is saved
+    // once, when the drag ends.
+    shell.hold_and_move(edge.center(), point(px(200.0), y));
     assert_eq!(shell.read(|root| root.rail_width()), px(200.0));
+    assert_eq!(
+        saved(&mut shell, "navigation"),
+        None,
+        "no write during a drag"
+    );
+    shell.release(point(px(200.0), y));
     assert_eq!(saved(&mut shell, "navigation"), Some(200.0));
     shell.capture("gpui-columns__01-rail-dragged__1200x800");
     let edge = shell
@@ -390,6 +473,14 @@ fn ctrl_s_saves_only_the_page_shown() {
     shell.click(&first("id:roster-menu:"));
     shell.click("Move down");
     assert!(encounter_dirty(&mut shell));
+    // The campaign cannot change with a draft open: the switcher shows its lock.
+    assert!(
+        shell
+            .bounds("Active campaign: The Emberfall Marches (locked)")
+            .is_some(),
+        "the switcher is locked: {:?}",
+        crate::gui::kit::probe::names()
+    );
     // A menu over the page: Ctrl+S waits.
     shell.click(&first("id:roster-menu:"));
     shell.press("ctrl-s");
@@ -478,5 +569,329 @@ fn frame_cost_report() {
     let library = shell.frame_cost(20);
     println!(
         "frame cost: Encounters list {quiet:?}; World with {notes} notes {world_few:?}, with {many} notes {world_many:?}; Library browse {library:?}"
+    );
+}
+
+/// A menu whose trigger is no longer drawn (its row went in a reload, its form closed) closes:
+/// no invisible menu keeps the global keys refused.
+#[test]
+fn a_menu_closes_when_its_trigger_goes() {
+    use super::kit::{Button, MenuButton, MenuItem};
+    use gpui::{IntoElement, ParentElement};
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let mut shell = Shell::new("gpui-menu-gone", Seed::Campaign);
+    let shown = Rc::new(Cell::new(true));
+    let draws = shown.clone();
+    shell.update(move |root, _, cx| {
+        let draws = draws.clone();
+        root.pages.reader.preview = Some(Rc::new(move |_, _, _| {
+            let mut page = gpui::div();
+            if draws.get() {
+                page = page.child(
+                    MenuButton::new("gone-menu", Button::secondary("gone-more", "More"))
+                        .item(MenuItem::new("Rename")),
+                );
+            }
+            page.into_any_element()
+        }));
+        cx.notify();
+    });
+    shell.click("More");
+    assert!(shell.bounds("Rename").is_some(), "the menu is open");
+    shown.set(false);
+    shell.update(|_, _, cx| cx.notify());
+    assert!(
+        !shell.update(|_, _, cx| super::kit::menu::any_open(cx)),
+        "the menu closed with its trigger"
+    );
+    shell.press("ctrl-k");
+    assert!(shell.read(|root| root.app.lookup.open), "Ctrl+K works");
+}
+
+/// A text editor's own edit (a command's result, words put in at the caret) keeps the DM's Undo
+/// history under it; words from elsewhere end it.
+#[test]
+fn a_program_write_keeps_the_text_undo_when_it_is_the_fields_own() {
+    use super::kit::{EditorHandle, TextEditor};
+    use gpui::IntoElement;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    let mut shell = Shell::new("gpui-text-undo", Seed::Campaign);
+    let kept: Rc<RefCell<Option<EditorHandle>>> = Rc::default();
+    let words: Rc<RefCell<String>> = Rc::default();
+    let (draw_kept, draw_words) = (kept.clone(), words.clone());
+    shell.update(move |root, _, cx| {
+        let (kept, words) = (draw_kept.clone(), draw_words.clone());
+        root.pages.reader.preview = Some(Rc::new(move |_, window, cx| {
+            let handle = kept
+                .borrow_mut()
+                .get_or_insert_with(|| EditorHandle::new("", window, cx))
+                .clone();
+            let typed = words.clone();
+            TextEditor::new("undo-editor", words.borrow().clone())
+                .handle(&handle)
+                .name("Undo editor")
+                .on_change(move |now: &str, _, _| *typed.borrow_mut() = now.to_owned())
+                .into_any_element()
+        }));
+        cx.notify();
+    });
+    let handle = || kept.borrow().clone().expect("the editor's handle");
+    let shown = |shell: &mut Shell, handle: &EditorHandle| {
+        let handle = handle.clone();
+        shell.update(move |_, _, cx| handle.words(cx).to_string())
+    };
+    shell.click("Undo editor");
+    shell.type_text("Ash");
+    assert_eq!(*words.borrow(), "Ash");
+    // The field's own edit (the caller's words change with it): the words change, and Ctrl+Z
+    // takes the change back.
+    let editor = handle();
+    let (own, model) = (editor.clone(), words.clone());
+    shell.update(move |_, window, cx| {
+        *model.borrow_mut() = "Ash falls".to_owned();
+        own.show_words("Ash falls", window, cx);
+    });
+    assert_eq!(shown(&mut shell, &editor), "Ash falls");
+    shell.press("ctrl-z");
+    assert_eq!(
+        shown(&mut shell, &editor),
+        "Ash",
+        "Ctrl+Z took back the field's own edit"
+    );
+    // Words from elsewhere end the history: Ctrl+Z keeps them.
+    let (other, model) = (editor.clone(), words.clone());
+    shell.update(move |_, window, cx| {
+        *model.borrow_mut() = "From disk".to_owned();
+        other.show_other_words("From disk", window, cx);
+    });
+    shell.press("ctrl-z");
+    assert_eq!(shown(&mut shell, &editor), "From disk");
+}
+
+/// A wrapped link in a row gives way to the row's other parts: its words wrap and never run
+/// under the button beside it (a long fight title before `Add rewards`).
+#[test]
+fn a_wrapped_link_gives_way_in_a_row() {
+    use super::kit::{Button, Link};
+    use gpui::{IntoElement, ParentElement, Styled};
+    let mut shell = Shell::new("gpui-link-wrap", Seed::Campaign);
+    shell.update(|root, _, cx| {
+        root.pages.reader.preview = Some(std::rc::Rc::new(|_, _, _| {
+            gpui::div()
+                .w(px(320.0))
+                .flex()
+                .flex_row()
+                .items_start()
+                .gap(super::theme::S)
+                .child(
+                    gpui::div().flex_1().min_w_0().child(
+                        Link::new(
+                            "long-title",
+                            "Wolves at the Ford Below the Burning Shrine Road",
+                        )
+                        .wrap(),
+                    ),
+                )
+                .child(Button::quiet("beside", "Add rewards"))
+                .into_any_element()
+        }));
+        cx.notify();
+    });
+    let link = shell
+        .bounds("Wolves at the Ford Below the Burning Shrine Road")
+        .expect("the link");
+    let button = shell.bounds("Add rewards").expect("the button");
+    assert!(
+        link.right() <= button.left(),
+        "the link {link:?} ends before the button {button:?}"
+    );
+    assert!(
+        link.size.height > super::theme::Type::Body.line() * 1.5,
+        "its words wrap: {link:?}"
+    );
+}
+
+/// The rail's Run slot shortens a long state to the word that matters (egui's
+/// `run_nav_detail`), and keeps a state that fits whole.
+#[test]
+fn the_run_slot_detail_fits_the_rail() {
+    let mut shell = Shell::new("gpui-run-detail", Seed::Campaign);
+    let fit = |shell: &mut Shell, detail: &'static str, width: f32| {
+        shell.update(move |_, window, _| super::kit::nav::fit_run_detail(window, detail, px(width)))
+    };
+    assert_eq!(fit(&mut shell, "Ended · Round 3", 120.0), "Ended");
+    assert_eq!(fit(&mut shell, "Round 2 · Paused", 120.0), "Paused");
+    assert_eq!(fit(&mut shell, "Ended · Round 3", 400.0), "Ended · Round 3");
+}
+
+/// Wait until `done`, letting the app's background work land (a load on a thread).
+fn wait_for(shell: &mut Shell, what: &str, done: impl Fn(&super::SplatRoot) -> bool) {
+    for _ in 0..400 {
+        if shell.read(&done) {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        shell.wait(std::time::Duration::from_millis(50));
+    }
+    assert!(shell.read(&done), "{what}");
+}
+
+/// The first target whose name starts with `prefix`.
+fn first_named(prefix: &str) -> String {
+    super::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with(prefix))
+        .unwrap_or_else(|| {
+            panic!(
+                "no target starts with {prefix:?}: {:?}",
+                super::kit::probe::names()
+            )
+        })
+}
+
+/// The app's dialogs (the egui `dialogs` scenario): the copy dialog and its destination menu,
+/// a renamed copy, its result and the copy's editor; then the close prompt over an unsaved
+/// Library draft, where Escape and Enter both keep editing.
+#[test]
+fn dialogs() {
+    let mut shell = Shell::new("dialogs", Seed::Campaign);
+    shell.click("Library");
+    wait_for(&mut shell, "the Library loads", |root| {
+        root.app.library.loaded() && !root.app.library.loading()
+    });
+    shell.click("Creatures");
+    shell.click(&first_named("Aboleth ·"));
+    shell.click("Copy to…");
+    wait_for(&mut shell, "the copy plan", |root| {
+        root.app
+            .copy_dialog
+            .as_ref()
+            .is_some_and(|dialog| dialog.plan().is_some())
+    });
+    shell.capture("dialogs__01-copy-dialog__1200x800");
+    shell.click("Destination");
+    shell.capture("dialogs__02-copy-destination-menu__1200x800");
+    shell.click("Campaign · The Emberfall Marches");
+    shell.click("Copy name");
+    shell.press("ctrl-a");
+    shell.type_text("Watch Aboleth");
+    wait_for(&mut shell, "the plan names the new file", |root| {
+        root.app
+            .copy_dialog
+            .as_ref()
+            .is_some_and(|dialog| dialog.name() == "Watch Aboleth" && dialog.plan().is_some())
+    });
+    shell.capture("dialogs__03-copy-renamed__1200x800");
+    shell.click("Create copy");
+    assert!(
+        shell.read(|root| root
+            .app
+            .copy_dialog
+            .as_ref()
+            .is_some_and(|dialog| dialog.completed().is_some())),
+        "Create copy writes the copy"
+    );
+    shell.capture("dialogs__04-copy-complete__1200x800");
+    shell.click("Edit the copy");
+    wait_for(&mut shell, "the copy opens", |root| {
+        root.app.copy_dialog.is_none() && !root.app.library.loading()
+    });
+    shell.capture("dialogs__05-edit-the-copy__1200x800");
+    // A Library draft, and the window's close button.
+    shell.click("id:library-scope");
+    shell.click("Ashen Marches");
+    shell.click("Ash Exposure · Rule");
+    shell.click("Edit Markdown");
+    shell.click("Markdown editor");
+    shell.press("ctrl-end");
+    shell.type_text(" Draft ruling.");
+    assert!(shell.read(|root| root.app.library.dirty()));
+    let close = |shell: &mut Shell| shell.update(|root, window, cx| root.should_close(window, cx));
+    assert!(!close(&mut shell), "the draft keeps the window open");
+    assert!(shell.read(|root| root.app.confirm_close));
+    shell.capture("dialogs__06-unsaved-changes-on-close__1200x800");
+    shell.press("escape");
+    assert!(
+        !shell.read(|root| root.app.confirm_close),
+        "Escape keeps editing"
+    );
+    assert!(shell.read(|root| root.app.library.dirty()));
+    shell.capture("dialogs__07-kept-editing__1200x800");
+    // Keep editing has the keyboard when the prompt opens: Enter keeps editing too.
+    assert!(!close(&mut shell));
+    shell.press("enter");
+    assert!(
+        !shell.read(|root| root.app.confirm_close),
+        "Enter keeps editing"
+    );
+    assert!(shell.read(|root| root.app.library.dirty()));
+}
+
+/// Each page keeps its state while the DM visits the others (the egui `nav-state` scenario):
+/// the Library's search and reader, Party's member and sheet page, the open encounter, and the
+/// Campaign page's last tab.
+#[test]
+fn nav_state() {
+    use crate::CampaignTab;
+    let mut shell = Shell::new("nav-state", Seed::Campaign);
+    shell.click("Library");
+    wait_for(&mut shell, "the Library loads", |root| {
+        root.app.library.loaded() && !root.app.library.loading()
+    });
+    shell.click("id:library-search");
+    shell.type_text("dragon");
+    shell.click(&first_named("Adult Black Dragon ·"));
+    shell.capture("nav-state__01-library-set-up__1200x800");
+    shell.click("Party");
+    wait_for(&mut shell, "the party is read", |root| {
+        !root.app.party.reader.members.is_empty() && !root.app.party.reader.loading()
+    });
+    shell.click(&first_named("Iselle Marrowind"));
+    shell.click("Spells");
+    let party = |root: &super::SplatRoot| {
+        (
+            root.app.party.reader.selected.clone(),
+            root.pages.party.page,
+        )
+    };
+    let party_set_up = shell.read(party);
+    assert_eq!(party_set_up.1, 2, "the Spells page");
+    shell.capture("nav-state__02-party-set-up__1200x800");
+    shell.click("Encounters");
+    wait_for(&mut shell, "the encounters are read", |root| {
+        !root.app.encounters.busy() && root.app.encounters.loaded()
+    });
+    shell.click(&first_named("id:edit:Encounters/"));
+    assert!(shell.read(|root| root.app.encounters.editor_open()));
+    shell.capture("nav-state__03-encounters-set-up__1200x800");
+    shell.click("Campaign");
+    shell.click("Rules and runs");
+    shell.click("Settings");
+    shell.capture("nav-state__04-settings__1200x800");
+    shell.click("Library");
+    assert_eq!(
+        shell.read(|root| root.app.library.search_text().to_owned()),
+        "dragon",
+        "the Library keeps its search"
+    );
+    assert!(shell.bounds(&first_named("Adult Black Dragon ·")).is_some());
+    shell.click("Campaign");
+    assert!(
+        shell.read(|root| root.app.campaign_tab == CampaignTab::RunSettings),
+        "the Campaign page reopens its last tab"
+    );
+    shell.capture("nav-state__06-campaign-returned__1200x800");
+    shell.click("Party");
+    assert_eq!(
+        shell.read(party),
+        party_set_up,
+        "Party keeps its member and page"
+    );
+    shell.click("Encounters");
+    assert!(
+        shell.read(|root| root.app.encounters.editor_open()),
+        "Encounters keeps its open editor"
     );
 }
