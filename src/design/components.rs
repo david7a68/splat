@@ -71,9 +71,14 @@ pub fn one_line(
 /// Whole words of `text` that fit. A cut ends with an ellipsis, never a joining word.
 /// The first word stays unless it is itself a joining word.
 pub fn words_that_fit(ui: &Ui, text: &str, font: &FontId, width: f32) -> String {
+    words_that_fit_by(text, width, |words| number_width(ui, words, font))
+}
+
+/// [`words_that_fit`] with any measure of a line's width (a view that does not draw with egui).
+pub fn words_that_fit_by(text: &str, width: f32, measure: impl Fn(&str) -> f32) -> String {
     let mut words: Vec<_> = text.split_whitespace().collect();
     let full = words.join(" ");
-    if number_width(ui, &full, font) <= width || words.is_empty() {
+    if measure(&full) <= width || words.is_empty() {
         return full;
     }
     while let Some(word) = words.last() {
@@ -82,7 +87,7 @@ pub fn words_that_fit(ui: &Ui, text: &str, font: &FontId, width: f32) -> String 
             .any(|joining| word.eq_ignore_ascii_case(joining));
         if !joining {
             let fitted = format!("{}…", words.join(" "));
-            if words.len() == 1 || number_width(ui, &fitted, font) <= width {
+            if words.len() == 1 || measure(&fitted) <= width {
                 return fitted;
             }
         }

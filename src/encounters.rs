@@ -343,8 +343,8 @@ mod run_settings_view;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
 pub(crate) use groups::{
-    ENCOUNTER_DELETED, MemberFaultView, MemberRepair, NO_MAX_HP_CAUSE, member_fault,
-    member_fault_row,
+    EDIT_GROUP, ENCOUNTER_DELETED, MemberFaultView, MemberRepair, NO_MAX_HP_CAUSE, PACKAGES_LINK,
+    member_fault, member_fault_row,
 };
 #[cfg(any(test, feature = "test-support"))]
 pub use groups::{change_copies, group_checks, member_comparisons};

@@ -3,14 +3,16 @@
 //! saves and a sync conflict, then the tab's body: the stat block or sheet with its action
 //! tiles, Conditions, Correct, Log, Prep, Keys, or Arrivals.
 use super::{on_command, on_run};
+use crate::design::outcome::plain::PlainLine;
 use crate::encounter_run::{Command, MAX_FROM_SHEET, Panel, Participant, Phase, Run, view};
 use crate::gui::{SplatRoot, bridge, icons, kit, theme};
 use crate::rolls::{self, ArmedAction, Ask, Mode};
 use gpui::{
     AnyElement, ClickEvent, Context, ElementId, InteractiveElement, IntoElement, ParentElement,
-    Pixels, SharedString, Styled, div, prelude::*, px,
+    Pixels, SharedString, Styled, Window, div, prelude::*, px,
 };
 use splat_party::combat_sync::SyncState;
+use std::rc::Rc;
 use theme::{Density, Type, TypeExt, colors};
 
 /// The panel, `width` wide, with its gutter and hairline on the left.
@@ -18,7 +20,8 @@ pub(super) fn render(
     root: &SplatRoot,
     run: &Run,
     width: Pixels,
-    window: &gpui::Window,
+    arrival_lines: Vec<PlainLine<view::ArrivalPress>>,
+    window: &Window,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
@@ -40,6 +43,10 @@ pub(super) fn render(
         p.name.clone()
     };
     let is_sheet = p.definition.fields.contains_key("splat_external");
+    // The panel's own room: its width less the gutter before its words.
+    let inner = width - theme::L - theme::HAIRLINE_WIDTH;
+    // A long name gives up whole words, keeping its copy number (egui `dock_name`).
+    let shown = super::measure::fit_name(window, Type::Title, &title, inner);
     let mut top = div()
         .flex()
         .flex_col()
@@ -50,10 +57,16 @@ pub(super) fn render(
                 .ty(Type::Title)
                 .text_color(c.text)
                 .truncate()
-                .child(title.clone())
-                .with_tooltip_words(title),
+                .child(shown)
+                .with_tooltip_words(title.clone()),
         )
-        .child(tabs(run, if is_sheet { "Sheet" } else { "Stat block" }, cx))
+        .child(tabs(
+            run,
+            if is_sheet { "Sheet" } else { "Stat block" },
+            inner,
+            window,
+            cx,
+        ))
         .child(kit::rule());
     if run.state.phase == Phase::Setup {
         top = top.children(sync_block(run, cx));
@@ -68,6 +81,15 @@ pub(super) fn render(
     {
         body = body.child(conflicts(index, None, sync, cx));
     }
+    // The stat block's notice is the panel's footer, so the stat block keeps its top.
+    let stat_block = run.panel == Panel::Reference
+        && !(run.sheet.is_some() && run.sheet_for == Some(index))
+        && p.definition.path != "Made up in this fight";
+    let footer = if stat_block {
+        super::stat_block::footer(run, index, cx)
+    } else {
+        Vec::new()
+    };
     body = match run.panel {
         Panel::Reference => body.child(reference(root, run, index, cx)),
         Panel::Conditions => body.child(conditions(run, index, cx)),
@@ -77,7 +99,12 @@ pub(super) fn render(
         Panel::Log => body.child(log(run)),
         Panel::Encounter => body.child(prep(run, cx)),
         Panel::Keys => body.child(keys(run)),
-        Panel::Groups => body.child(arrivals(run, cx)),
+        Panel::Groups => body.child(arrivals(run, inner, window, cx)),
+    };
+    let footer = if run.panel == Panel::Groups {
+        arrivals_footer(arrival_lines, cx)
+    } else {
+        footer
     };
     div()
         .flex()
@@ -94,8 +121,25 @@ pub(super) fn render(
                 .flex_1()
                 .min_h_0()
                 .pt(theme::S)
-                .child(kit::scroll_column("run-panel-body", body)),
+                .child(kit::scroll_column(
+                    ElementId::Name(format!("run-panel-body-{:?}-{}", run.panel, p.key).into()),
+                    body,
+                )),
         )
+        .when(!footer.is_empty(), |panel| {
+            panel.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_none()
+                    .gap(theme::S)
+                    .pt(theme::S)
+                    .pb(theme::S)
+                    .border_t(theme::HAIRLINE_WIDTH)
+                    .border_color(c.hairline)
+                    .children(footer),
+            )
+        })
         .into_any_element()
 }
 
@@ -110,33 +154,80 @@ pub(super) fn fight_title(panel: Panel) -> &'static str {
     }
 }
 
-/// The participant's tabs, then the fight's (`panel_tabs`).
-fn tabs(run: &Run, reference: &'static str, cx: &mut Context<SplatRoot>) -> impl IntoElement {
+/// The participant's tabs, then the fight's (`panel_tabs`). When both do not fit in `room`, the
+/// fight's tabs become a `Fight` menu, underlined in the accent while one of them shows.
+fn tabs(
+    run: &Run,
+    reference: &'static str,
+    room: Pixels,
+    window: &Window,
+    cx: &mut Context<SplatRoot>,
+) -> impl IntoElement {
     const PARTICIPANT: [Panel; 3] = [Panel::Reference, Panel::Conditions, Panel::Record];
-    const FIGHT: [Panel; 2] = [Panel::Log, Panel::Encounter];
+    const FIGHT: [(Panel, &str); 2] = [(Panel::Log, "Log"), (Panel::Encounter, "Prep")];
     let chosen = |list: &[Panel]| {
         list.iter()
             .position(|panel| *panel == run.panel)
             .unwrap_or(usize::MAX)
     };
-    let participant = kit::Segmented::new(
-        "run-panel-tabs",
-        [reference, "Conditions", "Correct"],
-        chosen(&PARTICIPANT),
-    )
-    .on_select(cx.listener(|root: &mut SplatRoot, at: &usize, _, cx| {
-        if let Some(run) = root.app.encounters.run_mut() {
-            run.panel = PARTICIPANT[*at];
-        }
-        cx.notify();
-    }));
-    let fight = kit::Segmented::new("run-panel-fight-tabs", ["Log", "Prep"], chosen(&FIGHT))
+    let participant_words = [reference, "Conditions", "Correct"];
+    let width = |words: &mut dyn Iterator<Item = &str>| {
+        words
+            .map(|label| super::measure::width(window, Type::Strong, label) + theme::L)
+            .fold(px(0.0), |sum, one| sum + one)
+    };
+    let fits = width(&mut participant_words.iter().copied())
+        + width(&mut FIGHT.iter().map(|(_, label)| *label))
+        + theme::L
+        <= room;
+    let participant =
+        kit::Segmented::new("run-panel-tabs", participant_words, chosen(&PARTICIPANT)).on_select(
+            cx.listener(|root: &mut SplatRoot, at: &usize, _, cx| {
+                if let Some(run) = root.app.encounters.run_mut() {
+                    run.panel = PARTICIPANT[*at];
+                }
+                cx.notify();
+            }),
+        );
+    let fight: AnyElement = if fits {
+        let panels: Vec<Panel> = FIGHT.iter().map(|(panel, _)| *panel).collect();
+        kit::Segmented::new(
+            "run-panel-fight-tabs",
+            FIGHT.map(|(_, label)| label),
+            chosen(&panels),
+        )
         .on_select(cx.listener(|root: &mut SplatRoot, at: &usize, _, cx| {
             if let Some(run) = root.app.encounters.run_mut() {
-                run.panel = FIGHT[*at];
+                run.panel = FIGHT[*at].0;
             }
             cx.notify();
-        }));
+        }))
+        .into_any_element()
+    } else {
+        let current = FIGHT.iter().any(|(panel, _)| *panel == run.panel);
+        let mut menu = kit::MenuButton::new(
+            "run-panel-fight-menu",
+            kit::Button::quiet("run-panel-fight", "Fight")
+                .icon(icons::DOWN)
+                .name("Fight menu")
+                .density(Density::Read),
+        );
+        for (panel, label) in FIGHT {
+            menu = menu.item(
+                kit::MenuItem::new(label)
+                    .checked(run.panel == panel)
+                    .on_click(on_run(cx, move |run| run.panel = panel)),
+            );
+        }
+        div()
+            .flex()
+            .flex_col()
+            .child(menu)
+            .when(current, |menu| {
+                menu.child(div().h(theme::HAIRLINE_WIDTH).w_full().bg(colors().accent))
+            })
+            .into_any_element()
+    };
     div()
         .flex()
         .flex_row()
@@ -144,6 +235,29 @@ fn tabs(run: &Run, reference: &'static str, cx: &mut Context<SplatRoot>) -> impl
         .gap(theme::L)
         .child(div().flex_none().child(participant))
         .child(div().flex_none().child(fight))
+}
+
+/// The Arrivals footer: the newest arrival's result with a tie's `Move`, and each group's
+/// reason its Add waits for (`groups_tab`'s footer, `Run::arrival_lines`). A press goes to
+/// `Run::arrival_press` with its ticket: a Move whose step is no longer the newest does nothing.
+fn arrivals_footer(
+    lines: Vec<PlainLine<view::ArrivalPress>>,
+    cx: &mut Context<SplatRoot>,
+) -> Vec<AnyElement> {
+    kit::messages::lines(
+        "run-arrivals-footer",
+        lines,
+        cx.listener(
+            |root: &mut SplatRoot, pressed: &kit::messages::Pressed<view::ArrivalPress>, _, cx| {
+                if let Some(press) = pressed.take()
+                    && let Some(run) = root.app.encounters.run_mut()
+                {
+                    run.arrival_press(press);
+                }
+                cx.notify();
+            },
+        ),
+    )
 }
 
 /// Death saves: the counts, `+ Success`, `+ Failure` and a roll (`death_saves`).
@@ -379,25 +493,9 @@ fn sync_block(run: &Run, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
     Some(block.child(kit::rule()).into_any_element())
 }
 
-/// What the encounter or group changed on this creature (`changes_block`): its origin line.
+/// What the encounter or group changed on this creature (`changes_block`).
 fn changes_block(p: &Participant) -> Option<AnyElement> {
-    let c = colors();
-    let origin = view::change_origin(p)?;
-    Some(
-        div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(theme::XS)
-            .pb(theme::S)
-            .child(kit::icon(
-                icons::CHANGED,
-                Type::Small,
-                c.participant.changed,
-            ))
-            .child(kit::text(Type::Small, c.participant.changed, origin))
-            .into_any_element(),
-    )
+    super::stat_block::changes(p, false)
 }
 
 /// AC, HP and initiative in columns (`vital_columns`).
@@ -415,10 +513,6 @@ fn vitals(columns: &[(&'static str, String)]) -> impl IntoElement {
                 .child(kit::text(Type::Label, c.text, *label))
                 .child(kit::text(Type::Stat, c.text, value.clone()))
         }))
-}
-
-fn display(value: Option<i64>) -> String {
-    value.map_or_else(|| "—".to_owned(), |n| n.to_string())
 }
 
 /// The stat block or sheet tab (`reference_tab`): the loot on the card, the starting snapshot's
@@ -454,77 +548,8 @@ fn reference(root: &SplatRoot, run: &Run, index: usize, cx: &mut Context<SplatRo
             .child(sheet(root, run, index, &record, cx))
             .into_any_element();
     }
-    // A stat block whose file changed, went or cannot be read since the run copied it.
-    let mut notice = None;
-    if let Some(content) = &run.content {
-        let at = content.position_of(&splat::content::Reference::Id(definition.id));
-        let current = at.map(|at| &content.items[at].entry);
-        let unreadable = content
-            .errors
-            .iter()
-            .any(|error| error.contains(&definition.path));
-        notice = view::snapshot_notice(definition, current, unreadable)
-            .map(|words| (words.to_string(), unreadable, at));
-    }
-    if definition.fields.contains_key("splat_external") {
-        column = column.child(kit::text(
-            Type::Small,
-            c.document.read_only,
-            view::snapshot_values_line(notice.is_some()),
-        ));
-    }
-    let speed = p.changes.as_ref().and_then(|changes| {
-        changes
-            .overrides
-            .rows(&changes.base)
-            .into_iter()
-            .find(|row| row.label == "Speed")
-            .map(|row| row.changed)
-    });
-    column =
-        column
-            .children(changes_block(p))
-            .child(vitals(&[
-                ("ARMOR CLASS", display(p.armor_class)),
-                (
-                    "HIT POINTS",
-                    splat_party::combat_sync::fraction(display(p.hp), display(p.max_hp)),
-                ),
-                (
-                    "INITIATIVE",
-                    p.initiative_bonus
-                        .map_or_else(|| "—".to_owned(), crate::design::signed),
-                ),
-            ]))
-            .children(speed.map(|speed| {
-                kit::text(Type::Small, c.participant.changed, format!("Speed {speed}"))
-            }))
-            .child(tiles(run, index, cx))
-            .child(
-                kit::markdown::Markdown::new(
-                    ElementId::Name(format!("run-stat-block-{}", p.key).into()),
-                    definition.body.clone(),
-                )
-                .compact(),
-            );
-    if let Some((words, unreadable, at)) = notice {
-        let tone = if unreadable {
-            kit::Tone::Error
-        } else {
-            kit::Tone::Warning
-        };
-        let mut message = kit::Message::new(tone, words).small();
-        if let Some(at) = at {
-            message = message.action(
-                kit::Button::secondary("run-read-new-version", "Read the new version")
-                    .density(Density::Read)
-                    .on_click(on_run(cx, move |run| run.lookup_request = Some(at))),
-            );
-        }
-        column = column.child(kit::gap(theme::S)).child(message);
-    }
     let _ = root;
-    column.into_any_element()
+    super::stat_block::render(run, index, cx)
 }
 
 /// A linked character's Sheet tab (`reference_tab`): what the run changed, the sheet's age and
@@ -655,24 +680,10 @@ fn sheet(
         .into_any_element()
 }
 
-/// The participant's actions as tiles: a press arms an attack, a save or damage, or rolls a
-/// check at once; Ctrl+1 to 9 arm them too. Under the armed tile: what to do next and its
-/// actions (`rolls::tiles`, `armed_view`).
-fn tiles(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
-    if run.chips(index).is_empty() {
-        return div().into_any_element();
-    }
-    div()
-        .flex()
-        .flex_col()
-        .pt(theme::S)
-        .child(kit::heading(kit::Heading::Section("Actions"), true))
-        .child(tile_list(run, index, cx))
-        .into_any_element()
-}
-
-/// The tiles themselves, with the armed one's line under it: under `Actions` in a stat block,
-/// and under `Attacks` on a linked sheet's Actions page.
+/// A linked sheet's actions as tiles, under `Attacks` on its Actions page: a press arms an
+/// attack, a save or damage, or rolls a check at once; Ctrl+1 to 9 arm them too. Under the armed
+/// tile: what to do next and its actions (`rolls::tiles`, `armed_view`). A stat block's tiles are
+/// the entry view's (`stat_block`).
 fn tile_list(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
     let c = colors();
     let chips = run.chips(index);
@@ -1453,15 +1464,17 @@ fn keys(run: &Run) -> AnyElement {
 
 /// Arrivals (`groups_tab`): a creature to find or make up, then the campaign's encounter groups
 /// with their Add.
-fn arrivals(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn arrivals(run: &Run, room: Pixels, window: &Window, cx: &mut Context<SplatRoot>) -> AnyElement {
     let c = colors();
+    // One block for every group, no wider than a list, so the controls keep one column.
+    let block = theme::LIST_MEASURE.min(room - theme::SCROLL_BAR_WIDTH);
     let mut column = div()
         .flex()
         .flex_col()
         .gap(theme::XS)
         .max_w(theme::LIST_MEASURE);
     if run.groups.as_ref().is_some_and(|groups| !groups.is_empty()) {
-        column = column.child(kit::help("Use Add to bring a group into the fight."));
+        column = column.child(kit::help("Drag a group name to the list, or use Add."));
     }
     column = column.child(creature_form(run, cx)).child(kit::rule());
     let Some(groups) = run.groups.clone() else {
@@ -1530,108 +1543,310 @@ fn arrivals(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
             ));
         }
         for group in list {
-            column = column.child(group_row(run, group, cx)).child(kit::rule());
+            column = column
+                .child(group_row(run, group, block, window, cx))
+                .child(kit::rule());
         }
     }
     column.into_any_element()
 }
 
-/// One encounter group in Arrivals: its name and numbers, its status and members, an
-/// initiative total and Add.
+/// What a drag of an Arrivals group carries: the group, and its name for the ghost. A group
+/// whose Add waits carries none; its ghost still follows the pointer (egui `drag_source`).
+#[derive(Clone)]
+pub(super) struct GroupDrag {
+    pub(super) id: Option<uuid::Uuid>,
+    name: SharedString,
+}
+
+impl gpui::Render for GroupDrag {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let c = colors();
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(theme::XS)
+            .px(theme::S)
+            .h(Density::Read.control())
+            .rounded(theme::RADIUS_CONTROL)
+            .bg(c.raised)
+            .border(theme::HAIRLINE_WIDTH)
+            .border_color(c.rule)
+            .child(kit::icon(icons::ADD, Type::Body, c.text))
+            .child(kit::text::one_line(Type::Strong, c.text, self.name.clone()))
+    }
+}
+
+/// The initiative list as the place a group from Arrivals is dropped (`group_drop_zone`): while
+/// a group that can join is held over it, it says so with the accent outline; a drop adds the
+/// group as its Add does. A group whose Add came to wait while it was held does not join.
+pub(super) fn group_drop_zone(
+    zone: gpui::Div,
+    id: &'static str,
+    cx: &mut Context<SplatRoot>,
+) -> gpui::Stateful<gpui::Div> {
+    let c = colors();
+    zone.id(id)
+        .rounded(theme::RADIUS_CONTROL)
+        .drag_over::<GroupDrag>(move |style, drag, _, _| {
+            if drag.id.is_some() {
+                style.border(theme::FOCUS_WIDTH).border_color(c.accent)
+            } else {
+                style
+            }
+        })
+        .on_drop(
+            cx.listener(|root: &mut SplatRoot, drag: &GroupDrag, _, cx| {
+                if let (Some(id), Some(run)) = (drag.id, root.app.encounters.run_mut()) {
+                    let takes = run
+                        .groups
+                        .iter()
+                        .flat_map(|groups| groups.iter())
+                        .find(|group| group.id == id)
+                        .is_some_and(|group| run.add_waits_words(group).is_none());
+                    if takes {
+                        run.add_group_from_panel(id);
+                    }
+                }
+                cx.notify();
+            }),
+        )
+}
+
+/// One encounter group in Arrivals (`group_row`): its name, which drags to the initiative list,
+/// with the fight after it joins (`Fight after: Moderate`) on the heading or under it; its join
+/// status and members; an initiative total and Add, which Enter in the total presses too; then
+/// each fault with its repair.
 fn group_row(
     run: &Run,
     group: &crate::encounter_run::RunGroup,
+    block: Pixels,
+    window: &Window,
     cx: &mut Context<SplatRoot>,
 ) -> impl IntoElement {
     let c = colors();
     let id = group.id;
+    let name = group.name.clone();
     let status = run.group_status(group, run.group_joined(group));
-    let members: Vec<String> = group
-        .members
-        .iter()
-        .map(|member| {
-            if member.count > 1 {
-                format!("{} × {}", member.count, member.entry.name)
-            } else {
-                member.entry.name.clone()
-            }
-        })
-        .collect();
     let blocked = run.add_waits_words(group);
     let total = run.group_totals.get(&id).cloned().unwrap_or_default();
-    let numbers = format!(
-        "{} · {} · {}",
-        crate::design::reader::human_label(&group.side),
-        group.count_label(),
-        group.xp_label()
+    let small = |words: &str| super::measure::width(window, Type::Small, words);
+    let strong = |words: &str| super::measure::width(window, Type::Strong, words);
+    // The fight after the group joins, by the run's kept words (`arrival_words`).
+    let heading_fit = run.arrival_heading(
+        group,
+        f32::from(block),
+        |words| f32::from(small(words)),
+        |words| f32::from(strong(words)),
     );
-    div()
+    let split = &heading_fit.split;
+    let title = format!("{} {name}", icons::DRAG);
+    // The line's words as one, the name a test finds it by.
+    let line_words = heading_fit.line.as_ref().map(|fitted| {
+        let form: String = fitted
+            .form
+            .iter()
+            .map(|(words, _)| words.as_str())
+            .collect();
+        match (fitted.lead.is_empty(), form.is_empty()) {
+            (true, _) => form,
+            (false, true) => fitted.lead.clone(),
+            (false, false) => format!("{} · {form}", fitted.lead),
+        }
+    });
+    let answer = heading_fit.line.as_ref().map(|fitted| {
+        let mut words = div()
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .when(!fitted.wrap, |line| line.whitespace_nowrap());
+        if !fitted.lead.is_empty() {
+            let lead = if fitted.form.is_empty() {
+                fitted.lead.clone()
+            } else {
+                format!("{} · ", fitted.lead)
+            };
+            words = words.child(kit::text(Type::Small, c.muted, lead));
+        }
+        for (part, word) in &fitted.form {
+            words = words.child(kit::text(
+                Type::Small,
+                if *word { c.text } else { c.muted },
+                part.clone(),
+            ));
+        }
+        words
+    });
+    let totals_text = heading_fit.totals.clone();
+    let described = heading_fit.described.clone();
+    let hover = heading_fit.hover.clone();
+    let changed = view::changed_mark(group).is_some();
+    let movable = blocked.is_none();
+    let drag = GroupDrag {
+        id: movable.then_some(id),
+        name: name.clone().into(),
+    };
+    let grip = div()
+        .id(ElementId::Name(format!("run-arrival-grip-{id}").into()))
+        .flex_none()
+        .w(if split.below {
+            px(split.title)
+        } else {
+            px(split.title).min(block - px(split.room) - theme::L)
+        })
+        .min_w_0()
+        .h(Density::Read.control())
+        .flex()
+        .items_center()
+        .cursor_grab()
+        .child(
+            div()
+                .min_w_0()
+                .ty(Type::Strong)
+                .text_color(c.text)
+                .truncate()
+                .child(title),
+        )
+        .on_drag(drag, |drag, _, _, cx| cx.new(|_| drag.clone()))
+        .with_tooltip_words(hover);
+    let grip = kit::target(
+        grip,
+        format!(
+            "Drag {name} to the initiative list{}",
+            if changed { ". Changed." } else { "" }
+        ),
+    );
+    let mut heading = div().flex().flex_row().items_center().w(block).child(grip);
+    let mut below = None;
+    match answer {
+        Some(answer) if split.below => {
+            below = Some(kit::target(answer, line_words.clone().unwrap_or_default()));
+        }
+        Some(answer) => {
+            heading = heading.child(div().flex_1()).child(kit::target(
+                div()
+                    .id(ElementId::Name(format!("run-arrival-fight-{id}").into()))
+                    .flex_none()
+                    .child(answer)
+                    .when_some(described.clone(), |line, words| {
+                        line.with_tooltip_words(words)
+                    }),
+                line_words.clone().unwrap_or_default(),
+            ));
+        }
+        None => {}
+    }
+    let members = match view::changed_mark(group) {
+        Some(mark) => format!("{} ·\u{a0}{mark}", group.member_summary()),
+        None => group.member_summary(),
+    };
+    let summary = if status.is_empty() {
+        members
+    } else {
+        format!("{status} · {members}")
+    };
+    let add_word = view::arrival_add_word(group);
+    let on_enter = {
+        let blocked = blocked.is_some();
+        super::plain(cx, move |root, _, cx| {
+            if !blocked && let Some(run) = root.app.encounters.run_mut() {
+                run.add_group_from_panel(id);
+            }
+            cx.notify();
+        })
+    };
+    let controls = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(theme::XS)
+        .w(block)
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .child(kit::text(Type::Small, c.muted, summary)),
+        )
+        .child(kit::text(Type::Small, c.muted, "Initiative"))
+        .child(
+            div()
+                .id(ElementId::Name(
+                    format!("run-arrival-total-box-{id}").into(),
+                ))
+                .key_context("RunField")
+                .w(px(72.0))
+                .flex_none()
+                .child(
+                    kit::TextField::new(
+                        ElementId::Name(format!("run-arrival-total-{id}").into()),
+                        total,
+                    )
+                    .placeholder("Roll")
+                    .name(format!("Initiative total for {name}"))
+                    .disabled(group.problem.is_some())
+                    .on_change(
+                        cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                            if let Some(run) = root.app.encounters.run_mut() {
+                                run.group_totals.insert(id, words.to_owned());
+                                run.totals_revision += 1;
+                            }
+                            cx.notify();
+                        }),
+                    )
+                    .on_enter(on_enter),
+                )
+                .with_tooltip_words("Blank rolls initiative"),
+        )
+        .child(
+            kit::Button::secondary(
+                ElementId::Name(format!("run-arrival-add-{id}").into()),
+                add_word,
+            )
+            .icon(icons::ADD)
+            .name(format!("Add {name} to the initiative list"))
+            .density(Density::Read)
+            .blocked(blocked.clone())
+            .on_click(on_run(cx, move |run| run.add_group_from_panel(id))),
+        );
+    let mut row = div()
         .flex()
         .flex_col()
         .gap(px(2.0))
         .py(theme::XS)
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .items_baseline()
-                .gap(theme::S)
-                .child(div().min_w_0().child(kit::text::one_line(
-                    Type::Strong,
-                    c.text,
-                    group.name.clone(),
-                )))
-                .child(kit::text::one_line(Type::Small, c.muted, numbers)),
-        )
-        .when(!status.is_empty(), |row| {
-            row.child(kit::text(Type::Small, c.muted, status.clone()))
+        .child(heading)
+        .children(below)
+        .when(heading_fit.line.is_none(), |row| {
+            row.child(kit::text(Type::Small, c.muted, totals_text.clone()))
         })
-        .child(kit::text(Type::Small, c.muted, members.join(", ")))
-        .children(
-            group
-                .problem
-                .clone()
-                .map(|problem| kit::text(Type::Small, c.result.warning, problem)),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(theme::XS)
-                .child(kit::text(Type::Small, c.muted, "Initiative"))
-                .child(
-                    div().key_context("RunField").w(px(72.0)).child(
-                        kit::TextField::new(
-                            ElementId::Name(format!("run-arrival-total-{id}").into()),
-                            total,
-                        )
-                        .placeholder("Roll")
-                        .name(format!("Initiative total for {}", group.name))
-                        .on_change(cx.listener(
-                            move |root: &mut SplatRoot, words: &str, _, cx| {
-                                if let Some(run) = root.app.encounters.run_mut() {
-                                    run.group_totals.insert(id, words.to_owned());
-                                    run.totals_revision += 1;
-                                }
-                                cx.notify();
-                            },
-                        )),
-                    ),
-                )
-                .child(
-                    kit::Button::secondary(
-                        ElementId::Name(format!("run-arrival-add-{id}").into()),
-                        "Add",
-                    )
-                    .icon(icons::ADD)
-                    .name(format!("Add {}", group.name))
-                    .density(Density::Read)
-                    .blocked(blocked.clone())
-                    .on_click(on_run(cx, move |run| run.add_group_from_panel(id))),
-                ),
-        )
-        .children(blocked.map(|why| kit::text(Type::Small, c.muted, why)))
+        .child(controls);
+    // The group's faults, each with its repair; `Cannot join` before them (`member_fault_row`).
+    let faults = run.arrival_faults(group);
+    if !faults.is_empty() {
+        row = row.child(kit::text(Type::Small, c.muted, "Cannot join"));
+        let on_press: kit::messages::OnPress<view::GroupRepair> = Rc::new(cx.listener(
+            move |root: &mut SplatRoot,
+                  pressed: &kit::messages::Pressed<view::GroupRepair>,
+                  _,
+                  cx| {
+                if let Some(press) = pressed.take()
+                    && let Some(run) = root.app.encounters.run_mut()
+                {
+                    run.group_repair(id, press.id);
+                }
+                cx.notify();
+            },
+        ));
+        for (at, line) in faults.into_iter().enumerate() {
+            row = row.child(kit::messages::message(
+                ElementId::Name(format!("run-arrival-fault-{id}-{at}").into()),
+                line,
+                on_press.clone(),
+                true,
+            ));
+        }
+    }
+    row
 }
 
 /// Find or make up a creature (`add_creature_form`).

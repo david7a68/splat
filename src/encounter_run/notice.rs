@@ -566,7 +566,7 @@ impl Run {
 /// then its first changed value with the name (`Brannoch Vale: HP 58 → 54`). A count of
 /// removed Undo steps stays in both (FJ1, X47): with no room for it, the notice goes below
 /// the roster, where it keeps the count too.
-fn header_sheet_forms(summary: &str) -> [String; 2] {
+pub fn header_sheet_forms(summary: &str) -> [String; 2] {
     let (changes, removed) = summary
         .rsplit_once(" · ")
         .filter(|(_, removed)| removed.ends_with(" removed"))

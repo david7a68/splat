@@ -232,7 +232,7 @@ says otherwise (`cx.listener` makes them).
 | Scroll (`scroll`) | `scroll_column(id, content)`, `scroll::scroll_column_with(id, &ScrollHandle, content)`, `scroll::sideways(id, content)` | A column that keeps its bar's lane |
 | Virtual list (`virtual_list`) | `uniform_column(id, &UniformListScrollHandle, count, cx.processor(\|root, range, window, cx\| Vec<row>))`, `measured_column(id, &ListState, \|at, window, cx\| AnyElement)` | A long list that builds only the rows in view, in a column that keeps its bar's lane. `uniform_column` when every row has one height (Library entries, Timeline events); `measured_column` when rows have their own heights (World's headings and notes; `splice` the `ListState` when the rows change). Keep the handle or state in your page's GPUI state |
 | Panes (`panes`) | `Pane::new(id).header(..).footer(element).fixed().flush().scroll(&ScrollHandle).child(..)`, `Columns::new(id).column(width, min..max, pane).saved(key).rest(pane)` | Task columns with splitters; messages in the footer. `.saved(key)` (egui's column id: `library_entries`, `world_list_panel`, …) keeps the DM's width after a restart; a saved column is the harness target `column <key>` |
-| Edge column (`edge`) | `EdgeColumn::new(key, Side, natural, min..=max).page_keeps(px).name(words)`, `.width(room, cx)`, `.render(room, content, window, cx)`; `edge::column_width(key, cx)`, `set_column_width` | A side column with a splitter on its inner edge (`design::Column`): the rail, the side panel. Drag, or Left/Right/Home on the focused splitter; the width is saved under `key` |
+| Edge column (`edge`) | `EdgeColumn::new(key, Side, natural, min..=max).page_keeps(px).name(words)`, `.width(room, cx)`, `.render(room, content, window, cx)`; `edge::column_width(key, cx)`, `set_column_width` | A side column with a splitter on its inner edge (`design::Column`): the rail, the side panel, the run's panel. Drag, or Left/Right/Home on the focused splitter; the width is saved under `key` |
 | Layer (`layer`) | `layer::attach(container, &id, match_width, \|widest, tallest\| element)`, `layer::room_start(lane)` / `room_end()` | Where a raised layer opens (menus, drop-downs, popovers use it): under its trigger or above it, inside the innermost pane body or edge column. A part that owns a room other than `Pane` and `EdgeColumn` wraps its children in `room_start`/`room_end` |
 | Markdown (`markdown`) | `markdown(id, source)` / `Markdown::new(id, source)` then `.document(uuid)`, `.compact()`, `.fields()`, `.skills()`, `.row_words(muted)`, `.full_width()`, `.wide_tables()`, `.jump_in(&ScrollHandle)`, `.on_note(\|&str, window, cx\|)`, `.on_link(\|&str, window, cx\|)`, `.on_target(\|&LinkTarget, window, cx\|)` | Every Markdown document; see Reader parts |
 | Nav (`nav`) | `NavItem::new(..).detail(..).selected(bool).hint(..).name(..).on_click(f)`, `NavToggle::new(..).hint(..).on_click(f)` | The rail only |
@@ -355,8 +355,9 @@ fn library_browse() {
   `Shell::over(app, tempdir, size)` for a `Splat` you built.
 - `update(|root, window, cx| …)` changes state as a test's setup; `read(|root| …)` reads it;
   `settle()` runs frames until idle; `wait(Duration)` advances the clock (timers, the poll);
-  `bounds(name)` and `click_at(point)` for a place; `drag(from, to)` (a splitter);
-  `scroll(at, ScrollDelta, Modifiers)` (`Pixels` is a touchpad, `Lines` a wheel);
+  `bounds(name)` and `click_at(point)` for a place; `drag(from, to)` (a splitter) and
+  `drag_target(from, to)` (between two targets by name); `scroll(at, ScrollDelta, Modifiers)`
+  (`Pixels` is a touchpad, `Lines` a wheel);
   `frame_cost(frames)` for the mean time of a quiet frame (`gui::tests::frame_cost_report`).
 - The harness has the app's own fonts only, Hack for monospace included (`splat_assets::MONO`, the
   font egui bundles), so code and source text capture in mono.
@@ -400,9 +401,10 @@ fn library_browse() {
 ### Known gaps after wave 1
 
 - A splitter of `kit::Columns` (gpui-component's) cannot take the keyboard; only the rail's and the
-  side panel's (`EdgeColumn`) move with Left, Right and Home. The run's side panel, the Timeline's
-  event column and the Session note column do not use `Columns`/`EdgeColumn` yet, so their widths
-  are not dragged or saved (`run_panel`, `timeline_detail_panel`, `session_note_frame`), and the
+  side panels' (`EdgeColumn`: Lookup, the session notes and the run's `run_panel`,
+  `run_setup_panel` and `run_ended_log`) move with Left, Right and Home. The Timeline's event column
+  and the Session note column do not use `Columns`/`EdgeColumn` yet, so their widths are not
+  dragged or saved (`timeline_detail_panel`, `session_note_frame`), and the
   encounter editors' Add column saves nothing (egui saves `encounter_add`, a right column).
 - Reader (wave 2): reader text cannot be selected or copied, and links cannot be reached with Tab
   (GPUI's `InteractiveText` has neither); a dice link or tile has no right-click mode menu (Shift

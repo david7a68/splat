@@ -10,7 +10,7 @@ use gpui::{
     prelude::*, px,
 };
 use splat::content::loot::Loot;
-use theme::{Density, RunScale, Type, colors};
+use theme::{Density, Type, colors};
 
 /// The Ended phase.
 pub(super) fn render(
@@ -25,6 +25,7 @@ pub(super) fn render(
         .unwrap_or_else(|| super::page_width(root, window));
     let window_width = window.viewport_size().width;
     let height = window.viewport_size().height;
+    let side = super::side_width(super::Side::Ended, room, window_width, cx);
     let Some(run) = root.app.encounters.run() else {
         return div().into_any_element();
     };
@@ -33,17 +34,20 @@ pub(super) fn render(
         Phase::Ended { outcome } => outcome.clone(),
         _ => String::new(),
     };
-    let side = super::panel_width(room, window_width);
     let rows_width = if run.hide_panel {
         room
     } else {
-        room - side - theme::S
+        room - side - theme::M
     };
-    let scale = RunScale::fit(
+    let order = run.state.order.clone();
+    let plan = roster::plan(
+        run,
+        &order,
+        f32::from(rows_width - theme::S - theme::SCROLL_BAR_WIDTH),
         f32::from(height) - 160.0,
-        f32::from(rows_width) - f32::from(theme::S),
-        run.state.order.len(),
+        window,
     );
+    let scale = plan.scale;
     let title = div()
         .flex()
         .flex_col()
@@ -73,18 +77,17 @@ pub(super) fn render(
         .child(save_status(run))
         .children(undo_or_continue(run, cx))
         .child(close);
-    let rows: Vec<AnyElement> = run
-        .state
-        .order
-        .clone()
-        .into_iter()
-        .map(|index| {
+    let rows: Vec<AnyElement> = order
+        .iter()
+        .enumerate()
+        .map(|(at, &index)| {
             roster::row(
                 root,
                 run,
                 index,
                 roster::TurnMark::None,
-                scale,
+                &plan,
+                at,
                 roster::Use::Final,
                 cx,
             )
@@ -111,7 +114,11 @@ pub(super) fn render(
         ));
     let mut body = div().flex().flex_row().flex_1().min_h_0().child(left);
     if !run.hide_panel {
-        body = body.child(ended_panel(run, side, cx));
+        let panel = ended_panel(run, side, cx).into_any_element();
+        body = body.child(div().w(theme::M).flex_none()).child(
+            super::side_column(super::Side::Ended, room, window_width)
+                .render(room, panel, window, cx),
+        );
     }
     let messages = super::footer::messages(run, false, cx);
     div()

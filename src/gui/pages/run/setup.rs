@@ -1,7 +1,7 @@
 //! The Setup phase (egui `view::setup_view`, `setup_body`, `setup_row`): the title, Roll NPCs
 //! and Begin combat with its reason, Add to fight and Undo; each participant's row with its
 //! initiative, Roll, tie moves, place, Absent and menu; the message footer; Close run.
-use super::{on_command, on_run, panel, panel_width, plain, run_title, save_status};
+use super::{Side, on_command, on_run, panel, plain, run_title, save_status};
 use crate::encounter_run::{Command, Panel, Participant, Run, view};
 use crate::gui::{SplatRoot, icons, kit, theme};
 use gpui::{
@@ -33,10 +33,11 @@ pub(super) fn render(
                 .position(|p| p.initiative.is_none() && p.present);
         }
     }
+    let side = super::side_width(Side::Setup, room, window_width, cx);
+    let arrivals = super::arrivals_prepare(root);
     let Some(run) = root.app.encounters.run() else {
         return div().into_any_element();
     };
-    let side = panel_width(room, window_width);
     let width = if run.hide_panel {
         (room - theme::M).min(px(theme::RUN_LARGE.max_width))
     } else {
@@ -57,7 +58,14 @@ pub(super) fn render(
                 .min_h_0()
                 .flex()
                 .flex_col()
-                .child(kit::scroll_column("run-setup-rows", rows(run, cx)))
+                .child(
+                    panel::group_drop_zone(
+                        div().flex().flex_col().flex_1().min_h_0(),
+                        "run-setup-drop",
+                        cx,
+                    )
+                    .child(kit::scroll_column("run-setup-rows", rows(run, cx))),
+                )
                 .children(message_footer(run, cx)),
         )
         .child(kit::rule())
@@ -75,9 +83,10 @@ pub(super) fn render(
         );
     let mut page = div().flex().flex_row().size_full().child(main);
     if !run.hide_panel {
-        page = page
-            .child(div().w(theme::M).flex_none())
-            .child(panel::render(root, run, side, window, cx));
+        let panel = panel::render(root, run, side, arrivals, window, cx);
+        page = page.child(div().w(theme::M).flex_none()).child(
+            super::side_column(Side::Setup, room, window_width).render(room, panel, window, cx),
+        );
     }
     page.into_any_element()
 }
@@ -122,7 +131,8 @@ fn header(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
             .icon(icons::DOWN)
             .name("Roll NPC initiative another way")
             .density(Density::Glance),
-    );
+    )
+    .heading("This roll only");
     for mode in run.roll_choices() {
         modes = modes.item(
             kit::MenuItem::new(mode.label())

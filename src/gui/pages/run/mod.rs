@@ -9,20 +9,24 @@
 //! Each frame: `poll` takes the requests the last frame's acts left (`Splat::run_page_end`),
 //! saves the run (`Run::autosave`) and gives the page the keyboard when nothing has it; `render`
 //! tells the run the app's facts (`Splat::run_page_begin`) and draws the phase.
+#[cfg(test)]
+mod captures;
 mod dock;
 mod ended;
 mod footer;
 mod header;
 mod keys;
 mod live;
+mod measure;
 mod panel;
 mod roster;
 mod setup;
+mod stat_block;
 mod strip;
 #[cfg(test)]
 mod tests;
 
-use crate::encounter_run::{Command, Phase, Run};
+use crate::encounter_run::{Command, Phase, Run, view};
 use crate::gui::{SplatRoot, bridge, kit, theme};
 use crate::{Page, design};
 use gpui::{
@@ -40,6 +44,16 @@ pub struct State {
     focus: Option<FocusHandle>,
     /// The page's width in the last frame, so the next frame's facts use the room it had.
     width: Option<Pixels>,
+    /// The live roster's scroll, kept so the selected row can be brought into view and the
+    /// overflow line can say what is out of it.
+    roster_scroll: gpui::ScrollHandle,
+    /// The window height the roster was last laid out for: a new one scrolls to the selection.
+    roster_room: Option<Pixels>,
+    /// The height the live roster's box had when it was last laid out (its rows and the
+    /// overflow line), which the next frame fits its rows to.
+    roster_box: std::rc::Rc<std::cell::Cell<f32>>,
+    /// Lookup or Notes was open beside the run last frame.
+    side_open: bool,
 }
 
 /// Once, when the root is built.
@@ -53,15 +67,21 @@ pub(crate) fn poll(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<S
     if root.app.page != Page::Run {
         return;
     }
+    stat_block::poll(root, cx);
     root.app.run_page_end(false);
     if let Some(run) = root.app.encounters.run_mut() {
         run.refresh_portraits();
         run.autosave();
     }
+    // When Lookup or Notes closes, the keyboard comes back to the run, so its letters work
+    // again (egui: the closed panel's field no longer holds it); a hidden editor keeps no key.
+    let side_open = root.app.lookup.open || root.app.sessions.notes_open;
+    let closed = std::mem::replace(&mut root.pages.run.side_open, side_open) && !side_open;
     if let Some(focus) = &root.pages.run.focus
-        && window
-            .focused(cx)
-            .is_none_or(|focused| focused == root.focus)
+        && (closed
+            || window
+                .focused(cx)
+                .is_none_or(|focused| focused == root.focus))
     {
         window.focus(focus, cx);
     }
@@ -133,11 +153,74 @@ fn page_width(root: &SplatRoot, window: &Window) -> Pixels {
     root.page_width(window)
 }
 
-/// The run panel's width beside the roster (egui `panel_width`): the stat block's share of the
-/// window, or more when the roster would pass its largest width.
+/// The run panel's natural width beside the roster (egui `panel_width`): the stat block's share
+/// of the window, or more when the roster would pass its largest width.
 fn panel_width(room: Pixels, window: Pixels) -> Pixels {
     let share = px(design::side_panel_width(f32::from(window)));
     share.max(room - px(theme::RUN_LARGE.max_width) - theme::M)
+}
+
+/// The run panel's columns, by the ids egui saves their widths under (`design::Column::panel`).
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum Side {
+    /// The live view's panel.
+    Live,
+    /// Setup's panel.
+    Setup,
+    /// The ended view's Log.
+    Ended,
+}
+
+impl Side {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Live => "run_panel",
+            Self::Setup => "run_setup_panel",
+            Self::Ended => "run_ended_log",
+        }
+    }
+}
+
+/// The run panel's column (egui `Column::panel` with `page_keeps(RUN_LIST_KEEPS)`): at least
+/// `PANEL_MIN_WIDTH`, at most `PANEL_DRAG_MAX_WIDTH`, and the run's list keeps 454 px. The DM's
+/// width is kept with the other columns' (`kit::edge`), here and after a restart; its splitter
+/// takes a drag, Left and Right (`L` a press) and Home (the natural width again).
+pub(super) fn side_column(side: Side, room: Pixels, window: Pixels) -> kit::EdgeColumn {
+    kit::EdgeColumn::new(
+        side.id(),
+        kit::edge::Side::Right,
+        panel_width(room, window),
+        theme::PANEL_MIN_WIDTH..=theme::PANEL_DRAG_MAX_WIDTH,
+    )
+    .page_keeps(theme::RUN_LIST_KEEPS)
+    .name("fight panel")
+}
+
+/// The panel's width in `room`: the DM's dragged width, else the natural width, inside its
+/// range and the page.
+pub(super) fn side_width(side: Side, room: Pixels, window: Pixels, cx: &App) -> Pixels {
+    side_column(side, room, window).width(room, cx)
+}
+
+/// Before a phase draws its panel: Arrivals' kept fight words (`arrival_words`) and its
+/// footer's lines (`arrival_lines`), which the run works out and keeps as it reads them.
+fn arrivals_prepare(
+    root: &mut SplatRoot,
+) -> Vec<crate::design::outcome::plain::PlainLine<view::ArrivalPress>> {
+    let Some(run) = root
+        .app
+        .encounters
+        .run_mut()
+        .filter(|run| run.panel == crate::encounter_run::Panel::Groups && !run.hide_panel)
+    else {
+        return Vec::new();
+    };
+    run.keep_offered_lines();
+    let _ = run.arrival_words();
+    let frame = design::outcome::PaneFrame::plain();
+    let mut messages = design::outcome::Messages::new(&frame, ("arrival_footer", run.id()), 0.0);
+    run.arrival_lines(&mut messages, &frame);
+    messages.into_plain()
 }
 
 /// A click handler that acts on the run, then draws again.
@@ -220,13 +303,24 @@ fn save_status(run: &Run) -> impl IntoElement {
 /// An Undo action with the run's rules: its key while the keys work, blocked with the reason
 /// when there is nothing to undo (`undo_action`).
 fn undo_button(run: &Run, id: &'static str, words: String, density: theme::Density) -> kit::Button {
+    undo_button_keyed(run, id, words, density, true)
+}
+
+/// `undo_button`, whose key letter may give up its room (`key` false) before its words shorten.
+fn undo_button_keyed(
+    run: &Run,
+    id: &'static str,
+    words: String,
+    density: theme::Density,
+    key: bool,
+) -> kit::Button {
     let label = run.undo_label();
     let button = kit::Button::secondary(id, words)
         .icon(crate::gui::icons::UNDO)
         .density(density)
         .name(label.clone())
         .hint(label);
-    let button = if matches!(run.state.phase, Phase::Running) && !run.lookup_open {
+    let button = if key && matches!(run.state.phase, Phase::Running) && !run.lookup_open {
         button.key("U")
     } else {
         button

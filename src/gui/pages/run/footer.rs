@@ -348,7 +348,17 @@ pub(super) fn close_dialog(
                 ),
         );
     }
+    let keep_running = || {
+        kit::Button::secondary("run-close-keep", "Keep running").on_click(cx.listener(
+            move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
+                keep(root);
+                cx.notify();
+            },
+        ))
+    };
     if cannot_save {
+        // egui's order: the safe choice before the commit.
+        dialog = dialog.action(keep_running());
         dialog = dialog.action(
             kit::Button::primary("run-close-save-new", "Save as a new run and close")
                 .blocked(block.clone())
@@ -385,13 +395,8 @@ pub(super) fn close_dialog(
                 })),
         );
     }
-    dialog = dialog.action(
-        kit::Button::secondary("run-close-keep", "Keep running").on_click(cx.listener(
-            move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
-                keep(root);
-                cx.notify();
-            },
-        )),
-    );
+    if !cannot_save {
+        dialog = dialog.action(keep_running());
+    }
     Some(dialog.into_any_element())
 }

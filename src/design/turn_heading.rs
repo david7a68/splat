@@ -664,7 +664,13 @@ impl<'a> TurnStrip<'a> {
 /// Legacy users outside the part (counted by the lint's `fitting-escape` rule): the run's
 /// `dock_name`, for the dock's conflict words and the run's Undo.
 pub fn whole_words_name(ui: &Ui, name: &str, font: &FontId, width: f32) -> String {
-    let fitted = words_that_fit(ui, name, font, width);
+    whole_words_name_by(name, width, |words| number_width(ui, words, font))
+}
+
+/// [`whole_words_name`] with any measure of a line's width (a view that does not draw with
+/// egui).
+pub fn whole_words_name_by(name: &str, width: f32, measure: impl Fn(&str) -> f32) -> String {
+    let fitted = super::components::words_that_fit_by(name, width, &measure);
     if fitted == name {
         return fitted;
     }
@@ -678,17 +684,16 @@ pub fn whole_words_name(ui: &Ui, name: &str, font: &FontId, width: f32) -> Strin
         {
             words.pop();
         }
-        while words.len() > 1 && number_width(ui, &format!("{}…", words.join(" ")), font) > width
-        {
+        while words.len() > 1 && measure(&format!("{}…", words.join(" "))) > width {
             words.pop();
         }
         return format!("{}…", words.join(" "));
     }
-    let prefix_room = width - number_width(ui, &format!("… {last}"), font);
-    let prefix = words_that_fit(ui, name, font, prefix_room);
+    let prefix_room = width - measure(&format!("… {last}"));
+    let prefix = super::components::words_that_fit_by(name, prefix_room, &measure);
     let prefix = prefix.trim_end_matches('…');
     let candidate = format!("{prefix}… {last}");
-    if number_width(ui, &candidate, font) <= width {
+    if measure(&candidate) <= width {
         candidate
     } else {
         format!("… {last}")

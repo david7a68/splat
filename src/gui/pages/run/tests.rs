@@ -458,3 +458,217 @@ fn run_correct_sync_editor() {
         "the check rolls for this row, into the run's Log"
     );
 }
+/// Every harness name now drawn.
+fn names() -> Vec<String> {
+    crate::gui::kit::probe::names()
+        .into_iter()
+        .map(|name| name.to_string())
+        .collect()
+}
+
+/// Arrivals (egui `groups_tab`, `run-add-creature`): each group's heading says the fight after
+/// it joins; a typed total and Enter add the group; a total that ties a row gives the footer's
+/// Move, which moves the arrival before that row; a group dragged to the initiative list joins
+/// as its Add does.
+#[test]
+fn run_arrivals_add_tie_and_drag() {
+    let mut shell = Shell::new("run-arrivals", Seed::Groups);
+    open_saved(&mut shell, RUN);
+    shell.click("Add to fight");
+    assert_eq!(
+        shell.read(|root| root.app.encounters.run().unwrap().panel),
+        Panel::Groups
+    );
+    let groups: Vec<(String, usize)> = shell.read(|root| {
+        let run = root.app.encounters.run().unwrap();
+        run.groups
+            .iter()
+            .flat_map(|groups| groups.iter())
+            .filter(|group| group.problem.is_none())
+            .map(|group| {
+                let count = group.members.iter().map(|m| m.count as usize).sum();
+                (group.name.clone(), count)
+            })
+            .collect()
+    });
+    assert!(groups.len() >= 2, "two groups can join: {groups:?}");
+    assert!(
+        names().iter().any(|name| name.contains("Fight after: ")),
+        "a heading says the fight after its group joins: {:?}",
+        names()
+    );
+    shell.capture("run-arrivals__01-groups-with-fight-after__1200x800");
+
+    // A total that ties a present row: Enter adds the group, and the footer offers the Move.
+    let (before_count, tie) = shell.read(|root| {
+        let run = root.app.encounters.run().unwrap();
+        let tie = run
+            .state
+            .participants
+            .iter()
+            .filter(|p| p.present)
+            .find_map(|p| p.initiative)
+            .expect("a row with initiative");
+        (run.state.participants.len(), tie)
+    });
+    let (first, first_count) = groups[0].clone();
+    shell.click(&format!("Initiative total for {first}"));
+    shell.type_text(&tie.to_string());
+    shell.press("enter");
+    let after = shell.read(|root| root.app.encounters.run().unwrap().state.participants.len());
+    assert_eq!(after, before_count + first_count, "Enter adds {first}");
+    let mover = names()
+        .into_iter()
+        .find(|name| name.starts_with("Move "))
+        .unwrap_or_else(|| panic!("the tie offers Move: {:?}", names()));
+    shell.capture("run-arrivals__02-tie-move__1200x800");
+    shell.click(&mover);
+    assert!(
+        shell.read(|root| root
+            .app
+            .encounters
+            .run()
+            .unwrap()
+            .state
+            .log
+            .last()
+            .is_some_and(|line| line.contains(" moved before "))),
+        "Move moves the arrival before the row it tied"
+    );
+
+    // A dragged group joins as its Add does.
+    let (second, second_count) = groups[1].clone();
+    shell.click(&format!("Initiative total for {second}"));
+    shell.type_text("3");
+    let before = shell.read(|root| root.app.encounters.run().unwrap().state.participants.len());
+    let row = shell.read(|root| {
+        let run = root.app.encounters.run().unwrap();
+        run.state.participants[run.state.order[0]].name.clone()
+    });
+    shell.drag_target(&format!("Drag {second} to the initiative list"), &row);
+    assert_eq!(
+        shell.read(|root| root.app.encounters.run().unwrap().state.participants.len()),
+        before + second_count,
+        "a drop on the initiative list adds {second}"
+    );
+}
+
+/// Effects on rows (egui `run-effects`): an effect typed in Conditions shows on its row's second
+/// line, and U takes it back.
+#[test]
+fn run_effects_on_rows() {
+    let mut shell = Shell::new("run-effects", Seed::Campaign);
+    open_saved(&mut shell, RUN);
+    shell.click("Ember Cultist");
+    shell.click("id:run-dock-conditions");
+    shell.click("Other effect");
+    shell.type_text("Shield of Faith");
+    shell.press("enter");
+    assert!(
+        participant(&mut shell, "Ember Cultist")
+            .conditions
+            .iter()
+            .any(|c| c.name().contains("Shield of Faith")),
+        "the typed effect is on the row"
+    );
+    assert!(
+        names()
+            .iter()
+            .any(|name| name.starts_with("Shield of Faith")),
+        "the row's second line shows the effect: {:?}",
+        names()
+    );
+    shell.press("u");
+    assert!(
+        !names()
+            .iter()
+            .any(|name| name.starts_with("Shield of Faith")),
+        "U takes the effect off the row"
+    );
+}
+
+/// A creature the encounter changed (egui `run-overrides`): its card says what to add by hand
+/// and its row marks the change.
+#[test]
+fn run_overrides_card_and_row() {
+    let mut shell = Shell::new("run-overrides", Seed::Groups);
+    open_saved(&mut shell, crate::visual_tests::fixture::RUN_ARENA);
+    shell.click("Rival Captain");
+    assert!(
+        shell.bounds("Add by hand: speed 40 ft").is_some(),
+        "the card says what to add by hand: {:?}",
+        names()
+    );
+    let changed = format!("{}\u{a0}Changed", crate::gui::icons::CHANGED);
+    let changes = format!("{}\u{a0}", crate::gui::icons::CHANGED);
+    assert!(
+        names()
+            .iter()
+            .any(|name| *name == changed
+                || (name.starts_with(&changes) && name.ends_with("changes"))),
+        "the row marks the change: {:?}",
+        names()
+    );
+}
+
+/// The keyboard comes back to the run when Lookup or Notes close (egui: the run's letters work
+/// again once nothing else holds the keyboard).
+#[test]
+fn run_keys_after_lookup_and_notes() {
+    let mut shell = Shell::new("encounter-run", Seed::Campaign);
+    open_saved(&mut shell, RUN);
+    shell.press("ctrl-k");
+    assert!(
+        shell.read(|root| root.app.lookup.open),
+        "Ctrl+K opens Lookup"
+    );
+    shell.press("escape");
+    assert!(
+        !shell.read(|root| root.app.lookup.open),
+        "Escape closes Lookup"
+    );
+    let before = current_name(&mut shell);
+    shell.press("n");
+    assert_ne!(before, current_name(&mut shell), "N works after Lookup");
+    shell.press("ctrl-j");
+    assert!(
+        shell.read(|root| root.app.sessions.notes_open),
+        "Ctrl+J opens Notes"
+    );
+    // The fixture has no session yet: make one, then back to the run with Notes beside it.
+    shell.click("New session");
+    shell.click("Create session");
+    shell.click("Back to run");
+    if !shell.read(|root| root.app.sessions.notes_open) {
+        shell.press("ctrl-j");
+    }
+    // Beside Notes a click on a row takes the keyboard for one number; after the step the
+    // keyboard is the note's again, so the next letter is a word of the note.
+    let hp = participant(&mut shell, "Ember Cultist").hp.unwrap();
+    shell.click("Ember Cultist");
+    shell.type_text("3");
+    shell.press("enter");
+    assert_eq!(participant(&mut shell, "Ember Cultist").hp, Some(hp - 3));
+    let turn = current_name(&mut shell);
+    shell.type_text("n");
+    assert_eq!(
+        turn,
+        current_name(&mut shell),
+        "a letter beside Notes is the note's"
+    );
+    let words = shell.update(|root, _, _| root.app.sessions.gv_note_words(true));
+    assert!(
+        words
+            .as_ref()
+            .is_some_and(|words| words.contains("What happened\n\nn\n")),
+        "the keyboard went back to the note: {words:?}"
+    );
+    shell.press("escape");
+    assert!(
+        !shell.read(|root| root.app.sessions.notes_open),
+        "Escape closes Notes"
+    );
+    let before = current_name(&mut shell);
+    shell.press("n");
+    assert_ne!(before, current_name(&mut shell), "N works after Notes");
+}

@@ -230,6 +230,20 @@ impl Shell {
         }
     }
 
+    /// Drag the target `from` to the middle of the target `to` with the left button (a row or a
+    /// group dropped on a list), then settle.
+    pub(crate) fn drag_target(&mut self, from: &str, to: &str) {
+        let start = self
+            .bounds(from)
+            .unwrap_or_else(|| panic!("No target named {from:?}"))
+            .center();
+        let end = self
+            .bounds(to)
+            .unwrap_or_else(|| panic!("No target named {to:?}"))
+            .center();
+        self.drag(start, end);
+    }
+
     /// Scroll at `at` by `delta`, as a touchpad (`precise`, in pixels) or a mouse wheel (lines)
     /// reports it, with `modifiers` held, then settle.
     pub(crate) fn scroll(&mut self, at: Point<Pixels>, delta: ScrollDelta, modifiers: Modifiers) {
