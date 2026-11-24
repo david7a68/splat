@@ -12,7 +12,8 @@ pub fn challenge_words(value: f64) -> String {
         .map_or_else(|| format!("{value}"), |(_, words)| words.to_owned())
 }
 
-fn range_words((low, high): (Option<f64>, Option<f64>)) -> String {
+/// The words of a challenge range's chip: `CR 1 to 5`.
+pub fn range_words((low, high): (Option<f64>, Option<f64>)) -> String {
     match (low.map(challenge_words), high.map(challenge_words)) {
         (Some(low), Some(high)) if low == high => format!("CR {low}"),
         (Some(low), Some(high)) => format!("CR {low} to {high}"),
@@ -20,6 +21,52 @@ fn range_words((low, high): (Option<f64>, Option<f64>)) -> String {
         (None, Some(high)) => format!("CR {high} or less"),
         (None, None) => String::new(),
     }
+}
+
+/// The Filter button's words: `Filter`, or `Filter (2)` with two values chosen.
+pub fn filter_word(filter: &Filter) -> String {
+    match filter.count() {
+        0 => "Filter".to_owned(),
+        count => format!("Filter ({count})"),
+    }
+}
+
+/// A fact's row in the Filter menu: its label, with how many of its values are chosen.
+pub fn facet_word(filter: &Filter, facet: Facet) -> String {
+    let chosen = if facet == Facet::Challenge {
+        usize::from(filter.challenge != (None, None))
+    } else {
+        filter.chosen.get(&facet).map_or(0, |v| v.len())
+    };
+    if chosen > 0 {
+        format!("{} ({chosen})", facet.label())
+    } else {
+        facet.label().to_owned()
+    }
+}
+
+/// The chosen values, each as its chip shows it: `Habitat: Underdark`.
+pub fn chips(filter: &Filter) -> Vec<(Facet, String, String)> {
+    filter
+        .chosen
+        .iter()
+        .flat_map(|(facet, values)| {
+            values
+                .iter()
+                .map(move |v| (*facet, v.clone(), format!("{}: {v}", facet.label())))
+        })
+        .collect()
+}
+
+/// A press on a challenge rating in the lowest (`high` false) or highest row: it becomes that
+/// bound, and a second press on the same rating removes the bound.
+pub fn choose_bound(filter: &mut Filter, high: bool, number: f64) {
+    let bound = if high {
+        &mut filter.challenge.1
+    } else {
+        &mut filter.challenge.0
+    };
+    *bound = (*bound != Some(number)).then_some(number);
 }
 
 /// The Filter menu and the chips. `creatures` gives the creatures that the menu counts;
@@ -32,22 +79,11 @@ pub fn filter_bar<'a>(
     let before = filter.clone();
     ui.horizontal_wrapped(|ui| {
         let count = filter.count();
-        let word = if count == 0 {
-            "Filter".to_owned()
-        } else {
-            format!("Filter ({count})")
-        };
-        let response = design::menu_button_at_line_start(ui, &word, count > 0);
+        let response = design::menu_button_at_line_start(ui, &filter_word(filter), count > 0);
         design::named(ui, &response, "Filter creatures");
         design::menu_popup(&*ui, &response)
             .show_submenus(|ui, submenus| menu(ui, submenus, filter, &choices(creatures())));
-        let chosen: Vec<(Facet, String)> = filter
-            .chosen
-            .iter()
-            .flat_map(|(facet, values)| values.iter().map(move |v| (*facet, v.clone())))
-            .collect();
-        for (facet, value) in chosen {
-            let label = format!("{}: {value}", facet.label());
+        for (facet, value, label) in chips(filter) {
             if chip(ui, &label) {
                 filter.toggle(facet, &value);
             }
@@ -95,18 +131,7 @@ fn menu(
         .collect();
     let words: Vec<String> = facets
         .iter()
-        .map(|(facet, _)| {
-            let chosen = if *facet == Facet::Challenge {
-                usize::from(filter.challenge != (None, None))
-            } else {
-                filter.chosen.get(facet).map_or(0, |v| v.len())
-            };
-            if chosen > 0 {
-                format!("{} ({chosen})", facet.label())
-            } else {
-                facet.label().to_owned()
-            }
-        })
+        .map(|(facet, _)| facet_word(filter, *facet))
         .collect();
     // The widest fact's choices: the menu keeps one width whichever facts are open.
     let widest = facets
@@ -162,14 +187,14 @@ fn challenge_menu(ui: &mut egui::Ui, filter: &mut Filter, values: &[(String, usi
                     continue;
                 };
                 let bound = if high {
-                    &mut filter.challenge.1
+                    filter.challenge.1
                 } else {
-                    &mut filter.challenge.0
+                    filter.challenge.0
                 };
-                let response = design::choice_wrapped(ui, *bound == Some(number), value, None);
+                let response = design::choice_wrapped(ui, bound == Some(number), value, None);
                 design::named(ui, &response, &format!("{title} CR {value}"));
                 if response.clicked() {
-                    *bound = (*bound != Some(number)).then_some(number);
+                    choose_bound(filter, high, number);
                 }
             }
         });

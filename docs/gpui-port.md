@@ -195,11 +195,12 @@ says otherwise (`cx.listener` makes them).
 | Fact (`fact`) | `fact::fact_line(label, values)`, `fact::words(label, values)`, `fact::tile_label(..)`, `fact::roll_tile(label, link)` | `Label: a · b` on its own line (no line ends at a dot); a stat tile whose value rolls |
 | Rows (`list`) | `Row::new(id, name).height(px).grows().selected(bool).on_click(f).child(..)`, `two_line_row(id, title, detail, selected)` | List rows with hover, selection and focus; `grows` makes `height` a minimum, for words that wrap |
 | Tabs (`tabs`) | `Segmented::new(id, options, chosen).on_select(\|&usize, window, cx\|)` | Page tabs and small exclusive choices |
-| Checkbox (`checkbox`) | `Checkbox::new(id, label, checked).mixed(bool).blocked(..).on_click(f)`, `Switch::new(id, label, on).blocked(..).on_click(f)` | Yes/no settings; `mixed` draws egui's partly-chosen dash |
+| Checkbox (`checkbox`) | `Checkbox::new(id, label, checked).mixed(bool).name(words).blocked(..).on_click(f)`, `Switch::new(id, label, on).blocked(..).on_click(f)` | Yes/no settings; `mixed` draws egui's partly-chosen dash |
 | Menu (`menu`) | `MenuButton::new(id, Button).item(MenuItem::new(label).icon(..).checked(bool).blocked(Option<reason>).destructive().on_click(f))` | A row's `⋯`, `New ▾` |
 | Status menu | `StatusMenu::new(id, Status).item(MenuItem)` | A status that opens a menu under it (`2 notes need fixing`) |
 | Drop-down | `Dropdown::new(id, name, options, Option<chosen>).placeholder(..).blocked(..).width(px).density(..).command(MenuItem).on_select(\|&usize, window, cx\|)` | Choose one value |
 | Popover | `Popover::new(id, Button, content).on_status(..)` | Content in a raised layer under a button |
+| Creature filter (`creature_filter`) | `FilterBar::new(id, &Filter, \|\| choices, cx).on_change(\|&Filter, window, cx\|)`, `FilterBar::menu_id(&id)` | egui's `creature_filter::filter_bar`: the Filter menu (a submenu per fact, the challenge's Lowest and Highest rows), a chip per chosen value, Clear filters. `choices` runs only while the menu is open; the caller keeps the filter where its egui page keeps it |
 | Menu layer | `menu::layer_for(&id, content)` with `menu::open_popup(id, window, cx)`, `menu::is_open(&id, cx)`, `menu::any_open(cx)`, `menu::close_open_popup(window, cx)` | A menu that code opens (a row's right-click menu): draw the layer after its element while `is_open` |
 | Section (`section`) | `Section::new(id, title, open).blocked(Option<reason>).on_toggle(\|&bool, window, cx\|).child(..)` | egui's `design::section`: a `Strong` title after a caret. With `on_toggle` the caller keeps whether it is open; without it the section keeps it under its id, starting at `open` |
 | Quiet section | `QuietSection::new(id, title).default_open(bool).child(..)`, or caller-kept `.open(bool).on_toggle(\|&bool, window, cx\|)` | egui's `design::quiet_section`: a caret and muted `Small` words that open what most readers skip (Technical details). It keeps its own open state, unless the caller gives `open` and `on_toggle` (to build a costly body only while open) |
@@ -321,7 +322,8 @@ fn library_browse() {
   `Shell::over(app, tempdir, size)` for a `Splat` you built.
 - `update(|root, window, cx| …)` changes state as a test's setup; `read(|root| …)` reads it;
   `settle()` runs frames until idle; `wait(Duration)` advances the clock (timers, the poll);
-  `bounds(name)` and `click_at(point)` for a place.
+  `bounds(name)` and `click_at(point)` for a place; `scroll(name, dy)` turns the wheel over a
+  target (a negative `dy` shows what is below), for a row a scrolled layer hides.
 - Name captures `<scenario>__<step>__<w>x<h>` like the egui references, and compare them with
   `artifacts/screenshots/egui-reference/` by eye.
 - Put your tests in your folder (`pages/<area>/tests.rs`, `#[cfg(test)] mod tests;`). Run them with

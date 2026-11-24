@@ -20,6 +20,7 @@ pub struct Checkbox {
     label: SharedString,
     checked: bool,
     mixed: bool,
+    name: Option<SharedString>,
     blocked: Option<SharedString>,
     on_click: Option<OnClick>,
 }
@@ -31,6 +32,7 @@ impl Checkbox {
             label: label.into(),
             checked,
             mixed: false,
+            name: None,
             blocked: None,
             on_click: None,
         }
@@ -39,6 +41,13 @@ impl Checkbox {
     /// Disabled with a reason on hover.
     pub fn blocked(mut self, reason: Option<impl Into<SharedString>>) -> Self {
         self.blocked = reason.map(Into::into);
+        self
+    }
+
+    /// An accessible name that says more than its words (`Filter Habitat: Underdark` for a box
+    /// whose words are `Underdark (12)`); the harness finds it by this name too.
+    pub fn name(mut self, name: impl Into<SharedString>) -> Self {
+        self.name = Some(name.into());
         self
     }
 
@@ -83,6 +92,7 @@ impl RenderOnce for Checkbox {
         line(
             self.id,
             self.label,
+            self.name,
             mark,
             self.blocked,
             enabled.then_some(self.on_click).flatten(),
@@ -152,6 +162,7 @@ impl RenderOnce for Switch {
         line(
             self.id,
             self.label,
+            None,
             track,
             self.blocked,
             enabled.then_some(self.on_click).flatten(),
@@ -163,6 +174,7 @@ impl RenderOnce for Switch {
 fn line(
     id: ElementId,
     label: SharedString,
+    name: Option<SharedString>,
     mark: gpui::Div,
     blocked: Option<SharedString>,
     on_click: Option<OnClick>,
@@ -181,7 +193,7 @@ fn line(
         .rounded(RADIUS_CONTROL)
         .focusable()
         .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
-        .aria_label(label.clone())
+        .aria_label(name.clone().unwrap_or_else(|| label.clone()))
         .aria_toggled(toggled)
         .child(mark)
         .child(div().ty(Type::Body).text_color(c.text).child(label.clone()));
@@ -195,6 +207,10 @@ fn line(
             .cursor_pointer()
             .on_click(move |event, window, cx| on_click(event, window, cx));
     }
-    let line = target(line, label);
+    let line = target(line, label.clone());
+    let line = match name.filter(|name| *name != label) {
+        Some(name) => target(line, name),
+        None => line,
+    };
     target(line, element_name(&id))
 }
