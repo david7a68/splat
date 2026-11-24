@@ -523,7 +523,7 @@ pub(super) fn render(
         .border_color(c.hairline)
         .shadow_md()
         .child(content);
-    // Under the `/`, or above it when the window has no room below (egui `popup_at`): the
+    // Under the `/`, or above it when the window has no room below: the
     // place where the `/` was last drawn. Before the note has drawn it, at the note's top.
     let words = root
         .app

@@ -154,7 +154,7 @@ pub(super) fn render(
     })
     .unwrap_or(false);
     if editing_group {
-        // The group being assembled takes the pane (egui `plan_pane`): the group editor, and on
+        // The group being assembled takes the pane: the group editor, and on
         // the narrow Plan tab the page's messages keep their footer under it.
         let lines = if page_footer {
             with_plan(&mut root.app, |sessions, settings, book, plan| {
@@ -472,7 +472,7 @@ fn add_strip(
         .into_any_element()
 }
 
-/// One of the Add strip's menus (egui `fight_menu`, `group_menu`).
+/// One of the Add strip's menus.
 pub(super) struct AddMenu {
     group: bool,
     id: &'static str,
@@ -512,7 +512,7 @@ impl AddMenu {
 const MENU_WIDTH: gpui::Pixels = gpui::px(240.0);
 const MENU_LIST_HEIGHT: gpui::Pixels = gpui::px(240.0);
 
-/// An Add menu (egui `plan_menu`): the new one first, in a fixed place, with its reason under it
+/// An Add menu: the new one first, in a fixed place, with its reason under it
 /// when it is blocked; a search once the campaign has more than `FIGHT_SEARCH_FROM`; then the
 /// campaign's, those that hold the search's words, in a list that scrolls.
 fn add_menu(
@@ -1219,8 +1219,8 @@ fn fight_row(
         name.clone(),
         on(cx, PlanAct::TogglePlanned(path.clone())),
     );
-    // The roster and the difficulty as one line that wraps between words, its word strong
-    // (`prepare_plan_line`). The form never adds a line to the roster's own: where it would,
+    // The roster and the difficulty as one line that wraps between words, its word strong.
+    // The form never adds a line to the roster's own: where it would,
     // the party's size gives way first (`5 party`, the same on every row).
     let roster = match (roster_with_party, width) {
         (Some(with_party), Some(width)) => {

@@ -361,8 +361,7 @@ fn reading(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
             kit::Button::secondary("reading-add-to-notes", "Add to notes")
                 .density(Density::Read)
                 .on_click(cx.listener(|root, _, _, cx| {
-                    let ctx = root.bridge.ctx().clone();
-                    root.app.sessions.gv_summary_to_notes(&ctx);
+                    root.app.sessions.gv_summary_to_notes();
                     cx.notify();
                 }))
                 .into_any_element()

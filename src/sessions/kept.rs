@@ -95,7 +95,7 @@ impl Kept for FolderMoved {
     type Owner = FolderLink;
     const ENDS: Ends = Ends {
         // The DM's next edit of the folder field, and the next save or failed save of the
-        // folder (`folder_view`, `folder_save_row`).
+        // folder (`folder_view`).
         owner_changed: OwnerChanged::Ends,
         // A disk scan (`refresh`) ends it when the folder it moved to is gone.
         disk_changed: DiskChanged::Checked,

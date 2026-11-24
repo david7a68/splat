@@ -545,7 +545,10 @@ fn notes_panel_beside_another_page() {
 }
 
 /// `/` at a word's start opens the command menu at the note; its letters narrow it; Escape
-/// closes it and leaves the words; `Search` links the chosen entry where the `/` was.
+/// closes it and leaves the words; letters no command has close it, and a slash in a word opens
+/// none. `Search` keeps Tab in its field and links the chosen entry where the `/` was; Escape
+/// after a command leaves no link; `Generate NPC` saves the NPC to the World with Enter and
+/// links it. The note goes on after each link.
 #[test]
 fn slash_menu_in_the_note() {
     let mut shell = Shell::new("session-slash", Seed::Campaign);
@@ -591,18 +594,86 @@ fn slash_menu_in_the_note() {
         note_words(&mut shell).ends_with("Met /se"),
         "Escape leaves the words"
     );
-    shell.type_text(" and /");
+    // No command starts with these letters: the menu goes and the words stay. In a word, a
+    // slash is only a slash.
+    shell.type_text(" /zz");
+    assert!(shell.bounds("Search").is_none(), "no command: no menu");
+    shell.type_text(" and/");
+    assert!(
+        shell.bounds("Search").is_none(),
+        "a slash in a word opens no menu"
+    );
+    assert!(note_words(&mut shell).ends_with("Met /se /zz and/"));
+    // Search: the command's words go, and Tab in the search field stays there. The search
+    // and the NPC's tables read Lookup's index, a background read: wait on its result.
+    shell.update(|root, _, _| root.app.lookup.wait_for_load());
+    shell.settle();
+    shell.type_text(" /");
     shell.click("Search");
-    shell.type_text("Hobb");
-    let first = shell.bounds("id:slash-result-0");
-    if first.is_some() {
-        shell.press("enter");
-        let words = note_words(&mut shell);
-        assert!(
-            words.contains("and [["),
-            "the chosen entry's link takes the / place: {words:?}"
-        );
-    }
+    let before = note_words(&mut shell);
+    assert!(
+        before.ends_with("and/ "),
+        "the command's words are gone: {before:?}"
+    );
+    shell.type_text("cinder");
+    shell.press("tab");
+    shell.press("tab");
+    shell.type_text(" wolf");
+    assert_eq!(
+        note_words(&mut shell),
+        before,
+        "Tab in the search stays there"
+    );
+    assert!(
+        shell.bounds("id:slash-result-0").is_some(),
+        "the search finds the entry"
+    );
+    // Enter links the chosen entry where the `/` was, and the note goes on after the link.
+    shell.press("enter");
+    shell.type_text(" today");
+    let words = note_words(&mut shell);
+    assert!(
+        words.ends_with("and/ [[Cinder Wolf]] today"),
+        "the chosen entry's link takes the / place: {words:?}"
+    );
+    // Escape after a command goes back to the note with no link.
+    shell.type_text(" /se");
+    shell.press("enter");
+    shell.press("escape");
+    assert!(
+        shell.bounds("id:slash-result-0").is_none(),
+        "Escape closes the search"
+    );
+    shell.type_text("x");
+    let words = note_words(&mut shell);
+    assert!(
+        words.ends_with("today x"),
+        "no link, the words go on: {words:?}"
+    );
+    // Generate NPC: Enter saves the NPC to the World and links it; the note goes on after it.
+    let npcs = shell.read(|root| {
+        root.app
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join("NPCs"))
+            .expect("a campaign is open")
+    });
+    let count = || std::fs::read_dir(&npcs).map_or(0, Iterator::count);
+    let made = count();
+    shell.type_text(" /gen");
+    shell.press("enter");
+    assert!(
+        shell.bounds("Save to World").is_some(),
+        "the NPC card offers Save to World"
+    );
+    shell.press("enter");
+    assert_eq!(count(), made + 1, "the NPC is written to the World");
+    shell.type_text(" joined");
+    let words = note_words(&mut shell);
+    assert!(
+        words.ends_with("]] joined") && words.contains("x [["),
+        "the NPC's link takes the / place: {words:?}"
+    );
 }
 
 /// The event `id` as the Timeline holds it.

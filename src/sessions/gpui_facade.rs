@@ -343,7 +343,7 @@ impl Sessions {
         }
     }
 
-    /// A press on a tab: 0 Plan, 1 Note, 2 Recordings (`session_header`).
+    /// A press on a tab: 0 Plan, 1 Note, 2 Recordings.
     pub fn gv_set_tab(&mut self, tab: u8) {
         let shown = match tab {
             0 => Tab::Plan,
@@ -456,7 +456,7 @@ pub enum RecordControl {
     },
 }
 
-/// The record line under the title (`record_line_body`).
+/// The record line under the title.
 pub enum RecordLine {
     None,
     /// This session's live recording: its state, time and what it hears.
@@ -478,7 +478,7 @@ pub enum RecordLine {
     },
 }
 
-/// The Last time line (`last_time_line`).
+/// The Last time line.
 pub struct LastTimeView {
     pub id: Uuid,
     pub label: String,
@@ -536,7 +536,7 @@ impl Sessions {
         self.confirm_record = true;
     }
 
-    /// The record line's state now (`record_line_body`).
+    /// The record line's state now.
     pub fn gv_record_line(&mut self) -> RecordLine {
         use crate::recording::Health;
         if self.tab == Tab::Recordings
@@ -634,7 +634,7 @@ impl Sessions {
         self.confirm_record = false;
     }
 
-    /// The Last time line, read once for each selection (`see_last_time`, `last_time_line`).
+    /// The Last time line, read once for each selection (`see_last_time`).
     /// Nothing while a group being assembled here needs the height.
     pub fn gv_last_time(&mut self, book: &Book, plan: &Plan<'_>) -> Option<LastTimeView> {
         if plan.group_open && self.group_session == self.selected {
@@ -684,7 +684,7 @@ impl Sessions {
     }
 
     /// The Read view of the open note is worth offering: it holds written words, or the DM is
-    /// writing (`session_header`).
+    /// writing.
     pub fn gv_offers_read(
         &mut self,
         plan: &Plan<'_>,
@@ -709,7 +709,7 @@ impl Sessions {
         plan.group_open && self.group_session == self.selected
     }
 
-    /// An Add menu's search (`plan_menu`), of the Group menu when `group`, else the Fight
+    /// An Add menu's search, of the Group menu when `group`, else the Fight
     /// menu's: its words while the menu lists more than `FIGHT_SEARCH_FROM` names (`None`: no
     /// search), and the names it lists for them.
     pub fn gv_menu_search<'a>(
@@ -744,7 +744,7 @@ impl Sessions {
     }
 }
 
-/// What a press in the session banner does (`banner`, `banner_notices`, `draft_warning`).
+/// What a press in the session banner does (`draft_warning`).
 #[derive(Clone, Debug)]
 pub enum BannerAct {
     StalledRecord,
@@ -897,7 +897,7 @@ fn draft_warning(draft: &super::Draft, name: Option<&str>, template: bool) -> Ve
 }
 
 impl Sessions {
-    /// The session banner, or `None` when it has nothing to say (`banner`).
+    /// The session banner, or `None` when it has nothing to say.
     pub fn gv_banner(&self, settings: &ProcessingSettings, run_open: bool) -> Option<Banner> {
         use crate::design::Tone;
         use plain::ChoiceForm as Kind;
@@ -1045,7 +1045,7 @@ impl Sessions {
                 choices,
             });
         }
-        // What arrived on its own (`banner_notices`).
+        // What arrived on its own.
         let notes = self.on_page && self.view == View::Notes && self.form.is_none();
         let other = if notes && self.other_recording_shown() {
             self.live
@@ -1121,7 +1121,7 @@ impl Sessions {
         Some(Banner { other, messages })
     }
 
-    /// A press in the banner (the end of `banner`, `banner_notices` and `draft_warning`).
+    /// A press in the banner (`draft_warning`'s choices among them).
     pub fn gv_banner_act(
         &mut self,
         act: BannerAct,
@@ -1205,7 +1205,7 @@ impl Sessions {
     }
 }
 
-/// One part of the note's Read view (`show_prepared`).
+/// One part of the note's Read view.
 pub enum ReadPart {
     /// Markdown to read.
     Words(String),
@@ -1219,7 +1219,7 @@ pub enum ReadPart {
     Gone(String),
 }
 
-/// The note's Read view (`read_tab`, `read_body`).
+/// The note's Read view.
 pub struct ReadView {
     pub written: bool,
     pub before: Vec<ReadPart>,
@@ -1261,7 +1261,7 @@ impl Sessions {
             .map(|slice| slice.tail.as_str().to_owned())
     }
 
-    /// The DM's edit in the note's editor: its whole words after it (`note_editor`).
+    /// The DM's edit in the note's editor: its whole words after it.
     pub fn gv_note_edited(&mut self, in_panel: bool, words: &str) {
         let Some(draft) = &mut self.draft else {
             return;
@@ -1372,7 +1372,7 @@ impl Sessions {
 
     /// Where the keyboard is: in the note's editor (`focused`), or in another control
     /// (`elsewhere`). Narrowing keeps whichever side the DM last worked in: the note while it has
-    /// focus, the plan once focus moves to a plan control (egui `note_editor`).
+    /// focus, the plan once focus moves to a plan control.
     pub fn gv_note_has_focus(&mut self, in_panel: bool, focused: bool, elsewhere: bool) {
         self.note_had_focus = focused;
         if in_panel {
@@ -1385,7 +1385,7 @@ impl Sessions {
         }
     }
 
-    /// The note's Read view, prepared once per change of the note (`read_tab`).
+    /// The note's Read view, prepared once per change of the note.
     pub fn gv_read(
         &mut self,
         index: Option<&crate::lookup::ContentIndex>,
@@ -1429,7 +1429,7 @@ impl Sessions {
     }
 }
 
-/// The Notes panel's head (`notes_panel`).
+/// The Notes panel's head.
 pub enum PanelState {
     /// No session yet: `New session` in place of the editor.
     NoSession,
@@ -1558,7 +1558,7 @@ pub struct FightRow {
     /// The roster's words, then the difficulty's parts (`true`: the word, shown strong).
     pub roster: String,
     /// The roster with the party's size first (`5 party · …`), when the party has members: the
-    /// line keeps it while the row has room for it (`prepare_plan_line`).
+    /// line keeps it while the row has room for it.
     pub roster_with_party: Option<String>,
     pub difficulty: Vec<(String, bool)>,
     pub running: bool,
@@ -1612,7 +1612,7 @@ pub struct PlanView {
     pub primary_free: bool,
     pub open_run: bool,
     /// The heading's `N scenes`, when the scenes fold or the DM opened them: the count, and
-    /// whether they are folded now (`fold_line`).
+    /// whether they are folded now.
     pub fold: Option<(usize, bool)>,
     /// The scenes fold now: their rows are left out.
     pub folded: bool,
@@ -1998,7 +1998,7 @@ impl Sessions {
     }
 
     /// The open journey's checks block, before it draws: the length that settled, the start on
-    /// the clock, and the results that still hold (`plan_pane`'s steps before its rows). `None`
+    /// the clock, and the results that still hold. `None`
     /// when the open row is not a journey of this plan.
     pub fn gv_travel(
         &mut self,
@@ -2105,7 +2105,7 @@ impl Sessions {
                 } else {
                     book.add(kind, session)
                 };
-                // The row after the new one comes into view (`plan_pane`'s reveal).
+                // The row after the new one comes into view.
                 self.row_reveal = Some((id.clone(), 0, ctx.cumulative_pass_nr()));
                 self.record_plan_add(&id, book, ctx);
             }
@@ -2143,7 +2143,7 @@ impl Sessions {
             }
             PlanAct::RemoveEvent(id) => self.remove_plan_event(&id, book),
             PlanAct::AddToNotes(link) => {
-                if session.is_some() && self.add_to_note(ctx, &link) {
+                if session.is_some() && self.add_to_note(&link) {
                     let body = self.draft.as_ref().map_or("", |draft| draft.body.as_str());
                     if let Some(session) = session {
                         self.mentions
@@ -2256,7 +2256,7 @@ impl Sessions {
     }
 }
 
-/// What a recording row offers, as the egui row lays it (`recording_row`).
+/// What a recording row offers.
 pub struct RecordingRow {
     pub path: PathBuf,
     pub title: String,
@@ -2397,7 +2397,7 @@ impl Sessions {
         self.reading.is_some()
     }
 
-    /// The Recordings tab's rows (`recordings_tab`, `recording_row`, `markers`).
+    /// The Recordings tab's rows.
     pub fn gv_recording_rows(
         &mut self,
         settings: &ProcessingSettings,
@@ -2748,7 +2748,7 @@ impl Sessions {
             .collect()
     }
 
-    /// A press in a recording's row (`recording_row`, `markers`).
+    /// A press in a recording's row.
     pub fn gv_recording_act(
         &mut self,
         path: &std::path::Path,
@@ -2798,7 +2798,7 @@ impl Sessions {
                 self.wants_processing_settings = true;
                 self.wants_speech_key = key;
             }
-            RecordingAct::Read(made) => self.open_reading(&recording, made_of(made), None, None),
+            RecordingAct::Read(made) => self.open_reading(&recording, made_of(made), None),
             RecordingAct::AgainNotNow => self.confirm_again = None,
             RecordingAct::Cancel => {
                 if let Some((job, _)) = &self.job {
@@ -2830,13 +2830,7 @@ impl Sessions {
             }
             RecordingAct::ReadMarker(index) => {
                 if let Some(marker) = recording.markers.get(index) {
-                    let key = marker.key(&recording.name);
-                    self.open_reading(
-                        &recording,
-                        super::Made::Marked,
-                        Some(&marker.at.clone()),
-                        Some((marker.clone(), key)),
-                    );
+                    self.open_reading(&recording, super::Made::Marked, Some(&marker.at.clone()));
                 }
             }
             RecordingAct::OpenEvent(id) => self.wants_event = Some(id),
@@ -2920,7 +2914,7 @@ impl Sessions {
             .find(|recording| recording.path == path)
             .cloned()
         {
-            self.open_reading(&recording, made_of(made), None, None);
+            self.open_reading(&recording, made_of(made), None);
         }
     }
 
@@ -2934,7 +2928,7 @@ impl Sessions {
     }
 
     /// A summary's `Add to notes`.
-    pub fn gv_summary_to_notes(&mut self, ctx: &egui::Context) {
+    pub fn gv_summary_to_notes(&mut self) {
         let Some(summary) = self
             .reading
             .as_ref()
@@ -2943,7 +2937,7 @@ impl Sessions {
         else {
             return;
         };
-        let _ = self.add_to_note(ctx, &summary);
+        let _ = self.add_to_note(&summary);
     }
 
     /// The delete dialog's recording, while it is open.
@@ -2990,7 +2984,7 @@ pub struct TemplateRow {
     pub selected: bool,
 }
 
-/// The shown template, as its editor draws it (`template_editor`).
+/// The shown template, as its editor draws it.
 pub struct TemplateView {
     pub name: String,
     /// A campaign template: its file, its draft's words and state, and its menu's word
@@ -3032,7 +3026,7 @@ impl Sessions {
         self.select_template(name);
     }
 
-    /// The shown template, choosing the first when none is (`templates_view`).
+    /// The shown template, choosing the first when none is.
     pub fn gv_template(&mut self) -> Option<TemplateView> {
         if self.template.is_none()
             && let Some(first) = self.templates.first().map(|t| t.name.clone())
@@ -3166,3 +3160,72 @@ impl Sessions {
 }
 
 pub use crate::sessions::slash_plain as slash;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Round 30 review F4 of PR 400: every warning of the session note that the banner shows on
+    /// any page names its note, with its cause: the conflict, the missing note, the discarded
+    /// and missing note, and the failed save. A template's warning (no name) keeps `This note`.
+    /// Ported from the egui banner test to the banner's data (`draft_warning`).
+    #[test]
+    fn a_session_note_warning_names_its_note_in_every_state() {
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("Session 1 - Ash.md");
+        std::fs::write(&path, "---\nsession_id: 1\n---\n# Ash\n").unwrap();
+        const NAME: &str = "Session 1: Ash on the Road";
+        let shows = |state: DraftState, discarded: bool, name: Option<&str>, words: &str| {
+            let mut draft = super::super::Draft::open(&path).unwrap();
+            draft.state = state;
+            if discarded {
+                draft.discard();
+                draft.state = DraftState::Missing;
+            }
+            let said: Vec<String> = draft_warning(&draft, name, name.is_none())
+                .into_iter()
+                .map(|message| message.words)
+                .collect();
+            let named = said.iter().any(|said| said.contains(words));
+            let unnamed = said
+                .iter()
+                .any(|said| said.contains("This note ") || said.contains("This file "));
+            (named, unnamed)
+        };
+        for (state, discarded, cause) in [
+            (
+                DraftState::Conflict,
+                false,
+                "The note of Session 1: Ash on the Road changed on disk.",
+            ),
+            (
+                DraftState::Missing,
+                false,
+                "The note of Session 1: Ash on the Road is gone from the folder.",
+            ),
+            (
+                DraftState::Missing,
+                true,
+                "The note of Session 1: Ash on the Road is gone from the folder.",
+            ),
+            (
+                DraftState::Failed("Not saved. The disk is full.".to_owned()),
+                false,
+                "The note of Session 1: Ash on the Road was not saved. The disk is full.",
+            ),
+        ] {
+            let (named, unnamed) = shows(state.clone(), discarded, Some(NAME), cause);
+            assert!(
+                named && !unnamed,
+                "{state:?} (discarded {discarded}) names its note: {cause}"
+            );
+        }
+        let (named, unnamed) = shows(
+            DraftState::Conflict,
+            false,
+            None,
+            "This note changed on disk.",
+        );
+        assert!(named && unnamed, "a template's warning keeps its words");
+    }
+}

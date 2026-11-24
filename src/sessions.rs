@@ -1526,12 +1526,6 @@ impl Draft {
             .map(|(from, _)| (from, self.body.key()));
     }
 
-    /// Whether every change of the body since revision `from` (the panel's mark) is the note's
-    /// own write, in a row.
-    pub fn own_since(&self, from: crate::design::text_draft::DraftKey) -> bool {
-        self.own_since == Some((from, self.body.key()))
-    }
-
     /// This draft, a copy of `open` that an act wrote and saved (an event's link update, its
     /// Undo), takes `open`'s place. The copy is a new document, so the row of own writes goes
     /// on through it only when the copy started from the words `open` holds at the row's end.
