@@ -577,7 +577,7 @@ pub(super) fn unregister_dialog(
     root: &mut SplatRoot,
     cx: &mut Context<SplatRoot>,
 ) -> Option<AnyElement> {
-    let view = root.app.library.unregister_view(&root.app.campaigns)?;
+    let view = root.app.library.unregister_view()?;
     let c = colors();
     Some(
         kit::Dialog::new("library-unregister", view.title)

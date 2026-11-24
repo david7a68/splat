@@ -49,6 +49,41 @@ fn search_open_and_back() {
         !shell.read(|root| root.app.lookup.open),
         "Escape after a row press closes Lookup"
     );
+    // Ctrl+K opens on the last words, selected, so typing replaces them.
+    shell.press("ctrl-k");
+    shell.type_text("goblin");
+    assert_eq!(
+        shell.read(|root| root.app.lookup.query().to_owned()),
+        "goblin",
+        "the old words were selected"
+    );
+    // Clear empties the field and the reader; then Generate NPC holds an unsaved NPC.
+    shell.click("Clear");
+    assert!(shell.read(|root| matches!(
+        root.app.lookup.showing(),
+        crate::lookup::panel_view::Showing::Nothing
+    )));
+    shell.click("Generate NPC");
+    let npc = shell.read(|root| root.app.lookup.generated_name().map(str::to_owned));
+    assert!(npc.is_some(), "Generate NPC holds an NPC");
+    shell.click(crate::lookup::SEARCH_NAME);
+    shell.type_text("goblin");
+    assert!(
+        shell.read(entry_name).is_some(),
+        "the search opens an entry over the card"
+    );
+    // Emptying the field from the keyboard keeps the entry and the unsaved NPC.
+    for _ in 0.."goblin".len() {
+        shell.press("backspace");
+    }
+    assert_eq!(shell.read(|root| root.app.lookup.query().to_owned()), "");
+    assert_eq!(
+        shell.read(|root| root.app.lookup.generated_name().map(str::to_owned)),
+        npc,
+        "the unsaved NPC stays"
+    );
+    // Each shorter word opens its own best match; the last one stays on screen.
+    assert!(shell.read(entry_name).is_some(), "an entry stays on screen");
 }
 
 /// Escape in the search field closes Lookup.
@@ -204,7 +239,21 @@ fn npc_in_lookup() {
             .any(|p| p.name == "Rook Ambry"))),
         "Rook Ambry joined the run"
     );
-    // The stat block link opens the Guard, a creature, with its stat block.
+    // The run's Undo takes him back, so the run is as it was before the link below.
+    let undo = crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with("Undo") && name.contains("add Rook Ambry"))
+        .expect("the run's Undo of the add");
+    shell.click(&undo);
+    assert!(
+        shell.read(|root| root.app.encounters.run().is_some_and(|run| !run
+            .state
+            .participants
+            .iter()
+            .any(|p| p.name == "Rook Ambry"))),
+        "Undo takes Rook Ambry out of the run"
+    );
+    // The stat block link opens the Guard, a creature, with its stat block, and adds nothing.
     shell.click("Guard");
     assert_eq!(shell.read(entry_name).as_deref(), Some("Guard"));
     assert!(
@@ -216,17 +265,36 @@ fn npc_in_lookup() {
     shell.click("Watch House");
     assert_eq!(shell.read(entry_name).as_deref(), Some("Watch House"));
     shell.capture("npc-in-lookup__03-npc-place-link__1200x800");
+    // Rook moves and makes a promise; the DM writes both down without leaving the fight.
+    let north = world_entry(
+        &mut shell,
+        "Locations/North Gate.md",
+        "North Gate",
+        "location",
+        "",
+    );
+    reload(&mut shell, north);
     shell.click("id:lookup-back");
     assert_eq!(shell.read(entry_name).as_deref(), Some("Rook Ambry"));
-    // The edit form in Lookup: Status, then Save changes, and its Undo.
+    // The edit form in Lookup: a new Place and a new line of Text, then Save changes, and its
+    // Undo.
     shell.click("Edit Rook Ambry");
     assert!(
         shell.bounds("Save changes").is_some(),
         "the edit form shows"
     );
+    shell.click("Change Place");
+    shell.type_text("North");
+    shell.click("North Gate");
+    shell.click("Text");
+    shell.press("ctrl-end");
+    shell.press("enter");
+    shell.type_text("Never names the captain. Owes Nell a favour.");
+    assert!(
+        shell.bounds("id:world-pick-cancel").is_none(),
+        "the place is chosen and the picker closed"
+    );
     shell.capture("npc-in-lookup__04-npc-edit-form-in-lookup__1200x800");
-    shell.click("Status");
-    shell.type_text("Owes Nell a favour");
     let save = shell.bounds("Save changes").unwrap();
     assert!(
         save.bottom() <= shell.size().height && save.right() <= shell.size().width,
@@ -241,11 +309,13 @@ fn npc_in_lookup() {
             .path
             .join("NPCs/Rook Ambry.md")
     });
+    let saved = std::fs::read_to_string(&path).unwrap();
     assert!(
-        std::fs::read_to_string(&path)
-            .unwrap()
-            .contains("Owes Nell a favour"),
-        "Save changes writes the note"
+        saved.contains("Never names the captain. Owes Nell a favour.")
+            && saved.contains("North Gate")
+            && !saved.contains(&place.to_string())
+            && !saved.contains("Watch House"),
+        "Save changes writes the new place and line: {saved}"
     );
     reload(&mut shell, rook);
     shell.settle();
