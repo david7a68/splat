@@ -469,7 +469,12 @@ impl SplatRoot {
         {
             app.lookup.close();
             cx.notify();
+            return;
         }
+        // Nothing of the root's took the Escape: the focused view's own key listener gets it (a
+        // field's `on_escape`, a page's keys). Bindings run before key listeners, so without
+        // this no listener under the root would ever see Escape.
+        cx.propagate();
     }
 
     /// The page's own place: the no-campaign state where a page needs a campaign, else the page

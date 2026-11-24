@@ -668,6 +668,20 @@ fn run_effects_on_rows() {
     assert!(!blessed(&mut shell, &other), "to their own row only");
     assert_eq!(waiting(&mut shell), None);
     assert!(shell.read(|root| root.app.encounters.run().unwrap().effect_open.is_none()));
+    // Escape in the field drops its words and closes it (the root passes Escape on).
+    shell.click("Effect: words for this row");
+    shell.type_text("Haste");
+    assert_eq!(waiting(&mut shell).as_deref(), Some("Haste"));
+    shell.press("escape");
+    assert_eq!(waiting(&mut shell), None, "Escape drops the field's words");
+    assert!(shell.read(|root| root.app.encounters.run().unwrap().effect_open.is_none()));
+    assert!(
+        !participant(&mut shell, "Ember Cultist")
+            .conditions
+            .iter()
+            .any(|c| c.name().contains("Haste")),
+        "Escape adds nothing"
+    );
     // Exhaustion moves one level a press, each its own Undo step, and stops at 6 with the reason
     // (egui `iter9_b_exhaustion_stepper_uses_scan_and_keeps_undo`,
     // `iter10_b_exhaustion_limit_says_why`).

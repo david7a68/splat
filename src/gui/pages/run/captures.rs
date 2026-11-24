@@ -240,8 +240,13 @@ fn run_rolls() {
         );
     });
     shell.capture("run-rolls__05-row-menu__1200x800");
+    // The first Escape closes the row menu, the second stops the armed action.
     shell.press("escape");
-    on_run(&mut shell, Run::disarm);
+    shell.press("escape");
+    assert!(
+        with_run(&mut shell, |run| run.armed.is_none()),
+        "Escape stops the armed action"
+    );
 
     // A damage that depends on what the DM knows asks before it rolls.
     select(&mut shell, CASTER);
