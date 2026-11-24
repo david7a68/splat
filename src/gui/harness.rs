@@ -39,7 +39,7 @@ pub(crate) fn capture_dir() -> PathBuf {
 /// The character cache of this test process: one folder for every shell, as the egui suite has
 /// (`hermetic::closed::use_cache_root` takes one root per process). Each campaign's characters
 /// are kept apart inside it by the campaign's id.
-fn character_cache() -> PathBuf {
+pub(crate) fn character_cache() -> PathBuf {
     static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
     ROOT.get_or_init(|| {
         let root = std::env::temp_dir().join(format!("splat-gpui-cache-{}", std::process::id()));

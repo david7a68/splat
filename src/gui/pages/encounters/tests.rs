@@ -740,3 +740,231 @@ fn the_narrow_editor_takes_turns_and_a_dragged_width_is_kept() {
     );
     shell.capture("column-resize__09-roster-follows-add-panel__1200x800");
 }
+
+/// Read the campaign again (the list's Reload from disk) and wait for the read.
+fn reload(shell: &mut Shell) {
+    shell.click("Reload from disk");
+    ready(shell);
+}
+
+/// The open roster's difficulty, as its heading says it.
+fn roster_difficulty(shell: &mut Shell) -> String {
+    shell.update(|root, _, _| {
+        let ctx = root.bridge.ctx().clone();
+        root.app
+            .encounters
+            .roster_view(&ctx, &root.app.party, true)
+            .map(|roster| {
+                roster
+                    .difficulty
+                    .iter()
+                    .map(|(words, _)| words.clone())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .unwrap_or_default()
+    })
+}
+
+/// The editor's roster heading says its difficulty, and whose XP is not known
+/// (`encounter-difficulty`, with its scenario's creatures and encounters written the same way).
+#[test]
+fn the_editor_says_the_rosters_difficulty() {
+    let mut shell = Shell::new("encounter-difficulty", Seed::Campaign);
+    ready(&mut shell);
+    let root = shell.read(|root| root.app.campaigns.active_campaign().unwrap().path);
+    let creature = |name: &str, cr: Option<&str>| {
+        let id = crate::hermetic::new_uuid();
+        let relative = format!("Creatures/{name}.md");
+        let challenge = cr.map_or_else(String::new, |cr| format!(", cr_text: '{cr}'"));
+        let text = splat_content::content::formats::fixture(
+            &relative,
+            &format!(
+                "splat_id: {id}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{size: large, type: fiend{challenge}}}\nsplat_stats:\n  max_hp: {{value: 120}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\n"
+            ),
+            &format!("\n# {name}\n"),
+        )
+        .unwrap();
+        let path = root.join(&relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+        id
+    };
+    let shrine = std::fs::read_to_string(root.join("Encounters/Shrine of Cinders.md")).unwrap();
+    let shrine = splat_content::content::Entry::parse("Encounters/Shrine.md", &shrine).unwrap();
+    let setup = shrine.fields["splat_encounter"].clone();
+    let cultist: uuid::Uuid = setup["roster"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .find(|slot| slot["side"] == "enemies")
+        .and_then(|slot| slot["creature"]["id"].as_str())
+        .unwrap()
+        .parse()
+        .unwrap();
+    let encounter = |name: &str, party: bool, foes: &[uuid::Uuid]| {
+        let mut setup = setup.clone();
+        let roster = setup["roster"].as_sequence_mut().unwrap();
+        roster.retain(|slot| party && slot["side"] == "party");
+        for (at, foe) in foes.iter().enumerate() {
+            let slot = format!(
+                "{{key: actor_foe_{at}, creature: {{id: {foe}}}, side: enemies, controller: {{kind: manual, role: gm}}}}"
+            );
+            roster.push(serde_yaml_ng::from_str(&slot).unwrap());
+        }
+        let mut fields = serde_yaml_ng::Mapping::new();
+        for (key, value) in [
+            (
+                "splat_id",
+                serde_yaml_ng::Value::from(crate::hermetic::new_uuid().to_string()),
+            ),
+            ("splat_kind", "encounter".into()),
+            ("splat_name", name.into()),
+            ("splat_encounter", setup),
+        ] {
+            fields.insert(key.into(), value);
+        }
+        let relative = format!("Encounters/{name}.md");
+        let text = splat_content::content::formats::fixture(
+            &relative,
+            &serde_yaml_ng::to_string(&fields).unwrap(),
+            "\nWritten for the difficulty scenario.\n",
+        )
+        .unwrap();
+        std::fs::write(root.join(relative), text).unwrap();
+    };
+    let tyrant = creature("Cinder Tyrant", Some("10"));
+    let nameless = creature("Nameless Thing", None);
+    encounter("Mill Road", true, &[tyrant, cultist, cultist]);
+    encounter("Nameless Visitor", true, &[nameless]);
+    reload(&mut shell);
+    shell.capture("encounter-difficulty__01-ready-to-run__1200x800");
+    open_encounter(&mut shell, "Mill Road");
+    let words = roster_difficulty(&mut shell);
+    assert!(words.contains("High"), "the roster says High: {words}");
+    shell.capture("encounter-difficulty__03-editor-high__1200x800");
+    shell.click("id:encounter-back");
+    open_encounter(&mut shell, "Nameless Visitor");
+    let words = roster_difficulty(&mut shell);
+    assert!(
+        words.contains("XP not known") && words.contains("Nameless Thing"),
+        "the roster says whose XP is not known: {words}"
+    );
+    shell.capture("encounter-difficulty__05-editor-unknown__1200x800");
+}
+
+/// An NPC in the search: it adds its stat block under its own name, then says In roster.
+#[test]
+fn an_npc_is_found_and_added_by_its_name() {
+    let mut shell = Shell::new("npc-in-encounter", Seed::Campaign);
+    ready(&mut shell);
+    let campaign = shell.read(|root| root.app.campaigns.active_campaign().unwrap());
+    let catalogue = crate::content_workspace::Catalogue::load(&[], Some(&campaign)).unwrap();
+    let guard = catalogue
+        .entries
+        .values()
+        .find(|entry| entry.entry.kind == "creature" && entry.entry.name == "Guard")
+        .unwrap()
+        .entry
+        .id;
+    let text = splat_content::content::formats::fixture(
+        "Rook.md",
+        &format!(
+            "splat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {guard}}}\n",
+            crate::hermetic::new_uuid()
+        ),
+        "",
+    )
+    .unwrap();
+    std::fs::create_dir_all(campaign.path.join("NPCs")).unwrap();
+    crate::library::write_note(&campaign.path, "NPCs/Rook Ambry.md", None, &text).unwrap();
+    reload(&mut shell);
+    shell.click("New encounter");
+    shell.type_text("Rook's ambush");
+    shell.click("Find a creature or party member");
+    shell.type_text("Rook Ambry");
+    shell.capture("npc-in-encounter__01-npc-result__1200x800");
+    shell.click("Add Rook Ambry");
+    let names = shell.read(|root| root.app.encounters.roster_names().unwrap_or_default());
+    assert!(
+        names.iter().any(|name| name == "Rook Ambry"),
+        "one Add uses the stat block under the NPC's name: {names:?}"
+    );
+    assert!(
+        shell.bounds("Add Rook Ambry").is_none(),
+        "the NPC on the roster says In roster"
+    );
+    shell.capture("npc-in-encounter__02-npc-in-roster__1200x800");
+}
+
+/// No creature matches as typed, but a package the campaign does not use has one: the search
+/// says so with `Use it`, which asks to use that package's entry (`use_package_entry`).
+#[test]
+fn use_it_offers_a_creature_from_an_unused_package() {
+    // The fixture's unchosen Ash Wraith shares its words with the SRD's Wraith, which the
+    // search finds as typed, so (as in egui) it offers nothing to use. A creature of the same
+    // package that the campaign did not choose, with a name of its own, is offered.
+    crate::hermetic::closed::repeatable_uuids(1);
+    let home = tempfile::tempdir().expect("a test folder");
+    let root = home.path().join("use-it");
+    let world = crate::visual_tests::fixture::World::build(
+        &root,
+        &crate::gui::harness::character_cache(),
+        "use-it",
+        Seed::Campaign,
+    )
+    .unwrap();
+    let relative = "Creatures/Gloam Stalker.md";
+    let text = splat_content::content::formats::fixture(
+        relative,
+        &format!(
+            "splat_id: {}\nsplat_kind: creature\nsplat_name: Gloam Stalker\nsplat_creature: {{size: large, type: fiend, cr_text: '2'}}\nsplat_stats:\n  max_hp: {{value: 40}}\n  armor_class: {{value: 13}}\n  initiative: {{value: 2}}\n",
+            uuid::Uuid::from_u128(0x9100_0000_0000_0000_0000_0000_0000_0001)
+        ),
+        "\n# Gloam Stalker\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("modules/ashen-marches").join(relative), text).unwrap();
+    let mut shell = Shell::over(world.app(), home, size(px(1200.0), px(800.0)));
+    ready(&mut shell);
+    shell.click("New encounter");
+    shell.click("Find a creature or party member");
+    shell.type_text("gloam");
+    // Lookup's index, which the search reads, is built in the background.
+    let mut unused = Vec::new();
+    for _ in 0..400 {
+        unused = shell.update(|root, _, _| {
+            let ctx = root.bridge.ctx().clone();
+            root.app
+                .encounters
+                .unused_creatures(&ctx)
+                .into_iter()
+                .map(|unused| unused.words)
+                .collect::<Vec<_>>()
+        });
+        if !unused.is_empty() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+        shell.wait(Duration::from_millis(50));
+    }
+    shell.settle();
+    assert!(
+        unused.iter().any(|words| words.starts_with("Gloam Stalker is in ")),
+        "the search names the unused package's creature: {unused:?}"
+    );
+    shell.capture("encounter-build__17-use-it__1200x800");
+    let use_it = first_target(&mut shell, "Use it: Gloam Stalker");
+    shell.click(&use_it);
+    // The campaign now uses the entry, and the search reads its creatures again.
+    let mut usable = false;
+    for _ in 0..400 {
+        usable = shell.read(|root| root.app.encounters.searchable_creature("Gloam Stalker"));
+        if usable {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+        shell.wait(Duration::from_millis(50));
+    }
+    assert!(usable, "Use it puts the creature in the campaign's search");
+}
