@@ -98,6 +98,58 @@ fn session_notes_timeline_steps() {
     crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__22-timeline-removed__1200x800");
 }
 
+/// The file changed under an edit of the same event: the draft beside the file, aligned, the
+/// differing line marked (`kit::DraftComparison`), until the DM chooses. A later change of the
+/// file shows in the comparison.
+#[test]
+fn a_disk_conflict_compares_the_draft_and_the_file() {
+    let mut shell = Shell::new("timeline-conflict", Seed::Campaign);
+    shell.click("Timeline");
+    first_day(&mut shell);
+    shell.click("Add Long rest");
+    shell.type_text("Rest at the mill");
+    shell.press("ctrl-s");
+    let path = shell.read(|root| root.app.timeline.path().map(|p| p.to_path_buf()));
+    let path = path.expect("a Timeline file");
+    let saved = fs::read_to_string(&path).unwrap();
+    assert!(saved.contains("Rest at the mill"));
+    // Obsidian renames the rest while the DM renames it too.
+    fs::write(&path, saved.replace("Rest at the mill", "Rest by the river")).unwrap();
+    shell.click("Title");
+    shell.press("ctrl-a");
+    shell.type_text("Rest at the old mill");
+    shell.press("ctrl-s");
+    assert!(
+        shell.bounds("Overwrite with my timeline").is_some(),
+        "the choice waits"
+    );
+    crate::gui::pages::sessions::tests::capture(&mut shell, "timeline__02-disk-conflict__1200x800");
+    let texts = |shell: &mut Shell| {
+        shell.read(|root| {
+            root.pages
+                .timeline
+                .comparison
+                .as_ref()
+                .and_then(|kept| kept.texts.clone().ok())
+        })
+    };
+    assert!(
+        shell.bounds("Next difference").is_none()
+            && texts(&mut shell).is_some_and(|(draft, disk)| {
+                draft.contains("Rest at the old mill") && disk.contains("Rest by the river")
+            }),
+        "one change, in the shared comparison"
+    );
+    // The file changes again: the comparison follows it.
+    let now = fs::read_to_string(&path).unwrap();
+    fs::write(&path, now.replace("Rest by the river", "Rest by the ford")).unwrap();
+    shell.settle();
+    assert!(
+        texts(&mut shell).is_some_and(|(_, disk)| disk.contains("Rest by the ford")),
+        "the comparison reads the file again once it changed"
+    );
+}
+
 /// T11.2: an event added with the buttons opens with its Title taking the keyboard; its rest
 /// ruling changes with Undo; Remove has one Undo; a filter shows how many events show; Ctrl+S
 /// saves what was typed.
