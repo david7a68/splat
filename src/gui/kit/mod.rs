@@ -73,7 +73,7 @@ pub use text::{Heading, gap, heading, icon, label, rule, text};
 pub use title::{page_header, page_header_with};
 pub use tooltip::WithTooltip;
 pub use value_block::{HeadingNote, HeadingRow, ValueBlock};
-pub use virtual_list::{measured_column, uniform_column};
+pub use virtual_list::{measured_column, placed_rows, uniform_column};
 
 use gpui::{IntoElement, ParentElement, SharedString};
 
