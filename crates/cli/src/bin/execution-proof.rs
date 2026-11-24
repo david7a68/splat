@@ -90,6 +90,10 @@ fn run() -> Result<(), String> {
         .iter()
         .map(|(key, actor)| (key, actor.hp))
         .collect();
-    println!("{}",serde_json::to_string_pretty(&json!({"engine":ENGINE_ID,"rng":Random::ID,"seed":seed,"rounds":rounds,"outcome":outcome,"hp":hp,"initiative":{"bear":bear_init,"skeleton_group":skeleton_init,"order":order},"assumptions":["Every chosen melee target is within reach with a clear path.","No other Advantage, Disadvantage, cover, movement, reactions or active effects.","Monster zero-HP policy; fixed-target Multiattack strategy may forgo a remaining attack if its target dies."],"events":e.events})).map_err(|e|e.to_string())?);
+    // In sorted key order, as in every build: serde_json keeps insertion order when a crate in
+    // the build turns on its `preserve_order` feature (GPUI does).
+    let mut proof = json!({"engine":ENGINE_ID,"rng":Random::ID,"seed":seed,"rounds":rounds,"outcome":outcome,"hp":hp,"initiative":{"bear":bear_init,"skeleton_group":skeleton_init,"order":order},"assumptions":["Every chosen melee target is within reach with a clear path.","No other Advantage, Disadvantage, cover, movement, reactions or active effects.","Monster zero-HP policy; fixed-target Multiattack strategy may forgo a remaining attack if its target dies."],"events":e.events});
+    proof.sort_all_objects();
+    println!("{}", serde_json::to_string_pretty(&proof).map_err(|e| e.to_string())?);
     Ok(())
 }

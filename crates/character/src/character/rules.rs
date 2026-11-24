@@ -150,14 +150,7 @@ pub(super) fn fingerprint(source: &Value) -> String {
         "duration",
         "activation",
     ];
-    let selected: BTreeMap<_, _> = keys
-        .into_iter()
-        .map(|key| (key, source[key].clone()))
-        .collect();
-    format!(
-        "{:x}",
-        Sha256::digest(serde_json::to_vec(&selected).expect("JSON source"))
-    )
+    super::pin(source, &keys)
 }
 pub(super) fn coverage(fields: &Value) -> Result<Import, String> {
     serde_json::from_value(fields["splat_import"].clone()).map_err(|e| e.to_string())
@@ -185,10 +178,11 @@ fn empty_report() -> Import {
         rule_fingerprint: None,
     }
 }
-/// Write a note from the importer's JSON model, with one blank line around its body.
+/// Write a note from the importer's JSON model, with one blank line around its body. Its maps are
+/// written in sorted key order, as in every build: see [`super::sorted`].
 pub(super) fn written(path: &str, fields: &Value, body: &str) -> Result<String, String> {
     let serde_yaml_ng::Value::Mapping(fields) =
-        serde_yaml_ng::to_value(fields).map_err(|e| e.to_string())?
+        serde_yaml_ng::to_value(super::sorted(fields.clone())).map_err(|e| e.to_string())?
     else {
         return Err("Note fields must be a mapping".into());
     };

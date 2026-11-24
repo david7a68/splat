@@ -8,7 +8,6 @@ use crate::content::character::Sheet;
 use crate::content::{Entry, definitions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
@@ -114,14 +113,7 @@ fn links() -> Result<&'static Links, String> {
 }
 
 fn class_fingerprint(definition: &Value) -> String {
-    let selected: BTreeMap<_, _> = ["definitionKey", "id", "name", "sources"]
-        .into_iter()
-        .map(|key| (key, definition[key].clone()))
-        .collect();
-    format!(
-        "{:x}",
-        Sha256::digest(serde_json::to_vec(&selected).expect("JSON source"))
-    )
+    super::pin(definition, &["definitionKey", "id", "name", "sources"])
 }
 
 fn whole(value: &Value) -> Option<u32> {

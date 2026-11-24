@@ -375,9 +375,10 @@ fn campaign_entry_id(campaign: Uuid, key: &str) -> Uuid {
 fn source_key(entry: &Entry, local: &[String]) -> Result<String, String> {
     let mut fields = serde_json::to_value(&entry.fields).map_err(|e| e.to_string())?;
     fields["splat_id"] = Value::Null;
+    // Sorted, so the key is the same in every build: see [`super::sorted`].
     let mut text = format!(
         "{}\n{}",
-        serde_json::to_string(&fields).map_err(|e| e.to_string())?,
+        serde_json::to_string(&super::sorted(fields)).map_err(|e| e.to_string())?,
         entry.body
     );
     for id in local {
@@ -679,7 +680,7 @@ fn package_write(
     let changes = changed
         .iter()
         .map(|field| {
-            serde_yaml_ng::to_value(&merged[*field])
+            serde_yaml_ng::to_value(super::sorted(merged[*field].clone()))
                 .map(|value| (*field, Some(value)))
                 .map_err(|e| e.to_string())
         })
@@ -1354,6 +1355,21 @@ mod tests {
         };
         assert_eq!(path_of(&record), path_of(&other));
         assert!(path_of(&record).starts_with(campaign.path().join(FOLDER)));
+        // The shared key does not hang on the order of the note's fields.
+        let note = record.content_notes().unwrap().remove(0);
+        let entry = Entry::parse(&note.relative_path, &note.markdown).unwrap();
+        let mut turned = entry.clone();
+        let mut fields: Vec<_> = entry.fields.iter().collect();
+        fields.reverse();
+        turned.fields = fields
+            .into_iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<serde_yaml_ng::Mapping>()
+            .into();
+        assert_eq!(
+            source_key(&turned, &[]).unwrap(),
+            source_key(&entry, &[]).unwrap()
+        );
     }
 
     #[test]

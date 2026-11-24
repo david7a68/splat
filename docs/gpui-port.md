@@ -243,10 +243,15 @@ fn library_browse() {
 
 ### GPUI gotchas found in wave 1
 
-- gpui turns on serde_json's `preserve_order` for the whole build, so a `serde_json::Map` keeps
-  insertion order instead of sorting its keys. Code that iterates a map, or hashes its serialized
-  bytes, and needs an order must sort itself (`content::contracts::fingerprint` and combat sync's
-  currency writes now do). Map equality is not affected.
+- gpui turns on serde_json's `preserve_order` for any build that includes it (the app, `--workspace`
+  tests), so a `serde_json::Map` keeps insertion order instead of sorting its keys. A build of one
+  crate without gpui (`cargo test -p splat-character`) still sorts, so a test of order must run in
+  a build with gpui. Code that iterates a map, compares key lists, hashes serialized bytes or writes
+  a map to a file and needs an order must sort itself with `Value::sort_all_objects` or
+  `Map::sort_keys`. Sorted now: `content::contracts::fingerprint`, D&D Beyond snapshots on read
+  (`character::Source`), D&D Beyond pins (`character::pin`), importer notes (`rules::written`),
+  campaign package keys, coverage metadata, combat sync writes and `execution-proof` output. Map
+  equality is not affected.
 - `ElementId::NamedChild` takes an `Arc<ElementId>`. Tuple ids exist for `(&str, u32/u64/usize…)`,
   not `(&str, &str)`; use `ElementId::Name(format!(..).into())`.
 - `anchored()` starts at its parent's origin, not where it sits in a flex column: put it in a
