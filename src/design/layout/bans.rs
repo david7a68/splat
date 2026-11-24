@@ -2,7 +2,6 @@
 //!
 //! - [`syntax_rules`]: a renaming import or a type alias of a `clippy.toml` ban, which would hide
 //!   it from review, and a `CreateReasons` impl by hand, which could leave a reason out of `ALL`.
-//! - [`field_id_names`]: every `field_id!` name, for the check that each is used once.
 use syn::visit::{self, Visit};
 
 const CLIPPY: &str = include_str!("../../../clippy.toml");
@@ -25,9 +24,9 @@ fn banned_paths() -> Vec<(String, String)> {
 }
 
 /// Whether `path` (an import's or an alias's, segment by segment) names a banned owner (a type
-/// whose functions `clippy.toml` bans: `Fills`, `Footer`, `ScrollArea`), a banned method by its
-/// owner (`Fills::because`), or a banned free function by its name through any module: its own
-/// (`outcome::banner`) or one that re-exports it (`design::group_label`, from `components`).
+/// whose functions `clippy.toml` bans: `Results`, `Messages`), a banned method by its owner
+/// (`Results::undo`), or a banned free function by its name through any module: its own
+/// (`outcome::check_template`) or one that re-exports it (`design::check_template`).
 fn names_a_ban(path: &[String], bans: &[(String, String)]) -> bool {
     let Some(last) = path.last() else {
         return false;
@@ -145,10 +144,10 @@ mod tests {
             "use crate::design::{Body, ResultOrder as Order};",
             "type Store = crate::design::results::Results<A, B>;",
             "use crate::design::outcome::Sentence::outside as words;",
-            "use crate::design::components::save_row_state as save_state;",
+            "use crate::design::outcome::check_template as check;",
             // Round 29 P-1: a free function through a module that re-exports it.
-            "#[allow(clippy::disallowed_methods)] fn add_row() { use crate::design::save_row_state as state; }",
-            "use crate::design::{save_row_state as state, Heading};",
+            "#[allow(clippy::disallowed_methods)] fn add_row() { use crate::design::check_template as check; }",
+            "use crate::design::{check_template as check, Heading};",
             // Review of PR 446 (N3): `self` renames the path before its group.
             "use crate::design::outcome::Messages::{self as Lines};",
         ] {

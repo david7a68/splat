@@ -1142,13 +1142,10 @@ impl<A> Undo<A> {
 /// assert_eq!(done.words().as_str(), "“Who hired the bandits?” ticked in Horn Rings.");
 /// ```
 ///
-/// Its Undo's lock has the two forms of [`Choice`]'s: an optional reason does not fit
-/// `undo_blocked`.
+/// Its Undo's lock takes a reason, never an optional one:
 ///
 /// ```
 /// use splat_design::outcome::{Done, Verb};
-/// let live = true;
-/// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_locked_when(live, splat_design::sentence!("End the run first."));
 /// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_blocked(splat_design::sentence!("End the run first."));
 /// ```
 /// ```compile_fail
@@ -1218,14 +1215,6 @@ impl<A> Done<A> {
 
     pub fn choice(mut self, choice: Choice<A>) -> Self {
         self.choices.push(choice);
-        self
-    }
-
-    /// Its Undo is locked while `locked`, for `reason`; the reason's line is kept while open.
-    pub fn undo_locked_when(mut self, locked: bool, reason: Sentence) -> Self {
-        if let Some(undo) = &mut self.undo {
-            undo.2 = Some((reason, locked));
-        }
         self
     }
 

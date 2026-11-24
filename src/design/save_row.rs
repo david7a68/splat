@@ -17,8 +17,7 @@
 //! `docs/design-system.md` (Buttons, the save row paragraph) is the rule; this is its one copy.
 //!
 //! Caller duties left: route `Ctrl+S` through [`DraftState::can_save`], so the key saves exactly
-//! when the button can (taken through [`save_key`], the one rule for every page's key), and show
-//! a refusal's or a failure's sentence in the pane's footer. A
+//! when the button can, and show a refusal's or a failure's sentence in the pane's footer. A
 //! caller that paints a word itself (`SaveWord::status`) holds the rule only when it takes that
 //! word from [`DraftState::word`].
 //!
@@ -72,39 +71,7 @@
 //! let found = Diagnosis { refused: None, missing: None, incomplete: None, unreadable: true }; // <- by hand
 //! ```
 use super::{Status, Tone, colors, icons};
-use egui::{self};
 use std::borrow::Cow;
-
-/// [`save_key`] for a page that takes the key before it draws (it has no `Ui` yet); its caller
-/// knows whether the page is enabled.
-pub fn save_key_before_drawing(ctx: &egui::Context, ready: bool) -> bool {
-    ready && take_save_key(ctx)
-}
-
-fn take_save_key(ctx: &egui::Context) -> bool {
-    if modal_open(ctx) {
-        return false;
-    }
-    ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
-}
-
-fn modal_id() -> egui::Id {
-    egui::Id::new("design_save_key_modal")
-}
-
-/// The app says, once each pass before any page draws, whether a modal is open (its own dialogs,
-/// the full-window image, any egui modal: `art::modal_open`). No page's `Ctrl+S` acts beneath
-/// it ([`save_key`]).
-pub fn set_modal(ctx: &egui::Context, open: bool) {
-    let pass = ctx.cumulative_pass_nr();
-    ctx.data_mut(|data| data.insert_temp(modal_id(), (pass, open)));
-}
-
-fn modal_open(ctx: &egui::Context) -> bool {
-    let pass = ctx.cumulative_pass_nr();
-    ctx.data(|data| data.get_temp::<(u64, bool)>(modal_id()))
-        .is_some_and(|(set, open)| open && set == pass)
-}
 
 /// Whether the draft differs from the saved text: the same type as a revised value's change.
 pub use super::memo::Changed;

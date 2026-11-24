@@ -441,10 +441,6 @@ impl Type {
         }
     }
 
-    pub fn tracking(self) -> f32 {
-        if self == Self::Label { 0.6 } else { 0.0 }
-    }
-
     pub fn style(self) -> TextStyle {
         TextStyle::Name(self.name().into())
     }

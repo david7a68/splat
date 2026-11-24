@@ -20,10 +20,6 @@ use splat::content::{Entry, Fields as EntryFields, layout::Flag};
 use uuid::Uuid;
 
 const SAVED: &str = "Changes saved.";
-/// What the form says when it closes with nothing to write, for the checks: the footer says it
-/// with a checked `sentence!` of the same words (`Reader::footer`).
-#[cfg(any(test, feature = "test-support"))]
-pub const ALREADY_SAVED: &str = "Your changes are already in the note.";
 /// The faint example in an empty Status field: the rule the value must follow.
 pub const STATUS_HINT: &str = "A short word, such as alive.";
 

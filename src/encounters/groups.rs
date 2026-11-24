@@ -1927,32 +1927,6 @@ impl Encounters {
         }
     }
 
-    /// A member's change from its row: its place, its count, or its removal (with its Undo).
-    pub fn member_act(&mut self, act: MemberAct) {
-        let Some(snapshot) = self.snapshot.as_ref() else {
-            return;
-        };
-        let Some(draft) = self.group_draft.as_mut() else {
-            return;
-        };
-        let total = draft.setup.members.len();
-        match act {
-            MemberAct::Up(index) if index > 0 && index < total => {
-                draft.setup.members.swap(index, index - 1);
-            }
-            MemberAct::Down(index) if index + 1 < total => {
-                draft.setup.members.swap(index, index + 1);
-            }
-            MemberAct::Remove(index) if index < total => remove_member(draft, index, snapshot),
-            MemberAct::Count(index, count) if index < total => {
-                draft.setup.members[index].count = count.clamp(1, 99);
-            }
-            _ => return,
-        }
-        draft.touch();
-        self.expanded = None;
-    }
-
     /// The group editor's footer lines (`group_editor_view`'s `then`), for both views: the
     /// member result, the discard, the copies' separations, newest first by their stores, each
     /// with its ticket; then Save's reason, a failed separation and the file's warnings.

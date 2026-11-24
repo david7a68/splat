@@ -39,4 +39,3 @@ splat-campaign = { path = "../../crates/campaign", features = ["test-support"] }
 splat-content = { path = "../../crates/content", features = ["test-support"] }
 splat-design = { path = "../../src/design", features = ["test-support"] }
 splat-trackers = { path = "../../src/trackers", features = ["test-support"] }
-egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }

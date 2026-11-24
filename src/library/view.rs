@@ -1,7 +1,6 @@
 //! The one entry reader. The Library, Lookup, the run's side panel, and campaign
 //! entries all call `show`, so an entry looks the same everywhere (T6.4).
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
-use crate::design::{self};
 use splat::content::{Entry, Reference};
 
 /// What the reader's links can open. An index belongs to the implementer.
@@ -58,7 +57,3 @@ pub struct RunValues {
     pub initiative: Option<i64>,
     pub speed: Option<String>,
 }
-
-const REFERENCE_MAX: f32 = 360.0;
-/// The reader's measure, its gap and the margin at their widest.
-pub const WIDE_READER: f32 = design::READER_MEASURE + design::XL + REFERENCE_MAX;

@@ -16,5 +16,4 @@ uuid = { version = "1", features = ["v4", "serde"] }
 splat-trackers = { path = "../trackers", features = ["test-support"] }
 splat-content-ui = { path = "../content_ui", features = ["test-support"] }
 # The trackers' test reader (`trackers/reader.rs`) still draws with egui.
-eframe = { version = "0.33", default-features = false }
 tempfile = "3"

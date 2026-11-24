@@ -1142,13 +1142,6 @@ impl Library {
         focus
     }
 
-    /// The New entry form's folder suggestions (`catalogue::folder_field`): every folder under
-    /// the destination's root and the kind's own folder, read from disk. Read it when the menu
-    /// opens and keep it only while the menu stays open.
-    pub fn new_folder_choices(&self, campaigns: &Campaigns) -> Option<(PathBuf, Vec<String>)> {
-        self.new_folder_choices_if(campaigns, None)
-    }
-
     /// `new_folder_choices`, read only when the destination's root or the kind differ from
     /// `kept` (the root and kind the open menu read last): None when the kept ones still hold.
     pub fn new_folder_choices_if(

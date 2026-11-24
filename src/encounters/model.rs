@@ -182,9 +182,8 @@ impl Encounters {
         })
     }
 
-    /// Ctrl+S from a view that takes keys as actions (the GPUI page): the open creature while
-    /// it has changes, else the open group or encounter, as `save_by_key` saves a key no pane
-    /// took. Only while an editor is open (`save_shortcut`).
+    /// Ctrl+S from the page: the open creature while it has changes, else the open group or
+    /// encounter (`save_by_key`). Only while an editor is open.
     pub fn save_by_key_now(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
         if self.creature.is_some() || self.draft.is_some() || self.group_draft.is_some() {
             self.save_key = true;

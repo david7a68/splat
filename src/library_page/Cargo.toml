@@ -6,7 +6,7 @@ rust-version = "1.95"
 publish = false
 
 [features]
-test-support = ["splat-content-ui/test-support", "dep:egui_kittest"]
+test-support = ["splat-content-ui/test-support"]
 
 [dependencies]
 splat-campaign = { path = "../../crates/campaign" }
@@ -20,9 +20,7 @@ serde_yaml_ng = "0.10"
 uuid = { version = "1", features = ["v4", "serde"] }
 tempfile = "3"
 rfd = "0.15"
-egui_kittest = { version = "0.33", features = ["wgpu", "eframe"], optional = true }
 
 [dev-dependencies]
 serde_json = "1"
 splat-content-ui = { path = "../content_ui", features = ["test-support"] }
-egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }

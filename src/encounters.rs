@@ -548,12 +548,6 @@ thread_local! {
     static FAIL_NEXT_WRITE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
-/// A test makes the next Save of an encounter fail at its write, as a full disk would.
-#[cfg(any(test, feature = "test-support"))]
-pub fn fail_next_encounter_write(error: &str) {
-    FAIL_NEXT_WRITE.with(|next| *next.borrow_mut() = Some(error.to_owned()));
-}
-
 /// A group's refusal as the encounter's Save says it: `Group <name>: <words>`.
 fn named_group_words(name: &str, words: &str) -> String {
     match name.trim() {
@@ -1676,11 +1670,6 @@ impl CreatureEditor {
         self.recovery = Default::default();
         Ok(())
     }
-}
-
-/// The page's Ctrl+S, taken from this frame's input (`Encounters::save_shortcut`).
-pub(super) fn take_save_key(ctx: &egui::Context) -> bool {
-    design::save_row::save_key_before_drawing(ctx, true)
 }
 
 struct Creature {
@@ -3265,9 +3254,7 @@ pub struct Encounters {
     pub peek: Option<Uuid>,
     focus_name: bool,
     focus_search: bool,
-    /// Ctrl+S taken this frame by `save_shortcut`. The save is done after the fields it writes
-    /// have taken this frame's input (the creature's pane, the editor's `then`, the group
-    /// editor), so a key typed in the frame of Ctrl+S is saved too. `show_page` ends it.
+    /// Ctrl+S asked for this frame (`save_by_key_now`); `save_by_key` takes it.
     save_key: bool,
     editor_pane: EditorPane,
     expanded: Option<String>,
@@ -4595,26 +4582,8 @@ impl Encounters {
         self.member_results
             .end_unreachable(|mark| mark.draft.alive());
     }
-    /// Ctrl+S on this page saves the open creature while it has changes, else the open
-    /// encounter or group. The key is taken here, before the page draws; the save is done
-    /// after the fields it writes have taken this frame's input (`save_key`): the creature's
-    /// in its pane's `then`, the encounter's in the editor's `then`, a group's after its
-    /// editor's fields. A digit typed in the frame of Ctrl+S is saved with it (review of PR 499).
-    /// `modal`: the app's one test (`crate::art::modal_open`: its dialogs, the full-window image, any
-    /// egui modal). While a modal is open the key is left alone, so nothing saves beneath it
-    /// (reviews of PR 499 and PR 525).
-    pub fn save_shortcut(&mut self, ctx: &egui::Context, modal: bool, campaigns: &Campaigns) {
-        // Taken for the open editor whether or not it has changes yet: the first edit can come
-        // in the same frame. Its owner saves only if it has changes after its fields ran.
-        if !modal
-            && (self.creature.is_some() || self.draft.is_some() || self.group_draft.is_some())
-            && campaigns.active_campaign().is_some()
-        {
-            self.save_key |= take_save_key(ctx);
-        }
-    }
-    /// The page's Ctrl+S that no pane took after its fields (the creature's pane was not drawn
-    /// this frame, a narrow window's other tab): saved now, as nothing of it was drawn.
+    /// The page's Ctrl+S: the open creature while it has changes, else the open group, else the
+    /// encounter draft.
     fn save_by_key(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
         if !std::mem::take(&mut self.save_key) {
             return;

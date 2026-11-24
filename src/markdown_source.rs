@@ -1,6 +1,5 @@
 //! Markdown source, styled where it is typed, in the Reader's faces. Only the look changes:
 //! every character stays, markup included, so the file holds exactly what was typed.
-use eframe::egui::{self};
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag};
 use std::{ops::Range, sync::Arc};
 
@@ -230,36 +229,6 @@ fn splat_marks(text: &str) -> Vec<Range<usize>> {
         }
     }
     marks
-}
-
-mod sealed {
-    /// Only this file implements [`super::Laid`].
-    pub trait Sealed {}
-    impl Sealed for eframe::egui::text_edit::TextEditOutput {}
-}
-
-/// An editor's laid-out text: egui's `TextEditOutput` (a staged raw editor) or the field part's
-/// [`Editor`](design::Editor). Sealed: no caller adds a third with other offsets.
-pub trait Laid: sealed::Sealed {
-    fn response(&self) -> &egui::Response;
-    fn galley(&self) -> &Arc<egui::Galley>;
-    fn galley_pos(&self) -> egui::Pos2;
-    fn text_clip_rect(&self) -> egui::Rect;
-}
-
-impl Laid for egui::text_edit::TextEditOutput {
-    fn response(&self) -> &egui::Response {
-        &self.response
-    }
-    fn galley(&self) -> &Arc<egui::Galley> {
-        &self.galley
-    }
-    fn galley_pos(&self) -> egui::Pos2 {
-        self.galley_pos
-    }
-    fn text_clip_rect(&self) -> egui::Rect {
-        self.text_clip_rect
-    }
 }
 
 #[cfg(test)]

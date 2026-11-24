@@ -35,4 +35,3 @@ pulldown-cmark = "0.13"
 splat-session-records = { path = "../session_records", features = ["test-support"] }
 splat-content-ui = { path = "../content_ui", features = ["test-support"] }
 splat-encounters-ui = { path = "../encounters_ui", features = ["test-support"] }
-egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }
