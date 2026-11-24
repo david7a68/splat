@@ -42,3 +42,37 @@ pub fn header_sheet_forms(summary: &str) -> [String; 2] {
         .replace(&format!("{} ", super::SHEET_CHANGED), ": ");
     [summary.to_owned(), format!("{compact}{removed}")]
 }
+
+/// The sheet-change notice's forms under the roster, longest first (`sheet_notice_words`):
+/// the values from the last back to the first, then `<name>: <value>` with and without the
+/// other sheets, then the name alone. The character's name and a count of removed Undo steps
+/// stay in every form (FJ1); the first that fits keeps the notice on one line (FJ4).
+pub fn roster_sheet_forms(summary: &str) -> Vec<String> {
+    let (summary, removed) = summary
+        .rsplit_once(" · ")
+        .filter(|(_, removed)| removed.ends_with(" removed"))
+        .map_or((summary, String::new()), |(summary, removed)| {
+            (summary, format!(" · {removed}"))
+        });
+    let (first, more) = summary
+        .rsplit_once(" and ")
+        .filter(|(_, more)| more.ends_with("sheet") || more.ends_with("sheets"))
+        .map_or((summary, String::new()), |(first, more)| {
+            (first, format!(" and {more}"))
+        });
+    let values: Vec<&str> = first.split(", ").collect();
+    let compact = values[0].replace(super::SHEET_CHANGED, ":");
+    let name = values[0]
+        .split_once(super::SHEET_CHANGED)
+        .map_or(values[0], |(name, _)| name);
+    let mut forms: Vec<String> = (1..=values.len())
+        .rev()
+        .map(|n| format!("{}{more}{removed}", values[..n].join(", ")))
+        .collect();
+    forms.push(format!("{compact}{more}{removed}"));
+    forms.push(format!("{compact}{removed}"));
+    if !removed.is_empty() {
+        forms.push(format!("{name}{removed}"));
+    }
+    forms
+}

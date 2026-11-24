@@ -580,7 +580,12 @@ fn run_edge_states() {
     shell.click(EDGE_TARGET);
     shell.type_text("3");
     shell.press("enter");
-    shell.wait(std::time::Duration::from_secs(2));
+    for _ in 0..100 {
+        if with_run(&mut shell, Run::has_disk_conflict) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+    }
     assert!(
         with_run(&mut shell, Run::has_disk_conflict),
         "the run sees the file changed on disk"
@@ -590,6 +595,44 @@ fn run_edge_states() {
     shell.click("Close run");
     assert!(has_target(&mut shell, "Save as a new run and close"));
     shell.capture("run-edge-states__07-close-while-not-saved__1200x800");
+
+    // As in the egui scenario: Escape keeps the run, Replace saves over the changed file; a
+    // second change on disk is saved as a new run beside it; a third, to the new file, opens
+    // the same close choices for it.
+    shell.press("escape");
+    assert!(
+        !has_target(&mut shell, "Keep running"),
+        "Escape keeps the run"
+    );
+    shell.click("Replace the file with this run");
+    assert!(!with_run(&mut shell, Run::has_disk_conflict));
+    let change_on_disk = |shell: &mut Shell, path: &std::path::Path, damage: &str| {
+        let text = std::fs::read_to_string(path).expect("read the run") + "\n";
+        std::fs::write(path, text).expect("change the run on disk");
+        shell.click(EDGE_TARGET);
+        shell.type_text(damage);
+        shell.press("enter");
+        for _ in 0..100 {
+            if with_run(shell, Run::has_disk_conflict) {
+                return;
+            }
+            shell.wait(std::time::Duration::from_millis(50));
+        }
+        panic!("the run did not see its file changed on disk");
+    };
+    change_on_disk(&mut shell, &path, "1");
+    shell.click("Save as a new run");
+    let new_path = with_run(&mut shell, |run| {
+        run.path().map(std::path::Path::to_path_buf)
+    })
+    .expect("the new run's file");
+    assert!(
+        new_path != path && new_path.exists(),
+        "Save as a new run saves beside the changed file: {new_path:?}"
+    );
+    change_on_disk(&mut shell, &new_path, "1");
+    shell.click("Close run");
+    assert!(has_target(&mut shell, "Save as a new run and close"));
     shell.capture("run-edge-states__08-save-new-run-before-close__1200x800");
 
     let mut shell = small("run-edge-states", Seed::Campaign);
@@ -1117,6 +1160,13 @@ fn run_roster_conflict() {
     shell.click("id:run-condition-Prone");
     shell.update(|root, _, _| root.app.encounters.simulate_sheet_update(LONG_MESSAGE));
     assert!(row_text(&mut shell, LOADED_ROW).contains("Restrained"));
+    // The sheet's notice keeps one line: a shorter form of its changes, the Log the whole.
+    let whole = with_run(&mut shell, |run| run.notice.clone()).expect("the sheet's notice");
+    let words = shell.bounds(&whole).expect("the notice under the roster");
+    assert!(
+        words.size.height < crate::gui::theme::Type::Small.line() * 1.5,
+        "the notice is on one line: {words:?}"
+    );
     shell.capture("run-roster-conflict__02-message-on-one-line__1200x800");
 
     select(&mut shell, LOADED_ROW);
