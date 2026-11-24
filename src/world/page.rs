@@ -2,44 +2,17 @@
 use crate::world::{Nav, Reader, checks::tick_file, file_fault::FileFault};
 use crate::{
     design::{
-        self, Type, colors, icons,
-        outcome::{
-            Choice, Done, FaultMessage, MessageChoice, Messages, Notice, PagePlaceholder,
-            PaneFrame, Said, Verb,
-        },
-        pane::Body,
+        self, icons,
+        outcome::{Done, FaultMessage, Messages, Notice, PaneFrame, Said, Verb},
     },
     lookup::{ContentIndex, WorldGroups},
     persistence::Campaign,
 };
-use eframe::egui;
 use std::sync::Arc;
 use uuid::Uuid;
 
-const ROW: f32 = 40.0;
-/// Draws `add`, a page's fault, with its words at the reader measure (round 24 AG2: recovery
-/// steps are prose), past the message's bar and icon (`design::message_choice_row`'s inset).
-/// The Library's unreadable reader keeps the same measure (`library::at_reader_measure`).
-fn at_reader_measure<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let inset = design::S
-        + 1.0
-        + design::number_width(ui, design::icons::ERROR, &Type::Body.font(ui))
-        + design::XS;
-    ui.scope(|ui| {
-        ui.set_max_width(ui.available_width().min(design::READER_MEASURE + inset));
-        add(ui)
-    })
-    .inner
-}
-
-const WORLD_SEARCH: design::FieldId =
-    crate::field_id!("world_search").once(design::Once::PageSearch);
-const NEW_NAME: design::FieldId = crate::field_id!("world_new_name").once(design::Once::CreateForm);
-const NEW_NOTE_TYPE: design::FieldId =
-    crate::field_id!("world_new_note_type").once(design::Once::CreateForm);
-const LIST_WIDTH: f32 = 260.0;
 /// More rows than this in one check are counted, not shown.
-const CHECK_ROWS: usize = 40;
+pub const CHECK_ROWS: usize = 40;
 /// The line above the World card while Lookup holds a second unsaved NPC (round 26 FB8).
 pub fn kept_in_lookup(lookup: &str, card: &str) -> String {
     format!("{lookup} is not saved. It is in Lookup. Save or discard {card} to show {lookup} here.")
@@ -49,100 +22,8 @@ pub fn kept_in_lookup(lookup: &str, card: &str) -> String {
 pub const PROBLEMS_TITLE: &str = "Things to check";
 
 /// What the Things to check page lists, in the words of its sections.
-const PROBLEMS_INTRO: &str = "These lists show notes with a date outside an event, a link to no note, no summary, no links, or a name or sentence on two notes. Splat only lists them. You change the notes.";
+pub const PROBLEMS_INTRO: &str = "These lists show notes with a date outside an event, a link to no note, no summary, no links, or a name or sentence on two notes. Splat only lists them. You change the notes.";
 pub use crate::world::UNSAVED_NPC;
-
-/// A repair cause must stay whole even when Lookup narrows the list. So must the path: a long
-/// one wraps, because a cut path cannot tell two files in one folder apart. A note that cannot
-/// be read is an error, so its cause follows the error icon in the error colour; the words stay
-/// muted, as every row's do.
-fn broken_row(ui: &mut egui::Ui, selected: bool, path: &str, cause: &str) -> egui::Response {
-    let width = (ui.available_width() - design::S * 2.0).max(design::XXL);
-    let font = if selected { Type::Strong } else { Type::Body };
-    let title = ui
-        .painter()
-        .layout(path.to_owned(), font.font(ui), colors().text, width);
-    let format = |color| egui::TextFormat {
-        font_id: Type::Small.font(ui),
-        color,
-        ..Default::default()
-    };
-    // The icon has its own column, so a wrapped cause starts each line at its first word, as
-    // every wrapped status does (round 27 FH3, FF4).
-    let icon = ui.painter().layout_no_wrap(
-        icons::ERROR.to_owned(),
-        Type::Small.font(ui),
-        colors().result.error,
-    );
-    let gap = ui
-        .painter()
-        .layout_no_wrap(" ".to_owned(), Type::Small.font(ui), colors().muted)
-        .size()
-        .x;
-    let words_x = icon.size().x + gap;
-    let mut job = egui::text::LayoutJob::default();
-    job.append(cause, 0.0, format(colors().muted));
-    job.wrap.max_width = (width - words_x).max(design::XXL);
-    let detail = ui.fonts_mut(|fonts| fonts.layout_job(job));
-    let height = (title.size().y + detail.size().y + design::S).max(ROW);
-    design::row(
-        ui,
-        height,
-        selected,
-        &format!("{path} · {cause}"),
-        |ui, rect| {
-            let position = rect.min + egui::vec2(design::S, design::XS);
-            ui.painter().galley(position, title.clone(), colors().text);
-            let below = position + egui::vec2(0.0, title.size().y);
-            ui.painter()
-                .galley(below, icon.clone(), colors().result.error);
-            ui.painter()
-                .galley(below + egui::vec2(words_x, 0.0), detail, colors().muted);
-        },
-    )
-}
-
-/// `design::two_line_row`, with each warning mark in the detail in its own tone before the
-/// muted words, as Library's rows have.
-/// A list row: its title, and under it its detail, or `narrow` in its place when the detail does
-/// not fit the row whole. The row's accessible name keeps the whole detail.
-fn marked_row(
-    ui: &mut egui::Ui,
-    selected: bool,
-    title: &str,
-    detail: &str,
-    narrow: Option<&str>,
-) -> egui::Response {
-    design::row(
-        ui,
-        ROW,
-        selected,
-        &format!("{title} · {detail}"),
-        |ui, rect| {
-            let c = colors();
-            let width = rect.width() - 2.0 * design::S;
-            let font = if selected { Type::Strong } else { Type::Body };
-            let galley = design::one_line(ui, title, font.font(ui), c.text, width);
-            let total = galley.size().y + Type::Small.line();
-            let top = rect.center().y - total / 2.0;
-            ui.painter()
-                .galley(egui::pos2(rect.left() + design::S, top), galley, c.text);
-            let detail = match narrow {
-                Some(narrow) if design::number_width(ui, detail, &Type::Small.font(ui)) > width => {
-                    narrow
-                }
-                _ => detail,
-            };
-            let detail =
-                crate::library::marked_line(ui, detail, Type::Small.font(ui), c.muted, width);
-            ui.painter().galley(
-                egui::pos2(rect.left() + design::S, top + total - Type::Small.line()),
-                detail,
-                c.muted,
-            );
-        },
-    )
-}
 
 /// What the page's error slot holds.
 #[derive(Clone)]
@@ -276,13 +157,6 @@ struct Tick {
     note_name: String,
 }
 
-/// What the DM did in a checks view: open a page at a heading, or tick the question at this
-/// place in `Checks::questions`.
-enum CheckAct {
-    Open(usize, Option<String>),
-    Tick(usize),
-}
-
 /// What the page's larger part shows.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum View {
@@ -338,6 +212,22 @@ pub struct WorldPage {
     tick_error: Option<String>,
     /// The card's `Copy the marker` result (`MarkerCopied`).
     marker_copied: design::Results<MarkerSlot, MarkerCopied>,
+    /// The list's groups for one load of the index and one set of search words. A search reads
+    /// the text of every note, so a frame with neither changed reads none (`groups`).
+    groups: Option<GroupsKept>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Searches of the notes for the list's groups (`WorldPage::groups`), for a check.
+    static GROUP_SEARCHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The list's groups, and the index load and search words they were found for.
+struct GroupsKept {
+    generation: u64,
+    search: String,
+    groups: Arc<WorldGroups>,
 }
 
 /// One unreadable note's row words.
@@ -549,367 +439,6 @@ impl WorldPage {
         }
     }
 
-    pub fn show(
-        &mut self,
-        ui: &mut egui::Ui,
-        index: Option<&Arc<ContentIndex>>,
-        campaign: &Campaign,
-        trackers: &mut dyn crate::world::TrackerUi,
-    ) {
-        self.set_campaign(campaign.id);
-        // Lookup's reason line ends with the NPC it explains.
-        if self.generated.is_none() {
-            self.lookup_kept = false;
-            self.lookup_npc = None;
-        }
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("world"))
-        });
-        let broken = index.map_or(0, |index| index.broken_world.len());
-        // The fault records, found once per index: the count, its menu and the rows read them.
-        let faults = index.map(|index| index.note_faults());
-        let count = faults.map_or(0, |faults| faults.notes() + broken);
-        let broken_links = faults.map_or(0, |faults| faults.listed().len());
-        let mut create = None;
-        // M0603 (ruling M21): the header is the shared title line: the title and its count,
-        // New with its menu, the count of notes that need fixing with its menu, and the count
-        // that cannot be read, which opens the first one's repair.
-        const NEW: design::Word = crate::word!("New");
-        let context = (count > 0).then(|| design::count(count, "note", "notes"));
-        let fixing = design::count(broken_links, "note needs fixing", "notes need fixing");
-        let unreadable = format!("{} cannot be read", design::count(broken, "note", "notes"));
-        let mut open = None;
-        let mut line = design::TitleLine::new("World")
-            .context(context.as_deref())
-            .menu(
-                design::TitleAction::secondary(NEW)
-                    .icon(icons::ADD)
-                    .name("New ▾")
-                    .blocked(
-                        index
-                            .is_none()
-                            .then_some("Wait for the notes to load before creating a note."),
-                    ),
-                |ui| create = new_choices(ui),
-            );
-        if broken_links > 0 {
-            line = line.status(
-                design::Status {
-                    icon: icons::WARN,
-                    word: &fixing,
-                    color: colors().result.warning,
-                },
-                |ui| {
-                    if let (Some(index), Some(faults)) = (index, faults) {
-                        for &at in faults.listed() {
-                            let item = &index.items[at];
-                            if design::link(ui, &item.entry.name).clicked() {
-                                open = Some(item.entry.id);
-                                ui.close();
-                            }
-                        }
-                    }
-                },
-            );
-        }
-        // Every note this count holds cannot be read, which is an error in its row, this count
-        // and its repair alike.
-        if broken > 0 {
-            line = line.status_press(design::Status {
-                icon: icons::ERROR,
-                word: &unreadable,
-                color: colors().result.error,
-            });
-        }
-        // The header's menus keep to the column under their control (as the Library's header,
-        // issue #504): the list's content or the reader's, never over the list's scroll bar or
-        // the splitter.
-        let columns = header_columns(ui, index.is_some());
-        let shown = line
-            .page()
-            .menu_room(move |control| {
-                columns
-                    .iter()
-                    .copied()
-                    .find(|column| column.x_range().contains(control.center().x))
-                    .unwrap_or_else(|| columns[columns.len() - 1])
-            })
-            .show(ui);
-        if let Some(id) = open {
-            self.open_note(id);
-        }
-        if shown.status_pressed
-            && let Some(index) = index
-        {
-            self.press_unreadable(campaign, index);
-        }
-        if let Some(kind) = create.take() {
-            self.begin_new(kind, index.map(AsRef::as_ref));
-        }
-        let Some(index) = index else {
-            ui.horizontal(|ui| {
-                design::spinner(ui);
-                ui.label(
-                    Type::Small
-                        .rich(ui, "Wait for the notes to load before creating a note.")
-                        .color(colors().muted),
-                );
-            });
-            return;
-        };
-        self.refresh_checks(index, |path| {
-            crate::library::note_path(&campaign.path, path)
-                .ok()
-                .map(|file| {
-                    std::fs::read_to_string(file).map_err(|error| FileFault::read(path, &error))
-                })
-        });
-        let groups = index.world_groups(&self.search.trim().to_lowercase());
-        if broken == 0
-            && groups.is_empty()
-            && self.search.trim().is_empty()
-            && self.new_kind.is_none()
-            && self.generated.is_none()
-            && self.error.is_none()
-        {
-            design::empty_state(
-                ui,
-                icons::WORLD,
-                "No world notes yet",
-                "World notes are the Markdown files in this campaign’s World folder.",
-                |ui| {
-                    create = new_menu(ui);
-                },
-            );
-            if let Some(kind) = create.take() {
-                self.begin_new(kind, Some(index));
-            }
-            return;
-        }
-        list_column().show_inside(ui, |ui| {
-            let width = ui.available_width();
-            let _ = WORLD_SEARCH.search(
-                ui,
-                "Search the world",
-                &mut self.search,
-                "Find a note",
-                width,
-            );
-            // The list column's own scroll: it keeps its lane, so nothing moves when the bar
-            // comes or goes; its rows fill the column.
-            design::ScrollColumn::new("world_list")
-                .full_width()
-                .show(ui, |ui| {
-                    if groups.is_empty() && index.broken_world.is_empty() {
-                        ui.label(
-                            Type::Body
-                                .rich(ui, "Nothing here matches.")
-                                .color(colors().muted),
-                        );
-                    }
-                    if self.search.trim().is_empty() {
-                        self.check_rows(ui);
-                    }
-                    self.list(ui, index, &groups);
-                    let broken: Vec<_> = index
-                        .broken_world
-                        .iter()
-                        .filter(|(path, _)| {
-                            path.to_lowercase().contains(&self.search.to_lowercase())
-                        })
-                        .collect();
-                    if !broken.is_empty() {
-                        // The list's last row left no gap after it: the heading takes its
-                        // whole space, as the list's own headings do.
-                        let spacing = ui.spacing().item_spacing.y;
-                        if !groups.is_empty() {
-                            ui.spacing_mut().item_spacing.y = 0.0;
-                        }
-                        design::heading(
-                            ui,
-                            design::Heading::Group {
-                                title: "Cannot be read",
-                                count: broken.len(),
-                            },
-                        );
-                        ui.spacing_mut().item_spacing.y = spacing;
-                        for (path, problem) in broken {
-                            let detail = self.broken_details.get(path);
-                            let open = self.repair.as_ref().is_some_and(|r| r.path == *path)
-                                || matches!(
-                                    &self.error,
-                                    Some(PageError::Unread(unread)) if unread.fault.path == *path
-                                );
-                            let response = broken_row(
-                                ui,
-                                open,
-                                path,
-                                detail.map_or(problem.as_str(), |detail| &detail.cause),
-                            )
-                            .on_hover_text(detail.map_or(problem.as_str(), |detail| &detail.hover));
-                            if response.clicked() {
-                                self.open_repair(campaign, path);
-                            }
-                        }
-                    }
-                    let drafts: Vec<_> = self
-                        .kept_repairs
-                        .iter()
-                        .filter(|r| {
-                            r.dirty() && !index.broken_world.iter().any(|(path, _)| path == &r.path)
-                        })
-                        .map(|r| r.path.clone())
-                        .collect();
-                    if !drafts.is_empty() {
-                        design::heading(
-                            ui,
-                            design::Heading::Group {
-                                title: "Repair drafts",
-                                count: drafts.len(),
-                            },
-                        );
-                        for path in drafts {
-                            if design::two_line_row(ui, ROW, false, &path, "Unsaved repair")
-                                .clicked()
-                            {
-                                self.open_repair(campaign, &path);
-                            }
-                        }
-                    }
-                });
-        });
-        let mut nav = None;
-        // An `L` gutter, so a quiet action that starts a line can reach into it and stay clear
-        // of the World column's splitter.
-        egui::CentralPanel::default()
-            .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: design::L as i8,
-                ..Default::default()
-            }))
-            .show_inside(ui, |ui| {
-                self.held_row(ui);
-                if let Some(repair) = &mut self.repair {
-                    if repair.show(ui, campaign, self.run_open) {
-                        self.repair_saved(campaign);
-                    }
-                    return;
-                }
-                if matches!(self.error, Some(PageError::Unread(..))) {
-                    self.unread_pane(ui, index, campaign);
-                    return;
-                }
-                if self.new_kind.is_some() || self.card_shown() || self.error.is_some() {
-                    self.creation_form(ui, index, campaign);
-                    return;
-                }
-                if self.view != View::Reader {
-                    // The checks view is its pane's scroll column; Open questions' ticks and
-                    // their reason sit in its footer.
-                    let frame = PaneFrame::new(ui);
-                    let questions = self.view == View::Questions;
-                    let mut messages =
-                        Messages::new(&frame, ("world_checks", questions), ui.available_width());
-                    if questions {
-                        self.questions_messages(&frame, &mut messages, campaign);
-                    }
-                    let paned = messages.pane(ui, Body::Content, |ui| {
-                        design::reader::measure(ui, |ui| self.checks_view(ui, index))
-                    });
-                    if let Some(press) = paned.pressed
-                        && press.id == crate::world::FooterAct::Untick
-                        && let Some(ticket) = press.ticket
-                    {
-                        self.untick(index, campaign, ticket);
-                    }
-                    match paned.body {
-                        Some(CheckAct::Open(page, heading)) => {
-                            self.open_note(index.items[page].entry.id);
-                            self.reader.show_heading(heading);
-                        }
-                        Some(CheckAct::Tick(at)) => self.tick_question(index, campaign, at),
-                        None => {}
-                    }
-                    return;
-                }
-                nav = self.reader.choices(ui, index);
-                let Some(item) = self
-                    .selected
-                    .and_then(|id| index.position(id))
-                    .map(|position| &index.items[position])
-                else {
-                    // The result sits in the pane's footer, as it does below a note (round 26
-                    // FF1), so the empty state's advice keeps its place.
-                    let frame = PaneFrame::new(ui);
-                    let mut messages = Messages::new(&frame, "world_footer", ui.available_width());
-                    self.page_messages(&frame, &mut messages, None);
-                    // A Log line whose entry is gone says its words here too.
-                    self.reader
-                        .gone_log_messages(&frame, &mut messages, Some(campaign.id));
-                    let paned = messages.pane(ui, Body::Content, |ui| {
-                        design::empty_state(
-                            ui,
-                            icons::WORLD,
-                            "No note open",
-                            "Choose one from the list, or make a new one.",
-                            |_| {},
-                        );
-                    });
-                    if let Some(press) = paned.pressed {
-                        let _ = self.footer_press(ui.ctx(), press, None, campaign, trackers);
-                    }
-                    return;
-                };
-                // A later result on the repaired note replaces `Note repaired.`.
-                if self.repaired == Some(item.entry.id)
-                    && self.reader.has_change_result(campaign, &item.entry.path)
-                {
-                    self.repaired = None;
-                }
-                // Every result, reason and Undo of the open note sits in the pane's footer,
-                // below the reader, so none of them moves the note (round 26). The reader is the
-                // pane's scroll column, one for each note.
-                let frame = PaneFrame::new(ui);
-                let mut messages = Messages::new(
-                    &frame,
-                    ("world_reader", item.entry.id),
-                    ui.available_width(),
-                );
-                self.reader
-                    .footer(&frame, &mut messages, item, index, Some(campaign));
-                self.page_messages(&frame, &mut messages, Some(item.entry.id));
-                trackers.history_footer(item.entry.id, &frame, &mut messages);
-                // As in Library, a wide table may use the pane; prose keeps its measure.
-                // The reader pane is always the editor form (P2): an edit form's text draws in its
-                // region and gives way, so Save stays in view under a long note from the first
-                // frame the form shows; with no form, the unused region is a content pane.
-                let reader = &mut self.reader;
-                let paned = crate::markdown_view::with_wide_tables(ui, |ui| {
-                    messages.pane_editor(ui, |ui, region| {
-                        reader.read_in_pane(
-                            ui,
-                            item,
-                            index,
-                            Some(campaign),
-                            Some(&mut *trackers),
-                            Some(region),
-                        )
-                    })
-                });
-                nav = nav.take().or(paned.body);
-                if let Some(press) = paned.pressed {
-                    let pressed =
-                        self.footer_press(ui.ctx(), press, Some(item), campaign, trackers);
-                    nav = nav.take().or(pressed);
-                }
-            });
-        if let Some(kind) = create.take() {
-            self.begin_new(kind, Some(index));
-        }
-        if let Some(nav) = nav {
-            self.take_nav(nav, index);
-        }
-    }
-
     /// New note, NPC or location keeps a held NPC in its row. Generate NPC shows the held
     /// NPC's card, where Reroll rolls another.
     fn begin_new(&mut self, kind: &'static str, index: Option<&ContentIndex>) {
@@ -949,16 +478,6 @@ impl WorldPage {
         self.generated.is_some() && self.generated_shown
     }
 
-    /// Above another view: the held NPC's one row. The Undo for a discarded NPC is a result, so
-    /// it sits in the pane footer.
-    fn held_row(&mut self, ui: &mut egui::Ui) {
-        if let Some(npc) = self.generated.as_ref().filter(|_| !self.generated_shown)
-            && crate::world::unsaved_npc_row(ui, &npc.name)
-        {
-            self.show_held();
-        }
-    }
-
     /// The page's result, while its own state holds: the discarded NPC while no NPC is held,
     /// `Note repaired.` while the repaired note is open.
     fn page_messages<'f>(
@@ -981,42 +500,6 @@ impl WorldPage {
         }
     }
 
-    /// A press in a pane that shows the reader's footer: the page's own result and the
-    /// trackers' are taken here, the reader's by the reader.
-    fn footer_press(
-        &mut self,
-        ctx: &egui::Context,
-        press: crate::design::outcome::Press<crate::world::FooterAct>,
-        item: Option<&crate::lookup::Item>,
-        campaign: &Campaign,
-        trackers: &mut dyn crate::world::TrackerUi,
-    ) -> Option<Nav> {
-        match press.id {
-            crate::world::FooterAct::Page => {
-                let ticket = press.ticket?;
-                // Only the discard has an Undo; a replaced result (`Gone`) does nothing.
-                if self
-                    .results
-                    .undo_by(ticket, |kept| match kept.0 {
-                        crate::world::PageResult::Discarded(_) => Ok(()),
-                        crate::world::PageResult::Repaired => Err(()),
-                    })
-                    .is_ok()
-                {
-                    self.undo_discard();
-                }
-                None
-            }
-            crate::world::FooterAct::Trackers => {
-                trackers.undo_remove(press.ticket);
-                None
-            }
-            _ => self
-                .reader
-                .footer_act(ctx, press, item.map(|item| item.entry.id), campaign),
-        }
-    }
-
     /// `Undo discard`: the same NPC, with its table facts, on its card again.
     fn undo_discard(&mut self) {
         if let Some((npc, problems, sources)) = self.discarded_npc.take() {
@@ -1025,410 +508,6 @@ impl WorldPage {
             self.generator_sources = sources;
             self.show_held();
         }
-    }
-
-    /// A note that the system will not read. The pane names the file and how to recover it;
-    /// the system's words wait in Technical details. Nothing here writes the file.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
-    fn unread_pane(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
-        let Some(fault) = self.unread_view(index, campaign) else {
-            return;
-        };
-        design::reader::title(ui, &fault.file);
-        // No editor link: an editor cannot open a file that Splat cannot read either.
-        crate::world::folder_file_line(ui, &campaign.path, &fault.path, false);
-        // The title and file line name the file, so the error says `this note` (FG6). M0604
-        // (rulings M20, M23): the note's fault in place of its page, its recovery steps in its
-        // words, then `Try again` and `Close note` with the shared gap (round 18's `L` apart
-        // gives way). The recovery is prose: the words keep the reader measure (round 24 AG2).
-        #[derive(Clone, Copy, PartialEq)]
-        enum Pane {
-            Again,
-            Close,
-        }
-        let words = fault.words.clone();
-        let chosen = at_reader_measure(ui, |ui| {
-            PagePlaceholder::new(&crate::world::ReaderFault::Unreadable(words))
-                .choice(Choice::new(MessageChoice::Choice("Try again"), Pane::Again))
-                .choice(Choice::new(
-                    MessageChoice::Choice("Close note"),
-                    Pane::Close,
-                ))
-                .show(ui)
-        });
-        let (again, cancel) = (chosen == Some(Pane::Again), chosen == Some(Pane::Close));
-        design::gap(ui, design::Gap::S);
-        design::quiet_section(ui, "Technical details", |ui| {
-            ui.add(
-                egui::Label::new(Type::Small.rich(ui, &fault.system).color(colors().muted)).wrap(),
-            );
-        });
-        if cancel {
-            self.error = None;
-        } else if again {
-            // Read the folder again first, so the list's cause is current too.
-            self.unread_again();
-        }
-    }
-
-    /// A creation form or the held NPC's card, with the pane's footer: the card's `Copy the
-    /// marker` result, the line that names the NPC Lookup keeps (round 28 rows 7 and 44: a
-    /// state of the card, so the card never moves when it comes), and the error of the last
-    /// Create or Save (round 27 FG2: no body places). The form is the pane's scroll column.
-    fn creation_form(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
-        let form = self.new_kind.is_some() || self.card_shown();
-        let frame = PaneFrame::new(ui);
-        let mut messages: Messages<'_, crate::world::FooterAct> =
-            Messages::new(&frame, "world_creation", ui.available_width());
-        let card = self.generated.as_ref().filter(|_| self.generated_shown);
-        if let Some(npc) = card {
-            // Two NPCs: the one Lookup keeps and the one on this card. Each is named, so the DM
-            // knows which to save and which moves here. It is a state: an info notice.
-            if let Some(name) = self.lookup_npc.as_ref().filter(|_| self.lookup_kept) {
-                messages.outcome(Notice::new(crate::world::said(&kept_in_lookup(
-                    name, &npc.name,
-                ))));
-            }
-            if let Some(shown) = self
-                .marker_copied
-                .get(&MarkerSlot)
-                .filter(|shown| shown.value().0 == npc.name)
-            {
-                // `lookup::MARKER_COPIED`.
-                messages.kept(shown.outcome(&frame, |_| {
-                    Said::new(crate::sentence!(
-                        "Copied. Change 1d6 to the number of names."
-                    ))
-                    .into()
-                }));
-            }
-        }
-        if let Some(PageError::Words(error)) = &self.error
-            && form
-        {
-            messages.outcome(FaultMessage::new(&crate::world::ReaderFault::Action(
-                error.clone(),
-            )));
-        }
-        let _ = messages.pane(ui, Body::Content, |ui| {
-            self.creation_body(ui, index, campaign)
-        });
-    }
-
-    /// Inline creation (round 27 ruling): the Label title and the fields, the named Create
-    /// action after the last field on that field's line, centred on it, then one kept line
-    /// below, as tall as a control: quiet `Cancel` at its start, then the reason or the new
-    /// file's path. Typing moves nothing.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
-    )]
-    fn creation_body(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
-        if let Some(kind) = self.new_kind {
-            design::heading(
-                ui,
-                design::Heading::Label(match kind {
-                    "npc" => "New NPC",
-                    "location" => "New location",
-                    _ => "New note",
-                }),
-            );
-            let reason = self
-                .new_name
-                .trim()
-                .is_empty()
-                .then_some("Type a name first.");
-            let label = match kind {
-                "npc" => "Create NPC",
-                "location" => "Create location",
-                _ => "Create note",
-            };
-            let create = || {
-                if self.run_open {
-                    design::Action::secondary(label)
-                } else {
-                    design::Action::primary(label)
-                }
-            };
-            let create_width = create().natural_width(ui);
-            // The last field shares its line with Create; the others take the form's width.
-            let created = {
-                let name = &mut self.new_name;
-                let note_type = &mut self.note_type;
-                let field =
-                    |ui: &mut egui::Ui,
-                     last: bool,
-                     draw: &mut dyn FnMut(&mut egui::Ui) -> egui::Response| {
-                        if !last {
-                            draw(ui);
-                            return false;
-                        }
-                        let width = (ui.available_width() - create_width - design::S)
-                            .clamp(design::XXL, design::FORM_WIDTH);
-                        // Create sits `S` after the field's column, centred on the field itself.
-                        // The column's height is the line's, so the kept line follows it.
-                        let column = ui.allocate_ui_with_layout(
-                            egui::vec2(width, 0.0),
-                            egui::Layout::top_down(egui::Align::Min),
-                            |ui| draw(ui).rect,
-                        );
-                        let field = column.inner;
-                        let at = egui::Rect::from_min_size(
-                            egui::pos2(
-                                column.response.rect.right() + design::S,
-                                field.center().y - design::Density::Scan.control() / 2.0,
-                            ),
-                            egui::vec2(create_width, design::Density::Scan.control()),
-                        );
-                        crate::world::in_rect(ui, at, |ui| {
-                            create().blocked(reason).show(ui).clicked()
-                        })
-                    };
-                let mut name_field = |ui: &mut egui::Ui| {
-                    design::labelled_field(ui, NEW_NAME, "Name", name, None, None)
-                };
-                if kind == "note" {
-                    field(ui, false, &mut name_field);
-                    field(ui, true, &mut |ui: &mut egui::Ui| {
-                        design::labelled_field(
-                            ui,
-                            NEW_NOTE_TYPE,
-                            "Type (optional)",
-                            note_type,
-                            Some("Leave empty for a plain note. For example: faction or quest."),
-                            None,
-                        )
-                    })
-                } else {
-                    field(ui, true, &mut name_field)
-                }
-            };
-            if created {
-                self.create(campaign);
-            }
-            // The kept line: Cancel at its start, then the reason, or the file the name makes.
-            ui.horizontal(|ui| {
-                ui.set_min_height(design::Density::Read.control());
-                if design::Action::quiet("Cancel")
-                    .density(design::Density::Read)
-                    .line_start()
-                    .show(ui)
-                    .clicked()
-                {
-                    self.new_kind = None;
-                }
-                design::gap_to_next(ui, design::Gap::L);
-                if reason.is_some() {
-                    design::blocked_reason(ui, reason);
-                } else if kind == "npc" {
-                    let path = crate::world::new_entry_path(Some(index), &self.new_name, "npc");
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small
-                                .rich(ui, format!("Will create {path}"))
-                                .color(colors().muted),
-                        )
-                        .wrap(),
-                    );
-                }
-            });
-        }
-        if let Some(npc) = self.generated.as_ref().filter(|_| self.generated_shown) {
-            let choice = crate::lookup::generator_card(
-                ui,
-                npc,
-                &self.generator_problems,
-                &self.generator_sources,
-                self.run_open,
-                crate::lookup::NamesHelp::Marker,
-                &crate::world::new_entry_path(Some(index), &npc.name, "npc"),
-            );
-            for (pressed, act) in [
-                (choice.copied_marker, CardAct::CopiedMarker),
-                (choice.save, CardAct::Save),
-                (choice.again, CardAct::Again),
-                (choice.discard, CardAct::Discard),
-            ] {
-                if pressed {
-                    self.card_act(act, campaign, index);
-                }
-            }
-        }
-        // With no form and no card, the error is the page's content, with its Cancel; under a
-        // form or a card it is in the footer (`creation_form`).
-        if let Some(PageError::Words(error)) = self.error.clone()
-            && self.new_kind.is_none()
-            && !self.card_shown()
-        {
-            // M0607 (ruling M20): the error in place of the page's body, with its Cancel at the
-            // message text.
-            let cancel = PagePlaceholder::new(&crate::world::ReaderFault::Action(error))
-                .choice(Choice::new(MessageChoice::Choice("Cancel"), ()))
-                .show(ui)
-                .is_some();
-            if cancel {
-                self.error = None;
-            }
-        }
-    }
-
-    /// The two lists of what the notes still need, above the notes themselves.
-    fn check_rows(&mut self, ui: &mut egui::Ui) {
-        for (view, title, detail, open) in self.check_rows_shown() {
-            if design::two_line_row(ui, ROW, open, title, &detail).clicked() {
-                self.press_check_row(view);
-            }
-        }
-    }
-
-    /// The open questions, or the problems. Returns the page a press asks for, with the
-    /// heading to show.
-    fn checks_view(&mut self, ui: &mut egui::Ui, index: &ContentIndex) -> Option<CheckAct> {
-        let (_, checks) = self.checks.as_ref()?;
-        let mut open = None;
-        let mut tick = None;
-        let note = |ui: &mut egui::Ui, words: &str| {
-            ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
-        };
-        let more = |ui: &mut egui::Ui, count: usize| {
-            if count > CHECK_ROWS {
-                note(ui, &design::count(count - CHECK_ROWS, "more", "more"));
-            }
-        };
-        // One page's lines, then its name. The page answers "which questions are open?", so
-        // each line is `Body` first and opens the note at its heading; the note that holds them
-        // follows in `Small` (round 26 FE4). An open question has its box before its words.
-        let questions = self.view == View::Questions;
-        let mut by_page = |ui: &mut egui::Ui, found: &[crate::world::checks::Found]| {
-            let mut place = 0;
-            for group in found.chunk_by(|a, b| a.page == b.page).take(CHECK_ROWS) {
-                ui.push_id(group[0].page, |ui| {
-                    for line in group {
-                        let clicked = if questions {
-                            let (ticked, clicked) = question_row(ui, index, line);
-                            if ticked {
-                                tick = Some(place);
-                            }
-                            clicked
-                        } else {
-                            design::wrapped_link(ui, &line.words).clicked()
-                        };
-                        if clicked {
-                            open = Some(CheckAct::Open(line.page, line.heading.clone()));
-                        }
-                        place += 1;
-                    }
-                    ui.horizontal_wrapped(|ui| {
-                        if questions {
-                            design::gap(ui, design::Gap::XXL);
-                        }
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        note(ui, "In ");
-                        if design::small_link(ui, &index.items[group[0].page].entry.name).clicked()
-                        {
-                            open = Some(CheckAct::Open(group[0].page, None));
-                        }
-                    });
-                    design::gap(ui, design::Gap::S);
-                });
-            }
-            more(ui, found.chunk_by(|a, b| a.page == b.page).count());
-        };
-        if self.view == View::Questions {
-            design::reader::title(ui, "Open questions");
-            design::reader::subtitle(
-                ui,
-                "Each unticked task line in the world’s notes. Tick a question when you decide.",
-            );
-            design::gap(ui, design::Gap::S);
-            if checks.questions.is_empty() {
-                note(ui, "No open questions.");
-            }
-            by_page(ui, &checks.questions);
-            return tick.map(CheckAct::Tick).or(open);
-        }
-        design::reader::title(ui, PROBLEMS_TITLE);
-        design::reader::subtitle(ui, PROBLEMS_INTRO);
-        if !checks.loose_dates.is_empty() {
-            design::heading(ui, design::Heading::Section("Dates outside events"));
-            note(
-                ui,
-                "A date in words belongs on an event’s note. An event has a date that Splat can put in order.",
-            );
-            by_page(ui, &checks.loose_dates);
-        }
-        let mut pages = |ui: &mut egui::Ui, pages: &[usize]| {
-            for &page in pages {
-                if design::link(ui, &index.items[page].entry.name).clicked() {
-                    open = Some(CheckAct::Open(page, None));
-                }
-            }
-        };
-        if !checks.wanted.is_empty() {
-            design::heading(ui, design::Heading::Section("Pages to write"));
-            note(
-                ui,
-                "A link names each of these, and no note has the name. The note that most lines want is first.",
-            );
-            for (name, lines, from) in checks.wanted.iter().take(CHECK_ROWS) {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(Type::Body.rich(ui, name).color(colors().text));
-                    note(
-                        ui,
-                        &format!("{} in", design::count(*lines, "line", "lines")),
-                    );
-                    pages(ui, from);
-                });
-            }
-            more(ui, checks.wanted.len());
-        }
-        for (title, words, found) in [
-            (
-                "No summary",
-                "Start each of these with one paragraph that says what the subject is. Lists and Lookup show it.",
-                &checks.no_summary,
-            ),
-            (
-                "Nothing points here",
-                "These notes show on no other note. No line names them, they name no other note, and they are in no place and part of no group.",
-                &checks.alone,
-            ),
-        ] {
-            if !found.is_empty() {
-                design::heading(ui, design::Heading::Section(title));
-                note(ui, words);
-                ui.horizontal_wrapped(|ui| pages(ui, &found[..found.len().min(CHECK_ROWS)]));
-                more(ui, found.len());
-            }
-        }
-        for (title, words, found) in [
-            (
-                "One name on two notes",
-                "A line that uses the name shows on each of these notes.",
-                &checks.shared_names,
-            ),
-            (
-                "Said twice",
-                "The same sentence is on each of these notes. Keep it on the note of its subject.",
-                &checks.repeated,
-            ),
-        ] {
-            if !found.is_empty() {
-                design::heading(ui, design::Heading::Section(title));
-                note(ui, words);
-                for (said, on) in found.iter().take(CHECK_ROWS) {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(Type::Small.rich(ui, said).color(colors().text));
-                        pages(ui, on);
-                    });
-                }
-                more(ui, found.len());
-            }
-        }
-        open
     }
 
     /// Tick the question at this place in Open questions: one character of its note, at the
@@ -1552,191 +631,6 @@ impl WorldPage {
             )));
         }
     }
-
-    fn list(&mut self, ui: &mut egui::Ui, index: &ContentIndex, groups: &WorldGroups) {
-        let spacing = ui.spacing().item_spacing.y;
-        for (at, ((kind, title), rows)) in groups.iter().enumerate() {
-            // A group's rows have no gap between them, so after the first group nothing has left
-            // the usual gap after it, and a heading takes its whole space (`L`) itself.
-            if at > 0 {
-                ui.spacing_mut().item_spacing.y = 0.0;
-            }
-            if *kind == 3 {
-                // A folder's heading is not one of the part's kinds: it takes the space that the
-                // part gives a group heading. No token is the `10` that follows the first group
-                // after the search field, so that one keeps its old `XS`.
-                design::gap(
-                    ui,
-                    if at > 0 {
-                        design::Gap::L
-                    } else {
-                        design::Gap::XS
-                    },
-                );
-                ui.spacing_mut().item_spacing.y = spacing;
-                design::folder_group_heading(ui, design::FolderGroup::of_path(title), rows.len());
-            } else {
-                design::heading(
-                    ui,
-                    design::Heading::Group {
-                        title,
-                        count: rows.len(),
-                    },
-                );
-            }
-            ui.spacing_mut().item_spacing.y = 0.0;
-            for &(position, depth) in rows {
-                let entry = &index.items[position].entry;
-                let ListRow {
-                    name,
-                    detail,
-                    narrow,
-                    ..
-                } = list_row(index, position, depth);
-                let selected = self.row_selected(entry.id);
-                // A row is set in one step for each level of depth.
-                design::indent(ui, depth, design::Gap::S, |ui| {
-                    let response = if detail.is_empty() {
-                        design::row(
-                            ui,
-                            design::Density::Read.row(),
-                            selected,
-                            &format!("{} · ", entry.name),
-                            |ui, rect| {
-                                let galley = design::one_line(
-                                    ui,
-                                    &entry.name,
-                                    Type::Body.font(ui),
-                                    colors().text,
-                                    rect.width() - design::S * 2.0,
-                                );
-                                ui.painter().galley(
-                                    egui::pos2(
-                                        rect.left() + design::S,
-                                        rect.center().y - galley.size().y / 2.0,
-                                    ),
-                                    galley,
-                                    colors().text,
-                                );
-                            },
-                        )
-                    } else {
-                        marked_row(ui, selected, &name, &detail, narrow.as_deref())
-                            .on_hover_text(&entry.path)
-                    };
-                    if response.clicked() {
-                        self.open_note(entry.id);
-                    }
-                });
-            }
-            ui.spacing_mut().item_spacing.y = spacing;
-        }
-    }
-}
-
-/// The list of notes' column: one definition for the column and for the header's menus.
-fn list_column() -> design::Column {
-    design::Column::left("world_list_panel", LIST_WIDTH, 190.0..=480.0).frame(
-        egui::Frame::new().inner_margin(egui::Margin {
-            right: design::S as i8,
-            ..Default::default()
-        }),
-    )
-}
-
-/// The page's columns that `ui` lays out next, left to right, for the header's menus
-/// (`TitleLine::menu_room`): the list's and the reader's, each its content, `S` inside its
-/// panel, where the list's scroll bar starts. The header asks the list for its width before it
-/// draws (`Column::width_within`). While the notes load there is no list: one column.
-fn header_columns(ui: &egui::Ui, listed: bool) -> Vec<egui::Rect> {
-    let mut room = ui.available_rect_before_wrap();
-    let mut columns = Vec::new();
-    if listed {
-        let width = list_column().width_within(ui.ctx(), room);
-        columns.push(egui::Rect::from_x_y_ranges(
-            room.left()..=room.left() + width,
-            room.y_range(),
-        ));
-        room.min.x += width;
-    }
-    columns.push(room);
-    columns
-        .into_iter()
-        .map(|column| column.shrink2(egui::vec2(design::S, 0.0)))
-        .collect()
-}
-
-/// The same next step in the header and in an empty reader: the empty reader's `New ▾` with its
-/// menu (the header's is its title line's menu action, `TitleLine::menu`).
-fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
-    let label = format!("New {}", icons::DOWN);
-    let response = design::Action::secondary(&label)
-        .name("New ▾")
-        .icon(icons::ADD)
-        .show(ui);
-    design::layout::menu_popup(ui, &response)
-        .show(new_choices)
-        .and_then(|shown| shown.inner)
-}
-
-/// New's choices, in its menu.
-fn new_choices(ui: &mut egui::Ui) -> Option<&'static str> {
-    let mut choice = None;
-    for (word, kind) in [
-        // `…` marks a choice that asks for a name first. Generate NPC makes its card at once.
-        ("Note…", "note"),
-        ("NPC…", "npc"),
-        ("Location…", "location"),
-        ("Generate NPC", "generate"),
-    ] {
-        // M0609: a menu's choices are the shared quiet actions, as in the Library's menus.
-        if design::Action::quiet(word).show(ui).clicked() {
-            choice = Some(kind);
-            ui.close();
-        }
-    }
-    choice
-}
-
-/// The room before a question's words: its box's 24 px target and an `S` gap.
-const QUESTION_BOX: f32 = design::Gap::XXL.size();
-
-/// One open question: its box, when Splat can write its note, then its words as a link that
-/// opens the note at its heading. A note that Splat does not write keeps the box's room, so the
-/// words keep one column. Returns whether the box and the words were clicked.
-fn question_row(
-    ui: &mut egui::Ui,
-    index: &ContentIndex,
-    found: &crate::world::checks::Found,
-) -> (bool, bool) {
-    let row = ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        let (slot, _) =
-            ui.allocate_exact_size(egui::vec2(QUESTION_BOX, design::XL), egui::Sense::hover());
-        let mut ticked = false;
-        if found.open_box.is_some() && crate::world::edit::editable(&index.items[found.page], index)
-        {
-            let mut cell = ui.new_child(
-                egui::UiBuilder::new()
-                    .max_rect(egui::Rect::from_min_size(
-                        slot.min,
-                        egui::vec2(design::XL, design::XL),
-                    ))
-                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
-            );
-            cell.spacing_mut().interact_size.y = design::XL;
-            let mut done = false;
-            let response = cell.add(egui::Checkbox::without_text(&mut done));
-            design::named(ui, &response, &format!("Open: {}", found.words));
-            ticked = response.clicked();
-        }
-        let clicked = ui
-            .vertical(|ui| design::wrapped_link(ui, &found.words).clicked())
-            .inner;
-        (ticked, clicked)
-    });
-    design::register_row(ui, row.response.rect);
-    row.inner
 }
 
 /// One row of the list of notes, as any view draws it.
@@ -1863,10 +757,33 @@ impl WorldPage {
         }
     }
 
+    /// The list's groups for the search words: found again only when the index loads again or
+    /// the words change.
+    pub fn groups(&mut self, index: &ContentIndex) -> Arc<WorldGroups> {
+        let search = self.search.trim().to_lowercase();
+        let generation = index.generation();
+        match &self.groups {
+            Some(kept) if kept.generation == generation && kept.search == search => {
+                kept.groups.clone()
+            }
+            _ => {
+                #[cfg(test)]
+                GROUP_SEARCHES.with(|count| count.set(count.get() + 1));
+                let groups = Arc::new(index.world_groups(&search));
+                self.groups = Some(GroupsKept {
+                    generation,
+                    search,
+                    groups: groups.clone(),
+                });
+                groups
+            }
+        }
+    }
+
     /// The page has nothing at all: no note, no search, no form, no NPC and no error.
-    pub fn is_empty(&self, index: &ContentIndex, groups: &WorldGroups) -> bool {
+    pub fn is_empty(&mut self, index: &ContentIndex) -> bool {
         index.broken_world.is_empty()
-            && groups.is_empty()
+            && self.groups(index).is_empty()
             && self.search.trim().is_empty()
             && self.new_kind.is_none()
             && self.generated.is_none()
@@ -1874,8 +791,8 @@ impl WorldPage {
     }
 
     /// The list's groups and rows for the search words.
-    pub fn list_groups(&self, index: &ContentIndex) -> Vec<ListGroup> {
-        let groups = index.world_groups(&self.search.trim().to_lowercase());
+    pub fn list_groups(&mut self, index: &ContentIndex) -> Vec<ListGroup> {
+        let groups = self.groups(index);
         groups
             .iter()
             .map(|((kind, title), rows)| ListGroup {
@@ -2458,10 +1375,6 @@ fn list_row(index: &ContentIndex, position: usize, depth: usize) -> ListRow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui_kittest::{
-        Harness,
-        kittest::{NodeT, Queryable},
-    };
 
     fn note(path: &str, name: &str, kind: &str, body: &str) -> String {
         format!(
@@ -2531,180 +1444,133 @@ mod tests {
         files
     }
 
+    /// The held NPC's row shows above another view, and its card is not the view.
+    fn row_shown(page: &WorldPage, index: &ContentIndex, npc: &str) -> bool {
+        page.held_name() == Some(npc) && page.card(index).is_none()
+    }
+
+    /// The pane's footer words and Undo labels, with no note open.
+    fn footer(page: &mut WorldPage, index: &ContentIndex, campaign: &Campaign) -> Vec<String> {
+        page.footer_plain(None, index, campaign, |_, _| ())
+            .into_iter()
+            .flat_map(|line| {
+                std::iter::once(line.words.clone()).chain(line.undo.map(|undo| undo.label))
+            })
+            .collect()
+    }
+
     /// AD1/SD1/FD1: an unsaved generated NPC is a held draft. Every path to another view keeps
     /// it in one row above that view, Show brings its card back, and Save writes it once.
     /// Each path's failure is collected, so one fault build names every path it breaks.
     #[test]
     fn iter15_d_ad1_every_path_keeps_a_held_npc() {
-        use crate::design::test_harness::Themed as _;
         let dir = tempfile::tempdir().unwrap();
         let (campaign, index) = held_npc_campaign(dir.path());
         assert_eq!(index.broken_world.len(), 1, "the fixture has a repair");
-        let rook = index
-            .items
-            .iter()
-            .find(|item| item.entry.name == "Rook")
-            .unwrap()
-            .entry
-            .id;
-        let shown = campaign.clone();
-        let mut harness = Harness::builder()
-            .with_size(egui::vec2(1200.0, 800.0))
-            .themed_ui_state(
-                {
-                    let index = index.clone();
-                    move |ui, page: &mut WorldPage| {
-                        page.show(
-                            ui,
-                            Some(&index),
-                            &shown,
-                            &mut crate::tracker_reader::Reader(&mut Default::default()),
-                        )
-                    }
-                },
-                WorldPage::default(),
-            );
-        harness.run_steps(2);
-        harness.state_mut().begin_new("generate", Some(&index));
-        harness.run_steps(2);
-        let npc = held(harness.state()).expect("the generator rolled an NPC");
-        let rolled = harness.state().generated.clone().unwrap();
-        // M0602: the row is the draft status, then the name, which the row's sentence names
-        // (the name's label; kittest's label queries read a text's value, its name alone).
-        let row = format!("Unsaved NPC: {npc}");
-        fn row_shown(harness: &Harness<'_, WorldPage>, npc: &str, row: &str) -> bool {
-            harness
-                .query_all_by_label_contains(npc)
-                .any(|node| node.accesskit_node().label().as_deref() == Some(row))
-        }
-        assert!(harness.query_by_label("Save NPC").is_some());
+        let id_of = |name: &str| {
+            index
+                .items
+                .iter()
+                .find(|item| item.entry.name == name)
+                .unwrap()
+                .entry
+                .id
+        };
+        let (rook, bells) = (id_of("Rook"), id_of("Bells"));
+        let mut page = WorldPage::default();
+        page.follow_campaign(campaign.id);
+        page.refresh(&index, &campaign);
+        page.press_new("generate", Some(&index));
+        let npc = held(&page).expect("the generator rolled an NPC");
+        let rolled = page.generated.clone().unwrap();
+        assert!(page.card(&index).is_some(), "the card shows");
         assert!(
-            !row_shown(&harness, &npc, &row),
+            !row_shown(&page, &index, &npc),
             "no row while the card shows"
         );
 
-        type Path<'a> = (
-            &'a str,
-            Box<dyn Fn(&mut Harness<'_, WorldPage>) -> bool + 'a>,
-        );
-        let label_starting = |harness: &Harness<'_, WorldPage>, start: &str| {
-            harness
-                .query_all_by_label_contains(start)
-                .find(|node| {
-                    node.accesskit_node()
-                        .label()
-                        .is_some_and(|label| label.starts_with(start))
-                })
-                .map(|node| node.accesskit_node().label().unwrap())
-        };
-        let click_starting = move |harness: &mut Harness<'_, WorldPage>, start: &str| {
-            let label = label_starting(harness, start).unwrap_or_else(|| panic!("{start}"));
-            harness.get_by_label(&label).click();
-            harness.run_steps(2);
-        };
+        type Path<'a> = (&'a str, Box<dyn Fn(&mut WorldPage) -> bool + 'a>);
         let paths: Vec<Path> = vec![
             (
                 "AD1-problems",
-                Box::new(|harness| {
-                    click_starting(harness, "Things to check · ");
-                    harness.state().view == View::Problems
-                        && harness.query_by_label(PROBLEMS_INTRO).is_some()
+                Box::new(|page| {
+                    let listed = page.check_rows_shown().iter().any(|(view, title, ..)| {
+                        *view == View::Problems && *title == PROBLEMS_TITLE
+                    });
+                    page.press_check_row(View::Problems);
+                    listed && matches!(page.pane(&index), Pane::Checks(View::Problems))
                 }),
             ),
             (
                 "AD1-questions",
-                Box::new(|harness| {
-                    click_starting(harness, "Open questions · ");
-                    harness.state().view == View::Questions
-                        && harness.query_by_label("Who pays Rook?").is_some()
+                Box::new(|page| {
+                    page.press_check_row(View::Questions);
+                    matches!(page.pane(&index), Pane::Checks(View::Questions))
+                        && page.checks().is_some_and(|checks| {
+                            checks.questions.iter().any(|q| q.words == "Who pays Rook?")
+                        })
                 }),
             ),
             (
                 "AD1-reveal",
-                Box::new(|harness| {
-                    let id = campaign.id;
-                    harness.state_mut().reveal(id, rook);
-                    harness.run_steps(2);
-                    harness.state().selected == Some(rook)
-                        && harness.query_by_label("Rook keeps the gate.").is_some()
+                Box::new(|page| {
+                    page.reveal(campaign.id, rook);
+                    page.selected() == Some(rook)
+                        && matches!(page.pane(&index), Pane::Note(at) if index.items[at].entry.id == rook)
                 }),
             ),
             (
                 "AD1-repair-opens",
-                Box::new(|harness| {
-                    harness.state_mut().open_repair(&campaign, "Broken.md");
-                    harness.run_steps(2);
-                    harness.state().repair.is_some()
+                Box::new(|page| {
+                    page.open_repair(&campaign, "Broken.md");
+                    matches!(page.pane(&index), Pane::Repair)
                 }),
             ),
             (
                 "AD1-repair-ends-on-another-note",
-                Box::new(|harness| {
-                    harness.state_mut().open_repair(&campaign, "Broken.md");
-                    harness.run_steps(2);
-                    let opened = harness.state().repair.is_some();
-                    click_starting(harness, "Bells · ");
-                    opened
-                        && harness.state().repair.is_none()
-                        && harness.state().selected
-                            == index
-                                .items
-                                .iter()
-                                .find(|item| item.entry.name == "Bells")
-                                .map(|item| item.entry.id)
+                Box::new(|page| {
+                    page.open_repair(&campaign, "Broken.md");
+                    let opened = page.repair.is_some();
+                    page.press_note(bells);
+                    opened && page.repair.is_none() && page.selected() == Some(bells)
                 }),
             ),
             (
                 "AD1-new-note",
-                Box::new(|harness| {
-                    harness.state_mut().begin_new("note", Some(&index));
-                    harness.run_steps(2);
-                    let form = harness.query_by_label("Create note").is_some();
-                    harness.get_by_label("Cancel").click();
-                    harness.run_steps(2);
-                    form && harness.state().new_kind.is_none()
+                Box::new(|page| {
+                    page.press_new("note", Some(&index));
+                    let form = page.new_kind() == Some("note")
+                        && matches!(page.pane(&index), Pane::Creation);
+                    page.cancel_new();
+                    form && page.new_kind().is_none()
                 }),
             ),
             (
                 "AD1-new-npc-saved",
-                Box::new(|harness| {
-                    harness.state_mut().begin_new("npc", Some(&index));
-                    harness.run_steps(2);
-                    let form = harness.query_by_label("Create NPC").is_some();
-                    harness
-                        .get_by_role_and_label(egui::accesskit::Role::TextInput, "Name")
-                        .focus();
-                    harness.run_steps(1);
-                    harness
-                        .get_by_role_and_label(egui::accesskit::Role::TextInput, "Name")
-                        .type_text("Tam");
-                    harness.run_steps(2);
-                    harness.get_by_label("Create NPC").click();
-                    harness.run_steps(2);
+                Box::new(|page| {
+                    page.press_new("npc", Some(&index));
+                    let form = page.new_kind() == Some("npc");
+                    page.set_new_name("Tam");
+                    page.create(&campaign);
                     // The New form's save writes only its own note.
-                    form && harness.state().new_kind.is_none()
-                        && npc_files(dir.path()) == ["Tam.md"]
+                    form && page.new_kind().is_none() && npc_files(dir.path()) == ["Tam.md"]
                 }),
             ),
         ];
         let mut failed = Vec::new();
         for (id, path) in &paths {
-            let reached = path(&mut harness);
-            let kept = held(harness.state()).as_deref() == Some(npc.as_str());
-            let shown =
-                row_shown(&harness, &npc, &row) && harness.query_by_label("Save NPC").is_none();
+            let reached = path(&mut page);
+            let kept = held(&page).as_deref() == Some(npc.as_str());
+            let shown = row_shown(&page, &index, &npc);
             if !(reached && kept && shown) {
                 failed.push(format!("{id}: reached {reached}, kept {kept}, row {shown}"));
                 // Hold the same NPC again so the next path starts from the same state.
-                let page = harness.state_mut();
                 page.generated = Some(rolled.clone());
                 page.generated_shown = true;
-                harness.run_steps(2);
                 continue;
             }
-            harness.get_by_label("Show").click();
-            harness.run_steps(2);
-            if harness.query_by_label("Save NPC").is_none() || row_shown(&harness, &npc, &row) {
+            page.press_show_held();
+            if page.card(&index).is_none() || row_shown(&page, &index, &npc) {
                 failed.push(format!("{id}: Show did not bring the card back"));
             }
         }
@@ -2715,22 +1581,20 @@ mod tests {
                 WorldPage::lookup_kept as fn(&mut WorldPage),
             ),
             ("AD1-generate-again", |page: &mut WorldPage| {
-                page.begin_new("generate", None)
+                page.press_new("generate", None)
             }),
         ] {
-            click_starting(&mut harness, "Things to check · ");
-            open(harness.state_mut());
-            harness.run_steps(2);
-            if held(harness.state()).as_deref() != Some(npc.as_str())
-                || harness.query_by_label("Save NPC").is_none()
+            page.press_check_row(View::Problems);
+            open(&mut page);
+            if held(&page).as_deref() != Some(npc.as_str())
+                || page.card(&index).map(|card| card.npc.name) != Some(npc.clone())
             {
                 failed.push(format!("{id}: the held card is not shown"));
             }
         }
         assert!(failed.is_empty(), "{failed:#?}");
 
-        harness.get_by_label("Save NPC").click();
-        harness.run_steps(2);
+        page.card_act(CardAct::Save, &campaign, &index);
         let mut expected = vec![format!("{npc}.md"), "Tam.md".to_owned()];
         expected.sort();
         assert_eq!(
@@ -2738,97 +1602,75 @@ mod tests {
             expected,
             "AD1-saved: the held NPC saves to one file, beside the New form's note"
         );
-        assert!(held(harness.state()).is_none());
-        assert!(!row_shown(&harness, &npc, &row));
+        assert!(held(&page).is_none());
+        assert!(page.held_name().is_none(), "no row after the save");
     }
 
     /// Discard lets the NPC go with `Undo discard`, which brings the same NPC back. Moving on
     /// ends the Undo, and a new NPC replaces it.
     #[test]
     fn iter15_d_ad1_discard_has_undo() {
-        use crate::design::test_harness::Themed as _;
         let dir = tempfile::tempdir().unwrap();
         let (campaign, index) = held_npc_campaign(dir.path());
-        let mut harness = Harness::builder()
-            .with_size(egui::vec2(1200.0, 800.0))
-            .themed_ui_state(
-                {
-                    let index = index.clone();
-                    move |ui, page: &mut WorldPage| {
-                        page.show(
-                            ui,
-                            Some(&index),
-                            &campaign,
-                            &mut crate::tracker_reader::Reader(&mut Default::default()),
-                        )
-                    }
-                },
-                WorldPage::default(),
-            );
-        harness.run_steps(2);
-        harness.state_mut().begin_new("generate", Some(&index));
-        harness.run_steps(2);
-        let npc = held(harness.state()).unwrap();
-        let attributes = harness.state().generated.clone().unwrap().attributes;
+        let mut page = WorldPage::default();
+        page.follow_campaign(campaign.id);
+        page.refresh(&index, &campaign);
+        page.press_new("generate", Some(&index));
+        let npc = held(&page).unwrap();
+        let attributes = page.generated.clone().unwrap().attributes;
         let notice = format!("{npc} draft discarded.");
-        // The message and its footer both carry these words (round 26), so count either.
-        harness.get_by_label("Discard").click();
-        harness.run_steps(2);
-        assert!(held(harness.state()).is_none(), "Discard lets the NPC go");
-        assert!(harness.query_by_label("Save NPC").is_none());
-        assert!(
-            harness.query_all_by_label(&notice).next().is_some(),
-            "AD1-discard-notice"
+        let undo =
+            crate::design::outcome::UndoStep::of(crate::design::outcome::Verb::Discard, &npc)
+                .label();
+        page.card_act(CardAct::Discard, &campaign, &index);
+        assert!(held(&page).is_none(), "Discard lets the NPC go");
+        assert!(page.card(&index).is_none());
+        let words = footer(&mut page, &index, &campaign);
+        assert!(words.contains(&notice), "AD1-discard-notice: {words:?}");
+        assert!(words.contains(&undo), "AD1-discard-undo: {words:?}");
+        let press = page
+            .footer_plain(None, &index, &campaign, |_, _| ())
+            .iter()
+            .find_map(|line| {
+                line.undo
+                    .as_ref()
+                    .filter(|u| u.label == undo)
+                    .and(line.press_undo())
+            })
+            .expect("the Undo can be pressed");
+        page.footer_press_plain(
+            press,
+            &index,
+            &campaign,
+            &mut crate::tracker_reader::Reader(&mut Default::default()),
         );
-        harness
-            .get_by_label(&format!("Undo discard of {npc}"))
-            .click();
-        harness.run_steps(2);
         assert_eq!(
-            harness
-                .state()
-                .generated
-                .as_ref()
-                .map(|n| (&n.name, &n.attributes)),
+            page.generated.as_ref().map(|n| (&n.name, &n.attributes)),
             Some((&npc, &attributes)),
             "AD1-undo-discard: the same NPC comes back"
         );
-        assert!(harness.query_by_label("Save NPC").is_some());
-        assert!(harness.query_all_by_label(&notice).next().is_none());
+        assert!(page.card(&index).is_some());
+        assert!(!footer(&mut page, &index, &campaign).contains(&notice));
 
         // Moving on ends the Undo. The NPC is then gone and nothing was written.
-        harness.get_by_label("Discard").click();
-        harness.run_steps(2);
-        assert!(harness.query_all_by_label(&notice).next().is_some());
-        let problems = harness
-            .query_all_by_label_contains("Things to check · ")
-            .next()
-            .unwrap()
-            .accesskit_node()
-            .label()
-            .unwrap();
-        harness.get_by_label(&problems).click();
-        harness.run_steps(2);
+        page.card_act(CardAct::Discard, &campaign, &index);
+        assert!(footer(&mut page, &index, &campaign).contains(&notice));
+        page.press_check_row(View::Problems);
         assert!(
-            harness.query_all_by_label(&notice).next().is_none()
-                && harness.state().discarded_npc.is_none(),
+            !footer(&mut page, &index, &campaign).contains(&notice) && page.discarded_npc.is_none(),
             "AD1-undo-ends: another view ends the Undo"
         );
         assert!(npc_files(dir.path()).is_empty(), "Discard writes nothing");
 
         // A new NPC replaces a waiting Undo, so Undo never replaces an unsaved NPC.
-        harness.state_mut().begin_new("generate", Some(&index));
-        harness.run_steps(2);
-        harness.get_by_label("Discard").click();
-        harness.run_steps(2);
-        harness.state_mut().begin_new("generate", Some(&index));
-        harness.run_steps(2);
-        assert!(harness.state().discarded_npc.is_none());
+        page.press_new("generate", Some(&index));
+        page.card_act(CardAct::Discard, &campaign, &index);
+        page.press_new("generate", Some(&index));
+        assert!(page.discarded_npc.is_none());
         assert!(
-            harness
-                .query_all_by_label_contains("Undo discard")
-                .next()
-                .is_none()
+            !footer(&mut page, &index, &campaign)
+                .iter()
+                .any(|words| words.starts_with("Undo discard"))
         );
     }
 
@@ -2855,6 +1697,39 @@ mod tests {
             detail.hover, "Splat cannot read Notes/Broken.md as text.",
             "AD2-row-hover"
         );
+    }
+
+    /// The list's groups are found once per load of the index and set of search words: a quiet
+    /// frame searches no note.
+    #[test]
+    fn groups_found_once_per_load_and_search() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, index) = held_npc_campaign(dir.path());
+        let searches = || GROUP_SEARCHES.with(std::cell::Cell::get);
+        let mut page = WorldPage::default();
+        let before = searches();
+        assert!(!page.groups(&index).is_empty());
+        assert!(!page.is_empty(&index));
+        let _ = page.list_groups(&index);
+        assert_eq!(
+            searches(),
+            before + 1,
+            "the same load and words search the notes once"
+        );
+        page.set_search("  ROOK ");
+        let rook = page.groups(&index);
+        assert_eq!(searches(), before + 2, "new words search again");
+        assert_eq!(rook.values().map(Vec::len).sum::<usize>(), 1);
+        page.set_search("rook");
+        let _ = page.groups(&index);
+        assert_eq!(
+            searches(),
+            before + 2,
+            "the same words, trimmed and lowercased, search nothing"
+        );
+        let again = Arc::new(ContentIndex::load(&[], None).unwrap());
+        assert!(page.groups(&again).is_empty());
+        assert_eq!(searches(), before + 3, "a new load searches again");
     }
 
     #[test]

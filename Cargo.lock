@@ -8018,7 +8018,6 @@ name = "splat-world-page"
 version = "0.1.0"
 dependencies = [
  "eframe",
- "egui_kittest",
  "splat-character",
  "splat-content",
  "splat-content-ui",
