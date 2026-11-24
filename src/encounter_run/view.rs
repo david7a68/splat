@@ -5003,7 +5003,7 @@ impl Run {
             let _ = messages.pane(ui, design::pane::Body::Content, |ui| {
                 crate::rolls::set_roller(ui.ctx(), Some(index));
                 self.armed_tiles_begin(ui.ctx());
-                crate::party::sheet_page(ui, &record, page, "", Some(&live));
+                let _ = &live; // The egui sheet is gone (wave 3 step 2, Campaign/party strip).
                 crate::rolls::set_roller(ui.ctx(), None);
             });
             return;

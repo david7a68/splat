@@ -10,64 +10,9 @@ use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, Pixels, SharedString, Styled,
     Window, div, prelude::*, px,
 };
-use splat_party::party_bar::{self, Glance, Measured, Names, Step};
+use splat_party::party_bar::{self, Glance, Measured, Names, Step, known};
 
 const PORTRAIT: Pixels = px(24.0);
-
-fn known(n: Option<i64>) -> String {
-    n.map_or_else(|| "?".to_owned(), |n| n.to_string())
-}
-
-/// The numbers after HP, in the Party list's order. Only a caster has a DC.
-fn stats(glance: &Glance) -> Vec<(&'static str, Option<i64>)> {
-    let mut stats = vec![
-        ("AC", glance.ac),
-        ("Per", glance.perception),
-        ("Ins", glance.insight),
-    ];
-    if glance.spell_dc.is_some() {
-        stats.push(("DC", glance.spell_dc));
-    }
-    stats
-}
-
-/// Everything the bar knows of a member, a fact to a line, for hover and its name.
-fn facts(glance: &Glance) -> Vec<String> {
-    let mut hp = format!(
-        "HP {}",
-        splat_party::combat_sync::fraction(known(glance.hp), known(glance.max_hp))
-    );
-    if let Some((_, word, _)) = kit::hp::word(glance.hp, glance.max_hp) {
-        hp.push_str(&format!(" · {word}"));
-    }
-    if glance.temp > 0 {
-        hp.push_str(&format!(" · Temp HP {}", glance.temp));
-    }
-    let mut armor = format!("AC {}", known(glance.ac));
-    if let Some(dc) = glance.spell_dc {
-        armor.push_str(&format!(" · Spell save DC {dc}"));
-    }
-    vec![
-        hp,
-        armor,
-        format!(
-            "Passive Perception {} · Insight {} · Investigation {}",
-            known(glance.perception),
-            known(glance.insight),
-            known(glance.investigation)
-        ),
-        if glance.conditions.is_empty() {
-            "No conditions".to_owned()
-        } else {
-            glance
-                .conditions
-                .iter()
-                .map(|condition| condition.words())
-                .collect::<Vec<_>>()
-                .join(", ")
-        },
-    ]
-}
 
 /// A first name, or its initial (`B.`) when even first names do not fit.
 fn name_words(glance: &Glance, initial: bool) -> String {
@@ -115,7 +60,8 @@ fn measure(window: &Window, glance: &Glance) -> Measured {
             .then(|| icon(icons::TEMP_HP) + f32::from(XS) + small(&format!("+{}", glance.temp))),
         full_word: state.map(|(glyph, word, _)| icon(glyph) + f32::from(XS) + small(word)),
         icon_word: state.map(|(glyph, _, _)| icon(glyph)),
-        stats: stats(glance)
+        stats: glance
+            .stats()
             .into_iter()
             .map(|(label, value)| small(&stat_words(label, value)))
             .collect(),
@@ -206,7 +152,7 @@ pub(super) fn render(
     if !hidden.is_empty() {
         let words = hidden
             .iter()
-            .map(|glance| format!("{} · {}", glance.name, facts(glance)[0]))
+            .map(|glance| format!("{} · {}", glance.name, glance.facts()[0]))
             .collect::<Vec<_>>()
             .join("; ");
         items = items.child(
@@ -279,7 +225,7 @@ fn item(
 ) -> AnyElement {
     let c = colors();
     let name = name_words(glance, step.names == Names::Initial);
-    let mut facts = facts(glance);
+    let mut facts = glance.facts();
     facts.push(source.to_owned());
     let label = format!("{} · {}", glance.name, facts.join(" · "));
     let mut row = div()
@@ -352,7 +298,7 @@ fn item(
                 }),
         );
     }
-    for (label, value) in stats(glance).into_iter().take(step.shown) {
+    for (label, value) in glance.stats().into_iter().take(step.shown) {
         // One run of words, as it was measured: its muted label, a space, its value.
         row = row.child(
             div()
