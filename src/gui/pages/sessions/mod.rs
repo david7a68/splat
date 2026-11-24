@@ -45,6 +45,9 @@ pub struct State {
     pub(super) note: note::State,
     /// The New template form just opened: its name field takes the keyboard once.
     pub(super) focus_template_name: bool,
+    /// The plan's Add menus (Fight, Group) were open last frame: a search takes the keyboard
+    /// as its menu opens.
+    pub(super) add_menu_open: [bool; 2],
 }
 
 /// Once, when the root is built.

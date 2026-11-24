@@ -64,6 +64,30 @@ fn save(root: &mut SplatRoot, _: &Save, _: &mut Window, cx: &mut Context<SplatRo
     cx.notify();
 }
 
+/// The group editor drawn in place of a session's plan while a group is assembled there
+/// (egui `Encounters::group_in_plan_view`), with the page's Ctrl+S. The Sessions page calls it.
+pub(crate) fn render_group_in_plan(
+    root: &mut SplatRoot,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    let mut editor = div().key_context("Encounters");
+    if let Some(focus) = root.pages.encounters.focus.clone() {
+        if window
+            .focused(cx)
+            .is_none_or(|focused| focused == root.focus)
+        {
+            window.focus(&focus, cx);
+        }
+        editor = editor.track_focus(&focus);
+    }
+    editor
+        .on_action(cx.listener(save))
+        .size_full()
+        .child(group::render(root, window, cx))
+        .into_any_element()
+}
+
 /// The page.
 pub(crate) fn render(
     root: &mut SplatRoot,

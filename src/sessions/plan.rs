@@ -142,7 +142,16 @@ fn as_sentence(words: &str) -> Sentence {
     Sentence::outside(words).unwrap_or(crate::sentence!("Something changed."))
 }
 /// A list longer than this gets a search, and it scrolls instead of leaving the window.
-const FIGHT_SEARCH_FROM: usize = 8;
+pub(super) const FIGHT_SEARCH_FROM: usize = 8;
+
+/// The names an Add menu lists for its search words: those that hold them, any case.
+pub(super) fn searched<'a>(names: impl IntoIterator<Item = &'a str>, search: &str) -> Vec<&'a str> {
+    let query = search.trim().to_lowercase();
+    names
+        .into_iter()
+        .filter(|name| name.to_lowercase().contains(&query))
+        .collect()
+}
 const FIGHT_MENU_WIDTH: f32 = 240.0;
 const FIGHT_MENU_HEIGHT: f32 = 240.0;
 /// The kinds a session adds by one press. A fight has its own control, for what it can name.
@@ -1628,26 +1637,23 @@ fn plan_menu(
                 }
             }
             design::rule(ui);
-            let query = search.trim().to_lowercase();
             let mut chosen = None;
             design::ScrollColumn::new(menu.word)
                 .max_height(FIGHT_MENU_HEIGHT)
                 .fit_height()
                 .show(ui, |ui| {
-                    for name in names {
-                        if name.to_lowercase().contains(&query) {
-                            // Round 26 FL4: one left edge. Each name is a quiet action with the
-                            // new action's padding and an empty icon slot, so the names start
-                            // at the x of the word after `+`.
-                            let row = Action::quiet(name)
-                                .plain()
-                                .icon("")
-                                .name(&format!("Plan {name}"))
-                                .density(Density::Read)
-                                .show(ui);
-                            if row.clicked() {
-                                chosen = Some((*name).to_owned());
-                            }
+                    for name in searched(names.iter().copied(), search) {
+                        // Round 26 FL4: one left edge. Each name is a quiet action with the
+                        // new action's padding and an empty icon slot, so the names start
+                        // at the x of the word after `+`.
+                        let row = Action::quiet(name)
+                            .plain()
+                            .icon("")
+                            .name(&format!("Plan {name}"))
+                            .density(Density::Read)
+                            .show(ui);
+                        if row.clicked() {
+                            chosen = Some(name.to_owned());
                         }
                     }
                 });

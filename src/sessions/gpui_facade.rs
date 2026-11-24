@@ -708,6 +708,40 @@ impl Sessions {
     pub fn gv_editing_group_here(&self, plan: &Plan<'_>) -> bool {
         plan.group_open && self.group_session == self.selected
     }
+
+    /// An Add menu's search (`plan_menu`), of the Group menu when `group`, else the Fight
+    /// menu's: its words while the menu lists more than `FIGHT_SEARCH_FROM` names (`None`: no
+    /// search), and the names it lists for them.
+    pub fn gv_menu_search<'a>(
+        &self,
+        group: bool,
+        names: &'a [String],
+    ) -> (Option<String>, Vec<&'a str>) {
+        let search = if group {
+            &self.group_search
+        } else {
+            &self.fight_search
+        };
+        let field = (names.len() > super::plan::FIGHT_SEARCH_FROM).then(|| search.clone());
+        let shown = super::plan::searched(names.iter().map(String::as_str), search);
+        (field, shown)
+    }
+
+    /// The DM typed in an Add menu's search.
+    pub fn gv_set_menu_search(&mut self, group: bool, words: &str) {
+        let search = if group {
+            &mut self.group_search
+        } else {
+            &mut self.fight_search
+        };
+        words.clone_into(search);
+    }
+
+    /// A name chosen in an Add menu: it joins the plan, and the menu's search empties.
+    pub fn gv_menu_choose(&mut self, group: bool, name: &str) {
+        self.add_to_plan(name);
+        self.gv_set_menu_search(group, "");
+    }
 }
 
 /// What a press in the session banner does (`banner`, `banner_notices`, `draft_warning`).
@@ -1331,12 +1365,18 @@ impl Sessions {
         self.focus_notes || self.refocus_note
     }
 
-    /// The editor took the keyboard: in a narrow page, the note's tab stays.
-    pub fn gv_note_has_focus(&mut self, in_panel: bool, focused: bool) {
+    /// Where the keyboard is: in the note's editor (`focused`), or in another control
+    /// (`elsewhere`). Narrowing keeps whichever side the DM last worked in: the note while it has
+    /// focus, the plan once focus moves to a plan control (egui `note_editor`).
+    pub fn gv_note_has_focus(&mut self, in_panel: bool, focused: bool, elsewhere: bool) {
         self.note_had_focus = focused;
-        if !in_panel && focused && self.tab == Tab::Plan {
-            // Narrowing keeps whichever side the DM last worked in.
+        if in_panel {
+            return;
+        }
+        if focused && self.tab == Tab::Plan {
             self.tab = Tab::Note;
+        } else if !focused && elsewhere && self.tab == Tab::Note {
+            self.tab = Tab::Plan;
         }
     }
 
