@@ -411,13 +411,16 @@ fn card(root: &SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
         column = column.child(
             div().max_w(crate::gui::theme::READER_MEASURE).child(
                 Message::new(Tone::Warning, problem.message.clone()).action(
-                    Button::secondary(("lookup-card-problem", at), format!("Open {}", problem.path))
-                        .density(Density::Read)
-                        .hint(problem.marker.clone())
-                        .on_click(cx.listener(move |root, _, _, cx| {
-                            crate::gui::pages::world::panes::open_note(root, &path);
-                            cx.notify();
-                        })),
+                    Button::secondary(
+                        ("lookup-card-problem", at),
+                        format!("Open {}", problem.path),
+                    )
+                    .density(Density::Read)
+                    .hint(problem.marker.clone())
+                    .on_click(cx.listener(move |root, _, _, cx| {
+                        crate::gui::pages::world::panes::open_note(root, &path);
+                        cx.notify();
+                    })),
                 ),
             ),
         );

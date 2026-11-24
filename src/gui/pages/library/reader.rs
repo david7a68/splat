@@ -4,11 +4,9 @@
 //! choices and comparison; the pane's footer under it all.
 use super::{footer, forms};
 use crate::gui::kit::WithTooltip as _;
-use crate::gui::theme::{
-    Density, HAIRLINE_WIDTH, L, READER_MEASURE, S, Type, TypeExt, XS, colors,
-};
-use crate::gui::{SplatRoot, bridge, icons, kit};
 use crate::gui::pages::reader::entry::{EntryView, Source};
+use crate::gui::theme::{Density, HAIRLINE_WIDTH, L, READER_MEASURE, S, Type, TypeExt, XS, colors};
+use crate::gui::{SplatRoot, bridge, icons, kit};
 use crate::library::model::ReaderView;
 use crate::library::view::NoLinks;
 use crate::lookup::ContentIndex;

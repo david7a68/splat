@@ -266,15 +266,17 @@ impl RenderOnce for Markdown {
             on_target: self.on_target.clone().or_else(|| {
                 let on_note = self.on_note.clone()?;
                 let document = self.document;
-                Some(Rc::new(move |target: &LinkTarget, window: &mut Window, cx: &mut App| {
-                    if let LinkTarget::Note(note) = target {
-                        on_note(note, window, cx);
-                        window.refresh();
-                    } else {
-                        let ctx = host(cx);
-                        follow(target, document, (None, None, ctx.as_ref()), window, cx);
-                    }
-                }) as OnTarget)
+                Some(Rc::new(
+                    move |target: &LinkTarget, window: &mut Window, cx: &mut App| {
+                        if let LinkTarget::Note(note) = target {
+                            on_note(note, window, cx);
+                            window.refresh();
+                        } else {
+                            let ctx = host(cx);
+                            follow(target, document, (None, None, ctx.as_ref()), window, cx);
+                        }
+                    },
+                ) as OnTarget)
             }),
             ctx: ctx.clone(),
             kept: kept.clone(),

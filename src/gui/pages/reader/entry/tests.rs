@@ -163,7 +163,10 @@ fn creature_stat_block_and_its_dice() {
     // In a run, the armed action's tile row says what to do now and offers what can follow; a
     // press on a follow-up goes to the run (egui `rolls::tile_row` under `show_run`).
     let dragon = builtin("definitions/creatures/adult_black_dragon.md");
-    let armed = crate::rolls::plain::actions_of(&dragon.body)[0].1.link.clone();
+    let armed = crate::rolls::plain::actions_of(&dragon.body)[0]
+        .1
+        .link
+        .clone();
     shell.update(|root, _, cx| {
         let ctx = root.bridge.ctx();
         crate::rolls::set_roller(ctx, Some(0));

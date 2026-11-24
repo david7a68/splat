@@ -1040,9 +1040,7 @@ pub(super) fn edit_form(
                 cx.notify();
             }))
         };
-    let picker_key = host.reader(root)
-        .picker_view()
-        .map(|view| view.key);
+    let picker_key = host.reader(root).picker_view().map(|view| view.key);
     let mut rows: Vec<(&'static str, &'static str, &DraftValue, Option<String>)> = Vec::new();
     if let Some(creature) = &view.creature {
         rows.push(("creature", "Stat block", creature, None));

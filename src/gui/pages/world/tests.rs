@@ -493,7 +493,11 @@ fn file_formats_flagged_value() {
     let status = shell.bounds("Change Status").expect("the Status row");
     assert!(file.bottom() < status.top());
     shell.capture("file-formats__01-flagged-malformed-value__1200x800");
-    assert_eq!(std::fs::read(&path).unwrap(), before, "reading never writes");
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        before,
+        "reading never writes"
+    );
 }
 
 /// An NPC is read as every entry is (`view::show_with_related`): its dice roll for it, and a
@@ -556,7 +560,9 @@ fn world_entry_rolls_and_links_to_a_heading() {
     );
     shell.capture("world-entry-links__01-npc-with-dice-and-link__1200x800");
     // The note link opens Night Watch in World, scrolled to its heading.
-    let link = shell.bounds(&paragraph("Night roster")).expect("the link line");
+    let link = shell
+        .bounds(&paragraph("Night roster"))
+        .expect("the link line");
     shell.click_at(gpui::point(link.left() + px(8.0), link.top() + px(10.0)));
     let night = shell.read(|root| {
         root.app
@@ -617,7 +623,11 @@ fn world_card_table_links_open_the_note() {
     };
     shell.click("Names.md");
     assert!(shell.read(|root| root.app.lookup.open), "Lookup opens");
-    assert_eq!(showing(&mut shell).as_deref(), Some("Names"), "the table's note");
+    assert_eq!(
+        showing(&mut shell).as_deref(),
+        Some("Names"),
+        "the table's note"
+    );
     assert_eq!(
         shell.read(|root| root.app.lookup.query().to_owned()),
         "",

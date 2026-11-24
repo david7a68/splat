@@ -217,7 +217,9 @@ pub(crate) fn render_reader(
     }
     if host.reader(root).editing(id, campaign) {
         return column
-            .child(super::panes::edit_form(root, host, item, index, campaign, cx))
+            .child(super::panes::edit_form(
+                root, host, item, index, campaign, cx,
+            ))
             .into_any_element();
     }
     let facts = host.reader(root).body_facts(item, index, Some(campaign));
@@ -396,14 +398,14 @@ fn title_line(
         .gap_x(theme::L)
         .child(
             // The title and kind line, with the note's picture beside them when it has one.
-            div()
-                .max_w(theme::LIST_MEASURE)
-                .child(crate::gui::pages::reader::entry::title_with_art(
+            div().max_w(theme::LIST_MEASURE).child(
+                crate::gui::pages::reader::entry::title_with_art(
                     &facts.title,
                     &facts.kind_line,
                     Some(&item.entry),
                     cx,
-                )),
+                ),
+            ),
         )
         .child(
             div()
@@ -435,10 +437,10 @@ fn log_field(
         reader.log_selected(campaign_id, id);
     }
     let enter = on_key(cx, move |root, campaign, index, _, _| {
-        if let Some(at) = index.position(id) {
-            if let Some(nav) = host.reader(root).log_enter(&index.items[at], campaign) {
-                host.take_nav(root, nav, index);
-            }
+        if let Some(at) = index.position(id)
+            && let Some(nav) = host.reader(root).log_enter(&index.items[at], campaign)
+        {
+            host.take_nav(root, nav, index);
         }
     });
     let escape = on_key(cx, move |root, _, _, _, _| {
@@ -449,8 +451,7 @@ fn log_field(
         .name(view.name)
         .focus_selected(view.select)
         .on_change(on_words(cx, move |root, words| {
-            host.reader(root)
-                .set_log_words(campaign_id, id, words);
+            host.reader(root).set_log_words(campaign_id, id, words);
         }))
         .on_enter(enter)
         .on_escape(escape);
@@ -675,7 +676,9 @@ fn values(
         let value: AnyElement = match row.value {
             ValueShown::Link(at, name) => kit::Link::new(("world-value", at), name)
                 .wrap()
-                .on_click(on_item(cx, host, id, move |page, _, _, _| page.reader.go_to(at)))
+                .on_click(on_item(cx, host, id, move |page, _, _, _| {
+                    page.reader.go_to(at)
+                }))
                 .into_any_element(),
             ValueShown::PlaceChoices(words) => div()
                 .flex()
@@ -712,7 +715,9 @@ fn values(
                     match target {
                         Some(at) => kit::Link::new(("world-group", n), name)
                             .wrap()
-                            .on_click(on_item(cx, host, id, move |page, _, _, _| page.reader.go_to(at)))
+                            .on_click(on_item(cx, host, id, move |page, _, _, _| {
+                                page.reader.go_to(at)
+                            }))
                             .into_any_element(),
                         None => missing(&name).into_any_element(),
                     }
@@ -838,7 +843,9 @@ fn place_chooser(
                 .child(
                     kit::Link::new(("world-place-file", at), path.clone())
                         .wrap()
-                        .on_click(on_item(cx, host, id, move |page, _, _, _| page.reader.go_to(at))),
+                        .on_click(on_item(cx, host, id, move |page, _, _, _| {
+                            page.reader.go_to(at)
+                        })),
                 )
                 .child(
                     kit::Button::secondary(("world-place-use", at), "Always use this one")
@@ -1059,8 +1066,7 @@ fn join_form(
     cx: &mut Context<SplatRoot>,
 ) -> Option<AnyElement> {
     let c = theme::colors();
-    let view = host.reader(root)
-        .join_view(item, index, Some(campaign))?;
+    let view = host.reader(root).join_view(item, index, Some(campaign))?;
     let id = item.entry.id;
     let join = move |cx: &mut Context<SplatRoot>, act: JoinAct| {
         on_item::<gpui::ClickEvent>(cx, host, id, move |page, item, index, campaign| {
@@ -1208,7 +1214,9 @@ fn duplicate_values(
         let value = match target {
             Some(at) => kit::Link::new(("world-dup-value", at), name)
                 .wrap()
-                .on_click(on_item(cx, host, id, move |page, _, _, _| page.reader.go_to(at)))
+                .on_click(on_item(cx, host, id, move |page, _, _, _| {
+                    page.reader.go_to(at)
+                }))
                 .into_any_element(),
             None if label == "Status" => {
                 kit::text(theme::Type::Body, c.text, name).into_any_element()
@@ -1303,7 +1311,9 @@ fn related(
             .child(
                 kit::Link::new(("world-related", at), page.name)
                     .wrap()
-                    .on_click(on_item(cx, host, id, move |page, _, _, _| page.reader.go_to(at))),
+                    .on_click(on_item(cx, host, id, move |page, _, _, _| {
+                        page.reader.go_to(at)
+                    })),
             )
             .when(!page.detail.is_empty(), |row| {
                 row.child(kit::text(theme::Type::Small, c.muted, page.detail))
@@ -1437,10 +1447,7 @@ fn make_type(
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let id = item.entry.id;
-    let other = host.reader(root)
-        .other_type()
-        .trim()
-        .to_lowercase();
+    let other = host.reader(root).other_type().trim().to_lowercase();
     let make = move |cx: &mut Context<SplatRoot>, kind: String| {
         on_item::<gpui::ClickEvent>(cx, host, id, move |page, item, _, campaign| {
             page.reader.make_type(campaign, item, &kind)
