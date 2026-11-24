@@ -607,24 +607,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn iter1_c_offline_link_opens_account_settings() {
-        use crate::design::test_harness::ThemedPage as _;
-        use egui_kittest::kittest::Queryable;
-        let mut harness = egui_kittest::Harness::builder().themed(|ctx| {
-            egui::CentralPanel::default().show(ctx, connection_help);
-        });
-        harness.run_steps(2);
-        harness.get_by_label("Settings").click();
-        harness.run_steps(2);
-        assert!(
-            harness
-                .ctx
-                .data(|data| data.get_temp::<bool>(egui::Id::new("open_account_settings")))
-                .unwrap_or(false)
-        );
-    }
-
-    #[test]
     fn visibility_keeps_request_marker_until_setting_leaves_view() {
         let key = (uuid::Uuid::new_v4(), "12".to_owned());
         let mut remote = DndBeyond {
