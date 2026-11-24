@@ -345,7 +345,6 @@ fn reading(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
     } = view;
     let back = kit::Button::quiet("reading-back", "Back to recordings")
         .icon(icons::HISTORY_BACK)
-        .line_start()
         .on_click(cx.listener(|root, _, _, cx| {
             root.app.sessions.gv_close_reading();
             cx.notify();

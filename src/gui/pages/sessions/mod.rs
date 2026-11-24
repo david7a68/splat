@@ -13,6 +13,7 @@ mod panel;
 mod plan;
 mod recordings;
 mod session;
+mod slash;
 mod templates;
 #[cfg(test)]
 mod tests;
@@ -49,8 +50,8 @@ pub struct State {
 }
 
 /// Once, when the root is built.
-pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, cx: &mut Context<SplatRoot>) {
-    note::init(cx);
+pub(crate) fn init(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) {
+    note::init(root, window, cx);
 }
 
 /// Once per frame, before anything draws.
@@ -366,7 +367,6 @@ fn notes_view(
         let back = (!form_open).then(|| {
             kit::Button::quiet("session-all", "All sessions")
                 .icon(icons::HISTORY_BACK)
-                .line_start()
                 .on_click(cx.listener(|root, _, _, cx| {
                     root.app.sessions.gv_set_list_only(true);
                     cx.notify();

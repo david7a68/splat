@@ -19,9 +19,64 @@ actions!(session_note, [SaveNote]);
 #[derive(Default)]
 pub(crate) struct State {
     editors: HashMap<(Option<Uuid>, bool), kit::EditorHandle>,
+    /// The `/` menu, while it is open (`slash`).
+    pub(super) slash: Option<super::slash::Open>,
+    /// The `/` menu's keys (`slash::init`).
+    slash_keys: Option<gpui::Subscription>,
 }
 
-pub(super) fn init(cx: &mut App) {
+/// The editor of the open note at this place, if it was drawn.
+fn handle(root: &SplatRoot, in_panel: bool) -> Option<kit::EditorHandle> {
+    let session = root.app.sessions.gv_selected();
+    root.pages
+        .sessions
+        .note
+        .editors
+        .get(&(session, in_panel))
+        .cloned()
+}
+
+/// The note editor's caret, as a byte offset of its words.
+pub(super) fn caret(root: &SplatRoot, in_panel: bool, cx: &App) -> Option<usize> {
+    Some(handle(root, in_panel)?.caret(cx))
+}
+
+/// Show the note's new words in its editor now, with the caret at character `at`, and give it
+/// the keyboard (a command's link, the menu closed).
+pub(super) fn show(
+    root: &mut SplatRoot,
+    in_panel: bool,
+    words: &str,
+    at: usize,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) {
+    if let Some(handle) = handle(root, in_panel) {
+        handle.show_words(words.to_owned(), window, cx);
+        let byte = words.char_indices().nth(at).map_or(words.len(), |(byte, _)| byte);
+        handle.set_caret(byte, cx);
+        handle.focus(window, cx);
+    }
+}
+
+/// Back to the note with the caret at character `at`.
+pub(super) fn place_caret(
+    root: &mut SplatRoot,
+    in_panel: bool,
+    at: usize,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) {
+    let words = root
+        .app
+        .sessions
+        .gv_note_words(in_panel)
+        .unwrap_or_default();
+    show(root, in_panel, &words, at, window, cx);
+}
+
+pub(super) fn init(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) {
+    root.pages.sessions.note.slash_keys = Some(super::slash::init(window, cx));
     cx.bind_keys([KeyBinding::new("ctrl-s", SaveNote, Some("SessionNote"))]);
     super::form::init(cx);
     super::templates::init(cx);
@@ -104,18 +159,28 @@ pub(super) fn editor(
         .text_type(Type::Prose)
         .fill()
         .on_change(cx.listener(move |root, words: &str, _, cx| {
+            let before = root
+                .app
+                .sessions
+                .gv_note_words(in_panel)
+                .unwrap_or_default();
             root.app.sessions.gv_note_edited(in_panel, words);
+            let caret = caret(root, in_panel, cx).unwrap_or(words.len());
+            super::slash::follow(root, in_panel, &before, words, caret);
             cx.notify();
         }));
+    let menu = super::slash::render(root, in_panel, cx);
     div()
         .key_context("SessionNote")
         .on_action(cx.listener(|root, _: &SaveNote, _, cx| {
             root.app.sessions.gv_save_note();
             cx.notify();
         }))
+        .relative()
         .size_full()
         .max_w(frame_width())
         .child(editor)
+        .children(menu)
         .into_any_element()
 }
 
@@ -233,8 +298,11 @@ pub(super) fn conflict(
     let Some((draft, disk)) = root.app.sessions.gv_conflict_texts() else {
         return div().into_any_element();
     };
-    let (draft_lines, disk_lines): (Vec<&str>, Vec<&str>) =
-        (draft.lines().collect(), disk.lines().collect());
+    // Paragraphs, not blank lines: the two texts side by side, each line once.
+    let (draft_lines, disk_lines): (Vec<&str>, Vec<&str>) = (
+        draft.lines().filter(|line| !line.trim().is_empty()).collect(),
+        disk.lines().filter(|line| !line.trim().is_empty()).collect(),
+    );
     let summary = changed_lines(&draft_lines, &disk_lines);
     let column = |title: &'static str, lines: &[&str], other: &[&str]| {
         div()

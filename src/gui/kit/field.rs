@@ -247,40 +247,41 @@ pub struct TextEditor {
 /// place the caret and insert words: a note the program writes into at the caret. Keep one per
 /// thing it edits, and drop it when that thing goes away.
 #[derive(Clone)]
-pub struct EditorHandle(Entity<FieldState<TextareaState>>);
+pub struct EditorHandle(Entity<FieldState<TextareaState>>, Entity<TextareaState>);
 
 impl EditorHandle {
     pub fn new(placeholder: impl Into<SharedString>, window: &mut Window, cx: &mut App) -> Self {
         let placeholder = placeholder.into();
         let input = cx.new(|cx| TextareaState::new(window, cx).placeholder(placeholder));
-        Self(cx.new(|cx| FieldState::<TextareaState>::create(input, window, cx)))
+        let state = cx.new(|cx| FieldState::<TextareaState>::create(input.clone(), window, cx));
+        Self(state, input)
     }
 
-    /// The caret, as a byte offset into the words.
+    /// The caret, as a byte offset into the words. It can be read from the change handler.
     pub fn caret(&self, cx: &App) -> usize {
-        self.0.read(cx).input.read(cx).cursor()
+        self.1.read(cx).cursor()
     }
 
     /// Put the caret at byte offset `at` (clipped to a character boundary).
     pub fn set_caret(&self, at: usize, cx: &mut App) {
-        let input = self.0.read(cx).input.clone();
-        input.update(cx, |input, cx| input.set_selected_range(at..at, cx));
+        self.1
+            .update(cx, |input, cx| input.set_selected_range(at..at, cx));
     }
 
     /// Whether it has the keyboard.
     pub fn focused(&self, window: &Window, cx: &App) -> bool {
-        self.0.read(cx).input.read(cx).focus_handle(cx).is_focused(window)
+        self.1.read(cx).focus_handle(cx).is_focused(window)
     }
 
     /// Give it the keyboard.
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
-        let handle = self.0.read(cx).input.read(cx).focus_handle(cx);
+        let handle = self.1.read(cx).focus_handle(cx);
         window.focus(&handle, cx);
     }
 
     /// The words it shows now.
     pub fn words(&self, cx: &App) -> SharedString {
-        self.0.read(cx).input.read(cx).value()
+        self.1.read(cx).value()
     }
 
     /// Show `words` now (the program changed them), before the editor draws again, so a caret

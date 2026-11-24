@@ -4872,12 +4872,6 @@ impl Sessions {
         self.plan_lines_seen.set(seen);
     }
 
-    /// The session as a list, top to bottom: what happened, then what is still to come. It
-    /// replaces a walk between Encounters, Timeline and the note.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls, and a by-owner Undo (design::results::STAGED_ALLOWS)"
-    )]
     /// An event the plan's Add strip just added: its title is its kind's word, and its result
     /// (`kept::PlanAdded`) keeps one step of Undo (both UIs).
     pub(super) fn record_plan_add(&mut self, id: &str, book: &mut Book, ctx: &egui::Context) {
@@ -5172,6 +5166,12 @@ impl Sessions {
         messages
     }
 
+    /// The session as a list, top to bottom: what happened, then what is still to come. It
+    /// replaces a walk between Encounters, Timeline and the note.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls, and a by-owner Undo (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn plan_pane(
         &mut self,
         ui: &mut egui::Ui,

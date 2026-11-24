@@ -216,7 +216,13 @@ pub(super) fn render(
         .children(last_time)
         .children(tab_row)
         .child(kit::gap(XS))
-        .child(div().flex_1().min_h_0().child(body))
+        // Rows of recordings end where their content does, and the footer follows them `S`
+        // below (pinned only when the rows fill the pane); the plan and note fill the pane.
+        .child(if shown == Shown::Recordings && !conflict {
+            div().flex_shrink(1.0).min_h_0().child(body)
+        } else {
+            div().flex_1().min_h_0().child(body)
+        })
         .when(!footer.is_empty(), |pane| {
             pane.child(
                 div()
@@ -407,10 +413,13 @@ fn last_time(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Option<AnyEle
             cx.notify();
         }))
     });
+    // The link keeps its words; the preview gives way, cut at the line's end.
     let preview = (!last.preview.is_empty() || carry.is_none()).then(|| {
         kit::text::one_line(Type::Small, c.muted, format!("— {}", last.preview))
             .max_w(READER_MEASURE)
+            .flex_1()
             .min_w_0()
+            .overflow_hidden()
     });
     Some(
         div()
@@ -420,7 +429,7 @@ fn last_time(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Option<AnyEle
             .gap(XS)
             .min_w_0()
             .child(kit::text(Type::Small, c.muted, "Last time:").flex_none())
-            .child(link)
+            .child(div().flex_none().child(link))
             .children(preview)
             .children(carry.map(|carry| div().pl(L - XS).child(carry)))
             .into_any_element(),

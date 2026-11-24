@@ -36,7 +36,6 @@ pub(super) fn render(
     if narrow {
         let back = kit::Button::quiet("templates-all", "All templates")
             .icon(icons::HISTORY_BACK)
-            .line_start()
             .on_click(cx.listener(|root, _, _, cx| {
                 root.app.sessions.gv_set_templates_list_only(true);
                 cx.notify();
@@ -89,7 +88,6 @@ fn list(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement {
         .child(
             kit::Button::quiet("templates-back", "Sessions")
                 .icon(icons::HISTORY_BACK)
-                .line_start()
                 .on_click(cx.listener(|root, _, _, cx| {
                     root.app.sessions.gv_show_notes();
                     cx.notify();

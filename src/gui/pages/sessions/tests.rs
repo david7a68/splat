@@ -373,3 +373,32 @@ fn notes_panel_beside_another_page() {
     shell.click("Close notes");
     assert!(!shell.read(|root| root.app.sessions.notes_open));
 }
+
+/// `/` at a word's start opens the command menu at the note; its letters narrow it; Escape
+/// closes it and leaves the words; `Search` links the chosen entry where the `/` was.
+#[test]
+fn slash_menu_in_the_note() {
+    let mut shell = Shell::new("session-slash", Seed::Campaign);
+    shell.click("Session");
+    new_session(&mut shell, TITLE);
+    shell.click("Note text");
+    shell.press("ctrl-end");
+    shell.type_text("Met /");
+    assert!(shell.bounds("Generate NPC").is_some(), "the / menu lists Generate NPC");
+    assert!(shell.bounds("Search").is_some(), "the / menu lists Search");
+    shell.capture("session-notes__53-slash-menu__1200x800");
+    shell.type_text("se");
+    assert!(shell.bounds("Generate NPC").is_none(), "the letters narrow the menu");
+    shell.press("escape");
+    assert!(shell.bounds("Search").is_none(), "Escape closes the menu");
+    assert!(note_words(&mut shell).ends_with("Met /se"), "Escape leaves the words");
+    shell.type_text(" and /");
+    shell.click("Search");
+    shell.type_text("Hobb");
+    let first = shell.bounds("id:slash-result-0");
+    if first.is_some() {
+        shell.press("enter");
+        let words = note_words(&mut shell);
+        assert!(words.contains("and [["), "the chosen entry's link takes the / place: {words:?}");
+    }
+}

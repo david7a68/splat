@@ -206,7 +206,6 @@ fn add_strip(view: &PlanView, cx: &mut Context<SplatRoot>) -> AnyElement {
         .flex_row()
         .flex_wrap()
         .items_center()
-        .gap(XS)
         .py(XS)
         .child(kit::text(Type::Small, c.muted, "Add").pr(XS))
         .child(fight)
@@ -231,6 +230,8 @@ fn row_frame(
     details: Option<AnyElement>,
 ) -> AnyElement {
     let c = colors();
+    // The title's line holds the lead, the title and the actions; the second line and the
+    // open row's details run under the title to the row's right edge.
     div()
         .flex()
         .flex_col()
@@ -253,16 +254,7 @@ fn row_frame(
                         .pt(XS)
                         .children(lead),
                 )
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .min_w_0()
-                        .gap(XS)
-                        .child(title)
-                        .children(second),
-                )
+                .child(div().flex_1().min_w_0().child(title))
                 .child(
                     div()
                         .flex()
@@ -273,6 +265,7 @@ fn row_frame(
                         .children(actions),
                 ),
         )
+        .children(second.map(|second| div().pl(theme::ICON_SLOT + S).child(second)))
         .children(details.map(|details| div().pl(theme::ICON_SLOT + S).pt(S).child(details)))
         .into_any_element()
 }
@@ -298,9 +291,8 @@ fn scene_words(line: usize, words: &str, cx: &mut Context<SplatRoot>) -> AnyElem
         let Some(end) = rest[start..].find("]]") else {
             break;
         };
-        let before = &rest[..start];
-        if !before.trim().is_empty() {
-            row = row.child(kit::text(Type::Body, c.text, before.trim().to_owned()));
+        for word in rest[..start].split_whitespace() {
+            row = row.child(kit::text(Type::Body, c.text, word.to_owned()));
         }
         let inner = &rest[start + 2..start + end];
         let (target, shown) = inner.split_once('|').unwrap_or((inner, inner));
@@ -312,8 +304,8 @@ fn scene_words(line: usize, words: &str, cx: &mut Context<SplatRoot>) -> AnyElem
         at += 1;
         rest = &rest[start + end + 2..];
     }
-    if !rest.trim().is_empty() {
-        row = row.child(kit::text(Type::Body, c.text, rest.trim().to_owned()));
+    for word in rest.split_whitespace() {
+        row = row.child(kit::text(Type::Body, c.text, word.to_owned()));
     }
     row.into_any_element()
 }
@@ -593,25 +585,37 @@ fn fight_row(
         name.clone(),
         on(cx, PlanAct::TogglePlanned(path.clone())),
     );
-    let mut second = div().flex().flex_row().flex_wrap().items_baseline();
-    let mut first = true;
-    if !roster.is_empty() {
-        second = second.child(small(roster));
-        first = false;
-    }
-    for (words, strong) in difficulty {
-        let words = if first && words.starts_with(" · ") {
-            words.trim_start_matches(" · ").to_owned()
+    // The roster and the difficulty as one line that wraps between words, its word strong
+    // (`prepare_plan_line`); the party's size gives way first, so the plan leaves it out.
+    let mut words = roster;
+    let mut strong = Vec::new();
+    for (at, (part, is_word)) in difficulty.into_iter().enumerate() {
+        let part = if words.is_empty() {
+            part.trim_start_matches(" · ").to_owned()
+        } else if at == 0 && !part.starts_with(" · ") {
+            format!(" · {part}")
         } else {
-            words
+            part
         };
-        first = false;
-        second = second.child(kit::text(
-            if strong { Type::Strong } else { Type::Small },
-            if strong { c.text } else { c.muted },
-            words,
-        ).when(strong, |words| words.text_size(Type::Small.size())));
+        if is_word {
+            strong.push(words.len()..words.len() + part.len());
+        }
+        words.push_str(&part);
     }
+    let highlights = strong.into_iter().map(|range| {
+        (
+            range,
+            gpui::HighlightStyle {
+                color: Some(c.text),
+                font_weight: Some(gpui::FontWeight::SEMIBOLD),
+                ..Default::default()
+            },
+        )
+    });
+    let second = div()
+        .ty_small()
+        .text_color(c.muted)
+        .child(gpui::StyledText::new(words).with_highlights(highlights));
     let mut items = vec![
         kit::MenuItem::new("Remove from tonight")
             .on_click(on(cx, PlanAct::RemoveFight(position, name.clone()))),
@@ -655,7 +659,24 @@ fn fight_row(
             .on_click(on(cx, PlanAct::ReadEncounter(name.clone())))
             .into_any_element()
     });
-    row_frame(Some(lead), title, Some(second.into_any_element()), actions, details)
+    row_frame(
+        Some(lead),
+        title,
+        Some(second.into_any_element()),
+        actions,
+        details,
+    )
+}
+
+trait SmallText {
+    fn ty_small(self) -> Self;
+}
+
+impl SmallText for Div {
+    fn ty_small(self) -> Self {
+        use theme::TypeExt;
+        self.ty(Type::Small)
+    }
 }
 
 fn group_row(row: GroupRow, blocked: &Option<String>, cx: &mut Context<SplatRoot>) -> AnyElement {

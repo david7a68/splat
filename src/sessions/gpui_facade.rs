@@ -1718,7 +1718,12 @@ impl Sessions {
                 name: fight.name.clone(),
                 path: fight.path.clone(),
                 id: fight.id,
-                roster: fight.summary.text(),
+                roster: crate::difficulty::Summary {
+                    party: 0,
+                    members: fight.summary.members.clone(),
+                    facts: fight.summary.facts.clone(),
+                }
+                .text(),
                 difficulty: fight.difficulty.parts().unwrap_or_default(),
                 running,
                 saved,
@@ -2903,3 +2908,19 @@ impl Sessions {
         footer(messages)
     }
 }
+
+impl Sessions {
+    /// `Save` of a rolled NPC: its World entry, and the link the note takes; or why not.
+    pub fn gv_save_npc(
+        &mut self,
+        generated: &crate::npc_generator::Generated,
+        index: Option<&crate::lookup::ContentIndex>,
+    ) -> Result<String, String> {
+        let campaign = self.campaign.as_ref().ok_or("Open a campaign first.")?;
+        crate::world::create_generated(campaign, generated)?;
+        self.wants_content_refresh = true;
+        Ok(crate::world::new_entry_link(index, &generated.name, "npc"))
+    }
+}
+
+pub use crate::sessions::slash_plain as slash;

@@ -5,6 +5,8 @@
 pub mod page;
 #[path = "sessions/slash.rs"]
 mod slash;
+/// The `/` menu's rules, for the GPUI note.
+pub use slash::plain as slash_plain;
 
 use crate::{
     content_workspace::{CampaignDocument, patch_fields},
