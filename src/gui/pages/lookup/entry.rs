@@ -22,7 +22,7 @@ pub(super) fn render(
     };
     let entry = &item.entry;
     let detail = index.result_detail(position);
-    let markdown = index.reader_markdown(&entry.body, Some(entry.id));
+    let markdown = prose(&index.reader_markdown(&entry.body, Some(entry.id)), &entry.name);
     let from = entry.id;
     let mut column = div()
         .flex()
@@ -44,4 +44,28 @@ pub(super) fn render(
         );
     }
     kit::scroll_column(("lookup-entry-scroll", position), column).into_any_element()
+}
+
+/// The entry's words as the reader shows them: its own title is the heading above, so a first
+/// `# Name` line goes, and Obsidian's `%% … %%` comments are not words to read.
+fn prose(markdown: &str, name: &str) -> String {
+    let mut text = markdown.trim_start();
+    if let Some(rest) = text.strip_prefix("# ")
+        && let Some((title, after)) = rest.split_once('\n')
+        && title.trim().eq_ignore_ascii_case(name.trim())
+    {
+        text = after;
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut parts = text.split("%%");
+    if let Some(first) = parts.next() {
+        out.push_str(first);
+    }
+    // Every other part sits between two marks: a comment.
+    for (at, part) in parts.enumerate() {
+        if at % 2 == 1 {
+            out.push_str(part);
+        }
+    }
+    out
 }

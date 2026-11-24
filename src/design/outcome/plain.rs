@@ -10,8 +10,8 @@
 //! for line in messages.into_plain() { /* draw line.words, line.undo, line.choices */ }
 //! ```
 use super::{
-    ChoiceKind, DISMISS_NAME, Messages, MessageChoice, PaneFrame, Press, Ticket, Tone, holding,
-    refusal_rank,
+    ChoiceKind, DISMISS_NAME, Messages, MessageChoice, PaneFrame, Press, ResultOrder, RowMessages,
+    Ticket, Tone, Typed, footer_order, holding, refusal_rank,
 };
 
 /// One footer line.
@@ -81,10 +81,33 @@ impl<A: 'static> Messages<'_, A> {
         lines.sort_by_key(|line| (line.rank, line.order.map(std::cmp::Reverse)));
         lines
             .into_iter()
-            .map(|line| {
-                let order = line.ticket.as_ref().map(Ticket::order);
+            .map(|line| plain(line.typed, line.ticket.as_ref().map(Ticket::order)))
+            .collect()
+    }
+}
+
+impl<A: 'static> RowMessages<'_, A> {
+    /// Every line, in the row's order, as plain data.
+    pub fn into_plain(self) -> Vec<PlainLine<A>> {
+        let mut items = self.items;
+        let newest = items.iter().filter_map(|item| item.1).max();
+        for (rank, order, _, _, refused) in &mut items {
+            if let (true, Some(attempt)) = (*refused, *order) {
+                *rank = refusal_rank(attempt, newest);
+            }
+        }
+        footer_order(&mut items);
+        items
+            .into_iter()
+            .map(|(_, _, typed, ticket, _)| plain(typed, ticket.as_ref().map(Ticket::order)))
+            .collect()
+    }
+}
+
+/// One typed line as plain data; `order` is its kept result's, for its presses' tickets.
+fn plain<A>(typed: Typed<A>, order: Option<ResultOrder>) -> PlainLine<A> {
+
                 let ticket = || order.map(Ticket::of);
-                let typed = line.typed;
                 let body = typed.body;
                 let undo = match (body.undo.as_ref(), typed.undo) {
                     (Some(step), Some(id)) => Some(PlainChoice {
@@ -163,7 +186,4 @@ impl<A: 'static> Messages<'_, A> {
                     undo,
                     choices,
                 }
-            })
-            .collect()
-    }
 }

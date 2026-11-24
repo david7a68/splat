@@ -1,5 +1,6 @@
 //! Lookup's panel acts and reads, free of any toolkit, for the GPUI panel
 //! (`src/gui/pages/lookup/`). The egui panel (`Lookup::panel`) does the same steps in place.
+#![warn(deprecated)]
 use super::{
     Hit, Landing, Lookup, OnScreen, RESULTS_LISTED, merge_hits, names_the_query, rows_shown,
     search_written, typed_name,

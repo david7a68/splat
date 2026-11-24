@@ -33,15 +33,28 @@ fn search_open_and_back() {
     )));
     assert!(shell.read(|root| root.app.lookup.results_shown()));
     shell.capture("run-lookup__02-reading-spell-beside-run__1200x800");
-    let first = shell.read(|root| entry_name(root));
+    let first = shell.read(entry_name);
     shell.press("down");
-    let second = shell.read(|root| entry_name(root));
+    let second = shell.read(entry_name);
     assert_ne!(first, second, "Down opens the next match");
     // A press on a row reads it and closes the list.
     shell.click("id:lookup-result-0");
-    assert_eq!(shell.read(|root| entry_name(root)), first);
+    assert_eq!(shell.read(entry_name), first);
     assert!(!shell.read(|root| root.app.lookup.results_shown()));
-    assert!(shell.read(|root| root.app.lookup.can_go_back()) || true);
+    shell.press("escape");
+    assert!(
+        !shell.read(|root| root.app.lookup.open),
+        "Escape after a row press closes Lookup"
+    );
+}
+
+/// Escape in the search field closes Lookup.
+#[test]
+fn escape_in_the_field_closes() {
+    let mut shell = Shell::new("lookup-escape", Seed::Campaign);
+    shell.press("ctrl-k");
+    wait_for_index(&mut shell);
+    shell.type_text("fire");
     shell.press("escape");
     assert!(!shell.read(|root| root.app.lookup.open));
 }

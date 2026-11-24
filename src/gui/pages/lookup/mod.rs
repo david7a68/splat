@@ -17,7 +17,12 @@ pub(crate) fn init(_root: &mut SplatRoot, _window: &mut Window, _cx: &mut Contex
 
 /// Once per frame, before anything draws: the found notes are read again when the panel opens
 /// (`Lookup::wants_written`, as the egui shell passes them in).
-pub(crate) fn poll(root: &mut SplatRoot, _window: &mut Window, _cx: &mut Context<SplatRoot>) {
+pub(crate) fn poll(root: &mut SplatRoot, window: &mut Window, cx: &mut Context<SplatRoot>) {
+    // A press on a result row, or Lookup closing under its field, leaves nothing with the
+    // keyboard: the root takes it back, so Escape, Ctrl+K and the page's keys still reach it.
+    if window.focused(cx).is_none() {
+        window.focus(&root.focus, cx);
+    }
     let app = &mut root.app;
     if app.lookup.open && app.lookup.wants_written() {
         let written = app.sessions.written(&app.timeline);

@@ -43,6 +43,8 @@ mod carry;
 mod kept;
 #[path = "plan.rs"]
 mod plan;
+#[path = "folder_view.rs"]
+mod folder_view;
 #[cfg(any(test, feature = "test-support"))]
 pub use plan::scene_fit_counts;
 
@@ -8126,14 +8128,7 @@ let paned = messages.pane_editor(ui, |ui, region| {
         let (block, save) = block
             .save_row(|ui| design::locked(ui, locked, |ui| self.folder_save_row(ui, book, locked)));
         // A refusal of Save without moving ends when its cause goes (`save_folder_act`).
-        if let Some(FolderFault::FilesChanged | FolderFault::FilesGone) = &self.folder_error {
-            let files = self.folder_files();
-            let offered = self.folder_move_counts(book, &files).is_some();
-            let gone = matches!(self.folder_error, Some(FolderFault::FilesGone));
-            if offered == gone {
-                self.folder_error = None;
-            }
-        }
+        self.settle_folder_error(book);
         let mut messages = RowMessages::new(&frame);
         self.folder_messages(&frame, &mut messages, book, locked.is_some());
         let pressed = block.messages(messages).map(|press| press.id);
@@ -8200,36 +8195,10 @@ let paned = messages.pane_editor(ui, |ui, region| {
     /// `Ctrl+S` at the form's right edge, and why Save waits under it while the folder has
     /// changes. True when the DM pressed Save, or `Ctrl+S`, and Save can run.
     fn folder_save_row(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) -> bool {
-        let Some(campaign) = self.campaign.clone() else {
+        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+        let Some((state, changed)) = self.folder_row(book, locked) else {
             return false;
         };
-        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-        let changed = super::resolve(&campaign, &self.folder_text).ok() != self.folder.clone();
-        // The listing the footer read this frame (`folder_scan`, kept until the next scan).
-        let files = self.folder_files();
-        let has_files = self.folder_move_counts(book, &files).is_some();
-        // One rule for the row (`DraftState`): the word, Discard, Save's weight and why it waits.
-        let mut state = design::DraftState::new(
-            design::save_row::DraftOrigin::Saved,
-            if changed {
-                design::save_row::Changed::Yes
-            } else {
-                design::save_row::Changed::No
-            },
-            design::save_row::Primary::Draft,
-        );
-        // The page's lock first: while it holds, the warning offers no choice, so Save never
-        // points at choices that are not there. With no changes the row says so itself.
-        let wait = self
-            .folder_wait(book, changed, &files)
-            .filter(|wait| *wait != FolderWait::NoChanges)
-            .map(FolderWait::words);
-        if let Some(why) = locked.or(wait) {
-            state = state.waits(why);
-        } else if has_files {
-            // The warning's two choices under the row save the folder: Save waits in its place.
-            state = state.commits_elsewhere("Choose below to move the files or not.");
-        }
         // `Ctrl+S` saves exactly when the button it labels can, not under a modal (the app's
         // one test) nor the page's lock.
         let save_key = design::save_row::save_key(ui, state.can_save() && !self.modal);
@@ -8237,10 +8206,7 @@ let paned = messages.pane_editor(ui, |ui, region| {
         // turns into another act.
         let row = design::save_row(ui, &state, "Save folder");
         if row.discard {
-            if let Ok(saved) = folder_setting(&campaign) {
-                self.folder_text = saved;
-            }
-            self.folder_error = None;
+            self.discard_folder();
         }
         if locked.is_none() && changed {
             design::blocked_reason(ui, state.save_blocked());

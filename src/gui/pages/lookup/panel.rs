@@ -7,7 +7,7 @@ use crate::gui::{SplatRoot, icons};
 use crate::lookup::panel_view::{Showing, search_hint};
 use gpui::{
     AnyElement, Context, IntoElement, ParentElement, SharedString, Styled, Window, div,
-    prelude::*, px,
+    prelude::*,
 };
 
 /// A result row's height (`RESULT_ROW`).
@@ -77,6 +77,18 @@ pub(super) fn render(root: &mut SplatRoot, window: &mut Window, cx: &mut Context
     let search = div()
         .capture_key_down(cx.listener(|root, event: &gpui::KeyDownEvent, _, cx| {
             let key = event.keystroke.key.as_str();
+            // Escape in the field closes Lookup, as everywhere else in the panel.
+            if key == "escape" && !event.keystroke.modifiers.modified() {
+                let app = &root.app;
+                let held = app.lookup.reader.takes_escape()
+                    || (app.page == crate::Page::Library && app.library.form_open());
+                if !crate::gui::kit::menu::any_open(cx) && !held {
+                    root.app.lookup.close();
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+                return;
+            }
             if event.keystroke.modifiers.modified() || !matches!(key, "up" | "down") {
                 return;
             }
@@ -456,9 +468,4 @@ fn written(root: &SplatRoot, at: usize, query: &str, cx: &mut Context<SplatRoot>
     let text = SharedString::from(note.text.clone());
     column = column.child(kit::markdown::Markdown::new(("lookup-written-text", at), text).compact());
     kit::scroll_column(("lookup-written", at), column.pr(S)).into_any_element()
-}
-
-#[allow(dead_code)]
-fn _width_in_use() -> gpui::Pixels {
-    px(0.0)
 }

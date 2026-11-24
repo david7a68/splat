@@ -19,6 +19,7 @@ pub struct Checkbox {
     id: ElementId,
     label: SharedString,
     checked: bool,
+    mixed: bool,
     blocked: Option<SharedString>,
     on_click: Option<OnClick>,
 }
@@ -29,6 +30,7 @@ impl Checkbox {
             id: id.into(),
             label: label.into(),
             checked,
+            mixed: false,
             blocked: None,
             on_click: None,
         }
@@ -37,6 +39,12 @@ impl Checkbox {
     /// Disabled with a reason on hover.
     pub fn blocked(mut self, reason: Option<impl Into<SharedString>>) -> Self {
         self.blocked = reason.map(Into::into);
+        self
+    }
+
+    /// Partly chosen (egui's indeterminate box): a dash in place of the check.
+    pub fn mixed(mut self, mixed: bool) -> Self {
+        self.mixed = mixed;
         self
     }
 
@@ -66,8 +74,11 @@ impl RenderOnce for Checkbox {
             .bg(c.well)
             .icon_font(Type::Small)
             .text_color(c.text)
-            .when(self.checked, |mark| {
+            .when(self.checked && !self.mixed, |mark| {
                 mark.child(SharedString::new_static(phosphor::CHECK))
+            })
+            .when(self.mixed, |mark| {
+                mark.child(SharedString::new_static(phosphor::MINUS))
             });
         line(
             self.id,

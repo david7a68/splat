@@ -2,11 +2,11 @@
 //! each member's portrait, name, class and level, conditions, the compare columns (passive
 //! Perception and Insight, spell DC), AC and HP with its bar.
 use crate::gui::kit::{self, Row};
-use crate::gui::theme::{Density, S, Type, TypeExt, XS, colors};
+use crate::gui::theme::{S, Type, XS, colors};
 use crate::gui::{SplatRoot, icons};
 use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, Pixels, SharedString, Styled, div,
-    px,
+    prelude::*, px,
 };
 
 const AC_WIDTH: Pixels = px(34.0);
@@ -202,7 +202,6 @@ pub(super) fn list(root: &mut SplatRoot, width: Pixels, cx: &mut Context<SplatRo
                 .child(row),
         );
     }
-    let _ = Density::Read;
     div()
         .flex()
         .flex_col()
@@ -217,22 +216,4 @@ pub(super) fn list(root: &mut SplatRoot, width: Pixels, cx: &mut Context<SplatRo
                 .child(kit::scroll_column("party_members_list", rows)),
         )
         .into_any_element()
-}
-
-trait WhenSome: Sized {
-    fn when_some<T>(self, value: Option<T>, then: impl FnOnce(Self, T) -> Self) -> Self;
-}
-
-impl WhenSome for gpui::Div {
-    fn when_some<T>(self, value: Option<T>, then: impl FnOnce(Self, T) -> Self) -> Self {
-        match value {
-            Some(value) => then(self, value),
-            None => self,
-        }
-    }
-}
-
-#[allow(dead_code)]
-fn _type_ext_in_use(div: gpui::Div) -> gpui::Div {
-    div.ty(Type::Body)
 }
