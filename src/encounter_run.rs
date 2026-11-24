@@ -527,7 +527,7 @@ pub struct Run {
     /// The total typed beside each group in the panel, until it is used.
     pub group_totals: BTreeMap<Uuid, String>,
 }
-#[derive(Clone, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Panel {
     #[default]
     Reference,
@@ -552,7 +552,7 @@ const HALF_FOR: &str = ", half for ";
 const SHEET_SOURCE: &str = "D&D Beyond ";
 /// What a saved run may hold. A larger one does not open again.
 const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe until you choose. Saving has stopped.";
-const MAX_FROM_SHEET: &str =
+pub const MAX_FROM_SHEET: &str =
     "Maximum HP comes from the D&D Beyond sheet while sync is on. Stop sync to change it here.";
 /// What `Last:` says after a long rest fills a saved Setup's HP. It is no Undo step.
 const REST_STEP: &str = "full HP after long rest";
@@ -661,7 +661,7 @@ pub enum Unend {
     Undo,
 }
 /// The outcome of an ending whose outcome field was left empty.
-const NO_OUTCOME: &str = "Undecided";
+pub const NO_OUTCOME: &str = "Undecided";
 /// The Undo step an ending makes. While it is the newest step, Undo is how the fight goes on.
 /// An Undo step's label, and the words in it that name what it acted on (`describe_named`).
 type Named = (String, Option<String>);
@@ -2830,7 +2830,7 @@ fn condition_removed(condition: &Condition) -> String {
     }
 }
 
-fn mode_label(mode: i8) -> &'static str {
+pub fn mode_label(mode: i8) -> &'static str {
     match mode {
         -1 => "Disadvantage / surprised",
         1 => "Advantage",

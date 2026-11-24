@@ -35,17 +35,17 @@ pub struct RunCreature {
 /// The form in the run's Arrivals panel. Never saved.
 #[derive(Default)]
 pub struct AdHoc {
-    pub(super) query: String,
-    pub(super) picked: Option<Arc<RunCreature>>,
-    pub(super) count: String,
-    pub(super) hp: String,
-    pub(super) ac: String,
-    pub(super) total: String,
-    pub(super) side: Option<String>,
+    pub query: String,
+    pub picked: Option<Arc<RunCreature>>,
+    pub count: String,
+    pub hp: String,
+    pub ac: String,
+    pub total: String,
+    pub side: Option<String>,
     /// The words for which the DM chose Show all.
-    pub(super) show_all: Option<String>,
+    pub show_all: Option<String>,
     /// HP takes the keyboard on the next frame.
-    pub(super) focus_hp: bool,
+    pub focus_hp: bool,
 }
 
 /// What the form says now, when it can be added.
@@ -110,11 +110,11 @@ fn made_up_entry(name: &str, hp: i64, ac: Option<i64>) -> Entry {
 }
 
 impl AdHoc {
-    pub(super) fn side(&self) -> &str {
+    pub fn side(&self) -> &str {
         self.side.as_deref().unwrap_or(DEFAULT_SIDE)
     }
 
-    pub(super) fn total(&self) -> Option<i64> {
+    pub fn total(&self) -> Option<i64> {
         crate::design::parse_signed(&self.total)
     }
 
@@ -127,7 +127,7 @@ impl AdHoc {
     }
 
     /// What this form would add, or why it cannot be added yet.
-    pub(super) fn check(&self, known: &[Arc<RunCreature>]) -> Result<Checked, String> {
+    pub fn check(&self, known: &[Arc<RunCreature>]) -> Result<Checked, String> {
         let count = number_in(&self.count, "Count", 1..=MAX_COUNT as i64)?.unwrap_or(1) as u64;
         let hp = number_in(&self.hp, "HP", 1..=MAX_HP)?;
         let ac = number_in(&self.ac, "AC", 0..=MAX_AC)?;
@@ -176,7 +176,7 @@ impl AdHoc {
     }
 
     /// The form as a group of one line, ready to add.
-    pub(super) fn group(&self, checked: Checked) -> Arc<RunGroup> {
+    pub fn group(&self, checked: Checked) -> Arc<RunGroup> {
         let entry = checked.entry.unwrap_or_else(|| {
             Arc::new(made_up_entry(
                 &checked.name,
@@ -498,11 +498,8 @@ impl Run {
             }
         }
         // A base value is the hint, so that a blank field reads as that value.
-        let creature = self.ad_hoc.creature(&known).cloned();
-        let base = creature
-            .as_ref()
-            .map(|creature| Base::of(&creature.entry, self.ad_hoc.side()));
-        if creature.is_none() {
+        let add = self.creature_add();
+        if add.made_up {
             ui.add(
                 egui::Label::new(
                     Type::Small
@@ -512,13 +509,7 @@ impl Run {
                 .wrap(),
             );
         }
-        let shown = |value: Option<Option<i64>>, none: &str| {
-            value
-                .flatten()
-                .map_or_else(|| none.to_owned(), |value| value.to_string())
-        };
-        let hp_hint = shown(base.as_ref().map(|base| base.max_hp), "Needed");
-        let ac_hint = shown(base.as_ref().map(|base| base.armor_class), "None");
+        let (hp_hint, ac_hint) = (add.hp_hint.clone(), add.ac_hint.clone());
         let mut enter = false;
         // Two fixed rows, so that a narrow panel never parts a word from its field. Their
         // first words share one column, so `Count` and `Initiative` fields start at one x and
@@ -594,6 +585,77 @@ impl Run {
                 self.ad_hoc.side = Some(chosen);
             }
         });
+        let CreatureAdd {
+            label,
+            name,
+            blocked,
+            ..
+        } = add;
+        // A reason that comes and goes keeps its line, as tall as the made-up form's own
+        // reason, so Add and the groups below stay still when the DM types the HP.
+        let width = ui.available_width();
+        let reserved = egui::WidgetText::from(Type::Small.rich(ui, NEEDS_HP))
+            .into_galley(
+                ui,
+                Some(egui::TextWrapMode::Wrap),
+                width,
+                egui::TextStyle::Body,
+            )
+            .size()
+            .y;
+        ui.allocate_ui_with_layout(
+            egui::vec2(width, reserved),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_min_size(egui::vec2(0.0, reserved));
+                if let Some(why) = &blocked {
+                    ui.add(egui::Label::new(Type::Small.rich(ui, why).color(c.muted)).wrap());
+                }
+            },
+        );
+        let pressed = Action::secondary(&label)
+            .icon(icons::ADD)
+            .density(Density::Read)
+            .name(&format!("Add {name} to the initiative list"))
+            .blocked(blocked.as_deref())
+            .show(ui)
+            .clicked();
+        if (pressed || enter) && blocked.is_none() {
+            self.add_creature_from_form();
+        }
+    }
+}
+
+/// What the Arrivals form's Add says and does now, for any toolkit's form.
+pub struct CreatureAdd {
+    /// `Add 2 × Goblin at 14`, `Add Goblin and roll`.
+    pub label: String,
+    /// The whole name, for the accessible name.
+    pub name: String,
+    /// Why Add cannot add now.
+    pub blocked: Option<String>,
+    /// The HP and AC fields' placeholders: the chosen stat block's values, or what is needed.
+    pub hp_hint: String,
+    pub ac_hint: String,
+    /// The words name no known creature: it is made up here.
+    pub made_up: bool,
+}
+
+impl Run {
+    /// The Arrivals form's Add, as the form stands (`add_creature_form`).
+    pub fn creature_add(&self) -> CreatureAdd {
+        let known = self.creatures.clone().unwrap_or_default();
+        let creature = self.ad_hoc.creature(&known).cloned();
+        let base = creature
+            .as_ref()
+            .map(|creature| Base::of(&creature.entry, self.ad_hoc.side()));
+        let shown = |value: Option<Option<i64>>, none: &str| {
+            value
+                .flatten()
+                .map_or_else(|| none.to_owned(), |value| value.to_string())
+        };
+        let hp_hint = shown(base.as_ref().map(|base| base.max_hp), "Needed");
+        let ac_hint = shown(base.as_ref().map(|base| base.armor_class), "None");
         let checked = self.ad_hoc.check(&known);
         let total = self.ad_hoc.total();
         let may_roll = !self.joins_side(self.ad_hoc.side());
@@ -625,45 +687,50 @@ impl Run {
             Ok(_) if no_bonus => Some("It has no initiative bonus. Type a total.".to_owned()),
             Ok(_) => None,
         };
-        // A reason that comes and goes keeps its line, as tall as the made-up form's own
-        // reason, so Add and the groups below stay still when the DM types the HP.
-        let width = ui.available_width();
-        let reserved = egui::WidgetText::from(Type::Small.rich(ui, NEEDS_HP))
-            .into_galley(
-                ui,
-                Some(egui::TextWrapMode::Wrap),
-                width,
-                egui::TextStyle::Body,
-            )
-            .size()
-            .y;
-        ui.allocate_ui_with_layout(
-            egui::vec2(width, reserved),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                ui.set_min_size(egui::vec2(0.0, reserved));
-                if let Some(why) = &blocked {
-                    ui.add(egui::Label::new(Type::Small.rich(ui, why).color(c.muted)).wrap());
-                }
-            },
-        );
-        let pressed = Action::secondary(&label)
-            .icon(icons::ADD)
-            .density(Density::Read)
-            .name(&format!("Add {name} to the initiative list"))
-            .blocked(blocked.as_deref())
-            .show(ui)
-            .clicked();
-        if (pressed || enter)
-            && blocked.is_none()
-            && let Ok(checked) = checked
-        {
-            let group = self.ad_hoc.group(checked);
-            self.run_command(Command::AddCreature(group, total));
-            if self.error.is_none() {
-                self.ad_hoc = AdHoc::default();
-                self.return_focus = self.lookup_open;
-            }
+        CreatureAdd {
+            label,
+            name,
+            blocked,
+            hp_hint,
+            ac_hint,
+            made_up: creature.is_none(),
         }
+    }
+
+    /// Add what the Arrivals form says, when it can; the form empties after a join.
+    pub fn add_creature_from_form(&mut self) {
+        if self.creature_add().blocked.is_some() {
+            return;
+        }
+        let known = self.creatures.clone().unwrap_or_default();
+        let total = self.ad_hoc.total();
+        let Ok(checked) = self.ad_hoc.check(&known) else {
+            return;
+        };
+        let group = self.ad_hoc.group(checked);
+        self.run_command(Command::AddCreature(group, total));
+        if self.error.is_none() {
+            self.ad_hoc = AdHoc::default();
+            self.return_focus = self.lookup_open;
+        }
+    }
+
+    /// The known creatures that match the form's words, and how many of them show before
+    /// `Show all N` (all of them once the DM chose it, or when one more would show).
+    pub fn creature_matches(&self) -> (Vec<Arc<RunCreature>>, usize) {
+        let known = self.creatures.clone().unwrap_or_default();
+        let typed = self.ad_hoc.query.trim().to_lowercase();
+        if typed.is_empty() {
+            return (Vec::new(), 0);
+        }
+        let matches: Vec<Arc<RunCreature>> =
+            matches_for(&known, &typed).into_iter().cloned().collect();
+        let all = self.ad_hoc.show_all.as_deref() == Some(typed.as_str());
+        let shown = if all || matches.len() == MATCHES_SHOWN + 1 {
+            matches.len()
+        } else {
+            matches.len().min(MATCHES_SHOWN)
+        };
+        (matches, shown)
     }
 }

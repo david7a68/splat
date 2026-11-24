@@ -106,6 +106,7 @@ pub struct TextField {
     width: Option<gpui::Pixels>,
     on_change: Option<OnChange>,
     on_enter: Option<super::OnAct>,
+    focus: bool,
 }
 
 impl TextField {
@@ -120,7 +121,15 @@ impl TextField {
             width: None,
             on_change: None,
             on_enter: None,
+            focus: false,
         }
+    }
+
+    /// Take the keyboard in this frame (a page's own focus request, such as the run's Amount
+    /// after a step). Give it once: the page clears its request after the frame.
+    pub fn focus(mut self, focus: bool) -> Self {
+        self.focus = focus;
+        self
     }
 
     /// Faint words while the field is empty. Set it once: the field keeps its first placeholder.
@@ -182,7 +191,11 @@ impl RenderOnce for TextField {
         state.update(cx, |state, cx| state.follow(&value, on_change, window, cx));
         let input = state.read(cx).input.clone();
         input.update(cx, |input, cx| input.set_disabled(self.disabled, cx));
-        let focused = input.read(cx).focus_handle(cx).is_focused(window);
+        let handle = input.read(cx).focus_handle(cx);
+        let focused = handle.is_focused(window);
+        if self.focus && !focused {
+            window.defer(cx, move |window, cx| window.focus(&handle, cx));
+        }
         let name = self
             .name
             .clone()

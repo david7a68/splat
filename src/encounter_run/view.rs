@@ -43,16 +43,16 @@ const CORRECT_INITIATIVE_FIELD: design::FieldName = crate::field_id!("run_correc
 const ROLL_MODE_FIELD: design::FieldName = crate::field_id!("run_initiative_mode");
 const OUTCOME_FIELD: design::FieldName = crate::field_id!("run_outcome");
 const DM_NOTE_FIELD: design::FieldName = crate::field_id!("run_dm_note");
-const READ_ALOUD: &str = "Read-aloud and notes";
+pub const READ_ALOUD: &str = "Read-aloud and notes";
 /// FI10: Arrivals says what the fight becomes when a group joins.
 pub(crate) const FIGHT_AFTER: &str = "Fight after: ";
 /// Two lines of controls in a frame.
-pub(crate) const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
+pub const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
 /// The dock's width from which Damage has its key hint, and Temp HP and Roll their full forms.
-pub(crate) const DOCK_ALL_WORDS_FROM: f32 = design::turn_heading::ADD_WORDS_FROM;
+pub const DOCK_ALL_WORDS_FROM: f32 = design::turn_heading::ADD_WORDS_FROM;
 /// FK1 (iter-27-R): the dock's name slot, one width in every fight and for every row, so the
 /// controls after it keep one x. A name that `Heading` does not hold on one line wraps in it.
-pub(crate) const DOCK_NAME_WIDTH: f32 = 8.0 * design::L;
+pub const DOCK_NAME_WIDTH: f32 = 8.0 * design::L;
 /// The lines a dock name may take. Two share the height of one control.
 const DOCK_NAME_LINES: usize = 2;
 const FOOTER_HEIGHT: f32 = 28.0 + 7.0;
@@ -71,9 +71,9 @@ const NAME_ROOM: f32 = 8.0;
 /// A long name wraps to at most this many lines; the last one ends in `…`.
 const NAME_LINES: usize = 3;
 /// X8: the Conditions field's words while the dock has no room for `Effect`.
-const OTHER_EFFECT_TIMED: &str = "Other effect, such as Bless 10 rounds";
+pub const OTHER_EFFECT_TIMED: &str = "Other effect, such as Bless 10 rounds";
 /// X7: what the Conditions tab records, and what Splat does with a time the DM types.
-const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9. Other effects stay local and do not sync.";
+pub const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9. Other effects stay local and do not sync.";
 /// A creature's effects beyond the official conditions, in the run's Conditions tab and in a
 /// change form alike: the `Other effects` label, then each in Body text with its row menu.
 /// Returns the position in `effects` of the one the DM removed. `field` is the width of the
@@ -337,6 +337,58 @@ fn conditions_grid_counted(
     (pressed, counts)
 }
 
+/// Where an official condition is among a participant's conditions (Exhaustion at any level).
+fn found_condition(p: &Participant, name: &str) -> Option<usize> {
+    p.conditions
+        .iter()
+        .position(|c| c.same(name) || (name == "Exhaustion" && c.name().starts_with("Exhaustion")))
+}
+
+/// An official condition's words on its toggle while it holds (`Bless 9` with a count), or
+/// `None` while it does not.
+pub fn condition_label(p: &Participant, name: &str) -> Option<String> {
+    found_condition(p, name).map(|at| {
+        let c = &p.conditions[at];
+        c.count().map_or_else(|| name.to_owned(), |_| c.words())
+    })
+}
+
+/// A press on an official condition's toggle: it holds now, or it ends.
+pub fn condition_press(p: &Participant, index: usize, name: &str) -> Command {
+    found_condition(p, name).map_or_else(
+        || Command::Condition(index, name.to_owned()),
+        |at| Command::RemoveCondition(index, at),
+    )
+}
+
+/// The effects and unofficial conditions the Conditions tab lists under `Other effects`, by
+/// their place: an effect whose count the toggles show (`counts`) stays on its toggle.
+pub fn other_effects(p: &Participant, counts: bool) -> Vec<(usize, String)> {
+    p.conditions
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| {
+            super::recognized_condition(c.name()).is_none()
+                || (c.is_effect() && !(counts && c.count().is_some()))
+        })
+        .map(|(at, c)| (at, c.words()))
+        .collect()
+}
+
+/// `Other effect…`'s words, added: an Exhaustion level sets the level of the one it has.
+pub fn other_effect_command(p: &Participant, index: usize, typed: String) -> Command {
+    let exhausted = p
+        .conditions
+        .iter()
+        .any(|c| c.name().starts_with("Exhaustion"));
+    let level = typed.starts_with("Exhaustion") && !super::Condition::read(&typed).is_effect();
+    if exhausted && level {
+        set_exhaustion(index, exhaustion_level(&typed))
+    } else {
+        Command::Condition(index, typed)
+    }
+}
+
 /// Blank means roll; invalid text must never silently request a roll.
 fn arrival_total(text: &str) -> Result<Option<i64>, &'static str> {
     let text = text.trim();
@@ -468,7 +520,7 @@ const PENDING_WORDS: &str =
 /// Splat would send and D&D Beyond does not have yet: `Its change to 49/62 HP has not reached
 /// D&D Beyond yet. Splat tries again by itself.` HP has the form of the conflict's buttons.
 /// With nothing to compare, the general words.
-fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
+pub fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
     #[cfg(any(test, feature = "test-support"))]
     PENDING_WORK.with(|work| work.set(work.get() + 1));
     let max = sync.max_hp().unwrap_or(0);
@@ -526,7 +578,7 @@ fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
     }
 }
 
-pub(crate) fn sync_status(state: SyncState) -> Status<'static> {
+pub fn sync_status(state: SyncState) -> Status<'static> {
     let s = colors().sync;
     match state {
         SyncState::Off => Status {
@@ -621,7 +673,7 @@ fn side_mark(painter: &egui::Painter, center: egui::Pos2, side: &str, size: f32)
 }
 
 /// The run's keyboard commands.
-const KEYS: [(&str, &str); 13] = [
+pub const KEYS: [(&str, &str); 13] = [
     ("N", "Next turn"),
     ("Enter", "Damage the selected rows by the amount"),
     ("Shift+Enter", "Heal the selected rows by the amount"),
@@ -2325,25 +2377,12 @@ impl Run {
             // A form, not the pane: the grid, the effects and Add stay within its width.
             ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
             ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
-            let found = |name: &str| {
-                p.conditions.iter().position(|c| {
-                    c.same(name) || (name == "Exhaustion" && c.name().starts_with("Exhaustion"))
-                })
-            };
             // Fixed columns, `S` apart: never spread across the form, never moved by a toggle.
             // X11: a condition with a count shows it on its tick, `✓ Frightened 10`.
-            let label = |name: &str| {
-                found(name).map(|at| {
-                    let c = &p.conditions[at];
-                    c.count().map_or_else(|| name.to_owned(), |_| c.words())
-                })
-            };
+            let label = |name: &str| condition_label(p, name);
             let (pressed, counts) = conditions_grid_counted(ui, "official_conditions", &label);
             if let Some(name) = pressed {
-                command = Some(found(name).map_or_else(
-                    || Command::Condition(index, name.to_owned()),
-                    |i| Command::RemoveCondition(index, i),
-                ));
+                command = Some(condition_press(p, index, name));
             }
             // One level, not a pile of lines. Each step replaces the last.
             let exhausted = p
@@ -2397,17 +2436,7 @@ impl Run {
             }
             // Each other effect with its whole words. An official condition's count is on
             // its tick; it is here only when the tick cannot show it.
-            let listed = |c: &super::Condition| {
-                super::recognized_condition(c.name()).is_none()
-                    || (c.is_effect() && !(counts && c.count().is_some()))
-            };
-            let custom: Vec<_> = p
-                .conditions
-                .iter()
-                .enumerate()
-                .filter(|(_, c)| listed(c))
-                .map(|(at, c)| (at, c.words()))
-                .collect();
+            let custom = other_effects(p, counts);
             // The list's heading adds its own space above it; an empty list has no heading.
             if custom.is_empty() {
                 design::gap(ui, design::Gap::S);
@@ -2447,12 +2476,7 @@ impl Run {
                 // Typed as a level, it is still the one Exhaustion a creature has.
                 // Words with a time go through the one reader, which keeps the level.
                 let typed = draft.words.trim().to_owned();
-                let level =
-                    typed.starts_with("Exhaustion") && !super::Condition::read(&typed).is_effect();
-                command = Some(match exhausted.filter(|_| level) {
-                    Some(_) => set_exhaustion(index, exhaustion_level(&typed)),
-                    None => Command::Condition(index, typed),
-                });
+                command = Some(other_effect_command(p, index, typed));
                 added = true;
             }
             design::help(ui, CONDITIONS_HELP);
@@ -3458,6 +3482,11 @@ impl Run {
             .collect();
         self.arrival_reasons = Some((key, reasons.clone()));
         reasons
+    }
+
+    /// The words of `add_waits`, for a view in any toolkit.
+    pub fn add_waits_words(&self, group: &super::RunGroup) -> Option<String> {
+        self.add_waits(group).map(|waits| waits.words().to_owned())
     }
 
     /// Why this group's Add waits now, or `None` when it runs: its faults, then its typed total,
@@ -6527,7 +6556,7 @@ pub(crate) fn continue_action() -> Action<'static> {
 }
 
 /// The level in `Exhaustion (2)`. Plain `Exhaustion` is the first.
-pub(crate) fn exhaustion_level(condition: &str) -> u8 {
+pub fn exhaustion_level(condition: &str) -> u8 {
     condition
         .trim()
         .strip_prefix("Exhaustion (")
@@ -6540,7 +6569,7 @@ pub(crate) fn exhaustion_level(condition: &str) -> u8 {
 const ARRIVAL_FIELD_WIDTH: f32 = 72.0;
 
 /// The highest exhaustion level. The run's stepper stops here and says why.
-const EXHAUSTION_MAX: i64 = 6;
+pub const EXHAUSTION_MAX: i64 = 6;
 const EXHAUSTION_AT_LOW: &str = "Exhaustion is already 0.";
 const EXHAUSTION_AT_HIGH: &str = "Exhaustion stops at 6.";
 
@@ -6558,13 +6587,13 @@ pub struct ExhaustionDrag {
 
 /// One step of undo: the old level goes, and the new one comes.
 /// The one Exhaustion entry at another level. Its time stays.
-fn set_exhaustion(index: usize, level: u8) -> Command {
+pub fn set_exhaustion(index: usize, level: u8) -> Command {
     Command::Condition(index, format!("Exhaustion ({level})"))
 }
 
 /// The line under a character's card. The notice above it, when it shows, already says the
 /// card is the copy from the start of the fight, so the line does not say it again.
-fn snapshot_values_line(notice_shown: bool) -> &'static str {
+pub fn snapshot_values_line(notice_shown: bool) -> &'static str {
     if notice_shown {
         "The roster has the current values."
     } else {
@@ -6708,7 +6737,7 @@ impl design::outcome::Fault for SnapshotFault {
     }
 }
 
-fn snapshot_notice(
+pub fn snapshot_notice(
     snapshot: &Entry,
     current: Option<&Entry>,
     unreadable: bool,
@@ -6781,7 +6810,7 @@ fn snapshot_notice(
     })
 }
 
-fn change_origin(p: &Participant) -> Option<String> {
+pub fn change_origin(p: &Participant) -> Option<String> {
     let mut parts = Vec::new();
     if let Some(added) = &p.added_from
         && (!p.stat_changes() || added.group.is_empty())
@@ -6946,7 +6975,7 @@ fn arrival_summary(ui: &egui::Ui, status: &str, members: &str, width: f32) -> Op
     }
 }
 
-fn ordinal(place: usize) -> String {
+pub fn ordinal(place: usize) -> String {
     let suffix = if (11..=13).contains(&(place % 100)) {
         "th"
     } else {
@@ -7592,7 +7621,7 @@ fn hp_word(p: &Participant) -> Option<(&'static str, &'static str, egui::Color32
 }
 
 /// The death-save counts in words: `1 success · 0 failures`.
-fn death_save_words(successes: u8, failures: u8) -> String {
+pub fn death_save_words(successes: u8, failures: u8) -> String {
     format!(
         "{successes} {} · {failures} {}",
         if successes == 1 {
@@ -7988,7 +8017,7 @@ struct RowLayout {
     input: Option<std::sync::Arc<RowInput>>,
 }
 
-pub(crate) fn header_height(scale: RunScale) -> f32 {
+pub fn header_height(scale: RunScale) -> f32 {
     design::TurnHeading::height(scale)
 }
 

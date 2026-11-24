@@ -138,6 +138,12 @@ fn layer(id: &ElementId, min_width: Option<Pixels>, content: impl IntoElement) -
     )
 }
 
+/// The raised layer of `id` for a menu that opens from code, such as a row's right-click menu
+/// (`open_popup`): draw it after the element it belongs to while `is_open(id)`.
+pub fn layer_for(id: &ElementId, content: impl IntoElement) -> impl IntoElement {
+    layer(id, None, content)
+}
+
 /// One choice in a menu: its words, an optional icon, and a reason when it is blocked (shown as
 /// a note under its words, as `choice_note` does).
 pub struct MenuItem {

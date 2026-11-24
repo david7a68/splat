@@ -469,7 +469,7 @@ impl Run {
 }
 
 /// The dock's words while several rows are targets: the mark the rows paint, and what it does.
-pub(crate) fn target_hint() -> String {
+pub fn target_hint() -> String {
     format!(
         "Press a target’s {} to give it half, rounded down.",
         icons::OK

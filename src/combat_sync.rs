@@ -880,6 +880,27 @@ impl crate::design::outcome::Fault for ActionFailed<'_> {
     }
 }
 
+/// One sync conflict, as `CombatSync::conflict_rows` gives it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConflictRow {
+    /// The value group's key, for `use_remote` and `keep_local`.
+    pub key: String,
+    /// `HP conflict`.
+    pub title: String,
+    /// The sheet's words about it.
+    pub message: String,
+    /// The value in Splat and on D&D Beyond, in words.
+    pub splat: String,
+    pub beyond: String,
+    /// The two choices' words.
+    pub use_label: String,
+    pub keep_label: String,
+    /// Why neither choice works now (a sheet read is running).
+    pub busy: Option<&'static str>,
+    /// Why Keep does not work now.
+    pub keep_blocked: Option<&'static str>,
+}
+
 #[derive(Default)]
 pub struct CombatSync {
     pub enabled: bool,
@@ -1464,11 +1485,11 @@ impl CombatSync {
     }
     fn conflicts_inner(&mut self, ui: &mut egui::Ui, name: Option<&str>, explanation: bool) {
         use crate::design::{self, Action, Density, Type, colors};
-        for (key, message) in self.blocked.clone() {
+        for row in self.conflict_rows() {
             let c = colors();
-            let status = format!("{} {} conflict", design::icons::WARN, self.group_name(&key));
+            let key = row.key.clone();
+            let status = format!("{} {}", design::icons::WARN, row.title);
             match name {
-                // FK3: the ended view's one heading form, the name in the text colour.
                 Some(name) => {
                     sync_heading(ui, name, &status, c.sync.conflict);
                 }
@@ -1477,7 +1498,7 @@ impl CombatSync {
                         ui,
                         design::Heading::Status(design::Status {
                             icon: design::icons::WARN,
-                            word: &format!("{} conflict", self.group_name(&key)),
+                            word: &row.title,
                             color: c.sync.conflict,
                         }),
                     );
@@ -1485,74 +1506,37 @@ impl CombatSync {
             }
             if explanation {
                 ui.add(
-                    egui::Label::new(Type::Small.rich(ui, message.as_str()).color(c.text)).wrap(),
+                    egui::Label::new(Type::Small.rich(ui, row.message.as_str()).color(c.text))
+                        .wrap(),
                 );
             }
-            // The two values side by side, so the difference is what the eye finds.
             egui::Grid::new(("conflict_values", &key))
                 .num_columns(2)
                 .spacing([design::L, 2.0])
                 .show(ui, |ui| {
-                    for (label, value) in [
-                        ("Splat", self.desired.get(&key)),
-                        (
-                            "D&D Beyond",
-                            self.remote.as_ref().and_then(|r| r.groups.get(&key)),
-                        ),
-                    ] {
+                    for (label, value) in [("Splat", &row.splat), ("D&D Beyond", &row.beyond)] {
                         ui.label(Type::Small.rich(ui, label).color(colors().muted));
-                        ui.label(
-                            Type::Strong
-                                .rich(ui, describe(&key, value, self.max_hp().unwrap_or(0)))
-                                .color(colors().text),
-                        );
+                        ui.label(Type::Strong.rich(ui, value).color(colors().text));
                         ui.end_row();
                     }
                 });
             ui.push_id(&key, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    let busy = self.busy().then_some("Wait for the current sheet read.");
-                    let max = self.max_hp().unwrap_or(0);
-                    let sheet = self.remote.as_ref().and_then(|r| r.groups.get(&key));
-                    let read_only = self.read_only();
-                    let (use_label, keep_label) = (
-                        format!("Use {} from D&D Beyond", short_value(&key, sheet, max)),
-                        format!(
-                            "Keep {}, {}",
-                            short_value(&key, self.desired.get(&key), max),
-                            if read_only {
-                                "in Splat only"
-                            } else {
-                                "send to D&D Beyond"
-                            }
-                        ),
-                    );
-                    let use_word = &use_label;
-                    let keep_word = &keep_label;
-                    if Action::secondary(use_word)
-                        .hint(&use_label)
+                    if Action::secondary(&row.use_label)
+                        .hint(&row.use_label)
                         .name("Use D&D Beyond values")
                         .density(Density::Read)
-                        .blocked(busy)
+                        .blocked(row.busy)
                         .show(ui)
                         .clicked()
                     {
                         self.use_remote(&key);
                     }
-                    let writable = read_only
-                        || self
-                            .remote
-                            .as_ref()
-                            .is_some_and(|r| r.can_edit && r.groups.contains_key(&key));
-                    if Action::secondary(keep_word)
-                        .hint(&keep_label)
+                    if Action::secondary(&row.keep_label)
+                        .hint(&row.keep_label)
                         .name("Keep Splat values and retry")
                         .density(Density::Read)
-                        .blocked(busy.or(
-                            (!writable).then_some(
-                                "This sign-in cannot edit this character on D&D Beyond.",
-                            ),
-                        ))
+                        .blocked(row.keep_blocked)
                         .show(ui)
                         .clicked()
                     {
@@ -1561,6 +1545,57 @@ impl CombatSync {
                 });
             });
         }
+    }
+    /// Each conflict as a view in any toolkit shows it: its title, the sheet's words, both
+    /// values, and the two choices with their words and reasons.
+    pub fn conflict_rows(&self) -> Vec<ConflictRow> {
+        let max = self.max_hp().unwrap_or(0);
+        let busy = self.busy().then_some("Wait for the current sheet read.");
+        let read_only = self.read_only();
+        self.blocked
+            .iter()
+            .map(|(key, message)| {
+                let sheet = self.remote.as_ref().and_then(|r| r.groups.get(key));
+                let writable = read_only
+                    || self
+                        .remote
+                        .as_ref()
+                        .is_some_and(|r| r.can_edit && r.groups.contains_key(key));
+                ConflictRow {
+                    key: key.clone(),
+                    title: format!("{} conflict", self.group_name(key)),
+                    message: message.clone(),
+                    splat: describe(key, self.desired.get(key), max),
+                    beyond: describe(key, sheet, max),
+                    use_label: format!("Use {} from D&D Beyond", short_value(key, sheet, max)),
+                    keep_label: format!(
+                        "Keep {}, {}",
+                        short_value(key, self.desired.get(key), max),
+                        if read_only {
+                            "in Splat only"
+                        } else {
+                            "send to D&D Beyond"
+                        }
+                    ),
+                    busy,
+                    keep_blocked: busy.or((!writable)
+                        .then_some("This sign-in cannot edit this character on D&D Beyond.")),
+                }
+            })
+            .collect()
+    }
+    /// `Check now`: read the sheet at once.
+    pub fn check_now(&mut self) {
+        self.refresh_only = true;
+        self.next = None;
+    }
+    /// Whether a sheet was read since sync started.
+    pub fn has_read(&self) -> bool {
+        self.remote.is_some()
+    }
+    /// Whether D&D Beyond lets this sign-in edit the character.
+    pub fn can_edit(&self) -> bool {
+        self.remote.as_ref().is_some_and(|remote| remote.can_edit)
     }
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let was = self.enabled;

@@ -8,7 +8,7 @@ use crate::design::{self, Action, Density, Type, colors, icons};
 use crate::roll_table::TableRoll;
 use eframe::egui;
 use splat::content::loot::Loot;
-pub(crate) use splat_session_records::rewards::{Holder, place};
+pub use splat_session_records::rewards::{Holder, place};
 #[cfg(test)]
 pub(crate) use splat_session_records::rewards::{Rewards, rewards};
 use splat_session_records::rewards::{and_list, holders, note_lines, plain_roll};
@@ -410,4 +410,14 @@ impl Run {
         }
         out.trim_end().to_owned()
     }
+}
+
+/// A loot line's roll in words, `2 × gems`, for a view in any toolkit.
+pub fn plain_roll_words(times: u32, key: &str) -> String {
+    plain_roll(times, key)
+}
+
+/// What a line's rolls came to, `3 and 5`, for a view in any toolkit.
+pub fn found_values(found: &[Found]) -> String {
+    values(found)
 }
