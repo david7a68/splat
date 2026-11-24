@@ -297,46 +297,14 @@ fn technical_details() {
 #[test]
 fn party_bar_holds_through_a_fight() {
     let mut shell = Shell::new("party-bar-crowded", Seed::Campaign);
-    shell.update(|root, _, cx| {
-        let campaign = root.app.campaigns.active_campaign().expect("a campaign");
-        let modules = root.app.campaigns.modules().to_vec();
-        root.app.encounters.refresh_now(&campaign, &modules);
-        let path = root
-            .app
-            .encounters
-            .saved_runs()
-            .iter()
-            .find(|run| run.encounter == crate::fixtures::RUN)
-            .expect("the fixture's saved run")
-            .path
-            .clone();
-        root.app.encounters.open_saved_run(&path, &campaign);
-        root.app.sessions.party_bar = Some(true);
-        // Kestrel is already Bloodied. Two more make three of five; two keep temporary HP.
-        let run = root.app.encounters.run_mut().expect("the run");
-        for (name, damage) in [("Iselle Marrowind", 8), ("Oren Thistlewick", 23)] {
-            let at = run
-                .state
-                .participants
-                .iter()
-                .position(|p| p.name == name)
-                .expect("a party member");
-            let p = &run.state.participants[at];
-            let (hp, max) = (p.hp.map(|hp| hp - damage), p.max_hp);
-            run.run_command(crate::encounter_run::Command::Health(at, hp, max));
-        }
-        root.show_page(Page::Run, cx);
-    });
-    shell.click("Session");
-    assert_eq!(shell.read(|root| root.app.page), Page::Sessions);
-    for _ in 0..400 {
-        if shell.read(|root| root.pages.party.bar_hold.is_some()) {
-            break;
-        }
-        shell.wait(std::time::Duration::from_millis(50));
-        std::thread::sleep(std::time::Duration::from_millis(20));
-    }
+    crowded_fight(&mut shell);
     shell.capture("party-bar-crowded__01-three-bloodied__1200x800");
+    // The items are measured as they are drawn, so the room after them holds the source's
+    // full words, as in egui.
+    assert!(
+        shell.bounds("From the open fight").is_some(),
+        "the source shows in full"
+    );
     let widths = |shell: &mut Shell| {
         shell.read(|root| {
             let hold = root.pages.party.bar_hold.as_ref().expect("a fight's hold");
@@ -371,4 +339,93 @@ fn party_bar_holds_through_a_fight() {
         before, after,
         "the bar holds its level and widths in the fight"
     );
+}
+
+/// The fixture's saved run open with three of five players Bloodied and two with temporary HP,
+/// then the Session page with the party bar shown and its fight's hold made.
+fn crowded_fight(shell: &mut Shell) {
+    shell.update(|root, _, cx| {
+        let campaign = root.app.campaigns.active_campaign().expect("a campaign");
+        let modules = root.app.campaigns.modules().to_vec();
+        root.app.encounters.refresh_now(&campaign, &modules);
+        let path = root
+            .app
+            .encounters
+            .saved_runs()
+            .iter()
+            .find(|run| run.encounter == crate::fixtures::RUN)
+            .expect("the fixture's saved run")
+            .path
+            .clone();
+        root.app.encounters.open_saved_run(&path, &campaign);
+        root.app.sessions.party_bar = Some(true);
+        // Kestrel is already Bloodied. Two more make three of five; two keep temporary HP.
+        let run = root.app.encounters.run_mut().expect("the run");
+        for (name, damage) in [("Iselle Marrowind", 8), ("Oren Thistlewick", 23)] {
+            let at = run
+                .state
+                .participants
+                .iter()
+                .position(|p| p.name == name)
+                .expect("a party member");
+            let p = &run.state.participants[at];
+            let (hp, max) = (p.hp.map(|hp| hp - damage), p.max_hp);
+            run.run_command(crate::encounter_run::Command::Health(at, hp, max));
+        }
+        root.show_page(Page::Run, cx);
+    });
+    shell.click("Session");
+    assert_eq!(shell.read(|root| root.app.page), Page::Sessions);
+    // The party's sheets are read before a frame settles (`Shell::settle`), so the bar shows.
+    assert!(
+        shell.read(|root| root.pages.party.bar_hold.is_some()),
+        "the party bar shows and holds the fight's widths"
+    );
+}
+
+/// When the window is too narrow for every player, `N more` names the rest. It is a keyboard
+/// stop, as each player is reached from the keyboard (egui: `Sense::focusable_noninteractive`).
+#[test]
+fn party_bar_more_takes_keyboard_focus() {
+    let mut shell = Shell::with_size(
+        "party-bar-crowded",
+        Seed::Campaign,
+        gpui::size(gpui::px(700.0), gpui::px(640.0)),
+    );
+    crowded_fight(&mut shell);
+    let more = (1..=5)
+        .map(|n| format!("{n} more"))
+        .find(|words| shell.bounds(words).is_some())
+        .expect("a narrow bar hides a player behind `N more`");
+    // No item is cut: the count ends inside the items' line, which clips.
+    let line = shell.bounds("party-bar-items").expect("the items' line");
+    let count = shell.bounds(&more).expect("the count");
+    assert!(
+        count.right() <= line.right(),
+        "`{more}` is whole: {count:?} inside {line:?}"
+    );
+    let focused = |shell: &mut Shell| {
+        shell.update(|root, window, _| {
+            root.pages
+                .party
+                .more_focus
+                .as_ref()
+                .is_some_and(|focus| focus.is_focused(window))
+        })
+    };
+    let mut presses = 0;
+    while !focused(&mut shell) && presses < 60 {
+        shell.press("tab");
+        presses += 1;
+    }
+    assert!(focused(&mut shell), "Tab reaches `{more}`");
+    // Focus shows the players it hides, as hover does, under the count.
+    let list = shell
+        .bounds("party-bar-more-list")
+        .expect("focus shows the hidden players");
+    assert!(
+        list.top() >= count.bottom(),
+        "the list is under `{more}`: {list:?} {count:?}"
+    );
+    shell.capture("party-bar-crowded__02-more-focused__700x640");
 }

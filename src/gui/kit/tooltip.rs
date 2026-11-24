@@ -13,19 +13,25 @@ pub struct Tip(SharedString);
 
 impl Render for Tip {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        let c = colors();
-        div()
-            .max_w(TOOLTIP_WIDTH)
-            .px(S)
-            .py(XS)
-            .bg(c.raised)
-            .border(HAIRLINE_WIDTH)
-            .border_color(c.rule)
-            .rounded(RADIUS_LAYER)
-            .ty(Type::Small)
-            .text_color(c.text)
-            .child(self.0.clone())
+        tip_box(self.0.clone())
     }
+}
+
+/// The tooltip's box with `words`, for a part that shows the same words while it holds keyboard
+/// focus (GPUI's tooltip shows on hover only).
+pub fn tip_box(words: SharedString) -> gpui::Div {
+    let c = colors();
+    div()
+        .max_w(TOOLTIP_WIDTH)
+        .px(S)
+        .py(XS)
+        .bg(c.raised)
+        .border(HAIRLINE_WIDTH)
+        .border_color(c.rule)
+        .rounded(RADIUS_LAYER)
+        .ty(Type::Small)
+        .text_color(c.text)
+        .child(words)
 }
 
 /// Build a tooltip view of `words` (for `StatefulInteractiveElement::tooltip`).
