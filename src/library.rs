@@ -222,6 +222,9 @@ pub struct Library {
     matches_scope: Option<Scope>,
     scope_counts: Option<(Scope, Vec<(Section, usize)>)>,
     confirm_unregister: Option<Module>,
+    /// The unregister confirmation's sentence of the campaign's entries that use the package,
+    /// read once as it opens (it reads every package from disk).
+    unregister_users: Option<String>,
     new_place: Option<usize>,
     /// A saved note's owner folder, so other pages can read it again.
     pub content_changed: Option<PathBuf>,

@@ -358,6 +358,7 @@ pub struct TextEditor {
     handle: Option<EditorHandle>,
     ty: Option<Type>,
     markdown: bool,
+    read_only: bool,
 }
 
 /// A text editor's state that the caller keeps (`TextEditor::handle`), so the caller can read and
@@ -451,7 +452,14 @@ impl TextEditor {
             handle: None,
             ty: None,
             markdown: false,
+            read_only: false,
         }
+    }
+
+    /// The words can be read, selected and copied, but not changed (a built-in entry's source).
+    pub fn read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
     }
 
     /// The words are Markdown source (a note): styled where they are typed, as the Reader sets
@@ -560,6 +568,7 @@ impl RenderOnce for TextEditor {
             .child({
                 let area = Textarea::new(&input)
                     .appearance(false)
+                    .readonly(self.read_only)
                     .aria_label(name.clone())
                     .h_full();
                 // gpui-component sets its own small size; a chosen type replaces it.

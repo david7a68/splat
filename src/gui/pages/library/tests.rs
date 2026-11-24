@@ -83,6 +83,28 @@ fn library_browse() {
     open_row(&mut shell, "Wizard · Class");
     assert_eq!(open_name(&mut shell).as_deref(), Some("Wizard"));
     shell.capture("library-browse__05-class-traits-and-features__1200x800");
+    // A built-in entry's Markdown source reads, but takes no typing.
+    shell.click("Markdown source");
+    assert!(shell.read(|root| root.app.library.source_open()));
+    // The words and the caret: typing would move the caret even when the words go back.
+    let words = |shell: &mut Shell| {
+        shell.update(|root, _, cx| {
+            root.pages
+                .library
+                .editor
+                .as_ref()
+                .map(|(_, handle)| (handle.words(cx).to_string(), handle.caret(cx)))
+        })
+    };
+    shell.click("Markdown editor");
+    let before = words(&mut shell).expect("the editor");
+    shell.type_text("typed");
+    assert_eq!(
+        words(&mut shell).expect("the editor"),
+        before,
+        "the built-in source takes no typing"
+    );
+    assert!(!shell.read(|root| root.app.library.dirty()));
     let mut shell = Shell::with_size("library-browse", Seed::Empty, size(px(960.0), px(640.0)));
     library(&mut shell);
     search(&mut shell, "dragon");
@@ -549,8 +571,13 @@ fn remove_package_in_use() {
     shell.click("Packages");
     shell.click("Manage packages…");
     shell.click(&more);
+    let reads = || crate::library::model::UNREGISTER_READS.with(std::cell::Cell::get);
+    let before = reads();
     shell.click("Unregister…");
     assert!(shell.read(|root| root.app.library.unregister_open()));
+    // The packages are read once as the dialog opens, not on each frame it shows.
+    shell.frame_cost(5);
+    assert_eq!(reads() - before, 1, "the dialog read the packages once");
     shell.capture("remove-package-in-use__01-package-in-use-warning__1200x800");
     // Escape keeps the package.
     shell.press("escape");

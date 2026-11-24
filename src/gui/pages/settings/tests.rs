@@ -14,6 +14,36 @@ fn settings(name: &str, seed: Seed) -> Shell {
     shell
 }
 
+/// The state the `settings` scenario's campaign steps start from (egui ran them after the
+/// account steps): the paused run read, the cookie typed, and the account connected and then
+/// lost, so the party's sync stopped and the rail says so.
+fn after_the_account_steps(shell: &mut Shell) {
+    for _ in 0..10 {
+        if !shell.read(|root| root.app.encounters.busy()) {
+            break;
+        }
+        shell.update(|root, _, _| root.app.encounters.wait_for_load());
+    }
+    shell.update(|root, _, _| root.app.settings.simulate(Account::Connected));
+    // Combat sync starts once the party's sheet is read (on a thread).
+    for _ in 0..200 {
+        if shell.read(|root| root.app.party.combat.enabled) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    shell.update(|root, _, _| {
+        root.app.settings.simulate(Account::NotConnected);
+        root.app.settings.set_cookie("synthetic-not-a-real-cookie");
+    });
+    shell.settle();
+    assert!(
+        shell.read(|root| root.app.party.sync_stopped),
+        "the party's sync stopped with the account"
+    );
+}
+
 /// The connect form: Connect waits for a cookie and says why; a typed cookie makes it the
 /// primary action; each account state has its words.
 #[test]
@@ -28,10 +58,6 @@ fn account_states() {
         "synthetic-not-a-real-cookie"
     );
     shell.capture("settings__03-cookie-entered__1200x800");
-    shell.click("How to get your sign-in cookie");
-    assert!(shell.read(|root| root.pages.settings.cookie_help_open));
-    shell.capture("settings__14-cookie-help__1200x800");
-    shell.click("How to get your sign-in cookie");
     for (state, step) in [
         (Account::Busy, "05-account-connecting"),
         (Account::Connected, "06-account-connected"),
@@ -52,6 +78,13 @@ fn account_states() {
     shell.click("Connect again");
     assert!(shell.read(|root| root.app.settings.signing_in_again()));
     assert!(shell.bounds("Paste sign-in cookie").is_some());
+    // The cookie's help, last in the scenario, after the account was lost.
+    after_the_account_steps(&mut shell);
+    shell.click("How to get your sign-in cookie");
+    assert!(shell.read(|root| root.pages.settings.cookie_help_open));
+    shell.capture("settings__14-cookie-help__1200x800");
+    shell.click("How to get your sign-in cookie");
+    assert!(!shell.read(|root| root.pages.settings.cookie_help_open));
     let mut shell = Shell::with_size("settings", Seed::Campaign, size(px(960.0), px(640.0)));
     shell.click("Settings");
     shell.update(|root, _, _| root.app.settings.simulate(Account::NotConnected));
@@ -76,7 +109,7 @@ fn account_states() {
 #[test]
 fn edit_details_discard_and_undo() {
     let mut shell = settings("settings", Seed::Campaign);
-    shell.update(|root, _, _| root.app.settings.simulate(Account::NotConnected));
+    after_the_account_steps(&mut shell);
     shell.capture("settings__08-campaign-list__1200x800");
     let first = shell.read(|root| root.app.campaigns.all()[0].clone());
     shell.click(&format!("id:campaign-edit-{}", first.id));
@@ -112,6 +145,7 @@ fn edit_details_discard_and_undo() {
 #[test]
 fn remove_asks_first() {
     let mut shell = settings("settings", Seed::Campaign);
+    after_the_account_steps(&mut shell);
     let second = shell.read(|root| root.app.campaigns.all()[1].clone());
     let count = shell.read(|root| root.app.campaigns.all().len());
     shell.click(&format!("id:campaign-more-{}", second.id));
@@ -189,6 +223,16 @@ fn signed_in_remote_list_and_link() {
     }
     shell.settle();
     assert!(shell.bounds("Add Salt Road from D&D Beyond").is_some());
+    // The added campaign is listed, as Added, with no Add….
+    assert!(
+        shell.read(|root| root
+            .app
+            .dndbeyond
+            .remotes()
+            .find(|remote| remote.name == "The Emberfall Marches")
+            .is_some_and(|remote| root.app.campaigns.is_added(&remote.id))),
+        "The Emberfall Marches is listed and added"
+    );
     assert!(
         shell
             .bounds("Add The Emberfall Marches from D&D Beyond")
