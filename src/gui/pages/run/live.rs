@@ -122,7 +122,8 @@ pub(super) fn render(
         }
     }
     let overflow_line = overflow_note(run, &handle, &spans, list_height);
-    let notice = live_notice(run, cx);
+    let header_sheet = header::sheet_in_header(run, roster_width, window).is_some();
+    let notice = live_notice(run, header_sheet, cx);
     let messages = footer::messages(run, false, cx);
     let compact = hide_panel.then(|| panel::compact_actions(run, cx));
     let main = div()
@@ -245,10 +246,14 @@ fn overflow_note(
 
 /// A notice under the roster that sync or the run left (the header shows a sheet's summary):
 /// its words, `Log` and its close (`live_notice`).
-fn live_notice(run: &crate::encounter_run::Run, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
+fn live_notice(
+    run: &crate::encounter_run::Run,
+    header_sheet: bool,
+    cx: &mut Context<SplatRoot>,
+) -> Option<AnyElement> {
     let c = colors();
     let notice = run.notice.clone()?;
-    if run.notice_summary.is_some() && run.recording_notice.is_none() {
+    if header_sheet {
         return None;
     }
     Some(

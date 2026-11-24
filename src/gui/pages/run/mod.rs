@@ -23,6 +23,8 @@ mod stat_block;
 mod strip;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod captures;
 
 use crate::encounter_run::{Command, Phase, Run, view};
 use crate::gui::{SplatRoot, bridge, kit, theme};

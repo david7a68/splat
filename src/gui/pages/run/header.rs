@@ -384,16 +384,17 @@ fn notice_line(
         ));
     }
     let _ = next_shown;
-    // A sheet's changes: a warning with `Log` and its close, on this line.
-    if let Some(summary) = run
-        .notice_summary
-        .clone()
-        .filter(|_| run.notice.is_some() && run.recording_notice.is_none())
-    {
-        let detail = run.notice.clone().unwrap_or_else(|| summary.clone());
+    // A sheet's changes: a warning with `Log` and its close, on this line in the first of its
+    // forms that fits; with no room, under the roster (`live::live_notice`).
+    let sheet = sheet_in_header(run, width, window);
+    let sheet_room = sheet
+        .as_ref()
+        .map_or(px(0.0), |form| sheet_width(window, form));
+    if let Some(form) = sheet {
+        let detail = run.notice.clone().unwrap_or_else(|| form.clone());
         left = left
             .child(kit::gap(px(0.0)).w(theme::S))
-            .child(sheet_notice(summary, detail, cx));
+            .child(sheet_notice(form, detail, cx));
     }
     if let Some((words, _, full)) = run.turn_reminders() {
         left = left.child(kit::gap(px(0.0)).w(theme::S)).child(
@@ -416,7 +417,40 @@ fn notice_line(
         .gap(theme::L)
         .h(Density::Read.control())
         .child(left)
-        .child(undo(run, undo_room(run, width, window), window, cx))
+        .child(undo(run, undo_room(run, width - sheet_room, window), window, cx))
+}
+
+/// The sheet-change notice's width on the notice line: its mark and words, `Log`, its close
+/// and their gaps.
+fn sheet_width(window: &Window, form: &str) -> Pixels {
+    measure::width(window, Type::Small, &format!("{} {form}", icons::WARN))
+        + measure::width(window, Type::Body, "Log")
+        + Density::Read.control()
+        + theme::L
+        + theme::S * 3.0
+}
+
+/// The form of a sheet's changes that the notice line has room for, beside its notice and
+/// Undo's shortest form (egui `live_header`'s `header_sheet_forms`); none when it shows under
+/// the roster, or when there is no such notice.
+pub(super) fn sheet_in_header(run: &Run, width: Pixels, window: &Window) -> Option<String> {
+    let summary = run
+        .notice_summary
+        .as_ref()
+        .filter(|_| run.notice.is_some() && run.recording_notice.is_none())?;
+    let undo = undo_room(run, px(0.0), window).max(px(0.0));
+    let label = run.undo_label();
+    let shortest = run
+        .undo_word_forms(&label)
+        .into_iter()
+        .next_back()
+        .unwrap_or(label);
+    let reserve = undo.max(undo_width(window, &shortest, false));
+    let notice = width - undo_room(run, width, window) - theme::L;
+    let room = width - notice - reserve - theme::L;
+    crate::encounter_run::notice::header_sheet_forms(summary)
+        .into_iter()
+        .find(|form| sheet_width(window, form) <= room)
 }
 
 /// The room Undo has on the notice line (egui `live_header`'s slot): the line less its notice's

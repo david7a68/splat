@@ -11,6 +11,7 @@ use gpui::{
     Pixels, SharedString, Styled, Window, div, prelude::*, px,
 };
 use crate::design::outcome::plain::PlainLine;
+use std::rc::Rc;
 use splat_party::combat_sync::SyncState;
 use theme::{Density, Type, TypeExt, colors};
 
@@ -1802,10 +1803,28 @@ fn group_row(
         })
         .child(controls);
     // The group's faults, each with its repair; `Cannot join` before them (`member_fault_row`).
-    if let Some(problem) = group.problem.clone() {
-        row = row
-            .child(kit::text(Type::Small, c.muted, "Cannot join"))
-            .child(kit::text(Type::Small, c.result.warning, problem));
+    let faults = run.arrival_faults(group);
+    if !faults.is_empty() {
+        row = row.child(kit::text(Type::Small, c.muted, "Cannot join"));
+        let on_press: Rc<dyn Fn(&kit::messages::Pressed<view::GroupRepair>, &mut Window, &mut gpui::App)> =
+            Rc::new(cx.listener(
+                move |root: &mut SplatRoot, pressed: &kit::messages::Pressed<view::GroupRepair>, _, cx| {
+                    if let Some(press) = pressed.take()
+                        && let Some(run) = root.app.encounters.run_mut()
+                    {
+                        run.group_repair(id, press.id);
+                    }
+                    cx.notify();
+                },
+            ));
+        for (at, line) in faults.into_iter().enumerate() {
+            row = row.child(kit::messages::message(
+                ElementId::Name(format!("run-arrival-fault-{id}-{at}").into()),
+                line,
+                on_press.clone(),
+                true,
+            ));
+        }
     }
     row
 }

@@ -141,6 +141,8 @@ struct Line {
     wraps: bool,
     /// The roll words take a line of their own under it.
     badge_below: bool,
+    /// The line's width as drawn, where the roll words start after it.
+    used: f32,
 }
 
 /// One row's fitted layout.
@@ -307,12 +309,17 @@ fn row_plan(
     let name_line = name_line(scale, fit);
     let name_extra = if name_wraps { scale.name * 1.25 } else { 0.0 };
     let second_height = scale.condition + 2.0;
+    let badge_alone = line.parts.is_empty() && run.row_badge(index).is_some();
     let lines = usize::from(!line.parts.is_empty())
         + usize::from(line.wraps)
-        + usize::from(line.badge_below);
+        + usize::from(line.badge_below || badge_alone);
     let second = second_height * lines as f32;
     let sync = run.row_sync_word(index);
-    let tight = fit != Fit::Natural && line.parts.is_empty() && sync.is_none() && !name_wraps;
+    let tight = fit != Fit::Natural
+        && line.parts.is_empty()
+        && !badge_alone
+        && sync.is_none()
+        && !name_wraps;
     let hairline = f32::from(theme::HAIRLINE_WIDTH);
     let height = if tight {
         view::TIGHT_ROW.min(scale.row).max(even)
@@ -322,7 +329,7 @@ fn row_plan(
         let top = ((scale.row - name_line - second_height) / 2.0).max(1.0);
         scale.row.max(top + name_line + name_extra + second + 3.0)
     };
-    let line_y = if fit != Fit::Natural && !line.parts.is_empty() {
+    let line_y = if fit != Fit::Natural && lines > 0 {
         let content = name_line + name_extra + second;
         ((height - content) / 2.0).max(hairline / 2.0) + name_line / 2.0
     } else {
@@ -521,8 +528,9 @@ fn fit_line(
     let badge_width = badge.as_ref().map_or(0.0, |badge| {
         f32::from(theme::S + measure::width_at(window, Type::Small, None, badge))
     });
+    // R8: the roll words keep their room after the line before a condition does.
     let fits = |parts: &[Part], ty: Type, size: Pixels| {
-        line_width(window, parts, ty, size) <= room
+        line_width(window, parts, ty, size) + badge_width <= room
     };
     let mut bonuses = if fit == Fit::Summary {
         Bonuses::One
@@ -555,9 +563,10 @@ fn fit_line(
         parts,
         ..Line::default()
     };
-    if !fits(&line.parts, role, size) {
+    let bare = |parts: &[Part], ty: Type, size: Pixels| line_width(window, parts, ty, size) <= room;
+    if !bare(&line.parts, role, size) {
         line.small = true;
-        if !fits(&line.parts, Type::Small, px(scale.mark)) {
+        if !bare(&line.parts, Type::Small, px(scale.mark)) {
             line.wraps = true;
         }
     }
@@ -567,9 +576,9 @@ fn fit_line(
         (role, size)
     };
     // R8: the roll words follow the line while they fit there whole; else their own line.
+    line.used = line_width(window, &line.parts, ty, at);
     if badge.is_some() && !line.wraps {
-        let used = line_width(window, &line.parts, ty, at);
-        line.badge_below = used + badge_width > room;
+        line.badge_below = line.used + badge_width > room;
     }
     line
 }
@@ -695,13 +704,19 @@ fn second_line(
             .text_size(if part.mark { px(scale.mark) } else { size })
             .text_color(part.color)
             .whitespace_nowrap()
-            .when(part.underline || part.act == Act::Conditions, |words| {
+            .when(part.underline || matches!(part.act, Act::Conditions | Act::Changes), |words| {
                 words.underline()
             })
             .child(part.words.clone());
         if live && part.act != Act::None {
             let (act, key) = (part.act.clone(), p.key.clone());
-            element = element.cursor_pointer().on_click(on_run(cx, move |run| {
+            element = element.cursor_pointer().on_click(cx.listener(
+                move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
+                cx.stop_propagation();
+                cx.notify();
+                let Some(run) = root.app.encounters.run_mut() else {
+                    return;
+                };
                 let Some(index) = run.state.participants.iter().position(|p| p.key == key) else {
                     return;
                 };
@@ -721,7 +736,8 @@ fn second_line(
                     }
                     Act::None => {}
                 }
-            }));
+            },
+            ));
             let name = match part.act {
                 Act::Initiative => format!("No initiative for {}", p.name),
                 _ => part.words.clone(),
@@ -901,16 +917,26 @@ pub(super) fn row(
         };
         if live && run.state.phase == Phase::Running && (!selected || run.also.is_empty()) {
             let key = p.key.clone();
-            let column = column.cursor_pointer().on_click(on_run(cx, move |run| {
-                let Some(index) = run.state.participants.iter().position(|p| p.key == key) else {
-                    return;
-                };
-                run.live_initiative = Some(index);
-                run.focus_field = Some(index);
-                let total = run.state.participants[index].initiative;
-                run.setup_inputs
-                    .insert(index, total.map_or_else(String::new, |n| n.to_string()));
-            }));
+            // The number's own press: the row under it does not also select (egui drops the
+            // row's click), so the keyboard goes to the field, not to Amount.
+            let column = column.cursor_pointer().on_click(cx.listener(
+                move |root: &mut SplatRoot, _: &ClickEvent, _, cx| {
+                    cx.stop_propagation();
+                    let Some(run) = root.app.encounters.run_mut() else {
+                        return;
+                    };
+                    let Some(index) = run.state.participants.iter().position(|p| p.key == key)
+                    else {
+                        return;
+                    };
+                    run.live_initiative = Some(index);
+                    run.focus_field = Some(index);
+                    let total = run.state.participants[index].initiative;
+                    run.setup_inputs
+                        .insert(index, total.map_or_else(String::new, |n| n.to_string()));
+                    cx.notify();
+                },
+            ));
             kit::target(
                 kit::WithTooltip::with_tooltip(column, "Change initiative"),
                 format!("Change initiative for {}", p.name),
@@ -1092,11 +1118,18 @@ pub(super) fn row(
         } else {
             second_top
         };
+        let after = if own_line {
+            px(0.0)
+        } else {
+            px(layout.line.used) + theme::S
+        };
         div()
             .absolute()
             .top(top)
-            .left(px(columns.name_left))
-            .when(!own_line, |badge| badge.w(second_room).flex().justify_end())
+            .left(px(columns.name_left) + after)
+            .h(condition_line)
+            .flex()
+            .items_center()
             .child(words)
     });
     let mut row = div()

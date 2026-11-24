@@ -449,6 +449,15 @@ pub fn heading_split(whole: f32, title: f32, floor: f32, widest: f32) -> Heading
     }
 }
 
+/// The repair a group's fault in Arrivals offers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GroupRepair {
+    /// Choose the package with the creature (Campaign → Packages).
+    Packages,
+    /// Open the group's editor.
+    EditGroup,
+}
+
 /// An Arrivals heading, fitted for a view that measures its own words (`Run::arrival_heading`).
 pub struct ArrivalHeading {
     /// How the title and the line share the heading.
@@ -4636,6 +4645,64 @@ impl Run {
             totals: totals_text,
             described,
             hover,
+        }
+    }
+
+    /// A group's `Cannot join` faults in Arrivals, each with its repair, as plain lines for a
+    /// view that is not egui (`group_row`'s `member_fault_row` rows): the members' faults, then
+    /// the group's own reasons. When every fault points to packages, the last also offers the
+    /// group editor.
+    pub fn arrival_faults(
+        &self,
+        group: &super::RunGroup,
+    ) -> Vec<design::outcome::plain::PlainLine<GroupRepair>> {
+        use design::outcome::{Choice, FaultMessage, MessageChoice};
+        let own: Vec<super::MemberFault> = group
+            .own_problems()
+            .into_iter()
+            .map(|line| super::MemberFault::new(super::FaultKind::CannotJoin, line.into()))
+            .collect();
+        let faults: Vec<&super::MemberFault> = group.warnings.iter().chain(&own).collect();
+        let packages_only = faults
+            .iter()
+            .all(|fault| fault.kind == super::FaultKind::NotInPackages);
+        faults
+            .iter()
+            .enumerate()
+            .map(|(at, fault)| {
+                let (label, repair) = if fault.kind == super::FaultKind::NotInPackages {
+                    (crate::encounters::PACKAGES_LINK, GroupRepair::Packages)
+                } else {
+                    (crate::encounters::EDIT_GROUP, GroupRepair::EditGroup)
+                };
+                let mut message = FaultMessage::new(*fault)
+                    .choice(Choice::new(MessageChoice::Choice(label), repair));
+                if packages_only && at + 1 == faults.len() && repair == GroupRepair::Packages {
+                    message = message.choice(Choice::new(
+                        MessageChoice::Choice(crate::encounters::EDIT_GROUP),
+                        GroupRepair::EditGroup,
+                    ));
+                }
+                message.into_plain()
+            })
+            .collect()
+    }
+
+    /// A repair pressed under a group's fault in Arrivals.
+    pub fn group_repair(&mut self, group: uuid::Uuid, repair: GroupRepair) {
+        match repair {
+            GroupRepair::Packages => self.wants_packages = true,
+            GroupRepair::EditGroup => {
+                if let Some(path) = self
+                    .groups
+                    .iter()
+                    .flat_map(|groups| groups.iter())
+                    .find(|found| found.id == group)
+                    .map(|found| found.path.clone())
+                {
+                    self.wants_group_editor = Some(path);
+                }
+            }
         }
     }
 

@@ -4439,7 +4439,7 @@ pub fn member_fault_row(
 pub(crate) const EDIT_GROUP: &str = "Edit group";
 
 /// Where a missing creature's package is chosen.
-pub(super) const PACKAGES_LINK: &str = "Campaign → Packages";
+pub(crate) const PACKAGES_LINK: &str = "Campaign → Packages";
 
 /// The group editor's save-row diagnosis: the cached check's one ranked result (E2), owned and
 /// passed through whole (E4). An empty group says its reason beside Save (`Add a creature
