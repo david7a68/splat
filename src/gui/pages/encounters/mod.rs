@@ -20,7 +20,7 @@ mod group;
 mod list;
 mod loot;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 /// This area's GPUI-only state, kept in `root.pages.encounters`.
 #[derive(Default)]

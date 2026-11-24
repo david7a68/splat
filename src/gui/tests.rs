@@ -12,9 +12,11 @@ fn the_shell_at_its_sizes() {
     let mut shell = Shell::new("gpui-shell", Seed::Campaign);
     assert_eq!(shell.read(|root| root.app.page), Page::Encounters);
     assert_eq!(shell.size(), size(px(1200.0), px(800.0)));
+    super::pages::encounters::tests::ready(&mut shell);
     shell.capture("gpui-shell__01-encounters__1200x800");
     let mut shell = Shell::with_size("gpui-shell", Seed::Campaign, size(px(960.0), px(640.0)));
     assert_eq!(shell.size(), size(px(960.0), px(640.0)));
+    super::pages::encounters::tests::ready(&mut shell);
     shell.capture("gpui-shell__01-encounters__960x640");
 }
 
@@ -218,6 +220,7 @@ fn the_kit_parts_work() {
 #[test]
 fn columns_keep_the_widths_the_dm_drags() {
     let mut shell = Shell::new("gpui-columns", Seed::Campaign);
+    super::pages::encounters::tests::ready(&mut shell);
     let saved = |shell: &mut Shell, key: &str| {
         shell.read(|root| {
             root.remembered

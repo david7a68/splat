@@ -96,6 +96,7 @@ fn value(shell: &mut Shell, key: &str, instance: Option<&str>) -> i64 {
 #[test]
 fn no_note_in_play_routes_to_the_rules() {
     let mut shell = Shell::new("trackers-empty", Seed::Campaign);
+    crate::gui::pages::encounters::tests::ready(&mut shell);
     shell.press("ctrl-t");
     assert!(shell.read(|root| root.app.lookup.on_trackers()));
     assert!(

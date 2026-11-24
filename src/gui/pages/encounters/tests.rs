@@ -7,8 +7,9 @@ use gpui::{px, size};
 
 /// The page after its campaign is read (the read runs on a thread of its own): each read in
 /// flight is waited for on its own result, never a clock, and the frames after it take it.
-/// A taken read can start another (new content), so this waits until none is in flight.
-fn ready(shell: &mut Shell) {
+/// A taken read can start another (new content), so this waits until none is in flight. Other
+/// areas' captures over the Encounters page wait on it too.
+pub(crate) fn ready(shell: &mut Shell) {
     shell.update(|root, _, cx| root.show_page(Page::Encounters, cx));
     for _ in 0..10 {
         if !shell.read(|root| root.app.encounters.busy()) {
