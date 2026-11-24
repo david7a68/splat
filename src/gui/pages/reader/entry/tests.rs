@@ -120,7 +120,6 @@ fn shell(name: &str, seed: Seed, window: Size<Pixels>) -> Shell {
 }
 
 const DEFAULT: (f32, f32) = (1200.0, 800.0);
-const SMALL: (f32, f32) = (960.0, 640.0);
 
 fn at((w, h): (f32, f32)) -> Size<Pixels> {
     size(px(w), px(h))
@@ -128,21 +127,7 @@ fn at((w, h): (f32, f32)) -> Size<Pixels> {
 
 #[test]
 fn creature_stat_block_and_its_dice() {
-    for (window, name) in [
-        (DEFAULT, "library-browse__03-creature-stat-block__1200x800"),
-        (SMALL, "library-browse__03-creature-stat-block__960x640"),
-    ] {
-        let mut shell = shell("library-browse", Seed::Empty, at(window));
-        let opened = Rc::new(Cell::new(None));
-        show_entry(
-            &mut shell,
-            READER.min(window.0 - 700.0),
-            builtin("definitions/creatures/adult_black_dragon.md"),
-            "Creature · CR 14 · D&D 2024 · SRD 5.2.1",
-            opened,
-        );
-        shell.capture(name);
-    }
+    // The Library's captures of this entry show the whole page (`library::tests`).
     // A press on an ability's modifier asks for its check; outside a run the preview stream
     // rolls it, and its result is kept for the entry.
     let mut shell = shell("library-browse", Seed::Empty, at(DEFAULT));
@@ -201,19 +186,6 @@ fn creature_stat_block_and_its_dice() {
 }
 
 #[test]
-fn spell_facts() {
-    let mut shell = shell("library-browse", Seed::Empty, at(DEFAULT));
-    show_entry(
-        &mut shell,
-        READER,
-        builtin("definitions/spells/fireball.md"),
-        "Spell · Level 3 · D&D 2024 · SRD 5.2.1",
-        Rc::new(Cell::new(None)),
-    );
-    shell.capture("library-browse__04-spell__1200x800");
-}
-
-#[test]
 fn class_traits_and_features_open_their_entries() {
     let mut shell = shell("library-browse", Seed::Campaign, at(DEFAULT));
     let opened = Rc::new(Cell::new(None));
@@ -224,7 +196,6 @@ fn class_traits_and_features_open_their_entries() {
         "Class · D&D 2024 · SRD 5.2.1",
         opened.clone(),
     );
-    shell.capture("library-browse__05-class-traits-and-features__1200x800");
     let index = shell
         .read(|root| root.app.lookup.index())
         .expect("the campaign's content index loads");

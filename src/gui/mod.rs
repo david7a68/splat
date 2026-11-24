@@ -744,6 +744,8 @@ impl Render for SplatRoot {
             .on_action(cx.listener(Self::toggle_session_list))
             .on_action(cx.listener(Self::dismiss))
             .on_action(cx.listener(Self::save))
+            .on_action(cx.listener(pages::lookup::back))
+            .on_action(cx.listener(pages::lookup::forward))
             .relative()
             .flex()
             .flex_row()

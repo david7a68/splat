@@ -35,19 +35,59 @@ fn scope(shell: &mut Shell, words: &str) {
     shell.click(words);
 }
 
+/// Search the Library for `words`, typed in one input (`steps::search_library`): Clear first
+/// when the field has words.
+fn search(shell: &mut Shell, words: &str) {
+    if shell.bounds("id:library-search-clear").is_some() {
+        shell.click("id:library-search-clear");
+    }
+    shell.click("id:library-search");
+    shell.insert_text(words);
+    assert_eq!(
+        shell.read(|root| root.app.library.search_text().to_owned()),
+        words
+    );
+}
+
+/// Open the list row whose words start with `start`.
+fn open_row(shell: &mut Shell, start: &str) {
+    let row = crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with(start))
+        .unwrap_or_else(|| panic!("no row starts with {start:?}"));
+    shell.click(&row);
+}
+
+fn open_name(shell: &mut Shell) -> Option<String> {
+    shell.read(|root| root.app.library.open_name().map(str::to_owned))
+}
+
 #[test]
 fn library_browse() {
     let mut shell = Shell::new("library-browse", Seed::Empty);
     library(&mut shell);
     assert_eq!(shell.read(|root| root.app.page), Page::Library);
     shell.capture("library-browse__01-first-launch__1200x800");
-    shell.click("id:library-search");
-    shell.type_text("dragon");
+    // A search opens its first result, which is the highlighted row.
+    search(&mut shell, "dragon");
+    assert_eq!(open_name(&mut shell).as_deref(), Some("Dragon Orb"));
     shell.capture("library-browse__02-search-dragon__1200x800");
-    assert_eq!(
-        shell.read(|root| root.app.library.search_text().to_owned()),
-        "dragon"
-    );
+    open_row(&mut shell, "Adult Black Dragon · ");
+    assert_eq!(open_name(&mut shell).as_deref(), Some("Adult Black Dragon"));
+    shell.capture("library-browse__03-creature-stat-block__1200x800");
+    search(&mut shell, "fireball");
+    open_row(&mut shell, "Fireball · ");
+    assert_eq!(open_name(&mut shell).as_deref(), Some("Fireball"));
+    shell.capture("library-browse__04-spell__1200x800");
+    search(&mut shell, "wizard");
+    open_row(&mut shell, "Wizard · Class");
+    assert_eq!(open_name(&mut shell).as_deref(), Some("Wizard"));
+    shell.capture("library-browse__05-class-traits-and-features__1200x800");
+    let mut shell = Shell::with_size("library-browse", Seed::Empty, size(px(960.0), px(640.0)));
+    library(&mut shell);
+    search(&mut shell, "dragon");
+    open_row(&mut shell, "Adult Black Dragon · ");
+    shell.capture("library-browse__03-creature-stat-block__960x640");
     // Round 25 FF5: a duplicate row's folder ends its second line, whole; the words before it
     // shorten (`list::folder_last`). A line with no folder is one part.
     assert_eq!(
@@ -116,16 +156,45 @@ fn library_author() {
     assert!(shell.read(|root| root.app.library.disk_changed()));
     assert!(shell.bounds("Overwrite with my draft").is_some());
     shell.capture("library-author__06-save-conflict__1200x800");
-    // Reload and lose my draft: the file wins, and Discard's Undo stands.
+    // Reload and lose my draft: the file wins, and Discard's Undo gives the draft back.
     shell.click("Reload and lose my draft");
     loaded(&mut shell);
     assert!(!shell.read(|root| root.app.library.disk_changed()));
+    let draft = |shell: &mut Shell| shell.read(|root| root.app.library.draft_text().to_owned());
+    assert!(draft(&mut shell).contains("Edited elsewhere."));
+    shell.click("Undo discard of Ash Exposure");
     assert!(
-        shell
-            .read(|root| root.app.library.draft_text().to_owned())
-            .contains("Edited elsewhere.")
+        draft(&mut shell).contains(SECOND_WORDS.trim()),
+        "Undo gives the draft back"
     );
-    shell.capture("library-author__07-library-draft-discarded__1200x800");
+    // After the reload, the same draft saves.
+    shell.click("id:library-save");
+    loaded(&mut shell);
+    assert!(
+        std::fs::read_to_string(&file)
+            .unwrap()
+            .contains(SECOND_WORDS.trim())
+    );
+    // Overwrite puts the draft on disk in place of the other change.
+    shell.click("Markdown editor");
+    shell.press("ctrl-end");
+    shell.type_text(THIRD_WORDS);
+    let edited = std::fs::read_to_string(&file).unwrap() + "\nEdited again.\n";
+    std::fs::write(&file, edited).unwrap();
+    shell.click("id:library-save");
+    shell.click("Overwrite with my draft");
+    loaded(&mut shell);
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(
+        text.contains(THIRD_WORDS.trim()) && !text.contains("Edited again."),
+        "Overwrite writes the draft: {text}"
+    );
+    // A new draft, discarded: the file's words come back, with Undo.
+    shell.click("Markdown editor");
+    shell.press("ctrl-end");
+    shell.type_text(THIRD_WORDS);
+    shell.click("Discard");
+    assert!(!shell.read(|root| root.app.library.dirty()));
     assert!(
         shell.bounds("Undo discard of Ash Exposure").is_some(),
         "{:?}",
@@ -134,14 +203,7 @@ fn library_author() {
             .filter(|name| name.contains("Undo") || name.contains("footer"))
             .collect::<Vec<_>>()
     );
-    shell.click("Undo discard of Ash Exposure");
-    assert!(
-        shell
-            .read(|root| root.app.library.draft_text().to_owned())
-            .contains(SECOND_WORDS.trim()),
-        "Undo gives the draft back"
-    );
-    shell.click("Discard");
+    shell.capture("library-author__07-library-draft-discarded__1200x800");
     // Manage packages, from the Packages menu.
     shell.click("Packages");
     shell.capture("library-author__08-package-actions__1200x800");
@@ -214,8 +276,9 @@ fn library_author() {
     shell.capture("library-author__11-new-entry-created__1200x800");
 }
 
-const DRAFT_WORDS: &str = " Rangers of the ash line are exempt.";
-const SECOND_WORDS: &str = " Rangers carry spare cloth.";
+const DRAFT_WORDS: &str = "Rangers of the ash line are exempt. ";
+const SECOND_WORDS: &str = "Rangers carry spare cloth. ";
+const THIRD_WORDS: &str = "Cloth wears out in a week. ";
 
 #[test]
 fn library_author_small() {
@@ -252,6 +315,9 @@ fn reload(shell: &mut Shell) {
 fn library_scope() {
     let mut shell = Shell::new("library-scope", Seed::Campaign);
     library(&mut shell);
+    search(&mut shell, "fireball");
+    open_row(&mut shell, "Fireball · Spell · Level 3");
+    assert_eq!(open_name(&mut shell).as_deref(), Some("Fireball"));
     shell.click("id:library-scope");
     shell.capture("library-scope__01-scope-menu__1200x800");
     shell.click("Everything");
@@ -259,15 +325,41 @@ fn library_scope() {
         shell.read(|root| root.app.library.scope()),
         crate::library::Scope::All
     );
+    // A scope change keeps the words and the open spell.
+    assert_eq!(
+        shell.read(|root| root.app.library.search_text().to_owned()),
+        "fireball"
+    );
+    assert_eq!(open_name(&mut shell).as_deref(), Some("Fireball"));
     shell.capture("library-scope__02-scope-everything__1200x800");
+    open_row(&mut shell, "Fireball · Spell · Level 3 · Campaign");
+    shell.capture("library-scope__03-campaign-fireball__1200x800");
     scope(&mut shell, "Ashen Marches");
     shell.click("About Ashen Marches");
     assert_eq!(
-        shell.read(|root| root.app.library.open_name().map(str::to_owned)),
+        open_name(&mut shell),
         Some("Ashen Marches".to_owned()),
         "About opens the package’s manifest"
     );
+    // The empty search names its scope, and Search Everything keeps the words.
+    assert!(
+        shell.bounds("id:library-search-everything").is_some(),
+        "the package's empty search offers Search Everything: {:?}",
+        crate::gui::kit::probe::names()
+    );
     shell.capture("library-scope__04-package-about-title__1200x800");
+    shell.click("id:library-search-everything");
+    assert_eq!(
+        shell.read(|root| root.app.library.scope()),
+        crate::library::Scope::All
+    );
+    assert_eq!(
+        shell.read(|root| root.app.library.search_text().to_owned()),
+        "fireball"
+    );
+    shell.click("id:library-search-clear");
+    scope(&mut shell, "Ashen Marches");
+    shell.click("About Ashen Marches");
     // A section row ends About and lists its entries.
     shell.click("Creatures");
     assert_eq!(
@@ -292,6 +384,7 @@ fn library_file_fault() {
     std::fs::write(&path, &not_text).unwrap();
     library(&mut shell);
     scope(&mut shell, "Ashen Marches");
+    search(&mut shell, "Cinder Wolf");
     let row = crate::gui::kit::probe::names()
         .into_iter()
         .find(|name| name.starts_with("Creatures/Cinder Wolf.md · "))
@@ -331,8 +424,11 @@ fn package_manifest_broken() {
     .unwrap();
     library(&mut shell);
     scope(&mut shell, "Ashen Marches");
-    // The header counts the file; its entries stay.
+    search(&mut shell, "Cinder Wolf");
+    open_row(&mut shell, "Cinder Wolf · ");
+    // The header counts the file; its entries stay and open.
     assert!(shell.bounds("1 file needs fixing").is_some());
+    assert_eq!(open_name(&mut shell).as_deref(), Some("Cinder Wolf"));
     shell.capture("package-manifest-broken__01-manifest-invalid-library-keeps-entries__1200x800");
     shell.click("1 file needs fixing");
     shell.capture("package-manifest-broken__01b-issues-menu__1200x800");
@@ -346,12 +442,30 @@ fn package_manifest_broken() {
     );
 }
 
+/// Scenario `library-to-encounter`: an encounter draft open, a creature copied from the Library
+/// into the campaign, and the copy added to the draft.
 #[test]
 fn library_to_encounter_copy() {
     let mut shell = Shell::new("library-to-encounter", Seed::Campaign);
+    shell.update(|root, _, cx| root.show_page(Page::Encounters, cx));
+    for _ in 0..10 {
+        if !shell.read(|root| root.app.encounters.busy()) {
+            break;
+        }
+        shell.update(|root, _, _| root.app.encounters.wait_for_load());
+    }
+    shell.click("New encounter");
+    shell.type_text("Deep Ford");
+    assert_eq!(
+        shell.read(|root| root.app.encounters.draft_name()),
+        Some("Deep Ford".to_owned())
+    );
+    shell.capture("library-to-encounter__01-draft-open__1200x800");
     library(&mut shell);
-    scope(&mut shell, "Ashen Marches");
-    shell.click("Ash Wraith · Creature · CR 1");
+    search(&mut shell, "aboleth");
+    open_row(&mut shell, "Aboleth · ");
+    assert_eq!(open_name(&mut shell).as_deref(), Some("Aboleth"));
+    shell.capture("library-to-encounter__02-library-entry__1200x800");
     shell.click("Copy to…");
     assert!(
         shell.read(|root| root.app.copy_dialog.is_some()),
@@ -370,7 +484,19 @@ fn library_to_encounter_copy() {
         shell.wait(std::time::Duration::from_millis(50));
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    shell.capture("library-to-encounter__02-library-entry__1200x800");
+    // The dialog opens with the copy's name selected: typing replaces it.
+    shell.type_text("Deep Aboleth");
+    assert_eq!(
+        shell.read(|root| root
+            .app
+            .copy_dialog
+            .as_ref()
+            .map(|dialog| dialog.name().to_owned())),
+        Some("Deep Aboleth".to_owned()),
+        "the name field holds the keyboard, its words selected"
+    );
+    shell.press("ctrl-a");
+    shell.type_text("Aboleth");
     shell.click("Create copy");
     assert!(
         shell.read(|root| root
@@ -380,9 +506,34 @@ fn library_to_encounter_copy() {
             .is_some_and(|dialog| dialog.completed().is_some())),
         "Create copy writes the copy"
     );
+    // The Library reads the copy in; the list behind the dialog shows both Aboleths.
+    loaded(&mut shell);
+    assert!(
+        shell.bounds("Add to Deep Ford").is_some(),
+        "the copy can go to the open draft: {:?}",
+        crate::gui::kit::probe::names()
+    );
     shell.capture("library-to-encounter__03-copied__1200x800");
-    shell.click("Close");
+    let before = shell.read(|root| {
+        root.app
+            .encounters
+            .roster_names()
+            .map_or(0, |names| names.len())
+    });
+    shell.click("Add to Deep Ford");
     assert!(shell.read(|root| root.app.copy_dialog.is_none()));
+    shell.update(|root, _, cx| root.show_page(Page::Encounters, cx));
+    shell.settle();
+    assert_eq!(
+        shell.read(|root| root
+            .app
+            .encounters
+            .roster_names()
+            .map_or(0, |names| names.len())),
+        before + 1,
+        "the copy joins the draft"
+    );
+    shell.capture("library-to-encounter__04-copy-in-open-draft-results__1200x800");
 }
 
 #[test]
