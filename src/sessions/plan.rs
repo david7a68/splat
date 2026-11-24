@@ -2268,9 +2268,7 @@ fn log_view(ui: &egui::Ui, run: Uuid, revision: LogRevision, log: &[String]) -> 
     // One row: a `Small` line and the gap after it; the block holds as many as a third of the
     // reader's measure does, and at least the newest entry and the notice.
     let gap = ui.spacing().item_spacing.y;
-    let room = ((design::READER_MEASURE / 3.0 + gap) / (Type::Small.line() + gap))
-        .floor()
-        .max(2.0) as usize;
+    let room = log_room(Type::Small.line(), gap);
     let line = |words: &str| {
         let mut job = egui::text::LayoutJob::simple_singleline(
             words.replace(['\n', '\r'], " "),
@@ -2289,12 +2287,7 @@ fn log_view(ui: &egui::Ui, run: Uuid, revision: LogRevision, log: &[String]) -> 
         .collect();
     let notice = (log.len() > rows.len() || rows.iter().any(|(row, _)| row.elided)).then(|| {
         rows.truncate(room - 1);
-        let words = match log.len() - rows.len() {
-            0 => "Whole run has every line whole.".to_owned(),
-            1 => "Whole run has 1 more line.".to_owned(),
-            more => format!("Whole run has {more} more lines."),
-        };
-        line(&words)
+        line(&log_notice(log.len() - rows.len()))
     });
     let view = Arc::new(LogView { rows, notice });
     ui.data_mut(|data| data.insert_temp(id, (key, view.clone())));
@@ -2885,6 +2878,11 @@ pub struct JourneyPlan {
 }
 
 impl JourneyPlan {
+    /// The plan as names: those the campaign can plan, and those with a row still to come.
+    pub(super) fn of(known: Vec<String>, coming: Vec<String>) -> Self {
+        Self { known, coming }
+    }
+
     /// What `checks::View::planned` asks, by the plan's own rule (`offer_state`).
     pub fn get(&self, name: &str) -> Option<bool> {
         offer_state(
@@ -3232,13 +3230,13 @@ enum TravelUndo {
 /// its Undo, and the plan line's Undo. The length being typed is the Timeline book's.
 #[derive(Default)]
 pub(super) struct Travel {
-    block: checks::State,
+    pub(super) block: checks::State,
     /// The open journey's start on the clock, while the Timeline is as it was: its count of
     /// changes, the event, its place in the list, and the minute.
     start: Option<(u64, String, Option<usize>, Option<u64>)>,
-    focus_length: bool,
+    pub(super) focus_length: bool,
     /// Each journey's last Timeline act, by its event. Leaving the page ends them.
-    done: checks::Results,
+    pub(super) done: checks::Results,
     /// `Plan “<name>”`: the journey, the name and the check it was clicked on, and the note's
     /// Undo, with its order and the refusal of its last Undo. It lasts while the note's words are
     /// what the act left, as every note act's Undo does; a page change keeps it. The one store
@@ -3921,7 +3919,11 @@ impl Sessions {
     /// The open journey's start on the clock, worked out again only when the Timeline changed
     /// or another journey opened.
     /// Also the open event's place in the list, for `checks::settle_length`.
-    fn journey_start(&mut self, book: &Book, open: Option<&str>) -> (Option<usize>, Option<u64>) {
+    pub(super) fn journey_start(
+        &mut self,
+        book: &Book,
+        open: Option<&str>,
+    ) -> (Option<usize>, Option<u64>) {
         let Some(open) = open else {
             return (None, None);
         };
@@ -5262,8 +5264,7 @@ impl Sessions {
         let planned_fights = || projection.planned.iter().map(|&at| &plan.fights[at]);
         let planned_groups = || projection.planned_groups.iter().map(|&at| &plan.groups[at]);
         // While the DM types a scene, the fold holds.
-        let hold =
-            self.scenes.typing || self.scenes.field.as_ref().is_some_and(|field| field.focus);
+        let hold = self.fold_holds();
         let (folded, fold_line) = self.scenes.fold.state(scene_count, hold);
         // Each scene result's place in this frame: its own while that is drawn, else the footer.
         let rows = (!folded).then_some(scenes.as_slice());
@@ -5877,6 +5878,22 @@ impl Sessions {
         measure: fold::Measure,
         hold: bool,
     ) {
+        // The fold settles on the next frame without waiting for input.
+        if self.keep_fold_measure(folded, viewport, measure, hold) {
+            ctx.request_repaint();
+        }
+    }
+
+    /// Keep what a frame measured for the next frame's fold. Folded scenes keep the height they
+    /// had when last shown. Returns whether the fold changes in the next frame, which is then
+    /// due at once.
+    fn keep_fold_measure(
+        &mut self,
+        folded: bool,
+        viewport: f32,
+        measure: fold::Measure,
+        hold: bool,
+    ) -> bool {
         let fold = &mut self.scenes.fold;
         fold.viewport = Some(viewport);
         fold.measure = if folded {
@@ -5884,10 +5901,49 @@ impl Sessions {
         } else {
             measure
         };
-        // The fold settles on the next frame without waiting for input.
-        if !hold && fold.measured() != fold.overflow {
-            ctx.request_repaint();
-        }
+        !hold && fold.measured() != fold.overflow
+    }
+
+    /// While the DM types a scene, the fold holds.
+    fn fold_holds(&self) -> bool {
+        self.scenes.typing || self.scenes.field.as_ref().is_some_and(|field| field.focus)
+    }
+
+    /// The scenes' fold for a view that is not egui's (the GPUI plan): whether they fold now,
+    /// and whether the heading offers `N scenes`.
+    pub(super) fn scene_fold(&mut self, count: usize) -> (bool, bool) {
+        let hold = self.fold_holds();
+        self.scenes.fold.state(count, hold)
+    }
+
+    /// `N scenes` pressed while the scenes were `folded`: they open in place, or close again.
+    pub(super) fn press_scene_fold(&mut self, folded: bool) {
+        self.scenes.fold.open = Some(folded);
+    }
+
+    /// What a view that is not egui's measured in a frame, for the next frame's fold (`Fold`):
+    /// the pane's room for the rows, the closed rows without the scenes, the scenes, the opened
+    /// rows' details, and the next fight still to come (its bottom, and the details and the
+    /// scenes above it). Returns whether the fold changes in the next frame.
+    pub(super) fn note_fold_measure(
+        &mut self,
+        folded: bool,
+        viewport: f32,
+        (closed, scenes, details): (f32, f32, f32),
+        next: Option<(f32, f32, f32)>,
+    ) -> bool {
+        let measure = fold::Measure {
+            closed,
+            scenes,
+            details,
+            next: next.map(|(bottom, details, scenes)| fold::Next {
+                bottom,
+                details,
+                scenes,
+            }),
+        };
+        let hold = self.fold_holds();
+        self.keep_fold_measure(folded, viewport, measure, hold)
     }
 
     /// The plan model for the selected note, built again only when what it reads changed.
@@ -7249,45 +7305,7 @@ impl Sessions {
         rewards: Option<bool>,
     ) -> bool {
         let mut add_rewards = false;
-        // R41 (round 30 review F2): the run's file as the folder says now, with the folder's
-        // cause typed. The kept summary belongs to this run AND this answer: when the answer
-        // changes (the folder comes back, goes, or the file moves), the summary is read again.
-        let found = match (&plan.run_directory, &self.campaign) {
-            (Some(directory), Some(campaign)) => Some(crate::encounter_run::find_run_typed(
-                directory,
-                campaign.id,
-                run,
-            )),
-            _ => None,
-        };
-        let path = found
-            .as_ref()
-            .and_then(|found| found.as_ref().ok())
-            .cloned();
-        if self
-            .fight
-            .as_ref()
-            .is_none_or(|(id, kept, _, _)| *id != run || *kept != found)
-        {
-            let result = match (&found, &self.campaign) {
-                (Some(Ok(path)), Some(campaign)) => {
-                    fight_summary(path, campaign.id).map_err(FightFault::Other)
-                }
-                (Some(Err(crate::encounter_run::FindRunFault::Folder(folder))), _) => {
-                    Err(FightFault::Folder(folder.clone()))
-                }
-                (Some(Err(crate::encounter_run::FindRunFault::File(words))), _) => {
-                    Err(FightFault::Other(words.clone()))
-                }
-                _ => Err(FightFault::Other(
-                    "The run folder is not available.".to_owned(),
-                )),
-            };
-            let revision = result
-                .as_ref()
-                .map_or(0, |summary| log_revision(&summary.log));
-            self.fight = Some((run, found, result, revision));
-        }
+        let path = self.keep_fight(run, plan);
         let Some((_, _, result, revision)) = &self.fight else {
             return false;
         };
@@ -7309,16 +7327,7 @@ impl Sessions {
                 for row in in_party_order(&summary.rows, plan.party) {
                     let first = row.name.split_whitespace().next().unwrap_or(&row.name);
                     let hp = crate::design::fraction(known(row.hp), known(row.max_hp));
-                    let mut detail = format!("{}: {hp} HP", row.name);
-                    if row.temporary_hp > 0 {
-                        detail.push_str(&format!(" · {}", design::temp_hp_text(row.temporary_hp)));
-                    }
-                    if !row.present {
-                        detail.push_str(" · Absent");
-                    }
-                    for condition in &row.conditions {
-                        detail.push_str(&format!(" · {}", condition.words()));
-                    }
+                    let detail = fight_row_detail(row);
                     let mut words = egui::text::LayoutJob::default();
                     let format = |color| egui::TextFormat {
                         font_id: Type::Small.font(ui),
@@ -7404,6 +7413,135 @@ impl Sessions {
             }
         }
         add_rewards
+    }
+
+    /// The open played fight's summary, read again only for another run or another answer of
+    /// its run folder. Returns the run's file, when the folder found it.
+    pub(super) fn keep_fight(&mut self, run: Uuid, plan: &Plan<'_>) -> Option<std::path::PathBuf> {
+        // R41 (round 30 review F2): the run's file as the folder says now, with the folder's
+        // cause typed. The kept summary belongs to this run AND this answer: when the answer
+        // changes (the folder comes back, goes, or the file moves), the summary is read again.
+        let found = match (&plan.run_directory, &self.campaign) {
+            (Some(directory), Some(campaign)) => Some(crate::encounter_run::find_run_typed(
+                directory,
+                campaign.id,
+                run,
+            )),
+            _ => None,
+        };
+        let path = found
+            .as_ref()
+            .and_then(|found| found.as_ref().ok())
+            .cloned();
+        if self
+            .fight
+            .as_ref()
+            .is_none_or(|(id, kept, _, _)| *id != run || *kept != found)
+        {
+            let result = match (&found, &self.campaign) {
+                (Some(Ok(path)), Some(campaign)) => {
+                    fight_summary(path, campaign.id).map_err(FightFault::Other)
+                }
+                (Some(Err(crate::encounter_run::FindRunFault::Folder(folder))), _) => {
+                    Err(FightFault::Folder(folder.clone()))
+                }
+                (Some(Err(crate::encounter_run::FindRunFault::File(words))), _) => {
+                    Err(FightFault::Other(words.clone()))
+                }
+                _ => Err(FightFault::Other(
+                    "The run folder is not available.".to_owned(),
+                )),
+            };
+            let revision = result
+                .as_ref()
+                .map_or(0, |summary| log_revision(&summary.log));
+            self.fight = Some((run, found, result, revision));
+        }
+        path
+    }
+}
+
+/// A player's whole line in a played fight's block: name, HP, temporary HP, absence and
+/// conditions (the cell's hover).
+fn fight_row_detail(row: &crate::encounter_run::FightRow) -> String {
+    let known = |n: Option<i64>| n.map_or_else(|| "?".to_owned(), |n| n.to_string());
+    let hp = crate::design::fraction(known(row.hp), known(row.max_hp));
+    let mut detail = format!("{}: {hp} HP", row.name);
+    if row.temporary_hp > 0 {
+        detail.push_str(&format!(" · {}", design::temp_hp_text(row.temporary_hp)));
+    }
+    if !row.present {
+        detail.push_str(" · Absent");
+    }
+    for condition in &row.conditions {
+        detail.push_str(&format!(" · {}", condition.words()));
+    }
+    detail
+}
+
+/// One player of a played fight's block, for a view that is not egui's: the first name, HP and
+/// its max, temporary HP, and the whole line (`fight_row_detail`).
+pub struct FightCell {
+    pub first: String,
+    pub hp: Option<i64>,
+    pub max: Option<i64>,
+    pub temp: i64,
+    pub detail: String,
+}
+
+/// The played fight's players in the party's order, as the block lists them.
+pub(super) fn fight_cells(
+    summary: &crate::encounter_run::FightSummary,
+    party: &[Uuid],
+) -> Vec<FightCell> {
+    in_party_order(&summary.rows, party)
+        .into_iter()
+        .map(|row| FightCell {
+            first: row
+                .name
+                .split_whitespace()
+                .next()
+                .unwrap_or(&row.name)
+                .to_owned(),
+            hp: row.hp,
+            max: row.max_hp,
+            temp: row.temporary_hp,
+            detail: fight_row_detail(row),
+        })
+        .collect()
+}
+
+/// The plain line of a played fight's fault, as its block says it (`fight_block`), for a view
+/// that is not egui's: the folder's cause in Encounters' words and tone (R41), or that the run
+/// cannot be read.
+pub(super) fn fight_fault_line(fault: &FightFault) -> design::outcome::plain::PlainLine<()> {
+    match fault {
+        FightFault::Folder(folder) => {
+            let fault = PlanFault::Toned(as_sentence(&folder.message()), folder.severity());
+            FaultMessage::new(&fault).into_plain()
+        }
+        FightFault::Other(error) => {
+            let words = as_sentence(&format!("This fight’s run cannot be read. {error}"));
+            Notice::new(words).into_plain()
+        }
+    }
+}
+
+/// How many Log lines a played fight's block holds (`log_view`): as many as a third of the
+/// reader's measure, each a line and the gap after it, and at least the newest entry and the
+/// notice.
+pub fn log_room(line: f32, gap: f32) -> usize {
+    ((design::READER_MEASURE / 3.0 + gap) / (line + gap))
+        .floor()
+        .max(2.0) as usize
+}
+
+/// The Log's last line when it leaves entries out or cuts one: what Whole run has.
+pub fn log_notice(left_out: usize) -> String {
+    match left_out {
+        0 => "Whole run has every line whole.".to_owned(),
+        1 => "Whole run has 1 more line.".to_owned(),
+        more => format!("Whole run has {more} more lines."),
     }
 }
 

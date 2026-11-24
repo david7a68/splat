@@ -6,7 +6,8 @@ use crate::visual_tests::fixture::Seed;
 use gpui::{px, size};
 use std::fs;
 
-const ROAD: &str = "# Road\n\n## On the road\n\n<!-- splat:rolls key=road dice=1d20 per=day -->\n\n| d20 | On the road |\n| --- | --- |\n| 1-14 | Nothing stirs. |\n| 15-17 | [[Bridge Ambush]] waits by the old quarry gate, where the road narrows between walls of loose stone. |\n| 18-20 | A toll gang blocks the way: [[Shrine of Cinders]]. |\n";
+/// A road table: a Bridge Ambush on 15-17, a toll gang (Shrine of Cinders) on 18-20.
+pub(crate) const ROAD: &str = "# Road\n\n## On the road\n\n<!-- splat:rolls key=road dice=1d20 per=day -->\n\n| d20 | On the road |\n| --- | --- |\n| 1-14 | Nothing stirs. |\n| 15-17 | [[Bridge Ambush]] waits by the old quarry gate, where the road narrows between walls of loose stone. |\n| 18-20 | A toll gang blocks the way: [[Shrine of Cinders]]. |\n";
 
 fn events(shell: &mut Shell) -> Vec<crate::timeline::Event> {
     shell.read(|root| root.app.timeline.events.clone())
@@ -145,20 +146,15 @@ fn a_journeys_checks() {
         fs::write(campaign.path.join("Road.md"), ROAD).unwrap();
         root.app.lookup.refresh();
     });
-    // The content is read in the background in real time: up to 20 s while the suite runs.
-    for _ in 0..400 {
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        shell.wait(std::time::Duration::from_millis(100));
-        let tables = shell.read(|root| {
-            root.app
-                .lookup
-                .index()
-                .is_some_and(|index| !index.loot_sources().tables.is_empty())
-        });
-        if tables {
-            break;
-        }
-    }
+    crate::gui::pages::trackers::tests::read_content_again(&mut shell);
+    assert!(
+        shell.read(|root| root
+            .app
+            .lookup
+            .index()
+            .is_some_and(|index| !index.loot_sources().tables.is_empty())),
+        "the road's table is read"
+    );
     shell.click("Timeline");
     shell.settle();
     first_day(&mut shell);
@@ -210,4 +206,166 @@ fn a_journeys_checks() {
         event(&mut shell).checks.is_empty(),
         "Clear takes the result"
     );
+}
+
+/// The Add strip keeps Fight and Long rest on its line; when the line has no room for every
+/// kind, the rarer ones share `More Add actions` (egui `hanging_add_strip`).
+#[test]
+fn the_add_strip_shares_more_when_short() {
+    let mut wide = Shell::new("timeline-add-strip", Seed::Campaign);
+    wide.click("Timeline");
+    assert!(wide.bounds("Add Day").is_some(), "every kind fits at 1200");
+    assert!(wide.bounds("More Add actions").is_none());
+    let mut shell = Shell::with_size(
+        "timeline-add-strip",
+        Seed::Campaign,
+        size(px(960.0), px(640.0)),
+    );
+    shell.click("Timeline");
+    shell.press("ctrl-k");
+    assert!(
+        shell.read(|root| root.app.lookup.open),
+        "Lookup beside the page"
+    );
+    for kept in ["Add Fight", "Add Long rest"] {
+        assert!(shell.bounds(kept).is_some(), "{kept} stays on the line");
+    }
+    assert!(shell.bounds("Add Day").is_none(), "Day goes to More");
+    shell.click("More Add actions");
+    shell.capture("timeline-add-strip__01-more-add-actions__960x640");
+    let before = events(&mut shell).len();
+    shell.click("Day");
+    let now = events(&mut shell);
+    assert_eq!(now.len(), before + 1);
+    assert_eq!(now.last().unwrap().kind, Kind::Day, "More adds its kind");
+}
+
+/// Round 29 G142: after a roll, the check's result and its offers scroll least into view.
+#[test]
+fn a_rolled_checks_result_comes_into_view() {
+    let mut shell = Shell::with_size(
+        "timeline-checks-reveal",
+        Seed::Campaign,
+        size(px(1200.0), px(520.0)),
+    );
+    shell.update(|root, _, _| {
+        let campaign = root.app.campaigns.active_campaign().unwrap();
+        fs::write(campaign.path.join("Road.md"), ROAD).unwrap();
+        root.app.lookup.refresh();
+    });
+    crate::gui::pages::trackers::tests::read_content_again(&mut shell);
+    shell.click("Timeline");
+    first_day(&mut shell);
+    shell.click("Add Travel");
+    let journey = events(&mut shell).last().unwrap().id.clone();
+    shell.click("More actions for Travel");
+    shell.click("Roll for encounters");
+    let table = shell.read(|root| {
+        root.app
+            .timeline
+            .events
+            .iter()
+            .find(|e| e.id == journey)
+            .and_then(|e| e.checks_table.clone())
+    });
+    if table.as_deref() == Some("") {
+        shell.click(&format!("id:timeline-checks-{journey}-table-button"));
+        shell.click("On the road");
+    }
+    shell.type_text("6 days");
+    shell.press("enter");
+    // The last day's roll, made as its Roll makes it, while its line is below the form's room.
+    let last = 5 * 24;
+    let clear_of = |shell: &mut Shell| {
+        let label = shell.read(|root| {
+            root.app
+                .timeline
+                .events
+                .iter()
+                .find(|e| e.id == journey)
+                .and_then(|e| e.checks.first().map(|check| check.label.clone()))
+        });
+        label.and_then(|label| shell.bounds(&format!("id:timeline-checks-{journey}-clear-{label}")))
+    };
+    shell.update(|root, _, cx| {
+        let acts = crate::timeline::page::DetailActs {
+            checks: Some(crate::timeline::checks::Act::Roll(vec![last])),
+            ..Default::default()
+        };
+        super::detail::apply(root, &journey, acts, cx);
+    });
+    let clear = clear_of(&mut shell).expect("the result's Clear is drawn");
+    let window = shell.size();
+    assert!(
+        clear.top() >= px(0.0) && clear.bottom() <= window.height,
+        "the result is in view: {clear:?} in {window:?}"
+    );
+    shell.capture("timeline-checks-reveal__01-result-in-view__1200x520");
+}
+
+/// Review of #817: in a window so short that the title line would leave the form no room, the
+/// title line scrolls with the form; with room, it stays above it.
+#[test]
+fn the_title_line_scrolls_with_the_form_when_room_is_short() {
+    for (height, scrolls) in [(800.0, false), (270.0, true)] {
+        let mut shell = Shell::with_size(
+            "timeline-short",
+            Seed::Campaign,
+            size(px(1200.0), px(height)),
+        );
+        shell.click("Timeline");
+        first_day(&mut shell);
+        shell.click("Add Long rest");
+        let title = |shell: &mut Shell| shell.bounds("Title").expect("the Title field").top();
+        let before = title(&mut shell);
+        shell.update(|root, _, cx| {
+            root.pages
+                .timeline
+                .form
+                .set_offset(gpui::point(px(0.0), px(-40.0)));
+            cx.notify();
+        });
+        let after = title(&mut shell);
+        assert_eq!(
+            after < before,
+            scrolls,
+            "at {height}: the Title moved from {before:?} to {after:?}"
+        );
+        if scrolls {
+            shell.capture("timeline-short__01-title-line-scrolls__1200x270");
+        }
+    }
+}
+
+/// Round 26 FG4: a row whose length the clock cannot count says why on hover.
+#[test]
+fn an_uncounted_length_says_why_on_hover() {
+    let mut shell = Shell::new("timeline-uncounted", Seed::Campaign);
+    shell.click("Timeline");
+    first_day(&mut shell);
+    shell.click("Add Travel");
+    let journey = events(&mut shell).last().unwrap().id.clone();
+    shell.update(|root, _, cx| {
+        if let Some(event) = root.app.timeline.event_mut(&journey) {
+            event.duration = "a while".to_owned();
+        }
+        root.app.timeline.touch();
+        root.app.timeline_page.select(None);
+        cx.notify();
+    });
+    let row = shell
+        .bounds(&format!("id:timeline-row-{journey}"))
+        .expect("the journey's row");
+    shell.update(|_, window, cx| {
+        window.dispatch_event(
+            gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                position: row.center(),
+                pressed_button: None,
+                modifiers: gpui::Modifiers::default(),
+            }),
+            cx,
+        );
+    });
+    shell.wait(std::time::Duration::from_secs(1));
+    shell.capture("timeline-uncounted__01-row-hover__1200x800");
 }

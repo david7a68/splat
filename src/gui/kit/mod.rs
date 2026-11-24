@@ -12,6 +12,7 @@
 
 pub mod button;
 pub mod checkbox;
+pub mod comparison;
 pub mod dialog;
 pub mod edge;
 pub mod empty;
@@ -22,6 +23,7 @@ pub mod layer;
 pub mod link;
 pub mod list;
 pub mod markdown;
+pub mod markdown_source;
 pub mod measure;
 pub mod menu;
 pub mod messages;
@@ -30,6 +32,7 @@ pub mod outcome;
 pub mod panes;
 pub mod portrait;
 pub mod quiet_section;
+pub mod reveal;
 pub mod roll_link;
 pub mod scroll;
 pub mod section;
@@ -44,6 +47,7 @@ pub mod virtual_list;
 
 pub use button::{Button, IconButton};
 pub use checkbox::{Checkbox, Switch};
+pub use comparison::DraftComparison;
 pub use dialog::Dialog;
 pub use edge::EdgeColumn;
 pub use empty::empty_state;

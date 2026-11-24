@@ -36,6 +36,7 @@ mod lint;
 mod typing_history_model;
 
 pub use column::*;
+pub use comparison::{Aligned, aligned};
 pub use components::*;
 // Wave 2 callers name the extras through `design`, as they name the components.
 #[allow(unused_imports)]

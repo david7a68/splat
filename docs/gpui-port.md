@@ -201,8 +201,10 @@ says otherwise (`cx.listener` makes them).
 | Icon button | `IconButton::new(id, glyph, name).hint(words).toggled(bool).disabled(bool).on_click(f)` | `⋯`, `×`, a view toggle; never an action that needs words. `disabled` draws it at the disabled opacity and ignores its press |
 | Link (`link`) | `Link::new(id, words)` or `link(id, words)`, then `.small()`, `.wrap()`, `.hint(words)`, `.name(words)`, `.on_click(f)` | A move to another place (a note, a file, a page), never an act that changes data. Accent words, underlined, the focus colour on hover; at least `XL` wide and 24 px high. One line by default; `.wrap()` for words of unknown length (a note's name, a path) |
 | Text field (`field`) | `TextField::new(id, value).placeholder(..).name(..).masked().disabled(bool).width(px).on_change(\|&str, window, cx\|).on_enter(f).on_escape(f).on_blur(f)`, `.focus(bool)` / `.focus_selected(bool)` | One line; two-way sync with your `String` (give the value each frame, take edits in `on_change`). `focus(true)` takes the keyboard with the caret after the words (a field that opens for typing); `focus_selected(true)` takes it with all the words selected (a rename a press opened). Give either for one frame. `on_escape` stops the press there: the window's Escape does not also run |
-| Editor | `TextEditor::new(id, value).placeholder(..).name(..).rows(n).mono().text_type(Type).fill().focus(bool).handle(&EditorHandle).on_change(f)` | Several lines that wrap; `text_type(Type::Prose)` for a note |
-| Editor handle | `EditorHandle::new(placeholder, window, cx)`, `.caret(cx)`, `.set_caret(byte, cx)`, `.words(cx)`, `.show_words(words, window, cx)`, `.focus(window, cx)`, `.focused(window, cx)` | An editor state the page keeps (in its `State`, by what it edits) to read and place the caret and to write at it |
+| Editor | `TextEditor::new(id, value).placeholder(..).name(..).rows(n).mono().text_type(Type).markdown_source().fill().focus(bool).handle(&EditorHandle).on_change(f)` | Several lines that wrap; `text_type(Type::Prose)` for a note; `markdown_source()` styles Markdown where it is typed (`kit::markdown_source`: bold, italic, code fill, faint markup, accent links, a rule under each section heading) |
+| Editor handle | `EditorHandle::new(placeholder, window, cx)`, `.caret(cx)`, `.set_caret(byte, cx)`, `.words(cx)`, `.show_words(words, window, cx)`, `.focus(window, cx)`, `.focused(window, cx)`, `.bounds_at(byte, cx)`, `.caret_bounds(cx)` | An editor state the page keeps (in its `State`, by what it edits) to read and place the caret and to write at it; `bounds_at` places a menu at a character (the note's `/` menu) |
+| Comparison (`comparison`) | `DraftComparison::new(id, draft, disk).source().headings(draft, disk)` | A draft beside its changed file (`design::grouped_draft_comparison`): the count and heading, `Next difference`, aligned rows with the changed ones marked and a missing line hatched |
+| Reveal (`reveal`) | `reveal::revealed(element, &ScrollHandle, Option<Align::{Least, Top}>)`, `reveal::reveal(&handle, align)` | Bring a row into view in a column the page scrolls (`scroll_column_with`) for one frame: a plan row after an add, a check's result after a roll |
 | Field block | `field(caption, Option<help>, Option<error>, control) -> Div`, `help(words) -> Div` | Caption, control, help, error, then `L` |
 | Value block (`value_block`) | `ValueBlock::new(HeadingRow::new(title).note(HeadingNote::..).action(Button), first).field(..).save_row(..).messages(Vec<Message>)` or `.end()` | One settings value: heading row, field, save row, its messages (typed stages: a field comes before its save row) |
 | Fact (`fact`) | `fact::fact_line(label, values)`, `fact::words(label, values)`, `fact::tile_label(..)`, `fact::roll_tile(label, link)` | `Label: a · b` on its own line (no line ends at a dot); a stat tile whose value rolls |
@@ -406,9 +408,11 @@ fn library_browse() {
   (GPUI's `InteractiveText` has neither); a dice link or tile has no right-click mode menu (Shift
   and Ctrl still pick advantage and disadvantage); a wide table's header does not stay at the
   top while its rows scroll; images do not open full size; a lone action tile keeps 208 px
-  instead of the row's width; Markdown source (`markdown_source`: reader faces, folded
-  `splat:` marks, section rules where a note is typed) is not ported, as the kit's
-  `TextEditor` has one font size per editor (`text_type`).
+  instead of the row's width. Markdown source where a note is typed
+  (`TextEditor::markdown_source`) has the reader's weights, italics, code fill, faint markup,
+  accent links and section rules, but one size and face per editor: headings keep the prose
+  size (bold), code keeps the prose face, and a `splat:` mark stays whole (faint) where egui
+  folds it to `⋯` off the caret's line.
 - The Library's Read, World's reader and Lookup draw entries with the entry view
   (`EntryView`). World's note reader is one view for two hosts (`pages::world::reader::Host`:
   World's page and Lookup's compact panel), each with its own `world::Reader`.

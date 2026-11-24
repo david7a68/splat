@@ -22,7 +22,9 @@ use gpui::{
     AnyElement, App, Context, Div, ElementId, Entity, IntoElement, ParentElement, RenderOnce,
     SharedString, Styled, Subscription, Window, div, prelude::*,
 };
-use gpui_component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
+use gpui_component::input::{
+    Input, InputEvent, InputState, TextDecoration, Textarea, TextareaState,
+};
 use std::rc::Rc;
 
 type OnChange = Rc<dyn Fn(&str, &mut Window, &mut App)>;
@@ -35,7 +37,29 @@ pub struct FieldState<S: 'static> {
     on_change: Option<OnChange>,
     /// The caller's handler of focus leaving the field (`TextField::on_blur`).
     on_blur: Option<super::OnAct>,
+    /// The words are Markdown source, styled where they are typed (`TextEditor::markdown_source`).
+    markdown: bool,
+    /// Where each section heading of the source ends (its rule goes under that line).
+    rules: Rc<Vec<usize>>,
     _changes: Subscription,
+}
+
+/// A field whose words can carry decorations (a text editor's Markdown source); a one-line
+/// field carries none.
+trait Decorate {
+    fn decorate(&mut self, decorations: Vec<TextDecoration>, cx: &mut Context<Self>)
+    where
+        Self: Sized;
+}
+
+impl Decorate for InputState {
+    fn decorate(&mut self, _: Vec<TextDecoration>, _: &mut Context<Self>) {}
+}
+
+impl Decorate for TextareaState {
+    fn decorate(&mut self, decorations: Vec<TextDecoration>, cx: &mut Context<Self>) {
+        self.set_decorations(decorations, cx);
+    }
 }
 
 macro_rules! field_state {
@@ -60,6 +84,7 @@ macro_rules! field_state {
                             return;
                         }
                         this.last = now.clone();
+                        this.restyle(&now, cx);
                         if let Some(on_change) = this.on_change.clone() {
                             on_change(&now, window, cx);
                         }
@@ -70,8 +95,21 @@ macro_rules! field_state {
                     last: SharedString::default(),
                     on_change: None,
                     on_blur: None,
+                    markdown: false,
+                    rules: Rc::default(),
                     _changes: changes,
                 }
+            }
+
+            /// Style the words again, when they are Markdown source: once per change of them.
+            fn restyle(&mut self, words: &str, cx: &mut Context<Self>) {
+                if !self.markdown {
+                    return;
+                }
+                let style = super::markdown_source::style(words);
+                self.rules = Rc::new(style.rules);
+                self.input
+                    .update(cx, |input, cx| input.decorate(style.decorations, cx));
             }
 
             /// Take the caller's value: words the program changed replace the field's.
@@ -87,7 +125,8 @@ macro_rules! field_state {
                     self.last = value.clone();
                     let value = value.clone();
                     self.input
-                        .update(cx, |input, cx| input.set_value(value, window, cx));
+                        .update(cx, |input, cx| input.set_value(value.clone(), window, cx));
+                    self.restyle(&value, cx);
                 }
             }
         }
@@ -305,6 +344,7 @@ pub struct TextEditor {
     focus: bool,
     handle: Option<EditorHandle>,
     ty: Option<Type>,
+    markdown: bool,
 }
 
 /// A text editor's state that the caller keeps (`TextEditor::handle`), so the caller can read and
@@ -342,6 +382,18 @@ impl EditorHandle {
     #[cfg(test)]
     pub fn selection(&self, cx: &App) -> std::ops::Range<usize> {
         self.1.read(cx).selected_range()
+    }
+
+    /// Where the character at byte `at` was last drawn, in window coordinates (its line's
+    /// height, no width): a place to open a menu at (the note's `/` menu). `None` while that
+    /// line is not drawn.
+    pub fn bounds_at(&self, at: usize, cx: &App) -> Option<gpui::Bounds<gpui::Pixels>> {
+        self.1.read(cx).range_to_bounds(&(at..at))
+    }
+
+    /// Where the caret was last drawn, in window coordinates.
+    pub fn caret_bounds(&self, cx: &App) -> Option<gpui::Bounds<gpui::Pixels>> {
+        self.bounds_at(self.caret(cx), cx)
     }
 
     /// Whether it has the keyboard.
@@ -385,7 +437,16 @@ impl TextEditor {
             focus: false,
             handle: None,
             ty: None,
+            markdown: false,
         }
+    }
+
+    /// The words are Markdown source (a note): styled where they are typed, as the Reader sets
+    /// them, with a rule under each section heading (`kit::markdown_source`). Every character
+    /// stays, markup included.
+    pub fn markdown_source(mut self) -> Self {
+        self.markdown = true;
+        self
     }
 
     /// Use the caller's state (`EditorHandle`) in place of one kept under the id.
@@ -456,7 +517,15 @@ impl RenderOnce for TextEditor {
         };
         let value = self.value.clone();
         let on_change = self.on_change.clone();
-        state.update(cx, |state, cx| state.follow(&value, on_change, window, cx));
+        let markdown = self.markdown;
+        state.update(cx, |state, cx| {
+            if markdown && !state.markdown {
+                state.markdown = true;
+                let words = state.input.read(cx).value();
+                state.restyle(&words, cx);
+            }
+            state.follow(&value, on_change, window, cx)
+        });
         let input = state.read(cx).input.clone();
         if self.focus {
             let handle = input.read(cx).focus_handle(cx);
@@ -492,9 +561,54 @@ impl RenderOnce for TextEditor {
         if self.fill {
             frame = frame.h_full();
         }
+        if self.markdown {
+            frame = frame
+                .relative()
+                .child(section_rules(input, state.read(cx).rules.clone()));
+        }
         let frame = target(frame, name);
         target(frame, element_name(&self.id))
     }
+}
+
+/// The rule under each section heading of a Markdown source, as the Reader draws it: a hairline
+/// in the rule colour `RULE_GAP` under the heading's last line, across the text. Only headings in
+/// view have a place (`range_to_bounds`), so a frame paints only those.
+fn section_rules(input: Entity<TextareaState>, rules: Rc<Vec<usize>>) -> impl IntoElement {
+    /// The egui source's gap between a heading's line and its rule.
+    const RULE_GAP: gpui::Pixels = gpui::px(3.0);
+    gpui::canvas(
+        |_, _, _| {},
+        move |bounds, _, window, cx| {
+            let input = input.read(cx);
+            let Some(text) = input.text_bounds() else {
+                return;
+            };
+            let color = colors().rule;
+            window.with_content_mask(Some(gpui::ContentMask { bounds }), |window| {
+                for end in rules.iter() {
+                    let Some(line) = input.range_to_bounds(&(*end..*end)) else {
+                        continue;
+                    };
+                    let y = line.bottom() + RULE_GAP;
+                    if y < bounds.top() || y > bounds.bottom() {
+                        continue;
+                    }
+                    window.paint_quad(gpui::fill(
+                        gpui::Bounds::new(
+                            gpui::point(text.left(), y),
+                            gpui::size(text.size.width, HAIRLINE_WIDTH),
+                        ),
+                        color,
+                    ));
+                }
+            });
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
 }
 
 /// The well and edge every input shows: the well colour, a 3:1 field edge, and the focus colour

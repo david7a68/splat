@@ -34,6 +34,43 @@ pub(crate) fn width(window: &Window, ty: Type, words: &str) -> Pixels {
         .width
 }
 
+/// How many lines `words` take in `ty` at `room`, wrapped between words as the text element
+/// wraps them.
+pub(crate) fn lines(window: &Window, ty: Type, words: &str, room: Pixels) -> usize {
+    if words.is_empty() {
+        return 1;
+    }
+    let run = TextRun {
+        len: words.len(),
+        font: Font {
+            family: SharedString::new_static(ty.family()),
+            features: FontFeatures::default(),
+            fallbacks: None,
+            weight: ty.weight(),
+            style: ty.style(),
+        },
+        color: gpui::black(),
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    };
+    window
+        .text_system()
+        .shape_text(
+            SharedString::from(words.to_owned()),
+            ty.size(),
+            &[run],
+            Some(room),
+            None,
+        )
+        .map_or(1, |lines| {
+            lines
+                .iter()
+                .map(|line| line.wrap_boundaries().len() + 1)
+                .sum()
+        })
+}
+
 /// The natural width of a secondary or quiet-at-`M` kit button with these words (and an icon).
 pub(crate) fn button_width(window: &Window, words: &str, icon: bool) -> Pixels {
     width(window, Type::Strong, words)

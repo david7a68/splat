@@ -65,18 +65,21 @@ fn race_in_play(shell: &mut Shell) {
         root.app.lookup.refresh();
         root.app.lookup.files_changed = true;
     });
-    // The content is read again in the background, in real time: up to 20 s while the suite runs.
-    for _ in 0..400 {
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        shell.wait(std::time::Duration::from_millis(100));
-        if shell.read(|root| root.app.trackers.in_play()) {
-            break;
-        }
-    }
+    // The content is read again in the background: wait for that read's result, not a clock.
+    read_content_again(shell);
     assert!(
         shell.read(|root| root.app.trackers.in_play()),
         "the note is in play"
     );
+}
+
+/// The content index read that `Lookup::refresh` started, carried to its end: the frame that
+/// starts the read has run (`update` settles), so this blocks on the read's own result, and the
+/// frames after it take the new index as any frame does. No wall clock, so a loaded machine
+/// only makes it slower.
+pub(crate) fn read_content_again(shell: &mut Shell) {
+    shell.update(|root, _, _| root.app.lookup.wait_for_load());
+    shell.settle();
 }
 
 fn value(shell: &mut Shell, key: &str, instance: Option<&str>) -> i64 {
@@ -134,10 +137,25 @@ fn quick_actions_notices_and_amounts() {
     shell.settle();
     assert_eq!(value(&mut shell, "race_clock", None), 0);
 
-    // A seal raises its notice; Done ends it.
+    // A seal raises its notice; Done ends it. The Due row comes above the action, and the
+    // action stays under the still pointer (egui `ContentScroll::holds_presses`).
+    let before = shell.bounds("Take seal: Party").expect("the action");
     shell.click("Take seal: Party");
     shell.settle();
     assert_eq!(value(&mut shell, "seals", Some("Party")), 1);
+    let after = shell.bounds("Take seal: Party").expect("the action");
+    assert!(
+        (after.top() - before.top()).abs() < px(1.0),
+        "the action stays under the pointer: {before:?} then {after:?}"
+    );
+    // The Due row came above the held action: back to the view's top to reach its Done.
+    shell.update(|root, _, cx| {
+        root.pages
+            .trackers
+            .scroll
+            .set_offset(gpui::point(px(0.0), px(0.0)));
+        cx.notify();
+    });
     assert_eq!(shell.read(|root| root.app.trackers.due()), 1);
     assert!(shell.bounds("Done: First seal for Party").is_some() || shell.bounds("Done").is_some());
     shell.capture("trackers__03-trackers-a-notice__1200x800");

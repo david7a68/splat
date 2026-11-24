@@ -514,21 +514,35 @@ pub(super) fn render(
             column.into_any_element()
         }
     };
-    Some(
-        div()
-            .absolute()
-            .top(L * 2.0)
-            .left(M)
-            .w(MENU_WIDTH)
-            .p(S)
-            .rounded(RADIUS_LAYER)
-            .bg(c.raised)
-            .border(theme::HAIRLINE_WIDTH)
-            .border_color(c.hairline)
-            .shadow_md()
-            .child(content)
-            .into_any_element(),
-    )
+    let layer = div()
+        .w(MENU_WIDTH)
+        .p(S)
+        .rounded(RADIUS_LAYER)
+        .bg(c.raised)
+        .border(theme::HAIRLINE_WIDTH)
+        .border_color(c.hairline)
+        .shadow_md()
+        .child(content);
+    // Under the `/`, or above it when the window has no room below (egui `popup_at`): the
+    // place where the `/` was last drawn. Before the note has drawn it, at the note's top.
+    let words = root
+        .app
+        .sessions
+        .gv_note_words(in_panel)
+        .unwrap_or_default();
+    let place = note::bounds_at(root, in_panel, byte_of(&words, at), cx);
+    Some(match place {
+        Some(place) => gpui::deferred(
+            gpui::anchored()
+                .attach(place, gpui::Anchor::BottomLeft)
+                .anchor(gpui::Anchor::TopLeft)
+                .offset(gpui::point(px(0.0), XS))
+                .child(layer),
+        )
+        .with_priority(1)
+        .into_any_element(),
+        None => layer.absolute().top(L * 2.0).left(M).into_any_element(),
+    })
 }
 
 fn reroll(root: &mut SplatRoot) {

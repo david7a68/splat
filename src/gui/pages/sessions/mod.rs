@@ -45,6 +45,8 @@ pub struct State {
     pub(super) note: note::State,
     /// The New template form just opened: its name field takes the keyboard once.
     pub(super) focus_template_name: bool,
+    /// The plan's scroll and what its last frame measured.
+    pub(super) plan: plan::State,
 }
 
 /// Once, when the root is built.
@@ -417,6 +419,12 @@ pub(crate) fn save_key(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) {
     } else {
         root.app.sessions.gv_save_note();
     }
+}
+
+/// An act of the session plan from outside its rows: an open journey's checks block, which the
+/// Timeline's view draws for the plan (`timeline::checks::Host::Plan`).
+pub(crate) fn travel_act(root: &mut SplatRoot, act: crate::sessions::page::gpui_facade::PlanAct) {
+    plan::act(root, act);
 }
 
 /// The note in the side panel beside another page (`Sessions::notes_panel`).

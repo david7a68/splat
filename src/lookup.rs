@@ -1899,6 +1899,22 @@ impl Lookup {
         self.pending.is_some() || self.checking.is_some()
     }
 
+    /// Block until the index read in flight has its result (its completion signal, never a
+    /// clock), and hand that result to the next `poll`, which takes it as it takes any. A test's
+    /// wait. `false` when no read was in flight.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn wait_for_load(&mut self) -> bool {
+        let Some(rx) = self.pending.take() else {
+            return false;
+        };
+        let (tx, ready) = mpsc::channel();
+        if let Ok(result) = rx.recv() {
+            let _ = tx.send(result);
+        }
+        self.pending = Some(ready);
+        true
+    }
+
     pub fn index(&self) -> Option<Arc<ContentIndex>> {
         self.index.clone()
     }
