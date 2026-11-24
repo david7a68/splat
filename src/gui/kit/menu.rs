@@ -548,3 +548,43 @@ impl RenderOnce for Popover {
             })
     }
 }
+
+/// A status that opens a menu under it (`TitleLine::status`): the page header's
+/// `2 notes need fixing`, whose menu lists each note. The status keeps its icon, word and colour;
+/// the press opens or closes the menu as a `MenuButton`'s does.
+#[derive(IntoElement)]
+pub struct StatusMenu {
+    id: ElementId,
+    status: super::Status,
+    items: Vec<MenuItem>,
+}
+
+impl StatusMenu {
+    pub fn new(id: impl Into<ElementId>, status: super::Status) -> Self {
+        Self {
+            id: id.into(),
+            status,
+            items: Vec::new(),
+        }
+    }
+
+    pub fn item(mut self, item: MenuItem) -> Self {
+        self.items.push(item);
+        self
+    }
+}
+
+impl RenderOnce for StatusMenu {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let open = is_open(&self.id, cx);
+        let id = self.id.clone();
+        let trigger = super::status_link(
+            ElementId::NamedChild(std::sync::Arc::new(self.id.clone()), "trigger".into()),
+            self.status,
+        )
+        .on_click(move |event, window, cx| toggle(&id, event, window, cx));
+        div().flex().flex_col().child(trigger).when(open, |menu| {
+            menu.child(layer(&self.id, None, items(&self.id, self.items)))
+        })
+    }
+}

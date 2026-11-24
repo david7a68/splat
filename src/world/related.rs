@@ -332,3 +332,150 @@ pub fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> Option<G
     }
     go.or(from_other_pages(ui, item, index, &listed))
 }
+
+/// One page in a related list, as data: its place, name and what it is.
+pub struct PageFacts {
+    pub position: usize,
+    pub name: String,
+    pub detail: String,
+}
+
+/// A line from another page: its label, its words and the heading it opens at.
+pub struct LineFacts {
+    pub label: String,
+    pub text: String,
+    pub heading: Option<String>,
+}
+
+/// One kind of page under From other notes: its title, its count of lines, whether it starts
+/// open, and each page with its lines and the count left out.
+pub struct FromGroup {
+    pub title: String,
+    pub count: usize,
+    pub open: bool,
+    pub pages: Vec<(usize, String, Vec<LineFacts>, usize)>,
+}
+
+/// What `related` draws, as data, for a view that is not egui (the GPUI port).
+#[derive(Default)]
+pub struct RelatedFacts {
+    pub here: Vec<PageFacts>,
+    /// Members by kind; the kind's title only when there are several kinds.
+    pub members: Vec<(Option<String>, Vec<PageFacts>)>,
+    pub history: Vec<(Option<String>, PageFacts)>,
+    pub from: Vec<FromGroup>,
+    pub also: Vec<(usize, String)>,
+}
+
+fn page_facts(index: &ContentIndex, position: usize) -> PageFacts {
+    let item = &index.items[position];
+    let detail = match item.summary() {
+        "" if item.entry.kind == "world" => type_label(world_type(&item.entry)),
+        summary => summary.to_owned(),
+    };
+    PageFacts {
+        position,
+        name: index.name_of(item).to_owned(),
+        detail,
+    }
+}
+
+/// What is here, who is part of this, its history, and what other pages say about it, as data.
+pub fn related_facts(item: &Item, index: &ContentIndex) -> RelatedFacts {
+    let mut facts = RelatedFacts::default();
+    let here = index.inside(&item.entry);
+    let mut listed = here.clone();
+    facts.here = here.iter().map(|&at| page_facts(index, at)).collect();
+    let members = index.members(item.entry.id);
+    listed.extend(members);
+    let mut groups: BTreeMap<(u8, String), Vec<usize>> = BTreeMap::new();
+    for &position in members {
+        groups
+            .entry(page_group(&index.items[position]))
+            .or_default()
+            .push(position);
+    }
+    let several = groups.len() > 1;
+    facts.members = groups
+        .into_iter()
+        .map(|((_, title), positions)| {
+            (
+                several.then_some(title),
+                positions.iter().map(|&at| page_facts(index, at)).collect(),
+            )
+        })
+        .collect();
+    let history = index.history_of(item.entry.id);
+    listed.extend(history);
+    facts.history = history
+        .iter()
+        .map(|&at| (date_words(&index.items[at].entry), page_facts(index, at)))
+        .collect();
+    let mentions = index.lines_about(item.entry.id);
+    if mentions.is_empty() {
+        return facts;
+    }
+    let mut names = vec![item.entry.name.to_lowercase()];
+    names.extend(super::aliases(&item.entry).iter().map(|a| a.to_lowercase()));
+    type Pages<'a> = Vec<(usize, Vec<&'a Line>)>;
+    let mut groups: BTreeMap<(u8, String), Pages> = BTreeMap::new();
+    for page in mentions.chunk_by(|a, b| a.source == b.source) {
+        let source = page[0].source;
+        let said = listed.contains(&source);
+        let summary = index.items[source].summary();
+        let lines: Vec<&Line> = page
+            .iter()
+            .filter_map(|&Mention { line, .. }| Some(&index.items[source].lines[line?]))
+            .filter(|line| !line.bare)
+            .filter(|line| !(said && line.label.is_none() && line.text == summary))
+            .collect();
+        if lines.is_empty() {
+            if !said {
+                facts.also.push((source, source_name(index, item, source)));
+            }
+        } else {
+            groups
+                .entry(page_group(&index.items[source]))
+                .or_default()
+                .push((source, lines));
+        }
+    }
+    facts.from = groups
+        .into_iter()
+        .map(|((_, title), pages)| {
+            let count: usize = pages.iter().map(|(_, lines)| lines.len()).sum();
+            FromGroup {
+                title,
+                count,
+                open: count <= OPEN_LINES,
+                pages: pages
+                    .into_iter()
+                    .map(|(source, lines)| {
+                        let more = lines.len().saturating_sub(LINES_PER_PAGE);
+                        let shown = lines
+                            .iter()
+                            .take(LINES_PER_PAGE)
+                            .map(|line| {
+                                let words = line.snippet(&names, LINE_WIDTH);
+                                let (label, text) = match &line.label {
+                                    Some(label) if words.starts_with(&format!("{label}:")) => {
+                                        let (label, text) = words.split_at(label.len() + 1);
+                                        (label.to_owned(), text.to_owned())
+                                    }
+                                    _ => (String::new(), words.clone()),
+                                };
+                                LineFacts {
+                                    label,
+                                    text,
+                                    heading: line.heading.clone(),
+                                }
+                            })
+                            .collect();
+                        (source, source_name(index, item, source), shown, more)
+                    })
+                    .collect(),
+            }
+        })
+        .collect();
+    facts
+}

@@ -23,6 +23,7 @@ pub mod messages;
 pub mod nav;
 pub mod outcome;
 pub mod panes;
+pub mod quiet_section;
 pub mod scroll;
 pub mod status;
 pub mod tabs;
@@ -39,17 +40,18 @@ pub use field::{TextEditor, TextField, field, help};
 pub use link::{Link, link};
 pub use list::{Row, two_line_row};
 pub use markdown::markdown;
-pub use menu::{Dropdown, MenuButton, MenuItem, Popover};
+pub use menu::{Dropdown, MenuButton, MenuItem, Popover, StatusMenu};
 pub use nav::{NavItem, NavToggle};
 pub use outcome::{Message, Tone};
 pub use panes::{Columns, Pane};
+pub use quiet_section::QuietSection;
 pub use scroll::scroll_column;
 pub use status::{Status, status, status_link};
 pub use tabs::Segmented;
 pub use text::{Heading, gap, heading, icon, label, rule, text};
 pub use title::page_header;
 pub use tooltip::WithTooltip;
-pub use virtual_list::virtual_column;
+pub use virtual_list::{measured_column, uniform_column};
 
 use gpui::{IntoElement, ParentElement, SharedString};
 

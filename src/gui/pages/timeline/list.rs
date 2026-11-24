@@ -9,7 +9,7 @@ use crate::timeline::page::{RowTint, RowWords, long_rest_status, short_session};
 use crate::timeline::{Kind, kind_icon};
 use gpui::{
     AnyElement, Context, ElementId, Hsla, IntoElement, ParentElement, ScrollStrategy,
-    SharedString, StyledText, Styled, TextRun, Window, div, prelude::*, px, uniform_list,
+    SharedString, StyledText, Styled, TextRun, Window, div, prelude::*, px,
 };
 
 /// A row's height (egui's `ROW`), and the gap under it.
@@ -55,8 +55,9 @@ pub(crate) fn render(
             .scroll_to_item(row.saturating_sub(1), ScrollStrategy::Top);
     }
     let count = view.rows.len();
-    let list = uniform_list(
+    kit::uniform_column(
         "timeline-list",
+        &root.pages.timeline.list,
         count,
         cx.processor(|root, range: std::ops::Range<usize>, _window, cx| {
             let view = root.app.timeline_page.view(&root.app.timeline);
@@ -82,8 +83,8 @@ pub(crate) fn render(
                 })
                 .collect::<Vec<_>>()
         }),
-    );
-    kit::scroll::virtual_list(list, &root.pages.timeline.list).into_any_element()
+    )
+    .into_any_element()
 }
 
 /// The second line's words from byte `from`, muted, with each status part in its own colour.

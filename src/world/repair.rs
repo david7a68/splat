@@ -285,7 +285,7 @@ impl Fault for RepairFault {
 
 /// What the DM can press in the repair's footer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RepairAct {
+pub enum RepairAct {
     Undo,
 }
 
@@ -353,9 +353,9 @@ impl Repair {
             .map(|(_, reason)| reason.as_str())
     }
 
-    /// `run_open`: an open run owns `Next turn`, the screen's primary action, so Save stays
-    /// secondary.
-    pub fn show(&mut self, ui: &mut egui::Ui, campaign: &Campaign, run_open: bool) -> bool {
+    /// The file on disk, read again: a draft with no changes follows it, and a changed draft
+    /// keeps it for the DM's choice. A failure on the disk ends with any change of the draft.
+    pub fn follow_disk(&mut self, campaign: &Campaign) {
         if let Ok(path) = crate::library::note_path(&campaign.path, &self.path)
             && let Ok(text) = std::fs::read_to_string(path)
             && text != *self.baseline
@@ -380,6 +380,12 @@ impl Repair {
         {
             self.failed = None;
         }
+    }
+
+    /// `run_open`: an open run owns `Next turn`, the screen's primary action, so Save stays
+    /// secondary.
+    pub fn show(&mut self, ui: &mut egui::Ui, campaign: &Campaign, run_open: bool) -> bool {
+        self.follow_disk(campaign);
         // Save's own checks: the state word, its cause and Save's availability all come from them.
         let (problem, line) = refusal(campaign, &self.path, &self.draft);
         // The pane's footer (round 26 FA1): a result with a live Undo (Undo discard or Undo
@@ -390,41 +396,7 @@ impl Repair {
             ("world_repair_footer", &self.path),
             ui.available_width().min(design::LIST_MEASURE),
         );
-        if self.disk.is_none() {
-            let name = self
-                .path
-                .rsplit('/')
-                .next()
-                .unwrap_or(&self.path)
-                .to_owned();
-            if let Some(shown) = self.undos.get(&self.owner()) {
-                messages.kept(shown.outcome(&frame, |undo| {
-                    match undo {
-                        RepairUndo::Discard { .. } => KeptOutcome::Notice(
-                            Notice::new(crate::sentence!("{} draft discarded.", name)),
-                            // `Undo discard of Broken.md`: the name every discarded draft's Undo
-                            // has in the app.
-                            UndoStep::of(Verb::Discard, name.clone()).pressed_as(RepairAct::Undo),
-                        ),
-                        RepairUndo::Reload { .. } => KeptOutcome::Notice(
-                            Notice::new(crate::sentence!(
-                                "Reloaded from disk. Your draft is kept until you edit."
-                            )),
-                            // `Undo reload Broken.md`, the name its discard's Undo has (M0548).
-                            UndoStep::of(Verb::Reload, name.clone()).pressed_as(RepairAct::Undo),
-                        ),
-                    }
-                }));
-            }
-            let fault = match (&problem, self.failure()) {
-                (Some(problem), _) => Some(RepairFault::Refused(problem.clone())),
-                (None, Some(failure)) => Some(RepairFault::NotSaved(failure.to_owned())),
-                (None, None) => None,
-            };
-            if let Some(fault) = &fault {
-                messages.outcome(FaultMessage::new(fault));
-            }
-        }
+        self.footer_lines(&frame, &mut messages, problem.as_deref());
         let paned = messages.pane_editor(ui, |ui, region| {
             self.body(ui, region, campaign, run_open, problem, line)
         });
@@ -446,6 +418,51 @@ impl Repair {
             }
         }
         paned.body
+    }
+
+    /// The pane's footer (round 26 FA1): a result with a live Undo (Undo discard or Undo
+    /// reload), then Save's reason. The comparison of a changed file owns the pane alone.
+    fn footer_lines<'f>(
+        &self,
+        frame: &'f PaneFrame,
+        messages: &mut Messages<'f, RepairAct>,
+        problem: Option<&str>,
+    ) {
+        if self.disk.is_none() {
+            let name = self
+                .path
+                .rsplit('/')
+                .next()
+                .unwrap_or(&self.path)
+                .to_owned();
+            if let Some(shown) = self.undos.get(&self.owner()) {
+                messages.kept(shown.outcome(frame, |undo| {
+                    match undo {
+                        RepairUndo::Discard { .. } => KeptOutcome::Notice(
+                            Notice::new(crate::sentence!("{} draft discarded.", name)),
+                            // `Undo discard of Broken.md`: the name every discarded draft's Undo
+                            // has in the app.
+                            UndoStep::of(Verb::Discard, name.clone()).pressed_as(RepairAct::Undo),
+                        ),
+                        RepairUndo::Reload { .. } => KeptOutcome::Notice(
+                            Notice::new(crate::sentence!(
+                                "Reloaded from disk. Your draft is kept until you edit."
+                            )),
+                            // `Undo reload Broken.md`, the name its discard's Undo has (M0548).
+                            UndoStep::of(Verb::Reload, name.clone()).pressed_as(RepairAct::Undo),
+                        ),
+                    }
+                }));
+            }
+            let fault = match (problem, self.failure()) {
+                (Some(problem), _) => Some(RepairFault::Refused(problem.to_owned())),
+                (None, Some(failure)) => Some(RepairFault::NotSaved(failure.to_owned())),
+                (None, None) => None,
+            };
+            if let Some(fault) = &fault {
+                messages.outcome(FaultMessage::new(fault));
+            }
+        }
     }
 
     /// The pane's body: the title, the file line, then the comparison of a changed file, or the
@@ -599,6 +616,105 @@ impl Repair {
                 self.failed = Some((self.draft.key(), error));
                 false
             }
+        }
+    }
+}
+
+/// The repair as data, for a view that is not egui (the GPUI port).
+pub struct RepairView {
+    /// The file's name, the pane's title.
+    pub file: String,
+    pub path: String,
+    pub text: String,
+    /// The file on disk changed under a changed draft: its text, for the DM's choice.
+    pub disk: Option<String>,
+    /// Why Save would not write, and the line to fix.
+    pub problem: Option<String>,
+    pub line: Option<usize>,
+    pub dirty: bool,
+    /// Save failed on the disk for this draft.
+    pub failed: bool,
+}
+
+impl Repair {
+    /// The repair as it stands, after following its file (`follow_disk`).
+    pub fn view(&mut self, campaign: &Campaign) -> RepairView {
+        self.follow_disk(campaign);
+        let (problem, line) = refusal(campaign, &self.path, &self.draft);
+        RepairView {
+            file: std::path::Path::new(&self.path)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned(),
+            path: self.path.clone(),
+            text: self.draft.as_str().to_owned(),
+            disk: self.disk.clone(),
+            problem,
+            line,
+            dirty: self.dirty(),
+            failed: self.failure().is_some(),
+        }
+    }
+
+    /// The footer's lines as data.
+    pub fn footer_plain(
+        &self,
+        campaign: &Campaign,
+    ) -> Vec<design::outcome::plain::PlainLine<RepairAct>> {
+        let (problem, _) = refusal(campaign, &self.path, &self.draft);
+        let frame = design::outcome::PaneFrame::plain();
+        let mut messages = Messages::new(&frame, "plain", 0.0);
+        self.footer_lines(&frame, &mut messages, problem.as_deref());
+        messages.into_plain()
+    }
+
+    /// The DM's words in the editor: an edit ends both Undo results.
+    pub fn set_text(&mut self, words: &str) {
+        if self.draft.as_str() != words {
+            let _ = self.draft.replace(words);
+            self.undos.owner_changed(&self.owner());
+            self.failed = None;
+        }
+    }
+
+    /// `Save repaired note`. True when it saved.
+    pub fn press_save(&mut self, campaign: &Campaign) -> bool {
+        let (problem, _) = refusal(campaign, &self.path, &self.draft);
+        problem.is_none() && self.dirty() && self.save(campaign)
+    }
+
+    /// `Discard`: the draft goes back to the file, with its Undo.
+    pub fn press_discard(&mut self) {
+        let draft = self.draft.replace(self.baseline.as_str());
+        self.undos.record(RepairUndo::Discard {
+            owner: self.owner(),
+            draft,
+        });
+        self.failed = None;
+    }
+
+    /// The choice after the file changed under the draft. True when an Overwrite saved.
+    pub fn press_choice(
+        &mut self,
+        campaign: &Campaign,
+        choice: design::DiskConflictChoice,
+    ) -> bool {
+        let Some(disk) = self.disk.clone() else {
+            return false;
+        };
+        let (problem, _) = refusal(campaign, &self.path, &self.draft);
+        self.choose(campaign, choice, disk, problem.is_some())
+    }
+
+    /// A footer press: the Undo of Discard or Reload, by its ticket.
+    pub fn press_footer(&mut self, press: design::outcome::Press<RepairAct>) {
+        let Some(ticket) = press.ticket else {
+            return;
+        };
+        if let Ok((undo, ())) = self.undos.undo_by(ticket, |_| Ok::<_, ()>(())) {
+            let _ = self.draft.replace(undo.draft());
+            self.failed = None;
         }
     }
 }

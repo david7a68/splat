@@ -302,7 +302,8 @@ impl RenderOnce for Button {
             button = button.opacity(DISABLED_OPACITY);
         }
         let button = target(button, self.label.clone());
-        // A name that says more than the words (`Add Long rest`) finds it too.
+        // A button whose accessible name says more than its words (`Add Long rest`, `Change
+        // Place`) is found by that name too.
         let button = match self.name.clone().filter(|name| *name != self.label) {
             Some(name) => target(button, name),
             None => button,

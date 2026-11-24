@@ -46,7 +46,7 @@ pub fn kept_in_lookup(lookup: &str, card: &str) -> String {
 }
 
 /// The advice page's row and title: what to check, not what is broken (round 26 FF3, FH1).
-pub(crate) const PROBLEMS_TITLE: &str = "Things to check";
+pub const PROBLEMS_TITLE: &str = "Things to check";
 
 /// What the Things to check page lists, in the words of its sections.
 const PROBLEMS_INTRO: &str = "These lists show notes with a date outside an event, a link to no note, no summary, no links, or a name or sentence on two notes. Splat only lists them. You change the notes.";
@@ -284,8 +284,8 @@ enum CheckAct {
 }
 
 /// What the page's larger part shows.
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-enum View {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum View {
     #[default]
     Reader,
     Questions,
@@ -639,10 +639,9 @@ impl WorldPage {
             self.open_note(id);
         }
         if shown.status_pressed
-            && let Some((path, _)) = index.and_then(|index| index.broken_world.first())
+            && let Some(index) = index
         {
-            self.search.clear();
-            self.open_repair(campaign, path);
+            self.press_unreadable(campaign, index);
         }
         if let Some(kind) = create.take() {
             self.begin_new(kind, index.map(AsRef::as_ref));
@@ -791,18 +790,7 @@ impl WorldPage {
                 self.held_row(ui);
                 if let Some(repair) = &mut self.repair {
                     if repair.show(ui, campaign, self.run_open) {
-                        self.view = View::Reader;
-                        self.selected = repair.entry_id();
-                        self.repaired = self.selected;
-                        self.results
-                            .record(PageKept(crate::world::PageResult::Repaired));
-                        // The repair is the newer result. A change result kept from before the
-                        // note broke has nothing left to undo, and would hide `Note repaired.`.
-                        // Another note's rename keeps its Undo.
-                        self.reader.clear_notice();
-                        self.reader.end_name_change_on(campaign, &repair.path);
-                        self.repair = None;
-                        self.reload = true;
+                        self.repair_saved(campaign);
                     }
                     return;
                 }
@@ -917,17 +905,8 @@ impl WorldPage {
         if let Some(kind) = create.take() {
             self.begin_new(kind, Some(index));
         }
-        match nav {
-            Some(Nav::Item(position)) => {
-                self.selected = Some(index.items[position].entry.id);
-                self.view = View::Reader;
-            }
-            Some(Nav::Missing(words)) => self.ask_lookup = Some(words),
-            Some(Nav::Reload(id)) => {
-                self.reload = true;
-                self.selected = Some(id);
-            }
-            None => {}
+        if let Some(nav) = nav {
+            self.take_nav(nav, index);
         }
     }
 
@@ -1055,32 +1034,10 @@ impl WorldPage {
         reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
     fn unread_pane(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
-        let Some(PageError::Unread(unread)) = &mut self.error else {
+        let Some(fault) = self.unread_view(index, campaign) else {
             return;
         };
-        // A later load that no longer lists the file (fixed, moved or deleted outside Splat)
-        // ends the pane, and a fixed note opens in the reader. After Try again, a file the load
-        // still lists opens again: in the source editor, or here with its new fault.
-        let generation = index.generation();
-        if unread.seen.is_some_and(|seen| seen != generation) {
-            let listed = index
-                .broken_world
-                .iter()
-                .any(|(path, _)| *path == unread.fault.path);
-            if !listed || unread.again {
-                let path = std::mem::take(&mut unread.fault.path);
-                self.error = None;
-                if listed {
-                    self.open_repair(campaign, &path);
-                } else if let Some(item) = index.items.iter().find(|item| item.entry.path == path) {
-                    self.open_note(item.entry.id);
-                }
-                return;
-            }
-        }
-        unread.seen = Some(generation);
-        let fault = unread.fault.clone();
-        design::reader::title(ui, fault.path.rsplit('/').next().unwrap_or(&fault.path));
+        design::reader::title(ui, &fault.file);
         // No editor link: an editor cannot open a file that Splat cannot read either.
         crate::world::folder_file_line(ui, &campaign.path, &fault.path, false);
         // The title and file line name the file, so the error says `this note` (FG6). M0604
@@ -1092,11 +1049,7 @@ impl WorldPage {
             Again,
             Close,
         }
-        let words = format!(
-            "{} {}",
-            fault.pane_headline(),
-            fault.recovery_with_try_again()
-        );
+        let words = fault.words.clone();
         let chosen = at_reader_measure(ui, |ui| {
             PagePlaceholder::new(&crate::world::ReaderFault::Unreadable(words))
                 .choice(Choice::new(MessageChoice::Choice("Try again"), Pane::Again))
@@ -1115,10 +1068,9 @@ impl WorldPage {
         });
         if cancel {
             self.error = None;
-        } else if again && let Some(PageError::Unread(unread)) = &mut self.error {
+        } else if again {
             // Read the folder again first, so the list's cause is current too.
-            unread.again = true;
-            self.reload = true;
+            self.unread_again();
         }
     }
 
@@ -1175,7 +1127,6 @@ impl WorldPage {
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn creation_body(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
-        let mut made = None;
         if let Some(kind) = self.new_kind {
             design::heading(
                 ui,
@@ -1256,12 +1207,7 @@ impl WorldPage {
                 }
             };
             if created {
-                let kind = if kind == "note" {
-                    self.note_type.trim()
-                } else {
-                    kind
-                };
-                made = Some(crate::world::create_entry(campaign, &self.new_name, kind));
+                self.create(campaign);
             }
             // The kept line: Cancel at its start, then the reason, or the file the name makes.
             ui.horizontal(|ui| {
@@ -1300,52 +1246,16 @@ impl WorldPage {
                 crate::lookup::NamesHelp::Marker,
                 &crate::world::new_entry_path(Some(index), &npc.name, "npc"),
             );
-            if choice.copied_marker {
-                // Each press is a new result, ahead of the older one it replaces.
-                self.marker_copied.record(MarkerCopied(npc.name.clone()));
-            }
-            if choice.save {
-                made = Some(crate::world::create_generated(campaign, npc));
-            }
-            if choice.again {
-                self.roll(index);
-            }
-            if choice.discard
-                && let Some(npc) = self.generated.take()
-            {
-                // The copy's result belonged to this card; `Undo discard` does not bring it back.
-                self.marker_copied.owner_changed(&MarkerSlot);
-                self.results
-                    .record(PageKept(crate::world::PageResult::Discarded(
-                        npc.name.clone(),
-                    )));
-                self.discarded_npc = Some((
-                    npc,
-                    std::mem::take(&mut self.generator_problems),
-                    std::mem::take(&mut self.generator_sources),
-                ));
-                self.generated_shown = false;
-                self.error = None;
-            }
-        }
-        match made {
-            Some(Ok(id)) => {
-                self.selected = Some(id);
-                self.view = View::Reader;
-                self.new_kind = None;
-                // A New form's save leaves a held NPC in its row.
-                if self.generated_shown {
-                    self.marker_copied.owner_changed(&MarkerSlot);
-                    self.generated = None;
-                    self.generated_shown = false;
+            for (pressed, act) in [
+                (choice.copied_marker, CardAct::CopiedMarker),
+                (choice.save, CardAct::Save),
+                (choice.again, CardAct::Again),
+                (choice.discard, CardAct::Discard),
+            ] {
+                if pressed {
+                    self.card_act(act, campaign, index);
                 }
-                self.new_name.clear();
-                self.note_type.clear();
-                self.error = None;
-                self.reload = true;
             }
-            Some(Err(error)) => self.error = Some(error.into()),
-            None => {}
         }
         // With no form and no card, the error is the page's content, with its Cancel; under a
         // form or a card it is in the footer (`creation_form`).
@@ -1367,46 +1277,9 @@ impl WorldPage {
 
     /// The two lists of what the notes still need, above the notes themselves.
     fn check_rows(&mut self, ui: &mut egui::Ui) {
-        let Some((_, checks)) = &self.checks else {
-            return;
-        };
-        let rows = [
-            (
-                View::Questions,
-                "Open questions",
-                design::count(checks.questions.len(), "question", "questions"),
-                checks.questions.len(),
-            ),
-            (
-                View::Problems,
-                // Round 26 FF3, FH1: advice, not faults. The header's `needs fixing` is the
-                // only fault count, so this row names suggestions.
-                PROBLEMS_TITLE,
-                design::count(checks.problems(), "suggestion", "suggestions"),
-                checks.problems(),
-            ),
-        ];
-        // A row with nothing left stays while its page is open (FE4), and after the DM leaves
-        // that page until the notes are checked again: the list does not move under the DM, and
-        // the row still shows which page is open.
-        for (view, title, detail, count) in rows {
-            let open = self.view == view;
-            if count == 0 && open && !self.kept_empty.contains(&view) {
-                self.kept_empty.push(view);
-            }
-            let kept = self.kept_empty.contains(&view);
-            let detail = match (count, view) {
-                (0, View::Questions) => "No open questions".to_owned(),
-                (0, _) => "No suggestions".to_owned(),
-                _ => detail,
-            };
-            if (count > 0 || kept) && design::two_line_row(ui, ROW, open, title, &detail).clicked()
-            {
-                self.view = view;
-                self.keep_repair();
-                self.new_kind = None;
-                self.leave_card();
-                self.error = None;
+        for (view, title, detail, open) in self.check_rows_shown() {
+            if design::two_line_row(ui, ROW, open, title, &detail).clicked() {
+                self.press_check_row(view);
             }
         }
     }
@@ -1714,55 +1587,13 @@ impl WorldPage {
             ui.spacing_mut().item_spacing.y = 0.0;
             for &(position, depth) in rows {
                 let entry = &index.items[position].entry;
-                let duplicate = index.duplicate_world.contains_key(&entry.path);
-                let name = if duplicate {
-                    std::path::Path::new(&entry.path)
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .into_owned()
-                } else {
-                    entry.name.clone()
-                };
-                // The note's fault record, the one the header's count and its menu read.
-                let fault = index.note_faults().of_note(position);
-                // A fault's words that do not fit the row whole give way to its short form.
-                let narrow = fault
-                    .and_then(crate::world::NoteFault::narrow_words)
-                    .map(|words| format!("{} {words}", icons::WARN));
-                let detail = if let Some(fault) = fault {
-                    format!("{} {}", icons::WARN, fault.words())
-                } else if entry.kind == "world" {
-                    if index.shares_name(position) {
-                        let file = std::path::Path::new(&entry.path)
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .into_owned();
-                        match crate::world::status(entry) {
-                            "" => file,
-                            status => format!("{file} · {status}"),
-                        }
-                    } else {
-                        [
-                            crate::world::date_words(entry),
-                            Some(crate::world::status(entry).to_owned()),
-                        ]
-                        .into_iter()
-                        .flatten()
-                        .filter(|word| !word.is_empty())
-                        .collect::<Vec<_>>()
-                        .join(" · ")
-                    }
-                } else {
-                    String::new()
-                };
-                let selected = self.view == View::Reader
-                    && self.repair.is_none()
-                    && self.new_kind.is_none()
-                    && !self.card_shown()
-                    && self.error.is_none()
-                    && self.selected == Some(entry.id);
+                let ListRow {
+                    name,
+                    detail,
+                    narrow,
+                    ..
+                } = list_row(index, position, depth);
+                let selected = self.row_selected(entry.id);
                 // A row is set in one step for each level of depth.
                 design::indent(ui, depth, design::Gap::S, |ui| {
                     let response = if detail.is_empty() {
@@ -1906,6 +1737,722 @@ fn question_row(
     });
     design::register_row(ui, row.response.rect);
     row.inner
+}
+
+/// One row of the list of notes, as any view draws it.
+pub struct ListRow {
+    pub position: usize,
+    pub id: Uuid,
+    /// The row's title: the note's name, or its file's name when two notes share it.
+    pub name: String,
+    /// The second line (a fault, a date and status, a file), or empty for a one-line row.
+    pub detail: String,
+    /// The short form of a fault's words, when the whole does not fit.
+    pub narrow: Option<String>,
+    /// Its depth under its group: one `S` step each.
+    pub depth: usize,
+    /// The note's path, on hover.
+    pub path: String,
+}
+
+/// One group of the list: its kind (3 is a folder), its title and its rows.
+pub struct ListGroup {
+    pub folder: bool,
+    pub title: String,
+    pub rows: Vec<ListRow>,
+}
+
+/// What the page's larger part shows now, in the order `show` decides it.
+pub enum Pane {
+    Repair,
+    Unread,
+    /// A creation form, the held NPC's card, or the page's error in place of the body.
+    Creation,
+    Checks(View),
+    /// The note at this place in the index.
+    Note(usize),
+    /// No note open.
+    Empty,
+}
+
+/// A press in the held NPC's card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CardAct {
+    CopiedMarker,
+    Save,
+    Again,
+    Discard,
+}
+
+/// The held NPC's card as data.
+pub struct CardView {
+    pub npc: crate::npc_generator::Generated,
+    pub problems: Vec<crate::npc_generator::TableProblem>,
+    pub sources: Vec<String>,
+    pub save_path: String,
+    /// `<name> is not saved. It is in Lookup. …`, while Lookup keeps its own NPC.
+    pub kept_in_lookup: Option<String>,
+    /// `Copy the marker`'s result shows.
+    pub marker_copied: bool,
+}
+
+/// The unreadable note's pane as data.
+pub struct UnreadView {
+    pub path: String,
+    pub file: String,
+    /// The fault and its recovery, the words of its message.
+    pub words: String,
+    /// The system's own words, in Technical details.
+    pub system: String,
+}
+
+/// The page's view of the World, for a view that is not egui (the GPUI port). Each act here is
+/// the one the egui page runs, which calls it too.
+impl WorldPage {
+    /// The list's search words.
+    pub fn search(&self) -> &str {
+        &self.search
+    }
+
+    pub fn set_search(&mut self, words: &str) {
+        words.clone_into(&mut self.search);
+    }
+
+    /// The page belongs to this campaign: a new one starts the page again (`set_campaign`), and
+    /// a reason line about Lookup's NPC ends with the NPC it explains.
+    pub fn follow_campaign(&mut self, campaign: Uuid) {
+        self.set_campaign(campaign);
+        if self.generated.is_none() {
+            self.lookup_kept = false;
+            self.lookup_npc = None;
+        }
+    }
+
+    /// The checks of the notes, read once per load of the index; `campaign` is the folder the
+    /// repairs read from.
+    pub fn refresh(&mut self, index: &ContentIndex, campaign: &Campaign) {
+        self.refresh_checks(index, |path| {
+            crate::library::note_path(&campaign.path, path)
+                .ok()
+                .map(|file| {
+                    std::fs::read_to_string(file).map_err(|error| FileFault::read(path, &error))
+                })
+        });
+    }
+
+    /// The header's count words: `3 notes`, `2 notes need fixing`, `1 note cannot be read`,
+    /// each when it is not zero.
+    pub fn header_counts(index: &ContentIndex) -> (Option<String>, Option<String>, Option<String>) {
+        let broken = index.broken_world.len();
+        let faults = index.note_faults();
+        let count = faults.notes() + broken;
+        let fixing = faults.listed().len();
+        (
+            (count > 0).then(|| design::count(count, "note", "notes")),
+            (fixing > 0).then(|| design::count(fixing, "note needs fixing", "notes need fixing")),
+            (broken > 0)
+                .then(|| format!("{} cannot be read", design::count(broken, "note", "notes"))),
+        )
+    }
+
+    /// The header's `cannot be read` count: the first such note's repair opens.
+    pub fn press_unreadable(&mut self, campaign: &Campaign, index: &ContentIndex) {
+        if let Some((path, _)) = index.broken_world.first() {
+            self.search.clear();
+            self.open_repair(campaign, path);
+        }
+    }
+
+    /// The page has nothing at all: no note, no search, no form, no NPC and no error.
+    pub fn is_empty(&self, index: &ContentIndex, groups: &WorldGroups) -> bool {
+        index.broken_world.is_empty()
+            && groups.is_empty()
+            && self.search.trim().is_empty()
+            && self.new_kind.is_none()
+            && self.generated.is_none()
+            && self.error.is_none()
+    }
+
+    /// The list's groups and rows for the search words.
+    pub fn list_groups(&self, index: &ContentIndex) -> Vec<ListGroup> {
+        let groups = index.world_groups(&self.search.trim().to_lowercase());
+        groups
+            .iter()
+            .map(|((kind, title), rows)| ListGroup {
+                folder: *kind == 3,
+                title: title.clone(),
+                rows: rows
+                    .iter()
+                    .map(|&(position, depth)| list_row(index, position, depth))
+                    .collect(),
+            })
+            .collect()
+    }
+
+    /// Whether the note's row is the chosen one: the reader shows it, and nothing else holds
+    /// the pane.
+    pub fn row_selected(&self, id: Uuid) -> bool {
+        self.view == View::Reader
+            && self.repair.is_none()
+            && self.new_kind.is_none()
+            && !self.card_shown()
+            && self.error.is_none()
+            && self.selected == Some(id)
+    }
+
+    /// A press on a note's row, or on a link to it in the header's menu.
+    pub fn press_note(&mut self, id: Uuid) {
+        self.open_note(id);
+    }
+
+    /// The two rows of checks above the notes (Open questions, Things to check): each view,
+    /// title, detail and whether it is open. A row with nothing left stays while its page is
+    /// open, and until the notes are checked again.
+    pub fn check_rows_shown(&mut self) -> Vec<(View, &'static str, String, bool)> {
+        let Some((_, checks)) = &self.checks else {
+            return Vec::new();
+        };
+        let rows = [
+            (
+                View::Questions,
+                "Open questions",
+                design::count(checks.questions.len(), "question", "questions"),
+                checks.questions.len(),
+            ),
+            (
+                View::Problems,
+                PROBLEMS_TITLE,
+                design::count(checks.problems(), "suggestion", "suggestions"),
+                checks.problems(),
+            ),
+        ];
+        let mut shown = Vec::new();
+        for (view, title, detail, count) in rows {
+            let open = self.view == view;
+            if count == 0 && open && !self.kept_empty.contains(&view) {
+                self.kept_empty.push(view);
+            }
+            let kept = self.kept_empty.contains(&view);
+            let detail = match (count, view) {
+                (0, View::Questions) => "No open questions".to_owned(),
+                (0, _) => "No suggestions".to_owned(),
+                _ => detail,
+            };
+            if count > 0 || kept {
+                shown.push((view, title, detail, open));
+            }
+        }
+        shown
+    }
+
+    /// A press on a check row: its page becomes the view.
+    pub fn press_check_row(&mut self, view: View) {
+        self.view = view;
+        self.keep_repair();
+        self.new_kind = None;
+        self.leave_card();
+        self.error = None;
+    }
+
+    /// The notes that cannot be read and match the search: path, row words and hover words, and
+    /// whether its repair is open.
+    pub fn broken_rows(&self, index: &ContentIndex) -> Vec<(String, String, String, bool)> {
+        let search = self.search.to_lowercase();
+        index
+            .broken_world
+            .iter()
+            .filter(|(path, _)| path.to_lowercase().contains(&search))
+            .map(|(path, problem)| {
+                let detail = self.broken_details.get(path);
+                let open = self.repair.as_ref().is_some_and(|r| r.path == *path)
+                    || matches!(
+                        &self.error,
+                        Some(PageError::Unread(unread)) if unread.fault.path == *path
+                    );
+                (
+                    path.clone(),
+                    detail.map_or(problem.clone(), |detail| detail.cause.clone()),
+                    detail.map_or(problem.clone(), |detail| detail.hover.clone()),
+                    open,
+                )
+            })
+            .collect()
+    }
+
+    /// Whether the repair of the note at `path`, or its unreadable pane, is open.
+    pub fn repair_open(&self, path: &str) -> bool {
+        self.repair.as_ref().is_some_and(|r| r.path == path)
+            || matches!(
+                &self.error,
+                Some(PageError::Unread(unread)) if unread.fault.path == path
+            )
+    }
+
+    /// The paths of repairs with unsaved changes whose note no longer needs one.
+    pub fn draft_repairs(&self, index: &ContentIndex) -> Vec<String> {
+        self.kept_repairs
+            .iter()
+            .filter(|r| r.dirty() && !index.broken_world.iter().any(|(path, _)| path == &r.path))
+            .map(|r| r.path.clone())
+            .collect()
+    }
+
+    /// What the page's larger part shows.
+    pub fn pane(&self, index: &ContentIndex) -> Pane {
+        if self.repair.is_some() {
+            Pane::Repair
+        } else if matches!(self.error, Some(PageError::Unread(..))) {
+            Pane::Unread
+        } else if self.new_kind.is_some() || self.card_shown() || self.error.is_some() {
+            Pane::Creation
+        } else if self.view != View::Reader {
+            Pane::Checks(self.view)
+        } else {
+            match self.selected.and_then(|id| index.position(id)) {
+                Some(at) => Pane::Note(at),
+                None => Pane::Empty,
+            }
+        }
+    }
+
+    /// The held NPC's name, while its card is not the view: its row above the view.
+    pub fn held_name(&self) -> Option<&str> {
+        self.generated
+            .as_ref()
+            .filter(|_| !self.generated_shown)
+            .map(|npc| npc.name.as_str())
+    }
+
+    /// `Show` on the held NPC's row.
+    pub fn press_show_held(&mut self) {
+        self.show_held();
+    }
+
+    /// A choice of New (`note`, `npc`, `location`, `generate`).
+    pub fn press_new(&mut self, kind: &'static str, index: Option<&ContentIndex>) {
+        self.begin_new(kind, index);
+    }
+
+    /// The creation form's kind, while one is open.
+    pub fn new_kind(&self) -> Option<&'static str> {
+        self.new_kind
+    }
+
+    /// The form's Name and Type words.
+    pub fn new_fields(&self) -> (&str, &str) {
+        (&self.new_name, &self.note_type)
+    }
+
+    pub fn set_new_name(&mut self, words: &str) {
+        words.clone_into(&mut self.new_name);
+    }
+
+    pub fn set_note_type(&mut self, words: &str) {
+        words.clone_into(&mut self.note_type);
+    }
+
+    /// The form's Cancel.
+    pub fn cancel_new(&mut self) {
+        self.new_kind = None;
+    }
+
+    /// Whether a run is open, so a form's commit is not the screen's primary.
+    pub fn run_open(&self) -> bool {
+        self.run_open
+    }
+
+    /// `Create note`, `Create NPC` or `Create location`.
+    pub fn create(&mut self, campaign: &Campaign) {
+        let Some(kind) = self.new_kind else {
+            return;
+        };
+        if self.new_name.trim().is_empty() {
+            return;
+        }
+        let kind = if kind == "note" {
+            self.note_type.trim()
+        } else {
+            kind
+        };
+        let made = crate::world::create_entry(campaign, &self.new_name, kind);
+        self.made(made);
+    }
+
+    /// A new note was made, or not: the made note opens, or the error shows.
+    fn made(&mut self, made: Result<Uuid, String>) {
+        match made {
+            Ok(id) => {
+                self.selected = Some(id);
+                self.view = View::Reader;
+                self.new_kind = None;
+                // A New form's save leaves a held NPC in its row.
+                if self.generated_shown {
+                    self.marker_copied.owner_changed(&MarkerSlot);
+                    self.generated = None;
+                    self.generated_shown = false;
+                }
+                self.new_name.clear();
+                self.note_type.clear();
+                self.error = None;
+                self.reload = true;
+            }
+            Err(error) => self.error = Some(error.into()),
+        }
+    }
+
+    /// The held NPC's card, while it is the view.
+    pub fn card(&self, index: &ContentIndex) -> Option<CardView> {
+        let npc = self.generated.as_ref().filter(|_| self.generated_shown)?;
+        Some(CardView {
+            npc: npc.clone(),
+            problems: self.generator_problems.clone(),
+            sources: self.generator_sources.clone(),
+            save_path: crate::world::new_entry_path(Some(index), &npc.name, "npc"),
+            kept_in_lookup: self
+                .lookup_npc
+                .as_ref()
+                .filter(|_| self.lookup_kept)
+                .map(|name| kept_in_lookup(name, &npc.name)),
+            marker_copied: self
+                .marker_copied
+                .get(&MarkerSlot)
+                .is_some_and(|shown| shown.value().0 == npc.name),
+        })
+    }
+
+    /// A press in the held NPC's card.
+    pub fn card_act(&mut self, act: CardAct, campaign: &Campaign, index: &ContentIndex) {
+        let Some(npc) = self.generated.as_ref().filter(|_| self.generated_shown) else {
+            return;
+        };
+        match act {
+            // Each press is a new result, ahead of the older one it replaces.
+            CardAct::CopiedMarker => self.marker_copied.record(MarkerCopied(npc.name.clone())),
+            CardAct::Save => {
+                let made = crate::world::create_generated(campaign, npc);
+                self.made(made);
+            }
+            CardAct::Again => self.roll(index),
+            CardAct::Discard => {
+                if let Some(npc) = self.generated.take() {
+                    // The copy's result belonged to this card; `Undo discard` does not bring it
+                    // back.
+                    self.marker_copied.owner_changed(&MarkerSlot);
+                    self.results
+                        .record(PageKept(crate::world::PageResult::Discarded(
+                            npc.name.clone(),
+                        )));
+                    self.discarded_npc = Some((
+                        npc,
+                        std::mem::take(&mut self.generator_problems),
+                        std::mem::take(&mut self.generator_sources),
+                    ));
+                    self.generated_shown = false;
+                    self.error = None;
+                }
+            }
+        }
+    }
+
+    /// The page's error words, and whether they stand under a form (in its footer) or in place
+    /// of the body (with Cancel).
+    pub fn error_words(&self) -> Option<(&str, bool)> {
+        match &self.error {
+            Some(PageError::Words(words)) => {
+                Some((words, self.new_kind.is_some() || self.card_shown()))
+            }
+            _ => None,
+        }
+    }
+
+    /// The error's Cancel.
+    pub fn cancel_error(&mut self) {
+        self.error = None;
+    }
+
+    /// The unreadable note's pane. A later load that no longer lists the file ends it, and a
+    /// fixed note opens; after Try again, a file still listed opens again.
+    pub fn unread_view(&mut self, index: &ContentIndex, campaign: &Campaign) -> Option<UnreadView> {
+        let Some(PageError::Unread(unread)) = &mut self.error else {
+            return None;
+        };
+        let generation = index.generation();
+        if unread.seen.is_some_and(|seen| seen != generation) {
+            let listed = index
+                .broken_world
+                .iter()
+                .any(|(path, _)| *path == unread.fault.path);
+            if !listed || unread.again {
+                let path = std::mem::take(&mut unread.fault.path);
+                self.error = None;
+                if listed {
+                    self.open_repair(campaign, &path);
+                } else if let Some(item) = index.items.iter().find(|item| item.entry.path == path) {
+                    self.open_note(item.entry.id);
+                }
+                return None;
+            }
+        }
+        unread.seen = Some(generation);
+        let fault = &unread.fault;
+        Some(UnreadView {
+            path: fault.path.clone(),
+            file: fault
+                .path
+                .rsplit('/')
+                .next()
+                .unwrap_or(&fault.path)
+                .to_owned(),
+            words: format!(
+                "{} {}",
+                fault.pane_headline(),
+                fault.recovery_with_try_again()
+            ),
+            system: fault.system.clone(),
+        })
+    }
+
+    /// The unreadable pane's `Try again`: the folder is read again first.
+    pub fn unread_again(&mut self) {
+        if let Some(PageError::Unread(unread)) = &mut self.error {
+            unread.again = true;
+            self.reload = true;
+        }
+    }
+
+    /// The open repair, for its view.
+    pub fn repair_mut(&mut self) -> Option<&mut crate::world::repair::Repair> {
+        self.repair.as_mut()
+    }
+
+    /// The open repair was saved: the repaired note opens with `Note repaired.`.
+    pub fn repair_saved(&mut self, campaign: &Campaign) {
+        let Some(repair) = self.repair.take() else {
+            return;
+        };
+        self.view = View::Reader;
+        self.selected = repair.entry_id();
+        self.repaired = self.selected;
+        self.results
+            .record(PageKept(crate::world::PageResult::Repaired));
+        // The repair is the newer result. A change result kept from before the note broke has
+        // nothing left to undo, and would hide `Note repaired.`. Another note's rename keeps its
+        // Undo.
+        self.reader.clear_notice();
+        self.reader.end_name_change_on(campaign, &repair.path);
+        self.reload = true;
+    }
+
+    /// A press on a repair row (the list's `Cannot be read` and `Repair drafts`).
+    pub fn press_repair(&mut self, campaign: &Campaign, path: &str) {
+        self.open_repair(campaign, path);
+    }
+
+    /// The checks of the notes, for the checks view.
+    pub fn checks(&self) -> Option<&crate::world::checks::Checks> {
+        self.checks.as_ref().map(|(_, checks)| checks)
+    }
+
+    /// A press in a checks view: a page opens at its heading, or a question is ticked.
+    pub fn press_open(&mut self, index: &ContentIndex, page: usize, heading: Option<String>) {
+        self.open_note(index.items[page].entry.id);
+        self.reader.show_heading(heading);
+    }
+
+    /// Tick the question at this place in Open questions.
+    pub fn press_tick(&mut self, index: &ContentIndex, campaign: &Campaign, place: usize) {
+        self.tick_question(index, campaign, place);
+    }
+
+    /// The footer of the open pane, as plain lines: the reader's for the note at `item`, the
+    /// page's result, the ticks of Open questions, then the trackers' history (`more`).
+    pub fn footer_plain(
+        &mut self,
+        item: Option<&crate::lookup::Item>,
+        index: &ContentIndex,
+        campaign: &Campaign,
+        more: impl for<'f> FnOnce(&'f PaneFrame, &mut Messages<'f, crate::world::FooterAct>),
+    ) -> Vec<design::outcome::plain::PlainLine<crate::world::FooterAct>> {
+        let frame = design::outcome::PaneFrame::plain();
+        let mut messages = Messages::new(&frame, "plain", 0.0);
+        match (item, self.view) {
+            (_, View::Questions) => self.questions_messages(&frame, &mut messages, campaign),
+            (Some(item), _) => {
+                self.reader
+                    .footer(&frame, &mut messages, item, index, Some(campaign));
+                self.page_messages(&frame, &mut messages, Some(item.entry.id));
+            }
+            (None, _) => {
+                self.page_messages(&frame, &mut messages, None);
+                self.reader
+                    .gone_log_messages(&frame, &mut messages, Some(campaign.id));
+            }
+        }
+        more(&frame, &mut messages);
+        messages.into_plain()
+    }
+
+    /// The creation pane's footer: Lookup's kept NPC, the marker's result and the error of the
+    /// last Create or Save.
+    pub fn creation_footer(
+        &self,
+    ) -> Vec<design::outcome::plain::PlainLine<crate::world::FooterAct>> {
+        let frame = design::outcome::PaneFrame::plain();
+        let mut messages: Messages<'_, crate::world::FooterAct> =
+            Messages::new(&frame, "plain", 0.0);
+        let form = self.new_kind.is_some() || self.card_shown();
+        if let Some(npc) = self.generated.as_ref().filter(|_| self.generated_shown) {
+            if let Some(name) = self.lookup_npc.as_ref().filter(|_| self.lookup_kept) {
+                messages.outcome(Notice::new(crate::world::said(&kept_in_lookup(
+                    name, &npc.name,
+                ))));
+            }
+            if let Some(shown) = self
+                .marker_copied
+                .get(&MarkerSlot)
+                .filter(|shown| shown.value().0 == npc.name)
+            {
+                messages.kept(shown.outcome(&frame, |_| {
+                    Said::new(crate::sentence!(
+                        "Copied. Change 1d6 to the number of names."
+                    ))
+                    .into()
+                }));
+            }
+        }
+        if let Some(PageError::Words(error)) = &self.error
+            && form
+        {
+            messages.outcome(FaultMessage::new(&crate::world::ReaderFault::Action(
+                error.clone(),
+            )));
+        }
+        messages.into_plain()
+    }
+
+    /// A footer press in the page's panes: the page's result and ticks are taken here, the
+    /// trackers' by `trackers`, the reader's by the reader.
+    pub fn footer_press_plain(
+        &mut self,
+        press: design::outcome::Press<crate::world::FooterAct>,
+        index: &ContentIndex,
+        campaign: &Campaign,
+        trackers: &mut dyn crate::world::TrackerUi,
+    ) -> Option<crate::world::model::Effect> {
+        let open = self.selected.filter(|_| self.view == View::Reader);
+        match press.id {
+            crate::world::FooterAct::Page => {
+                if let Some(ticket) = press.ticket
+                    && self
+                        .results
+                        .undo_by(ticket, |kept| match kept.0 {
+                            crate::world::PageResult::Discarded(_) => Ok(()),
+                            crate::world::PageResult::Repaired => Err(()),
+                        })
+                        .is_ok()
+                {
+                    self.undo_discard();
+                }
+                None
+            }
+            crate::world::FooterAct::Trackers => {
+                trackers.undo_remove(press.ticket);
+                None
+            }
+            crate::world::FooterAct::Untick => {
+                if let Some(ticket) = press.ticket {
+                    self.untick(index, campaign, ticket);
+                }
+                None
+            }
+            _ => {
+                let (nav, effect) = self.reader.footer_press(press, open, campaign);
+                if let Some(nav) = nav {
+                    self.take_nav(nav, index);
+                }
+                effect
+            }
+        }
+    }
+
+    /// What a reader's press asks of the page: another note, Lookup for a missing one, or a
+    /// new load of the notes.
+    pub fn take_nav(&mut self, nav: Nav, index: &ContentIndex) {
+        match nav {
+            Nav::Item(position) => {
+                self.selected = Some(index.items[position].entry.id);
+                self.view = View::Reader;
+            }
+            Nav::Missing(words) => self.ask_lookup = Some(words),
+            Nav::Reload(id) => {
+                self.reload = true;
+                self.selected = Some(id);
+            }
+        }
+    }
+
+    /// The selected note, for a check.
+    pub fn selected(&self) -> Option<Uuid> {
+        self.selected
+    }
+
+    /// The view, for a check.
+    pub fn view(&self) -> View {
+        self.view
+    }
+}
+
+/// One row of the list: the note's name or file, its fault, dates or status.
+fn list_row(index: &ContentIndex, position: usize, depth: usize) -> ListRow {
+    let entry = &index.items[position].entry;
+    let duplicate = index.duplicate_world.contains_key(&entry.path);
+    let file = || {
+        std::path::Path::new(&entry.path)
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned()
+    };
+    let name = if duplicate {
+        file()
+    } else {
+        entry.name.clone()
+    };
+    let fault = index.note_faults().of_note(position);
+    let narrow = fault
+        .and_then(crate::world::NoteFault::narrow_words)
+        .map(|words| format!("{} {words}", icons::WARN));
+    let detail = if let Some(fault) = fault {
+        format!("{} {}", icons::WARN, fault.words())
+    } else if entry.kind == "world" {
+        if index.shares_name(position) {
+            match crate::world::status(entry) {
+                "" => file(),
+                status => format!("{} · {status}", file()),
+            }
+        } else {
+            [
+                crate::world::date_words(entry),
+                Some(crate::world::status(entry).to_owned()),
+            ]
+            .into_iter()
+            .flatten()
+            .filter(|word| !word.is_empty())
+            .collect::<Vec<_>>()
+            .join(" · ")
+        }
+    } else {
+        String::new()
+    };
+    ListRow {
+        position,
+        id: entry.id,
+        name,
+        detail,
+        narrow,
+        depth,
+        path: entry.path.clone(),
+    }
 }
 
 #[cfg(test)]

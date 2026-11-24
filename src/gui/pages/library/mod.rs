@@ -5,7 +5,7 @@
 //! sections and entries columns, the reader (Read, Edit Markdown, a changed file), the New entry and
 //! Manage packages forms and the unregister confirmation. Every act calls a model method; the egui
 //! page shares the list's logic with it. The footer of each pane draws the same typed lines as
-//! egui's (`design::outcome::port`), and a press goes back to `Library::press_footer`.
+//! egui's (`design::outcome::plain`), and a press goes back to `Library::press_footer`.
 mod copy;
 mod dndbeyond;
 mod footer;
@@ -19,8 +19,6 @@ mod tests;
 
 use crate::Page;
 use crate::gui::{SplatRoot, kit, theme};
-use crate::library::model::FooterLine;
-use crate::library::LibraryPress;
 use gpui::{
     AnyElement, App, Context, FocusHandle, InteractiveElement, IntoElement, KeyBinding,
     ParentElement, Styled, UniformListScrollHandle, Window, actions, div, px,
@@ -45,8 +43,6 @@ pub struct State {
     focus: Option<FocusHandle>,
     /// The entry list's scroll, which a link's reveal moves.
     list_scroll: UniformListScrollHandle,
-    /// The lines of the footer drawn last, whose controls a press reaches by place.
-    footer: Vec<FooterLine<LibraryPress>>,
 }
 
 /// Once, when the root is built.

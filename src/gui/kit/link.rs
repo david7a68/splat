@@ -1,7 +1,8 @@
-//! A text link (`design::link`, `small_link`): accent words with an underline, for a move to
-//! another place (`Open this session`, `Show all events`, a place's name). A link never changes
-//! data; an act that does is a quiet `Button`. Its target is at least `XL` wide and `MIN_TARGET`
-//! high, so two short links side by side never share a press area.
+//! A text link (`design::link`, `small_link`, `wrapped_link`): accent words with an underline that
+//! turn to the focus colour on hover, for a move to another place (`Open this session`, `Show all
+//! events`, a note's name, a file). A link never changes data; an act that does is a quiet
+//! `Button`. Its target is at least `XL` wide and `MIN_TARGET` high, so two short links side by
+//! side never share a press area.
 use super::{OnClick, button::element_name, target, tooltip::tip};
 use crate::gui::theme::{FOCUS_WIDTH, MIN_TARGET, RADIUS_CONTROL, Type, TypeExt, XL, colors};
 use gpui::{
@@ -10,7 +11,8 @@ use gpui::{
 };
 use std::rc::Rc;
 
-/// A link of `Body` words (`.small()` for `Small`).
+/// A link of `Body` words on one line (`.small()` for `Small`, `.wrap()` for words of unknown
+/// length).
 ///
 /// ```ignore
 /// kit::Link::new("open-session", "Open this session")
@@ -21,6 +23,7 @@ pub struct Link {
     id: ElementId,
     words: SharedString,
     ty: Type,
+    wrap: bool,
     hint: Option<SharedString>,
     name: Option<SharedString>,
     on_click: Option<OnClick>,
@@ -37,6 +40,7 @@ impl Link {
             id: id.into(),
             words: words.into(),
             ty: Type::Body,
+            wrap: false,
             hint: None,
             name: None,
             on_click: None,
@@ -49,13 +53,21 @@ impl Link {
         self
     }
 
+    /// The words wrap at the column's edge (`design::wrapped_link`): a note's name, a path, a
+    /// check's line, whose length the app does not choose.
+    pub fn wrap(mut self) -> Self {
+        self.wrap = true;
+        self
+    }
+
     /// Words on hover (a path).
     pub fn hint(mut self, hint: impl Into<SharedString>) -> Self {
         self.hint = Some(hint.into());
         self
     }
 
-    /// The accessible name, when it says more than the words.
+    /// The accessible name, when it says more than the words. The harness finds the link by it
+    /// too.
     pub fn name(mut self, name: impl Into<SharedString>) -> Self {
         self.name = Some(name.into());
         self
@@ -77,7 +89,6 @@ impl RenderOnce for Link {
         let mut link = div()
             .id(self.id.clone())
             .flex()
-            .flex_none()
             .items_center()
             .min_h(MIN_TARGET)
             .min_w(XL)
@@ -85,20 +96,26 @@ impl RenderOnce for Link {
             .ty(self.ty)
             .text_color(c.accent)
             .underline()
-            .whitespace_nowrap()
             .cursor_pointer()
-            .hover(|s| s.bg(c.hover))
+            .hover(|s| s.text_color(c.focus))
             .focusable()
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
-            .aria_label(name)
+            .aria_label(name.clone())
             .child(self.words.clone());
+        if !self.wrap {
+            link = link.flex_none().whitespace_nowrap();
+        }
         if let Some(hint) = self.hint {
             link = link.tooltip(tip(hint));
         }
         if let Some(on_click) = self.on_click {
             link = link.on_click(move |event, window, cx| on_click(event, window, cx));
         }
-        let link = target(link, self.words.clone());
+        let link = match self.name.filter(|name| *name != self.words) {
+            Some(name) => target(link, name),
+            None => link,
+        };
+        let link = target(link, self.words);
         target(link, element_name(&self.id))
     }
 }

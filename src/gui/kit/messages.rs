@@ -18,7 +18,9 @@ use crate::design::outcome::Press;
 use crate::design::outcome::plain::{ChoiceForm, PlainLine};
 use crate::gui::icons;
 use crate::gui::theme::{Density, Type, colors};
-use gpui::{AnyElement, App, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div};
+use gpui::{
+    AnyElement, App, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -72,7 +74,9 @@ pub fn lines<A: Clone + 'static>(
 }
 
 /// One line as a message: its words, its file line and help, its Undo first, then its choices
-/// (a choice that loses something last, `L` after the others). `small`: a row's own message.
+/// (a choice that loses something last, `L` after the others), each choice's help under it.
+/// Every control's words are its accessible name, so the harness finds it by them.
+/// `small`: a row's own message.
 pub fn message<A: Clone + 'static>(
     id: ElementId,
     line: PlainLine<A>,
@@ -81,7 +85,10 @@ pub fn message<A: Clone + 'static>(
 ) -> Message {
     let c = colors();
     let child = |name: &str| {
-        ElementId::NamedChild(std::sync::Arc::new(id.clone()), SharedString::from(name.to_owned()))
+        ElementId::NamedChild(
+            std::sync::Arc::new(id.clone()),
+            SharedString::from(name.to_owned()),
+        )
     };
     let line = Rc::new(line);
     let mut message = Message::new(tone(line.tone), line.words.clone());
@@ -116,7 +123,11 @@ pub fn message<A: Clone + 'static>(
                 row = row.child(
                     Link::new(child("show"), crate::design::outcome::SHOW_FILE)
                         .small()
-                        .name(format!("{}: {}", crate::design::outcome::SHOW_FILE, file.shown))
+                        .name(format!(
+                            "{}: {}",
+                            crate::design::outcome::SHOW_FILE,
+                            file.shown
+                        ))
                         .hint(path.display().to_string())
                         .on_click(move |_, _, cx| cx.open_url(&url)),
                 );
@@ -141,6 +152,23 @@ pub fn message<A: Clone + 'static>(
                 }),
         );
     }
+    // A message whose choices have help puts each choice on a line of its own, its help under it
+    // (ruling M8: the help reads as its own choice's, never the next one's).
+    let helped = line.choices.iter().any(|choice| choice.help.is_some());
+    let with_help = |control: AnyElement, help: &Option<String>| -> AnyElement {
+        if !helped {
+            return control;
+        }
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .items_start()
+            .gap(crate::gui::theme::XS)
+            .child(control)
+            .children(help.clone().map(super::field::help))
+            .into_any_element()
+    };
     for (at, choice) in line.choices.iter().enumerate() {
         let press = {
             let (line, on_press) = (line.clone(), on_press.clone());
@@ -157,7 +185,7 @@ pub fn message<A: Clone + 'static>(
                 if let Some(hover) = &choice.hover {
                     link = link.hint(hover.clone());
                 }
-                message = message.action(link);
+                message = message.action(with_help(link.into_any_element(), &choice.help));
             }
             ChoiceForm::Dismiss => {
                 message = message.action(
@@ -168,7 +196,7 @@ pub fn message<A: Clone + 'static>(
                 let button = match form {
                     ChoiceForm::Primary => Button::primary(id, choice.words.clone()),
                     ChoiceForm::Lose => Button::destructive(id, choice.words.clone()),
-                    _ => Button::quiet(id, choice.words.clone()),
+                    _ => Button::secondary(id, choice.words.clone()),
                 }
                 .density(Density::Read)
                 .blocked(choice.locked.clone())
@@ -177,6 +205,7 @@ pub fn message<A: Clone + 'static>(
                     Some(hover) if choice.locked.is_none() => button.hint(hover.clone()),
                     _ => button,
                 };
+                let button = with_help(button.into_any_element(), &choice.help);
                 message = if form == ChoiceForm::Lose {
                     message.destructive(button)
                 } else {

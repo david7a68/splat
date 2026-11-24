@@ -21,7 +21,7 @@ use crate::design::results::Ticket;
 /// What a choice of a message is: its look and what it does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChoiceForm {
-    /// A quiet choice.
+    /// A safe choice: bordered (secondary), as egui draws it.
     Choice,
     /// The message's one commit.
     Primary,

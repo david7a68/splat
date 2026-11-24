@@ -36,7 +36,7 @@ pub(super) fn pane(
         };
         let lines = root.app.library.form_footer(&root.app.campaigns);
         let mut pane = kit::Pane::new("library-form").flush().child(body);
-        for line in footer::render(root, lines, cx) {
+        for line in footer::render(lines, cx) {
             pane = pane.footer(line);
         }
         return pane.into_any_element();
@@ -50,7 +50,7 @@ pub(super) fn pane(
     let Some((view, lines)) = view else {
         return empty_reader(root, cx);
     };
-    let footer = footer::render(root, lines, cx);
+    let footer = footer::render(lines, cx);
     entry(root, view, width, footer, index, window, cx)
 }
 
@@ -69,7 +69,7 @@ fn empty_reader(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> AnyElement
         body,
         None::<AnyElement>,
     ));
-    for line in footer::render(root, lines, cx) {
+    for line in footer::render(lines, cx) {
         pane = pane.footer(line);
     }
     pane.into_any_element()

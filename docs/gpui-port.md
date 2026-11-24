@@ -179,26 +179,34 @@ Icons: `gui::icons::*` has the design system's names (`icons::RUN`, `icons::WARN
 | Text | `text(Type, Hsla, words) -> Div`, `one_line(..)`, `icon(glyph, Type, Hsla)`, `label(words, count)`, `heading(Heading::{Group{title,count}, Section, Panel, Name}, first: bool)`, `rule()`, `gap(Pixels)` | All words; `Label` is set in capitals for you |
 | Button | `Button::{primary, secondary, quiet, destructive}(id, label)` then `.icon(glyph)`, `.key("Ctrl+S")`, `.hint(words)`, `.blocked(Option<reason>)`, `.density(Density)`, `.selected(bool)`, `.plain()`, `.line_start()`, `.full_width()`, `.name(words)`, `.on_click(f)` | One primary per view; `line_start` for a quiet action that starts a line |
 | Icon button | `IconButton::new(id, glyph, name).hint(words).toggled(bool).on_click(f)` | `⋯`, `×`, a view toggle; never an action that needs words |
-| Text field | `TextField::new(id, value).placeholder(..).name(..).masked().disabled(bool).width(px).on_change(\|&str, window, cx\|).on_enter(f)` | One line; two-way sync with your `String` (give the value each frame, take edits in `on_change`) |
+| Text field | `TextField::new(id, value).placeholder(..).name(..).masked().disabled(bool).width(px).on_change(\|&str, window, cx\|).on_enter(f).on_escape(f).on_blur(f)`, `.focus(bool)` / `.focus_selected(bool)` | One line; two-way sync with your `String` (give the value each frame, take edits in `on_change`). `focus(true)` takes the keyboard with the caret after the words (a field that opens for typing); `focus_selected(true)` takes it with all the words selected (a rename a press opened). Give either for one frame. `on_escape` stops the press there: the window's Escape does not also run |
 | Editor | `TextEditor::new(id, value).placeholder(..).rows(n).mono().fill().on_change(f)` | Several lines that wrap |
 | Field block | `field(caption, Option<help>, Option<error>, control) -> Div`, `help(words)` | Caption, control, help, error, then `L` |
-| Rows | `Row::new(id, name).height(px).selected(bool).on_click(f).child(..)`, `two_line_row(id, title, detail, selected)` | List rows with hover, selection and focus |
+| Rows | `Row::new(id, name).height(px).grows().selected(bool).on_click(f).child(..)`, `two_line_row(id, title, detail, selected)` | List rows with hover, selection and focus; `grows` makes `height` a minimum, for words that wrap |
 | Tabs | `Segmented::new(id, options, chosen).on_select(\|&usize, window, cx\|)` | Page tabs and small exclusive choices |
 | Checkbox | `Checkbox::new(id, label, checked).blocked(..).on_click(f)`, `Switch::new(id, label, on)` | Yes/no settings |
 | Menu | `MenuButton::new(id, Button).item(MenuItem::new(label).icon(..).checked(bool).blocked(Option<reason>).destructive().on_click(f))` | A row's `⋯`, `New ▾` |
+| Status menu | `StatusMenu::new(id, Status).item(MenuItem)` | A status that opens a menu under it (`2 notes need fixing`) |
+| Quiet section | `QuietSection::new(id, title).default_open(bool).child(..)` | A caret and muted words that open what most readers skip (Technical details) |
 | Drop-down | `Dropdown::new(id, name, options, Option<chosen>).placeholder(..).blocked(..).width(px).density(..).command(MenuItem).on_select(\|&usize, window, cx\|)` | Choose one value |
 | Popover | `Popover::new(id, Button, content)` | Content in a raised layer under a button |
 | Dialog | `Dialog::new(id, title).child(..).destructive(Button).action(safe).action(commit).on_escape(f)` | Modal tasks only; draw it while open; it covers the window |
 | Message | `Message::new(Tone::{Info, Success, Warning, Error}, words).small().action(Button).destructive(Button)` | Results, reasons, notices; safe action first, `L` before the destructive one |
+| Footer messages | `design::outcome::plain`: build `Messages` as egui does with `let frame = PaneFrame::plain();`, then `messages.into_plain() -> Vec<PlainLine<A>>` (also `KeptLine`, `FaultMessage` and `Notice::into_plain() -> PlainLine<A>`); `kit::messages::lines(id, lines, cx.listener(\|root, pressed: &kit::messages::Pressed<A>, window, cx\| { if let Some(press) = pressed.take() { … } }))`, `kit::messages::message(id, line, on_press, small)`, `kit::messages::tone(design::Tone)` | Every pane footer (Timeline, Trackers, Library, World). One order (`footer_order`), Undo first with its icon, safe choices bordered, a `Lose` choice red with `L` before it (also a `Choice::named_as(Lose, …)`), locks (`blocked` with the reason), hover words, each choice's help under it, the file line with `Edit in Obsidian` and `Show file`. A press is a `Press { id, ticket }`: a kept line's ticket reaches only the entry it showed; give it to the store's `…press…` method as egui does. A locked control gives no press |
 | Status | `Status::new(glyph, word, color).icon_color(c)`, `status(&Status)`, `status_link(id, Status).hint(..).on_click(f)` | Icon + word + colour |
 | Empty state | `empty_state(glyph, title, body, Option<action>)` | An empty pane or page |
 | Page header | `page_header(title, Option<context>, Vec<AnyElement>)` | A page's first line, rule and `L` |
 | Scroll | `scroll_column(id, content)`, `scroll::scroll_column_with(id, &ScrollHandle, content)`, `scroll::sideways(id, content)` | A column that keeps its bar's lane |
+| Virtual list | `uniform_column(id, &UniformListScrollHandle, count, cx.processor(\|root, range, window, cx\| Vec<row>))`, `measured_column(id, &ListState, \|at, window, cx\| AnyElement)` (`kit::virtual_list`) | A long list that builds only the rows in view, in a column that keeps its bar's lane. `uniform_column` when every row has one height (Library entries, Timeline events); `measured_column` when rows have their own heights (World's headings and notes; `splice` the `ListState` when the rows change). Keep the handle or state in your page's GPUI state |
 | Panes | `Pane::new(id).header(..).footer(Message).fixed().flush().child(..)`, `Columns::new(id).column(width, min..max, pane).rest(pane)` | Task columns with splitters; messages in the footer |
 | Markdown | `markdown(id, source)` / `Markdown::new(..).compact().full_width().on_link(\|&str, window, cx\|)` | Reader prose (basic; the Reader agent extends it) |
 | Nav | `NavItem`, `NavToggle` | The rail only |
 | Tooltip | `.with_tooltip(words)` on an element with an id (`WithTooltip`) | Hints and blocked reasons |
+| Link | `Link::new(id, words)` or `link(id, words)`, then `.small()`, `.wrap()`, `.hint(words)`, `.name(words)`, `.on_click(f)` | A move to another place (a note, a file, a page), never an act that changes data. Accent words, underlined, the focus colour on hover; at least `XL` wide and 24 px high. One line by default; `.wrap()` for words of unknown length (a note's name, a path) |
 | Target | `kit::target(element, name)` | Name your own pressable element for the harness |
+
+A control's harness names: its words, its accessible name when `.name(..)` says more (`Button`,
+`Link`), and `id:<element id>`. `shell.click("Undo remove Ash")` or `shell.click("id:…")`.
 
 The kit gallery (`src/gui/gallery.rs`, tests only) shows every part on one page:
 `artifacts/screenshots/gpui/gpui-kit__01-gallery__1200x800.png`, `__02-menu`, `__03-dialog`. A

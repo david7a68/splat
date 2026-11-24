@@ -303,7 +303,7 @@ pub(super) fn entries_column(
         handle.scroll_to_item(row, ScrollStrategy::Center);
     }
     let index = index.clone();
-    let rows = kit::virtual_column(
+    let rows = kit::uniform_column(
         "library-entries",
         &handle,
         list.rows,
@@ -412,7 +412,7 @@ pub(super) fn empty_scope(
     };
     let lines = root.app.library.form_footer(&root.app.campaigns);
     let mut pane = kit::Pane::new("library-empty-scope").child(body);
-    for line in footer::render(root, lines, cx) {
+    for line in footer::render(lines, cx) {
         pane = pane.footer(line);
     }
     div()

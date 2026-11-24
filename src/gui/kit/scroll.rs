@@ -51,16 +51,3 @@ pub fn sideways(id: impl Into<ElementId>, content: impl IntoElement) -> impl Int
         .overflow_x_scrollbar()
         .child(content)
 }
-
-/// A virtual list (`gpui::uniform_list`, only the rows in view are built) with the kit's scroll
-/// bar in its lane: a long list whose rows have one height (Timeline's events).
-pub fn virtual_list(
-    list: gpui::UniformList,
-    handle: &gpui::UniformListScrollHandle,
-) -> impl IntoElement {
-    div()
-        .size_full()
-        .min_h_0()
-        .child(list.track_scroll(handle).size_full().pr(SCROLL_BAR_WIDTH))
-        .vertical_scrollbar(handle)
-}

@@ -2,7 +2,7 @@
 //! with the link's state, the picker of the account's campaigns, Refresh list, and the linked
 //! campaign's details. The Campaign page's Link and folder tab draws it
 //! (`library::render_dndbeyond_link`); its errors and its `Campaign link saved.` result go in
-//! that pane's footer, from `DndBeyond::footer_messages` (typed lines, `design::outcome::port`).
+//! that pane's footer, from `DndBeyond::footer_messages` (typed lines, `design::outcome::plain`).
 use crate::gui::theme::{Density, FORM_WIDTH, S, Type, XS, colors};
 use crate::gui::{SplatRoot, icons, kit};
 use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div};

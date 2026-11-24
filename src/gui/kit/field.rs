@@ -117,7 +117,7 @@ pub struct TextField {
     on_enter: Option<super::OnAct>,
     on_escape: Option<super::OnAct>,
     on_blur: Option<super::OnAct>,
-    focus: bool,
+    focus: Option<FocusAt>,
 }
 
 impl TextField {
@@ -134,7 +134,7 @@ impl TextField {
             on_enter: None,
             on_escape: None,
             on_blur: None,
-            focus: false,
+            focus: None,
         }
     }
 
@@ -180,7 +180,8 @@ impl TextField {
         self
     }
 
-    /// Escape in the field (an amount that ends unused). Escape still reaches the window's keys.
+    /// Escape in the field (an amount that ends unused, a picker's Cancel). The press stops here:
+    /// the window's Escape (close a panel) does not also run.
     pub fn on_escape(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_escape = Some(Rc::new(handler));
         self
@@ -192,11 +193,32 @@ impl TextField {
         self
     }
 
-    /// Take the keyboard in this frame (a field that opens for typing). Give `true` once.
+    /// Take the keyboard in this frame, the caret after the words (a field that opens for
+    /// typing). Give `true` for one frame; the caller keeps the request.
     pub fn focus(mut self, focus: bool) -> Self {
-        self.focus = focus;
+        if focus {
+            self.focus = Some(FocusAt::End);
+        }
         self
     }
+
+    /// Take the keyboard in this frame with all the words selected, so typing replaces them (a
+    /// rename that a press opened, `design::focus_and_select`). Give `true` for one frame.
+    pub fn focus_selected(mut self, focus: bool) -> Self {
+        if focus {
+            self.focus = Some(FocusAt::All);
+        }
+        self
+    }
+}
+
+/// Where a field that takes the keyboard puts its caret.
+#[derive(Clone, Copy)]
+enum FocusAt {
+    /// After the words.
+    End,
+    /// Around all the words.
+    All,
 }
 
 impl RenderOnce for TextField {
@@ -219,8 +241,14 @@ impl RenderOnce for TextField {
         });
         let input = state.read(cx).input.clone();
         input.update(cx, |input, cx| input.set_disabled(self.disabled, cx));
-        if self.focus {
-            input.update(cx, |input, cx| input.focus(window, cx));
+        match self.focus {
+            Some(FocusAt::End) => input.update(cx, |input, cx| input.focus(window, cx)),
+            Some(FocusAt::All) => {
+                let handle = input.read(cx).focus_handle(cx);
+                window.focus(&handle, cx);
+                window.dispatch_action(Box::new(gpui_component::input::SelectAll), cx);
+            }
+            None => {}
         }
         let focused = input.read(cx).focus_handle(cx).is_focused(window);
         let name = self
@@ -235,7 +263,6 @@ impl RenderOnce for TextField {
             element = element.mask_toggle();
         }
         let enter = self.on_enter.clone();
-        let escape = self.on_escape.clone();
         let mut frame = frame(focused, Density::Read.control())
             .ty(Type::Body)
             .text_color(colors().text)
@@ -244,15 +271,18 @@ impl RenderOnce for TextField {
             Some(width) => frame.w(width),
             None => frame.w_full(),
         };
-        if enter.is_some() || escape.is_some() {
+        if let Some(enter) = enter {
             frame = frame.on_key_down(move |event, window, cx| {
-                if event.keystroke.modifiers.modified() {
-                    return;
+                if event.keystroke.key == "enter" && !event.keystroke.modifiers.modified() {
+                    enter(window, cx);
                 }
-                match (event.keystroke.key.as_str(), &enter, &escape) {
-                    ("enter", Some(enter), _) => enter(window, cx),
-                    ("escape", _, Some(escape)) => escape(window, cx),
-                    _ => {}
+            });
+        }
+        if let Some(escape) = self.on_escape.clone() {
+            frame = frame.on_key_down(move |event, window, cx| {
+                if event.keystroke.key == "escape" && !event.keystroke.modifiers.modified() {
+                    escape(window, cx);
+                    cx.stop_propagation();
                 }
             });
         }

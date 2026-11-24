@@ -2,10 +2,10 @@
 //! `docs/gpui-port.md`). The egui page (`Library::show`) shares the list's logic with it
 //! (`begin`, `section_counts`, `find_matches`, `row_subtitle`, `list_empty_words`); the reader's
 //! data here follows `Library::editor_pane` step by step, and its footer lines are the same typed
-//! lines (`design::outcome::port`). The cleanup wave deletes the egui page and keeps this.
+//! lines (`design::outcome::plain`). The cleanup wave deletes the egui page and keeps this.
 use super::*;
 pub use super::presentation::Section;
-pub use crate::design::outcome::port::{Kind as ControlKind, Line as FooterLine};
+pub use crate::design::outcome::plain::PlainLine as FooterLine;
 pub use crate::matching::CLOSE_NAMES;
 use crate::design::outcome::Fault as _;
 use std::sync::Arc;
@@ -1050,14 +1050,14 @@ impl Library {
 
     /// The footer of a pane with no reader (a form, the empty campaign scope): `form_messages`.
     pub fn form_footer(&self, campaigns: &Campaigns) -> Vec<FooterLine<LibraryPress>> {
-        let frame = PaneFrame::headless();
+        let frame = PaneFrame::plain();
         self.form_messages(&frame, design::READER_MEASURE, campaigns)
-            .into_lines()
+            .into_plain()
     }
 
     /// The empty reader's footer: Remove's notice and the page's results and error.
     pub fn empty_reader_footer(&self, campaigns: &Campaigns) -> Vec<FooterLine<LibraryPress>> {
-        let frame = PaneFrame::headless();
+        let frame = PaneFrame::plain();
         let results = self.reader_results(campaigns);
         let mut messages = Messages::new(&frame, "library_footer", design::READER_MEASURE);
         if !self.dirty()
@@ -1069,7 +1069,7 @@ impl Library {
         }
         self.page_messages(&frame, &mut messages, &results, campaigns);
         page_faults(&mut messages, &[self.error.as_ref()]);
-        messages.into_lines()
+        messages.into_plain()
     }
 
     /// The reader's kept results and its lock (`editor_pane`'s `ReaderResults`).
@@ -1906,7 +1906,7 @@ impl Library {
         if !self.saved_is_draft(note) {
             let _ = self.kept.take_discarded();
         }
-        let frame = PaneFrame::headless();
+        let frame = PaneFrame::plain();
         let mut messages = Messages::new(&frame, "library_footer", design::READER_MEASURE);
         let undo = |step: UndoStep| step.pressed_as(LibraryPress::Undo);
         if discard_is_for(self.kept.discarded(), note)
@@ -2022,7 +2022,7 @@ impl Library {
             );
         }
         page_faults(&mut messages, &[self.error.as_ref()]);
-        let footer = messages.into_lines();
+        let footer = messages.into_plain();
         let link_choices = if self.link_choices.len() > 1 {
             let loaded = self.loaded.as_ref().unwrap();
             self.link_choices
