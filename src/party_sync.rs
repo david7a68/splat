@@ -513,6 +513,18 @@ impl Reader {
     pub fn loading(&self) -> bool {
         self.pending.is_some()
     }
+    /// Block until the read in flight has sent all it has (its thread ends, never a clock),
+    /// and hand its events to the next `poll`, which takes them as it takes any. A test's wait.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn wait_for_load(&mut self) {
+        if let Some(rx) = self.pending.take() {
+            let (tx, ready) = mpsc::channel();
+            for event in rx.iter() {
+                let _ = tx.send(event);
+            }
+            self.pending = Some(ready);
+        }
+    }
     fn load_cache(&mut self, ctx: &egui::Context) {
         let Some(scope) = self.scope.clone() else {
             return;

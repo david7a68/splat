@@ -4,21 +4,38 @@ use crate::Page;
 use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
 use gpui::{px, size};
-use std::time::Duration;
 
-/// The page after its campaign is read (the read runs on a thread of its own).
+/// The page after its campaign is read (the read runs on a thread of its own): each read in
+/// flight is waited for on its own result, never a clock, and the frames after it take it.
+/// A taken read can start another (new content), so this waits until none is in flight.
 fn ready(shell: &mut Shell) {
     shell.update(|root, _, cx| root.show_page(Page::Encounters, cx));
-    for _ in 0..400 {
-        let reading =
-            shell.read(|root| root.app.encounters.busy() || !root.app.encounters.loaded());
-        if !reading {
+    for _ in 0..10 {
+        if !shell.read(|root| root.app.encounters.busy()) {
             break;
         }
-        std::thread::sleep(Duration::from_millis(5));
-        shell.wait(Duration::from_millis(50));
+        shell.update(|root, _, _| root.app.encounters.wait_for_load());
     }
-    shell.settle();
+    assert!(
+        shell.read(|root| root.app.encounters.loaded() && !root.app.encounters.busy()),
+        "the campaign's encounters are read"
+    );
+}
+
+/// Every read the page's search waits on (Lookup's index and the campaign's encounters), each
+/// carried to its end on its own result, never a clock, until none is in flight.
+fn reads_done(shell: &mut Shell) {
+    for _ in 0..10 {
+        let index = shell.update(|root, _, _| root.app.lookup.wait_for_load());
+        let encounters = shell.read(|root| root.app.encounters.busy());
+        if encounters {
+            shell.update(|root, _, _| root.app.encounters.wait_for_load());
+        }
+        if !index && !encounters {
+            return;
+        }
+    }
+    panic!("the reads did not end");
 }
 
 fn small(name: &str, seed: Seed) -> Shell {
@@ -387,18 +404,21 @@ fn roster_lines(shell: &mut Shell) -> Vec<(String, String)> {
     })
 }
 
-/// Wait until the party's saved sheets are read (a background read), so the synced party rows
-/// can show them.
+/// Wait until the party's saved sheets are read (a background read, waited for on its own
+/// result), so the synced party rows can show them.
 fn wait_for_sheets(shell: &mut Shell) {
-    for _ in 0..200 {
-        let rows = roster_lines(shell);
-        if rows.iter().any(|(_, line)| line.contains('/')) {
+    for _ in 0..10 {
+        if !shell.read(|root| root.app.party.reader.loading()) {
             break;
         }
-        std::thread::sleep(Duration::from_millis(5));
-        shell.wait(Duration::from_millis(50));
+        shell.update(|root, _, _| root.app.party.reader.wait_for_load());
     }
-    shell.settle();
+    assert!(
+        roster_lines(shell)
+            .iter()
+            .any(|(_, line)| line.contains('/')),
+        "a synced party row shows its sheet's HP"
+    );
 }
 
 /// A roster row's changes form: the change words open it; a number's `Add` writes a change;
@@ -948,24 +968,16 @@ fn use_it_offers_a_creature_from_an_unused_package() {
     shell.click("Find a creature or party member");
     shell.type_text("gloam");
     // Lookup's index, which the search reads, is built in the background.
-    let mut unused = Vec::new();
-    for _ in 0..400 {
-        unused = shell.update(|root, _, _| {
-            let ctx = root.bridge.ctx().clone();
-            root.app
-                .encounters
-                .unused_creatures(&ctx)
-                .into_iter()
-                .map(|unused| unused.words)
-                .collect::<Vec<_>>()
-        });
-        if !unused.is_empty() {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(5));
-        shell.wait(Duration::from_millis(50));
-    }
-    shell.settle();
+    reads_done(&mut shell);
+    let unused = shell.update(|root, _, _| {
+        let ctx = root.bridge.ctx().clone();
+        root.app
+            .encounters
+            .unused_creatures(&ctx)
+            .into_iter()
+            .map(|unused| unused.words)
+            .collect::<Vec<_>>()
+    });
     assert!(
         unused
             .iter()
@@ -976,14 +988,9 @@ fn use_it_offers_a_creature_from_an_unused_package() {
     let use_it = first_target(&mut shell, "Use it: Gloam Stalker");
     shell.click(&use_it);
     // The campaign now uses the entry, and the search reads its creatures again.
-    let mut usable = false;
-    for _ in 0..400 {
-        usable = shell.read(|root| root.app.encounters.searchable_creature("Gloam Stalker"));
-        if usable {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(5));
-        shell.wait(Duration::from_millis(50));
-    }
-    assert!(usable, "Use it puts the creature in the campaign's search");
+    reads_done(&mut shell);
+    assert!(
+        shell.read(|root| root.app.encounters.searchable_creature("Gloam Stalker")),
+        "Use it puts the creature in the campaign's search"
+    );
 }
