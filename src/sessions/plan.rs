@@ -1013,8 +1013,6 @@ impl JourneyPlan {
         fights: &[String],
         groups: &[String],
     ) -> Self {
-        #[cfg(any(test, feature = "test-support"))]
-        timeline::page::JOURNEY_PLAN_READS.with(|reads| reads.set(reads.get() + 1));
         let stubs = plan_fight_stubs(fights);
         let mut coming: Vec<String> = plan_links(body, events, session, &stubs)
             .into_iter()

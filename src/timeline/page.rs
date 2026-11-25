@@ -150,8 +150,6 @@ impl PlanNames {
 thread_local! {
     /// How many times the plan's names were copied from the encounters (row 123, point 4).
     pub static PLAN_NAMES_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    /// How many times a session plan was read for Timeline's offers or a plan line's write.
-    pub static JOURNEY_PLAN_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// How many times a plan line's result was checked against its note's words.
     pub static PLAN_LINE_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
