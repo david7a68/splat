@@ -222,7 +222,17 @@ impl SplatRoot {
                 cx.stop_propagation();
             }
         });
-        vec![lost, escape]
+        // Coming back from Obsidian or a file manager: the files are checked again, so a file
+        // deleted or written there shows at once (`requests::WINDOW_ACTIVATED`).
+        let activation = cx.observe_window_activation(window, |root, window, cx| {
+            if window.is_window_active() {
+                root.ctx
+                    .set(splat_content_ui::requests::WINDOW_ACTIVATED, true);
+                root.ctx.request_repaint();
+                cx.notify();
+            }
+        });
+        vec![lost, escape, activation]
     }
 
     /// The timer task between frames: when background work reported a change through the

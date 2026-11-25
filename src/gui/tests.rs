@@ -813,6 +813,27 @@ fn dialogs() {
             .is_some_and(|dialog| dialog.plan().is_some())
     });
     shell.capture("dialogs__01-copy-dialog__1200x800");
+    // The copy's Folder is an editable combo (egui's `folder_field`): its chevron is inside the
+    // field, and its menu starts with `Main folder`, chosen while the field is empty.
+    let field = shell.bounds("id:copy-folder").expect("the copy's Folder");
+    let chevron = shell
+        .bounds("Suggestions for Folder")
+        .expect("the Folder's chevron");
+    assert!(
+        field.contains(&chevron.center()) && chevron.right() <= field.right(),
+        "the chevron {chevron:?} is inside the Folder field {field:?}"
+    );
+    shell.click("Suggestions for Folder");
+    assert!(
+        shell.bounds("Main folder").is_some(),
+        "the Folder's menu offers Main folder"
+    );
+    shell.click("Main folder");
+    assert_eq!(
+        shell.read(|root| root.app.copy_dialog.as_ref().map(|d| d.folder().to_owned())),
+        Some(String::new()),
+        "Main folder keeps the copy in the destination's main folder"
+    );
     let destination = |shell: &mut Shell| {
         shell.read(|root| {
             root.app
@@ -844,6 +865,7 @@ fn dialogs() {
             .is_some_and(|dialog| dialog.name() == "Watch Aboleth" && dialog.plan().is_some())
     });
     shell.capture("dialogs__03-copy-renamed__1200x800");
+    let before = shell.read(|root| root.app.library.total());
     shell.click("Create copy");
     assert!(
         shell.read(|root| root
@@ -852,6 +874,16 @@ fn dialogs() {
             .as_ref()
             .is_some_and(|dialog| dialog.completed().is_some())),
         "Create copy writes the copy"
+    );
+    // The copy reloads the Library behind the dialog; egui's step waited until the page was
+    // still, so the full Library shows with the copy in it.
+    wait_for(&mut shell, "the Library reloads", |root| {
+        root.app.library.loaded() && !root.app.library.loading()
+    });
+    assert_eq!(
+        shell.read(|root| root.app.library.total()),
+        before + 1,
+        "the reloaded Library counts the copy"
     );
     shell.capture("dialogs__04-copy-complete__1200x800");
     shell.click("Edit the copy");

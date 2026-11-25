@@ -6,6 +6,7 @@ use gpui::{
     AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, SharedString,
     Styled, Window, div,
 };
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// `Choose for this campaign`, its help, then `L`.
@@ -180,78 +181,109 @@ pub(super) fn new_entry(
         .into_any_element()
 }
 
-/// The New entry folder field (`catalogue::folder_field`): the words, and a menu of the
-/// folders already there (`Main folder` first) whose names hold the words. The folders are read
-/// when the menu opens and kept only while it stays open, so a folder made meanwhile shows at
-/// the next open.
+/// The New entry folder field (`folder_combo` over the destination's folders and the kind's).
 fn folder_field(root: &mut SplatRoot, value: &str, cx: &mut Context<SplatRoot>) -> AnyElement {
-    let menu: ElementId = "library-new-folder-menu".into();
-    let state = &mut root.pages.library;
+    folder_combo(
+        root,
+        "library-new-folder",
+        value,
+        |root, kept| {
+            let kind = root.app.library.new_kind().to_owned();
+            root.app
+                .library
+                .new_folder_choices_if(&root.app.campaigns, kept)
+                .map(|(at, folders)| (at, kind, folders))
+        },
+        |root, words| root.app.library.set_new_folder(words),
+        cx,
+    )
+}
+
+/// A folder field, egui's `library::folder_field`: an editable combo whose words are the
+/// folder (empty: `Main folder`, its placeholder), with its chevron inside the frame. The
+/// chevron's menu offers `Main folder`, then the folders already there whose names hold the
+/// words. `read` gives the folders (with the root and kind they were read for) unless the kept
+/// ones are for the same root and kind; they are read when the menu opens and kept only while
+/// it stays open, so a folder made meanwhile shows at the next open. One field's menu is open
+/// at a time, and the kept folders are that field's (`State::folders`).
+pub(super) fn folder_combo(
+    root: &mut SplatRoot,
+    id: &'static str,
+    value: &str,
+    read: impl FnOnce(&SplatRoot, Option<(&Path, &str)>) -> Option<(PathBuf, String, Vec<String>)>,
+    set: impl Fn(&mut SplatRoot, &str) + Clone + 'static,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    let menu = ElementId::Name(format!("{id}-menu").into());
     if kit::menu::is_open(&menu, cx) {
-        if let Some((folder_root, folders)) = root.app.library.new_folder_choices_if(
-            &root.app.campaigns,
-            state
-                .folders
-                .as_ref()
-                .map(|(at, kind, _)| (at.as_path(), kind.as_str())),
-        ) {
-            state.folders = Some((
-                folder_root,
-                root.app.library.new_kind().to_owned(),
-                Arc::new(folders),
-            ));
+        let kept = root
+            .pages
+            .library
+            .folders
+            .as_ref()
+            .and_then(|(owner, at, kind, _)| {
+                (*owner == id).then_some((at.as_path(), kind.as_str()))
+            });
+        if let Some((at, kind, folders)) = read(root, kept) {
+            root.pages.library.folders = Some((id, at, kind, Arc::new(folders)));
         }
-    } else {
-        state.folders = None;
+    } else if root
+        .pages
+        .library
+        .folders
+        .as_ref()
+        .is_some_and(|(owner, ..)| *owner == id)
+    {
+        root.pages.library.folders = None;
     }
     let query = value.to_lowercase();
+    let main = set.clone();
     let mut suggestions = kit::MenuButton::new(
         menu,
-        kit::Button::quiet("library-new-folder-suggest", "")
+        kit::Button::quiet(ElementId::Name(format!("{id}-suggest").into()), "")
             .icon(crate::gui::icons::DOWN)
+            .density(Density::Read)
             .name("Suggestions for Folder"),
     )
     .item(
         kit::MenuItem::new("Main folder")
             .checked(value.is_empty())
-            .on_click(cx.listener(|root, _, _, cx| {
-                root.app.library.set_new_folder("");
+            .on_click(cx.listener(move |root, _, _, cx| {
+                main(root, "");
                 cx.notify();
             })),
     );
-    if let Some((_, _, folders)) = &root.pages.library.folders {
+    if let Some((_, _, _, folders)) = root
+        .pages
+        .library
+        .folders
+        .as_ref()
+        .filter(|(owner, ..)| *owner == id)
+    {
         for folder in folders
             .iter()
             .filter(|folder| folder.to_lowercase().contains(&query))
         {
             let chosen = folder.clone();
+            let set = set.clone();
             suggestions = suggestions.item(
                 kit::MenuItem::new(folder.clone())
                     .checked(value == folder.as_str())
                     .on_click(cx.listener(move |root, _, _, cx| {
-                        root.app.library.set_new_folder(&chosen);
+                        set(root, &chosen);
                         cx.notify();
                     })),
             );
         }
     }
-    div()
-        .flex()
-        .flex_row()
-        .items_start()
-        .gap(XS)
-        .child(
-            div().flex_1().min_w_0().child(
-                kit::TextField::new("library-new-folder", value.to_owned())
-                    .name("Folder")
-                    .placeholder("Main folder")
-                    .on_change(cx.listener(|root, words: &str, _, cx| {
-                        root.app.library.set_new_folder(words);
-                        cx.notify();
-                    })),
-            ),
-        )
-        .child(suggestions)
+    kit::TextField::new(id, value.to_owned())
+        .name("Folder")
+        .placeholder("Main folder")
+        .on_change(cx.listener(move |root, words: &str, _, cx| {
+            set(root, words);
+            cx.notify();
+        }))
+        .trailing(suggestions)
         .into_any_element()
 }
 
@@ -422,8 +454,11 @@ pub(super) fn package_form(
         }
         form = form
             .child(kit::gap(S))
-            .child(kit::text(Type::Small, c.muted, "Technical details"))
-            .child(kit::text(Type::Small, c.faint, copy.id.clone()));
+            // The id is for a bug report, not the DM's choice: closed, as egui's disclosure.
+            .child(
+                kit::QuietSection::new("library-copy-technical", "Technical details")
+                    .child(kit::text(Type::Small, c.faint, copy.id.clone())),
+            );
     }
     if view.copy.as_ref().is_none_or(|copy| !copy.naming) {
         let create = if view.create_primary {

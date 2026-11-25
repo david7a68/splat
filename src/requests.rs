@@ -34,3 +34,7 @@ pub const OPEN_ACCOUNT_SETTINGS: Slot<bool> = Slot::new("open_account_settings")
 
 /// An encounter's identity changed on disk, so the run and the plan read it again.
 pub const ENCOUNTER_IDENTITY_CHANGED: Slot<bool> = Slot::new("encounter_identity_changed");
+
+/// The window got the focus back (the DM came back from Obsidian or a file manager): Lookup
+/// checks the files again (`Lookup::check_files`).
+pub const WINDOW_ACTIVATED: Slot<bool> = Slot::new("window_activated");

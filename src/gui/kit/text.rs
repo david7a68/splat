@@ -155,6 +155,15 @@ pub fn one_line(ty: Type, color: Hsla, words: impl Into<SharedString>) -> Div {
     text(ty, color, words).truncate()
 }
 
+/// A file path on one line, cut at its start (`…/Spells/Fireball 46d7cb49.md`): its end is the
+/// part that tells two files apart, as egui's file line kept it.
+pub fn path_line(ty: Type, color: Hsla, path: impl Into<SharedString>) -> Div {
+    text(ty, color, path)
+        .overflow_hidden()
+        .whitespace_nowrap()
+        .text_ellipsis_start()
+}
+
 /// Turn any `IntoElement` into a boxed element, for heterogeneous lists of children.
 pub fn any(element: impl IntoElement) -> gpui::AnyElement {
     element.into_any_element()

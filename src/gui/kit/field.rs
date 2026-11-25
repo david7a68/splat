@@ -179,6 +179,7 @@ pub struct TextField {
     text_type: Option<Type>,
     search: bool,
     tight: bool,
+    trailing: Option<gpui::AnyElement>,
 }
 
 impl TextField {
@@ -199,6 +200,7 @@ impl TextField {
             text_type: None,
             search: false,
             tight: false,
+            trailing: None,
         }
     }
 
@@ -212,6 +214,13 @@ impl TextField {
     /// field (an amount, dice, an initiative total) shows its whole placeholder and number.
     pub fn tight(mut self) -> Self {
         self.tight = true;
+        self
+    }
+
+    /// A control inside the field's frame, after the words: an editable combo's chevron
+    /// (egui's `Dropdown::editable_value` with its `combo_icon`).
+    pub fn trailing(mut self, trailing: impl IntoElement) -> Self {
+        self.trailing = Some(trailing.into_any_element());
         self
     }
 
@@ -369,8 +378,13 @@ impl RenderOnce for TextField {
                         .text_color(colors().muted)
                         .child(SharedString::new_static(crate::gui::icons::SEARCH)),
                 )
-            })
-            .child(element);
+            });
+        frame = match self.trailing {
+            Some(trailing) => frame
+                .child(div().flex_1().min_w_0().child(element))
+                .child(trailing),
+            None => frame.child(element),
+        };
         // For tests: the words' own room, inside the frame's padding and the input's (its default
         // `Medium` size), under `<name> words` (a narrow field's placeholder must fit it whole).
         #[cfg(test)]

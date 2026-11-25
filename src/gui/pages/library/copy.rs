@@ -18,17 +18,23 @@ pub(super) fn render(
 ) -> AnyElement {
     let c = colors();
     let draft = root.app.encounters.draft_name();
-    let campaigns = &root.app.campaigns;
+    let destinations = CopyDialog::destinations(&root.app.campaigns);
     let Some(dialog) = root.app.copy_dialog.as_mut() else {
         return div().into_any_element();
     };
     dialog.draft = draft;
     dialog.poll();
-    let destinations = CopyDialog::destinations(campaigns);
     let blocked = if dialog.completed().is_none() {
         dialog.prepare(&destinations)
     } else {
         None
+    };
+    // The Folder combo keeps its suggestions in the page's state, so it is built before the
+    // dialog is borrowed for the rest.
+    let folder = folder_combo(root, &destinations, cx);
+    let campaigns = &root.app.campaigns;
+    let Some(dialog) = root.app.copy_dialog.as_mut() else {
+        return div().into_any_element();
     };
     let mut frame = kit::Dialog::new("copy-entry", "Copy entry")
         .on_escape(act(cx, |root, _, cx| {
@@ -164,16 +170,11 @@ pub(super) fn render(
     if let Some(destination) = destination {
         frame = frame.child(kit::field(
             "Folder",
+            Some(gpui::SharedString::new_static(
+                "Type a new folder, or choose one. A new folder is made with the file.",
+            )),
             None,
-            None,
-            kit::TextField::new("copy-folder", dialog.folder().to_owned())
-                .name("Folder")
-                .on_change(cx.listener(|root, words: &str, _, cx| {
-                    if let Some(dialog) = &mut root.app.copy_dialog {
-                        dialog.set_folder(words);
-                    }
-                    cx.notify();
-                })),
+            folder,
         ));
         if !destination.0 && campaigns.active_campaign().is_some() {
             frame = frame.child(
@@ -323,4 +324,45 @@ pub(super) fn render(
 fn follow(root: &mut SplatRoot) {
     let ctx = root.ctx.clone();
     root.app.follow_copy_dialog(&ctx, true);
+}
+
+/// The copy's Folder (`forms::folder_combo` over the chosen destination's folders), when a
+/// destination is chosen.
+fn folder_combo(
+    root: &mut SplatRoot,
+    destinations: &[crate::copy_dialog::Destination],
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
+    let Some(dialog) = &root.app.copy_dialog else {
+        return div().into_any_element();
+    };
+    let Some(at) = destinations
+        .iter()
+        .find(|(campaign, id, ..)| Some((*campaign, *id)) == dialog.destination())
+        .map(|destination| destination.3.clone())
+    else {
+        return div().into_any_element();
+    };
+    let folder = dialog.folder().to_owned();
+    super::forms::folder_combo(
+        root,
+        "copy-folder",
+        &folder,
+        move |_, kept| {
+            kept.is_none_or(|(kept, kind)| kept != at || !kind.is_empty())
+                .then(|| {
+                    (
+                        at.clone(),
+                        String::new(),
+                        crate::library::folder_choices(&at, None),
+                    )
+                })
+        },
+        |root, words| {
+            if let Some(dialog) = &mut root.app.copy_dialog {
+                dialog.set_folder(words);
+            }
+        },
+        cx,
+    )
 }

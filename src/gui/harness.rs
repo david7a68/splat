@@ -146,6 +146,32 @@ impl Shell {
         self.settle();
     }
 
+    /// Another window takes the focus, and the app's window gets it back: the DM came back from
+    /// Obsidian or a file manager (egui's `focus_window(false)`, then `focus_window(true)`).
+    pub(crate) fn focus_window_again(&mut self) {
+        struct Away;
+        impl gpui::Render for Away {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl gpui::IntoElement {
+                gpui::Empty
+            }
+        }
+        let away = self
+            .cx
+            .open_window(size(px(10.0), px(10.0)), |_, cx| cx.new(|_| Away))
+            .expect("another window");
+        let activate = |cx: &mut HeadlessAppContext, window: AnyWindowHandle| {
+            cx.update_window(window, |_, window, _| window.activate_window())
+                .expect("the window");
+            cx.run_until_parked();
+        };
+        activate(&mut self.cx, away.into());
+        activate(&mut self.cx, self.window);
+        self.cx
+            .update_window(away.into(), |_, window, _| window.remove_window())
+            .expect("the other window");
+        self.settle();
+    }
+
     /// Read the root's state.
     pub(crate) fn read<R>(&mut self, read: impl FnOnce(&SplatRoot) -> R) -> R {
         self.cx.read_entity(&self.root, |root, _| read(root))
