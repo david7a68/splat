@@ -24,12 +24,151 @@ fn first_day(shell: &mut Shell) {
             shell.bounds("Start with day 1").is_some(),
             "the empty state"
         );
-        shell.capture("session-notes__15-timeline-empty__1200x800");
         shell.click("Start with day 1");
     } else {
         shell.click("Add Day");
     }
     shell.settle();
+}
+
+/// The session-notes scenario's Timeline steps, as egui's made them: a session's plan adds a
+/// Long rest (linked in the note), a Travel and a Major event; on the Timeline a Day named
+/// Harvest Eve starts the timeline, and the rest is renamed and placed. Then the Rests filter,
+/// and the rest removed while the note still links to it.
+#[test]
+fn session_notes_timeline_steps() {
+    let mut shell = Shell::new("session-notes", Seed::Campaign);
+    shell.click("Session");
+    shell.update(|root, _, _| root.app.encounters.wait_for_load());
+    shell.settle();
+    shell.click("New session");
+    shell.type_text("Ash on the Road");
+    shell.click("Create session");
+    shell.click("Long rest");
+    shell.click("id:plan-add-more-button");
+    shell.click("Travel");
+    shell.click("id:plan-add-more-button");
+    shell.click("Major event");
+    shell.click("Add to notes: Long rest");
+    shell.update(|root, _, _| root.app.sessions.flush());
+    shell.click("Timeline");
+    shell.click("Add Day");
+    shell.type_text("Harvest Eve");
+    shell.click("Place this event after");
+    shell.click("Start of the timeline");
+    let rest = events(&mut shell)
+        .into_iter()
+        .find(|event| event.kind == Kind::LongRest)
+        .expect("the plan's rest");
+    shell.update(|root, _, cx| {
+        root.app.timeline_page.select(Some(rest.id.clone()));
+        cx.notify();
+    });
+    shell.click("Title");
+    shell.press("ctrl-a");
+    shell.type_text("Rest at the mill");
+    shell.click("Where");
+    shell.type_text("Old mill");
+    shell.press("ctrl-s");
+    let now = events(&mut shell);
+    assert_eq!(
+        now.len(),
+        4,
+        "a Day, a Long rest, a Travel and a Major event"
+    );
+    assert_eq!(now[0].title, "Harvest Eve", "the Day starts the timeline");
+    let renamed = now.iter().find(|event| event.id == rest.id).unwrap();
+    assert_eq!(
+        (renamed.title.as_str(), renamed.place.as_str()),
+        ("Rest at the mill", "Old mill")
+    );
+    assert!(renamed.session.is_some(), "the rest is the session's");
+    // The title was typed letter by letter: the offer names only the old name the note's link
+    // says.
+    let old = shell.read(|root| {
+        root.app
+            .sessions
+            .event_link_offer(&root.app.timeline, &rest.id)
+            .map(|offer| offer.old().to_vec())
+    });
+    assert_eq!(old, Some(vec!["Long rest".to_owned()]));
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "session-notes__18-timeline-event__1200x800",
+    );
+    shell.click("Rests");
+    assert_eq!(
+        selected(&mut shell),
+        Some(rest.id.clone()),
+        "the rest stays open"
+    );
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "session-notes__21-timeline-filtered__1200x800",
+    );
+    shell.click("All");
+    shell.click("More actions for Rest at the mill");
+    shell.click("Remove");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "session-notes__22-timeline-removed__1200x800",
+    );
+}
+
+/// The file changed under an edit of the same event: the draft beside the file, aligned, the
+/// differing line marked (`kit::DraftComparison`), until the DM chooses. A later change of the
+/// file shows in the comparison.
+#[test]
+fn a_disk_conflict_compares_the_draft_and_the_file() {
+    let mut shell = Shell::new("timeline-conflict", Seed::Campaign);
+    shell.click("Timeline");
+    first_day(&mut shell);
+    shell.click("Add Long rest");
+    shell.type_text("Rest at the mill");
+    shell.press("ctrl-s");
+    let path = shell.read(|root| root.app.timeline.path().map(|p| p.to_path_buf()));
+    let path = path.expect("a Timeline file");
+    let saved = fs::read_to_string(&path).unwrap();
+    assert!(saved.contains("Rest at the mill"));
+    // Obsidian renames the rest while the DM renames it too.
+    fs::write(
+        &path,
+        saved.replace("Rest at the mill", "Rest by the river"),
+    )
+    .unwrap();
+    shell.click("Title");
+    shell.press("ctrl-a");
+    shell.type_text("Rest at the old mill");
+    shell.press("ctrl-s");
+    assert!(
+        shell.bounds("Overwrite with my timeline").is_some(),
+        "the choice waits"
+    );
+    crate::gui::pages::sessions::tests::capture(&mut shell, "timeline__02-disk-conflict__1200x800");
+    let texts = |shell: &mut Shell| {
+        shell.read(|root| {
+            root.pages
+                .timeline
+                .comparison
+                .as_ref()
+                .and_then(|kept| kept.texts.clone().ok())
+        })
+    };
+    assert!(
+        shell.bounds("Next difference").is_none()
+            && texts(&mut shell).is_some_and(|(draft, disk)| {
+                draft.contains("Rest at the old mill") && disk.contains("Rest by the river")
+            }),
+        "one change, in the shared comparison"
+    );
+    // The file changes again: the comparison follows it.
+    let now = fs::read_to_string(&path).unwrap();
+    fs::write(&path, now.replace("Rest by the river", "Rest by the ford")).unwrap();
+    shell.settle();
+    assert!(
+        texts(&mut shell).is_some_and(|(_, disk)| disk.contains("Rest by the ford")),
+        "the comparison reads the file again once it changed"
+    );
 }
 
 /// T11.2: an event added with the buttons opens with its Title taking the keyboard; its rest
@@ -41,6 +180,7 @@ fn add_name_rule_remove_and_save() {
     shell.click("Timeline");
     shell.settle();
     assert_eq!(shell.read(|root| root.app.page), crate::Page::Timeline);
+    crate::gui::pages::sessions::tests::capture(&mut shell, "timeline__01-empty__1200x800");
     first_day(&mut shell);
     let before = events(&mut shell).len();
     shell.click("Add Long rest");
@@ -72,7 +212,6 @@ fn add_name_rule_remove_and_save() {
         })
     };
     assert_eq!(title(&mut shell).as_deref(), Some("Rest at the mill"));
-    shell.capture("session-notes__18-timeline-event__1200x800");
 
     // The ruling and its Undo.
     let restores = |shell: &mut Shell| {
@@ -89,7 +228,10 @@ fn add_name_rule_remove_and_save() {
     shell.click("Mark not at full");
     shell.settle();
     assert!(!restores(&mut shell));
-    shell.capture("session-plan__33-timeline-rest-ruling-off__1200x800");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "session-plan__33-timeline-rest-ruling-off__1200x800",
+    );
     shell.click("Undo change to ruling");
     shell.settle();
     assert!(restores(&mut shell), "Undo puts the ruling back");
@@ -101,7 +243,6 @@ fn add_name_rule_remove_and_save() {
     shell.settle();
     assert!(title(&mut shell).is_none(), "the event is gone");
     assert_eq!(selected(&mut shell), None);
-    shell.capture("session-notes__22-timeline-removed__1200x800");
     shell.click("Undo remove Rest at the mill");
     shell.settle();
     assert_eq!(title(&mut shell).as_deref(), Some("Rest at the mill"));
@@ -112,7 +253,6 @@ fn add_name_rule_remove_and_save() {
     let shown =
         shell.update(|root, _, _| root.app.timeline_page.header_context(&root.app.timeline));
     assert!(shown.contains(" of "), "{shown}");
-    shell.capture("session-notes__21-timeline-filtered__1200x800");
     shell.click("All");
     shell.settle();
 
@@ -161,7 +301,10 @@ fn an_open_event_at_the_smallest_window() {
     first_day(&mut shell);
     shell.click("Add Long rest");
     shell.settle();
-    shell.capture("session-notes__18-timeline-event__960x640");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "session-notes__18-timeline-event__960x640",
+    );
 }
 
 /// F9: a journey's encounter checks on Timeline: `Roll for encounters` from its menu, a table,
@@ -183,12 +326,23 @@ fn a_journeys_checks() {
             .is_some_and(|index| !index.loot_sources().tables.is_empty())),
         "the road's table is read"
     );
-    shell.click("Timeline");
-    shell.settle();
-    first_day(&mut shell);
-    shell.click("Add Travel");
-    shell.settle();
+    // As egui's scenario: the journey is the session's, added in its plan after a Day, then
+    // opened on Timeline.
+    shell.click("Session");
+    shell.click("New session");
+    shell.type_text("The Crossing");
+    shell.click("Create session");
+    shell.click("id:plan-add-more-button");
+    shell.click("Day");
+    shell.click("id:plan-add-more-button");
+    shell.click("Travel");
     let journey = events(&mut shell).last().unwrap().id.clone();
+    shell.click("Timeline");
+    shell.update(|root, _, cx| {
+        root.app.timeline_page.select(Some(journey.clone()));
+        cx.notify();
+    });
+    shell.settle();
     shell.click("More actions for Travel");
     shell.settle();
     shell.click("Roll for encounters");
@@ -226,7 +380,10 @@ fn a_journeys_checks() {
     shell.settle();
     assert_eq!(event(&mut shell).checks.len(), 1, "one check rolled");
     assert!(shell.bounds("Undo roll 1 travel check").is_some());
-    shell.capture("travel-checks__07-travel-checks-timeline__1200x800");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "travel-checks__07-travel-checks-timeline__1200x800",
+    );
     let label = event(&mut shell).checks[0].label.clone();
     shell.click(&format!("id:timeline-checks-{journey}-clear-{label}"));
     shell.settle();
@@ -260,7 +417,10 @@ fn the_add_strip_shares_more_when_short() {
     }
     assert!(shell.bounds("Add Day").is_none(), "Day goes to More");
     shell.click("More Add actions");
-    shell.capture("timeline-add-strip__01-more-add-actions__960x640");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "timeline-add-strip__01-more-add-actions__960x640",
+    );
     let before = events(&mut shell).len();
     shell.click("Day");
     let now = events(&mut shell);
@@ -328,7 +488,10 @@ fn a_rolled_checks_result_comes_into_view() {
         clear.top() >= px(0.0) && clear.bottom() <= window.height,
         "the result is in view: {clear:?} in {window:?}"
     );
-    shell.capture("timeline-checks-reveal__01-result-in-view__1200x520");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "timeline-checks-reveal__01-result-in-view__1200x520",
+    );
 }
 
 /// Review of #817: in a window so short that the title line would leave the form no room, the
@@ -360,7 +523,10 @@ fn the_title_line_scrolls_with_the_form_when_room_is_short() {
             "at {height}: the Title moved from {before:?} to {after:?}"
         );
         if scrolls {
-            shell.capture("timeline-short__01-title-line-scrolls__1200x270");
+            crate::gui::pages::sessions::tests::capture(
+                &mut shell,
+                "timeline-short__01-title-line-scrolls__1200x270",
+            );
         }
     }
 }
@@ -394,8 +560,20 @@ fn an_uncounted_length_says_why_on_hover() {
             cx,
         );
     });
+    // Before the hover delay the row shows no tooltip; after it, its words are drawn over the
+    // page, so the picture changes.
+    let before = shell.capture("timeline-uncounted__00-row-hover-before-tip__1200x800");
     shell.wait(std::time::Duration::from_secs(1));
-    shell.capture("timeline-uncounted__01-row-hover__1200x800");
+    let after = crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "timeline-uncounted__01-row-hover__1200x800",
+    );
+    let pixels = |path: &std::path::Path| image::open(path).expect("the capture").to_rgba8();
+    assert_ne!(
+        pixels(&before),
+        pixels(&after),
+        "the uncounted length says why on hover"
+    );
 }
 
 /// M0556: a long Timeline opens at its last event, whole in view, with its first out of view.

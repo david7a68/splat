@@ -16,7 +16,7 @@ mod session;
 mod slash;
 mod templates;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use crate::Splat;
 use crate::gui::{SplatRoot, icons, kit, theme};
@@ -386,10 +386,15 @@ fn notes_view(
             .into_any_element();
     }
     let list_hides = root.app.sessions.gv_list_hides();
+    // The list's width as the DM dragged and saved it (`session_list_panel`), not its
+    // default: the pane's width chooses between the plan beside the note and the tabs.
+    let list_width = kit::edge::column_width("session_list_panel", cx)
+        .map_or(LIST_WIDTH, px)
+        .clamp(LIST_MIN, LIST_MAX);
     let session_width = if list_hides {
         width
     } else {
-        width - LIST_WIDTH - S - theme::SPLITTER_WIDTH
+        width - list_width - S - theme::SPLITTER_WIDTH
     };
     let body = if root.app.sessions.gv_form_open() {
         form::render(root, window, cx)
@@ -407,16 +412,11 @@ fn notes_view(
         .into_any_element()
 }
 
-/// Whether the note's `/` menu is open for the session shown: its own key interceptor takes
-/// Escape (`slash::init`), so the root's Escape steps aside (`SplatRoot::watch_keys`).
-pub(crate) fn takes_escape(root: &SplatRoot) -> bool {
-    let session = root.app.sessions.gv_selected();
-    root.pages
-        .sessions
-        .note
-        .slash
-        .as_ref()
-        .is_some_and(|open| open.session == session)
+/// Whether the note's `/` menu has the keys now (`slash::has_keys`): its own key interceptor
+/// takes Escape (`slash::init`), so the root's Escape steps aside (`SplatRoot::watch_keys`). A
+/// menu left open while the keyboard is elsewhere takes no key, so the root's Escape goes on.
+pub(crate) fn takes_escape(root: &SplatRoot, window: &Window, cx: &gpui::App) -> bool {
+    slash::has_keys(root, window, cx)
 }
 
 /// Ctrl+S on the Session page (`pages::save_key`): the shown template's draft; a group open in

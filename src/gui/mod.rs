@@ -215,7 +215,7 @@ impl SplatRoot {
             // its Escape itself (it runs after this one), so the root leaves it alone then.
             let took = root
                 .update(cx, |root, cx| {
-                    !pages::sessions::takes_escape(root) && root.take_escape(window, cx)
+                    !pages::sessions::takes_escape(root, window, cx) && root.take_escape(window, cx)
                 })
                 .unwrap_or(false);
             if took {

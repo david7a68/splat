@@ -41,7 +41,7 @@ pub(crate) use strip::render_strip;
 #[derive(Default)]
 pub struct State {
     /// The page's keyboard focus: the run's letters and digits reach it while no field has it.
-    focus: Option<FocusHandle>,
+    pub(crate) focus: Option<FocusHandle>,
     /// The page's width in the last frame, so the next frame's facts use the room it had.
     width: Option<Pixels>,
     /// The live roster's scroll, kept so the selected row can be brought into view and the

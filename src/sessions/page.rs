@@ -531,6 +531,12 @@ pub struct LinkOffer {
 }
 
 impl LinkOffer {
+    /// The old names the offer changes the links from.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn old(&self) -> &[String] {
+        &self.old
+    }
+
     /// The offer in a pane's typed footer: what changes, and the action that does it.
     pub fn notice<A>(&self, update: A) -> Notice<A> {
         Notice::new(crate::sentence!(
@@ -2380,6 +2386,9 @@ impl Sessions {
             .insert(event.to_owned(), renamed.clone());
         let mut changes = Vec::new();
         let mut count = 0;
+        // The old names that the notes' links say: a title typed letter by letter passes many
+        // names, and the offer names only those a link holds.
+        let mut said = std::collections::BTreeSet::new();
         for note in &self.notes {
             let draft =
                 if let Some(draft) = self.draft.as_ref().filter(|draft| draft.path == note.path) {
@@ -2392,6 +2401,13 @@ impl Sessions {
             let (body, found) = updated_event_links(&draft.body, &scoped);
             if found > 0 {
                 count += found;
+                timeline::each_reference(&draft.body, |_, _, id, label| {
+                    if id == event
+                        && let Some(label) = label
+                    {
+                        said.insert(label.to_owned());
+                    }
+                });
                 changes.push((draft, body));
             }
         }
@@ -2406,7 +2422,11 @@ impl Sessions {
         (count > 0).then(|| LinkOffer {
             changes,
             title: timeline::reference_label(current, day),
-            old: renamed.clone(),
+            old: renamed
+                .iter()
+                .filter(|old| said.contains(*old))
+                .cloned()
+                .collect(),
             count,
         })
     }
@@ -4578,6 +4598,56 @@ impl Sessions {
             word: "Processing failed",
             words: words.to_owned(),
         });
+    }
+
+    /// Processing of the open session finishes now, as the background job would.
+    pub fn simulate_job_finished(&mut self) {
+        let session = self.selected.expect("an open session");
+        self.finish_job(Ok(None), session);
+    }
+
+    /// A job that stays in progress, for a capture of that state.
+    pub fn simulate_job(&mut self, progress: processing::Progress) {
+        self.end_notice();
+        self.processed_session = None;
+        self.processed_recording = None;
+        self.job_done = false;
+        self.job_warned = false;
+        let session = self.selected.expect("an open session");
+        let path = self.recordings[0].path.clone();
+        if let processing::Progress::Transcribing { part, of } = &progress {
+            fs::write(
+                processing::transcript_path(&path),
+                format!(
+                    "---\ntranscript_parts_done: {part}\ntranscript_parts: {of}\n---\n\nThe party held the bridge.\n"
+                ),
+            )
+            .expect("a partial raw transcript before cancellation");
+            self.refresh_recordings();
+        }
+        if matches!(progress, processing::Progress::Asking { .. }) {
+            fs::write(
+                processing::transcript_path(&path),
+                "---\ntranscript_parts_done: 1\ntranscript_parts: 1\n---\n\nThe party held the bridge.\n",
+            )
+            .expect("a complete raw transcript before the LLM pass");
+            self.refresh_recordings();
+        }
+        self.job = Some((Job::held(path, progress), session));
+    }
+
+    /// A job that ends with a warning, stored as a real one is.
+    pub fn simulate_job_end_warned(&mut self, words: &str) {
+        let (job, session) = self.job.as_ref().expect("a job");
+        let session = *session;
+        fs::write(processing::warning_path(&job.recording), words).expect("the warning");
+        self.finish_job(Ok(Some(words.to_owned())), session);
+    }
+
+    /// The held job ends with this result, as the background job would.
+    pub fn simulate_job_end(&mut self, result: Result<Option<String>, String>) {
+        let session = self.job.as_ref().expect("a job").1;
+        self.finish_job(result, session);
     }
 
     /// The open note's file changes outside Splat while the DM has unsaved words.

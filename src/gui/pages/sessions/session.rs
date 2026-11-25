@@ -187,14 +187,25 @@ pub(super) fn render(
                 } else {
                     (width * 0.4).clamp(PLAN_WIDTH, PLAN_MAX_WIDTH)
                 };
-                let plan = super::plan::render(root, false, window, cx);
+                let plan_focus = super::note::plan_focus(root, cx);
+                let plan = div()
+                    .size_full()
+                    .track_focus(&plan_focus)
+                    .child(super::plan::render(root, false, window, cx));
                 let note = super::note::render(root, beside, window, cx);
                 kit::Columns::new("session-plan-note")
                     .column(plan_width, PLAN_WIDTH..px(4000.0), plan)
                     .rest(div().size_full().pl(L).child(note))
                     .into_any_element()
             }
-            Shown::Plan => super::plan::render(root, true, window, cx),
+            Shown::Plan => {
+                let plan_focus = super::note::plan_focus(root, cx);
+                div()
+                    .size_full()
+                    .track_focus(&plan_focus)
+                    .child(super::plan::render(root, true, window, cx))
+                    .into_any_element()
+            }
             Shown::Note => super::note::render(root, beside, window, cx),
             Shown::Recordings => super::recordings::render(root, window, cx),
         }
@@ -419,7 +430,8 @@ fn last_time(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Option<AnyEle
         }))
     });
     // The link keeps its words; the preview gives way, cut at the line's end.
-    let preview = (!last.preview.is_empty() || carry.is_none()).then(|| {
+    // With nothing written last time there is no preview, so no dash (egui: the link alone).
+    let preview = (!last.preview.is_empty()).then(|| {
         kit::text::one_line(Type::Small, c.muted, format!("— {}", last.preview))
             .max_w(READER_MEASURE)
             .flex_1()

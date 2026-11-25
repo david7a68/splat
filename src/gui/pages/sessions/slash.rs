@@ -1,13 +1,15 @@
 //! `/` in the note (`sessions/slash.rs`): a short menu of commands at the note. `Search` links an
 //! entry or a note; `Generate NPC` rolls one from the campaign's tables, saves it to the World,
 //! and links it. The link goes where the `/` was typed, so the DM keeps writing. Up, Down and
-//! Enter choose; Escape closes and leaves the words as they are.
+//! Enter choose; Escape closes and leaves the words as they are. With only the `/` typed, Enter
+//! still ends the line. The menu has these keys only while the note or the menu has the
+//! keyboard, and a press outside the menu closes it (egui's popup closed on a click outside).
 use super::note;
 use crate::gui::{SplatRoot, kit, theme};
 use crate::sessions::page::gpui_facade::slash as rules;
 use gpui::{
-    AnyElement, Context, ElementId, IntoElement, ParentElement, SharedString, Styled, Window, div,
-    px,
+    AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, SharedString,
+    Styled, Window, div, px,
 };
 use theme::{L, M, RADIUS_LAYER, S, Type, XS, colors};
 use uuid::Uuid;
@@ -26,6 +28,8 @@ pub(super) struct Open {
 enum Stage {
     Menu {
         highlight: usize,
+        /// Up or Down moved the highlight: Enter chooses, also with no letters typed.
+        moved: bool,
     },
     Search {
         query: String,
@@ -63,7 +67,7 @@ pub(super) fn follow(
     let state = &mut root.pages.sessions.note;
     match &mut state.slash {
         Some(open) if open.session == session && open.in_panel == in_panel => {
-            if let Stage::Menu { highlight } = &mut open.stage {
+            if let Stage::Menu { highlight, .. } = &mut open.stage {
                 let typed: Option<String> =
                     (caret > open.at && words.chars().nth(open.at) == Some('/')).then(|| {
                         words
@@ -86,46 +90,70 @@ pub(super) fn follow(
                     session,
                     in_panel,
                     at: caret - 1,
-                    stage: Stage::Menu { highlight: 0 },
+                    stage: Stage::Menu {
+                        highlight: 0,
+                        moved: false,
+                    },
                 });
             }
         }
     }
 }
 
-/// Up, Down, Enter and Escape go to the open menu before the editor sees them.
 /// Up, Down, Enter and Escape reach the open menu before any key binding (the editor's own,
-/// the root's Escape): a keystroke interceptor, kept for the root's life.
+/// the root's Escape): a keystroke interceptor, kept for the root's life. A key the menu does not
+/// take goes to the note's other keys (`note::keys`).
 pub(super) fn init(window: &mut Window, cx: &mut Context<SplatRoot>) -> gpui::Subscription {
     let _ = window;
     let root = cx.entity().downgrade();
     cx.intercept_keystrokes(move |event, window, cx| {
-        let _ = root.update(cx, |root, cx| keys(root, &event.keystroke, window, cx));
+        let _ = root.update(cx, |root, cx| {
+            if !keys(root, &event.keystroke, window, cx) {
+                note::keys(root, &event.keystroke, window, cx);
+            }
+        });
     })
 }
 
+/// The open menu's keys; true when it took the key.
 fn keys(
     root: &mut SplatRoot,
     keystroke: &gpui::Keystroke,
     window: &mut Window,
     cx: &mut Context<SplatRoot>,
-) {
+) -> bool {
     let session = root.app.sessions.gv_selected();
     let Some(open) = root
         .pages
         .sessions
         .note
         .slash
-        .as_mut()
+        .as_ref()
         .filter(|open| open.session == session)
     else {
-        return;
+        return false;
     };
     let in_panel = open.in_panel;
-    if keystroke.modifiers.modified() {
-        return;
+    if !has_keys(root, window, cx) || keystroke.modifiers.modified() {
+        return false;
     }
     let key = keystroke.key.as_str();
+    // With only the `/`, Enter ends the line, and the menu goes with the line's end.
+    if key == "enter"
+        && let Some(Open {
+            at,
+            stage: Stage::Menu { moved: false, .. },
+            ..
+        }) = root.pages.sessions.note.slash
+        && typed(root, in_panel, at, cx).0.is_empty()
+    {
+        root.pages.sessions.note.slash = None;
+        cx.notify();
+        return false;
+    }
+    let Some(open) = root.pages.sessions.note.slash.as_mut() else {
+        return false;
+    };
     match key {
         "escape" => {
             let in_menu = matches!(open.stage, Stage::Menu { .. });
@@ -136,17 +164,15 @@ fn keys(
             }
         }
         "up" | "down" => match &mut open.stage {
-            Stage::Menu { highlight } | Stage::Search { highlight, .. } => {
-                *highlight = if key == "up" {
-                    highlight.saturating_sub(1)
-                } else {
-                    *highlight + 1
-                };
+            Stage::Menu { highlight, moved } => {
+                *moved = true;
+                *highlight = step(*highlight, key);
             }
+            Stage::Search { highlight, .. } => *highlight = step(*highlight, key),
             Stage::Npc { .. } => {}
         },
         "enter" => match &open.stage {
-            Stage::Menu { highlight } => {
+            Stage::Menu { highlight, .. } => {
                 let highlight = *highlight;
                 choose_command(root, in_panel, highlight, window, cx);
             }
@@ -158,10 +184,44 @@ fn keys(
             }
             Stage::Npc { .. } => save_npc(root, in_panel, window, cx),
         },
-        _ => return,
+        _ => return false,
     }
     cx.stop_propagation();
     cx.notify();
+    true
+}
+
+/// Whether the open menu has the keys now. Its keys are the note's or the menu's own: a key
+/// pressed in another control, or while the note is not drawn, goes on as usual (egui: only
+/// while the editor had focus).
+pub(super) fn has_keys(root: &SplatRoot, window: &Window, cx: &gpui::App) -> bool {
+    let session = root.app.sessions.gv_selected();
+    let Some(open) = root
+        .pages
+        .sessions
+        .note
+        .slash
+        .as_ref()
+        .filter(|open| open.session == session)
+    else {
+        return false;
+    };
+    let in_menu = note::menu_has_keyboard(root, window, cx);
+    match open.stage {
+        Stage::Menu { .. } | Stage::Npc { .. } => {
+            in_menu || note::has_keyboard(root, open.in_panel, window, cx)
+        }
+        Stage::Search { .. } => in_menu,
+    }
+}
+
+/// The highlight after Up or Down.
+fn step(highlight: usize, key: &str) -> usize {
+    if key == "up" {
+        highlight.saturating_sub(1)
+    } else {
+        highlight + 1
+    }
 }
 
 /// The words typed after the `/` (the command's letters), as the note holds them now.
@@ -352,7 +412,7 @@ pub(super) fn render(
     let c = colors();
     let at = open.at;
     let content: AnyElement = match &open.stage {
-        Stage::Menu { highlight } => {
+        Stage::Menu { highlight, .. } => {
             let highlight = *highlight;
             let (letters, _) = typed(root, in_panel, at, cx);
             let found = rules::commands(&letters)?;
@@ -514,7 +574,14 @@ pub(super) fn render(
             column.into_any_element()
         }
     };
+    let focus = note::menu_focus(root, cx);
     let layer = div()
+        .track_focus(&focus)
+        // A press outside closes the menu; what was typed stays as it is.
+        .on_mouse_down_out(cx.listener(|root, _, _, cx| {
+            root.pages.sessions.note.slash = None;
+            cx.notify();
+        }))
         .w(MENU_WIDTH)
         .p(S)
         .rounded(RADIUS_LAYER)

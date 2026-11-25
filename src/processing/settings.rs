@@ -360,6 +360,15 @@ impl ProcessingSettings {
         self.config.input = Some(name.to_owned());
     }
 
+    /// Both keys saved for the services chosen now, as after the DM saved them in Settings.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn simulate_keys(&mut self) {
+        self.speech_key.saved = true;
+        self.llm_key.saved = true;
+        self.config.speech_key_for = self.config.speech_url.clone();
+        self.config.llm_key_for = self.config.llm_url.clone();
+    }
+
     /// A key for the service chosen now. A key saved for another service does not count,
     /// because it must never be sent to a different company.
     pub fn has_key(&self, slot: KeySlot) -> bool {

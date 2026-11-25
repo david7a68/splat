@@ -23,8 +23,8 @@ use crate::timeline::page::{ADD_KINDS, FILTERS, ListAct};
 use crate::timeline::{Kind, kind_icon};
 use crate::{Page, timeline};
 use gpui::{
-    AnyElement, Context, InteractiveElement, IntoElement, ParentElement, Pixels, ScrollHandle,
-    SharedString, Styled, UniformListScrollHandle, Window, div, prelude::*, px,
+    AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, Pixels,
+    ScrollHandle, SharedString, Styled, UniformListScrollHandle, Window, div, prelude::*, px,
 };
 
 /// Two columns from this width of the page; below it the open event takes the list's place.
@@ -47,7 +47,17 @@ pub struct State {
     /// heights, for whether the title line scrolls with the form (`detail::render`).
     pub(crate) detail_room: std::rc::Rc<std::cell::Cell<(Pixels, Pixels)>>,
     /// The page's keyboard focus, so Ctrl+S reaches it while no field has the keyboard.
-    focus: Option<gpui::FocusHandle>,
+    pub(crate) focus: Option<gpui::FocusHandle>,
+    /// The disk conflict's comparison, made again only when the book or the file changes.
+    comparison: Option<Comparison>,
+}
+
+/// The draft beside the file, and what it was made from: the book's revision and the file's
+/// stamp (its length and modified time).
+struct Comparison {
+    revision: crate::design::memo::Revision,
+    stamp: Option<(u64, std::time::SystemTime)>,
+    texts: Result<(String, String), String>,
 }
 
 /// Once, when the root is built.
@@ -448,41 +458,41 @@ impl crate::design::outcome::Fault for Changed {
     }
 }
 
-/// The draft and the file side by side while the file changed under the draft.
-fn comparison(root: &SplatRoot) -> AnyElement {
-    let c = colors();
-    match root.app.timeline.conflict_comparison() {
-        Ok((draft, disk)) => {
-            let side = |id: &'static str, title: &'static str, words: String| {
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .gap(XS)
-                    .child(kit::label(title, 0))
-                    .child(
-                        div().flex_1().min_h_0().child(kit::scroll_column(
-                            id,
-                            div()
-                                .ty(Type::Mono)
-                                .text_color(c.text)
-                                .whitespace_normal()
-                                .child(words),
-                        )),
-                    )
-            };
-            div()
-                .flex()
-                .flex_row()
-                .gap(L)
-                .size_full()
-                .child(side("timeline-draft", "Your version", draft))
-                .child(side("timeline-disk", "Timeline.md now", disk))
+/// The draft and the file side by side while the file changed under the draft
+/// (`design::draft_comparison_styled`): aligned line by line, each difference marked, in the
+/// source's monospace. The file is read again only when the book or the file's stamp changes.
+fn comparison(root: &mut SplatRoot) -> AnyElement {
+    let book = &root.app.timeline;
+    let revision = book.revision();
+    let stamp = book
+        .path()
+        .and_then(|path| std::fs::metadata(path).ok())
+        .and_then(|meta| Some((meta.len(), meta.modified().ok()?)));
+    let kept = &mut root.pages.timeline.comparison;
+    if kept
+        .as_ref()
+        .is_none_or(|kept| kept.revision != revision || kept.stamp != stamp)
+    {
+        *kept = Some(Comparison {
+            revision,
+            stamp,
+            texts: book.conflict_comparison(),
+        });
+    }
+    match kept.as_ref().map(|kept| &kept.texts) {
+        Some(Ok((draft, disk))) => {
+            let id = ElementId::Name(SharedString::from(format!(
+                "timeline-conflict-{}",
+                book.path()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_default()
+            )));
+            kit::DraftComparison::new(id, draft.clone(), disk.clone())
+                .source()
                 .into_any_element()
         }
-        Err(error) => kit::Message::new(kit::Tone::Error, error).into_any_element(),
+        Some(Err(error)) => kit::Message::new(kit::Tone::Error, error.clone()).into_any_element(),
+        None => div().into_any_element(),
     }
 }
 

@@ -59,6 +59,12 @@ pub(super) fn render(
             "New events go to no session, so no note is open here. Choose a session on the Timeline page.",
         )
         .into_any_element(),
+        // While the file changed under the draft, the panel shows the draft beside the file
+        // (egui: the shared note editor's comparison), so nothing is typed into a draft that
+        // cannot save; the banner holds the choice.
+        PanelState::Note { .. } if root.app.sessions.gv_conflict() => {
+            super::note::conflict(root, window, cx)
+        }
         PanelState::Note { .. } => super::note::editor(root, true, window, cx),
     };
     let lines = root.app.sessions.gv_panel_footer();

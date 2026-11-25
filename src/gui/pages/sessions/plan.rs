@@ -1043,9 +1043,8 @@ fn event_details(
     }
     // A played fight's block has its own `Timeline` among its links.
     let timeline = (details.fight.is_none()).then(|| {
-        kit::Button::quiet(id(format!("plan-event-timeline-{event}")), "Timeline")
-            .plain()
-            .line_start()
+        // A link that goes to another page (egui: a link under the open row).
+        kit::Link::new(id(format!("plan-event-timeline-{event}")), "Timeline")
             .on_click(on(cx, PlanAct::OpenEventOnTimeline(event.to_owned())))
     });
     column.children(timeline).into_any_element()
@@ -1205,6 +1204,7 @@ fn fight_row(
         running,
         saved,
         open,
+        day,
     } = row;
     let lead = kit::IconButton::new(
         id(format!("plan-fight-open-{path}-{position}")),
@@ -1252,6 +1252,13 @@ fn fight_row(
         }
         words.push_str(&part);
     }
+    // The day it is played on, after the summary (egui `planned_summary_on_road`).
+    if let Some(day) = day {
+        if !words.is_empty() {
+            words.push_str(" · ");
+        }
+        words.push_str(&day);
+    }
     let highlights = strong.into_iter().map(|range| {
         (
             range,
@@ -1262,10 +1269,21 @@ fn fight_row(
             },
         )
     });
-    let second = div()
-        .ty_small()
-        .text_color(c.muted)
-        .child(gpui::StyledText::new(words).with_highlights(highlights));
+    // A paused run of the fight says its state in place of the roster (egui
+    // `plan_saved_status`); the whole saved-run record stays in Encounters.
+    let second: AnyElement = match saved.as_ref().filter(|_| !running) {
+        Some(saved) => kit::status(&kit::Status::new(
+            icons::RUN,
+            crate::encounters::run_state_word(saved, true),
+            c.muted,
+        ))
+        .into_any_element(),
+        None => div()
+            .ty_small()
+            .text_color(c.muted)
+            .child(gpui::StyledText::new(words).with_highlights(highlights))
+            .into_any_element(),
+    };
     let mut items = vec![
         kit::MenuItem::new("Remove from tonight")
             .on_click(on(cx, PlanAct::RemoveFight(position, name.clone()))),
@@ -1306,21 +1324,18 @@ fn fight_row(
     actions.push(row_menu(&name, items));
     let details = open.then(|| {
         (
-            kit::Button::quiet(id(format!("plan-read-encounter-{path}")), "Read encounter")
-                .plain()
-                .line_start()
-                .on_click(on(cx, PlanAct::ReadEncounter(name.clone())))
+            // It opens the encounter in Lookup (egui: a link under the open row).
+            div()
+                .flex()
+                .child(
+                    kit::Link::new(id(format!("plan-read-encounter-{path}")), "Read encounter")
+                        .on_click(on(cx, PlanAct::ReadEncounter(name.clone()))),
+                )
                 .into_any_element(),
             (probes, at),
         )
     });
-    row_frame(
-        Some(lead),
-        title,
-        Some(second.into_any_element()),
-        actions,
-        details,
-    )
+    row_frame(Some(lead), title, Some(second), actions, details)
 }
 
 trait SmallText {

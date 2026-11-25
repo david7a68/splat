@@ -140,14 +140,16 @@ fn editor(
                     },
                 ))),
             );
+            // The pane's width, styled as the note's source is (egui: the full pane, headings
+            // bold, `{{…}}` muted).
             div()
                 .key_context("SessionTemplate")
                 .size_full()
-                .max_w(super::note::frame_width())
                 .child(
                     kit::TextEditor::new(id(format!("template-text-{}", path.display())), words)
                         .name("Template text")
                         .text_type(Type::Prose)
+                        .markdown_source()
                         .fill()
                         .on_change(cx.listener(|root, words: &str, _, cx| {
                             root.app.sessions.gv_template_edited(words);
@@ -167,11 +169,9 @@ fn editor(
             );
             kit::scroll_column(
                 "template-built-in",
-                div().max_w(theme::READER_MEASURE).child(kit::text(
-                    Type::Prose,
-                    c.text,
-                    template.built_in.unwrap_or_default(),
-                )),
+                div()
+                    .max_w(theme::READER_MEASURE)
+                    .child(source_read_only(template.built_in.unwrap_or_default())),
             )
             .into_any_element()
         };
@@ -278,5 +278,19 @@ fn new_template(
                 ),
         )
         .children(blocked.map(|reason| kit::text(Type::Small, colors().muted, reason).pt(px(4.0))))
+        .into_any_element()
+}
+
+/// A built-in template's words, read-only, with the looks the note's editor gives its source
+/// (`kit::markdown_source`): headings bold, markup and `{{…}}` faint.
+fn source_read_only(words: String) -> AnyElement {
+    let c = colors();
+    let highlights: Vec<_> = kit::markdown_source::style(&words)
+        .decorations
+        .into_iter()
+        .map(|decoration| (decoration.range, decoration.style))
+        .collect();
+    kit::text(Type::Prose, c.text, "")
+        .child(gpui::StyledText::new(words).with_highlights(highlights))
         .into_any_element()
 }

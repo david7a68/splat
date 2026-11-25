@@ -21,6 +21,10 @@ pub(crate) struct State {
     pub(super) slash: Option<super::slash::Open>,
     /// The `/` menu's keys (`slash::init`).
     slash_keys: Option<gpui::Subscription>,
+    /// The `/` menu's place in the focus tree: its search field has the keyboard inside it.
+    slash_focus: Option<gpui::FocusHandle>,
+    /// The plan column's place in the focus tree: a plan control has the keyboard inside it.
+    plan_focus: Option<gpui::FocusHandle>,
 }
 
 /// The editor of the open note at this place, if it was drawn.
@@ -32,6 +36,113 @@ fn handle(root: &SplatRoot, in_panel: bool) -> Option<kit::EditorHandle> {
         .editors
         .get(&(session, in_panel))
         .cloned()
+}
+
+/// The `/` menu's focus handle, made once.
+pub(super) fn menu_focus(root: &mut SplatRoot, cx: &mut App) -> gpui::FocusHandle {
+    root.pages
+        .sessions
+        .note
+        .slash_focus
+        .get_or_insert_with(|| cx.focus_handle())
+        .clone()
+}
+
+/// The plan column's focus handle, made once (`session::render` tracks it on the plan).
+pub(super) fn plan_focus(root: &mut SplatRoot, cx: &mut App) -> gpui::FocusHandle {
+    root.pages
+        .sessions
+        .note
+        .plan_focus
+        .get_or_insert_with(|| cx.focus_handle())
+        .clone()
+}
+
+/// Whether the keyboard is in the `/` menu (its search field), as last drawn.
+pub(super) fn menu_has_keyboard(root: &SplatRoot, window: &Window, cx: &App) -> bool {
+    root.pages
+        .sessions
+        .note
+        .slash_focus
+        .as_ref()
+        .is_some_and(|focus| focus.contains_focused(window, cx))
+}
+
+/// Whether the note's editor at this place has the keyboard and was drawn in the last frame (a
+/// focus kept by an editor that is no longer drawn is not the note's).
+pub(super) fn has_keyboard(root: &SplatRoot, in_panel: bool, window: &Window, cx: &App) -> bool {
+    handle(root, in_panel).is_some_and(|handle| handle.focused(window, cx))
+        && root.focus.contains_focused(window, cx)
+}
+
+/// The note's keys that are not the `/` menu's (`slash::init`'s interceptor):
+/// - a correction key in the note means the DM goes on with the same line, so no new paragraph
+///   waits (`gv_new_thought`);
+/// - beside the Notes panel, words typed or pasted while no control has the keyboard belong in
+///   the note: a stray click leaves the keyboard on nothing while the DM's eyes are on the table.
+pub(super) fn keys(
+    root: &mut SplatRoot,
+    keystroke: &gpui::Keystroke,
+    window: &mut Window,
+    cx: &mut Context<SplatRoot>,
+) {
+    const CORRECTING: [&str; 8] = [
+        "backspace",
+        "delete",
+        "left",
+        "right",
+        "up",
+        "down",
+        "home",
+        "end",
+    ];
+    if CORRECTING.contains(&keystroke.key.as_str())
+        && (has_keyboard(root, false, window, cx) || has_keyboard(root, true, window, cx))
+    {
+        root.app.sessions.gv_correcting();
+        return;
+    }
+    let panel_drawn = root.app.sessions.notes_open && root.app.page != crate::Page::Sessions;
+    let on_nothing = window
+        .focused(cx)
+        .is_none_or(|focused| page_keyboard(root).contains(&focused));
+    if !panel_drawn || !on_nothing || root.modal_open(cx) {
+        return;
+    }
+    let modifiers = keystroke.modifiers;
+    let words = if modifiers.secondary(cx) && !modifiers.alt && keystroke.key == "v" {
+        cx.read_from_clipboard().and_then(|item| item.text())
+    } else if !modifiers.control && !modifiers.alt && !modifiers.platform && !modifiers.function {
+        keystroke
+            .key_char
+            .clone()
+            .filter(|words| !words.is_empty() && !words.chars().any(char::is_control))
+    } else {
+        None
+    };
+    let Some(words) = words.filter(|words| !words.is_empty()) else {
+        return;
+    };
+    root.app.sessions.gv_stray_words(&words);
+    cx.stop_propagation();
+    cx.notify();
+}
+
+/// The focus handles that mean no control has the keyboard: the root's, and a page's own, which
+/// a page takes from the root so its keys reach it.
+fn page_keyboard(root: &SplatRoot) -> Vec<gpui::FocusHandle> {
+    let pages = &root.pages;
+    std::iter::once(Some(&root.focus))
+        .chain([
+            pages.timeline.focus.as_ref(),
+            pages.run.focus.as_ref(),
+            pages.encounters.focus.as_ref(),
+            pages.library.focus.as_ref(),
+            pages.campaigns.focus.as_ref(),
+        ])
+        .flatten()
+        .cloned()
+        .collect()
 }
 
 /// Where the note editor last drew the character at byte `at`, in window coordinates.
@@ -118,6 +229,9 @@ pub(super) fn editor(
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let session = root.app.sessions.gv_selected();
+    // In the panel, a change made by the note's own writes keeps the DM's Undo history; a
+    // reload or a discard ends it. Asked before the words, which mark the panel's hold.
+    let own_write = in_panel && root.app.sessions.gv_note_own_write();
     let Some(words) = root.app.sessions.gv_note_words(in_panel) else {
         return kit::Message::new(kit::Tone::Error, "This note could not be opened.")
             .into_any_element();
@@ -157,7 +271,15 @@ pub(super) fn editor(
         }
     }
     let focused = handle.focused(window, cx);
-    let elsewhere = window.focused(cx).is_some_and(|other| other != root.focus);
+    // Elsewhere is a plan control: not the note's own `/` search field, the tabs or a control
+    // outside the plan, which in the tab layout would swap the note (and its menu) for the plan.
+    let elsewhere = root
+        .pages
+        .sessions
+        .note
+        .plan_focus
+        .as_ref()
+        .is_some_and(|plan| plan.contains_focused(window, cx));
     root.app
         .sessions
         .gv_note_has_focus(in_panel, focused, elsewhere);
@@ -171,14 +293,30 @@ pub(super) fn editor(
         .text_type(Type::Prose)
         .markdown_source()
         .fill()
-        .on_change(cx.listener(move |root, words: &str, _, cx| {
+        .own_write(own_write)
+        .on_change(cx.listener(move |root, words: &str, window, cx| {
             let before = root
                 .app
                 .sessions
                 .gv_note_words(in_panel)
                 .unwrap_or_default();
-            root.app.sessions.gv_note_edited(in_panel, words);
             let caret = caret(root, in_panel, cx).unwrap_or(words.len());
+            // After a step of the run, the first words typed at the end of a line start a new
+            // paragraph.
+            if let Some((now, caret)) = root.app.sessions.gv_new_thought(&before, words, caret) {
+                root.app.sessions.gv_note_edited(in_panel, &now);
+                // The editor is inside its own change event: show the words after it.
+                cx.defer_in(window, move |root, window, cx| {
+                    if let Some(handle) = self::handle(root, in_panel) {
+                        handle.show_words(now, window, cx);
+                        handle.set_caret(caret, cx);
+                    }
+                    cx.notify();
+                });
+                cx.notify();
+                return;
+            }
+            root.app.sessions.gv_note_edited(in_panel, words);
             super::slash::follow(root, in_panel, &before, words, caret);
             cx.notify();
         }));
