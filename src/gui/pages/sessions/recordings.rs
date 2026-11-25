@@ -189,6 +189,12 @@ fn row(row: RecordingRow, cx: &mut Context<SplatRoot>) -> AnyElement {
     }
     if !actions.is_empty() || reason_link.is_some() {
         let mut line = div().flex().flex_row().flex_wrap().items_center().gap(S);
+        // A blocked choice says why beside it, as egui's `blocked_reason` did (`Stop recording
+        // first.`), unless the reason is a link of its own.
+        let why = actions
+            .iter()
+            .find_map(|choice| choice.blocked.clone())
+            .filter(|_| reason_link.is_none());
         for choice in actions {
             let element_id = id(format!("recording-{}-{key}", choice.words));
             let click = on(cx, path.clone(), choice.act.clone());
@@ -204,6 +210,12 @@ fn row(row: RecordingRow, cx: &mut Context<SplatRoot>) -> AnyElement {
                 button = button.hint(hover);
             }
             line = line.child(button.on_click(click));
+        }
+        if let Some(why) = why {
+            line = line.child(kit::target(
+                kit::text(Type::Small, colors().muted, why.clone()),
+                why,
+            ));
         }
         if let Some((words, key_needed)) = reason_link {
             line = line.child(

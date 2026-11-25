@@ -381,6 +381,10 @@ fn session_recording_states() {
     capture(&mut shell, "session-recording__03-recording-hearing__1200x800");
     shell.click("id:session-tabs-Recordings 1");
     shell.update(|root, _, _| root.app.sessions.simulate_recorder_health(Health::Hearing));
+    assert!(
+        shell.bounds("Stop recording first.").is_some(),
+        "the blocked Process says why beside it"
+    );
     capture(&mut shell, "session-recording__04-recording-listed__1200x800");
     shell.click("Stop recording");
     // As in egui's scenario, both keys are saved by this step, so Process is ready.
