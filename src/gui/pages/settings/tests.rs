@@ -315,5 +315,14 @@ fn campaign_copy_registered() {
         shell.read(|root| root.app.campaigns.all().iter().any(|c| c.name == NAME)),
         "the copy is registered"
     );
+    // The rail's status link wraps at the rail's edge, as egui's did ("Session folder not /
+    // found"), and is never cut there.
+    let status = shell
+        .bounds("Session folder not found")
+        .expect("the rail's status link");
+    assert!(
+        status.size.height > crate::gui::theme::Type::Small.line() * 1.5,
+        "the status's word wraps onto a second line: {status:?}"
+    );
     shell.capture("campaign-copy-registered__01-copy-registered__1200x800");
 }

@@ -54,12 +54,15 @@ pub fn status(status: &Status) -> Div {
     status_line(status, false)
 }
 
-/// The status, its word underlined when it is a link's (`StatusLink`).
+/// The status, its word underlined when it is a link's (`StatusLink`). It gives way to its
+/// parent's width (`min_w_0`), so a long word wraps at the parent's edge, as egui's did, and is
+/// never cut there (the rail's `Session folder not found`).
 fn status_line(status: &Status, underlined: bool) -> Div {
     div()
         .flex()
         .flex_row()
         .items_start()
+        .min_w_0()
         .gap(XS)
         .text_color(status.color)
         .child(
@@ -121,6 +124,7 @@ impl RenderOnce for StatusLink {
             .id(self.id.clone())
             .flex()
             .items_center()
+            .min_w_0()
             .min_h(MIN_TARGET)
             .px(XS)
             .rounded(RADIUS_CONTROL)
