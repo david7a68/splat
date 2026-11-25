@@ -686,14 +686,19 @@ impl Reader {
         }
     }
 
-    /// Whether the place link's chooser is open.
-    pub fn place_choices_open(&self) -> bool {
-        self.place_choices_open
+    /// Whether the place link's chooser shows under `item`'s Place. It belongs to the note it
+    /// opened on (opening another note closes it), and it shows only while that link still
+    /// matches several notes: a duplicate that goes ends the choice, in World and in Lookup.
+    pub fn place_chooser_open(&self, item: &Item, index: &ContentIndex) -> bool {
+        let id = item.entry.id;
+        self.place_choices_open == Some(id)
+            && index.place_of(id).is_none()
+            && !index.place_choices(id).is_empty()
     }
 
-    /// The place link's warning: the chooser opens or closes.
-    pub fn toggle_place_choices(&mut self) {
-        self.place_choices_open = !self.place_choices_open;
+    /// The place link's warning on the note `id`: the chooser opens or closes.
+    pub fn toggle_place_choices(&mut self, id: Uuid) {
+        self.place_choices_open = (self.place_choices_open != Some(id)).then_some(id);
     }
 
     /// `Always use this one` in the place chooser.

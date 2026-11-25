@@ -113,10 +113,11 @@ fn lookup_shows(shell: &mut Shell) -> Option<String> {
     })
 }
 
-/// Open Lookup and search for `name`: it shows that note.
+/// Open Lookup and search for `name`: it shows that note. The words go in as one input, as
+/// egui's scenarios typed them: Lookup opened again on the same words keeps its result list.
 fn look_up(shell: &mut Shell, name: &str) {
     shell.click("Lookup");
-    shell.type_text(name);
+    shell.insert_text(name);
     shell.settle();
     let query = shell.read(|root| (root.app.lookup.open, root.app.lookup.query().to_owned()));
     assert_eq!(
@@ -1097,6 +1098,17 @@ fn world_note_moved() {
     );
     reload(&mut shell, Some(npc));
     click_starting(&mut shell, "Rook Ambry · ");
+    // The place link's warning, icon and words, stays on one line (as in egui).
+    let one_line = |shell: &mut Shell, step: &str| {
+        let link = shell
+            .bounds("Watch House · 2 matches")
+            .expect("the place link");
+        assert!(
+            link.size.height < crate::gui::theme::Type::Body.line() * 2.0,
+            "{step}: the place link is on one line: {link:?}"
+        );
+    };
+    one_line(&mut shell, "01");
     shell.click("Watch House · 2 matches");
     for path in ["Locations/Watch House.md", "Other/Watch House.md"] {
         assert!(shell.bounds(&format!("Always use {path}")).is_some());
@@ -1158,6 +1170,7 @@ fn world_note_moved() {
             .any(|name| name.starts_with("Rook Ambry · ") && name.contains("2 links need fixing")),
         "the row names both link faults: {names:?}"
     );
+    one_line(&mut shell, "03");
     shell.capture("world-note-moved__03-mixed-link-problems-need-fixing__1200x800");
     std::fs::write(&npc_path, &original).unwrap();
     reload(&mut shell, None);
@@ -1183,8 +1196,17 @@ fn world_note_moved() {
             "in Lookup, {path}'s action is clear of it and in the panel: {link:?} {action:?} edge {edge:?}"
         );
     }
+    one_line(&mut shell, "04");
     shell.capture("world-note-moved__04-duplicate-place-chooser-in-lookup__1200x800");
+    // As in egui: the DM follows a file from Lookup's chooser (a step on Lookup's Back trail),
+    // then closes Lookup.
+    shell.click("Locations/Watch House.md");
+    assert_eq!(lookup_shows(&mut shell).as_deref(), Some("Watch House"));
     shell.update(|root, _, _| root.app.lookup.close());
+    // World's chooser is open on Rook Ambry when Obsidian takes the other copy away.
+    click_starting(&mut shell, "Rook Ambry · ");
+    shell.click("Watch House · 2 matches");
+    assert!(shell.bounds("Always use Other/Watch House.md").is_some());
     // Obsidian moves the place and the NPC; the other copy goes.
     std::fs::remove_file(folder.join("Other/Watch House.md")).unwrap();
     std::fs::create_dir_all(folder.join("Locations/Moved")).unwrap();
@@ -1197,13 +1219,34 @@ fn world_note_moved() {
     reload(&mut shell, Some(npc));
     click_starting(&mut shell, "Rook Ambry · ");
     assert!(shell.bounds("Watch House").is_some(), "the place is kept");
+    // One match left: no chooser, and no words that ask for a choice, in either reader.
+    let chooser_open = |shell: &mut Shell, host: crate::gui::pages::world::reader::Host| {
+        shell.update(|root, _, _| {
+            let index = root.app.lookup.index().expect("the notes");
+            let item = &index.items[index.position(npc).expect("Rook Ambry")];
+            host.reader(root).place_chooser_open(item, &index)
+        })
+    };
+    assert!(
+        !chooser_open(&mut shell, crate::gui::pages::world::reader::Host::World),
+        "World's chooser ends with the duplicate"
+    );
     shell.capture("world-note-moved__05-moved-note-keeps-place-in-world__1200x800");
     look_up(&mut shell, "Rook Ambry");
+    assert!(
+        !chooser_open(&mut shell, crate::gui::pages::world::reader::Host::Lookup),
+        "Lookup's chooser ends with the duplicate"
+    );
+    assert!(
+        shell.bounds("Back").is_some(),
+        "Lookup can go Back to Watch House: {:?}",
+        crate::gui::kit::probe::names()
+    );
     shell.capture("world-note-moved__06-moved-note-keeps-place-in-lookup__1200x800");
     shell.update(|root, _, _| root.app.lookup.close());
     let moved = folder.join("Locations/Moved/Rook Ambry.md");
     let external = format!(
-        "{}\n## Patrol after the move\n\nRook keeps the east gate key in the watch room.\n\nKeep this note from Obsidian when the place changes.\n",
+        "{}\n## Patrol after the move\n\nRook keeps the east gate key in the watch room. The relief patrol leaves at midnight and checks the bridge before it returns to the north gate.\n\nKeep this note from Obsidian when the place changes.\n",
         std::fs::read_to_string(&moved).unwrap()
     );
     std::fs::write(&moved, &external).unwrap();
@@ -1261,9 +1304,26 @@ fn world_note_deleted() {
     shell.click("Search the world");
     shell.type_text("Watchkeeper");
     shell.settle();
+    assert!(shell.bounds("Clear").is_some(), "the search offers Clear");
     shell.capture("world-note-deleted__04-npc-stat-block-deleted-in-world__1200x800");
     look_up(&mut shell, "Watchkeeper");
+    // Lookup opened again on its last words keeps the result list: the one match, with its
+    // problem count.
+    let names = crate::gui::kit::probe::names();
+    assert!(
+        shell.read(|root| root.app.lookup.results_shown())
+            && names
+                .iter()
+                .any(|name| name.starts_with("Watchkeeper") && name.contains("2 broken links")),
+        "the result row names its problems: {names:?}"
+    );
     shell.capture("world-note-deleted__05-npc-stat-block-deleted-in-lookup__1200x800");
+    // Clear empties World's search and goes.
+    shell.update(|root, _, _| root.app.lookup.close());
+    shell.settle();
+    shell.click("Clear");
+    assert_eq!(shell.read(|root| root.app.world_page.search().to_owned()), "");
+    assert!(shell.bounds("Clear").is_none());
 }
 
 /// Part of keeps what Splat did not read and what Obsidian changed: a missing group on one line,
@@ -1361,6 +1421,20 @@ fn world_part_of_safety() {
         other,
         "the note already held the change"
     );
+    // The save reads the note again: Part of shows the group the note holds (as egui waited
+    // for it), and the form is closed with nothing to undo.
+    until(&mut shell, "Part of shows Added Guild", |_| {
+        crate::gui::kit::probe::names()
+            .iter()
+            .any(|name| name == "Added Guild")
+    });
+    assert!(
+        shell.bounds("Save changes").is_none()
+            && shell.bounds("Overwrite with my draft").is_none()
+            && shell.bounds("Undo change to Safe Rook").is_none(),
+        "{:?}",
+        crate::gui::kit::probe::names()
+    );
     shell.capture("world-part-of-safety__04-overwrite-already-in-note__1200x800");
     // A changed draft over a list that turned unread on disk.
     write(&readable);
@@ -1374,6 +1448,16 @@ fn world_part_of_safety() {
     shell.click("Added Guild");
     write(&unread);
     shell.click("Save changes");
+    assert!(shell.bounds("Reload and lose my draft").is_some());
+    // The save reads the note again, so its list row names the unread list, not the old
+    // missing group; the choice still waits.
+    until(&mut shell, "the row says 1 value not read", |_| {
+        crate::gui::kit::probe::names().iter().any(|name| {
+            name.starts_with("Safe Rook · ")
+                && name.contains("1 value not read")
+                && !name.contains("Group not found")
+        })
+    });
     assert!(shell.bounds("Reload and lose my draft").is_some());
     shell.capture("world-part-of-safety__05-group-draft-disk-conflict__1200x800");
     shell.click("Overwrite with my draft");

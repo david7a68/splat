@@ -1972,7 +1972,8 @@ pub struct Reader {
     /// A link that matches several files, waiting for the DM to choose.
     many: Vec<usize>,
     many_heading: Option<String>,
-    place_choices_open: bool,
+    /// The note whose place chooser is open.
+    place_choices_open: Option<Uuid>,
     heading_document: Option<Uuid>,
     heading: Option<String>,
     /// What only the app can do, for it to take after this reader draws.
@@ -2422,6 +2423,7 @@ impl Reader {
             self.other_type.clear();
             self.adding = None;
             self.picker = None;
+            self.place_choices_open = None;
             self.error = None;
         }
     }
@@ -2562,7 +2564,7 @@ impl Reader {
         };
         if same {
             self.picker = None;
-            self.place_choices_open = false;
+            self.place_choices_open = None;
             return None;
         }
         // The row, the result and the Undo say one name, `Place` (ruling Q-p, R16).
@@ -2604,7 +2606,7 @@ impl Reader {
         let go = self.written(result, item.entry.id);
         if go.is_some() {
             self.picker = None;
-            self.place_choices_open = false;
+            self.place_choices_open = None;
         }
         go
     }
