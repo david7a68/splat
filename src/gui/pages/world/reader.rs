@@ -1379,20 +1379,31 @@ fn note_text(
             column = column.child(kit::heading(kit::Heading::Section(&section.title), false));
         }
         column = column.child(
-            kit::markdown::Markdown::new(("world-text", at), section.body.to_owned())
-                .document(id)
-                .jump_in(scroll)
-                .on_note(cx.listener(move |root: &mut SplatRoot, note: &str, _, cx| {
-                    if let Some((_, index)) = super::world(root)
-                        && let Some(position) = index.position(id)
-                        && let Some(nav) =
-                            host.reader(root)
-                                .follow(&index.items[position], &index, note)
-                    {
-                        host.take_nav(root, nav, &index);
-                    }
-                    cx.notify();
-                })),
+            // Each host's own id: a table's typed roll and result belong to the reader that
+            // asked (`roll_table::roll_state`), so Lookup never shows World's (egui: it did not).
+            kit::markdown::Markdown::new(
+                (
+                    match host {
+                        Host::World => "world-text",
+                        Host::Lookup => "lookup-text",
+                    },
+                    at,
+                ),
+                section.body.to_owned(),
+            )
+            .document(id)
+            .jump_in(scroll)
+            .on_note(cx.listener(move |root: &mut SplatRoot, note: &str, _, cx| {
+                if let Some((_, index)) = super::world(root)
+                    && let Some(position) = index.position(id)
+                    && let Some(nav) =
+                        host.reader(root)
+                            .follow(&index.items[position], &index, note)
+                {
+                    host.take_nav(root, nav, &index);
+                }
+                cx.notify();
+            })),
         );
     }
     column.into_any_element()
