@@ -178,6 +178,7 @@ pub struct TextField {
     focus: Option<FocusAt>,
     text_type: Option<Type>,
     tight: bool,
+    trailing: Option<gpui::AnyElement>,
 }
 
 impl TextField {
@@ -197,6 +198,7 @@ impl TextField {
             focus: None,
             text_type: None,
             tight: false,
+            trailing: None,
         }
     }
 
@@ -204,6 +206,13 @@ impl TextField {
     /// field (an amount, dice, an initiative total) shows its whole placeholder and number.
     pub fn tight(mut self) -> Self {
         self.tight = true;
+        self
+    }
+
+    /// A control inside the field's frame, after the words: an editable combo's chevron
+    /// (egui's `Dropdown::editable_value` with its `combo_icon`).
+    pub fn trailing(mut self, trailing: impl IntoElement) -> Self {
+        self.trailing = Some(trailing.into_any_element());
         self
     }
 
@@ -349,10 +358,13 @@ impl RenderOnce for TextField {
             element = element.mask_toggle();
         }
         let enter = self.on_enter.clone();
-        let mut frame = frame(focused, height)
-            .ty(ty)
-            .text_color(colors().text)
-            .child(element);
+        let mut frame = frame(focused, height).ty(ty).text_color(colors().text);
+        frame = match self.trailing {
+            Some(trailing) => frame
+                .child(div().flex_1().min_w_0().child(element))
+                .child(trailing),
+            None => frame.child(element),
+        };
         // For tests: the words' own room, inside the frame's padding and the input's (its default
         // `Medium` size), under `<name> words` (a narrow field's placeholder must fit it whole).
         #[cfg(test)]

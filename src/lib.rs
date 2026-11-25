@@ -1465,6 +1465,9 @@ impl Splat {
             self.lookup.refresh();
             self.lookup.files_changed = true;
         }
+        if ctx.take(requests::WINDOW_ACTIVATED).is_some() {
+            self.lookup.check_files();
+        }
         self.lookup.poll(ctx, &self.campaigns);
         if std::mem::take(&mut self.lookup.files_changed) {
             let roots: Vec<_> = self

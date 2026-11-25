@@ -65,17 +65,32 @@ fn section_row(
 /// The package's About row.
 fn about_row(index: usize, label: String, selected: bool, cx: &mut Context<SplatRoot>) -> kit::Row {
     let c = colors();
+    // The mark has the fault's tone (`about_label`): an unreadable manifest is an error, a
+    // deleted one or another problem a warning, as on an entry row.
+    let (mark, words) = [
+        (icons::ERROR, c.result.error),
+        (icons::WARN, c.result.warning),
+    ]
+    .into_iter()
+    .find_map(|(icon, tone)| {
+        label
+            .strip_prefix(icon)
+            .map(|rest| (Some((icon, tone)), rest.trim_start().to_owned()))
+    })
+    .unwrap_or((None, label.clone()));
+    let ty = if selected { Type::Strong } else { Type::Body };
     kit::Row::new("library-about", label.clone())
         .height(Density::Read.row())
         .selected(selected)
+        .children(mark.map(|(icon, tone)| kit::icon(icon, ty, tone).mr(XS)))
         .child(
             div()
                 .flex_1()
                 .min_w_0()
-                .ty(if selected { Type::Strong } else { Type::Body })
+                .ty(ty)
                 .text_color(if selected { c.text } else { c.muted })
                 .truncate()
-                .child(label),
+                .child(words),
         )
         .on_click(cx.listener(move |root, _, _, cx| {
             root.app.library.open_about(index);
@@ -212,16 +227,20 @@ pub(super) fn entries_column(
                 .pb(XS)
                 .child(div().flex_1().min_w_0().child(scope_menu(root, cx)))
                 .when(!sections.is_empty(), |line| {
-                    line.child(div().flex_1().min_w_0().child(
-                        kit::Dropdown::new("library-section", "Section", labels, chosen).on_select(
-                            cx.listener(move |root, at: &usize, _, cx| {
-                                if let Some(section) = sections.get(*at) {
-                                    root.app.library.choose_section(*section, None);
-                                    cx.notify();
-                                }
-                            }),
+                    line.child(
+                        div().flex_1().min_w_0().child(
+                            // While a search lists the whole scope or About is open, no section
+                            // is chosen: the control says `Section`, faint (egui's name).
+                            kit::Dropdown::new("library-section", "Section", labels, chosen)
+                                .placeholder("Section")
+                                .on_select(cx.listener(move |root, at: &usize, _, cx| {
+                                    if let Some(section) = sections.get(*at) {
+                                        root.app.library.choose_section(*section, None);
+                                        cx.notify();
+                                    }
+                                })),
                         ),
-                    ))
+                    )
                 }),
         );
     }

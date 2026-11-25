@@ -192,7 +192,7 @@ fn file_line(view: &ReaderView) -> AnyElement {
                     .min_w_0()
                     .flex_shrink_1()
                     .with_tooltip(path.display().to_string())
-                    .child(kit::text::one_line(Type::Small, c.muted, relative.clone())),
+                    .child(kit::text::path_line(Type::Small, c.muted, relative.clone())),
             );
             if let Some(from) = &line.moved_from {
                 row = row.child(kit::text(Type::Small, c.muted, from.clone()));

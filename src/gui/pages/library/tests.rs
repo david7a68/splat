@@ -261,6 +261,17 @@ fn library_author() {
     // The menu lists the folders whose names hold the field's words, so the field is emptied
     // first (it starts at the kind's folder).
     std::fs::create_dir_all(package_folder(&mut shell).join("Beasts/Ash")).unwrap();
+    // An editable combo (egui's `folder_field`): its chevron is inside the field's frame.
+    let field = shell
+        .bounds("id:library-new-folder")
+        .expect("the Folder field");
+    let chevron = shell
+        .bounds("Suggestions for Folder")
+        .expect("the Folder's chevron");
+    assert!(
+        field.contains(&chevron.center()) && chevron.right() <= field.right(),
+        "the chevron {chevron:?} is inside the Folder field {field:?}"
+    );
     shell.click("id:library-new-folder");
     shell.press("ctrl-a backspace");
     shell.click("Suggestions for Folder");
@@ -338,8 +349,14 @@ fn library_scope() {
     let mut shell = Shell::new("library-scope", Seed::Campaign);
     library(&mut shell);
     search(&mut shell, "fireball");
-    open_row(&mut shell, "Fireball · Spell · Level 3");
+    // The built-in Fireball, by its row's whole name (egui's `click`): the campaign's own
+    // Fireball's row starts with the same words.
+    shell.click("Fireball · Spell · Level 3");
     assert_eq!(open_name(&mut shell).as_deref(), Some("Fireball"));
+    assert!(
+        shell.bounds("Show file").is_none(),
+        "the built-in Fireball is open, which has no file"
+    );
     shell.click("id:library-scope");
     shell.capture("library-scope__01-scope-menu__1200x800");
     shell.click("Everything");
@@ -353,8 +370,20 @@ fn library_scope() {
         "fireball"
     );
     assert_eq!(open_name(&mut shell).as_deref(), Some("Fireball"));
+    assert!(
+        shell.bounds("Show file").is_none(),
+        "the built-in Fireball stays open"
+    );
     shell.capture("library-scope__02-scope-everything__1200x800");
     open_row(&mut shell, "Fireball · Spell · Level 3 · Campaign");
+    assert!(
+        shell.bounds("Show file").is_some(),
+        "the campaign's Fireball is open"
+    );
+    assert!(
+        shell.bounds("id:library-back").is_some(),
+        "Back returns to the built-in Fireball"
+    );
     shell.capture("library-scope__03-campaign-fireball__1200x800");
     scope(&mut shell, "Ashen Marches");
     shell.click("About Ashen Marches");
@@ -914,8 +943,9 @@ fn creature_filter() {
     shell.capture("creature-filter__02-search-terms__1200x800");
 }
 
-/// Scenario `reader-tables`, step 01: a package rule whose table is wider than the reader, read
-/// in the Library at each size. Where it does not fit, the table scrolls sideways and says so.
+/// Scenario `reader-tables`, step 01: a homebrewer makes a rule in the campaign with New entry,
+/// types a table wider than the reader under its template, saves it and reads it, at each size
+/// (egui's steps). Where it does not fit, the table scrolls sideways and says so.
 #[test]
 fn reader_tables_in_library() {
     const TABLE: &str = "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
@@ -929,22 +959,51 @@ Read the row for your class level. A slot is spent when you cast a spell of that
         (1920.0, 1080.0, false),
     ] {
         let mut shell = Shell::with_size("reader-tables", Seed::Campaign, size(px(w), px(h)));
-        let folder = package_folder(&mut shell);
-        let note = splat::content::formats::fixture(
-            "Rule.md",
-            &format!(
-                "splat_id: {}\nsplat_kind: rule\nsplat_key: ashen_marches:rule/spell_progression\nsplat_name: Spell Progression\nsplat_rule: {{}}\n",
-                splat::character::stable_id("spell-progression")
-            ),
-            &format!("\n# Spell Progression\n\n{TABLE}"),
-        )
-        .unwrap();
-        std::fs::write(folder.join("Rules/Spell Progression.md"), note).unwrap();
-        library(&mut shell);
-        scope(&mut shell, "Ashen Marches");
-        open_row(&mut shell, "Spell Progression · ");
-        assert_eq!(open_name(&mut shell).as_deref(), Some("Spell Progression"));
         let name = format!("reader-tables__01-wide-table-in-library__{w}x{h}");
+        library(&mut shell);
+        shell.click("id:library-new");
+        shell.type_text("Spell Progression");
+        shell.click("Kind of entry");
+        shell.click("Rule");
+        shell.click("Create entry");
+        loaded(&mut shell);
+        assert_eq!(open_name(&mut shell).as_deref(), Some("Spell Progression"));
+        assert!(
+            shell
+                .bounds("Spell Progression · Rule · Campaign")
+                .is_some(),
+            "{name}: the new entry's row is in view: {:?}",
+            names_starting("Spell")
+        );
+        shell.click("Markdown editor");
+        shell.press("ctrl-end");
+        shell.insert_text(TABLE);
+        shell.click("id:library-save");
+        loaded(&mut shell);
+        shell.click("Read");
+        assert!(
+            !shell.read(|root| root.app.library.dirty()),
+            "{name}: saved"
+        );
+        // The campaign's own rule: its template's words, then the table.
+        let file = shell.read(|root| {
+            root.app
+                .campaigns
+                .active_campaign()
+                .expect("the campaign")
+                .path
+                .join("Rules/Spell Progression.md")
+        });
+        let text = std::fs::read_to_string(&file).expect("the rule in the campaign");
+        assert!(
+            text.contains("Describe when and how this rule applies.")
+                && text.contains("Ninth-slot"),
+            "{name}: the template's words, then the table: {text}"
+        );
+        assert!(
+            shell.bounds("Edit in Obsidian").is_some(),
+            "{name}: the campaign's own entry is open"
+        );
         assert_eq!(
             shell
                 .bounds("More columns: scroll sideways or use Shift+wheel.")
@@ -1065,22 +1124,56 @@ fn package_delete_entry() {
     assert_eq!(open_name(&mut shell).as_deref(), Some("Ash Exposure"));
     shell.capture("package-delete-entry__01-package-entry-before-delete__1200x800");
     std::fs::remove_file(package.join("Creatures/Cinder Wolf.md")).unwrap();
+    // The DM deleted the file in a file manager and comes back: the window's focus starts the
+    // files' check (egui's `focus_window(false)`, `focus_window(true)`).
+    shell.focus_window_again();
     shell.click("id:nav-Encounters");
     for _ in 0..100 {
-        if shell.read(|root| root.app.encounters.loaded() && !root.app.encounters.busy()) {
+        if shell.read(|root| {
+            !root.app.lookup.busy() && root.app.encounters.loaded() && !root.app.encounters.busy()
+        }) {
             break;
         }
-        shell.update(|root, _, _| root.app.encounters.wait_for_load());
+        shell.update(|root, _, _| {
+            root.app.lookup.wait_for_load();
+            root.app.encounters.wait_for_load();
+        });
         shell.wait(std::time::Duration::from_millis(50));
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    // The run's encounter opens in its editor, where the deleted creature's rows say so.
+    // Bridge Ambush is the paused run: its row's Edit (egui: the Edit beside "Bridge Ambush")
+    // opens the encounter in its editor, where the deleted creature's rows say so.
     let edit = crate::gui::kit::probe::names()
         .into_iter()
-        .find(|name| name.starts_with("id:edit:"))
+        .find(|name| name.starts_with("id:edit:") && name.contains("Encounter Runs"))
         .expect("the paused run's Edit");
     shell.click(&edit);
     assert!(shell.read(|root| root.app.encounters.editor_open()));
+    let (rows, difficulty) = shell.update(|root, _, _| {
+        let ctx = root.ctx.clone();
+        let roster = root
+            .app
+            .encounters
+            .roster_view(&ctx, &root.app.party, true)
+            .expect("the roster");
+        let rows: Vec<_> = roster
+            .rows
+            .iter()
+            .filter(|row| row.name.contains("Cinder Wolf"))
+            .map(|row| (row.missing.is_some(), row.edit_word))
+            .collect();
+        let difficulty: Vec<_> = roster.difficulty.into_iter().map(|(w, _)| w).collect();
+        (rows, difficulty.join(" "))
+    });
+    assert_eq!(
+        rows,
+        vec![(true, "Replace…"); 2],
+        "both Cinder Wolf rows say the creature is missing and offer Replace…"
+    );
+    assert!(
+        difficulty.contains("XP not known: Cinder Wolf"),
+        "the roster's difficulty names the deleted creature: {difficulty}"
+    );
     shell.capture("package-delete-entry__02-deleted-package-entry-in-encounter__1200x800");
 }
 
@@ -1286,6 +1379,10 @@ fn package_folder_copied() {
         shell.read(|root| root.app.campaigns.modules().len()),
         1,
         "the copy waits"
+    );
+    assert!(
+        shell.bounds("id:library-copy-technical").is_some(),
+        "the copy's id is under a closed Technical details"
     );
     shell.capture("package-folder-copied__01-copied-package-names-duplicate-identity__1200x800");
 }
