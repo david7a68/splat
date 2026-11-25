@@ -827,6 +827,7 @@ fn dialogs() {
             .is_some_and(|dialog| dialog.name() == "Watch Aboleth" && dialog.plan().is_some())
     });
     shell.capture("dialogs__03-copy-renamed__1200x800");
+    let before = shell.read(|root| root.app.library.total());
     shell.click("Create copy");
     assert!(
         shell.read(|root| root
@@ -835,6 +836,16 @@ fn dialogs() {
             .as_ref()
             .is_some_and(|dialog| dialog.completed().is_some())),
         "Create copy writes the copy"
+    );
+    // The copy reloads the Library behind the dialog; egui's step waited until the page was
+    // still, so the full Library shows with the copy in it.
+    wait_for(&mut shell, "the Library reloads", |root| {
+        root.app.library.loaded() && !root.app.library.loading()
+    });
+    assert_eq!(
+        shell.read(|root| root.app.library.total()),
+        before + 1,
+        "the reloaded Library counts the copy"
     );
     shell.capture("dialogs__04-copy-complete__1200x800");
     shell.click("Edit the copy");
