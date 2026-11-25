@@ -943,8 +943,9 @@ fn creature_filter() {
     shell.capture("creature-filter__02-search-terms__1200x800");
 }
 
-/// Scenario `reader-tables`, step 01: a package rule whose table is wider than the reader, read
-/// in the Library at each size. Where it does not fit, the table scrolls sideways and says so.
+/// Scenario `reader-tables`, step 01: a homebrewer makes a rule in the campaign with New entry,
+/// types a table wider than the reader under its template, saves it and reads it, at each size
+/// (egui's steps). Where it does not fit, the table scrolls sideways and says so.
 #[test]
 fn reader_tables_in_library() {
     const TABLE: &str = "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
@@ -958,22 +959,51 @@ Read the row for your class level. A slot is spent when you cast a spell of that
         (1920.0, 1080.0, false),
     ] {
         let mut shell = Shell::with_size("reader-tables", Seed::Campaign, size(px(w), px(h)));
-        let folder = package_folder(&mut shell);
-        let note = splat::content::formats::fixture(
-            "Rule.md",
-            &format!(
-                "splat_id: {}\nsplat_kind: rule\nsplat_key: ashen_marches:rule/spell_progression\nsplat_name: Spell Progression\nsplat_rule: {{}}\n",
-                splat::character::stable_id("spell-progression")
-            ),
-            &format!("\n# Spell Progression\n\n{TABLE}"),
-        )
-        .unwrap();
-        std::fs::write(folder.join("Rules/Spell Progression.md"), note).unwrap();
-        library(&mut shell);
-        scope(&mut shell, "Ashen Marches");
-        open_row(&mut shell, "Spell Progression · ");
-        assert_eq!(open_name(&mut shell).as_deref(), Some("Spell Progression"));
         let name = format!("reader-tables__01-wide-table-in-library__{w}x{h}");
+        library(&mut shell);
+        shell.click("id:library-new");
+        shell.type_text("Spell Progression");
+        shell.click("Kind of entry");
+        shell.click("Rule");
+        shell.click("Create entry");
+        loaded(&mut shell);
+        assert_eq!(open_name(&mut shell).as_deref(), Some("Spell Progression"));
+        assert!(
+            shell
+                .bounds("Spell Progression · Rule · Campaign")
+                .is_some(),
+            "{name}: the new entry's row is in view: {:?}",
+            names_starting("Spell")
+        );
+        shell.click("Markdown editor");
+        shell.press("ctrl-end");
+        shell.insert_text(TABLE);
+        shell.click("id:library-save");
+        loaded(&mut shell);
+        shell.click("Read");
+        assert!(
+            !shell.read(|root| root.app.library.dirty()),
+            "{name}: saved"
+        );
+        // The campaign's own rule: its template's words, then the table.
+        let file = shell.read(|root| {
+            root.app
+                .campaigns
+                .active_campaign()
+                .expect("the campaign")
+                .path
+                .join("Rules/Spell Progression.md")
+        });
+        let text = std::fs::read_to_string(&file).expect("the rule in the campaign");
+        assert!(
+            text.contains("Describe when and how this rule applies.")
+                && text.contains("Ninth-slot"),
+            "{name}: the template's words, then the table: {text}"
+        );
+        assert!(
+            shell.bounds("Edit in Obsidian").is_some(),
+            "{name}: the campaign's own entry is open"
+        );
         assert_eq!(
             shell
                 .bounds("More columns: scroll sideways or use Shift+wheel.")

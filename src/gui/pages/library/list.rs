@@ -212,20 +212,20 @@ pub(super) fn entries_column(
                 .pb(XS)
                 .child(div().flex_1().min_w_0().child(scope_menu(root, cx)))
                 .when(!sections.is_empty(), |line| {
-                    line.child(div().flex_1().min_w_0().child(
-                        // While a search lists the whole scope or About is open, no section
-                        // is chosen: the control says `Section`, faint (egui's name).
-                        kit::Dropdown::new("library-section", "Section", labels, chosen)
-                            .placeholder("Section")
-                            .on_select(
-                            cx.listener(move |root, at: &usize, _, cx| {
-                                if let Some(section) = sections.get(*at) {
-                                    root.app.library.choose_section(*section, None);
-                                    cx.notify();
-                                }
-                            }),
+                    line.child(
+                        div().flex_1().min_w_0().child(
+                            // While a search lists the whole scope or About is open, no section
+                            // is chosen: the control says `Section`, faint (egui's name).
+                            kit::Dropdown::new("library-section", "Section", labels, chosen)
+                                .placeholder("Section")
+                                .on_select(cx.listener(move |root, at: &usize, _, cx| {
+                                    if let Some(section) = sections.get(*at) {
+                                        root.app.library.choose_section(*section, None);
+                                        cx.notify();
+                                    }
+                                })),
                         ),
-                    ))
+                    )
                 }),
         );
     }
