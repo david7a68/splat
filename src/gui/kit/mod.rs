@@ -145,6 +145,19 @@ pub(crate) mod probe {
         })
     }
 
+    /// Every target laid out under `name` in the last frame, in paint order (one name in two
+    /// panes: World's reader and Lookup's).
+    pub(crate) fn find_all(name: &str) -> Vec<Bounds<Pixels>> {
+        TARGETS.with(|targets| {
+            targets
+                .borrow()
+                .iter()
+                .filter(|(n, _)| n.as_ref() == name)
+                .map(|(_, bounds)| *bounds)
+                .collect()
+        })
+    }
+
     /// Every name laid out in the last frame (for a test's failure message).
     pub(crate) fn names() -> Vec<String> {
         TARGETS.with(|targets| {

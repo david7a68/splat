@@ -1408,7 +1408,9 @@ fn prep_to_table() {
         ("Oren Thistlewick", "11"),
         ("Sable Harrowgate", "13"),
     ];
-    let mut shell = Shell::new("prep-to-table", Seed::Campaign);
+    // The shell's dice come from its name (`first_uuid`): this name rolls the cultists 11, as
+    // egui's run did, so Oren's typed 11 ties with them (egui's `⚠ 3 tied`).
+    let mut shell = Shell::new("prep-to-table-6", Seed::Campaign);
     shell.update(|root, _, cx| {
         let campaign = root.app.campaigns.active_campaign().unwrap().clone();
         let modules = root.app.campaigns.modules().to_vec();
@@ -1464,6 +1466,14 @@ fn prep_to_table() {
             "{player} has {total}: {totals:?}"
         );
     }
+    // Oren's 11 ties with the cultists' shared 11, and Setup says so under its title.
+    let tied = shell.read(|root| root.app.encounters.run().unwrap().tied_count());
+    assert_eq!(tied, 3, "Oren and both cultists tie");
+    assert!(
+        shell.bounds("3 tied").is_some(),
+        "Setup shows the tie note: {:?}",
+        crate::gui::kit::probe::names()
+    );
     capture(
         &mut shell,
         "prep-to-table__07-all-initiative-entered__1200x800",

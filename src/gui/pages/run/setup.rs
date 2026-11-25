@@ -119,11 +119,15 @@ fn header(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
         .min_w_0()
         .child(run_title(run, run.state_words(false)));
     if tied > 0 {
-        title = title.child(kit::status(&kit::Status::new(
-            icons::WARN,
-            crate::design::count(tied, "tied", "tied"),
-            c.result.warning,
-        )));
+        let words = crate::design::count(tied, "tied", "tied");
+        title = title.child(kit::target(
+            div().child(kit::status(&kit::Status::new(
+                icons::WARN,
+                words.clone(),
+                c.result.warning,
+            ))),
+            words,
+        ));
     }
     let mut modes = kit::MenuButton::new(
         "run-roll-npcs-menu",
@@ -311,7 +315,7 @@ fn rows(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
 
 /// The room from the initiative field's left: the field (`roster::INITIATIVE_FIELD`), tie,
 /// place, Absent and the menu.
-const SLOTS_RIGHT: f32 = 60.0 + 56.0 + 36.0 + 100.0 + 28.0 + 16.0;
+const SLOTS_RIGHT: f32 = 48.0 + 56.0 + 36.0 + 100.0 + 28.0 + 16.0;
 
 /// One participant's row in setup.
 fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
@@ -328,6 +332,9 @@ fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
             .collect::<Vec<_>>()
             .join(" · ")
     );
+    // As egui's setup row: the name shares its line with the controls, and the detail line
+    // runs under the whole row, so a narrow roster gives the name the room and nothing
+    // overlaps (`setup_row`).
     let label = div()
         .id(ElementId::Name(format!("run-setup-row-{}", p.key).into()))
         .flex()
@@ -335,30 +342,46 @@ fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
         .justify_center()
         .flex_1()
         .min_w_0()
+        .min_h(Density::Scan.control())
         .px(theme::S)
-        .py(theme::XS)
         .cursor_pointer()
-        .child(kit::text::one_line(Type::Body, c.text, name.clone()))
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .flex_wrap()
-                .items_center()
-                .gap_x(theme::XS)
-                .children(
-                    detail
-                        .into_iter()
-                        .map(|(words, color)| kit::text(Type::Small, color, words)),
-                ),
+        .child(kit::text(Type::Body, c.text, name.clone()))
+        .on_click(on_run(cx, move |run| {
+            run.selected = index;
+            run.return_focus = run.lookup_open;
+        }));
+    let detail = div()
+        .id(ElementId::Name(
+            format!("run-setup-detail-{}", p.key).into(),
+        ))
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .items_center()
+        .gap_x(theme::XS)
+        .px(theme::S)
+        .pb(theme::XS)
+        .cursor_pointer()
+        // The parts with egui's ` · ` between them (`Absent · Party · HP …`).
+        .children(
+            detail
+                .into_iter()
+                .enumerate()
+                .flat_map(|(at, (words, color))| {
+                    let dot = (at > 0).then(|| kit::text(Type::Small, c.muted, "·"));
+                    dot.into_iter()
+                        .chain(std::iter::once(kit::text(Type::Small, color, words)))
+                }),
         )
         .on_click(on_run(cx, move |run| {
             run.selected = index;
             run.return_focus = run.lookup_open;
         }));
     let label = kit::target(kit::target(label, row_name), name.clone());
-    let roll = div().w(px(64.0)).flex_none().when(p.npc, |slot| {
-        slot.child(
+    let detail = kit::target(detail, format!("Detail of {name}"));
+    // Party rows give up their Roll slot to the name (egui's `setup_slots`).
+    let roll = p.npc.then(|| {
+        div().w(px(64.0)).flex_none().child(
             kit::Button::quiet(
                 ElementId::Name(format!("run-setup-roll-{}", p.key).into()),
                 "Roll",
@@ -443,9 +466,9 @@ fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
         .flex_row()
         .items_center()
         .w_full()
-        .when(selected, |line| line.bg(c.selected))
+        .pt(theme::XS)
         .child(label)
-        .child(roll)
+        .children(roll)
         .child(initiative)
         .child(tie)
         .child(
@@ -456,7 +479,13 @@ fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
         )
         .child(div().w(px(100.0)).flex_none().child(absent))
         .child(menu);
-    let mut block = div().flex().flex_col().w_full().child(line);
+    let mut block = div()
+        .flex()
+        .flex_col()
+        .w_full()
+        .when(selected, |block| block.bg(c.selected))
+        .child(line)
+        .child(detail);
     if expanded {
         let npc = p.npc;
         let mode = p.initiative_mode;
@@ -559,6 +588,7 @@ fn initiative_field(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> Any
                 value,
             )
             .name(format!("Initiative for {}", p.name))
+            .tight()
             .focus(focus)
             .on_change(
                 cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {

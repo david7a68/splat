@@ -1142,6 +1142,11 @@ fn use_it_offers_a_creature_from_an_unused_package() {
             .any(|words| words.starts_with("Gloam Stalker is in ")),
         "the search names the unused package's creature: {unused:?}"
     );
+    // The page says one thing: the offer, with no empty state that nothing matched.
+    assert!(
+        shell.bounds("No creatures match").is_none(),
+        "Use it and the empty state both show"
+    );
     shell.capture("encounter-build__17-use-it__1200x800");
     let use_it = first_target(&mut shell, "Use it: Gloam Stalker");
     shell.click(&use_it);

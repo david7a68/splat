@@ -160,15 +160,32 @@ pub(super) fn render(
         .flex_col()
         .size_full()
         .child(
-            div().pb(theme::XS).child(
-                kit::TextField::new("world-search", search)
-                    .search()
-                    .placeholder("Find a note")
-                    .name("Search the world")
-                    .on_change(on_words(cx, |root, words| {
-                        root.app.world_page.set_search(words);
-                    })),
-            ),
+            // Clear beside the field while it holds words, as in Library and Lookup.
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(theme::S)
+                .pb(theme::XS)
+                .child(
+                    div().flex_1().min_w_0().child(
+                        kit::TextField::new("world-search", search.clone())
+                            .search()
+                            .placeholder("Find a note")
+                            .name("Search the world")
+                            .on_change(on_words(cx, |root, words| {
+                                root.app.world_page.set_search(words);
+                            })),
+                    ),
+                )
+                .when(!search.is_empty(), |line| {
+                    line.child(kit::Button::quiet("world-search-clear", "Clear").on_click(
+                        cx.listener(|root: &mut SplatRoot, _, _, cx| {
+                            root.app.world_page.set_search("");
+                            cx.notify();
+                        }),
+                    ))
+                }),
         )
         .child(div().flex_1().min_h_0().child(kit::measured_column(
             "world-list",

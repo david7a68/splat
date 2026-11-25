@@ -22,30 +22,6 @@ const LABEL_COLUMN: f32 = 104.0;
 /// The widest value column.
 const VALUE_COLUMN: gpui::Pixels = px(240.0);
 
-/// The width of `words` set in `ty`.
-fn words_width(window: &Window, ty: theme::Type, words: &str) -> gpui::Pixels {
-    let mut font = gpui::font(ty.family());
-    font.weight = ty.weight();
-    font.style = ty.style();
-    let run = gpui::TextRun {
-        len: words.len(),
-        font,
-        color: theme::colors().text,
-        background_color: None,
-        underline: None,
-        strikethrough: None,
-    };
-    window
-        .text_system()
-        .shape_line(
-            SharedString::from(words.to_owned()),
-            ty.size(),
-            &[run],
-            None,
-        )
-        .width
-}
-
 /// What an act on a note reaches: the host's reader, and where the act goes next.
 struct ReaderAct<'a> {
     reader: &'a mut crate::world::Reader,
@@ -734,13 +710,18 @@ fn values(
     let rows = reader.value_rows(item, index);
     // One Change column (AI1): `L` after the widest value, which wraps in the column when it is
     // wider than the reader's value room.
-    let body = |words: &str| words_width(window, theme::Type::Body, words);
-    let small = |words: &str| words_width(window, theme::Type::Small, words);
+    let body = |words: &str| kit::measure::width(window, theme::Type::Body, words);
+    let small = |words: &str| kit::measure::width(window, theme::Type::Small, words);
     let column_width = rows
         .iter()
         .map(|row| match &row.value {
             ValueShown::Link(_, name) | ValueShown::Words(name) => body(name),
-            ValueShown::PlaceChoices(words) => body(&format!("{} {words}", icons::WARN)),
+            // The warning icon in its own font, the gap, then the link (as drawn below).
+            ValueShown::PlaceChoices(words) => {
+                kit::measure::icon_width(window, theme::Type::Body, icons::WARN)
+                    + theme::XS
+                    + body(words)
+            }
             ValueShown::Missing(name) => {
                 body(&missing_text(name)) + small(crate::world::model::NOT_FOUND_WORDS)
             }
@@ -775,7 +756,7 @@ fn values(
                     kit::Link::new("world-place-choices", words)
                         .wrap()
                         .on_click(cx.listener(move |root: &mut SplatRoot, _, _, cx| {
-                            host.reader(root).toggle_place_choices();
+                            host.reader(root).toggle_place_choices(id);
                             cx.notify();
                         })),
                 )
@@ -823,7 +804,7 @@ fn values(
             column_width,
             Some(change.into_any_element()),
         ));
-        if key == "in" && host.reader(root).place_choices_open() {
+        if key == "in" && host.reader(root).place_chooser_open(item, index) {
             column = column.child(place_chooser(host, item, index, column_width, cx));
         }
     }
@@ -1381,20 +1362,31 @@ fn note_text(
             column = column.child(kit::heading(kit::Heading::Section(&section.title), false));
         }
         column = column.child(
-            kit::markdown::Markdown::new(("world-text", at), section.body.to_owned())
-                .document(id)
-                .jump_in(scroll)
-                .on_note(cx.listener(move |root: &mut SplatRoot, note: &str, _, cx| {
-                    if let Some((_, index)) = super::world(root)
-                        && let Some(position) = index.position(id)
-                        && let Some(nav) =
-                            host.reader(root)
-                                .follow(&index.items[position], &index, note)
-                    {
-                        host.take_nav(root, nav, &index);
-                    }
-                    cx.notify();
-                })),
+            // Each host's own id: a table's typed roll and result belong to the reader that
+            // asked (`roll_table::roll_state`), so Lookup never shows World's (egui: it did not).
+            kit::markdown::Markdown::new(
+                (
+                    match host {
+                        Host::World => "world-text",
+                        Host::Lookup => "lookup-text",
+                    },
+                    at,
+                ),
+                section.body.to_owned(),
+            )
+            .document(id)
+            .jump_in(scroll)
+            .on_note(cx.listener(move |root: &mut SplatRoot, note: &str, _, cx| {
+                if let Some((_, index)) = super::world(root)
+                    && let Some(position) = index.position(id)
+                    && let Some(nav) =
+                        host.reader(root)
+                            .follow(&index.items[position], &index, note)
+                {
+                    host.take_nav(root, nav, &index);
+                }
+                cx.notify();
+            })),
         );
     }
     column.into_any_element()

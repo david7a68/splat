@@ -178,6 +178,7 @@ pub struct TextField {
     focus: Option<FocusAt>,
     text_type: Option<Type>,
     search: bool,
+    tight: bool,
 }
 
 impl TextField {
@@ -197,12 +198,20 @@ impl TextField {
             focus: None,
             text_type: None,
             search: false,
+            tight: false,
         }
     }
 
     /// A search field (egui's `search_box`): the magnifier in muted at its left, then the words.
     pub fn search(mut self) -> Self {
         self.search = true;
+        self
+    }
+
+    /// Only the frame's own padding round the words, as egui's number fields had: a narrow
+    /// field (an amount, dice, an initiative total) shows its whole placeholder and number.
+    pub fn tight(mut self) -> Self {
+        self.tight = true;
         self
     }
 
@@ -341,6 +350,9 @@ impl RenderOnce for TextField {
             .aria_label(name.clone())
             .disabled(self.disabled)
             .text_size(ty.size());
+        if self.tight {
+            element = element.px_0();
+        }
         if self.masked {
             element = element.mask_toggle();
         }
@@ -359,6 +371,21 @@ impl RenderOnce for TextField {
                 )
             })
             .child(element);
+        // For tests: the words' own room, inside the frame's padding and the input's (its default
+        // `Medium` size), under `<name> words` (a narrow field's placeholder must fit it whole).
+        #[cfg(test)]
+        {
+            let inset = XS
+                + if self.tight {
+                    gpui::px(0.0)
+                } else {
+                    gpui_component::Size::Medium.input_px()
+                };
+            frame = frame.relative().child(target(
+                div().absolute().top_0().bottom_0().left(inset).right(inset),
+                format!("{name} words"),
+            ));
+        }
         frame = match self.width {
             Some(width) => frame.w(width),
             None => frame.w_full(),
