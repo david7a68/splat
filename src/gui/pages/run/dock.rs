@@ -47,6 +47,7 @@ pub(super) fn render(
             )
             .placeholder("Amount")
             .name("Amount")
+            .tight()
             .focus(run.focus_amount)
             .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
                 if let Some(run) = root.app.encounters.run_mut() {
@@ -226,6 +227,7 @@ fn dice(run: &Run, narrow: bool, cx: &mut Context<SplatRoot>) -> impl IntoElemen
             kit::TextField::new(("run-dice", run.id().as_u128() as u64), run.dice.clone())
                 .placeholder("1d20")
                 .name("Dice")
+                .tight()
                 .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
                     if let Some(run) = root.app.encounters.run_mut() {
                         run.dice = words.to_owned();
