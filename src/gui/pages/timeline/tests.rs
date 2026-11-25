@@ -44,6 +44,12 @@ fn session_notes_timeline_steps() {
     shell.click("New session");
     shell.type_text("Ash on the Road");
     shell.click("Create session");
+    // As egui's scenario (step 06): the session's processing has finished before the Timeline
+    // steps, so the rail says `Processed` on every page.
+    shell.update(|root, _, cx| {
+        root.app.sessions.simulate_job_finished();
+        cx.notify();
+    });
     shell.click("Long rest");
     shell.click("id:plan-add-more-button");
     shell.click("Travel");
@@ -92,6 +98,17 @@ fn session_notes_timeline_steps() {
             .map(|offer| offer.old().to_vec())
     });
     assert_eq!(old, Some(vec!["Long rest".to_owned()]));
+    let processed = |shell: &mut Shell| {
+        shell.bounds("id:rail-recording").is_some()
+            && shell
+                .read(|root| root.app.sessions.recording_detail())
+                .as_deref()
+                == Some("Processed")
+    };
+    assert!(
+        processed(&mut shell),
+        "the rail says Processed on the Timeline page"
+    );
     crate::gui::pages::sessions::tests::capture(
         &mut shell,
         "session-notes__18-timeline-event__1200x800",
@@ -102,6 +119,7 @@ fn session_notes_timeline_steps() {
         Some(rest.id.clone()),
         "the rest stays open"
     );
+    assert!(processed(&mut shell), "the rail still says Processed");
     crate::gui::pages::sessions::tests::capture(
         &mut shell,
         "session-notes__21-timeline-filtered__1200x800",
@@ -146,6 +164,13 @@ fn a_disk_conflict_compares_the_draft_and_the_file() {
     assert!(
         shell.bounds("Overwrite with my timeline").is_some(),
         "the choice waits"
+    );
+    // The rail says it in words its column holds (as `Notes changed`); the hover has them all.
+    let names = crate::gui::kit::probe::names();
+    assert!(
+        names.iter().any(|name| name == "Timeline changed")
+            && !names.iter().any(|name| name == "Timeline changed on disk"),
+        "the rail's short words: {names:?}"
     );
     crate::gui::pages::sessions::tests::capture(&mut shell, "timeline__02-disk-conflict__1200x800");
     let texts = |shell: &mut Shell| {

@@ -429,12 +429,13 @@ fn last_time(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Option<AnyEle
             cx.notify();
         }))
     });
-    // The link keeps its words; the preview gives way, cut at the line's end.
+    // The link keeps its words; the preview gives way, cut at the line's end. It is as wide as
+    // its words, so `Carry over` follows them (egui), and shrinks only when the line is short.
     // With nothing written last time there is no preview, so no dash (egui: the link alone).
     let preview = (!last.preview.is_empty()).then(|| {
         kit::text::one_line(Type::Small, c.muted, format!("— {}", last.preview))
             .max_w(READER_MEASURE)
-            .flex_1()
+            .flex_shrink_1()
             .min_w_0()
             .overflow_hidden()
     });

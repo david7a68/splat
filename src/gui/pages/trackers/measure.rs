@@ -71,6 +71,50 @@ pub(crate) fn lines(window: &Window, ty: Type, words: &str, room: Pixels) -> usi
         })
 }
 
+/// Where `words` in `ty` break at `room`, wrapped between words as the text element wraps
+/// them: each break's run and glyph. Two rooms that give the same breaks lay the words out alike.
+pub(crate) fn breaks(window: &Window, ty: Type, words: &str, room: Pixels) -> Vec<(usize, usize)> {
+    if words.is_empty() {
+        return Vec::new();
+    }
+    let run = TextRun {
+        len: words.len(),
+        font: Font {
+            family: SharedString::new_static(ty.family()),
+            features: FontFeatures::default(),
+            fallbacks: None,
+            weight: ty.weight(),
+            style: ty.style(),
+        },
+        color: gpui::black(),
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    };
+    window
+        .text_system()
+        .shape_text(
+            SharedString::from(words.to_owned()),
+            ty.size(),
+            &[run],
+            Some(room),
+            None,
+        )
+        .map_or_else(
+            |_| Vec::new(),
+            |lines| {
+                lines
+                    .iter()
+                    .flat_map(|line| {
+                        line.wrap_boundaries()
+                            .iter()
+                            .map(|at| (at.run_ix, at.glyph_ix))
+                    })
+                    .collect()
+            },
+        )
+}
+
 /// The natural width of a secondary or quiet-at-`M` kit button with these words (and an icon).
 pub(crate) fn button_width(window: &Window, words: &str, icon: bool) -> Pixels {
     width(window, Type::Strong, words)

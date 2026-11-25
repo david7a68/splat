@@ -894,6 +894,16 @@ impl Book {
         })
     }
 
+    /// The rail's short words for `attention_status`, as the notes have `Notes changed`: the
+    /// rail's column holds them whole; the whole words are its hover.
+    pub fn rail_word(&self) -> &'static str {
+        if self.conflict {
+            "Timeline changed"
+        } else {
+            "Timeline not saved"
+        }
+    }
+
     /// Why this event is not in `Timeline.md`, in the words the Timeline page shows, or none.
     pub fn event_not_saved(&self, id: &str) -> Option<String> {
         if !self.not_saved() || !self.event_unsaved(id) {

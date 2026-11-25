@@ -87,13 +87,23 @@ fn session_notes_main_states() {
     let words = note_words(&mut shell);
     set_note(
         &mut shell,
-        &format!("{words}The road was covered in ash, and the wolves followed us.\n"),
+        &format!("{words}\nThe road was covered in ash, and the wolves followed us.\n"),
     );
     // As egui's scenario: processing of the session finishes while the DM writes.
     shell.update(|root, _, cx| {
         root.app.sessions.simulate_job_finished();
         cx.notify();
     });
+    // As egui's DM: the `is processed.` notice is read and dismissed.
+    assert!(
+        shell.bounds("Dismiss this message").is_some(),
+        "the notice shows"
+    );
+    shell.click("Dismiss this message");
+    assert!(
+        shell.bounds("Dismiss this message").is_none(),
+        "Dismiss ends the notice"
+    );
     capture(&mut shell, "session-notes__06-session-written__1200x800");
     shell.click("Read");
     capture(&mut shell, "session-notes__07-session-read__1200x800");
@@ -116,6 +126,51 @@ fn session_notes_main_states() {
         &mut shell,
         "session-notes__11-session-event-added__1200x800",
     );
+    // As egui's scenario (step 24): back in Write, the DM's line, a line written in Obsidian,
+    // then a save. The note as last saved first.
+    shell.click("Write");
+    shell.update(|root, _, _| root.app.sessions.flush());
+    let words = note_words(&mut shell);
+    set_note(
+        &mut shell,
+        &format!("{words}\nMy words during the conflict.\n"),
+    );
+    shell.update(|root, _, cx| {
+        root.app.sessions.simulate_disk_change();
+        root.app.sessions.flush();
+        cx.notify();
+    });
+    assert_eq!(
+        shell.read(|root| root.app.sessions.gv_draft_state().cloned()),
+        Some(crate::sessions::DraftState::Conflict)
+    );
+    // The state egui showed: the line above the change in both columns, the session still
+    // processed, and the party strip after the planned rest.
+    let draft = note_words(&mut shell);
+    assert!(
+        draft.ends_with(
+            "The road was covered in ash, and the wolves followed us.\n\nMy words during the conflict.\n"
+        ),
+        "the DM's line comes after the written one: {draft:?}"
+    );
+    assert!(
+        shell.bounds("id:rail-recording").is_some()
+            && shell
+                .read(|root| root.app.sessions.recording_detail())
+                .as_deref()
+                == Some("Processed"),
+        "the rail still says Processed"
+    );
+    assert_eq!(
+        shell.read(|root| root.app.party.glance_source(false).word),
+        "After the long rest",
+        "the party strip keeps the planned rest"
+    );
+    capture(&mut shell, "session-notes__24-note-conflict__1200x800");
+    assert!(shell.bounds("Overwrite with my draft").is_some());
+    shell.click("Overwrite with my draft");
+    let state = shell.read(|root| root.app.sessions.gv_draft_state().cloned());
+    assert_ne!(state, Some(crate::sessions::DraftState::Conflict));
     // Templates: the built-in one, a customized copy, a new one, and a deleted one.
     shell.click("Templates");
     capture(&mut shell, "session-notes__29-templates-built-in__1200x800");
@@ -186,35 +241,6 @@ fn session_notes_small_window() {
         shell.bounds("Note text").is_some(),
         "the note stays, not the plan"
     );
-}
-
-#[test]
-fn session_notes_conflict_and_gone() {
-    let mut shell = Shell::new("session-notes", Seed::Campaign);
-    shell.click("Session");
-    new_session(&mut shell, TITLE);
-    let words = note_words(&mut shell);
-    // As egui's scenario: the note as last saved, the DM's line, a line written in Obsidian,
-    // then a save.
-    shell.update(|root, _, _| root.app.sessions.flush());
-    set_note(
-        &mut shell,
-        &format!("{words}\nMy words during the conflict.\n"),
-    );
-    shell.update(|root, _, cx| {
-        root.app.sessions.simulate_disk_change();
-        root.app.sessions.flush();
-        cx.notify();
-    });
-    assert_eq!(
-        shell.read(|root| root.app.sessions.gv_draft_state().cloned()),
-        Some(crate::sessions::DraftState::Conflict)
-    );
-    capture(&mut shell, "session-notes__24-note-conflict__1200x800");
-    assert!(shell.bounds("Overwrite with my draft").is_some());
-    shell.click("Overwrite with my draft");
-    let state = shell.read(|root| root.app.sessions.gv_draft_state().cloned());
-    assert_ne!(state, Some(crate::sessions::DraftState::Conflict));
 }
 
 #[test]
@@ -291,13 +317,30 @@ fn plain_evening_states() {
 /// on the heading's line, which opens them in place and closes them again.
 #[test]
 fn plan_scenes_and_their_fold() {
-    let scenes = "## Plan for tonight\n\n- [[Bridge Ambush]]\n- [ ] [[Hobb the Miller]]\n- [x] The miller is the informer\n- [ ] Pay the toll\n- [[Shrine of Cinders]]\n";
+    // egui's scenario: an NPC at a place, linked by a scene, and a done scene in plain words.
+    let scenes = "## Plan for tonight\n\n- [[Bridge Ambush]]\n- [ ] [[Warden Ostrel]]\n- [x] The miller is the informer\n- [[Shrine of Cinders]]\n";
     for (size, name) in [((1200.0, 800.0), "1200x800"), (SMALL, "960x640")] {
         let mut shell = Shell::with_size(
             "session-plan-scenes",
             Seed::Campaign,
             gpui::size(px(size.0), px(size.1)),
         );
+        use crate::gui::pages::lookup::tests::{reload, world_entry};
+        let keep = world_entry(
+            &mut shell,
+            "Locations/Ashfall Keep.md",
+            "Ashfall Keep",
+            "location",
+            "",
+        );
+        let warden = world_entry(
+            &mut shell,
+            "NPCs/Warden Ostrel.md",
+            "Warden Ostrel",
+            "npc",
+            &format!("  status: alive\n  in: {{id: {keep}}}\n"),
+        );
+        reload(&mut shell, warden);
         wait_for_fights(&mut shell);
         shell.click("Session");
         new_session(&mut shell, "The Crossing");
@@ -306,6 +349,30 @@ fn plan_scenes_and_their_fold() {
         if shell.bounds("id:session-tabs-Plan").is_some() {
             shell.click("id:session-tabs-Plan");
         }
+        // The scene's link finds its NPC, with its kind, status and place; Tonight counts the
+        // four rows under it.
+        let (count, scene) = shell.update(|root, _, _| {
+            let index = root.app.lookup.index();
+            super::with_plan(&mut root.app, |sessions, _, book, plan| {
+                let view = sessions.gv_plan(book, plan, index.as_deref());
+                let scene = view.rows.iter().find_map(|row| match row {
+                    crate::sessions::page::gpui_facade::PlanRow::Scene(scene)
+                        if scene.words.contains("Warden Ostrel") =>
+                    {
+                        Some((scene.detail.clone(), scene.not_found))
+                    }
+                    _ => None,
+                });
+                (view.count, scene)
+            })
+            .expect("a plan")
+        });
+        assert_eq!(count, 4, "{name}: Tonight counts four rows");
+        assert_eq!(
+            scene,
+            Some((Some("NPC · alive · Ashfall Keep".to_owned()), false)),
+            "{name}: the scene's entry is found"
+        );
         let folded = |shell: &mut Shell| {
             shell.update(|root, _, _| {
                 let index = root.app.lookup.index();
@@ -323,6 +390,15 @@ fn plan_scenes_and_their_fold() {
         if name == "1200x800" {
             continue;
         }
+        // As in egui's scenario by its fold step, the plan has a third scene.
+        let words = note_words(&mut shell);
+        set_note(
+            &mut shell,
+            &words.replace(
+                "- [x] The miller is the informer\n",
+                "- [x] The miller is the informer\n- [ ] Pay the toll\n",
+            ),
+        );
         // More rows than the plan holds with its scenes: they fold, the next fight in view.
         for _ in 0..4 {
             shell.click("id:plan-add-more-button");
@@ -442,7 +518,44 @@ fn session_recording_states() {
         &mut shell,
         "session-recording__16-recording-ready__1200x800",
     );
-    // The recording is processed, with a warning, before the DM deletes it.
+    assert!(
+        shell.read(|root| root.app.sessions.recording_saved_shown()),
+        "the stop's result shows in the session's footer"
+    );
+    // As in egui's scenario, the processing finishes (the test build's service writes the
+    // summary, the clean transcript and two marked events), and the DM moves between the tabs.
+    let process = crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with("Process:"))
+        .expect("the recording's Process");
+    shell.click(&process);
+    shell.settle();
+    assert!(
+        shell.bounds("Events marked in this recording 2").is_some(),
+        "the processing finished with its marked events"
+    );
+    shell.click("id:session-tabs-Plan and notes");
+    shell.click("id:session-tabs-Recordings 1");
+    // Leaving the tab is the event that ends `Recording saved` (its owner is the open session).
+    assert!(
+        !shell.read(|root| root.app.sessions.recording_saved_shown()),
+        "the stop's result ended when the DM left the tab"
+    );
+    shell.click("Add to timeline: Rest at the mill (1)");
+    assert!(shell.bounds("Undo add Rest at the mill").is_some());
+    // As egui's DM: the marker's event opens on the Timeline, and back to the recording.
+    // Leaving the tab ends the marker's result (its owner event).
+    shell.click("On the timeline");
+    assert_eq!(shell.read(|root| root.app.page), crate::Page::Timeline);
+    shell.click("id:nav-Session");
+    if shell.bounds("Events marked in this recording 2").is_none() {
+        shell.click("id:session-tabs-Recordings 1");
+    }
+    assert!(
+        shell.bounds("Undo add Rest at the mill").is_none(),
+        "the marker's result ended when the DM left the tab"
+    );
+    // The recording is processed again, with a warning, before the DM deletes it.
     shell.update(|root, _, cx| {
         root.app
             .sessions
@@ -467,6 +580,23 @@ fn session_recording_states() {
         path.expect("a recording")
     ));
     shell.click("Delete…");
+    // egui's state behind the dialog: the warned result keeps its texts and its marked events,
+    // one of them on the timeline, and the stop's result is gone.
+    for name in [
+        "Summary",
+        "Clean transcript",
+        "Raw transcript",
+        "Events marked in this recording 2",
+        "Add to timeline: Wolves at the bridge (0)",
+        "On the timeline",
+    ] {
+        assert!(
+            shell.bounds(name).is_some(),
+            "the recording shows {name:?}: {:?}",
+            crate::gui::kit::probe::names()
+        );
+    }
+    assert!(!shell.read(|root| root.app.sessions.recording_saved_shown()));
     capture(
         &mut shell,
         "session-recording__35-recording-delete__1200x800",
@@ -499,6 +629,25 @@ fn session_carry_over_offered() {
     assert!(
         shell.bounds("Carry over").is_some(),
         "a prepared session offers Carry over"
+    );
+    // `Carry over` follows the preview's words on the Last time line (egui), not the line's
+    // far end.
+    let preview = shell.update(|_, window, _| {
+        crate::gui::pages::trackers::measure::width(
+            window,
+            crate::gui::theme::Type::Small,
+            "— Hobb the miller says the toll collectors have not been paid.",
+        )
+    });
+    let link = shell
+        .bounds("id:last-time-link")
+        .expect("the Last time link");
+    let carry = shell.bounds("Carry over").unwrap();
+    let after = link.right() + preview + crate::gui::theme::L + crate::gui::theme::XS;
+    assert!(
+        carry.left() <= after + px(2.0),
+        "Carry over follows the preview: at {:?}, the words end at {after:?}",
+        carry.left()
     );
 }
 
@@ -1030,6 +1179,19 @@ fn travel_checks_in_the_plan() {
         "2",
         "How long takes the keyboard"
     );
+    // egui's scenario restarts here, which ends the page's results (`Travel added`, the checks'
+    // start): the DM leaves the page and comes back, and the row is open on its checks.
+    shell.click("id:nav-Timeline");
+    shell.click("id:nav-Session");
+    assert!(
+        !crate::gui::kit::probe::names()
+            .iter()
+            .any(|name| name.starts_with("Undo add")),
+        "the Add's result ended when the DM left the page"
+    );
+    if shell.bounds("How long").is_none() {
+        shell.click("Travel");
+    }
     if event(&mut shell).checks_table.as_deref() == Some("") {
         shell.click(&format!("id:plan-checks-{journey}-table-button"));
         shell.click("On the road");
@@ -1048,7 +1210,9 @@ fn travel_checks_in_the_plan() {
     // A roll, its result with Undo, and the Undo.
     shell.click(&format!("id:plan-checks-{journey}-roll-0"));
     assert_eq!(event(&mut shell).checks.len(), 1, "one check rolled");
+    // Its short words show, its whole words are its name (egui: `Undo roll`).
     assert!(shell.bounds("Undo roll 1 travel check").is_some());
+    assert!(shell.bounds("Undo roll").is_some(), "the short form shows");
     shell.click("Undo roll 1 travel check");
     assert!(
         event(&mut shell).checks.is_empty(),
@@ -1061,6 +1225,13 @@ fn travel_checks_in_the_plan() {
     shell.press("enter");
     assert_eq!(event(&mut shell).checks.len(), 2, "both days have a result");
     assert!(shell.bounds("Plan “Bridge Ambush”").is_some());
+    // The acts on the open row keep the plan where it was, as egui's reveal of the row's own
+    // line did: Tonight, the Add strip and Day 1 stay in view.
+    assert_eq!(
+        shell.read(|root| root.pages.sessions.plan.scroll.offset().y),
+        px(0.0),
+        "the plan is not scrolled to the open row's top"
+    );
     capture(
         &mut shell,
         "travel-checks__01-travel-checks-rolled__1200x800",
@@ -1353,10 +1524,24 @@ fn log_from_play() {
         shell.bounds("Add to Log: Ashfall Keep").is_none(),
         "a scene still to come has none"
     );
+    // egui's fit rule: beside the longer scene's words the action would move them, so it is a
+    // line of that row's menu, and its words keep the row's width.
+    let long = format!("Add to Log: {VARRA}: {WORDS}");
+    assert!(
+        shell.bounds(&long).is_none(),
+        "the longer done scene keeps its words on the row: {:?}",
+        crate::gui::kit::probe::names()
+    );
     capture(
         &mut shell,
         "log-from-play__01-done-scene-add-to-log__1200x800",
     );
+    shell.click(&format!("More actions for {VARRA}: {WORDS}"));
+    assert!(
+        shell.bounds("Add to Log").is_some(),
+        "its menu offers Add to Log"
+    );
+    shell.press("escape");
     shell.click(&short);
     let field = format!("Log line for {VARRA}");
     assert!(
