@@ -1195,3 +1195,82 @@ fn plan_group_assembly() {
     assert!(!shell.read(|root| root.app.encounters.group_open_in_plan()));
     assert_eq!(shell.read(|root| root.app.page), crate::Page::Sessions);
 }
+
+/// A World entry of the campaign, as egui's `log-from-play` wrote it.
+fn world_entry(dir: &std::path::Path, path: &str, name: &str, kind: &str, fields: &str) -> uuid::Uuid {
+    let id = splat::character::stable_id(path);
+    let path = dir.join(path);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let text = splat::content::formats::fixture(
+        "World.md",
+        &format!(
+            "splat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n  type: {kind}\n{fields}"
+        ),
+        &format!("\n# {name}\n\nA note for tonight.\n"),
+    )
+    .unwrap();
+    std::fs::write(path, text).unwrap();
+    id
+}
+
+/// egui's `log-from-play` (T18.2): a done scene that links one World entry has `Add to Log` on
+/// its row; it opens Lookup on the entry with its Log field, and Enter writes the line under the
+/// entry's Log heading, with its result in Lookup.
+#[test]
+fn log_from_play() {
+    const VARRA: &str = "Captain Varra Black";
+    const WORDS: &str = "told the party who burned the ropes at the ford";
+    const TYPED: &str = "Told the party who burned the ropes.";
+    let mut shell = Shell::new("log-from-play", Seed::Campaign);
+    let path = shell.update(|root, _, _| {
+        let dir = root.app.campaigns.active_campaign().unwrap().path.clone();
+        let keep = world_entry(&dir, "Locations/Ashfall Keep.md", "Ashfall Keep", "location", "");
+        world_entry(
+            &dir,
+            "NPCs/Captain Varra Black.md",
+            VARRA,
+            "npc",
+            &format!("  status: alive\n  in: {{id: {keep}}}\n"),
+        );
+        root.app.lookup.refresh();
+        dir.join("NPCs/Captain Varra Black.md")
+    });
+    crate::gui::pages::trackers::tests::read_content_again(&mut shell);
+    shell.click("Session");
+    new_session(&mut shell, "The Crossing");
+    let words = note_words(&mut shell);
+    set_note(
+        &mut shell,
+        &words.replace(
+            "## Plan for tonight\n",
+            &format!(
+                "## Plan for tonight\n\n- [x] [[{VARRA}]]\n- [x] [[{VARRA}]]: {WORDS}\n- [ ] [[Ashfall Keep]]\n"
+            ),
+        ),
+    );
+    shell.update(|root, _, _| root.app.sessions.flush());
+    let short = format!("Add to Log: {VARRA}");
+    assert!(
+        shell.bounds(&short).is_some(),
+        "a done scene with one entry has Add to Log on its row"
+    );
+    assert!(
+        shell.bounds("Add to Log: Ashfall Keep").is_none(),
+        "a scene still to come has none"
+    );
+    capture(&mut shell, "log-from-play__01-done-scene-add-to-log__1200x800");
+    shell.click(&short);
+    let field = format!("Log line for {VARRA}");
+    assert!(shell.bounds(&field).is_some(), "Lookup opens on the entry's Log field");
+    shell.type_text(TYPED);
+    shell.press("enter");
+    let logged = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        logged.contains("## Log") && logged.contains(TYPED),
+        "the entry's note gains the line under its Log heading: {logged:?}"
+    );
+    assert!(!note_words(&mut shell).contains(TYPED), "the session note gains none");
+    shell.click("Close Lookup");
+    shell.click("Lookup");
+    capture(&mut shell, "log-from-play__02-log-line-added-in-lookup__1200x800");
+}
