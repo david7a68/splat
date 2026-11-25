@@ -1350,6 +1350,10 @@ fn package_folder_copied() {
         1,
         "the copy waits"
     );
+    assert!(
+        shell.bounds("id:library-copy-technical").is_some(),
+        "the copy's id is under a closed Technical details"
+    );
     shell.capture("package-folder-copied__01-copied-package-names-duplicate-identity__1200x800");
 }
 

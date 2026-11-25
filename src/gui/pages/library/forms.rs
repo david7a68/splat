@@ -452,8 +452,11 @@ pub(super) fn package_form(
         }
         form = form
             .child(kit::gap(S))
-            .child(kit::text(Type::Small, c.muted, "Technical details"))
-            .child(kit::text(Type::Small, c.faint, copy.id.clone()));
+            // The id is for a bug report, not the DM's choice: closed, as egui's disclosure.
+            .child(
+                kit::QuietSection::new("library-copy-technical", "Technical details")
+                    .child(kit::text(Type::Small, c.faint, copy.id.clone())),
+            );
     }
     if view.copy.as_ref().is_none_or(|copy| !copy.naming) {
         let create = if view.create_primary {
