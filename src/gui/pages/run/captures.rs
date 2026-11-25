@@ -428,6 +428,20 @@ fn arrivals_made_up(shell: &mut Shell) {
     assert!(with_run(shell, |run| run.panel == Panel::Groups));
 }
 
+/// The target `name` in the run panel ends clear of the scroll bar's track at the window's
+/// right (the page's `M` gutter, then the track), where egui's content stopped.
+fn clear_of_bar(shell: &mut Shell, name: &str) {
+    let right = shell
+        .bounds(name)
+        .unwrap_or_else(|| panic!("{name}"))
+        .right();
+    let edge = shell.size().width - crate::gui::theme::M - crate::gui::kit::scroll::TRACK_WIDTH;
+    assert!(
+        right <= edge,
+        "{name} ends at {right:?}, under the bar from {edge:?}"
+    );
+}
+
 /// Scenario `run-add-creature`: Arrivals empty, a made-up creature from its HP to its row, a found
 /// creature, every match, and a group whose Add waits for a total.
 #[test]
@@ -486,6 +500,12 @@ fn run_add_creature() {
         has_target(&mut shell, "Clear the creature search"),
         "typed words can be cleared"
     );
+    for name in [
+        "Clear the creature search",
+        "Add Goblin Wave to the initiative list",
+    ] {
+        clear_of_bar(&mut shell, name);
+    }
     shell.capture("run-add-creature__07-arrivals-found__1200x800");
 
     shell.click("id:run-creature-Wolf");
@@ -499,6 +519,18 @@ fn run_add_creature() {
     );
     shell.click("New creature count");
     shell.type_text("2");
+    // A group's name shows whole while the heading has room for it (egui: `Rival Team`).
+    let title = shell
+        .bounds("Arrivals title of Rival Team")
+        .expect("Rival Team’s title");
+    let whole = shell.update(|_, window, _| {
+        crate::gui::kit::measure::width(window, crate::gui::theme::Type::Strong, "Rival Team")
+    });
+    assert!(
+        title.size.width >= whole,
+        "Rival Team’s title is {:?} wide for {whole:?}",
+        title.size.width
+    );
     shell.capture("run-add-creature__08-arrivals-found-chosen__1200x800");
 
     let before = count(&mut shell);
@@ -543,6 +575,12 @@ fn run_add_creature() {
     arrivals_made_up(&mut shell);
     shell.click(FIELD);
     shell.type_text("Ghost of the Mill");
+    for name in [
+        "Clear the creature search",
+        "Add Goblin Wave to the initiative list",
+    ] {
+        clear_of_bar(&mut shell, name);
+    }
     shell.capture("run-add-creature__02-arrivals-made-up-needs-hp__960x640");
 }
 
@@ -865,6 +903,22 @@ fn column_resize() {
     let before = current_name(&mut shell);
     shell.click("Next turn");
     assert_ne!(before, current_name(&mut shell));
+    // In the narrow roster, the dock's fields show their placeholders whole (egui: `Amount`,
+    // `1d20`).
+    for (field, placeholder) in [("Amount", "Amount"), ("Dice", "1d20")] {
+        let room = shell
+            .bounds(&format!("{field} words"))
+            .unwrap_or_else(|| panic!("{field}’s words"))
+            .size
+            .width;
+        let words = shell.update(|_, window, _| {
+            kit::measure::width(window, crate::gui::theme::Type::Body, placeholder)
+        });
+        assert!(
+            room >= words,
+            "{field} has {room:?} for {placeholder} ({words:?})"
+        );
+    }
     shell.capture("column-resize__06-run-rail-keeps-roster-room__1200x800");
 
     open_lookup(&mut shell);
@@ -1122,21 +1176,21 @@ fn ready_with_one_absent(shell: &mut Shell) {
 fn run_absent_player() {
     let mut shell = Shell::new("run-absent-player", Seed::Campaign);
     ready_with_one_absent(&mut shell);
-    // An initiative field shows a whole total: inside its border, its padding and the
-    // input's (4 and 10 px a side) leave room for `-12` and the caret (a narrower field
-    // scrolled to its last digit).
+    // An initiative field shows a whole total: its words' room holds `-12` and the caret (a
+    // narrower field scrolled to its last digit).
     let fits_total = |shell: &mut Shell, field: &str| {
-        let frame = shell
-            .bounds(field)
+        let room = shell
+            .bounds(&format!("{field} words"))
             .expect("the initiative field")
             .size
             .width;
         let total = shell.update(|_, window, _| {
             crate::gui::kit::measure::width(window, crate::gui::theme::Type::Body, "-12")
         });
+        // The caret's room after the digits.
         assert!(
-            frame - px(30.0) >= total,
-            "{field} is {frame:?} wide for a total of {total:?}"
+            room - px(2.0) >= total,
+            "{field} has {room:?} for a total of {total:?}"
         );
     };
     fits_total(&mut shell, "Initiative for Kestrel Dunmoor");
@@ -1162,6 +1216,17 @@ fn run_absent_player() {
     shell.click(&format!("No initiative for {ABSENT}"));
     assert_eq!(with_run(&mut shell, |run| run.live_initiative), Some(at));
     fits_total(&mut shell, &format!("Initiative for {ABSENT}"));
+    // The field stays in the initiative column, clear of the side's mark (egui: 44 px).
+    let field = shell
+        .bounds(&format!("Initiative for {ABSENT}"))
+        .expect("the field");
+    let mark = shell
+        .bounds(&format!("Side mark of {ABSENT}"))
+        .expect("the side mark");
+    assert!(
+        field.right() + px(2.0) <= mark.left(),
+        "the field ({field:?}) runs into the side mark ({mark:?})"
+    );
     shell.capture("run-absent-player__04-initiative-field-in-row__1200x800");
 
     // The field has the keyboard: the typed total and Enter set it.
@@ -1175,6 +1240,23 @@ fn run_absent_player() {
 
     let mut shell = small("run-absent-player", Seed::Campaign);
     ready_with_one_absent(&mut shell);
+    // In a narrow roster the detail line runs under the row's controls, as egui's did, so
+    // Roll and the initiative field never cover it.
+    for name in ["Ember Cultist 1", "Sable Harrowgate"] {
+        let detail = shell
+            .bounds(&format!("Detail of {name}"))
+            .expect("the detail line");
+        let field = shell
+            .bounds(&format!("Initiative for {name}"))
+            .expect("the initiative field");
+        assert!(
+            field.bottom() <= detail.top(),
+            "{name}’s detail ({detail:?}) is beside its field ({field:?})"
+        );
+        if let Some(roll) = shell.bounds(&format!("Roll for {name}")) {
+            assert!(roll.bottom() <= detail.top(), "Roll covers {name}’s detail");
+        }
+    }
     shell.capture("run-absent-player__01-ready-with-one-absent__960x640");
 }
 
@@ -1443,5 +1525,38 @@ fn roll_table_author() {
         has_target(&mut shell, "Roll 1d6"),
         "Lookup’s table rolls too"
     );
+    // A typed roll belongs to the reader that asked: World's result stays in World, and
+    // Lookup's table shows none (egui: Lookup showed the table with no result).
+    let fields = kit::probe::find_all("Typed roll for Valid");
+    assert_eq!(fields.len(), 2, "World and Lookup each show the table");
+    let by_left = |a: &gpui::Bounds<gpui::Pixels>, b: &gpui::Bounds<gpui::Pixels>| {
+        a.left().partial_cmp(&b.left()).unwrap()
+    };
+    let lookup = fields.iter().copied().max_by(by_left).unwrap();
+    let world = fields.iter().copied().min_by(by_left).unwrap();
+    // Lookup's pane is right of World's reader, whose table ends before it.
+    let in_lookup = |bounds: &gpui::Bounds<gpui::Pixels>| bounds.left() > world.right();
+    let results = kit::probe::find_all(kit::markdown::ROLL_RESULT);
+    assert_eq!(results.len(), 1, "one result, World’s: {results:?}");
+    assert!(!in_lookup(&results[0]), "the result is World’s");
+    assert!(has_target(
+        &mut shell,
+        &format!("{}: Typed 4 on 1d6: Fog", kit::markdown::ROLL_RESULT)
+    ));
     shell.capture("roll-table-author__04-authored-table-in-lookup__1200x800");
+
+    // Lookup's own typed roll shows in Lookup only, and World's stays as it was.
+    shell.click_at(lookup.center());
+    shell.type_text("6");
+    shell.press("enter");
+    let words = |result: &str| format!("{}: {result}", kit::markdown::ROLL_RESULT);
+    let lookup_result = shell
+        .bounds(&words("Typed 6 on 1d6: Sun"))
+        .expect("Lookup’s result");
+    assert!(in_lookup(&lookup_result), "Lookup’s result is in Lookup");
+    let world_result = shell
+        .bounds(&words("Typed 4 on 1d6: Fog"))
+        .expect("World’s result stays");
+    assert!(!in_lookup(&world_result), "World’s result is in World");
+    assert_eq!(kit::probe::find_all(kit::markdown::ROLL_RESULT).len(), 2);
 }

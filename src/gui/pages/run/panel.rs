@@ -70,7 +70,13 @@ pub(super) fn render(
     if run.state.phase == Phase::Setup {
         top = top.children(sync_block(run, cx));
     }
-    let mut body = div().flex().flex_col().w_full().gap(theme::XS);
+    // The bar's track paints over the lane's edge: the words keep clear of all of it.
+    let mut body = div()
+        .flex()
+        .flex_col()
+        .w_full()
+        .gap(theme::XS)
+        .pr(kit::scroll::TRACK_WIDTH - theme::SCROLL_BAR_WIDTH);
     if !fight && p.shows_death_saves() {
         body = body.child(death_saves(run, index, cx));
     }
@@ -845,8 +851,9 @@ pub(super) fn compact_actions(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElem
     for (at, chip) in chips.into_iter().enumerate() {
         let marked = armed.as_ref().is_some_and(|view| view.link == chip.link);
         let (link, occurrence, entry) = (chip.link.clone(), chip.spell_occurrence, name.clone());
+        // Framed, as egui's attack chips were: a press rolls.
         line = line.child(
-            kit::Button::quiet(
+            kit::Button::secondary(
                 ElementId::Name(format!("run-compact-{at}").into()),
                 chip.label.clone(),
             )
@@ -1482,7 +1489,7 @@ fn keys(run: &Run) -> AnyElement {
 fn arrivals(run: &Run, room: Pixels, window: &Window, cx: &mut Context<SplatRoot>) -> AnyElement {
     let c = colors();
     // One block for every group, no wider than a list, so the controls keep one column.
-    let block = theme::LIST_MEASURE.min(room - theme::SCROLL_BAR_WIDTH);
+    let block = theme::LIST_MEASURE.min(room - kit::scroll::TRACK_WIDTH);
     let mut column = div()
         .flex()
         .flex_col()
@@ -1649,11 +1656,13 @@ fn group_row(
     let blocked = run.add_waits_words(group);
     let total = run.group_totals.get(&id).cloned().unwrap_or_default();
     let small = |words: &str| super::measure::width(window, Type::Small, words);
-    // A title leads with the drag glyph, which is drawn in the icon font: it is measured there.
+    // A title leads with the drag glyph, drawn as its own icon before the name (`grip`): it is
+    // measured as it is drawn, the icon, the gap, then the name.
     let strong = |words: &str| match words.strip_prefix(icons::DRAG) {
         Some(rest) => {
             super::measure::icon_width(window, Type::Strong, icons::DRAG)
-                + super::measure::width(window, Type::Strong, rest)
+                + theme::XS
+                + super::measure::width(window, Type::Strong, rest.trim_start())
         }
         None => super::measure::width(window, Type::Strong, words),
     };
@@ -1665,7 +1674,6 @@ fn group_row(
         |words| f32::from(strong(words)),
     );
     let split = &heading_fit.split;
-    let title = format!("{} {name}", icons::DRAG);
     // The line's words as one, the name a test finds it by.
     let line_words = heading_fit.line.as_ref().map(|fitted| {
         let form: String = fitted
@@ -1718,20 +1726,25 @@ fn group_row(
             px(split.title)
         } else {
             px(split.title).min(block - px(split.room) - theme::L)
-        })
+        }
+        // A measured width can round below the drawn one: a whole pixel more never cuts.
+        .ceil())
         .min_w_0()
         .h(Density::Read.control())
         .flex()
         .items_center()
+        .gap(theme::XS)
         .cursor_grab()
-        .child(
+        .child(kit::icon(icons::DRAG, Type::Strong, c.text))
+        .child(kit::target(
             div()
                 .min_w_0()
                 .ty(Type::Strong)
                 .text_color(c.text)
                 .truncate()
-                .child(title),
-        )
+                .child(name.clone()),
+            format!("Arrivals title of {name}"),
+        ))
         .on_drag(drag, |drag, _, _, cx| cx.new(|_| drag.clone()))
         .with_tooltip_words(hover);
     let grip = kit::target(

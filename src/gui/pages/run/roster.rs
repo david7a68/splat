@@ -19,9 +19,9 @@ use gpui::{
 use splat_party::combat_sync::SyncState;
 use theme::{Density, RunScale, Type, TypeExt, colors};
 
-/// An initiative field's width: a whole total of three characters (`-12`) with the caret, inside
-/// the field's padding (`kit::TextField` scrolls words it cannot show whole).
-pub(super) const INITIATIVE_FIELD: Pixels = px(60.0);
+/// An initiative field's width, as egui's number slot (`L` × 3): a whole total of three
+/// characters (`-12`) with the caret, inside a tight field's padding (`kit::TextField::tight`).
+pub(super) const INITIATIVE_FIELD: Pixels = px(48.0);
 
 /// A row's place in the turn order.
 #[derive(Clone, Copy, PartialEq)]
@@ -1186,8 +1186,9 @@ pub(super) fn row(
             }
             cx.notify();
         };
-        // The field keeps the column's place, so the name after it does not move; it is
-        // wider than the column, over the gap and the side's mark, to show a whole total.
+        // The field keeps the column's place, so the name after it does not move; it stays
+        // inside the column, clear of the side's mark (egui: a 44 px field), and is tight, so a
+        // whole total shows.
         div()
             .relative()
             .w(initiative_width)
@@ -1199,13 +1200,14 @@ pub(super) fn row(
                     .absolute()
                     .left_0()
                     .top((name_line - Density::Read.control()) / 2.0)
-                    .w(INITIATIVE_FIELD)
+                    .w(initiative_width)
                     .child(
                         kit::TextField::new(
                             ElementId::Name(format!("run-live-initiative-{}", p.key).into()),
                             text,
                         )
                         .name(name)
+                        .tight()
                         .focus_selected(focus)
                         .on_change(
                             cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
@@ -1411,7 +1413,7 @@ pub(super) fn row(
         .child(div().w(px(6.0) + theme::XS).flex_none())
         .child(initiative)
         .child(div().w(px(columns.gap)).flex_none())
-        .child(
+        .child(kit::target(
             div()
                 .w(px(scale.name * 0.7))
                 .h(name_line)
@@ -1419,7 +1421,8 @@ pub(super) fn row(
                 .flex()
                 .items_center()
                 .child(side_mark(&p.side, scale.name * 0.55)),
-        )
+            format!("Side mark of {}", p.name),
+        ))
         .child(
             div()
                 .w(px(columns.picture))

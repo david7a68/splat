@@ -1396,22 +1396,24 @@ pub(super) fn add_column_with(
         )
         .child(div().flex_1().min_h_0().pt(S).child(results(
             add,
-            !offers.1.is_empty(),
+            !offers.1.is_empty() || !offers.0.is_empty(),
             (handle, columns),
             cx,
         )))
 }
 
 /// The search's results: a virtual list of rows with its scroll bar, or the empty state.
+/// `offered`: the head already says what the search found instead (a copied note's repairs,
+/// or an unused package's creature with `Use it`), so no empty state says nothing matched.
 pub(super) fn results(
     add: &AddView,
-    repairs: bool,
+    offered: bool,
     (handle, columns): (&gpui::UniformListScrollHandle, ResultColumns),
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
-    // A copied note's repairs are said instead: the search found it, twice.
-    if add.results.is_empty() && repairs {
+    // A copied note's repairs, or `Use it`, are said instead: the search found it.
+    if add.results.is_empty() && offered {
         return div().into_any_element();
     }
     if add.results.is_empty() {
@@ -1445,8 +1447,11 @@ pub(super) fn results(
                     )
                     .child(kit::text(Type::Body, c.muted, ".")),
             );
-        return kit::empty_state(icons::SEARCH, "No creatures match", "", Some(body))
-            .into_any_element();
+        return kit::target(
+            kit::empty_state(icons::SEARCH, "No creatures match", "", Some(body)),
+            "No creatures match",
+        )
+        .into_any_element();
     }
     let rows: Arc<Vec<ResultRow>> = add.results.clone();
     let status = rows.iter().any(|row| row.unavailable.is_some());
