@@ -442,6 +442,7 @@ pub(super) fn render(
         } => {
             let (query, highlight, focus) = (query.clone(), *highlight, *focus);
             let field = kit::TextField::new("slash-search", query.clone())
+                .search()
                 .name("Search to link")
                 .placeholder("Search to link")
                 .focus(focus)

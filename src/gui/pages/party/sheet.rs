@@ -133,6 +133,7 @@ pub(super) fn view(
         column = column.child(
             div().pt(XS).w(px(240.0)).child(
                 TextField::new("party_page_filter", root.pages.party.search.clone())
+                    .search()
                     .placeholder(format!("Filter {}…", SHEET_PAGES[page].1.to_lowercase()))
                     .name("Filter this page")
                     .on_change(cx.listener(|root, words: &str, _, cx| {

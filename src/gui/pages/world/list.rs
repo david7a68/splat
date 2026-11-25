@@ -162,6 +162,7 @@ pub(super) fn render(
         .child(
             div().pb(theme::XS).child(
                 kit::TextField::new("world-search", search)
+                    .search()
                     .placeholder("Find a note")
                     .name("Search the world")
                     .on_change(on_words(cx, |root, words| {

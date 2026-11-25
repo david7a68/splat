@@ -615,6 +615,7 @@ fn filters(root: &SplatRoot, page_width: Pixels, cx: &mut Context<SplatRoot>) ->
             }
         }));
     let search = kit::TextField::new("timeline-search", page.search.clone())
+        .search()
         .placeholder("Search")
         .name("Search the timeline")
         .width(px(160.0))

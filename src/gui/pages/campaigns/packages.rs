@@ -623,6 +623,7 @@ fn search(
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     TextField::new(field, root.app.campaign_content.search_words().to_owned())
+        .search()
         .placeholder("Find an entry…")
         .name(name)
         .on_change(cx.listener(|root, words: &str, _, cx| {

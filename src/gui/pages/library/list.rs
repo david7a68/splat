@@ -235,6 +235,7 @@ pub(super) fn entries_column(
             .child(
                 div().flex_1().min_w_0().child(
                     kit::TextField::new("library-search", search.clone())
+                        .search()
                         .placeholder("Search by name or detail…")
                         .name("Search the Library")
                         .on_change(cx.listener(|root, words: &str, _, cx| {

@@ -70,6 +70,7 @@ pub(super) fn render(
     // shows and the held NPC; only Clear empties the reader too.
     let has_words = !lookup.query().is_empty();
     let field = TextField::new("lookup_search", lookup.query().to_owned())
+        .search()
         .placeholder(search_hint(f32::from(width)))
         .name(crate::lookup::SEARCH_NAME)
         .focus_selected(focus)

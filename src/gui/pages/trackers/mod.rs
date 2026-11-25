@@ -301,6 +301,7 @@ pub(crate) fn render_view(
         );
     // Empty, with its placeholder, so it does not read as a filter of the trackers.
     let search = kit::TextField::new("trackers-search", "")
+        .search()
         .placeholder("Search entries and notes…")
         .name(crate::lookup::SEARCH_NAME)
         .on_change(cx.listener(|root, words: &str, _, cx| {
