@@ -130,15 +130,18 @@ fn a_disk_conflict_compares_the_draft_and_the_file() {
     let path = path.expect("a Timeline file");
     let saved = fs::read_to_string(&path).unwrap();
     assert!(saved.contains("Rest at the mill"));
-    // Obsidian renames the rest while the DM renames it too.
+    // The DM renames the rest, and Obsidian renames it too before the DM saves. The outside
+    // write comes after the DM's typing: written before it, the file watcher can take the
+    // outside name first (no conflict, the DM then edits the newer name), and the test would
+    // depend on when the watcher runs.
+    shell.click("Title");
+    shell.press("ctrl-a");
+    shell.type_text("Rest at the old mill");
     fs::write(
         &path,
         saved.replace("Rest at the mill", "Rest by the river"),
     )
     .unwrap();
-    shell.click("Title");
-    shell.press("ctrl-a");
-    shell.type_text("Rest at the old mill");
     shell.press("ctrl-s");
     assert!(
         shell.bounds("Overwrite with my timeline").is_some(),
