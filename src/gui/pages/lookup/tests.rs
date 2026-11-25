@@ -110,7 +110,13 @@ fn nothing_found_offers_new_entries() {
 }
 
 /// A World entry of `kind` at `path` in the open campaign.
-fn world_entry(shell: &mut Shell, path: &str, name: &str, kind: &str, fields: &str) -> uuid::Uuid {
+pub(crate) fn world_entry(
+    shell: &mut Shell,
+    path: &str,
+    name: &str,
+    kind: &str,
+    fields: &str,
+) -> uuid::Uuid {
     let id = splat::character::stable_id(path);
     let file = shell.read(|root| {
         root.app
@@ -137,7 +143,7 @@ fn world_entry(shell: &mut Shell, path: &str, name: &str, kind: &str, fields: &s
 }
 
 /// Read the content again and wait until the index holds `id`.
-fn reload(shell: &mut Shell, id: uuid::Uuid) {
+pub(crate) fn reload(shell: &mut Shell, id: uuid::Uuid) {
     shell.update(|root, _, _| root.app.lookup.refresh());
     for _ in 0..1500 {
         std::thread::sleep(std::time::Duration::from_millis(20));

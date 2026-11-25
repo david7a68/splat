@@ -228,7 +228,10 @@ pub(crate) fn render_in(
         column = column.child(
             div().py(XS).child(
                 kit::Message::new(kit::Tone::Success, done.words.to_string()).action(
-                    kit::Button::quiet(part(host, id, "undo"), done.undo.label())
+                    // The short form shows (`Undo roll`), the whole form is its name (`Undo
+                    // roll 1 travel check`), as egui's result line had them.
+                    kit::Button::quiet(part(host, id, "undo"), done.undo.short())
+                        .name(done.undo.label())
                         .icon(icons::UNDO)
                         .density(Density::Read)
                         .on_click(cx.listener(move |root, _, _, cx| {

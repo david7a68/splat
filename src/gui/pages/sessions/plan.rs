@@ -25,7 +25,7 @@ use theme::{Density, L, M, S, Type, XS, colors};
 /// The plan's GPUI state: its scroll column and what its last frame measured.
 #[derive(Default)]
 pub(crate) struct State {
-    scroll: ScrollHandle,
+    pub(super) scroll: ScrollHandle,
     probes: Rc<RefCell<Probes>>,
 }
 
@@ -94,6 +94,49 @@ fn probe(
     let probes = probes.clone();
     canvas(
         move |bounds, _, _| write(&mut probes.borrow_mut().now, bounds),
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
+}
+
+/// A reveal of row `at`'s closed part, its title line and second line, as egui revealed the
+/// row's own rect and not the open details under it: a tall open row (a journey's checks) is
+/// not brought to the plan's top after each act on it. The details' height comes from this
+/// frame's probe, which the row wrote before this box, its later sibling, is laid out.
+fn reveal_head(
+    handle: &ScrollHandle,
+    probes: &Rc<RefCell<Probes>>,
+    at: usize,
+    align: kit::reveal::Align,
+) -> impl IntoElement {
+    let (handle, probes) = (handle.clone(), probes.clone());
+    canvas(
+        move |bounds, window: &mut Window, _| {
+            let details = probes
+                .borrow()
+                .now
+                .details
+                .get(at)
+                .copied()
+                .unwrap_or_default();
+            let head = gpui::Bounds::new(
+                bounds.origin,
+                gpui::size(
+                    bounds.size.width,
+                    (bounds.size.height - details).max(px(0.0)),
+                ),
+            );
+            let now = handle.offset();
+            let y =
+                kit::reveal::offset_for(head, handle.bounds(), now.y, handle.max_offset().y, align);
+            if y != now.y {
+                handle.set_offset(gpui::point(now.x, y));
+                window.refresh();
+            }
+        },
         |_, _, _, _| {},
     )
     .absolute()
@@ -340,7 +383,7 @@ fn body(
                 cx,
             ),
             PlanRow::Group(row) => group_row(row, &view.group_blocked, cx),
-            PlanRow::Scene(row) => scene_row(row, &view.fight_blocked, cx),
+            PlanRow::Scene(row) => scene_row(row, &view.fight_blocked, measures.width, window, cx),
         };
         let element = probed(element, probes, move |probe, bounds| {
             if let Some(row) = probe.rows.get_mut(at) {
@@ -352,7 +395,15 @@ fn body(
         } else {
             (target == Some(at)).then_some(kit::reveal::Align::Least)
         };
-        rows.push(kit::reveal::revealed(element, measures.scroll, align));
+        rows.push(match align {
+            Some(align) => div()
+                .relative()
+                .w_full()
+                .child(element)
+                .child(reveal_head(measures.scroll, probes, at, align))
+                .into_any_element(),
+            None => element,
+        });
     }
     let empty = (!any).then(|| {
         kit::empty_state(
@@ -698,13 +749,29 @@ fn scene_words(line: usize, words: &str, cx: &mut Context<SplatRoot>) -> AnyElem
         let inner = &rest[start + 2..start + end];
         let (target, shown) = inner.split_once('|').unwrap_or((inner, inner));
         let target = target.split('#').next().unwrap_or(target).to_owned();
-        row = row.child(
-            kit::Link::new(id(format!("plan-scene-link-{line}-{at}")), shown.to_owned())
-                .wrap()
-                .on_click(on(cx, PlanAct::ReadEncounter(target))),
-        );
+        let link = kit::Link::new(id(format!("plan-scene-link-{line}-{at}")), shown.to_owned())
+            .wrap()
+            .on_click(on(cx, PlanAct::ReadEncounter(target)));
         at += 1;
         rest = &rest[start + end + 2..];
+        // Words that touch the link (`[[Varra]]:`) follow it with no gap, as the note has them.
+        let touching = rest
+            .find(char::is_whitespace)
+            .unwrap_or(rest.len())
+            .min(rest.find("[[").unwrap_or(rest.len()));
+        if touching > 0 {
+            row = row.child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .child(link)
+                    .child(kit::text(Type::Body, c.text, rest[..touching].to_owned())),
+            );
+            rest = &rest[touching..];
+        } else {
+            row = row.child(link);
+        }
     }
     for word in rest.split_whitespace() {
         row = row.child(kit::text(Type::Body, c.text, word.to_owned()));
@@ -1409,7 +1476,13 @@ fn group_row(row: GroupRow, blocked: &Option<String>, cx: &mut Context<SplatRoot
     )
 }
 
-fn scene_row(row: SceneRow, blocked: &Option<String>, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn scene_row(
+    row: SceneRow,
+    blocked: &Option<String>,
+    width: Option<Pixels>,
+    window: &Window,
+    cx: &mut Context<SplatRoot>,
+) -> AnyElement {
     let c = colors();
     let SceneRow {
         line,
@@ -1443,13 +1516,23 @@ fn scene_row(row: SceneRow, blocked: &Option<String>, cx: &mut Context<SplatRoot
         );
     }
     let mut actions = Vec::new();
-    if log {
+    // A done scene's `Add to Log` stands on its row while the scene's words keep their line
+    // breaks beside it, else it is a line of the row's menu (egui `log_keeps_rows`): no word
+    // moves for it.
+    let on_row = log && log_keeps_rows(window, &plain, width);
+    if on_row {
         actions.push(
             kit::Button::quiet(id(format!("plan-scene-log-{line}")), "Add to Log")
                 .name(format!("Add to Log: {plain}"))
                 .density(Density::Read)
                 .on_click(on(cx, PlanAct::SceneLog(line)))
                 .into_any_element(),
+        );
+    } else if log {
+        items.push(
+            kit::MenuItem::new("Add to Log")
+                .icon(icons::ADD)
+                .on_click(on(cx, PlanAct::SceneLog(line))),
         );
     }
     items.push(
@@ -1459,6 +1542,22 @@ fn scene_row(row: SceneRow, blocked: &Option<String>, cx: &mut Context<SplatRoot
     );
     actions.push(row_menu(&plain, items));
     row_frame(Some(lead), title, second, actions, None)
+}
+
+/// Whether a done scene's words keep their line breaks with `Add to Log` beside the row's
+/// menu, as they break beside the menu alone. Before the rows' width is measured it stays off
+/// the row.
+fn log_keeps_rows(window: &Window, plain: &str, width: Option<Pixels>) -> bool {
+    use crate::gui::pages::trackers::measure;
+    let Some(width) = width else {
+        return false;
+    };
+    // The words' room beside the action place: the row less its lead, and the gaps.
+    let room = width - theme::ICON_SLOT - S * 2.0;
+    let menu = Density::Read.control();
+    let log = measure::width(window, Type::Strong, "Add to Log") + S * 2.0;
+    let breaks = |action: Pixels| measure::breaks(window, Type::Body, plain, room - action);
+    breaks(menu + S + log) == breaks(menu)
 }
 
 /// The Scene field: `Plan a scene`, with Add and Cancel.

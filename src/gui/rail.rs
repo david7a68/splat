@@ -285,9 +285,7 @@ fn status_slot(
         ),
         (
             app.timeline.not_saved(),
-            app.timeline
-                .attention_status()
-                .map_or("Timeline not saved", |state| state.word),
+            app.timeline.rail_word(),
             Page::Timeline,
         ),
     ] {
@@ -303,10 +301,10 @@ fn status_slot(
             word,
             attention.map_or(colors().document.invalid, |state| theme::color(state.color)),
         );
-        let hint = if target == Page::Sessions && app.sessions.notes_changed_on_disk() {
-            "Notes changed on disk"
-        } else {
-            word
+        let hint = match target {
+            Page::Sessions if app.sessions.notes_changed_on_disk() => "Notes changed on disk",
+            Page::Timeline => attention.map_or(word, |state| state.word),
+            _ => word,
         };
         slot = slot.child(
             kit::status_link(
