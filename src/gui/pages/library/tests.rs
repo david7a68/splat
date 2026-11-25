@@ -349,8 +349,14 @@ fn library_scope() {
     let mut shell = Shell::new("library-scope", Seed::Campaign);
     library(&mut shell);
     search(&mut shell, "fireball");
-    open_row(&mut shell, "Fireball · Spell · Level 3");
+    // The built-in Fireball, by its row's whole name (egui's `click`): the campaign's own
+    // Fireball's row starts with the same words.
+    shell.click("Fireball · Spell · Level 3");
     assert_eq!(open_name(&mut shell).as_deref(), Some("Fireball"));
+    assert!(
+        shell.bounds("Show file").is_none(),
+        "the built-in Fireball is open, which has no file"
+    );
     shell.click("id:library-scope");
     shell.capture("library-scope__01-scope-menu__1200x800");
     shell.click("Everything");
@@ -364,8 +370,20 @@ fn library_scope() {
         "fireball"
     );
     assert_eq!(open_name(&mut shell).as_deref(), Some("Fireball"));
+    assert!(
+        shell.bounds("Show file").is_none(),
+        "the built-in Fireball stays open"
+    );
     shell.capture("library-scope__02-scope-everything__1200x800");
     open_row(&mut shell, "Fireball · Spell · Level 3 · Campaign");
+    assert!(
+        shell.bounds("Show file").is_some(),
+        "the campaign's Fireball is open"
+    );
+    assert!(
+        shell.bounds("id:library-back").is_some(),
+        "Back returns to the built-in Fireball"
+    );
     shell.capture("library-scope__03-campaign-fireball__1200x800");
     scope(&mut shell, "Ashen Marches");
     shell.click("About Ashen Marches");
