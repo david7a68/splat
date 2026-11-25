@@ -4,7 +4,7 @@
 mod entry;
 mod panel;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use crate::Page;
 use crate::gui::SplatRoot;

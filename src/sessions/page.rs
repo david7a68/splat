@@ -4587,6 +4587,11 @@ impl Sessions {
         self.job.as_ref().is_some_and(|(job, _)| !job.is_held())
     }
 
+    /// `Recording saved: …` stands for the open session, so its footer shows it.
+    pub fn recording_saved_shown(&self) -> bool {
+        self.saved.get(&self.of_session(self.selected)).is_some()
+    }
+
     /// A processing failure for the open session, as the job would raise it.
     pub fn simulate_alert(&mut self, words: &str) {
         let session = self.selected.expect("an open session");
