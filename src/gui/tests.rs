@@ -213,6 +213,16 @@ fn the_kit_parts_work() {
         cx.notify();
     });
     shell.capture("gpui-kit__01-gallery__1200x800");
+    // A message's action stands `L` after its words when it fits on their line (egui's FK3).
+    let words = shell
+        .bounds("Saved “Bridge Ambush”.")
+        .expect("the message's words");
+    let undo = shell.bounds("id:g-undo").expect("its Undo");
+    assert!(
+        undo.top() < words.bottom()
+            && (undo.left() - words.right() - super::theme::L).abs() <= px(1.0),
+        "the Undo {undo:?} is L after the words {words:?}"
+    );
     let gallery = |shell: &mut Shell, read: fn(&Gallery) -> String| {
         shell.read(|root| read(root.gallery.as_ref().expect("the gallery")))
     };

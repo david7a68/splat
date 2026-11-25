@@ -1,12 +1,13 @@
 //! A message line (`design::outcome`'s look): a bar and an icon in the tone's colour, the words in
-//! the text colour, and the message's actions under the words, at the words' edge.
+//! the text colour, and the message's actions `L` after the words when they fit on the words'
+//! line, else under the words, at their edge (egui's FK3).
 //!
 //! Where a message goes is the page's rule: a pane's results, reasons and notices sit
 //! in its footer (`kit::Pane::footer`); a notice that came by itself sits at the top of the pane's
 //! body; a row's fault sits on its row. The tone comes from what happened (`Tone`), never from the
 //! caller's taste: Error for a failure, Warning for a risk, Success for a done act, Info otherwise.
 use crate::gui::icons;
-use crate::gui::theme::{L, LIST_MEASURE, MARK_WIDTH, S, Type, TypeExt, XS, colors};
+use crate::gui::theme::{Density, L, LIST_MEASURE, MARK_WIDTH, S, Type, TypeExt, XS, colors};
 use gpui::{
     AnyElement, App, Div, Hsla, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
     Window, div, prelude::*,
@@ -49,6 +50,7 @@ pub struct Message {
     actions: Vec<AnyElement>,
     destructive: Option<AnyElement>,
     dismiss: Option<AnyElement>,
+    actions_under: bool,
 }
 
 impl Message {
@@ -61,7 +63,15 @@ impl Message {
             actions: Vec::new(),
             destructive: None,
             dismiss: None,
+            actions_under: false,
         }
+    }
+
+    /// The actions always on lines under the words (choices that each have a help line under
+    /// them, ruling M8), never beside them.
+    pub fn actions_under(mut self) -> Self {
+        self.actions_under = true;
+        self
     }
 
     /// `Small` words (a row's own fault).
@@ -76,8 +86,8 @@ impl Message {
         self
     }
 
-    /// An action under the words. The first starts at the words' edge; the safe choice comes
-    /// first.
+    /// An action: `L` after the words when all the actions fit on the words' line, else under
+    /// the words, the first at their edge. The safe choice comes first.
     pub fn action(mut self, action: impl IntoElement) -> Self {
         self.actions.push(action.into_any_element());
         self
@@ -102,15 +112,40 @@ impl RenderOnce for Message {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         let (icon, color) = self.tone.parts();
         let ty = if self.small { Type::Small } else { Type::Body };
-        let words: Div = div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_w_0()
-            .gap(XS)
-            .child(div().ty(ty).text_color(colors().text).child(self.words))
-            .children(self.details)
-            .when_actions(self.actions, self.destructive);
+        let text = super::target(
+            div()
+                .ty(ty)
+                .text_color(colors().text)
+                .min_w_0()
+                .child(self.words.clone()),
+            self.words,
+        );
+        let band = actions_band(self.actions, self.destructive);
+        let words: Div = div().flex().flex_col().flex_1().min_w_0();
+        let words = if self.details.is_empty() && !self.actions_under {
+            // egui's rule (FK3): the actions start `L` after the words' last letter when they
+            // fit on the words' line, else on a line under the words, at their edge. A column
+            // gap lies only between parts on one line, so a wrapped band starts at the edge.
+            // The band reaches as far above the words' line as its controls are taller than it.
+            let overhang = (Density::Read.control() - ty.line()) / 2.0;
+            words.child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .flex_wrap()
+                    .items_start()
+                    .gap_x(L)
+                    .gap_y(XS + overhang)
+                    .child(text)
+                    .when_some(band, |head, band| head.child(band.min_w_0().mt(-overhang))),
+            )
+        } else {
+            words
+                .gap(XS)
+                .child(text)
+                .children(self.details)
+                .when_some(band, |words, band| words.child(band))
+        };
         let dismissed = self.dismiss.is_some();
         let words = if dismissed {
             words.max_w(LIST_MEASURE)
@@ -153,29 +188,24 @@ impl RenderOnce for Message {
     }
 }
 
-trait WhenActions {
-    fn when_actions(self, actions: Vec<AnyElement>, destructive: Option<AnyElement>) -> Self;
-}
-
-impl WhenActions for Div {
-    fn when_actions(self, actions: Vec<AnyElement>, destructive: Option<AnyElement>) -> Self {
-        if actions.is_empty() && destructive.is_none() {
-            return self;
-        }
-        let gap_before = if actions.is_empty() {
-            gpui::px(0.0)
-        } else {
-            L - S
-        };
-        self.child(
-            div()
-                .flex()
-                .flex_row()
-                .flex_wrap()
-                .items_center()
-                .gap(S)
-                .children(actions)
-                .children(destructive.map(|action| div().ml(gap_before).child(action))),
-        )
+/// The actions in one band: the safe ones `S` apart, then the one that loses data `L` after them.
+fn actions_band(actions: Vec<AnyElement>, destructive: Option<AnyElement>) -> Option<Div> {
+    if actions.is_empty() && destructive.is_none() {
+        return None;
     }
+    let gap_before = if actions.is_empty() {
+        gpui::px(0.0)
+    } else {
+        L - S
+    };
+    Some(
+        div()
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .items_center()
+            .gap(S)
+            .children(actions)
+            .children(destructive.map(|action| div().ml(gap_before).child(action))),
+    )
 }

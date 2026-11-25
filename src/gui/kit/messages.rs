@@ -157,6 +157,9 @@ pub fn message<A: Clone + 'static>(
     // A message whose choices have help puts each choice on a line of its own, its help under it
     // (ruling M8: the help reads as its own choice's, never the next one's).
     let helped = line.choices.iter().any(|choice| choice.help.is_some());
+    if helped {
+        message = message.actions_under();
+    }
     let with_help = |control: AnyElement, help: &Option<String>| -> AnyElement {
         if !helped {
             return control;
