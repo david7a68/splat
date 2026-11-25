@@ -494,7 +494,7 @@ fn run_add_creature() {
     // new one is a new field).
     assert!(
         has_target(&mut shell, "id:run-creature-hp-11"),
-        "HP shows the Wolf's 11: {:?}",
+        "HP shows the Wolf’s 11: {:?}",
         kit::probe::names()
     );
     shell.click("New creature count");
