@@ -1322,7 +1322,10 @@ fn world_note_deleted() {
     shell.update(|root, _, _| root.app.lookup.close());
     shell.settle();
     shell.click("Clear");
-    assert_eq!(shell.read(|root| root.app.world_page.search().to_owned()), "");
+    assert_eq!(
+        shell.read(|root| root.app.world_page.search().to_owned()),
+        ""
+    );
     assert!(shell.bounds("Clear").is_none());
 }
 

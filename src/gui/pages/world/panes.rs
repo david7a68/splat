@@ -990,19 +990,22 @@ pub(super) fn edit_form(
             choose(cx, DiskConflictChoice::Overwrite),
             choose(cx, DiskConflictChoice::Reload),
         ));
-        for (label, words) in &conflict.effects {
-            form = form.child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap(theme::S)
-                    .child(div().w(px(104.0)).flex_none().child(kit::text(
-                        theme::Type::Small,
-                        c.muted,
-                        label.clone(),
-                    )))
-                    .child(kit::text(theme::Type::Small, c.text, words.clone())),
-            );
+        // What Overwrite does to each value, `L` under the choices, one line apart (as egui).
+        if !conflict.effects.is_empty() {
+            form = form.child(div().flex().flex_col().pt(theme::L).gap(theme::S).children(
+                conflict.effects.iter().map(|(label, words)| {
+                    div()
+                        .flex()
+                        .flex_row()
+                        .gap(theme::S)
+                        .child(div().w(px(104.0)).flex_none().child(kit::text(
+                            theme::Type::Small,
+                            c.muted,
+                            label.clone(),
+                        )))
+                        .child(kit::text(theme::Type::Small, c.text, words.clone()))
+                }),
+            ));
         }
         if let Some((mine, theirs)) = &conflict.texts {
             form = form.child(div().pt(theme::S).child(compare(mine, theirs)));

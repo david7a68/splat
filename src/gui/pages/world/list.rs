@@ -178,14 +178,12 @@ pub(super) fn render(
                     ),
                 )
                 .when(!search.is_empty(), |line| {
-                    line.child(
-                        kit::Button::quiet("world-search-clear", "Clear").on_click(cx.listener(
-                            |root: &mut SplatRoot, _, _, cx| {
-                                root.app.world_page.set_search("");
-                                cx.notify();
-                            },
-                        )),
-                    )
+                    line.child(kit::Button::quiet("world-search-clear", "Clear").on_click(
+                        cx.listener(|root: &mut SplatRoot, _, _, cx| {
+                            root.app.world_page.set_search("");
+                            cx.notify();
+                        }),
+                    ))
                 }),
         )
         .child(div().flex_1().min_h_0().child(kit::measured_column(
