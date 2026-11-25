@@ -522,13 +522,13 @@ fn run_add_creature() {
     // A group's name shows whole while the heading has room for it (egui: `Rival Team`).
     let title = shell
         .bounds("Arrivals title of Rival Team")
-        .expect("Rival Team's title");
+        .expect("Rival Team’s title");
     let whole = shell.update(|_, window, _| {
         crate::gui::kit::measure::width(window, crate::gui::theme::Type::Strong, "Rival Team")
     });
     assert!(
         title.size.width >= whole,
-        "Rival Team's title is {:?} wide for {whole:?}",
+        "Rival Team’s title is {:?} wide for {whole:?}",
         title.size.width
     );
     shell.capture("run-add-creature__08-arrivals-found-chosen__1200x800");
@@ -908,7 +908,7 @@ fn column_resize() {
     for (field, placeholder) in [("Amount", "Amount"), ("Dice", "1d20")] {
         let room = shell
             .bounds(&format!("{field} words"))
-            .unwrap_or_else(|| panic!("{field}'s words"))
+            .unwrap_or_else(|| panic!("{field}’s words"))
             .size
             .width;
         let words = shell.update(|_, window, _| {
@@ -1251,10 +1251,10 @@ fn run_absent_player() {
             .expect("the initiative field");
         assert!(
             field.bottom() <= detail.top(),
-            "{name}'s detail ({detail:?}) is beside its field ({field:?})"
+            "{name}’s detail ({detail:?}) is beside its field ({field:?})"
         );
         if let Some(roll) = shell.bounds(&format!("Roll for {name}")) {
-            assert!(roll.bottom() <= detail.top(), "Roll covers {name}'s detail");
+            assert!(roll.bottom() <= detail.top(), "Roll covers {name}’s detail");
         }
     }
     shell.capture("run-absent-player__01-ready-with-one-absent__960x640");
@@ -1537,8 +1537,8 @@ fn roll_table_author() {
     // Lookup's pane is right of World's reader, whose table ends before it.
     let in_lookup = |bounds: &gpui::Bounds<gpui::Pixels>| bounds.left() > world.right();
     let results = kit::probe::find_all(kit::markdown::ROLL_RESULT);
-    assert_eq!(results.len(), 1, "one result, World's: {results:?}");
-    assert!(!in_lookup(&results[0]), "the result is World's");
+    assert_eq!(results.len(), 1, "one result, World’s: {results:?}");
+    assert!(!in_lookup(&results[0]), "the result is World’s");
     assert!(has_target(
         &mut shell,
         &format!("{}: Typed 4 on 1d6: Fog", kit::markdown::ROLL_RESULT)
@@ -1552,11 +1552,11 @@ fn roll_table_author() {
     let words = |result: &str| format!("{}: {result}", kit::markdown::ROLL_RESULT);
     let lookup_result = shell
         .bounds(&words("Typed 6 on 1d6: Sun"))
-        .expect("Lookup's result");
-    assert!(in_lookup(&lookup_result), "Lookup's result is in Lookup");
+        .expect("Lookup’s result");
+    assert!(in_lookup(&lookup_result), "Lookup’s result is in Lookup");
     let world_result = shell
         .bounds(&words("Typed 4 on 1d6: Fog"))
-        .expect("World's result stays");
-    assert!(!in_lookup(&world_result), "World's result is in World");
+        .expect("World’s result stays");
+    assert!(!in_lookup(&world_result), "World’s result is in World");
     assert_eq!(kit::probe::find_all(kit::markdown::ROLL_RESULT).len(), 2);
 }
