@@ -6,9 +6,10 @@
 use super::measure;
 use super::on_run;
 use crate::design::{hp_state, hp_word};
+use crate::encounter_run::effect::Time;
 use crate::encounter_run::rolling::RowChoice;
 use crate::encounter_run::view::{self, RowColumns};
-use crate::encounter_run::{Command, Participant, Phase, Run};
+use crate::encounter_run::{Command, Condition, Participant, Phase, Run};
 use crate::gui::{SplatRoot, icons, kit, theme};
 use crate::rolls::Mode;
 use gpui::{
@@ -17,6 +18,10 @@ use gpui::{
 };
 use splat_party::combat_sync::SyncState;
 use theme::{Density, RunScale, Type, TypeExt, colors};
+
+/// An initiative field's width: a whole total of three characters (`-12`) with the caret, inside
+/// the field's padding (`kit::TextField` scrolls words it cannot show whole).
+pub(super) const INITIATIVE_FIELD: Pixels = px(60.0);
 
 /// A row's place in the turn order.
 #[derive(Clone, Copy, PartialEq)]
@@ -117,6 +122,23 @@ enum Act {
     Initiative,
     /// The count of the changes: the stat block, where they are.
     Changes,
+    /// An official condition's name: its rule in Lookup, beside the run.
+    Rule(String),
+    /// An effect's count: spend a use, mark it spent or roll its recharge, or remove it when
+    /// its time is up. Its place in the row's conditions, and its name, which must still be
+    /// there at the press.
+    Effect(EffectAct, usize, String),
+}
+
+/// What a press on an effect's count does (`effect_links` in the egui run).
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum EffectAct {
+    /// `Legendary actions 2 of 3`: one use (at 0, every use back).
+    Spend,
+    /// `Fire Breath ready`: mark it spent; `spent`: roll 1d6 for it.
+    Recharge,
+    /// `time is up`: the effect goes.
+    Remove,
 }
 
 /// One part of the second line: its words, colour and press.
@@ -129,6 +151,8 @@ struct Part {
     underline: bool,
     /// A state word at the mark's size (a sync state that opens the line).
     mark: bool,
+    /// It follows the part before after a space, not ` · `: an effect's count after its name.
+    joined: bool,
 }
 
 /// A row's second line as it fits.
@@ -157,6 +181,7 @@ pub(super) struct RowPlan {
 
 /// The whole roster's fit for one frame: its scale, columns, each row's layout (in order), and
 /// whether it is longer than its room.
+#[derive(Clone)]
 pub(super) struct Plan {
     pub(super) scale: RunScale,
     columns: RowColumns,
@@ -184,10 +209,93 @@ impl Plan {
     }
 }
 
+/// How a list uses room it does not need.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(super) enum Spare {
+    /// The live roster: spare room goes to the rows, so no gap opens under the list.
+    ToRows,
+    /// The ended view's final state: rows keep their scale's height, and the loot follows.
+    Keep,
+}
+
+/// The last plan and the hash of what it was fitted from (`plan_key`): a frame whose rows,
+/// room and width did not change takes it, and no row's words are measured again.
+#[derive(Default)]
+pub(super) struct PlanCache(Option<(u64, Plan)>);
+
+#[cfg(test)]
+thread_local! {
+    /// How many plans were fitted (a test of the cache).
+    pub(super) static PLANS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// `plan`, or the cached one when nothing it reads changed.
+pub(super) fn plan_cached(
+    cache: &mut PlanCache,
+    run: &Run,
+    order: &[usize],
+    width: f32,
+    room: f32,
+    spare: Spare,
+    window: &Window,
+) -> Plan {
+    let key = plan_key(run, order, width, room, spare);
+    if let Some((kept, plan)) = &cache.0
+        && *kept == key
+    {
+        return plan.clone();
+    }
+    #[cfg(test)]
+    PLANS_MADE.with(|made| made.set(made.get() + 1));
+    let plan = plan(run, order, width, room, spare, window);
+    cache.0 = Some((key, plan.clone()));
+    plan
+}
+
+/// Every fact a plan is fitted from, hashed: the room, the order and the turn, and each row's
+/// words and marks as `parts`, `fit_line` and `row_plan` read them.
+fn plan_key(run: &Run, order: &[usize], width: f32, room: f32, spare: Spare) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    width.to_bits().hash(&mut hash);
+    room.to_bits().hash(&mut hash);
+    (spare == Spare::ToRows).hash(&mut hash);
+    order.hash(&mut hash);
+    run.current().hash(&mut hash);
+    for (index, p) in run.state.participants.iter().enumerate() {
+        p.name.hash(&mut hash);
+        p.side.hash(&mut hash);
+        p.present.hash(&mut hash);
+        p.initiative.is_some().hash(&mut hash);
+        p.concentration.hash(&mut hash);
+        (p.hp, p.max_hp).hash(&mut hash);
+        p.conditions.hash(&mut hash);
+        p.npc_identity().hash(&mut hash);
+        p.definition.name.hash(&mut hash);
+        p.loot_ready().hash(&mut hash);
+        p.changes
+            .as_ref()
+            .filter(|_| p.stat_changes())
+            .map(|changes| changes.overrides.table_bonuses(&changes.base))
+            .hash(&mut hash);
+        run.row_sync_word(index).hash(&mut hash);
+        run.row_badge(index).hash(&mut hash);
+        run.conc_save_dc(index).hash(&mut hash);
+    }
+    hash.finish()
+}
+
 /// The run's list of rows in `width` (inside the scroll column's lane) and `room`: its scale, then each row
-/// laid out in the measured columns; spare room goes to the rows; a list that needs the height
-/// compresses, then summarises, and the rest scrolls under a line that counts it.
-pub(super) fn plan(run: &Run, order: &[usize], width: f32, room: f32, window: &Window) -> Plan {
+/// laid out in the measured columns; spare room goes to the rows (`Spare`); a list that needs the
+/// height compresses, then summarises, and the rest scrolls under a line that counts it.
+pub(super) fn plan(
+    run: &Run,
+    order: &[usize],
+    width: f32,
+    room: f32,
+    spare: Spare,
+    window: &Window,
+) -> Plan {
     let count = order.len();
     let mut scale = RunScale::fit(room, width, count);
     let total = |rows: &[RowPlan]| -> f32 { rows.iter().map(|row| row.height).sum() };
@@ -204,9 +312,11 @@ pub(super) fn plan(run: &Run, order: &[usize], width: f32, room: f32, window: &W
     let (mut fit, mut even) = (Fit::Natural, 0.0);
     if natural <= room {
         // Spare room goes to the rows, so a short list leaves no gap under it.
-        let spare = room - natural - 2.0;
-        let share = spare.max(0.0) / count.max(1) as f32;
-        scale.row += share.min(scale.row * 0.4);
+        if spare == Spare::ToRows {
+            let left = room - natural - 2.0;
+            let share = left.max(0.0) / count.max(1) as f32;
+            scale.row += share.min(scale.row * 0.4);
+        }
     } else {
         fit = Fit::Compressed;
         // What is left goes back to the rows, shortest first, so the pitch evens out.
@@ -370,7 +480,14 @@ fn row_plan(
 /// `bonuses` says, in this order: the state words when they have no column, Absent, No
 /// initiative, Conc, the conditions and the count of the rest, the side, `as <stat block>`, the
 /// changes, Loot, the sync state when it has no column, and the save DC.
-fn parts(run: &Run, index: usize, inline: bool, conditions: usize, bonuses: Bonuses) -> Vec<Part> {
+fn parts(
+    run: &Run,
+    index: usize,
+    inline: bool,
+    conditions: usize,
+    bonuses: Bonuses,
+    short: Option<&str>,
+) -> Vec<Part> {
     let c = colors();
     let p = &run.state.participants[index];
     let part = |words: String, color: Hsla, act: Act| Part {
@@ -379,6 +496,7 @@ fn parts(run: &Run, index: usize, inline: bool, conditions: usize, bonuses: Bonu
         act,
         underline: false,
         mark: false,
+        joined: false,
     };
     let mut parts = Vec::new();
     if inline && let Some((icon, word, color)) = hp_word(p.hp, p.max_hp) {
@@ -409,27 +527,14 @@ fn parts(run: &Run, index: usize, inline: bool, conditions: usize, bonuses: Bonu
         )
     });
     parts.extend(conc);
-    for condition in p.conditions.iter().take(conditions) {
-        let words = condition.words();
-        // FD8: a long effect shows its first four words and `…`.
-        let words = if words.split_whitespace().count() > 4 {
-            format!(
-                "{}…",
-                words
-                    .split_whitespace()
-                    .take(4)
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            )
-        } else {
-            words
-        };
-        parts.push(part(words, c.participant.condition, Act::Conditions));
+    let order = condition_order(run, index);
+    for (shown, &at) in order.iter().take(conditions).enumerate() {
+        let short = short.filter(|_| shown == 0);
+        parts.extend(condition_parts(&p.conditions[at], at, short));
     }
-    if p.conditions.len() > conditions {
+    if order.len() > conditions {
         parts.push(part(
-            crate::design::count(p.conditions.len() - conditions, "more", "more")
-                .replace(' ', "\u{a0}"),
+            crate::design::count(order.len() - conditions, "more", "more").replace(' ', "\u{a0}"),
             c.participant.condition,
             Act::Conditions,
         ));
@@ -529,13 +634,110 @@ fn parts(run: &Run, index: usize, inline: bool, conditions: usize, bonuses: Bonu
     parts
 }
 
+/// The order a row shows its conditions in: the effects first (on the turn's row, one due on
+/// this turn leads), then the plain conditions (section 1.4). Each is its place in the row's
+/// conditions.
+fn condition_order(run: &Run, index: usize) -> Vec<usize> {
+    let conditions = &run.state.participants[index].conditions;
+    let turn = run.current() == Some(index);
+    let mut effects: Vec<usize> = (0..conditions.len())
+        .filter(|&at| conditions[at].is_effect())
+        .collect();
+    if turn {
+        effects.sort_by_key(|&at| !conditions[at].due());
+    }
+    effects.extend((0..conditions.len()).filter(|&at| !conditions[at].is_effect()));
+    effects
+}
+
+/// An official condition's name (`Poisoned`, `Exhaustion (2)`): it has a rule to open.
+fn official(name: &str) -> bool {
+    let base = name.split(" (").next().unwrap_or(name).trim();
+    crate::encounter_run::effect::CONDITIONS
+        .iter()
+        .any(|(_, official)| official.eq_ignore_ascii_case(base))
+}
+
+/// FD8: words of more than four show their first four and `…`.
+fn first_words(words: &str) -> String {
+    if words.split_whitespace().count() > 4 {
+        let first: Vec<&str> = words.split_whitespace().take(4).collect();
+        format!("{}…", first.join(" "))
+    } else {
+        words.to_owned()
+    }
+}
+
+/// One condition's parts: its name, then its count after a space (or ` · ` for the words of
+/// a time), each its own target. An official condition's name opens its rule; other words
+/// open Conditions. A count of uses spends one, a recharge marks it spent or rolls for it, and
+/// `time is up` removes the effect. `short` stands for the name in a tight row.
+fn condition_parts(condition: &Condition, at: usize, short: Option<&str>) -> Vec<Part> {
+    let c = colors();
+    let name = condition.name();
+    let name_act = if official(name) {
+        Act::Rule(name.to_owned())
+    } else {
+        Act::Conditions
+    };
+    let part = |words: String, color: Hsla, act: Act, joined: bool| Part {
+        words,
+        color,
+        act,
+        underline: false,
+        mark: false,
+        joined,
+    };
+    let Some(count) = condition.count() else {
+        let words = short.map_or_else(|| first_words(&condition.words()), str::to_owned);
+        return vec![part(words, c.participant.condition, name_act, false)];
+    };
+    let words = short.map_or_else(|| first_words(name), str::to_owned);
+    let effect = |act| Act::Effect(act, at, name.to_owned());
+    let (words_of_count, color, act) = match condition.time() {
+        Some(Time::Rounds { left: 0, .. }) => (
+            format!("{} {count}", icons::WARN),
+            c.result.warning,
+            effect(EffectAct::Remove),
+        ),
+        Some(Time::Uses { .. }) => (count, c.participant.condition, effect(EffectAct::Spend)),
+        Some(Time::Recharge { spent: true, .. }) => (
+            format!("{count} {}", icons::DICE),
+            c.participant.condition,
+            effect(EffectAct::Recharge),
+        ),
+        Some(Time::Recharge { .. }) => {
+            (count, c.participant.condition, effect(EffectAct::Recharge))
+        }
+        _ => (count, c.participant.condition, Act::Conditions),
+    };
+    // `Bless 9`, but `Bless · last round`.
+    let joined = words_of_count.starts_with(|c: char| c.is_ascii_digit())
+        || !matches!(condition.time(), Some(Time::Rounds { .. }));
+    vec![
+        part(words, c.participant.condition, name_act, false),
+        part(words_of_count.replace(' ', "\u{a0}"), color, act, joined),
+    ]
+}
+
 /// The separator between two parts: ` · ` that keeps to its next word.
 const DOT: &str = " ·\u{a0}";
 
+/// The words of `parts` on one line, with their separators.
+fn line_text(parts: &[Part]) -> String {
+    let mut text = String::new();
+    for (at, part) in parts.iter().enumerate() {
+        if at > 0 {
+            text.push_str(if part.joined { " " } else { DOT });
+        }
+        text.push_str(&part.words);
+    }
+    text
+}
+
 /// The width of `parts` on one line in `ty` at `size`.
 fn line_width(window: &Window, parts: &[Part], ty: Type, size: Pixels) -> f32 {
-    let words: Vec<&str> = parts.iter().map(|part| part.words.as_str()).collect();
-    f32::from(measure::width_at(window, ty, Some(size), &words.join(DOT)))
+    f32::from(measure::width_at(window, ty, Some(size), &line_text(parts)))
 }
 
 /// The second line folded to its room: the changes give way first
@@ -569,7 +771,13 @@ fn fit_line(
         Bonuses::All
     };
     let mut shown = p.conditions.len();
-    let mut parts = parts(run, index, columns.inline_state, shown, bonuses);
+    let mut short: Option<String> = None;
+    let mut parts = parts(run, index, columns.inline_state, shown, bonuses, None);
+    let first_effect = condition_order(run, index)
+        .first()
+        .map(|&at| &p.conditions[at])
+        .filter(|condition| condition.count().is_some())
+        .map(|condition| condition.name().to_owned());
     loop {
         if fits(&parts, role, size) {
             break;
@@ -580,12 +788,49 @@ fn fit_line(
             } else {
                 Bonuses::None
             };
+        } else if shown == 2
+            && short.is_none()
+            && let Some(name) = &first_effect
+        {
+            // Before the first effect is alone with `N more`, its name gives up words so the
+            // next condition keeps its place: `Legendary… 2 of 3 · Prone · 1 more`.
+            let whole = line_width(window, &parts, role, size);
+            let name_width = f32::from(measure::width_at(window, role, Some(size), name));
+            let room_for_name = room - badge_width - (whole - name_width);
+            let cut = crate::design::words_that_fit_by(name, room_for_name, |words| {
+                f32::from(measure::width_at(window, role, Some(size), words))
+            });
+            if cut == *name || cut == "…" {
+                shown -= 1;
+            } else {
+                short = Some(cut);
+                let trial = self::parts(
+                    run,
+                    index,
+                    columns.inline_state,
+                    shown,
+                    bonuses,
+                    short.as_deref(),
+                );
+                if !fits(&trial, role, size) {
+                    short = None;
+                    shown -= 1;
+                }
+            }
         } else if shown > 1 {
+            short = None;
             shown -= 1;
         } else {
             break;
         }
-        parts = self::parts(run, index, columns.inline_state, shown, bonuses);
+        parts = self::parts(
+            run,
+            index,
+            columns.inline_state,
+            shown,
+            bonuses,
+            short.as_deref(),
+        );
     }
     let mut line = Line {
         parts,
@@ -722,7 +967,7 @@ fn second_line(
                     .text_size(size)
                     .text_color(c.muted)
                     .whitespace_nowrap()
-                    .child(DOT),
+                    .child(if part.joined { "\u{a0}" } else { DOT }),
             );
         }
         let id = ElementId::Name(format!("run-row-{}-part-{at}", p.key).into());
@@ -732,10 +977,9 @@ fn second_line(
             .text_size(if part.mark { px(scale.mark) } else { size })
             .text_color(part.color)
             .whitespace_nowrap()
-            .when(
-                part.underline || matches!(part.act, Act::Conditions | Act::Changes),
-                |words| words.underline(),
-            )
+            .when(part.underline || (live && part.act != Act::None), |words| {
+                words.underline()
+            })
             .child(part.words.clone());
         if live && part.act != Act::None {
             let (act, key) = (part.act.clone(), p.key.clone());
@@ -750,7 +994,7 @@ fn second_line(
                     else {
                         return;
                     };
-                    match act {
+                    match act.clone() {
                         Act::Conditions => {
                             run.select(index);
                             run.open_conditions_tab();
@@ -764,13 +1008,41 @@ fn second_line(
                             run.focus_field = Some(index);
                             run.setup_inputs.insert(index, String::new());
                         }
+                        // Whoever the DM asks about is the one they are about to change.
+                        Act::Rule(name) => {
+                            run.select(index);
+                            let rule = run
+                                .content
+                                .as_deref()
+                                .and_then(|content| content.condition_rule(&name));
+                            match rule {
+                                Some(rule) => run.lookup_request = Some(rule),
+                                None => run.open_conditions_tab(),
+                            }
+                        }
+                        Act::Effect(act, at, name) => {
+                            run.select(index);
+                            let there = run.state.participants[index]
+                                .conditions
+                                .get(at)
+                                .is_some_and(|condition| condition.name() == name);
+                            if there {
+                                run.run_command(match act {
+                                    EffectAct::Spend => Command::Spend(index, at),
+                                    EffectAct::Recharge => Command::Recharge(index, at),
+                                    EffectAct::Remove => Command::RemoveCondition(index, at),
+                                });
+                            }
+                        }
                         Act::None => {}
                     }
                 },
             ));
-            let name = match part.act {
-                Act::Initiative => format!("No initiative for {}", p.name),
-                _ => part.words.clone(),
+            let name = act_name(p, &part.act, &part.words);
+            let element = if matches!(part.act, Act::Rule(_) | Act::Effect(..)) {
+                element.with_tooltip_words(name.clone())
+            } else {
+                element
             };
             words = words.child(kit::target(element, name));
         } else {
@@ -778,6 +1050,39 @@ fn second_line(
         }
     }
     words.into_any_element()
+}
+
+/// The name of a part's press, as its hover and the accessibility tree give it.
+fn act_name(p: &Participant, act: &Act, words: &str) -> String {
+    let condition = |at: usize| p.conditions.get(at);
+    match act {
+        Act::Initiative => format!("No initiative for {}", p.name),
+        Act::Rule(name) => format!("Rule: {name}"),
+        Act::Effect(EffectAct::Remove, _, name) => format!("Remove {name}"),
+        Act::Effect(EffectAct::Spend, at, name) => match condition(*at).and_then(Condition::time) {
+            Some(Time::Uses { left: 0, .. }) => {
+                format!("Give back every use of {name} of {}", p.name)
+            }
+            _ => format!("Spend one use of {name} of {}", p.name),
+        },
+        Act::Effect(EffectAct::Recharge, at, name) => {
+            match condition(*at).and_then(Condition::time) {
+                Some(Time::Recharge {
+                    spent: true,
+                    recharge,
+                }) => {
+                    let range = if recharge[0] == recharge[1] {
+                        recharge[0].to_string()
+                    } else {
+                        format!("{}–{}", recharge[0], recharge[1])
+                    };
+                    format!("Roll 1d6. {range} makes it ready")
+                }
+                _ => format!("Mark {name} spent"),
+            }
+        }
+        Act::Conditions | Act::Changes | Act::None => words.to_owned(),
+    }
 }
 
 /// The accessible name of a row: every fact it shows, as `row_name` gives it.
@@ -871,40 +1176,63 @@ pub(super) fn row(
         let text = run.setup_inputs.get(&index).cloned().unwrap_or_default();
         let name = format!("Initiative for {}", p.name);
         let focus = run.focus_field == Some(index);
+        // Escape, a click away, or Enter with no number leaves the total as it was.
+        let close = move |root: &mut SplatRoot, cx: &mut Context<SplatRoot>| {
+            if let Some(run) = root.app.encounters.run_mut()
+                && run.live_initiative == Some(index)
+            {
+                run.live_initiative = None;
+                run.focus_field = None;
+            }
+            cx.notify();
+        };
+        // The field keeps the column's place, so the name after it does not move; it is
+        // wider than the column, over the gap and the side's mark, to show a whole total.
         div()
-            .key_context("RunField")
-            .w(initiative_width.max(px(52.0)))
+            .relative()
+            .w(initiative_width)
+            .h(name_line)
             .flex_none()
             .child(
-                kit::TextField::new(
-                    ElementId::Name(format!("run-live-initiative-{}", p.key).into()),
-                    text,
-                )
-                .name(name)
-                .focus_selected(focus)
-                .on_change(
-                    cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                        if let Some(run) = root.app.encounters.run_mut() {
-                            run.setup_inputs.insert(index, super::number_text(words));
-                        }
-                        cx.notify();
-                    }),
-                )
-                .on_enter(super::plain(cx, move |root, _, cx| {
-                    if let Some(run) = root.app.encounters.run_mut() {
-                        let total = run
-                            .setup_inputs
-                            .get(&index)
-                            .and_then(|text| crate::design::parse_signed(text));
-                        if let Some(total) = total
-                            && run.state.participants[index].initiative != Some(total)
-                        {
-                            run.run_command(Command::Initiative(index, Some(total)));
-                        }
-                        run.live_initiative = None;
-                    }
-                    cx.notify();
-                })),
+                div()
+                    .key_context("RunField")
+                    .absolute()
+                    .left_0()
+                    .top((name_line - Density::Read.control()) / 2.0)
+                    .w(INITIATIVE_FIELD)
+                    .child(
+                        kit::TextField::new(
+                            ElementId::Name(format!("run-live-initiative-{}", p.key).into()),
+                            text,
+                        )
+                        .name(name)
+                        .focus_selected(focus)
+                        .on_change(
+                            cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
+                                if let Some(run) = root.app.encounters.run_mut() {
+                                    run.setup_inputs.insert(index, super::number_text(words));
+                                }
+                                cx.notify();
+                            }),
+                        )
+                        .on_enter(super::plain(cx, move |root, _, cx| {
+                            if let Some(run) = root.app.encounters.run_mut() {
+                                let total = run
+                                    .setup_inputs
+                                    .get(&index)
+                                    .and_then(|text| crate::design::parse_signed(text));
+                                if let Some(total) = total
+                                    && run.state.participants[index].initiative != Some(total)
+                                {
+                                    run.run_command(Command::Initiative(index, Some(total)));
+                                }
+                                run.live_initiative = None;
+                            }
+                            cx.notify();
+                        }))
+                        .on_escape(super::plain(cx, move |root, _, cx| close(root, cx)))
+                        .on_blur(super::plain(cx, move |root, _, cx| close(root, cx))),
+                    ),
             )
             .into_any_element()
     } else {
@@ -1254,6 +1582,11 @@ pub(super) fn row(
                 let Some(index) = run.state.participants.iter().position(|p| p.key == key) else {
                     return;
                 };
+                // A click away from a row's initiative field closes it, as Escape does (a
+                // click on a row takes no focus, so the field would not lose it).
+                if run.live_initiative.is_some_and(|open| open != index) {
+                    run.live_initiative = None;
+                }
                 let modifiers = event.modifiers();
                 let ctrl = modifiers.secondary(cx);
                 let mode = if ctrl {

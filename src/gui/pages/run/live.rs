@@ -42,14 +42,21 @@ pub(super) fn render(
         .is_some_and(|run| std::mem::take(&mut run.scroll_to_selected));
     let resized = root.pages.run.roster_room != Some(height);
     root.pages.run.roster_room = Some(height);
-    let Some(run) = root.app.encounters.run() else {
+    let Some(hide_panel) = root.app.encounters.run().map(|run| run.hide_panel) else {
         return div().into_any_element();
     };
-    let hide_panel = run.hide_panel;
     let roster_width = if hide_panel {
         (room - theme::M).min(px(theme::RUN_LARGE.max_width))
     } else {
         room - side - theme::M
+    };
+    // `E` opens the dock's Effect line while the dock has room for Effect, else the Conditions
+    // tab's field: the dock's room decides it each frame.
+    if let Some(run) = root.app.encounters.run_mut() {
+        run.effect_in_dock = dock::effect_fits(roster_width);
+    }
+    let Some(run) = root.app.encounters.run() else {
+        return div().into_any_element();
     };
     // The roster's box as it was laid out last frame; before the first, an estimate.
     let measured = root.pages.run.roster_box.get();
@@ -71,11 +78,13 @@ pub(super) fn render(
     let current = run.current();
     let next_up = run.next_up();
     let order = run.state.order.clone();
-    let plan = roster::plan(
+    let plan = roster::plan_cached(
+        &mut root.pages.run.plan_cache,
         run,
         &order,
         f32::from(roster_width - theme::SCROLL_BAR_WIDTH),
         roster_room,
+        roster::Spare::ToRows,
         window,
     );
     let scale = plan.scale;
@@ -134,9 +143,14 @@ pub(super) fn render(
             cx,
         )
     });
-    let overflow_line = overflow_note(run, &handle, &spans, list_height);
+    // Only a list the plan cannot fit has the line: one drawn for a list that fits takes its
+    // own height from the rows and then keeps itself (the rows no longer fit beside it).
+    let overflow_line = plan
+        .overflow
+        .then(|| overflow_note(run, &handle, &spans, list_height))
+        .flatten();
     let header_sheet = header::sheet_in_header(run, roster_width, window).is_some();
-    let notice = live_notice(run, header_sheet, cx);
+    let notice = live_notice(run, header_sheet, roster_width, window, cx);
     let messages = footer::messages(run, false, cx);
     let compact = hide_panel.then(|| panel::compact_actions(run, cx));
     let main =
@@ -257,6 +271,8 @@ fn overflow_note(
 fn live_notice(
     run: &crate::encounter_run::Run,
     header_sheet: bool,
+    width: gpui::Pixels,
+    window: &Window,
     cx: &mut Context<SplatRoot>,
 ) -> Option<AnyElement> {
     let c = colors();
@@ -264,6 +280,37 @@ fn live_notice(
     if header_sheet {
         return None;
     }
+    // A sheet's changes keep one line (FJ4): the first of their shorter forms that fits beside
+    // the bar, icon, Log and Dismiss. The Log keeps the whole change.
+    let room = width
+        - theme::L * 6.0
+        - theme::S
+        - theme::MARK_WIDTH
+        - super::measure::width(window, Type::Small, icons::WARN);
+    let notice = match &run.notice_summary {
+        Some(summary) => {
+            let forms = crate::encounter_run::notice::roster_sheet_forms(summary);
+            let fits =
+                |form: &&String| super::measure::width(window, Type::Small, form.as_str()) <= room;
+            match forms.iter().find(fits) {
+                Some(form) => form.clone(),
+                None => crate::design::words_that_fit_by(
+                    forms.last().map_or(summary.as_str(), String::as_str),
+                    f32::from(room),
+                    |words| f32::from(super::measure::width(window, Type::Small, words)),
+                ),
+            }
+        }
+        None => notice.clone(),
+    };
+    // One form for every result: the tone marks the icon and bar (a sheet that changed warns;
+    // an arrival's place is a success), the words keep text colour.
+    let (icon, tone) = if run.notice_summary.is_some() {
+        (icons::WARN, c.result.warning)
+    } else {
+        (icons::OK, c.result.success)
+    };
+    let whole = run.notice.clone().unwrap_or_default();
     Some(
         div()
             .id("run-live-notice")
@@ -276,14 +323,19 @@ fn live_notice(
             .mt(theme::S)
             .pl(theme::S)
             .border_l(theme::MARK_WIDTH)
-            .border_color(c.result.warning)
-            .child(kit::icon(icons::WARN, Type::Small, c.result.warning))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .child(kit::text(Type::Small, c.text, notice)),
-            )
+            .border_color(tone)
+            .child(kit::icon(icon, Type::Small, tone))
+            .child(kit::target(
+                kit::WithTooltip::with_tooltip(
+                    div()
+                        .id("run-live-notice-words")
+                        .flex_1()
+                        .min_w_0()
+                        .child(kit::text(Type::Small, c.text, notice)),
+                    whole.clone(),
+                ),
+                whole,
+            ))
             .child(
                 kit::Button::quiet("run-live-notice-log", "Log")
                     .plain()

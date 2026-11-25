@@ -206,6 +206,13 @@ fn rolls_tiles(shell: &mut Shell) {
 fn run_rolls() {
     let mut shell = Shell::new("run-rolls", Seed::Campaign);
     rolls_tiles(&mut shell);
+    // A tile alone on its line takes the line, as egui's `tile_lines` did.
+    let bite = target_starting(&mut shell, "Bite");
+    let width = shell.bounds(&bite).expect("the Bite tile").size.width;
+    assert!(
+        f32::from(width) > crate::rolls::plain::TILE_WIDTH + 40.0,
+        "the lone Bite tile fills its line: {width:?}"
+    );
     shell.capture("run-rolls__01-tiles-in-the-stat-block__1200x800");
 
     click_starting(&mut shell, "Bite");
@@ -224,6 +231,36 @@ fn run_rolls() {
     );
     shell.capture("run-rolls__03-attack-rolled__1200x800");
     shell.press("enter");
+    // As in the egui scenario: a second attack and its damage, then Escape stops the action.
+    shell.click(TARGET);
+    shell.press("enter");
+    shell.press("escape");
+    assert!(with_run(&mut shell, |run| run.armed.is_none()));
+    shell.click(ATTACKER);
+    // Bite armed with advantage, as the tile's press with Shift held arms it (egui's tile
+    // menu, `Roll with advantage`; the GPUI tile has no menu yet).
+    shell.update(|root, _, cx| {
+        let run = root.app.encounters.run().expect("an open run");
+        let row = run.panel_row();
+        let bite = run
+            .chips(row)
+            .into_iter()
+            .find(|chip| {
+                chip.label.starts_with("Bite")
+                    && matches!(chip.link, splat::content::dice_text::RollLink::D20 { .. })
+            })
+            .expect("the Bite attack");
+        // The tile's mouse-up makes the row the roller, then its press asks.
+        crate::rolls::set_roller(&root.ctx, Some(row));
+        crate::rolls::plain::ask_pressed_at(&root.ctx, &bite.link, None, true, false);
+        cx.notify();
+    });
+    shell.settle();
+    assert_eq!(
+        with_run(&mut shell, |run| run.armed.as_ref().map(|armed| armed.mode)),
+        Some(crate::rolls::Mode::Advantage),
+        "Bite is armed with advantage"
+    );
 
     // The row menu, with Bite armed (a right-click on the row opens it).
     let target = index(&mut shell, TARGET);
@@ -367,6 +404,12 @@ fn run_sync_states() {
     shell.click("End encounter…");
     shell.click("id:run-end-confirm");
     assert!(matches!(phase(&mut shell), Phase::Ended { .. }));
+    // The ended view keeps the sync's choices and a way to stop it, or the run cannot close.
+    assert!(
+        has_target(&mut shell, "Stop sync for Iselle Marrowind"),
+        "the ended view shows the unsettled sync: {:?}",
+        kit::probe::names()
+    );
     shell.capture("run-sync-states__03-ended-with-conflict__1200x800");
 
     let mut shell = small("run-sync-states", Seed::Campaign);
@@ -419,6 +462,10 @@ fn run_add_creature() {
 
     select(&mut shell, "Ghost of the Mill");
     on_run(&mut shell, |run| run.panel = Panel::Reference);
+    shell.settle();
+    // Nine rows fit the roster: nothing scrolls and no line says what is out of view.
+    let end = shell.read(|root| f32::from(root.pages.run.roster_scroll.max_offset().y));
+    assert!(end < 1.0, "the roster of nine scrolls by {end}");
     shell.capture("run-add-creature__05-made-up-creature-sheet__1200x800");
 
     let ghost = index(&mut shell, "Ghost of the Mill");
@@ -435,10 +482,21 @@ fn run_add_creature() {
     shell.type_text("wolf");
     let (matches, _) = with_run(&mut shell, |run| run.creature_matches());
     assert!(matches.len() > 1, "wolf finds several creatures");
+    assert!(
+        has_target(&mut shell, "Clear the creature search"),
+        "typed words can be cleared"
+    );
     shell.capture("run-add-creature__07-arrivals-found__1200x800");
 
     shell.click("id:run-creature-Wolf");
     assert!(with_run(&mut shell, |run| run.ad_hoc.picked.is_some()));
+    // The chosen Wolf's HP shows in the field (a field keeps its first placeholder, so the
+    // new one is a new field).
+    assert!(
+        has_target(&mut shell, "id:run-creature-hp-11"),
+        "HP shows the Wolf’s 11: {:?}",
+        kit::probe::names()
+    );
     shell.click("New creature count");
     shell.type_text("2");
     shell.capture("run-add-creature__08-arrivals-found-chosen__1200x800");
@@ -570,7 +628,12 @@ fn run_edge_states() {
     shell.click(EDGE_TARGET);
     shell.type_text("3");
     shell.press("enter");
-    shell.wait(std::time::Duration::from_secs(2));
+    for _ in 0..100 {
+        if with_run(&mut shell, Run::has_disk_conflict) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+    }
     assert!(
         with_run(&mut shell, Run::has_disk_conflict),
         "the run sees the file changed on disk"
@@ -580,6 +643,44 @@ fn run_edge_states() {
     shell.click("Close run");
     assert!(has_target(&mut shell, "Save as a new run and close"));
     shell.capture("run-edge-states__07-close-while-not-saved__1200x800");
+
+    // As in the egui scenario: Escape keeps the run, Replace saves over the changed file; a
+    // second change on disk is saved as a new run beside it; a third, to the new file, opens
+    // the same close choices for it.
+    shell.press("escape");
+    assert!(
+        !has_target(&mut shell, "Keep running"),
+        "Escape keeps the run"
+    );
+    shell.click("Replace the file with this run");
+    assert!(!with_run(&mut shell, Run::has_disk_conflict));
+    let change_on_disk = |shell: &mut Shell, path: &std::path::Path, damage: &str| {
+        let text = std::fs::read_to_string(path).expect("read the run") + "\n";
+        std::fs::write(path, text).expect("change the run on disk");
+        shell.click(EDGE_TARGET);
+        shell.type_text(damage);
+        shell.press("enter");
+        for _ in 0..100 {
+            if with_run(shell, Run::has_disk_conflict) {
+                return;
+            }
+            shell.wait(std::time::Duration::from_millis(50));
+        }
+        panic!("the run did not see its file changed on disk");
+    };
+    change_on_disk(&mut shell, &path, "1");
+    shell.click("Save as a new run");
+    let new_path = with_run(&mut shell, |run| {
+        run.path().map(std::path::Path::to_path_buf)
+    })
+    .expect("the new run’s file");
+    assert!(
+        new_path != path && new_path.exists(),
+        "Save as a new run saves beside the changed file: {new_path:?}"
+    );
+    change_on_disk(&mut shell, &new_path, "1");
+    shell.click("Close run");
+    assert!(has_target(&mut shell, "Save as a new run and close"));
     shell.capture("run-edge-states__08-save-new-run-before-close__1200x800");
 
     let mut shell = small("run-edge-states", Seed::Campaign);
@@ -599,17 +700,6 @@ fn effect(shell: &mut Shell, name: &str, words: &str) {
         run.select(at);
         run.run_command(Command::Condition(at, words.to_owned()));
     });
-}
-
-fn condition_at(shell: &mut Shell, name: &str, start: &str) -> usize {
-    let at = index(shell, name);
-    with_run(shell, |run| {
-        run.state.participants[at]
-            .conditions
-            .iter()
-            .position(|c| c.words().starts_with(start))
-            .unwrap_or_else(|| panic!("{name} has no {start}"))
-    })
 }
 
 fn effects_on_its_turn(shell: &mut Shell) -> String {
@@ -633,20 +723,12 @@ fn run_effects() {
     effect(&mut shell, ATTACKER, "Hexed until the hag dies");
     effect(&mut shell, ATTACKER, "Legendary actions 3 uses");
     effect(&mut shell, CASTER, "Fire Breath recharge 5-6");
-    let wolf = index(&mut shell, ATTACKER);
-    let uses = condition_at(&mut shell, ATTACKER, "Legendary actions");
-    on_run(&mut shell, |run| {
-        run.run_command(Command::Spend(wolf, uses))
-    });
+    // The counts act from their rows, as the DM's clicks do.
+    shell.click(&format!("Spend one use of Legendary actions of {ATTACKER}"));
     assert!(row_text(&mut shell, ATTACKER).contains("2 of 3"));
-    let cultist = index(&mut shell, CASTER);
-    let breath = condition_at(&mut shell, CASTER, "Fire Breath");
-    on_run(&mut shell, |run| {
-        run.run_command(Command::Recharge(cultist, breath))
-    });
-    on_run(&mut shell, |run| {
-        run.run_command(Command::Recharge(cultist, breath))
-    });
+    shell.click("Mark Fire Breath spent");
+    shell.click("Roll 1d6. 5–6 makes it ready");
+    assert!(row_text(&mut shell, CASTER).contains("Fire Breath"));
     shell.capture("run-effects__02-effects-on-rows__1200x800");
 
     // Beside Lookup: an effect added from Conditions.
@@ -944,7 +1026,19 @@ fn run_large_roster() {
         }
     });
     assert_eq!(count(&mut shell), 300);
+    shell.settle();
+    // A frame in which nothing the rows show changed fits no row again; a change does.
+    let made = || super::roster::PLANS_MADE.with(std::cell::Cell::get);
+    let before = made();
     let many = shell.frame_cost(10);
+    assert_eq!(made(), before, "still frames reuse the roster’s plan");
+    let first = with_run(&mut shell, |run| run.state.order[0]);
+    on_run(&mut shell, |run| {
+        run.run_command(Command::Condition(first, "Prone".into()))
+    });
+    shell.settle();
+    assert!(made() > before, "a change fits the rows again");
+    on_run(&mut shell, Run::undo);
     eprintln!(
         "run-large-roster frame cost: 20 rows {twenty:?} ({twenty_built} built), 300 rows {many:?} ({} built)",
         built()
@@ -1028,6 +1122,24 @@ fn ready_with_one_absent(shell: &mut Shell) {
 fn run_absent_player() {
     let mut shell = Shell::new("run-absent-player", Seed::Campaign);
     ready_with_one_absent(&mut shell);
+    // An initiative field shows a whole total: inside its border, its padding and the
+    // input's (4 and 10 px a side) leave room for `-12` and the caret (a narrower field
+    // scrolled to its last digit).
+    let fits_total = |shell: &mut Shell, field: &str| {
+        let frame = shell
+            .bounds(field)
+            .expect("the initiative field")
+            .size
+            .width;
+        let total = shell.update(|_, window, _| {
+            crate::gui::kit::measure::width(window, crate::gui::theme::Type::Body, "-12")
+        });
+        assert!(
+            frame - px(30.0) >= total,
+            "{field} is {frame:?} wide for a total of {total:?}"
+        );
+    };
+    fits_total(&mut shell, "Initiative for Kestrel Dunmoor");
     shell.capture("run-absent-player__01-ready-with-one-absent__1200x800");
 
     shell.click("Begin combat");
@@ -1049,6 +1161,7 @@ fn run_absent_player() {
 
     shell.click(&format!("No initiative for {ABSENT}"));
     assert_eq!(with_run(&mut shell, |run| run.live_initiative), Some(at));
+    fits_total(&mut shell, &format!("Initiative for {ABSENT}"));
     shell.capture("run-absent-player__04-initiative-field-in-row__1200x800");
 
     // The field has the keyboard: the typed total and Enter set it.
@@ -1138,6 +1251,13 @@ fn run_roster_conflict() {
     shell.click("id:run-condition-Prone");
     shell.update(|root, _, _| root.app.encounters.simulate_sheet_update(LONG_MESSAGE));
     assert!(row_text(&mut shell, LOADED_ROW).contains("Restrained"));
+    // The sheet's notice keeps one line: a shorter form of its changes, the Log the whole.
+    let whole = with_run(&mut shell, |run| run.notice.clone()).expect("the sheet’s notice");
+    let words = shell.bounds(&whole).expect("the notice under the roster");
+    assert!(
+        words.size.height < crate::gui::theme::Type::Small.line() * 1.5,
+        "the notice is on one line: {words:?}"
+    );
     shell.capture("run-roster-conflict__02-message-on-one-line__1200x800");
 
     select(&mut shell, LOADED_ROW);
@@ -1167,4 +1287,161 @@ fn run_roster_conflict() {
     }
     assert_eq!(count(&mut shell), 20);
     shell.capture("run-roster-conflict__05-after-full-round__1200x800");
+}
+
+// ---------------------------------------------------------------------------------------------
+// run-resume, run-no-groups, run-folder-defect, roll-table-author
+
+/// The Encounters page with its campaign read: each read in flight is waited for on its own
+/// result, never a clock.
+fn encounters_ready(shell: &mut Shell) {
+    shell.update(|root, _, cx| root.show_page(Page::Encounters, cx));
+    for _ in 0..10 {
+        if !shell.read(|root| root.app.encounters.busy()) {
+            break;
+        }
+        shell.update(|root, _, _| root.app.encounters.wait_for_load());
+    }
+    assert!(
+        shell.read(|root| root.app.encounters.loaded() && !root.app.encounters.busy()),
+        "the campaign’s encounters are read"
+    );
+}
+
+/// Scenario `run-resume`: from a cold start, Resume on Encounters opens the paused run at the
+/// turn it stopped on, with that participant selected.
+#[test]
+fn run_resume() {
+    const INTERRUPTED: &str = "Cinder Wolf 2";
+    let mut shell = Shell::new("run-resume", Seed::Campaign);
+    encounters_ready(&mut shell);
+    shell.click("Resume");
+    assert_eq!(shell.read(|root| root.app.page), Page::Run);
+    assert_eq!(current_name(&mut shell).as_deref(), Some(INTERRUPTED));
+    assert_eq!(selected(&mut shell), INTERRUPTED);
+    shell.capture("run-resume__02-resumed__1200x800");
+}
+
+/// Scenario `run-no-groups`: Arrivals in a campaign with no groups says how to make one.
+#[test]
+fn run_no_groups() {
+    let mut shell = Shell::new("run-no-groups", Seed::Campaign);
+    open_saved(&mut shell, RUN);
+    on_run(&mut shell, Run::show_arrivals);
+    assert!(
+        has_target(&mut shell, "New group"),
+        "Arrivals says how to make a group: {:?}",
+        kit::probe::names()
+    );
+    shell.capture("run-no-groups__01-no-groups__1200x800");
+}
+
+/// Scenario `run-folder-defect`: the campaign's run folder edited in Rules and runs warns that
+/// the runs stay in the old folder, with the choice to move them.
+#[test]
+fn run_folder_defect() {
+    let mut shell = Shell::new("run-folder-defect", Seed::Campaign);
+    shell.update(|root, _, cx| root.show_page(Page::Campaign, cx));
+    shell.click("Rules and runs");
+    for _ in 0..200 {
+        if shell.read(|root| root.app.encounters.run_form().is_some()) {
+            break;
+        }
+        // The settings are read on a thread of their own, in real time.
+        shell.wait(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let id = shell.read(|root| root.app.campaigns.active_campaign().expect("a campaign").id);
+    shell.click(&format!("id:run_folder-{id}"));
+    shell.press("ctrl-a");
+    shell.type_text("Elsewhere");
+    assert_eq!(
+        shell.read(|root| root.app.encounters.run_form().expect("the form").folder),
+        "Elsewhere"
+    );
+    // The runs the old folder keeps are read after the edit: wait on the choices they bring.
+    for _ in 0..200 {
+        if has_target(&mut shell, "Move runs and save") {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+    }
+    assert!(
+        has_target(&mut shell, "Move runs and save"),
+        "the folder move offers its choices: {:?}",
+        kit::probe::names()
+    );
+    shell.capture("run-folder-defect__01-run-folder-edited__1200x800");
+}
+
+/// Scenario `roll-table-author`: a note's roll tables as the World reader shows them: an
+/// interval it cannot read, a typed roll on a valid table, a gap and an overlap, and the same
+/// note in Lookup.
+#[test]
+fn roll_table_author() {
+    let body = format!(
+        "# Table Workshop\n\n<!-- splat:rolls key=valid dice=1d6 per=fortnight -->\n\n| d6 | Result |\n|---|---|\n| 1 | Rain |\n| 2-5 | Fog |\n| 6 | Sun |\n\n<!-- splat:rolls key=gap dice=1d4 -->\n\n| d4 | Gap |\n|---|---|\n| 1 | One |\n| 3-4 | Later |\n\n<!-- splat:rolls key=overlap dice=1d4 -->\n\n| d4 | Overlap |\n|---|---|\n| 1-3 | First |\n| 3-4 | Second |\n\n{}<!-- splat:rolls key=words dice=1d6 -->\n\n| d6 | Words |\n|---|---|\n| 1 | One |\n| 2 to 5 | Fog |\n| 6 | Six |\n",
+        "\nThe next table checks a range written as words.\n".repeat(8)
+    );
+    let mut shell = Shell::new("roll-table-author", Seed::World);
+    let folder = shell.read(|root| {
+        root.app
+            .campaigns
+            .active_campaign()
+            .expect("a campaign")
+            .path
+    });
+    std::fs::write(folder.join("Table Workshop.md"), body).expect("write the note");
+    shell.update(|root, _, _| root.app.lookup.refresh());
+    let mut note = None;
+    for _ in 0..600 {
+        note = shell.read(|root| {
+            root.app.lookup.index().and_then(|index| {
+                index
+                    .items
+                    .iter()
+                    .find(|item| item.entry.name == "Table Workshop")
+                    .map(|item| item.entry.id)
+            })
+        });
+        if note.is_some() {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+    }
+    assert!(note.is_some(), "the note is read");
+    shell.update(|root, _, cx| root.show_page(Page::World, cx));
+    click_starting(&mut shell, "Table Workshop · ");
+    assert!(
+        has_target(&mut shell, "Roll 1d6"),
+        "the valid table rolls: {:?}",
+        kit::probe::names()
+    );
+    shell.capture("roll-table-author__01-authored-table-validation__1200x800");
+
+    shell.click("Typed roll for Valid");
+    shell.type_text("4");
+    shell.press("enter");
+    assert!(
+        has_target(&mut shell, kit::markdown::ROLL_RESULT),
+        "a typed roll shows its row"
+    );
+    shell.capture("roll-table-author__02-authored-table-typed-roll__1200x800");
+
+    let at = shell.bounds("Roll 1d6").expect("the Roll button").center();
+    shell.scroll(
+        at,
+        gpui::ScrollDelta::Pixels(point(px(0.0), px(-600.0))),
+        gpui::Modifiers::default(),
+    );
+    shell.capture("roll-table-author__03-authored-table-gap-and-overlap__1200x800");
+
+    open_lookup(&mut shell);
+    shell.type_text("Table Workshop");
+    shell.press("enter");
+    assert!(
+        has_target(&mut shell, "Roll 1d6"),
+        "Lookup’s table rolls too"
+    );
+    shell.capture("roll-table-author__04-authored-table-in-lookup__1200x800");
 }

@@ -869,7 +869,13 @@ pub enum ArmedAction {
     Stop,
 }
 
-impl ArmedAction {}
+impl ArmedAction {
+    /// The step that continues the armed task, which has the secondary border (FI9); the
+    /// others stay quiet.
+    pub fn continues(self) -> bool {
+        matches!(self, Self::RollDamage)
+    }
+}
 
 /// The run's armed action, for the tiles.
 const ARMED: Slot<ArmedView> = Slot::new("roll_armed");

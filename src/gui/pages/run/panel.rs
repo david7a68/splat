@@ -419,7 +419,7 @@ fn value_line(label: &'static str, value: String) -> impl IntoElement {
 }
 
 /// `D&D Beyond sync` in setup: each character whose sync has not settled (`sync_block`).
-fn sync_block(run: &Run, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
+pub(super) fn sync_block(run: &Run, cx: &mut Context<SplatRoot>) -> Option<AnyElement> {
     let c = colors();
     let names: Vec<(usize, String)> = run
         .syncs
@@ -658,6 +658,8 @@ fn sheet(
                 pages.iter().map(|(_, words)| *words).collect::<Vec<_>>(),
                 chosen,
             )
+            // The sheet's pages keep one line beside the run.
+            .small()
             .on_select(cx.listener(move |root: &mut SplatRoot, at: &usize, _, cx| {
                 if let Some(run) = root.app.encounters.run_mut()
                     && let Some(page) = numbers.get(*at)
@@ -787,8 +789,15 @@ fn armed_line(view: &rolls::ArmedView, cx: &mut Context<SplatRoot>) -> impl Into
     let mut actions = div().flex().flex_row().flex_wrap().gap(theme::XS);
     for (at, (words, action)) in view.actions.iter().enumerate() {
         let action: ArmedAction = *action;
+        let id = ElementId::Name(format!("run-armed-{at}").into());
+        // FI9: the step that continues the task is framed; the others stay quiet.
+        let button = if action.continues() {
+            kit::Button::secondary(id, *words)
+        } else {
+            kit::Button::quiet(id, *words)
+        };
         actions = actions.child(
-            kit::Button::quiet(ElementId::Name(format!("run-armed-{at}").into()), *words)
+            button
                 .density(Density::Read)
                 .on_click(on_run(cx, move |run| run.armed_action(action))),
         );
@@ -1005,6 +1014,7 @@ fn conditions(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElemen
     };
     let add_click = add.clone();
     let typing = key.clone();
+    let escaping = key.clone();
     column = column
         .child(
             div()
@@ -1032,7 +1042,18 @@ fn conditions(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElemen
                                 cx.notify();
                             }),
                         )
-                        .on_enter(super::plain(cx, move |root, _, cx| add(root, cx))),
+                        .on_enter(super::plain(cx, move |root, _, cx| add(root, cx)))
+                        // Escape clears the participant's draft, as in the dock's field.
+                        .on_escape(super::plain(cx, move |root, _, cx| {
+                            if let Some(run) = root.app.encounters.run_mut() {
+                                if let Some(field) = run.effect_fields.get_mut(&escaping) {
+                                    field.clear();
+                                }
+                                run.effect_fields.retain(|_, field| !field.words.is_empty());
+                                run.focus_amount = run.state.phase == Phase::Running;
+                            }
+                            cx.notify();
+                        })),
                     ),
                 )
                 .child(
@@ -1470,7 +1491,9 @@ fn arrivals(run: &Run, room: Pixels, window: &Window, cx: &mut Context<SplatRoot
     if run.groups.as_ref().is_some_and(|groups| !groups.is_empty()) {
         column = column.child(kit::help("Drag a group name to the list, or use Add."));
     }
-    column = column.child(creature_form(run, cx)).child(kit::rule());
+    column = column
+        .child(creature_form(run, window, cx))
+        .child(kit::rule());
     let Some(groups) = run.groups.clone() else {
         return column
             .child(kit::label("Encounter groups", 0))
@@ -1626,7 +1649,14 @@ fn group_row(
     let blocked = run.add_waits_words(group);
     let total = run.group_totals.get(&id).cloned().unwrap_or_default();
     let small = |words: &str| super::measure::width(window, Type::Small, words);
-    let strong = |words: &str| super::measure::width(window, Type::Strong, words);
+    // A title leads with the drag glyph, which is drawn in the icon font: it is measured there.
+    let strong = |words: &str| match words.strip_prefix(icons::DRAG) {
+        Some(rest) => {
+            super::measure::icon_width(window, Type::Strong, icons::DRAG)
+                + super::measure::width(window, Type::Strong, rest)
+        }
+        None => super::measure::width(window, Type::Strong, words),
+    };
     // The fight after the group joins, by the run's kept words (`arrival_words`).
     let heading_fit = run.arrival_heading(
         group,
@@ -1844,7 +1874,7 @@ fn group_row(
 }
 
 /// Find or make up a creature (`add_creature_form`).
-fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
+fn creature_form(run: &Run, window: &Window, cx: &mut Context<SplatRoot>) -> AnyElement {
     let c = colors();
     let mut column = div().flex().flex_col().gap(theme::XS);
     if let Some(picked) = run.ad_hoc.picked.clone() {
@@ -1868,22 +1898,42 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
             )
             .child(kit::text(Type::Small, c.muted, picked.detail.clone()));
     } else {
+        let typed_any = !run.ad_hoc.query.is_empty();
         column = column.child(
-            div().key_context("RunField").child(
-                kit::TextField::new("run-creature-search", run.ad_hoc.query.clone())
-                    .placeholder("Find or name a creature…")
-                    .name("Find or name a creature")
-                    .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
-                        if let Some(run) = root.app.encounters.run_mut() {
-                            run.ad_hoc.query = words.to_owned();
-                            let typed = words.trim().to_lowercase();
-                            if run.ad_hoc.show_all.as_deref() != Some(typed.as_str()) {
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(theme::XS)
+                .child(
+                    div().key_context("RunField").flex_1().min_w_0().child(
+                        kit::TextField::new("run-creature-search", run.ad_hoc.query.clone())
+                            .placeholder("Find or name a creature…")
+                            .name("Find or name a creature")
+                            .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {
+                                if let Some(run) = root.app.encounters.run_mut() {
+                                    run.ad_hoc.query = words.to_owned();
+                                    let typed = words.trim().to_lowercase();
+                                    if run.ad_hoc.show_all.as_deref() != Some(typed.as_str()) {
+                                        run.ad_hoc.show_all = None;
+                                    }
+                                }
+                                cx.notify();
+                            })),
+                    ),
+                )
+                // As egui's search: Clear empties the words and the matches with them.
+                .when(typed_any, |line| {
+                    line.child(
+                        kit::Button::quiet("run-creature-clear", "Clear")
+                            .name("Clear the creature search")
+                            .density(Density::Read)
+                            .on_click(on_run(cx, |run| {
+                                run.ad_hoc.query.clear();
                                 run.ad_hoc.show_all = None;
-                            }
-                        }
-                        cx.notify();
-                    })),
-            ),
+                            })),
+                    )
+                }),
         );
         let (matches, shown) = run.creature_matches();
         let typed = run.ad_hoc.query.trim().to_lowercase();
@@ -1927,6 +1977,12 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
             "Made up here. It stays in this fight.",
         ));
     }
+    // A field fits its placeholder whole (`Needed`, a stat block's `11`): the words, the
+    // field's frame and padding, and the caret. A field keeps its first placeholder, so a new
+    // one is a new field.
+    let fits = |hint: &str, least: f32| {
+        (f32::from(super::measure::width(window, Type::Body, hint)) + FIELD_CHROME).max(least)
+    };
     let field = |id: &'static str,
                  label: &'static str,
                  name: &'static str,
@@ -1944,7 +2000,7 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
             .child(kit::text(Type::Small, c.muted, label))
             .child(
                 div().key_context("RunField").w(px(width)).child(
-                    kit::TextField::new(id, value)
+                    kit::TextField::new(ElementId::Name(format!("{id}-{hint}").into()), value)
                         .placeholder(hint)
                         .name(name)
                         .focus(focus)
@@ -1980,7 +2036,7 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                     "New creature count",
                     form.count.clone(),
                     "1".into(),
-                    52.0,
+                    fits("99", 52.0),
                     false,
                     |form, words| form.count = words,
                     cx,
@@ -1991,7 +2047,7 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                     "New creature HP",
                     form.hp.clone(),
                     add.hp_hint.clone(),
-                    64.0,
+                    fits(&add.hp_hint, 64.0),
                     form.focus_hp,
                     |form, words| form.hp = words,
                     cx,
@@ -2002,7 +2058,7 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                     "New creature AC",
                     form.ac.clone(),
                     add.ac_hint.clone(),
-                    52.0,
+                    fits(&add.ac_hint, 52.0),
                     false,
                     |form, words| form.ac = words,
                     cx,
@@ -2021,7 +2077,7 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
                     "New creature initiative total",
                     form.total.clone(),
                     "Roll".into(),
-                    52.0,
+                    fits("Roll", 52.0),
                     false,
                     |form, words| form.total = words,
                     cx,
@@ -2043,6 +2099,10 @@ fn creature_form(run: &Run, cx: &mut Context<SplatRoot>) -> AnyElement {
         );
     column.into_any_element()
 }
+
+/// A one-line field's room around its words: the frame's padding and hairlines, the input's own
+/// padding (`gpui_component` medium: 10 px a side) and the caret.
+const FIELD_CHROME: f32 = 2.0 * 4.0 + 2.0 + 2.0 * 10.0 + 4.0;
 
 /// The made-up creature's side.
 fn side_choice(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {

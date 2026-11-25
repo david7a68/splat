@@ -309,8 +309,9 @@ fn rows(run: &Run, cx: &mut Context<SplatRoot>) -> impl IntoElement {
     column
 }
 
-/// The room right of the initiative field: tie, place, Absent and the menu.
-const SLOTS_RIGHT: f32 = 48.0 + 56.0 + 36.0 + 100.0 + 28.0 + 16.0;
+/// The room from the initiative field's left: the field (`roster::INITIATIVE_FIELD`), tie,
+/// place, Absent and the menu.
+const SLOTS_RIGHT: f32 = 60.0 + 56.0 + 36.0 + 100.0 + 28.0 + 16.0;
 
 /// One participant's row in setup.
 fn row(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> AnyElement {
@@ -550,7 +551,7 @@ fn initiative_field(run: &Run, index: usize, cx: &mut Context<SplatRoot>) -> Any
     let focus = run.focus_field == Some(index);
     div()
         .key_context("RunField")
-        .w(px(48.0))
+        .w(super::roster::INITIATIVE_FIELD)
         .flex_none()
         .child(
             kit::TextField::new(

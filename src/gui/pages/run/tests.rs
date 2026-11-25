@@ -2,7 +2,7 @@
 //! (`encounter-run__04-participant-selected__1200x800`), so they pair with the reference
 //! captures.
 use crate::Page;
-use crate::encounter_run::{Panel, Phase};
+use crate::encounter_run::{Command, Panel, Phase};
 use crate::fixtures::{RUN, Seed};
 use crate::gui::harness::Shell;
 use gpui::{px, size};
@@ -284,9 +284,31 @@ fn run_end_undo_and_close() {
 /// On another page the strip keeps the turn; Next turn there moves it, and Back to run returns.
 #[test]
 fn run_strip_on_another_page() {
+    const LONG_NAME: &str = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
     let mut shell = Shell::new("run-long-names", Seed::Campaign);
     open_saved(&mut shell, RUN);
+    // As in the egui scenario: Iselle, next up, has a long name and an effect, and the
+    // Library is read before the strip is seen there.
+    shell.update(|root, _, _| {
+        root.app
+            .encounters
+            .simulate_rename("Iselle Marrowind", LONG_NAME)
+    });
+    shell.click(LONG_NAME);
+    shell.press("e");
+    shell.type_text("Bless 10 rounds");
+    shell.press("enter");
     shell.update(|root, _, cx| root.show_page(Page::Library, cx));
+    for _ in 0..200 {
+        if shell.read(|root| root.app.library.loaded() && !root.app.library.loading()) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+    }
+    assert!(
+        shell.read(|root| root.app.library.loaded()),
+        "the Library loads"
+    );
     shell.capture("run-long-names__02-long-name-on-the-strip__1200x800");
     let before = current_name(&mut shell);
     shell.click("id:run-strip-next-turn");
@@ -389,6 +411,17 @@ fn run_sync_conflict() {
         root.app.encounters.simulate_sync_conflict("Brannoch Vale");
     });
     shell.capture("run-sync-conflict__02-conflict-with-nothing-expanded__1200x800");
+    // As in the egui scenario: from another page the strip's Next turn still acts, then the
+    // DM goes back to the run and opens the conflict on its row.
+    let before = current_name(&mut shell);
+    shell.update(|root, _, cx| root.show_page(Page::Library, cx));
+    shell.click("id:run-strip-next-turn");
+    assert_ne!(
+        current_name(&mut shell),
+        before,
+        "the strip's Next turn acts"
+    );
+    shell.click("Back to run");
     shell.click("Brannoch Vale");
     assert_eq!(
         sync_of(&mut shell, "Brannoch Vale"),
@@ -587,6 +620,92 @@ fn run_effects_on_rows() {
     let mut shell = Shell::new("run-effects", Seed::Campaign);
     open_saved(&mut shell, RUN);
     shell.click("Ember Cultist");
+    let run_read = |shell: &mut Shell, read: fn(&crate::encounter_run::Run) -> String| {
+        shell.read(|root| read(root.app.encounters.run().unwrap()))
+    };
+    // From the first frame, E opens the dock's Effect line while the dock has room for it.
+    shell.press("e");
+    assert_eq!(
+        run_read(&mut shell, |run| run
+            .effect_open
+            .clone()
+            .unwrap_or_default()),
+        participant(&mut shell, "Ember Cultist").key,
+        "E opens the dock's Effect line"
+    );
+    shell.press("escape");
+    // A row's effects act from the row: a count of uses spends one, a recharge is marked spent
+    // and then rolled, each its own step in the Log.
+    let at = shell.read(|root| {
+        let run = root.app.encounters.run().unwrap();
+        run.state
+            .participants
+            .iter()
+            .position(|p| p.name == "Ember Cultist")
+            .unwrap()
+    });
+    let add = |shell: &mut Shell, words: &'static str| {
+        shell.update(|root, _, cx| {
+            let run = root.app.encounters.run_mut().unwrap();
+            run.run_command(Command::Condition(at, words.into()));
+            cx.notify();
+        });
+    };
+    let remove_last = |shell: &mut Shell| {
+        shell.update(|root, _, cx| {
+            let run = root.app.encounters.run_mut().unwrap();
+            let last = run.state.participants[at].conditions.len() - 1;
+            run.run_command(Command::RemoveCondition(at, last));
+            cx.notify();
+        });
+    };
+    add(&mut shell, "Legendary actions 3 uses");
+    let words = |shell: &mut Shell| {
+        participant(shell, "Ember Cultist")
+            .conditions
+            .iter()
+            .map(crate::encounter_run::Condition::words)
+            .collect::<Vec<_>>()
+    };
+    shell.click("Spend one use of Legendary actions of Ember Cultist");
+    assert!(
+        words(&mut shell).contains(&"Legendary actions 2 of 3".to_owned()),
+        "the row's count spends a use: {:?}",
+        words(&mut shell)
+    );
+    remove_last(&mut shell);
+    add(&mut shell, "Fire Breath recharge 5-6");
+    shell.click("Mark Fire Breath spent");
+    assert!(
+        words(&mut shell).contains(&"Fire Breath spent".to_owned()),
+        "the row's recharge is marked spent: {:?}",
+        words(&mut shell)
+    );
+    let lines = shell.read(|root| root.app.encounters.run().unwrap().state.log.len());
+    shell.click("Roll 1d6. 5–6 makes it ready");
+    assert!(
+        shell.read(|root| root.app.encounters.run().unwrap().state.log.len()) > lines,
+        "the recharge roll is in the Log"
+    );
+    remove_last(&mut shell);
+    // An official condition on a row opens its rule in Lookup, beside the run.
+    shell.press("ctrl-k");
+    for _ in 0..200 {
+        if shell.read(|root| root.app.lookup.index().is_some()) {
+            break;
+        }
+        shell.wait(std::time::Duration::from_millis(50));
+    }
+    shell.press("escape");
+    add(&mut shell, "Blinded");
+    shell.click("Rule: Blinded");
+    assert!(
+        shell.read(|root| root.app.lookup.open),
+        "the rule opens in Lookup"
+    );
+    shell.press("escape");
+    remove_last(&mut shell);
+    shell.click("Ember Cultist");
     shell.click("id:run-dock-conditions");
     shell.click("Other effect");
     shell.type_text("Shield of Faith");
@@ -674,6 +793,36 @@ fn run_effects_on_rows() {
             .any(|c| c.name().contains("Haste")),
         "Escape adds nothing"
     );
+    // Escape in the Conditions tab's Other effect clears the same draft.
+    shell.click("id:run-dock-conditions");
+    shell.click("Other effect");
+    shell.type_text("Haste");
+    assert_eq!(waiting(&mut shell).as_deref(), Some("Haste"));
+    shell.press("escape");
+    assert_eq!(
+        waiting(&mut shell),
+        None,
+        "Escape clears Other effect's words"
+    );
+    // A row's initiative field closes on Escape and on a click away, leaving the total.
+    let open_total =
+        |shell: &mut Shell| shell.read(|root| root.app.encounters.run().unwrap().live_initiative);
+    shell.click("Change initiative for Ember Cultist");
+    assert!(
+        open_total(&mut shell).is_some(),
+        "the number opens its field"
+    );
+    shell.press("escape");
+    assert_eq!(open_total(&mut shell), None, "Escape closes the field");
+    shell.click("Change initiative for Ember Cultist");
+    assert!(open_total(&mut shell).is_some());
+    shell.click(&other);
+    assert_eq!(
+        open_total(&mut shell),
+        None,
+        "a click away closes the field"
+    );
+    shell.click("Ember Cultist");
     // Exhaustion moves one level a press, each its own Undo step, and stops at 6 with the reason
     shell.update(|root, _, cx| {
         root.app.encounters.run_mut().unwrap().panel = Panel::Conditions;

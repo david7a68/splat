@@ -5,7 +5,9 @@
 //! action's status and what can follow it; outside a run, the last preview's result.
 use super::OnOpen;
 use crate::gui::kit;
-use crate::gui::theme::{HAIRLINE_WIDTH, RADIUS_CONTROL, S, Type, TypeExt, XS, colors};
+use crate::gui::theme::{
+    HAIRLINE_WIDTH, RADIUS_CONTROL, READER_MEASURE, S, Type, TypeExt, XS, colors,
+};
 use crate::rolls::plain::{self, TileView};
 use crate::rolls::{Chip, SpellOccurrence};
 use crate::state_context::StateContext;
@@ -74,18 +76,33 @@ pub fn tile_row(
                         .items_start()
                         .gap(XS)
                         .child(kit::icon(crate::gui::icons::ARMED, Type::Body, c.accent))
-                        .child(kit::text(Type::Small, c.text, view.status.clone())),
+                        // The status wraps in the room left of the icon.
+                        .child(div().flex_1().min_w_0().child(kit::text(
+                            Type::Small,
+                            c.text,
+                            view.status.clone(),
+                        ))),
                 )
                 .child(div().flex().flex_row().flex_wrap().gap(S).children(
                     view.actions.iter().enumerate().map(|(at, (word, action))| {
                         let ctx = ctx.clone();
                         let action = *action;
-                        kit::Button::quiet(super::parts::child(id, format!("armed-{at}")), *word)
-                            .line_start()
-                            .on_click(move |_, window, _| {
+                        let id = super::parts::child(id, format!("armed-{at}"));
+                        // FI9: the step that continues the task is framed; a quiet one at the
+                        // line's start hangs its padding in the gutter.
+                        let button = if action.continues() {
+                            kit::Button::secondary(id, *word)
+                        } else if at == 0 {
+                            kit::Button::quiet(id, *word).line_start()
+                        } else {
+                            kit::Button::quiet(id, *word)
+                        };
+                        button.density(crate::gui::theme::Density::Read).on_click(
+                            move |_, window, _| {
                                 plain::send_armed_action(&ctx, action);
                                 window.refresh();
-                            })
+                            },
+                        )
                     }),
                 ));
         } else {
@@ -119,7 +136,13 @@ fn tile(
     let name = view.name.clone();
     let element = div()
         .id(id)
-        .w(px(plain::TILE_WIDTH))
+        // As egui's `tile_lines`: as many tiles as fit at their width share a line, and a tile
+        // alone on its line takes the line (never wider than the reader measure), so a damage
+        // line does not wrap beside an empty half of the panel.
+        .flex_grow(1.0)
+        .flex_basis(px(plain::TILE_WIDTH))
+        .min_w(px(48.0))
+        .max_w(READER_MEASURE)
         .flex()
         .flex_col()
         .px(S)

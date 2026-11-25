@@ -20,6 +20,11 @@ const ALL_WORDS_FROM: f32 = view::DOCK_ALL_WORDS_FROM;
 const EFFECT_WORD_FROM: f32 = 560.0;
 const EFFECT_ICON_FROM: f32 = 480.0;
 
+/// The dock has room for Effect (its word or its icon) at this width.
+pub(super) fn effect_fits(width: gpui::Pixels) -> bool {
+    f32::from(width) >= EFFECT_ICON_FROM
+}
+
 /// The dock.
 pub(super) fn render(
     run: &Run,
@@ -306,7 +311,7 @@ fn selected_line(run: &Run, width: gpui::Pixels, cx: &mut Context<SplatRoot>) ->
     // control of the line moves and the name keeps its slot.
     let room = f32::from(width);
     let wide = room >= EFFECT_WORD_FROM;
-    let effect = (running && room >= EFFECT_ICON_FROM).then(|| {
+    let effect = (running && effect_fits(width)).then(|| {
         if wide {
             kit::Button::quiet("run-dock-effect", "Effect")
                 .icon(icons::PIN)
@@ -314,17 +319,11 @@ fn selected_line(run: &Run, width: gpui::Pixels, cx: &mut Context<SplatRoot>) ->
                 .name("Effect: words for this row")
                 .hint("Pin words to this row, such as Bless 10 rounds")
                 .key(effect_key)
-                .on_click(on_run(cx, |run| {
-                    run.effect_in_dock = true;
-                    run.open_effect_field();
-                }))
+                .on_click(on_run(cx, Run::open_effect_field))
                 .into_any_element()
         } else {
             kit::IconButton::new("run-dock-effect", icons::PIN, "Effect: words for this row")
-                .on_click(on_run(cx, |run| {
-                    run.effect_in_dock = true;
-                    run.open_effect_field();
-                }))
+                .on_click(on_run(cx, Run::open_effect_field))
                 .into_any_element()
         }
     });
