@@ -630,6 +630,25 @@ fn session_carry_over_offered() {
         shell.bounds("Carry over").is_some(),
         "a prepared session offers Carry over"
     );
+    // `Carry over` follows the preview's words on the Last time line (egui), not the line's
+    // far end.
+    let preview = shell.update(|_, window, _| {
+        crate::gui::pages::trackers::measure::width(
+            window,
+            crate::gui::theme::Type::Small,
+            "— Hobb the miller says the toll collectors have not been paid.",
+        )
+    });
+    let link = shell
+        .bounds("id:last-time-link")
+        .expect("the Last time link");
+    let carry = shell.bounds("Carry over").unwrap();
+    let after = link.right() + preview + crate::gui::theme::L + crate::gui::theme::XS;
+    assert!(
+        carry.left() <= after + px(2.0),
+        "Carry over follows the preview: at {:?}, the words end at {after:?}",
+        carry.left()
+    );
 }
 
 #[test]
