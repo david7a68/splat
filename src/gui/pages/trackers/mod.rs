@@ -606,11 +606,7 @@ pub(crate) fn section_heading(
 
 /// One Due row: its words, its rolls with why each is blocked, the rolls' results, a check for
 /// each proposed change, then `Done` and the row's menu (`Dismiss`, `Dismiss all`) at its end.
-fn due_row(
-    trackers: &Trackers,
-    row: &DueRow,
-    cx: &mut Context<SplatRoot>,
-) -> impl IntoElement {
+fn due_row(trackers: &Trackers, row: &DueRow, cx: &mut Context<SplatRoot>) -> impl IntoElement {
     let c = colors();
     let parts = &row.parts;
     // By the notice, not the row's place: a control keeps its id (and its focus) when a row

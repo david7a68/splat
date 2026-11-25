@@ -1335,13 +1335,7 @@ fn fight_row(
             (probes, at),
         )
     });
-    row_frame(
-        Some(lead),
-        title,
-        Some(second),
-        actions,
-        details,
-    )
+    row_frame(Some(lead), title, Some(second), actions, details)
 }
 
 trait SmallText {

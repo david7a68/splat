@@ -1392,7 +1392,12 @@ impl Sessions {
         if !ends_words {
             return None;
         }
-        let now = format!("{}\n\n{}{}", &before[..start], &words[start..caret], &before[start..]);
+        let now = format!(
+            "{}\n\n{}{}",
+            &before[..start],
+            &words[start..caret],
+            &before[start..]
+        );
         Some((now, caret + 2))
     }
 

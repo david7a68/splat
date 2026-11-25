@@ -3,8 +3,8 @@
 //! that asks, and the panel's captures (`trackers__*`, paired with the references).
 use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
-use gpui::{px, size};
 use crate::gui::pages::sessions::tests::capture;
+use gpui::{px, size};
 use std::fs;
 
 const EXAMPLE: &str = include_str!("../../../../docs/design/world-examples/heralds-tournament.md");
@@ -152,7 +152,10 @@ fn quick_actions_notices_and_amounts() {
         shell.bounds("Enter room").is_some(),
         "the pinned trackers show"
     );
-    capture(&mut shell, "trackers__02-trackers-beside-the-plan__1200x800");
+    capture(
+        &mut shell,
+        "trackers__02-trackers-beside-the-plan__1200x800",
+    );
 
     // A quick action and its Undo.
     shell.click("Enter room");
@@ -194,7 +197,9 @@ fn quick_actions_notices_and_amounts() {
         names
             .iter()
             .any(|name| name.starts_with("id:trackers-due-") && name.ends_with("-done"))
-            && !names.iter().any(|name| name.starts_with("id:trackers-due-0-")),
+            && !names
+                .iter()
+                .any(|name| name.starts_with("id:trackers-due-0-")),
         "Due ids come from the notice: {names:?}"
     );
     shell.click("Done");
@@ -266,7 +271,10 @@ fn quick_actions_notices_and_amounts() {
             )
         });
     shell.click(&history);
-    capture(&mut shell, "trackers__07-tracker-history-in-the-reader__1200x800");
+    capture(
+        &mut shell,
+        "trackers__07-tracker-history-in-the-reader__1200x800",
+    );
 }
 
 /// The panel at the smallest window, with the race in play.

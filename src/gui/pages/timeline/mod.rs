@@ -23,8 +23,8 @@ use crate::timeline::page::{ADD_KINDS, FILTERS, ListAct};
 use crate::timeline::{Kind, kind_icon};
 use crate::{Page, timeline};
 use gpui::{
-    AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, Pixels, ScrollHandle,
-    SharedString, Styled, UniformListScrollHandle, Window, div, prelude::*, px,
+    AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, Pixels,
+    ScrollHandle, SharedString, Styled, UniformListScrollHandle, Window, div, prelude::*, px,
 };
 
 /// Two columns from this width of the page; below it the open event takes the list's place.
@@ -483,7 +483,9 @@ fn comparison(root: &mut SplatRoot) -> AnyElement {
         Some(Ok((draft, disk))) => {
             let id = ElementId::Name(SharedString::from(format!(
                 "timeline-conflict-{}",
-                book.path().map(|path| path.display().to_string()).unwrap_or_default()
+                book.path()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_default()
             )));
             kit::DraftComparison::new(id, draft.clone(), disk.clone())
                 .source()

@@ -100,13 +100,22 @@ fn session_notes_main_states() {
     // The note stays in Read while the DM uses the plan's Add strip (egui: 09-11 in Read).
     // The plan's Add strip: the fight picker and the rarer kinds.
     shell.click("id:plan-add-fight-button");
-    capture(&mut shell, "session-notes__09-session-plan-fight-picker__1200x800");
+    capture(
+        &mut shell,
+        "session-notes__09-session-plan-fight-picker__1200x800",
+    );
     shell.press("escape");
     shell.click("id:plan-add-more-button");
-    capture(&mut shell, "session-notes__10-plan-more-add-actions__1200x800");
+    capture(
+        &mut shell,
+        "session-notes__10-plan-more-add-actions__1200x800",
+    );
     shell.press("escape");
     shell.click("Long rest");
-    capture(&mut shell, "session-notes__11-session-event-added__1200x800");
+    capture(
+        &mut shell,
+        "session-notes__11-session-event-added__1200x800",
+    );
     // Templates: the built-in one, a customized copy, a new one, and a deleted one.
     shell.click("Templates");
     capture(&mut shell, "session-notes__29-templates-built-in__1200x800");
@@ -140,8 +149,8 @@ fn session_notes_main_states() {
     shell.click("id:template-more-button");
     shell.click("Delete");
     capture(&mut shell, "session-notes__32-templates-deleted__1200x800");
-    let text = std::fs::read_to_string(own(&mut shell).expect("the DM's own Standard session"))
-        .unwrap();
+    let text =
+        std::fs::read_to_string(own(&mut shell).expect("the DM's own Standard session")).unwrap();
     assert!(
         text.contains("Edited in the template."),
         "the template edit is saved: {text:?}"
@@ -159,7 +168,10 @@ fn session_notes_small_window() {
     new_session(&mut shell, TITLE);
     capture(&mut shell, "session-notes__04-session-write__960x640");
     shell.click("Note");
-    capture(&mut shell, "session-notes__04-session-write-note-tab__960x640");
+    capture(
+        &mut shell,
+        "session-notes__04-session-write-note-tab__960x640",
+    );
     // In the tab layout, the `/` menu's Search field is the note's own: the Note tab stays, with
     // its menu and field.
     shell.click("Note text");
@@ -212,10 +224,16 @@ fn plain_evening_states() {
     wait_for_fights(&mut shell);
     capture(&mut shell, "plain-evening__01-session-tonight__1200x800");
     shell.click("Road to the ford");
-    capture(&mut shell, "plain-evening__02-session-tonight: Travel row open__1200x800");
+    capture(
+        &mut shell,
+        "plain-evening__02-session-tonight: Travel row open__1200x800",
+    );
     shell.click("Road to the ford");
     shell.click("Shrine of Cinders");
-    capture(&mut shell, "plain-evening__03-session-tonight: planned fight open__1200x800");
+    capture(
+        &mut shell,
+        "plain-evening__03-session-tonight: planned fight open__1200x800",
+    );
     // Gap 4: the opened played fight shows how it ended: each player's
     // final HP, `Log · Whole run · Timeline`, and the Log under them while it is open.
     use crate::fixtures::{PLAIN_LAST, PLAIN_PLAYED};
@@ -247,13 +265,19 @@ fn plain_evening_states() {
             .any(|name| name.starts_with("Brannoch Vale: 58/62 HP")),
         "its players' final HP show, each with its whole line: {names:?}"
     );
-    capture(&mut shell, "plain-evening__04-session-last: played fight open__1200x800");
+    capture(
+        &mut shell,
+        "plain-evening__04-session-last: played fight open__1200x800",
+    );
     shell.click("Log");
     assert!(
         shell.read(|root| root.app.sessions.gv_fight_log_open()),
         "Log opens the log"
     );
-    capture(&mut shell, "plain-evening__04-session-last: played fight log__1200x800");
+    capture(
+        &mut shell,
+        "plain-evening__04-session-last: played fight log__1200x800",
+    );
     new_session(&mut shell, "The Shrine");
     assert!(
         selected_label(&mut shell).is_some_and(|label| label.ends_with("The Shrine")),
@@ -292,9 +316,10 @@ fn plan_scenes_and_their_fold() {
             })
         };
         assert_eq!(folded(&mut shell), None, "{name}: the scenes fit the plan");
-        capture(&mut shell, &format!(
-            "session-plan-scenes__01-scenes-in-the-plan__{name}"
-        ));
+        capture(
+            &mut shell,
+            &format!("session-plan-scenes__01-scenes-in-the-plan__{name}"),
+        );
         if name == "1200x800" {
             continue;
         }
@@ -315,7 +340,10 @@ fn plan_scenes_and_their_fold() {
                 .count()
         };
         assert_eq!(scene_rows(), 0, "{name}: folded scenes draw no rows");
-        capture(&mut shell, &format!("session-plan-scenes__08-scenes-folded__{name}"));
+        capture(
+            &mut shell,
+            &format!("session-plan-scenes__08-scenes-folded__{name}"),
+        );
         // `3 scenes` opens them in place, and closes them again.
         shell.click("3 scenes");
         assert_eq!(folded(&mut shell), Some((3, false)));
@@ -354,7 +382,10 @@ fn plan_add_reveals_its_row() {
         row.top() >= px(0.0) && row.bottom() <= undo.top(),
         "the added row is in view above the footer: {row:?}, footer at {undo:?}"
     );
-    capture(&mut shell, "session-plan-reveal__01-added-row-in-view__960x640");
+    capture(
+        &mut shell,
+        "session-plan-reveal__01-added-row-in-view__960x640",
+    );
 }
 
 #[test]
@@ -376,16 +407,25 @@ fn session_recording_states() {
     shell.click("Record");
     capture(&mut shell, "session-recording__01-record-consent__1200x800");
     shell.click("Start recording");
-    capture(&mut shell, "session-recording__02-recording-starting__1200x800");
+    capture(
+        &mut shell,
+        "session-recording__02-recording-starting__1200x800",
+    );
     shell.update(|root, _, _| root.app.sessions.simulate_recorder_health(Health::Hearing));
-    capture(&mut shell, "session-recording__03-recording-hearing__1200x800");
+    capture(
+        &mut shell,
+        "session-recording__03-recording-hearing__1200x800",
+    );
     shell.click("id:session-tabs-Recordings 1");
     shell.update(|root, _, _| root.app.sessions.simulate_recorder_health(Health::Hearing));
     assert!(
         shell.bounds("Stop recording first.").is_some(),
         "the blocked Process says why beside it"
     );
-    capture(&mut shell, "session-recording__04-recording-listed__1200x800");
+    capture(
+        &mut shell,
+        "session-recording__04-recording-listed__1200x800",
+    );
     shell.click("Stop recording");
     // As in egui's scenario, both keys are saved by this step, so Process is ready.
     shell.update(|root, _, cx| {
@@ -398,7 +438,10 @@ fn session_recording_states() {
             .any(|name| name.starts_with("Process")),
         "the recording offers Process"
     );
-    capture(&mut shell, "session-recording__16-recording-ready__1200x800");
+    capture(
+        &mut shell,
+        "session-recording__16-recording-ready__1200x800",
+    );
     // The recording is processed, with a warning, before the DM deletes it.
     shell.update(|root, _, cx| {
         root.app
@@ -424,7 +467,10 @@ fn session_recording_states() {
         path.expect("a recording")
     ));
     shell.click("Delete…");
-    capture(&mut shell, "session-recording__35-recording-delete__1200x800");
+    capture(
+        &mut shell,
+        "session-recording__35-recording-delete__1200x800",
+    );
     assert!(shell.read(|root| root.app.sessions.gv_confirm_delete().is_some()));
     shell.click("Keep the recording");
     assert!(shell.read(|root| root.app.sessions.gv_confirm_delete().is_none()));
@@ -446,7 +492,10 @@ fn session_carry_over_offered() {
     );
     shell.update(|root, _, _| root.app.sessions.flush());
     new_session(&mut shell, "The Crossing");
-    capture(&mut shell, "session-carry-over__01-carry-over-offered__1200x800");
+    capture(
+        &mut shell,
+        "session-carry-over__01-carry-over-offered__1200x800",
+    );
     assert!(
         shell.bounds("Carry over").is_some(),
         "a prepared session offers Carry over"
@@ -502,7 +551,10 @@ fn recording_banner_priority() {
         1,
         "the open session has its unprocessed recording"
     );
-    capture(&mut shell, "recording-banner-priority__01-failed-elsewhere-with-unprocessed-row__1200x800");
+    capture(
+        &mut shell,
+        "recording-banner-priority__01-failed-elsewhere-with-unprocessed-row__1200x800",
+    );
 }
 
 // Interaction tests: the main flows, driven through presses and keys.
@@ -602,7 +654,10 @@ fn list_toggle_key_and_button() {
     assert!(!shell.read(|root| root.app.sessions.list_hidden));
     // The list dragged to its widest: the pane left is too narrow for the plan beside the note,
     // so the page takes its tabs.
-    assert!(shell.bounds("id:session-tabs-Plan").is_none(), "plan beside the note");
+    assert!(
+        shell.bounds("id:session-tabs-Plan").is_none(),
+        "plan beside the note"
+    );
     shell.update(|_, _, cx| {
         crate::gui::kit::edge::set_column_width("session_list_panel", Some(420.0), cx);
     });
@@ -735,7 +790,10 @@ fn notes_panel_beside_another_page() {
     shell.press("ctrl-z");
     let after =
         shell.update(|root, _, _| root.app.sessions.gv_note_words(true).unwrap_or_default());
-    assert_ne!(after, before, "the panel's Undo history stays under the own write");
+    assert_ne!(
+        after, before,
+        "the panel's Undo history stays under the own write"
+    );
     // The file changes under the draft: the panel shows the comparison, not an editor.
     shell.update(|root, _, cx| {
         root.app.sessions.simulate_conflict();
@@ -1003,10 +1061,16 @@ fn travel_checks_in_the_plan() {
     shell.press("enter");
     assert_eq!(event(&mut shell).checks.len(), 2, "both days have a result");
     assert!(shell.bounds("Plan “Bridge Ambush”").is_some());
-    capture(&mut shell, "travel-checks__01-travel-checks-rolled__1200x800");
+    capture(
+        &mut shell,
+        "travel-checks__01-travel-checks-rolled__1200x800",
+    );
     shell.click("Clear the check for Day 2");
     shell.click("Clear the check for Day 1");
-    assert!(event(&mut shell).checks.is_empty(), "Clear takes each result off");
+    assert!(
+        event(&mut shell).checks.is_empty(),
+        "Clear takes each result off"
+    );
     // A player's roll, typed: the toll gang, which the plan can take.
     shell.click("Enter a roll for Day 2");
     shell.type_text("19");
@@ -1042,7 +1106,10 @@ fn travel_checks_in_the_plan() {
         .flatten()
     });
     assert_eq!(day.as_deref(), Some("Day 2 of Travel"));
-    capture(&mut shell, "travel-checks-plan__04-plan-answer-in-session-plan__1200x800");
+    capture(
+        &mut shell,
+        "travel-checks-plan__04-plan-answer-in-session-plan__1200x800",
+    );
 }
 
 /// The first target whose name starts with `prefix`.
@@ -1108,7 +1175,10 @@ fn plan_fight_picker_search() {
     assert!(shell.bounds("Plan Fight 7").is_some());
     assert!(shell.bounds("Plan Fight 1").is_none());
     assert!(shell.bounds("Plan Bridge Ambush").is_none());
-    capture(&mut shell, "session-plan__02-plan-fight-picker-search__1200x800");
+    capture(
+        &mut shell,
+        "session-plan__02-plan-fight-picker-search__1200x800",
+    );
     shell.click("Plan Fight 7");
     assert!(
         note_words(&mut shell).contains("Fight 7"),
@@ -1136,7 +1206,10 @@ fn plan_group_assembly() {
     assert_eq!(shell.read(|root| root.app.page), crate::Page::Sessions);
     assert!(shell.bounds("Back to the plan").is_some());
     shell.type_text("Ash Pack");
-    capture(&mut shell, "session-plan-groups__01-plan-group-empty__1200x800");
+    capture(
+        &mut shell,
+        "session-plan-groups__01-plan-group-empty__1200x800",
+    );
 
     // Discard closes it; the plan's footer has its Undo, which opens it again.
     shell.click("Discard");
@@ -1158,7 +1231,10 @@ fn plan_group_assembly() {
         shell.read(|root| root.app.encounters.group_members().map(|m| m.len())),
         Some(1)
     );
-    capture(&mut shell, "session-plan-groups__02-plan-group-assembled__1200x800");
+    capture(
+        &mut shell,
+        "session-plan-groups__02-plan-group-assembled__1200x800",
+    );
     shell.press("ctrl-s");
     assert!(
         !shell.read(|root| root.app.encounters.group_open_in_plan()),
@@ -1176,7 +1252,10 @@ fn plan_group_assembly() {
         shell.bounds("Edit group Ash Pack").is_some(),
         "the saved group is a row of the plan"
     );
-    capture(&mut shell, "session-plan-groups__03-plan-group-saved__1200x800");
+    capture(
+        &mut shell,
+        "session-plan-groups__03-plan-group-saved__1200x800",
+    );
 
     // Back waits while a new group is unsaved; once the saved group opens again unchanged,
     // Back returns to the plan.
@@ -1201,7 +1280,13 @@ fn plan_group_assembly() {
 }
 
 /// A World entry of the campaign, as egui's `log-from-play` wrote it.
-fn world_entry(dir: &std::path::Path, path: &str, name: &str, kind: &str, fields: &str) -> uuid::Uuid {
+fn world_entry(
+    dir: &std::path::Path,
+    path: &str,
+    name: &str,
+    kind: &str,
+    fields: &str,
+) -> uuid::Uuid {
     let id = splat::character::stable_id(path);
     let path = dir.join(path);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -1228,7 +1313,13 @@ fn log_from_play() {
     let mut shell = Shell::new("log-from-play", Seed::Campaign);
     let path = shell.update(|root, _, _| {
         let dir = root.app.campaigns.active_campaign().unwrap().path.clone();
-        let keep = world_entry(&dir, "Locations/Ashfall Keep.md", "Ashfall Keep", "location", "");
+        let keep = world_entry(
+            &dir,
+            "Locations/Ashfall Keep.md",
+            "Ashfall Keep",
+            "location",
+            "",
+        );
         world_entry(
             &dir,
             "NPCs/Captain Varra Black.md",
@@ -1262,10 +1353,16 @@ fn log_from_play() {
         shell.bounds("Add to Log: Ashfall Keep").is_none(),
         "a scene still to come has none"
     );
-    capture(&mut shell, "log-from-play__01-done-scene-add-to-log__1200x800");
+    capture(
+        &mut shell,
+        "log-from-play__01-done-scene-add-to-log__1200x800",
+    );
     shell.click(&short);
     let field = format!("Log line for {VARRA}");
-    assert!(shell.bounds(&field).is_some(), "Lookup opens on the entry's Log field");
+    assert!(
+        shell.bounds(&field).is_some(),
+        "Lookup opens on the entry's Log field"
+    );
     shell.type_text(TYPED);
     shell.press("enter");
     let logged = std::fs::read_to_string(&path).unwrap();
@@ -1273,10 +1370,16 @@ fn log_from_play() {
         logged.contains("## Log") && logged.contains(TYPED),
         "the entry's note gains the line under its Log heading: {logged:?}"
     );
-    assert!(!note_words(&mut shell).contains(TYPED), "the session note gains none");
+    assert!(
+        !note_words(&mut shell).contains(TYPED),
+        "the session note gains none"
+    );
     shell.click("Close Lookup");
     shell.click("Lookup");
-    capture(&mut shell, "log-from-play__02-log-line-added-in-lookup__1200x800");
+    capture(
+        &mut shell,
+        "log-from-play__02-log-line-added-in-lookup__1200x800",
+    );
 }
 
 /// egui's `prep-to-table` (T4.1-T4.3): a planned encounter's run from setup to its first turn:
@@ -1318,7 +1421,10 @@ fn prep_to_table() {
         }
         shell.type_text(total);
         if at == 0 {
-            capture(&mut shell, "prep-to-table__06-first-player-initiative__1200x800");
+            capture(
+                &mut shell,
+                "prep-to-table__06-first-player-initiative__1200x800",
+            );
         }
         // Enter goes to the next player who has no initiative.
         if at + 1 == PLAYERS.len() / 2 {
@@ -1339,15 +1445,19 @@ fn prep_to_table() {
     });
     for (player, total) in PLAYERS {
         assert!(
-            totals
-                .iter()
-                .any(|(name, initiative)| name == player
-                    && initiative.map(|i| i.to_string()).as_deref() == Some(total)),
+            totals.iter().any(|(name, initiative)| name == player
+                && initiative.map(|i| i.to_string()).as_deref() == Some(total)),
             "{player} has {total}: {totals:?}"
         );
     }
-    capture(&mut shell, "prep-to-table__07-all-initiative-entered__1200x800");
+    capture(
+        &mut shell,
+        "prep-to-table__07-all-initiative-entered__1200x800",
+    );
     shell.click("Begin combat");
-    assert_eq!(phase(&mut shell), Some(crate::encounter_run::Phase::Running));
+    assert_eq!(
+        phase(&mut shell),
+        Some(crate::encounter_run::Phase::Running)
+    );
     capture(&mut shell, "prep-to-table__09-first-turn__1200x800");
 }

@@ -71,7 +71,11 @@ fn session_notes_timeline_steps() {
     shell.type_text("Old mill");
     shell.press("ctrl-s");
     let now = events(&mut shell);
-    assert_eq!(now.len(), 4, "a Day, a Long rest, a Travel and a Major event");
+    assert_eq!(
+        now.len(),
+        4,
+        "a Day, a Long rest, a Travel and a Major event"
+    );
     assert_eq!(now[0].title, "Harvest Eve", "the Day starts the timeline");
     let renamed = now.iter().find(|event| event.id == rest.id).unwrap();
     assert_eq!(
@@ -88,14 +92,27 @@ fn session_notes_timeline_steps() {
             .map(|offer| offer.old().to_vec())
     });
     assert_eq!(old, Some(vec!["Long rest".to_owned()]));
-    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__18-timeline-event__1200x800");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "session-notes__18-timeline-event__1200x800",
+    );
     shell.click("Rests");
-    assert_eq!(selected(&mut shell), Some(rest.id.clone()), "the rest stays open");
-    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__21-timeline-filtered__1200x800");
+    assert_eq!(
+        selected(&mut shell),
+        Some(rest.id.clone()),
+        "the rest stays open"
+    );
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "session-notes__21-timeline-filtered__1200x800",
+    );
     shell.click("All");
     shell.click("More actions for Rest at the mill");
     shell.click("Remove");
-    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__22-timeline-removed__1200x800");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "session-notes__22-timeline-removed__1200x800",
+    );
 }
 
 /// The file changed under an edit of the same event: the draft beside the file, aligned, the
@@ -114,7 +131,11 @@ fn a_disk_conflict_compares_the_draft_and_the_file() {
     let saved = fs::read_to_string(&path).unwrap();
     assert!(saved.contains("Rest at the mill"));
     // Obsidian renames the rest while the DM renames it too.
-    fs::write(&path, saved.replace("Rest at the mill", "Rest by the river")).unwrap();
+    fs::write(
+        &path,
+        saved.replace("Rest at the mill", "Rest by the river"),
+    )
+    .unwrap();
     shell.click("Title");
     shell.press("ctrl-a");
     shell.type_text("Rest at the old mill");
@@ -207,7 +228,10 @@ fn add_name_rule_remove_and_save() {
     shell.click("Mark not at full");
     shell.settle();
     assert!(!restores(&mut shell));
-    crate::gui::pages::sessions::tests::capture(&mut shell, "session-plan__33-timeline-rest-ruling-off__1200x800");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "session-plan__33-timeline-rest-ruling-off__1200x800",
+    );
     shell.click("Undo change to ruling");
     shell.settle();
     assert!(restores(&mut shell), "Undo puts the ruling back");
@@ -277,7 +301,10 @@ fn an_open_event_at_the_smallest_window() {
     first_day(&mut shell);
     shell.click("Add Long rest");
     shell.settle();
-    crate::gui::pages::sessions::tests::capture(&mut shell, "session-notes__18-timeline-event__960x640");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "session-notes__18-timeline-event__960x640",
+    );
 }
 
 /// F9: a journey's encounter checks on Timeline: `Roll for encounters` from its menu, a table,
@@ -353,7 +380,10 @@ fn a_journeys_checks() {
     shell.settle();
     assert_eq!(event(&mut shell).checks.len(), 1, "one check rolled");
     assert!(shell.bounds("Undo roll 1 travel check").is_some());
-    crate::gui::pages::sessions::tests::capture(&mut shell, "travel-checks__07-travel-checks-timeline__1200x800");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "travel-checks__07-travel-checks-timeline__1200x800",
+    );
     let label = event(&mut shell).checks[0].label.clone();
     shell.click(&format!("id:timeline-checks-{journey}-clear-{label}"));
     shell.settle();
@@ -387,7 +417,10 @@ fn the_add_strip_shares_more_when_short() {
     }
     assert!(shell.bounds("Add Day").is_none(), "Day goes to More");
     shell.click("More Add actions");
-    crate::gui::pages::sessions::tests::capture(&mut shell, "timeline-add-strip__01-more-add-actions__960x640");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "timeline-add-strip__01-more-add-actions__960x640",
+    );
     let before = events(&mut shell).len();
     shell.click("Day");
     let now = events(&mut shell);
@@ -455,7 +488,10 @@ fn a_rolled_checks_result_comes_into_view() {
         clear.top() >= px(0.0) && clear.bottom() <= window.height,
         "the result is in view: {clear:?} in {window:?}"
     );
-    crate::gui::pages::sessions::tests::capture(&mut shell, "timeline-checks-reveal__01-result-in-view__1200x520");
+    crate::gui::pages::sessions::tests::capture(
+        &mut shell,
+        "timeline-checks-reveal__01-result-in-view__1200x520",
+    );
 }
 
 /// Review of #817: in a window so short that the title line would leave the form no room, the
@@ -487,7 +523,10 @@ fn the_title_line_scrolls_with_the_form_when_room_is_short() {
             "at {height}: the Title moved from {before:?} to {after:?}"
         );
         if scrolls {
-            crate::gui::pages::sessions::tests::capture(&mut shell, "timeline-short__01-title-line-scrolls__1200x270");
+            crate::gui::pages::sessions::tests::capture(
+                &mut shell,
+                "timeline-short__01-title-line-scrolls__1200x270",
+            );
         }
     }
 }
