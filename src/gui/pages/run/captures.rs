@@ -1122,8 +1122,9 @@ fn ready_with_one_absent(shell: &mut Shell) {
 fn run_absent_player() {
     let mut shell = Shell::new("run-absent-player", Seed::Campaign);
     ready_with_one_absent(&mut shell);
-    // An initiative field shows a whole total: its frame and padding leave room for `-12`
-    // and the caret (a narrower field scrolled to its last digit).
+    // An initiative field shows a whole total: inside its border, its padding and the
+    // input's (4 and 10 px a side) leave room for `-12` and the caret (a narrower field
+    // scrolled to its last digit).
     let fits_total = |shell: &mut Shell, field: &str| {
         let frame = shell
             .bounds(field)
@@ -1134,7 +1135,7 @@ fn run_absent_player() {
             crate::gui::kit::measure::width(window, crate::gui::theme::Type::Body, "-12")
         });
         assert!(
-            frame - px(34.0) >= total,
+            frame - px(30.0) >= total,
             "{field} is {frame:?} wide for a total of {total:?}"
         );
     };
@@ -1346,7 +1347,9 @@ fn run_folder_defect() {
         if shell.read(|root| root.app.encounters.run_form().is_some()) {
             break;
         }
+        // The settings are read on a thread of their own, in real time.
         shell.wait(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(20));
     }
     let id = shell.read(|root| root.app.campaigns.active_campaign().expect("a campaign").id);
     shell.click(&format!("id:run_folder-{id}"));
