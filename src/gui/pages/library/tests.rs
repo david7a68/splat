@@ -1065,22 +1065,56 @@ fn package_delete_entry() {
     assert_eq!(open_name(&mut shell).as_deref(), Some("Ash Exposure"));
     shell.capture("package-delete-entry__01-package-entry-before-delete__1200x800");
     std::fs::remove_file(package.join("Creatures/Cinder Wolf.md")).unwrap();
+    // The DM deleted the file in a file manager and comes back: the window's focus starts the
+    // files' check (egui's `focus_window(false)`, `focus_window(true)`).
+    shell.focus_window_again();
     shell.click("id:nav-Encounters");
     for _ in 0..100 {
-        if shell.read(|root| root.app.encounters.loaded() && !root.app.encounters.busy()) {
+        if shell.read(|root| {
+            !root.app.lookup.busy() && root.app.encounters.loaded() && !root.app.encounters.busy()
+        }) {
             break;
         }
-        shell.update(|root, _, _| root.app.encounters.wait_for_load());
+        shell.update(|root, _, _| {
+            root.app.lookup.wait_for_load();
+            root.app.encounters.wait_for_load();
+        });
         shell.wait(std::time::Duration::from_millis(50));
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    // The run's encounter opens in its editor, where the deleted creature's rows say so.
+    // Bridge Ambush is the paused run: its row's Edit (egui: the Edit beside "Bridge Ambush")
+    // opens the encounter in its editor, where the deleted creature's rows say so.
     let edit = crate::gui::kit::probe::names()
         .into_iter()
-        .find(|name| name.starts_with("id:edit:"))
+        .find(|name| name.starts_with("id:edit:") && name.contains("Encounter Runs"))
         .expect("the paused run's Edit");
     shell.click(&edit);
     assert!(shell.read(|root| root.app.encounters.editor_open()));
+    let (rows, difficulty) = shell.update(|root, _, _| {
+        let ctx = root.ctx.clone();
+        let roster = root
+            .app
+            .encounters
+            .roster_view(&ctx, &root.app.party, true)
+            .expect("the roster");
+        let rows: Vec<_> = roster
+            .rows
+            .iter()
+            .filter(|row| row.name.contains("Cinder Wolf"))
+            .map(|row| (row.missing.is_some(), row.edit_word))
+            .collect();
+        let difficulty: Vec<_> = roster.difficulty.into_iter().map(|(w, _)| w).collect();
+        (rows, difficulty.join(" "))
+    });
+    assert_eq!(
+        rows,
+        vec![(true, "Replace…"); 2],
+        "both Cinder Wolf rows say the creature is missing and offer Replace…"
+    );
+    assert!(
+        difficulty.contains("XP not known: Cinder Wolf"),
+        "the roster's difficulty names the deleted creature: {difficulty}"
+    );
     shell.capture("package-delete-entry__02-deleted-package-entry-in-encounter__1200x800");
 }
 

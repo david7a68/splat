@@ -1835,7 +1835,8 @@ pub struct Lookup {
     /// A check of campaign and package files, away from the frame.
     pub files_changed: bool,
     checking: Option<mpsc::Receiver<u64>>,
-    /// The first poll started its check of the files.
+    /// The check of the files is started (at the first poll, and again each time the window gets
+    /// the focus back: `check_files`).
     files_checked: bool,
     /// The panel shows the Trackers view in place of what it held, which it keeps.
     trackers_shown: bool,
@@ -1891,7 +1892,8 @@ impl Lookup {
     /// Load or reload in the background when the active campaign or packages change.
     pub fn poll(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         let active = campaigns.active_campaign();
-        // Once, at the first poll: show what was written while the app was closed.
+        // At the first poll, show what was written while the app was closed; when the window
+        // gets the focus back (`check_files`), what was just written in Obsidian or a file manager.
         if !self.files_checked {
             let (tx, rx) = mpsc::channel();
             let campaign = active.clone();
@@ -1950,6 +1952,13 @@ impl Lookup {
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
+    }
+
+    /// The window got the focus back: the next poll checks the campaign and package files, and
+    /// every page reads them again when they changed (`files_changed`). egui did this on its
+    /// `WindowFocused(true)`.
+    pub fn check_files(&mut self) {
+        self.files_checked = false;
     }
 
     /// Content on disk changed, for example after a copy.
