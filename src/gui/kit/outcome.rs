@@ -9,7 +9,7 @@ use crate::gui::icons;
 use crate::gui::theme::{L, LIST_MEASURE, MARK_WIDTH, S, Type, TypeExt, XS, colors};
 use gpui::{
     AnyElement, App, Div, Hsla, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
-    Window, div,
+    Window, div, prelude::*,
 };
 
 /// A message's tone (`design::Tone`).
@@ -48,6 +48,7 @@ pub struct Message {
     details: Vec<AnyElement>,
     actions: Vec<AnyElement>,
     destructive: Option<AnyElement>,
+    dismiss: Option<AnyElement>,
 }
 
 impl Message {
@@ -59,6 +60,7 @@ impl Message {
             details: Vec::new(),
             actions: Vec::new(),
             destructive: None,
+            dismiss: None,
         }
     }
 
@@ -86,6 +88,14 @@ impl Message {
         self.destructive = Some(action.into_any_element());
         self
     }
+
+    /// The message's Dismiss (a `kit::IconButton` `×`), at the right end of its first line, as
+    /// egui drew it: the message then takes its parent's width, its words still at most
+    /// `LIST_MEASURE` wide.
+    pub fn dismiss(mut self, control: impl IntoElement) -> Self {
+        self.dismiss = Some(control.into_any_element());
+        self
+    }
 }
 
 impl RenderOnce for Message {
@@ -101,13 +111,20 @@ impl RenderOnce for Message {
             .child(div().ty(ty).text_color(colors().text).child(self.words))
             .children(self.details)
             .when_actions(self.actions, self.destructive);
+        let dismissed = self.dismiss.is_some();
+        let words = if dismissed {
+            words.max_w(LIST_MEASURE)
+        } else {
+            words
+        };
         div()
             .flex()
             .flex_row()
             .items_start()
             // In a row it gives way to the row's other parts, and its words wrap there.
             .min_w_0()
-            .max_w(LIST_MEASURE)
+            .when(!dismissed, |message| message.max_w(LIST_MEASURE))
+            .when(dismissed, |message| message.w_full())
             .border_l(MARK_WIDTH)
             .border_color(color)
             .pl(S - MARK_WIDTH + gpui::px(1.0))
@@ -120,6 +137,19 @@ impl RenderOnce for Message {
                     .child(SharedString::new_static(icon)),
             )
             .child(words)
+            .when_some(self.dismiss, |message, dismiss| {
+                // Centred on the words' first line; the control is taller than the line, so it
+                // reaches out above and below it evenly.
+                message.child(
+                    div()
+                        .flex()
+                        .flex_none()
+                        .ml_auto()
+                        .items_center()
+                        .h(ty.line())
+                        .child(dismiss),
+                )
+            })
     }
 }
 

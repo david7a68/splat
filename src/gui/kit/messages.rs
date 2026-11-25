@@ -190,7 +190,7 @@ pub fn message<A: Clone + 'static>(
                 message = message.action(with_help(link.into_any_element(), &choice.help));
             }
             ChoiceForm::Dismiss => {
-                message = message.action(
+                message = message.dismiss(
                     IconButton::new(id, icons::CLOSE, choice.words.clone()).on_click(press),
                 );
             }
