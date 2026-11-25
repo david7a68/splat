@@ -1274,3 +1274,76 @@ fn log_from_play() {
     shell.click("Lookup");
     capture(&mut shell, "log-from-play__02-log-line-added-in-lookup__1200x800");
 }
+
+/// egui's `prep-to-table` (T4.1-T4.3): a planned encounter's run from setup to its first turn:
+/// the setup, a row's menu, NPC initiative rolled, each player's total typed (Enter goes to the
+/// next player with none), and Begin combat.
+#[test]
+fn prep_to_table() {
+    const PLAYERS: [(&str, &str); 5] = [
+        ("Brannoch Vale", "15"),
+        ("Iselle Marrowind", "19"),
+        ("Kestrel Dunmoor", "21"),
+        ("Oren Thistlewick", "11"),
+        ("Sable Harrowgate", "13"),
+    ];
+    let mut shell = Shell::new("prep-to-table", Seed::Campaign);
+    shell.update(|root, _, cx| {
+        let campaign = root.app.campaigns.active_campaign().unwrap().clone();
+        let modules = root.app.campaigns.modules().to_vec();
+        root.app.encounters.refresh_now(&campaign, &modules);
+        root.app
+            .encounters
+            .run_path("Encounters/Shrine of Cinders.md", &campaign, &modules);
+        root.show_page(crate::Page::Run, cx);
+    });
+    let phase = |shell: &mut Shell| {
+        shell.read(|root| root.app.encounters.run().map(|run| run.state.phase.clone()))
+    };
+    assert_eq!(phase(&mut shell), Some(crate::encounter_run::Phase::Setup));
+    capture(&mut shell, "prep-to-table__01-run-setup__1200x800");
+    shell.click("More actions for Brannoch Vale");
+    capture(&mut shell, "prep-to-table__02-setup-row-menu__1200x800");
+    shell.press("escape");
+    shell.click("Roll NPCs");
+    capture(&mut shell, "prep-to-table__05-npcs-rolled__1200x800");
+    for (at, (player, total)) in PLAYERS.iter().enumerate() {
+        let field = format!("Initiative for {player}");
+        if at != PLAYERS.len() / 2 {
+            shell.click(&field);
+        }
+        shell.type_text(total);
+        if at == 0 {
+            capture(&mut shell, "prep-to-table__06-first-player-initiative__1200x800");
+        }
+        // Enter goes to the next player who has no initiative.
+        if at + 1 == PLAYERS.len() / 2 {
+            shell.press("enter");
+        }
+    }
+    let totals = shell.read(|root| {
+        root.app
+            .encounters
+            .run()
+            .unwrap()
+            .state
+            .participants
+            .iter()
+            .filter(|p| !p.npc)
+            .map(|p| (p.name.clone(), p.initiative))
+            .collect::<Vec<_>>()
+    });
+    for (player, total) in PLAYERS {
+        assert!(
+            totals
+                .iter()
+                .any(|(name, initiative)| name == player
+                    && initiative.map(|i| i.to_string()).as_deref() == Some(total)),
+            "{player} has {total}: {totals:?}"
+        );
+    }
+    capture(&mut shell, "prep-to-table__07-all-initiative-entered__1200x800");
+    shell.click("Begin combat");
+    assert_eq!(phase(&mut shell), Some(crate::encounter_run::Phase::Running));
+    capture(&mut shell, "prep-to-table__09-first-turn__1200x800");
+}
