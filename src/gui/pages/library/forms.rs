@@ -221,7 +221,9 @@ pub(super) fn folder_combo(
             .library
             .folders
             .as_ref()
-            .and_then(|(owner, at, kind, _)| (*owner == id).then(|| (at.as_path(), kind.as_str())));
+            .and_then(|(owner, at, kind, _)| {
+                (*owner == id).then_some((at.as_path(), kind.as_str()))
+            });
         if let Some((at, kind, folders)) = read(root, kept) {
             root.pages.library.folders = Some((id, at, kind, Arc::new(folders)));
         }
