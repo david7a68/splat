@@ -139,6 +139,7 @@ fn switcher(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) -> Div {
         chosen,
     )
     .placeholder(label)
+    .small()
     .blocked(lock)
     .lock_when_blocked()
     .on_select(cx.listener(move |root, index: &usize, _, cx| {
