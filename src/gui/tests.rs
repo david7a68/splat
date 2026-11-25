@@ -670,6 +670,13 @@ fn a_program_write_keeps_the_text_undo_when_it_is_the_fields_own() {
     shell.click("Undo editor");
     shell.type_text("Ash");
     assert_eq!(*words.borrow(), "Ash");
+    // An editor with no type of its own draws in `Body`, as egui's did, not in gpui-component's
+    // smaller size.
+    let line = {
+        let handle = handle();
+        shell.update(move |_, _, cx| handle.caret_bounds(cx).map(|caret| caret.size.height))
+    };
+    assert_eq!(line, Some(super::theme::Type::Body.line()), "a Body line");
     // The field's own edit (the caller's words change with it): the words change, and Ctrl+Z
     // takes the change back.
     let editor = handle();
@@ -851,10 +858,28 @@ fn dialogs() {
     shell.press("ctrl-end");
     shell.type_text(" Draft ruling.");
     assert!(shell.read(|root| root.app.library.dirty()));
+    // The last input is the mouse's, as when the DM presses the window's close button.
+    shell.click("Markdown editor");
     let close = |shell: &mut Shell| shell.update(|root, window, cx| root.should_close(window, cx));
     assert!(!close(&mut shell), "the draft keeps the window open");
     assert!(shell.read(|root| root.app.confirm_close));
-    shell.capture("dialogs__06-unsaved-changes-on-close__1200x800");
+    let path = shell.capture("dialogs__06-unsaved-changes-on-close__1200x800");
+    // The safe default that has the keyboard shows the focus ring, though a press opened the
+    // prompt (egui's ring on Keep editing), so the DM sees what Enter does.
+    let keep = shell.bounds("Keep editing").expect("Keep editing");
+    let picture = image::open(&path).expect("the capture").to_rgba8();
+    let scale = picture.width() as f32 / f32::from(shell.size().width);
+    // A target's box lies inside its border: the ring is the pixel left of it.
+    let edge = picture.get_pixel(
+        ((f32::from(keep.left()) - 1.0) * scale) as u32,
+        (f32::from(keep.center().y) * scale) as u32,
+    );
+    let ring = gpui::Rgba::from(super::theme::colors().focus);
+    let ring = [ring.r, ring.g, ring.b].map(|channel| (channel * 255.0).round() as i32);
+    assert!(
+        (0..3).all(|at| (i32::from(edge[at]) - ring[at]).abs() <= 8),
+        "Keep editing's edge {edge:?} at {keep:?} is the focus ring {ring:?}"
+    );
     shell.press("escape");
     assert!(
         !shell.read(|root| root.app.confirm_close),
@@ -886,7 +911,29 @@ fn nav_state() {
     shell.click("id:library-search");
     shell.type_text("dragon");
     shell.click(&first_named("Adult Black Dragon ·"));
-    shell.capture("nav-state__01-library-set-up__1200x800");
+    let path = shell.capture("nav-state__01-library-set-up__1200x800");
+    // The search field shows its magnifier at its left, before the words (egui's search box):
+    // the strip from its edge to where the words start holds the icon's strokes.
+    let field = shell
+        .bounds("id:library-search")
+        .expect("the Library's search");
+    let picture = image::open(&path).expect("the capture").to_rgba8();
+    let scale = picture.width() as f32 / f32::from(shell.size().width);
+    let well = *picture.get_pixel(
+        ((f32::from(field.left()) + 3.0) * scale) as u32,
+        (f32::from(field.center().y) * scale) as u32,
+    );
+    let marked = (4..14)
+        .flat_map(|x| (-6..=6).map(move |y| (x, y)))
+        .filter(|(x, y)| {
+            let pixel = picture.get_pixel(
+                ((f32::from(field.left()) + *x as f32) * scale) as u32,
+                ((f32::from(field.center().y) + *y as f32) * scale) as u32,
+            );
+            (0..3).any(|at| (i32::from(pixel[at]) - i32::from(well[at])).abs() > 40)
+        })
+        .count();
+    assert!(marked > 4, "the magnifier is drawn: {marked} marked pixels");
     shell.click("Party");
     wait_for(&mut shell, "the party is read", |root| {
         !root.app.party.reader.members.is_empty() && !root.app.party.reader.loading()
@@ -901,13 +948,50 @@ fn nav_state() {
     };
     let party_set_up = shell.read(party);
     assert_eq!(party_set_up.1, 2, "the Spells page");
+    // Kestrel's detail line ("Rogue · Level 5 · Bloodied · Poisoned") is whole, as egui's was:
+    // it runs under the compare columns, up to HP.
+    let room = shell
+        .bounds("Kestrel Dunmoor detail")
+        .expect("Kestrel's detail line");
+    let words = shell
+        .bounds("Kestrel Dunmoor detail words")
+        .expect("Kestrel's detail words");
+    assert!(
+        words.right() <= room.right(),
+        "Kestrel's detail {words:?} fits its line {room:?}"
+    );
     shell.capture("nav-state__02-party-set-up__1200x800");
     shell.click("Encounters");
     wait_for(&mut shell, "the encounters are read", |root| {
         !root.app.encounters.busy() && root.app.encounters.loaded()
     });
-    shell.click(&first_named("id:edit:Encounters/"));
+    // The paused run's encounter, as egui's scenario opened it (Edit beside Bridge Ambush, its
+    // In progress row): its editor offers Resume.
+    let paused = shell
+        .read(|root| root.app.encounters.paused_run().map(|run| run.path.clone()))
+        .expect("the fixture's paused run");
+    shell.click(&format!("id:edit:{}", paused.display()));
     assert!(shell.read(|root| root.app.encounters.editor_open()));
+    let head = shell.update(|root, _, _| {
+        let active = root.app.campaigns.active_campaign().expect("a campaign");
+        root.app
+            .encounters
+            .editor_frame(&active)
+            .map(|view| (view.name, view.start_word, view.run_state))
+    });
+    assert_eq!(
+        head,
+        Some((
+            "Bridge Ambush".to_owned(),
+            "Resume",
+            Some("Round 2 · Paused".to_owned())
+        )),
+        "the editor shows the paused run's encounter, with Resume and its state"
+    );
+    assert!(
+        shell.bounds("id:encounter-start").is_some(),
+        "its Resume is drawn"
+    );
     shell.capture("nav-state__03-encounters-set-up__1200x800");
     shell.click("Campaign");
     shell.click("Rules and runs");
@@ -925,6 +1009,11 @@ fn nav_state() {
         shell.read(|root| root.app.campaign_tab == CampaignTab::RunSettings),
         "the Campaign page reopens its last tab"
     );
+    // A drop-down's value is in `Body`, as a text field's is (egui's `value_font`).
+    let value = shell
+        .bounds("Roll NPC initiative value")
+        .expect("the NPC initiative value");
+    assert_eq!(value.size.height, super::theme::Type::Body.line());
     shell.capture("nav-state__06-campaign-returned__1200x800");
     shell.click("Party");
     assert_eq!(

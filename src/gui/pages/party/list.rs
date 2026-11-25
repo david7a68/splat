@@ -2,7 +2,7 @@
 //! each member's portrait, name, class and level, conditions, the compare columns (passive
 //! Perception and Insight, spell DC), AC and HP with its bar.
 use crate::gui::kit::{self, Row};
-use crate::gui::theme::{S, Type, XS, colors};
+use crate::gui::theme::{M, S, Type, XS, colors};
 use crate::gui::{SplatRoot, icons};
 use gpui::{
     AnyElement, Context, ElementId, IntoElement, ParentElement, Pixels, SharedString, Styled, div,
@@ -39,15 +39,26 @@ pub(super) fn list(root: &mut SplatRoot, width: Pixels, cx: &mut Context<SplatRo
         }
     }
     header_cells.push((AC_WIDTH, label("AC")));
-    header_cells.push((HP_WIDTH, label("HP")));
+    // The header keeps a row's columns: the names and the compare columns, then HP against them
+    // (`-S` takes back the row's gap, as egui's columns met).
     let header = div()
         .flex()
         .flex_row()
         .items_center()
         .h(px(18.0))
         .px(S)
-        .child(div().flex_1().child(label("NAME")))
-        .child(numbers(header_cells));
+        .gap(S)
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .flex_1()
+                .min_w_0()
+                .child(div().flex_1().child(label("NAME")))
+                .child(numbers(header_cells)),
+        )
+        .child(numbers([(HP_WIDTH, label("HP"))]).ml(-S));
     let party = &root.app.party;
     let reader = &party.reader;
     let selected = reader.selected.clone();
@@ -101,17 +112,19 @@ pub(super) fn list(root: &mut SplatRoot, width: Pixels, cx: &mut Context<SplatRo
                 .map(|condition| format!(" · {condition}"))
                 .collect::<String>(),
         );
+        // The detail's words on one line at their own width; each status keeps its words whole.
+        let status = |status: kit::Status| div().flex_none().child(kit::status(&status));
         let mut detail = div()
             .flex()
             .flex_row()
             .items_center()
-            .overflow_hidden()
+            .flex_none()
             .whitespace_nowrap()
             .child(kit::text(Type::Small, c.muted, summary));
         if local_edits {
             detail = detail
                 .child(kit::text(Type::Small, c.muted, " · "))
-                .child(kit::status(&kit::Status::new(
+                .child(status(kit::Status::new(
                     icons::DRAFT,
                     "Local edits",
                     c.document.unsaved,
@@ -121,7 +134,7 @@ pub(super) fn list(root: &mut SplatRoot, width: Pixels, cx: &mut Context<SplatRo
             crate::design::HpState::Bloodied => {
                 detail = detail
                     .child(kit::text(Type::Small, c.muted, " · "))
-                    .child(kit::status(&kit::Status::new(
+                    .child(status(kit::Status::new(
                         icons::BLOODIED,
                         "Bloodied",
                         c.hp.bloodied,
@@ -152,6 +165,19 @@ pub(super) fn list(root: &mut SplatRoot, width: Pixels, cx: &mut Context<SplatRo
             AC_WIDTH,
             kit::text(Type::Numeral, c.text, known(ac)).into_any_element(),
         ));
+        // As egui's row: the compare columns and AC on the name's line, and the detail line
+        // under them, as wide as the row less HP and `M` before it, so a long detail ("Bloodied ·
+        // Poisoned") is whole.
+        let detail_name = format!("{} detail", member.name);
+        let detail = kit::target(
+            div()
+                .flex()
+                .flex_row()
+                .overflow_hidden()
+                .mr(M - S)
+                .child(kit::target(detail, format!("{detail_name} words"))),
+            detail_name,
+        );
         let mut readout = div().flex().flex_row().items_baseline().gap(S);
         if temp > 0 {
             readout = readout.child(kit::hp::temp(temp, Type::Numeral));
@@ -162,7 +188,7 @@ pub(super) fn list(root: &mut SplatRoot, width: Pixels, cx: &mut Context<SplatRo
             Type::NumeralLarge,
             Type::Numeral,
         ));
-        cells.push((
+        let hp_cell = (
             HP_WIDTH,
             div()
                 .flex()
@@ -172,7 +198,7 @@ pub(super) fn list(root: &mut SplatRoot, width: Pixels, cx: &mut Context<SplatRo
                 .child(readout)
                 .child(kit::hp::bar(hp, max_hp, temp, px(86.0)))
                 .into_any_element(),
-        ));
+        );
         let id = member.id.clone();
         let is_selected = selected.as_deref() == Some(member.id.as_str());
         let row = Row::new(
@@ -201,13 +227,24 @@ pub(super) fn list(root: &mut SplatRoot, width: Pixels, cx: &mut Context<SplatRo
                 .flex_col()
                 .flex_1()
                 .min_w_0()
-                .child(kit::text::one_line(Type::Name, c.text, member.name.clone()))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .child(div().flex_1().min_w_0().child(kit::text::one_line(
+                            Type::Name,
+                            c.text,
+                            member.name.clone(),
+                        )))
+                        .child(numbers(cells)),
+                )
                 .child(detail)
                 .when_some((!wide).then_some(compared), |column, compared| {
                     column.child(kit::text(Type::Small, c.muted, compared))
                 }),
         )
-        .child(numbers(cells));
+        .child(numbers([hp_cell]).ml(-S));
         rows = rows.child(
             div()
                 .border_b(crate::gui::theme::HAIRLINE_WIDTH)
