@@ -906,9 +906,13 @@ impl Draw {
                     .w_full()
                     .overflow_hidden()
                     .children(result.map(|result| {
+                        let words = format!("{ROLL_RESULT}: {result}");
                         super::target(
-                            super::text::one_line(Type::Body, c.text, result),
-                            ROLL_RESULT,
+                            super::target(
+                                super::text::one_line(Type::Body, c.text, result),
+                                ROLL_RESULT,
+                            ),
+                            words,
                         )
                     })),
             )
