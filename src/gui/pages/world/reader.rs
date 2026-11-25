@@ -981,6 +981,7 @@ pub(super) fn picker(
                 gpui::ElementId::Name(format!("world-picker-{}", view.key).into()),
                 view.search,
             )
+            .search()
             .placeholder(view.label)
             .name(view.label)
             .focus_selected(view.focus)
@@ -1205,6 +1206,7 @@ fn join_form(
         None => {
             form = form.child(
                 kit::TextField::new(("world-join-search", id.as_u128() as u64), view.search)
+                    .search()
                     .placeholder("Stat block: Commoner, Guard…")
                     .name("Stat block")
                     .on_change(words(cx, JoinAct::Search)),

@@ -617,6 +617,7 @@ fn add_menu(
         content = content.child(
             div().py(XS).child(
                 kit::TextField::new(id(format!("{}-search", menu.id)), words)
+                    .search()
                     .placeholder(menu.hint)
                     .name(menu.find)
                     .width(MENU_WIDTH)

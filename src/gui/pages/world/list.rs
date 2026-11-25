@@ -170,6 +170,7 @@ pub(super) fn render(
                 .child(
                     div().flex_1().min_w_0().child(
                         kit::TextField::new("world-search", search.clone())
+                            .search()
                             .placeholder("Find a note")
                             .name("Search the world")
                             .on_change(on_words(cx, |root, words| {

@@ -76,7 +76,9 @@ impl Button {
     }
 
     /// Keep its keyboard focus in `handle`, so the caller can give it the keyboard (a dialog's
-    /// safe action when the dialog opens).
+    /// safe action when the dialog opens). While it has the keyboard it shows the focus ring,
+    /// however the keyboard came to it (a press opened the dialog), so the DM sees what Enter
+    /// does, as egui showed it.
     pub fn focus_handle(mut self, handle: &gpui::FocusHandle) -> Self {
         self.focus = Some(handle.clone());
         self
@@ -290,7 +292,9 @@ impl RenderOnce for Button {
             .focusable()
             .tab_stop(enabled)
             .when_some(self.focus.clone(), |button, handle| {
-                button.track_focus(&handle.tab_stop(enabled))
+                button
+                    .track_focus(&handle.tab_stop(enabled))
+                    .focus(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             })
             .role(gpui::Role::Button)
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))

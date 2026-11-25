@@ -1236,6 +1236,7 @@ pub(super) fn search(
     let mut field = div().flex().flex_row().items_center().gap(S).child(
         div().flex_1().child(
             kit::TextField::new("encounter-search", add.search.clone())
+                .search()
                 .name(name)
                 .placeholder("Find a creature by name or detail…")
                 .focus_selected(focus)

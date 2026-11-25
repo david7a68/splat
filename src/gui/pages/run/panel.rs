@@ -1921,6 +1921,7 @@ fn creature_form(run: &Run, window: &Window, cx: &mut Context<SplatRoot>) -> Any
                 .child(
                     div().key_context("RunField").flex_1().min_w_0().child(
                         kit::TextField::new("run-creature-search", run.ad_hoc.query.clone())
+                            .search()
                             .placeholder("Find or name a creature…")
                             .name("Find or name a creature")
                             .on_change(cx.listener(|root: &mut SplatRoot, words: &str, _, cx| {

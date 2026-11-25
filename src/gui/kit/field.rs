@@ -14,7 +14,7 @@
 //! place in the layout.
 use super::{button::element_name, target};
 use crate::gui::theme::{
-    Density, FOCUS_WIDTH, HAIRLINE_WIDTH, L, RADIUS_CONTROL, READER_MEASURE, Type, TypeExt, XS,
+    Density, FOCUS_WIDTH, HAIRLINE_WIDTH, L, RADIUS_CONTROL, READER_MEASURE, S, Type, TypeExt, XS,
     colors,
 };
 use gpui::Focusable as _;
@@ -177,6 +177,7 @@ pub struct TextField {
     on_blur: Option<super::OnAct>,
     focus: Option<FocusAt>,
     text_type: Option<Type>,
+    search: bool,
     tight: bool,
     trailing: Option<gpui::AnyElement>,
 }
@@ -197,9 +198,16 @@ impl TextField {
             on_blur: None,
             focus: None,
             text_type: None,
+            search: false,
             tight: false,
             trailing: None,
         }
+    }
+
+    /// A search field (egui's `search_box`): the magnifier in muted at its left, then the words.
+    pub fn search(mut self) -> Self {
+        self.search = true;
+        self
     }
 
     /// Only the frame's own padding round the words, as egui's number fields had: a narrow
@@ -358,7 +366,19 @@ impl RenderOnce for TextField {
             element = element.mask_toggle();
         }
         let enter = self.on_enter.clone();
-        let mut frame = frame(focused, height).ty(ty).text_color(colors().text);
+        let mut frame = frame(focused, height)
+            .ty(ty)
+            .text_color(colors().text)
+            .when(self.search, |frame| {
+                frame.child(
+                    div()
+                        .flex_none()
+                        .pl(S - XS)
+                        .icon_font(ty)
+                        .text_color(colors().muted)
+                        .child(SharedString::new_static(crate::gui::icons::SEARCH)),
+                )
+            });
         frame = match self.trailing {
             Some(trailing) => frame
                 .child(div().flex_1().min_w_0().child(element))
@@ -553,7 +573,8 @@ impl TextEditor {
 
     /// The words are Markdown source (a note): styled where they are typed, as the Reader sets
     /// them, with a rule under each section heading (`kit::markdown_source`). Every character
-    /// stays, markup included.
+    /// stays, markup included. Its words are `Prose` (the body serif at reading size, with
+    /// italics) unless `text_type` says otherwise.
     pub fn markdown_source(mut self) -> Self {
         self.markdown = true;
         self
@@ -565,7 +586,7 @@ impl TextEditor {
         self
     }
 
-    /// The words' type (default `Body`, or `Mono` with `mono`): `Prose` for a note's prose.
+    /// The words' type (default `Body`; `Mono` with `mono`; `Prose` with `markdown_source`).
     pub fn text_type(mut self, ty: Type) -> Self {
         self.ty = Some(ty);
         self
@@ -643,9 +664,13 @@ impl RenderOnce for TextEditor {
             window.focus(&handle, cx);
         }
         let focused = input.read(cx).focus_handle(cx).is_focused(window);
-        let ty = self
-            .ty
-            .unwrap_or(if self.mono { Type::Mono } else { Type::Body });
+        let ty = self.ty.unwrap_or(if self.mono {
+            Type::Mono
+        } else if self.markdown {
+            Type::Prose
+        } else {
+            Type::Body
+        });
         let name = self
             .name
             .clone()
@@ -666,14 +691,11 @@ impl RenderOnce for TextEditor {
                     .when(!self.fill, |area| {
                         area.min_h(ty.line() * self.rows as f32 - FOCUS_WIDTH * 2.0)
                     });
-                // gpui-component sets its own small size; a chosen type replaces it.
-                match self.ty {
-                    Some(ty) => area
-                        .text_size(ty.size())
-                        .line_height(ty.line())
-                        .font_family(ty.family()),
-                    None => area,
-                }
+                // gpui-component sets its own small size and line; the editor's type replaces
+                // them always, as egui's editors drew in their type.
+                area.text_size(ty.size())
+                    .line_height(ty.line())
+                    .font_family(ty.family())
             });
         if self.fill {
             frame = frame.h_full();

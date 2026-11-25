@@ -514,6 +514,20 @@ fn session_recording_states() {
             .any(|name| name.starts_with("Process")),
         "the recording offers Process"
     );
+    // The notice's Dismiss sits at the right end of its line, as egui's did, not on a line of
+    // its own under the words.
+    let process = crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with("Process"))
+        .and_then(|name| shell.bounds(&name))
+        .expect("Process");
+    let dismiss = shell
+        .bounds(crate::design::outcome::DISMISS_NAME)
+        .expect("the notice's Dismiss");
+    assert!(
+        dismiss.left() > process.right() + crate::gui::theme::LIST_MEASURE / 2.0,
+        "the Dismiss {dismiss:?} is at the line's right end, far right of Process {process:?}"
+    );
     capture(
         &mut shell,
         "session-recording__16-recording-ready__1200x800",

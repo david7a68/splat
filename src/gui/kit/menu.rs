@@ -423,6 +423,7 @@ pub struct Dropdown {
     locks: Vec<(usize, SharedString)>,
     locked_look: bool,
     focus: bool,
+    small: bool,
     on_select: Option<super::OnIndex>,
 }
 
@@ -447,8 +448,16 @@ impl Dropdown {
             locks: Vec::new(),
             locked_look: false,
             focus: false,
+            small: false,
             on_select: None,
         }
+    }
+
+    /// Its words in `Small` (the rail's campaign switcher, two lines of a long name); by
+    /// default they are `Body`, as a text field's are (egui's `value_font`).
+    pub fn small(mut self) -> Self {
+        self.small = true;
+        self
     }
 
     /// The choices from `index` on start a new group, under a rule (`Everything` apart from
@@ -566,14 +575,15 @@ impl RenderOnce for Dropdown {
             .focus_visible(|s| s.border(FOCUS_WIDTH).border_color(c.focus))
             .aria_label(self.name.clone())
             .aria_expanded(open)
-            .child(
+            .child(target(
                 div()
                     .flex_1()
                     .min_w_0()
-                    .ty(Type::Small)
+                    .ty(if self.small { Type::Small } else { Type::Body })
                     .text_color(words_color)
                     .child(words.clone()),
-            )
+                format!("{} value", self.name),
+            ))
             .child({
                 let locked = !enabled && self.locked_look;
                 div()

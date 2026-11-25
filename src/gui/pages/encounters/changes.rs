@@ -474,6 +474,7 @@ pub(super) fn replacement(
             ElementId::Name(format!("replacement-search:{key}").into()),
             query,
         )
+        .search()
         .name("Replacement creature")
         .placeholder("Choose another creature…")
         .on_change(
