@@ -57,9 +57,9 @@ pub struct State {
     /// The entry list's row count and the open entry's row, as the list drew them.
     pub(super) list_rows: usize,
     pub(super) list_selected: Option<usize>,
-    /// The New entry folder field's suggestions, read when its menu opens and kept while it
-    /// stays open, for one root and kind (`catalogue::folder_suggestions`).
-    pub(super) folders: Option<(std::path::PathBuf, String, Arc<Vec<String>>)>,
+    /// A folder field's suggestions (`forms::folder_combo`): the field whose menu is open, and
+    /// the folders read when it opened, kept while it stays open, for one root and kind.
+    pub(super) folders: Option<(&'static str, std::path::PathBuf, String, Arc<Vec<String>>)>,
     /// The Markdown editor's state, by the file it edits, so the page can place its caret.
     pub(super) editor: Option<(String, kit::EditorHandle)>,
     /// The comparison's aligned rows, by the two texts (`design::comparison_rows`), and the

@@ -261,6 +261,17 @@ fn library_author() {
     // The menu lists the folders whose names hold the field's words, so the field is emptied
     // first (it starts at the kind's folder).
     std::fs::create_dir_all(package_folder(&mut shell).join("Beasts/Ash")).unwrap();
+    // An editable combo (egui's `folder_field`): its chevron is inside the field's frame.
+    let field = shell
+        .bounds("id:library-new-folder")
+        .expect("the Folder field");
+    let chevron = shell
+        .bounds("Suggestions for Folder")
+        .expect("the Folder's chevron");
+    assert!(
+        field.contains(&chevron.center()) && chevron.right() <= field.right(),
+        "the chevron {chevron:?} is inside the Folder field {field:?}"
+    );
     shell.click("id:library-new-folder");
     shell.press("ctrl-a backspace");
     shell.click("Suggestions for Folder");
