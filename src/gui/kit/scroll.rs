@@ -1,6 +1,7 @@
 //! A vertical scroll column (`design::ScrollColumn`): it keeps the scroll bar's lane whether or not
-//! the bar shows, so nothing moves when the bar comes. The bar is gpui-component's, coloured by the
-//! theme (`theme::install`). No scroll the app makes is animated (R43).
+//! the bar shows, so nothing moves when the bar comes. The bar is gpui-component's, coloured and
+//! sized by the theme (`theme::install`): its track and thumb are `SCROLL_BAR_WIDTH` wide, the
+//! lane's width, so the bar never paints over the content beside it. No scroll the app makes is animated (R43).
 //!
 //! Use `scroll_column` for a pane's body; give it a `ScrollHandle` you keep (in the page's GPUI
 //! state) with `scroll_column_with` when the page scrolls it itself (a reveal, a jump to a row).
@@ -10,11 +11,6 @@ use gpui::{
     StatefulInteractiveElement, Styled, div,
 };
 use gpui_component::scroll::ScrollableElement;
-
-/// The width of the bar's track at the column's right edge (gpui-base's scrollbar). The track
-/// paints the page colour over whatever is under it, so content that must stay whole keeps
-/// this much room from the edge; the lane keeps only `SCROLL_BAR_WIDTH` of it.
-pub const TRACK_WIDTH: gpui::Pixels = gpui::px(16.0);
 
 /// A column that fills its parent and scrolls its `content` up and down.
 pub fn scroll_column(id: impl Into<ElementId>, content: impl IntoElement) -> impl IntoElement {

@@ -4,7 +4,7 @@ use super::gallery::Gallery;
 use super::harness::Shell;
 use crate::fixtures::Seed;
 use crate::{Page, SettingsTab};
-use gpui::{point, px, size};
+use gpui::{Pixels, point, px, size};
 
 /// The shell over a campaign at the default size and at the smallest window.
 #[test]
@@ -445,6 +445,64 @@ fn a_menu_keeps_inside_its_pane() {
         );
         assert!(bounds.right() <= right, "{item} keeps inside the pane");
     }
+}
+
+/// A scroll bar paints only inside the lane its column keeps (`SCROLL_BAR_WIDTH`, egui's solid
+/// 8 px bar): the content's right edge beside it stays whole, and the thumb fills the lane.
+#[test]
+fn a_scroll_bar_paints_inside_its_lane() {
+    use super::kit::Pane;
+    use gpui::{IntoElement, ParentElement, Styled};
+    let mut shell = Shell::new("gpui-scroll-lane", Seed::Campaign);
+    let fill = super::theme::colors().focus;
+    shell.update(move |root, _, cx| {
+        root.pages.reader.preview = Some(std::rc::Rc::new(move |_, _, _| {
+            gpui::div()
+                .flex()
+                .flex_row()
+                .size_full()
+                .child(gpui::div().flex_1())
+                .child(
+                    gpui::div().w(px(300.0)).h_full().child(
+                        Pane::new("lane-pane").child(super::kit::target(
+                            gpui::div().w_full().h(px(3000.0)).bg(fill),
+                            "lane-content",
+                        )),
+                    ),
+                )
+                .into_any_element()
+        }));
+        cx.notify();
+    });
+    let content = shell.bounds("lane-content").expect("the pane's content");
+    let path = shell.capture("gpui-scroll-lane__01-bar-in-lane__1200x800");
+    let picture = image::open(&path).expect("the capture").to_rgba8();
+    let pixel = |x: Pixels| {
+        let rgba = picture.get_pixel(
+            f32::from(x) as u32,
+            f32::from(content.top() + px(100.0)) as u32,
+        );
+        [rgba[0], rgba[1], rgba[2]].map(i32::from)
+    };
+    let rgb = |color: gpui::Hsla| {
+        let rgba = gpui::Rgba::from(color);
+        [rgba.r, rgba.g, rgba.b].map(|channel| (channel * 255.0).round() as i32)
+    };
+    let near = |a: [i32; 3], b: [i32; 3]| (0..3).all(|at| (a[at] - b[at]).abs() <= 8);
+    for inside in 1..=4 {
+        let x = content.right() - px(inside as f32);
+        assert!(
+            near(pixel(x), rgb(fill)),
+            "the content's edge at {x:?} is whole, not under the bar: {:?}",
+            pixel(x)
+        );
+    }
+    let thumb = content.right() + super::theme::SCROLL_BAR_WIDTH / 2.0;
+    assert!(
+        near(pixel(thumb), rgb(super::theme::colors().rule)),
+        "the thumb fills the lane at {thumb:?}: {:?}",
+        pixel(thumb)
+    );
 }
 
 /// Ctrl+S has one owner (`SplatRoot::save`): with drafts open on two pages, it saves only the
