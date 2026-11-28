@@ -19,15 +19,9 @@ fn wait_for_fights(shell: &mut Shell) {
     );
 }
 
-/// A capture as the egui driver took it (`finish_capture_saves`): the note, the template and the
-/// Timeline are saved first, since test builds save only when told to, so the header says what
-/// the DM sees once the save timer has run, never a held "Saving…".
+/// A capture (`Shell::capture` saves the note, the template and the Timeline first, as egui's
+/// driver did).
 pub(crate) fn capture(shell: &mut Shell, name: &str) -> std::path::PathBuf {
-    shell.update(|root, _, cx| {
-        root.app.sessions.flush();
-        root.app.timeline.save();
-        cx.notify();
-    });
     shell.capture(name)
 }
 

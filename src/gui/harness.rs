@@ -474,9 +474,16 @@ impl Shell {
         self.settle();
     }
 
-    /// Render the window and write it to `artifacts/screenshots/gpui/<name>.png`.
+    /// Render the window and write it to `artifacts/screenshots/gpui/<name>.png`. The session
+    /// note, the template and the Timeline are saved first, as egui's driver did before every
+    /// capture (`finish_capture_saves`): test builds save only when told to, so the capture shows
+    /// what the DM sees once the save timer has run, never a held "Saving…".
     pub(crate) fn capture(&mut self, name: &str) -> PathBuf {
-        self.settle();
+        self.update(|root, _, cx| {
+            root.app.sessions.flush();
+            root.app.timeline.save();
+            cx.notify();
+        });
         let image = self
             .cx
             .capture_screenshot(self.window)
