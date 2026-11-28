@@ -807,6 +807,12 @@ impl Render for SplatRoot {
             .id("splat-root")
             .key_context("SplatRoot")
             .track_focus(&self.focus)
+            // The first key listener on every focus path, and an empty one: when an interceptor
+            // stops a key (the root's Escape, `watch_keys`), GPUI still calls the first key
+            // listener of the path once before it looks at the stop (`dispatch_key_down_up_event`).
+            // Without this one, that call went to a part's own key listener: a dialog's frame
+            // closed the dialog on the Escape that had closed its drop-down.
+            .capture_key_down(|_, _, _| {})
             .on_action(cx.listener(Self::toggle_lookup))
             .on_action(cx.listener(Self::toggle_notes))
             .on_action(cx.listener(Self::toggle_trackers))

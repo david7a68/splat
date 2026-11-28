@@ -945,6 +945,30 @@ fn dialogs() {
     shell.click("Destination");
     shell.click("id:copy-destination-choice-1");
     assert_eq!(destination(&mut shell), first);
+    // Escape with the drop-down open closes only the drop-down; a second Escape is the
+    // dialog's safe action (egui's popup took the first Escape).
+    let menu_open = |shell: &mut Shell| shell.update(|_, _, cx| super::kit::menu::any_open(cx));
+    let dialog_open = |shell: &mut Shell| shell.read(|root| root.app.copy_dialog.is_some());
+    shell.click("Destination");
+    assert!(menu_open(&mut shell), "the destination list is open");
+    shell.press("escape");
+    assert!(!menu_open(&mut shell), "Escape closed the list");
+    assert!(dialog_open(&mut shell), "and not the dialog");
+    shell.click("Suggestions for Folder");
+    assert!(menu_open(&mut shell), "the Folder's menu is open");
+    shell.press("escape");
+    assert!(!menu_open(&mut shell), "Escape closed it");
+    assert!(dialog_open(&mut shell), "and not the dialog");
+    shell.press("escape");
+    assert!(!dialog_open(&mut shell), "the second Escape closes the dialog");
+    shell.click("Copy to…");
+    wait_for(&mut shell, "the copy plan", |root| {
+        root.app
+            .copy_dialog
+            .as_ref()
+            .is_some_and(|dialog| dialog.plan().is_some())
+    });
+    assert_eq!(destination(&mut shell), first);
     shell.click("Copy name");
     shell.press("ctrl-a");
     shell.type_text("Watch Aboleth");

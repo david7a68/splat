@@ -143,7 +143,9 @@ impl RenderOnce for Dialog {
         }
         let viewport = window.viewport_size();
         let width = (viewport.width - DIALOG_INSET * 2.0).min(FORM_WIDTH);
-        let escape = self.on_escape.clone();
+        // Escape reaches the dialog through the root's order only (`escape_open_dialog`), after an
+        // open menu: a listener of its own would also close it on the Escape that closed the
+        // menu.
         cx.set_global(OpenDialog(
             self.on_escape
                 .clone()
@@ -183,14 +185,6 @@ impl RenderOnce for Dialog {
             .border_color(c.rule)
             .rounded(RADIUS_LAYER)
             .shadow_lg()
-            .capture_key_down(move |event, window, cx| {
-                if event.keystroke.key == "escape"
-                    && let Some(escape) = &escape
-                {
-                    escape(window, cx);
-                    cx.stop_propagation();
-                }
-            })
             .child(super::text::text(Type::Section, c.text, self.title.clone()))
             .child(
                 div()
