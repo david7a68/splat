@@ -6031,6 +6031,122 @@ mod tests {
         assert!(sessions.form.is_none(), "back in A, the form is not B's");
     }
 
+    /// A folder move's result is its campaign's (ported from egui's
+    /// `a_folder_move_result_is_its_campaigns_over_a_switch_and_a_lost_folder`, on the block's
+    /// plain lines): A → B → A shows each campaign its own result; a lost folder of A ends A's
+    /// result alone and says why; the folder back, the ended result stays ended.
+    #[test]
+    fn a_folder_move_result_is_its_campaigns_over_a_switch_and_a_lost_folder() {
+        let dirs = [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()];
+        let [a, b] = [0, 1].map(|at| {
+            let campaign = Campaign {
+                id: Uuid::from_u128(at + 1),
+                name: format!("Campaign {at}"),
+                path: dirs[at as usize].path().into(),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            };
+            crate::content_workspace::CampaignDocument::new(&campaign)
+                .unwrap()
+                .save()
+                .unwrap();
+            let folder = super::super::open_folder(&campaign).unwrap();
+            if at == 0 {
+                fs::create_dir_all(folder.join(super::super::TEMPLATES)).unwrap();
+                fs::write(folder.join(super::super::TEMPLATES).join("One.md"), "One").unwrap();
+            }
+            create_note(
+                &folder,
+                &NewNote {
+                    number: 1,
+                    title: "One",
+                    date: "2026-11-01",
+                    campaign: &campaign.name,
+                    template: "",
+                },
+            )
+            .unwrap();
+            campaign
+        });
+        const A_MOVED: &str = "Moved 1 note and 1 template to Moved A.";
+        const B_MOVED: &str = "Moved 1 note to Moved B.";
+        const MISSING: &str = "Splat cannot find the session folder ";
+        let ctx = StateContext::new();
+        let mut book = Book::default();
+        let mut sessions = Sessions::default();
+        let shows = |sessions: &mut Sessions, book: &Book, words: &str| {
+            sessions
+                .folder_lines(book, false)
+                .iter()
+                .any(|line| line.words.contains(words))
+        };
+        let move_to = |sessions: &mut Sessions, book: &Book, typed: &str| {
+            sessions.set_folder_text(typed);
+            sessions.folder_act(book, FolderAct::Move);
+        };
+        sessions.poll(&ctx, Some(&a), &mut book);
+        move_to(&mut sessions, &book, "Moved A");
+        assert!(
+            shows(&mut sessions, &book, A_MOVED),
+            "the move in A says what it moved"
+        );
+        sessions.poll(&ctx, Some(&b), &mut book);
+        assert!(
+            !shows(&mut sessions, &book, A_MOVED),
+            "the page of B does not show the result of A"
+        );
+        move_to(&mut sessions, &book, "Moved B");
+        assert!(
+            shows(&mut sessions, &book, B_MOVED),
+            "the move in B says what it moved"
+        );
+        sessions.poll(&ctx, Some(&a), &mut book);
+        assert!(
+            shows(&mut sessions, &book, A_MOVED) && !shows(&mut sessions, &book, B_MOVED),
+            "the result of A came back with A, and the result of B stays with B"
+        );
+        // The folder of A is moved away outside Splat: the disk scan ends the result of A and
+        // says why; the folder back, the next scan ends the fault, and the result stays ended.
+        let moved_a = a.path.join("Moved A");
+        let aside = a.path.join("Kept aside");
+        fs::rename(&moved_a, &aside).unwrap();
+        sessions.refresh();
+        assert!(
+            !shows(&mut sessions, &book, A_MOVED),
+            "the result of A ends with its folder"
+        );
+        assert!(
+            shows(&mut sessions, &book, MISSING),
+            "the missing folder is a sentence"
+        );
+        assert!(sessions.folder_missing());
+        fs::rename(&aside, &moved_a).unwrap();
+        sessions.refresh();
+        assert!(
+            !shows(&mut sessions, &book, MISSING) && !shows(&mut sessions, &book, A_MOVED),
+            "the folder is back by the scan, and the ended result stays ended"
+        );
+        // Gone again, then a switch to B and back: the result of B stays, and the folder of A,
+        // back before the return, opens with no fault.
+        move_to(&mut sessions, &book, "Moved A2");
+        const A2_MOVED: &str = "Moved 1 note and 1 template to Moved A2.";
+        assert!(shows(&mut sessions, &book, A2_MOVED));
+        let moved_a2 = a.path.join("Moved A2");
+        fs::rename(&moved_a2, &aside).unwrap();
+        sessions.refresh();
+        sessions.poll(&ctx, Some(&b), &mut book);
+        assert!(
+            shows(&mut sessions, &book, B_MOVED),
+            "the result of B stays over the lost folder of A"
+        );
+        fs::rename(&aside, &moved_a2).unwrap();
+        sessions.poll(&ctx, Some(&a), &mut book);
+        assert!(
+            !shows(&mut sessions, &book, MISSING) && !shows(&mut sessions, &book, A2_MOVED),
+            "the folder is back by the switch, and the ended result stays ended"
+        );
+    }
+
     /// The run moved to this session keeps `Undo move <run>` in the page's footer, owned by this
     /// campaign's page: its Undo puts the event back, and an edit of the note or a change to the
     /// Timeline ends it, in the plain footer lines.

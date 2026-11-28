@@ -84,7 +84,7 @@ pub(super) fn render(
     column = column.child(details);
     if root.app.campaigns.editing().is_some() {
         column = column.child(kit::gap(S));
-        column = column.child(campaign_list::details_form(root, true, cx));
+        column = column.child(campaign_list::details_form(root, true, lock, cx));
     }
     let mut pane = Pane::new("campaign-link").flush().child(column);
     for line in settings::footer("campaign-link-footer", lines, cx) {

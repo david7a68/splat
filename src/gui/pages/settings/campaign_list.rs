@@ -176,7 +176,7 @@ pub(super) fn list(
                 .child(actions),
         );
         if editing == Some(campaign_id) {
-            column = column.child(details_form(root, true, cx));
+            column = column.child(details_form(root, true, unwritable, cx));
         }
         column = column.child(kit::rule());
     }
@@ -234,7 +234,7 @@ fn add_section(
 ) -> AnyElement {
     if root.app.campaigns.all().is_empty() {
         root.app.campaigns.set_form_open(true);
-        return add_form(root, true, cx);
+        return add_form(root, true, unwritable, cx);
     }
     // The name field's request for the keyboard opens the section.
     if root.app.campaigns.take_focus_name() {
@@ -253,17 +253,19 @@ fn add_section(
             cx.notify();
         }));
     if open {
-        section = section.child(add_form(root, true, cx));
+        section = section.child(add_form(root, true, unwritable, cx));
     }
     section.into_any_element()
 }
 
 /// The add form (and the import form, for the remote campaign it adds): the name, the folder
 /// with Browse… and Add campaign on its line, the folder's help, then a kept line with Cancel,
-/// the folder Splat will create and the reason Add waits.
+/// the folder Splat will create and the reason Add waits. While a campaign change is blocked
+/// (`locked`), Add waits with that reason, as egui's `design::locked` list did.
 pub(crate) fn add_form(
     root: &mut SplatRoot,
     primary: bool,
+    locked: Option<&'static str>,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
@@ -296,7 +298,7 @@ pub(crate) fn add_form(
     } else {
         Button::secondary("campaign-add", "Add campaign")
     }
-    .blocked(reason)
+    .blocked(locked.or(reason))
     .on_click(cx.listener(|root, _, _, cx| {
         commit(root);
         cx.notify();
@@ -326,7 +328,7 @@ pub(crate) fn add_form(
             format!("Will create {preview}"),
         ));
     }
-    if let Some(reason) = reason {
+    if let Some(reason) = locked.or(reason) {
         kept = kept.child(kit::text(Type::Small, c.muted, reason));
     }
     div()
@@ -358,9 +360,16 @@ pub(crate) fn add_form(
         .into_any_element()
 }
 
+/// The lock of the campaign list's acts (`Campaigns::list_lock`): a blocked campaign change, or
+/// settings that cannot be written. Each act that can change the active campaign checks it when
+/// it runs, so a form opened before the block cannot commit under it.
+fn list_lock(root: &SplatRoot) -> Option<&'static str> {
+    root.app.campaigns.list_lock(root.app.blocked_switch())
+}
+
 /// Add campaign or Save details: a new campaign's form closes.
 fn commit(root: &mut SplatRoot) {
-    if root.app.campaigns.form_reason_words().is_some() {
+    if root.app.campaigns.form_reason_words().is_some() || list_lock(root).is_some() {
         return;
     }
     if root.app.campaigns.commit_form() {
@@ -370,9 +379,11 @@ fn commit(root: &mut SplatRoot) {
 
 /// The details form of the campaign being edited: its name, its folder with Browse…, the
 /// folder's help, then a save row (its state and Discard or Cancel; Save details at the right).
+/// While a campaign change is blocked (`locked`), Save details waits with that reason.
 pub(crate) fn details_form(
     root: &mut SplatRoot,
     primary: bool,
+    locked: Option<&'static str>,
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     let c = colors();
@@ -422,7 +433,7 @@ pub(crate) fn details_form(
     } else {
         Button::secondary("campaign-details-save", "Save details")
     }
-    .blocked(reason)
+    .blocked(locked.or(reason))
     .on_click(cx.listener(|root, _, _, cx| {
         commit(root);
         cx.notify();
@@ -469,8 +480,8 @@ pub(crate) fn details_form(
                 .child(undo)
                 .child(div().flex_1())
                 .children(
-                    reason
-                        .filter(|_| !unchanged)
+                    locked
+                        .or(reason.filter(|_| !unchanged))
                         .map(|words| kit::text(Type::Small, c.muted, words)),
                 )
                 .child(save),
@@ -490,9 +501,11 @@ pub(crate) fn form_error_inline(
         let (name, _) = root.app.campaigns.form_words();
         message = message.action(
             Button::secondary("campaign-register-new", "Register as a new campaign")
-                .blocked(name.trim().is_empty().then_some("Type a name first."))
+                .blocked(list_lock(root).or(name.trim().is_empty().then_some("Type a name first.")))
                 .on_click(cx.listener(|root, _, _, cx| {
-                    root.app.campaigns.register_copy_now();
+                    if list_lock(root).is_none() {
+                        root.app.campaigns.register_copy_now();
+                    }
                     cx.notify();
                 })),
         );
@@ -637,15 +650,18 @@ fn import(
             row = row.child(
                 Button::secondary(("ddb-add", at), "Add…")
                     .name(format!("Add {name} from D&D Beyond"))
+                    .blocked(unwritable)
                     .on_click(cx.listener(move |root, _, _, cx| {
-                        root.app.campaigns.begin_import(&remote, &remote_name);
+                        if list_lock(root).is_none() {
+                            root.app.campaigns.begin_import(&remote, &remote_name);
+                        }
                         cx.notify();
                     })),
             );
         }
         section = section.child(row);
         if importing {
-            section = section.child(add_form(root, true, cx));
+            section = section.child(add_form(root, true, unwritable, cx));
         }
     }
     section.into_any_element()

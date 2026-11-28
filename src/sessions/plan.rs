@@ -535,8 +535,6 @@ pub(super) struct PlanProjection {
     /// Each scene's line among the model's lines, at each place (before each planned fight and
     /// after the last).
     pub(super) scenes: Vec<Vec<usize>>,
-    /// The place a row stands at before each model line, and after the last.
-    pub(super) line_place: Vec<(usize, usize)>,
     pub(super) scene_count: usize,
     /// The groups the note links that are not fights, by their place in `Plan::groups`.
     pub(super) planned_groups: Vec<usize>,
@@ -565,11 +563,7 @@ impl PlanProjection {
         }
         let mut planned = Vec::new();
         let mut scenes: Vec<Vec<usize>> = vec![Vec::new()];
-        let mut line_place = Vec::with_capacity(model.lines.len() + 1);
-        let place_now =
-            |scenes: &Vec<Vec<usize>>| (scenes.len() - 1, scenes.last().map_or(0, Vec::len));
         for (at, line) in model.lines.iter().enumerate() {
-            line_place.push(place_now(&scenes));
             match line {
                 ModelLine::Scene(_) => scenes
                     .last_mut()
@@ -594,7 +588,6 @@ impl PlanProjection {
                 }
             }
         }
-        line_place.push(place_now(&scenes));
         let planned_groups = linked_names(body)
             .iter()
             .filter(|name| {
@@ -638,7 +631,6 @@ impl PlanProjection {
             model,
             planned,
             scenes,
-            line_place,
             planned_groups,
             planned_results,
         }
@@ -654,8 +646,9 @@ pub enum Place {
     Footer,
 }
 
-/// Where each scene result shows in this frame, decided once before anything is drawn
-/// (`Sessions::shown_at`).
+/// Where each scene result shows in this frame, decided once before anything is drawn. The GPUI
+/// plan draws no message among its rows or under the Scene field, so each is `Footer`
+/// (`gv_plan_footer`).
 #[derive(Clone, Copy, Default)]
 pub(super) struct Shown {
     pub(super) added: Option<Place>,
@@ -668,7 +661,6 @@ pub(super) struct Shown {
 pub(super) struct Fault {
     pub(super) what: SceneFault,
     pub(super) met: String,
-    pub(super) place: Place,
     /// The act waits in the draft: its words end when the note is saved.
     pub(super) waits: bool,
 }
@@ -2954,21 +2946,6 @@ impl Sessions {
         messages
     }
 
-    /// Where a scene act's words show, decided as they are shown: at the act's own place while
-    /// that place is drawn (the open Scene field, or a row's place among the shown scenes), else
-    /// in the plan's footer. Words never go to a place that is not drawn. `rows` are the scenes
-    /// at each place, or `None` while they fold.
-    pub(super) fn shown_at(&self, place: Place, rows: Option<&[Vec<usize>]>) -> Place {
-        let drawn = match place {
-            Place::Field => self.scenes.field.is_some(),
-            Place::Row((position, at)) => {
-                rows.is_some_and(|rows| rows.get(position).is_some_and(|row| at <= row.len()))
-            }
-            Place::Footer => true,
-        };
-        if drawn { place } else { Place::Footer }
-    }
-
     /// Keep what a frame measured for the next frame's fold. Folded scenes keep the height they
     /// had when last shown. Returns whether the fold changes in the next frame, which is then
     /// due at once.
@@ -3097,9 +3074,8 @@ impl Sessions {
         Arc::clone(cache.model.as_ref().expect("the model was just built"))
     }
 
-    /// The scenes' results whose own place is not drawn, in the plan's message footer
-    /// (`shown_at`): the Scene field's once it closes, a row's while the scenes fold, and a
-    /// removal whose row's place is gone. The Undo stays the note's, so it stays in reach.
+    /// The scenes' results shown in the plan's message footer (`Shown`). The Undo stays the
+    /// note's, so it stays in reach.
     fn scene_messages<'f>(
         &self,
         frame: &'f PaneFrame,
@@ -3178,7 +3154,7 @@ impl Sessions {
             )
         };
         use design::results::FailedAct;
-        let (result, place, failed) = match act {
+        let (result, failed) = match act {
             SceneAct::StartFight(_) | SceneAct::AddToLog(..) => return,
             SceneAct::Add(words) => {
                 let result = draft.apply(note, Apply::Now, |text| Some(add_scene(text, &words)));
@@ -3195,9 +3171,9 @@ impl Sessions {
                         field.focus = true;
                     }
                 }
-                (result.map(drop), Place::Field, (failed, false))
+                (result.map(drop), (failed, false))
             }
-            SceneAct::Tick(slot, task) => {
+            SceneAct::Tick(_, task) => {
                 let what = scene(&plain_links(&task.words));
                 let within = within.clone();
                 let failed = if task.done {
@@ -3213,9 +3189,9 @@ impl Sessions {
                         Some(&ticked(&task.line, !task.done)),
                     )
                 });
-                (result.map(drop), Place::Row(slot), (failed, false))
+                (result.map(drop), (failed, false))
             }
-            SceneAct::Remove(slot, line, task) => {
+            SceneAct::Remove(_, line, task) => {
                 let result = draft.apply(note, Apply::Now, |text| {
                     change_line(text, task.at, &task.line, None)
                 });
@@ -3227,12 +3203,11 @@ impl Sessions {
                     scenes.removed = Some((line, plain_links(&task.words), undo.clone()));
                     Self::mark_plan(marks, folder, PlanKind::SceneRemoved);
                 }
-                (result.map(drop), Place::Row(slot), (failed, false))
+                (result.map(drop), (failed, false))
             }
             // The Undo of an add takes the scene back out of the note.
             SceneAct::UndoAdd => (
                 scenes.added.take().map_or(Ok(()), |undo| undo.undo(draft)),
-                Place::Field,
                 (
                     FailedAct::NotRemoved {
                         what: scene(&scenes.added_words),
@@ -3241,7 +3216,7 @@ impl Sessions {
                     true,
                 ),
             ),
-            SceneAct::UndoRemove(place) => {
+            SceneAct::UndoRemove(_) => {
                 let removed = scenes.removed.take();
                 let failed = FailedAct::NotPutBack {
                     what: scene(removed.as_ref().map_or("", |(_, words, _)| words.as_str())),
@@ -3249,7 +3224,6 @@ impl Sessions {
                 };
                 (
                     removed.map_or(Ok(()), |(_, _, undo)| undo.undo(draft)),
-                    place,
                     (failed, true),
                 )
             }
@@ -3268,7 +3242,6 @@ impl Sessions {
             };
             scenes.fault = Some(Fault {
                 met: draft.body.as_str().to_owned(),
-                place,
                 waits: matches!(what, SceneFault::NotSaved),
                 what,
             });
@@ -5286,6 +5259,175 @@ mod tests {
             None,
             "the open run is not resumed"
         );
+    }
+
+    /// `Add rewards` and its Undo are note acts (ported from egui's
+    /// `rewards_are_a_note_act_with_their_own_undo`): an edit on disk a moment before stays,
+    /// each add writes its block under `Loot and rewards` and asks the note to show it, and the
+    /// footer's Undo of A takes back A's block alone while B's stays.
+    #[test]
+    fn rewards_are_a_note_act_with_their_own_undo() {
+        // The run writer is the app's (`src/encounter_run.rs`), reached here through Encounters.
+        use crate::sessions::{NewNote, create_note};
+        use splat_encounters_ui::encounter_run::{Participant, write_ended_run_with};
+        let root = tempfile::tempdir().unwrap();
+        let (sessions, runs) = (root.path().join("Sessions"), root.path().join("Runs"));
+        fs::create_dir_all(&sessions).unwrap();
+        let campaign = Uuid::new_v4();
+        let creature = |name: &str, cr: &str| {
+            let fields = format!(
+                "splat_id: {}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{type: beast, cr_text: \"{cr}\"}}\nsplat_stats:\n  max_hp: {{value: 11}}\n  armor_class: {{value: 13}}\n",
+                Uuid::new_v4()
+            );
+            let text =
+                splat::content::formats::fixture("Fixture.md", &fields, "\n## Actions\nBite.\n");
+            splat::content::Entry::parse("creature.md", &text.unwrap()).unwrap()
+        };
+        let joined = |key: &str, entry| {
+            Participant::new(
+                key.into(),
+                "enemies".into(),
+                entry,
+                &serde_yaml_ng::Mapping::new(),
+                true,
+            )
+            .unwrap()
+        };
+        // Each fight ends with its first creature at 0 HP, as the run file holds it.
+        let ended = |name: &str, details: &str, participants| {
+            let fact =
+                write_ended_run_with(campaign, &runs, name, None, "Won", participants, details)
+                    .unwrap();
+            let path = crate::encounter_run::find_run(&runs, campaign, fact.id).unwrap();
+            let mut saved: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+            saved["state"]["participants"][0]["hp"] = 0.into();
+            fs::write(&path, saved.to_string()).unwrap();
+            fact
+        };
+        let bridge = ended(
+            "Bridge",
+            "# Bridge\n\n## Loot\n\n- 30 gp\n",
+            vec![
+                joined("wolf", creature("Wolf", "1 (XP 200; PB +2)")),
+                joined("wolf2", creature("Wolf", "1 (XP 200; PB +2)")),
+            ],
+        );
+        let shrine = ended(
+            "Shrine",
+            "# Shrine",
+            vec![joined("varra", creature("Captain Varra", ""))],
+        );
+        let note = create_note(
+            &sessions,
+            &NewNote {
+                number: 2,
+                title: "The Crossing",
+                date: "2026-11-01",
+                campaign: "Marches",
+                template: "## What happened\n\n## Loot and rewards\n\n## Open threads\n\n",
+            },
+        )
+        .unwrap();
+        let mut book = Book::default();
+        book.open(Some(&sessions));
+        book.record_run(&bridge, Some(note.id), false);
+        book.record_run(&shrine, Some(note.id), false);
+        let id = |name: &str| {
+            book.events
+                .iter()
+                .find(|event| event.title == name)
+                .unwrap()
+                .id
+                .clone()
+        };
+        let (a, b) = (id("Bridge"), id("Shrine"));
+        let read = || fs::read_to_string(&note.path).unwrap();
+        let mut page = Sessions {
+            selected: Some(note.id),
+            notes: vec![note.clone()],
+            folder: Some(sessions.clone()),
+            draft: Some(Draft::open(&note.path).unwrap()),
+            campaign: Some(crate::persistence::Campaign {
+                id: campaign,
+                name: "Marches".into(),
+                path: root.path().to_owned(),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            }),
+            ..Sessions::default()
+        };
+        let still = crate::design::memo::Revised::new(()).revision();
+        let plan = Plan {
+            fights: &[],
+            saved_runs: &[],
+            saved_runs_revision: still,
+            fights_revision: still,
+            groups: &[],
+            group_blocked: None,
+            group_open: false,
+            group_discard: &|_| None,
+            arrivals_open: false,
+            blocked: None,
+            run_directory: Some(runs.clone()),
+            open_run: None,
+            open_state: String::new(),
+            open_encounter: None,
+            party: &[],
+            tables: &[],
+        };
+        let block_a = format!(
+            "- [[Timeline#^{a}|Bridge]]\n  - XP 200 for 1 at 0 HP · 1 still stood (XP 200)\n  - 30 gp\n"
+        );
+        let block_b = format!(
+            "- [[Timeline#^{b}|Shrine]]\n  - XP 0. XP not known for Captain Varra: enter an award here.\n"
+        );
+        // An edit on disk a moment before is in the words that the act changes.
+        let outside = read().replace("## What happened\n", "## What happened\n\nThe ford held.\n");
+        fs::write(&note.path, &outside).unwrap();
+        page.do_rewards_act(
+            (RewardsAct::Add(a.clone(), bridge.id), None),
+            &mut book,
+            &plan,
+        );
+        let with_a = outside.replace(
+            "## Loot and rewards\n\n",
+            &format!("## Loot and rewards\n\n{block_a}\n"),
+        );
+        assert_eq!(read(), with_a);
+        assert!(
+            page.caret_to_show.is_some(),
+            "the note beside the plan is asked to show the block"
+        );
+        // B: another fight's rewards. A's Undo stays.
+        page.caret_to_show = None;
+        page.do_rewards_act(
+            (RewardsAct::Add(b.clone(), shrine.id), None),
+            &mut book,
+            &plan,
+        );
+        let with_both = with_a.replace(&block_a, &format!("{block_a}{block_b}"));
+        assert_eq!(read(), with_both);
+        let settings = crate::processing::settings::ProcessingSettings::default();
+        let lines = page.gv_plan_footer(&settings, &mut book, &plan, None, false);
+        let undo_of = |words: &str| {
+            lines
+                .iter()
+                .find(|line| line.words.contains(words))
+                .and_then(crate::design::outcome::plain::PlainLine::press_undo)
+                .unwrap_or_else(|| panic!("no Undo for {words:?}"))
+        };
+        let undo_a = undo_of("Rewards for “Bridge”");
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.words.contains("Rewards for “Shrine”")
+                    && line.press_undo().is_some()),
+            "B's result keeps its Undo"
+        );
+        // Undo of A takes back A's block alone; B's stays.
+        page.gv_plan_press(undo_a, &mut book, &plan);
+        assert_eq!(read(), with_both.replace(&block_a, ""));
     }
 
     /// A plan with these saved runs and nothing else, all its revisions `revision`: the

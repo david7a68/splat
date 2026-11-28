@@ -53,7 +53,7 @@ Apply the rules below to the code and checks your trace reaches.
   caller in the same change. Another screen that shows the same thing is also a caller: a list row and its
   pane, a preview and the live view.
 - **A ban is a list, not a proof.** `clippy.toml` holds the paths that a design part replaces (kept results,
-  the save row, checked words). A path that goes around a part and is not listed is found by review: add it in
+  checked words). A path that goes around a part and is not listed is found by review: add it in
   the same PR.
 - **Layout rules that keep getting broken:** every target at least 24 px and clear of splitters; a quiet action
   that starts a line uses `line_start`; choices after a message start at its text, safe first, with exactly

@@ -338,6 +338,51 @@ fn npc_in_lookup() {
             .contains("Owes Nell a favour"),
         "Undo takes the change back"
     );
+    // Ctrl+S goes to the edit form whose fields have the keyboard, Lookup's before the page's
+    // (egui: `main:src/world/edit.rs:1301`, Lookup drawn first). The World page edits the Watch
+    // House, Lookup edits Rook; each has typed words.
+    shell.press("escape");
+    shell.update(|root, _, cx| root.show_page(crate::Page::World, cx));
+    shell.click(&format!("id:world-note-{}", place.as_u128() as u64));
+    shell.click("Edit Watch House");
+    shell.click("Text");
+    shell.press("ctrl-end");
+    shell.type_text(" The lamps stay lit.");
+    shell.press("ctrl-k");
+    shell.type_text("Rook Ambry");
+    assert_eq!(shell.read(entry_name).as_deref(), Some("Rook Ambry"));
+    shell.click("Edit Rook Ambry");
+    // Two Text fields: the page's, then Lookup's.
+    let texts = crate::gui::kit::probe::find_all("Text");
+    assert_eq!(texts.len(), 2, "both forms are open");
+    shell.click_at(texts[1].center());
+    shell.press("ctrl-end");
+    shell.type_text(" Sleeps at the gate.");
+    shell.press("ctrl-s");
+    let house = shell.read(|root| {
+        root.app
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join("Locations/Watch House.md")
+    });
+    assert!(
+        std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("Sleeps at the gate."),
+        "Ctrl+S in Lookup's form saves Lookup's note"
+    );
+    assert!(
+        !std::fs::read_to_string(&house)
+            .unwrap()
+            .contains("The lamps stay lit."),
+        "and not the page's"
+    );
+    assert!(
+        shell.read(|root| root.app.world_page.reader.has_unsaved_edits()),
+        "the page's form keeps its words"
+    );
 }
 
 fn entry_name(root: &crate::gui::SplatRoot) -> Option<String> {

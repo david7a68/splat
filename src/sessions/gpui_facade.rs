@@ -2013,30 +2013,14 @@ impl Sessions {
     ) -> Vec<FooterLine> {
         let session = self.selected;
         let projection = self.plan_projection(book, session, plan, index);
-        let removed_slot = self
-            .scenes
-            .removed
-            .as_ref()
-            .and_then(|(line, ..)| projection.line_place.get(*line).copied());
-        let (folded, _) = self.scene_fold(projection.scene_count);
-        let rows = (!folded).then_some(projection.scenes.as_slice());
+        // This view draws no message among the rows or under the Scene field: each scene
+        // result is in the footer, so its Undo stays in reach (a removal whose line another
+        // scene now has, a tick refused at its row, an add while the field stays open).
+        let footer = |result: bool| result.then_some(super::plan::Place::Footer);
         let shown = super::plan::Shown {
-            added: self
-                .scenes
-                .added
-                .as_ref()
-                .map(|_| self.shown_at(super::plan::Place::Field, rows)),
-            removed: self.scenes.removed.as_ref().map(|_| {
-                self.shown_at(
-                    removed_slot.map_or(super::plan::Place::Footer, super::plan::Place::Row),
-                    rows,
-                )
-            }),
-            fault: self
-                .scenes
-                .fault
-                .as_ref()
-                .map(|fault| self.shown_at(fault.place, rows)),
+            added: footer(self.scenes.added.is_some()),
+            removed: footer(self.scenes.removed.is_some()),
+            fault: footer(self.scenes.fault.is_some()),
         };
         let note = self.gv_selected_note().cloned();
         let page = with_page

@@ -1097,7 +1097,9 @@ fn record(
             "Current HP",
             ElementId::Name(format!("run-correct-hp-{}", p.key).into()),
             p.hp,
+            (0..=1_000_000, false),
             false,
+            window,
             cx,
             move |run, value| {
                 let max = run.state.participants[index].max_hp;
@@ -1108,7 +1110,9 @@ fn record(
             "Maximum HP",
             ElementId::Name(format!("run-correct-max-{}", p.key).into()),
             p.max_hp,
+            (1..=1_000_000, false),
             sheet_decides,
+            window,
             cx,
             move |run, value| {
                 let hp = run.state.participants[index].hp;
@@ -1127,11 +1131,14 @@ fn record(
             false,
         ));
     if run.state.phase == Phase::Setup {
+        // M0169: a modifier, so the signed stepper (`+2`, `−1`; reads `-1` too).
         column = column.child(number_row(
             "Initiative bonus",
             ElementId::Name(format!("run-correct-bonus-{}", p.key).into()),
             p.initiative_bonus,
+            (-1_000..=1_000, true),
             false,
+            window,
             cx,
             move |_, value| Command::Bonus(index, value),
         ));
@@ -1279,46 +1286,95 @@ fn record(
     column.into_any_element()
 }
 
-/// One number of Correct: its label and a field that applies each change as a step.
+/// One value of Correct that may be unknown (`optional_number`): its label, then its value in
+/// the shared stepper (`signed` for a modifier) with `Clear`, or `Unknown` and `Enter` while it
+/// has none. A typed number is one step, on Enter or when the well loses the keyboard; − and +
+/// are a step each.
+#[allow(clippy::too_many_arguments)]
 fn number_row(
     label: &'static str,
     id: ElementId,
     value: Option<i64>,
+    (range, signed): (std::ops::RangeInclusive<i64>, bool),
     locked: bool,
+    window: &gpui::Window,
     cx: &mut Context<SplatRoot>,
     make: impl Fn(&Run, Option<i64>) -> Command + 'static,
 ) -> impl IntoElement {
     let c = colors();
-    div()
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(theme::XS)
-        .child(
-            div()
-                .w(px(110.0))
-                .child(kit::text(Type::Small, c.muted, label)),
-        )
-        .child(
-            div().key_context("RunField").w(px(96.0)).child(
-                kit::TextField::new(id, value.map_or_else(String::new, |n| n.to_string()))
-                    .name(label)
-                    .disabled(locked)
-                    .on_change(
-                        cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                            if let Some(run) = root.app.encounters.run_mut() {
-                                let typed = super::number_text(words);
-                                let parsed = crate::design::parse_signed(&typed);
-                                if typed.is_empty() || parsed.is_some() {
-                                    let command = make(run, parsed);
-                                    run.run_command(command);
-                                }
-                            }
-                            cx.notify();
-                        }),
+    let make = std::rc::Rc::new(make);
+    let set = |to: Option<i64>| {
+        let make = make.clone();
+        move |root: &mut SplatRoot, cx: &mut Context<SplatRoot>| {
+            if let Some(run) = root.app.encounters.run_mut() {
+                let command = make(run, to);
+                run.run_command(command);
+            }
+            cx.notify();
+        }
+    };
+    let row = div().flex().flex_row().items_center().gap(theme::XS).child(
+        div()
+            .w(px(110.0))
+            .child(kit::text(Type::Small, c.muted, label)),
+    );
+    match value {
+        Some(number) => {
+            let start = *range.start();
+            let well = kit::stepper::well_for(
+                window,
+                kit::stepper::digits(number).max(kit::stepper::digits(start)) + 1,
+            );
+            let mut stepper = kit::Stepper::new(id, label, number, range)
+                .well(well)
+                .disabled(locked)
+                .on_enter_or_leave()
+                .on_change({
+                    let make = make.clone();
+                    cx.listener(move |root: &mut SplatRoot, to: &i64, _, cx| {
+                        if let Some(run) = root.app.encounters.run_mut() {
+                            let command = make(run, Some(*to));
+                            run.run_command(command);
+                        }
+                        cx.notify();
+                    })
+                });
+            if signed {
+                stepper = stepper.signed();
+            }
+            let clear = set(None);
+            row.child(div().key_context("RunField").child(stepper))
+                .child(
+                    kit::Button::quiet(
+                        ElementId::NamedChild(
+                            std::sync::Arc::new(ElementId::Name(label.into())),
+                            "clear".into(),
+                        ),
+                        "Clear",
+                    )
+                    .name(format!("Clear {label}"))
+                    .density(Density::Read)
+                    .blocked(locked.then_some(MAX_FROM_SHEET))
+                    .on_click(cx.listener(move |root, _, _, cx| clear(root, cx))),
+                )
+        }
+        None => {
+            let enter = set(Some((*range.start()).max(0)));
+            row.child(kit::text(Type::Small, c.muted, "Unknown")).child(
+                kit::Button::quiet(
+                    ElementId::NamedChild(
+                        std::sync::Arc::new(ElementId::Name(label.into())),
+                        "enter".into(),
                     ),
-            ),
-        )
+                    "Enter",
+                )
+                .name(format!("Enter {label}"))
+                .density(Density::Read)
+                .blocked(locked.then_some(MAX_FROM_SHEET))
+                .on_click(cx.listener(move |root, _, _, cx| enter(root, cx))),
+            )
+        }
+    }
 }
 
 /// A sheet's sync in Correct (`CombatSync::show`): the same sync editor as the Party page's

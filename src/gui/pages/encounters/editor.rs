@@ -1031,20 +1031,21 @@ fn row_form(
         );
         if let Some(value) = value {
             let value_key = key.clone();
+            // The shared stepper, as egui's (`design::stepper`, 0 and up): the well keeps the
+            // DM's words while they type.
             values = values.child(
-                kit::TextField::new(
+                kit::Stepper::new(
                     ElementId::Name(format!("roster-number:{field}:{key}").into()),
-                    value.to_string(),
+                    label,
+                    value,
+                    0..=i64::MAX,
                 )
-                .name(label)
-                .width(px(64.0))
+                .well(px(64.0))
                 .on_change(cx.listener(
-                    move |root: &mut SplatRoot, words: &str, _, cx| {
-                        if let Ok(number) = words.trim().parse::<i64>() {
-                            root.app
-                                .encounters
-                                .edit_draft(|draft| draft.value(&value_key, field, Some(number)));
-                        }
+                    move |root: &mut SplatRoot, number: &i64, _, cx| {
+                        root.app
+                            .encounters
+                            .edit_draft(|draft| draft.value(&value_key, field, Some(*number)));
                         cx.notify();
                     },
                 )),

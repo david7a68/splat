@@ -686,8 +686,8 @@ name)`): no `String` is ever a whole label. When the line is short, every object
 of letters (at least three) with `…`, never the fixed words, and the action is named with the whole words.
 A choice may give shorter forms of itself (`ChoiceWords::or_shorter`): a form gives up a whole part, never
 a piece of one. `clippy.toml` lists the escapes (`Sentence::outside` and the macros' helpers); each use
-carries one reviewed suppression on its innermost function and one counted row
-(`design::results::STAGED`).
+carries one reviewed suppression on its innermost function, counted for its file in
+`src/design/lint_allowlist.txt` (`ban-allow`).
 
 **Undo.** Undo comes first, quiet with its icon, its words at the message's words. Its words are typed
 (`UndoStep`: a `Verb`, an optional object, and the joining word from the verb's table, `Verb::join`), so no
@@ -830,8 +830,8 @@ no rows.
 
 `design::save_row` (`DraftState`, `SaveWord`, `SaveWeight`) decides the state word, Save's weight, why
 Save waits, Discard and the campaign-switch reason. The caller says what is true of the draft. `Ctrl+S`
-follows `DraftState::can_save` through the root's save owner (`design::save_row::save_key`).
-`save_row_state(` calls are counted and can only go down.
+follows `DraftState::can_save` through the root's save owner (`gui::pages::save_key`). The root's `Save`
+binding is the only `Ctrl+S` binding: `design::results::STAGED` counts it, so a page cannot add its own.
 
 A save row keeps its state and quiet `Discard` at the left and `Save` at the right. A draft that Save's own check
 refuses says `Invalid`, changed or not: validity comes before whether the text changed. An encounter draft is
@@ -3550,15 +3550,17 @@ count of effects and the notice line's reminders.
   (`raw-colour`, `raw-size`), raw icon text (`raw-symbol`), a straight apostrophe inside a word of a UI string
   (`straight-apostrophe`), a phrase, fact, HP fraction or sheet label written outside its owner
   (`phrase-owner`, `fact-owner`, `hp-fraction-owner`, `sheet-label-owner`), a control whose label is only an
-  arrow (`arrow-label`), and an alias of a `clippy.toml` ban (`banned-alias`). The shrink-only allowlist is
+  arrow (`arrow-label`), an alias of a `clippy.toml` ban (`banned-alias`), and a suppression of a ban (`ban-allow`, counted for
+  each file; `ban-allow-wide`, on a file, a module, an `impl` or a trait, never allowed). The shrink-only allowlist is
   `src/design/lint_allowlist.txt`: a count above it fails, and a count below it asks you to lower it.
-- `design::results::STAGED` counts the calls that a part replaces (`Outcome::Refused(`, `save_row_state(`,
-  an Undo with no object, …) for each file. The counts can only go down
+- `design::results::STAGED` counts the calls that a part replaces (`Outcome::Refused(`, an Undo with no
+  object, a `Ctrl+S` binding outside the root, …) for each file. The counts can only go down
   (`design::results::tests::staged_calls_only_shrink`).
-- `clippy.toml` lists the paths that a design part replaces (kept results by owner instead of by ticket, the
-  old save row, unchecked sentences and words). `check` runs Clippy with `-D warnings`, so a new call outside
+- `clippy.toml` lists the paths that a design part replaces (kept results by owner instead of by ticket,
+  unchecked sentences and words). `check` runs Clippy with `-D warnings`, so a new call outside
   its owner fails. A function that still calls one carries its own
-  `#[allow(clippy::disallowed_methods, reason = "...")]` on the innermost function, for review.
+  `#[allow(clippy::disallowed_methods, reason = "...")]` on the innermost function, and the design lint
+  counts each file's (`ban-allow`): a new one fails until its count is raised on purpose.
 - The GUI tests (`devenv shell -- gui-test`, [Development](development.md#gui-tests)) drive each page
   through the harness and write captures. The kit gallery shows every kit part, its menu and its dialog. No
   test compares the captures: look at each capture that a change can affect, at each size it is taken.

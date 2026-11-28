@@ -1,8 +1,14 @@
 //! A whole number with − and +: `Decrease <name>`, the number in a well
 //! the DM can type in, then `Increase <name>`. At a limit the − or + is disabled. A typed number
 //! keeps to the range; a value already outside it only steps back towards it, never further, as
-//! the stepper does. `.change()` shows a change (`+3`, `−1`) whose steps skip 0; `.grouped()` a
-//! count with its digits grouped (`1,000`).
+//! the stepper does. `.change()` shows a change (`+3`, `−1`) whose steps skip 0; `.signed()` a
+//! modifier (`+0`, `−1`); `.grouped()` a count with its digits grouped (`1,000`).
+//!
+//! The well keeps the DM's words while they type (egui's `DragValue`): an empty well, a lone
+//! sign or a number out of range stays as typed, and never jumps back to the old number between
+//! keys. Each whole number typed is the value at once, or with `.on_enter_or_leave()` only on
+//! Enter or when the well loses the keyboard (one command for a running fight). Escape, − and +
+//! drop the typed words; so does leaving the well.
 //!
 //! ```ignore
 //! kit::Stepper::new(("hp", id), "Current HP", hp, 0..=max)
@@ -32,6 +38,8 @@ enum Shown {
     Plain,
     /// `+3`, `−1`: a change, whose steps skip 0.
     Change,
+    /// `+3`, `+0`, `−1`: a modifier.
+    Signed,
     /// `1,000`: a count with its digits grouped.
     Grouped,
 }
@@ -46,6 +54,7 @@ pub struct Stepper {
     disabled: bool,
     shown: Shown,
     on_change: Option<OnValue>,
+    on_enter_or_leave: bool,
 }
 
 impl Stepper {
@@ -65,6 +74,7 @@ impl Stepper {
             disabled: false,
             shown: Shown::Plain,
             on_change: None,
+            on_enter_or_leave: false,
         }
     }
 
@@ -84,6 +94,20 @@ impl Stepper {
     /// A change (`+3`, `−1`): its − and + step over 0, which changes nothing.
     pub fn change(mut self) -> Self {
         self.shown = Shown::Change;
+        self
+    }
+
+    /// A modifier (`+2`, `+0`, `−1`): typed with a true minus, a hyphen or a `+`.
+    pub fn signed(mut self) -> Self {
+        self.shown = Shown::Signed;
+        self
+    }
+
+    /// A typed number becomes the value only on Enter or when the well loses the keyboard, so
+    /// the words typed in between are one change (a running fight's command, its Log line and
+    /// its Undo step). − and + still change it at once.
+    pub fn on_enter_or_leave(mut self) -> Self {
+        self.on_enter_or_leave = true;
         self
     }
 
@@ -134,7 +158,7 @@ impl Shown {
     fn words(self, value: i64) -> String {
         match self {
             Self::Plain => value.to_string(),
-            Self::Change => crate::design::signed(value),
+            Self::Change | Self::Signed => crate::design::signed(value),
             Self::Grouped => {
                 let digits = crate::design::grouped_number(value.unsigned_abs() as usize);
                 if value < 0 {
@@ -158,7 +182,7 @@ impl Shown {
 }
 
 impl RenderOnce for Stepper {
-    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let value = self.value;
         let (low, high) = (
             (*self.range.start()).min(value),
@@ -167,14 +191,49 @@ impl RenderOnce for Stepper {
         let child = |part: &'static str| {
             ElementId::NamedChild(std::sync::Arc::new(self.id.clone()), part.into())
         };
+        // The DM's words while they type, until Enter, Escape, a step or leaving the well.
+        let typed = window.use_keyed_state(child("typed"), cx, |_, _| None::<String>);
+        let words = typed
+            .read(cx)
+            .clone()
+            .unwrap_or_else(|| self.shown.words(value));
         let send = |to: i64, on_change: Option<OnValue>| {
+            let typed = typed.clone();
             move |_: &gpui::ClickEvent, window: &mut Window, cx: &mut App| {
+                typed.update(cx, |typed, _| *typed = None);
                 if let Some(on_change) = &on_change {
                     on_change(&to, window, cx);
                 }
             }
         };
-        let typed = self.on_change.clone();
+        // A whole number typed is the value, kept to the range.
+        let apply = {
+            let on_change = self.on_change.clone();
+            move |words: &str, window: &mut Window, cx: &mut App| {
+                let Some(number) = parse(words) else {
+                    return;
+                };
+                let number = number.clamp(low, high);
+                if number != value
+                    && let Some(on_change) = &on_change
+                {
+                    on_change(&number, window, cx);
+                }
+            }
+        };
+        let apply = Rc::new(apply);
+        // Enter or leaving the well: the typed words, once, then the value's own words.
+        let settle = {
+            let (typed, apply) = (typed.clone(), apply.clone());
+            Rc::new(move |window: &mut Window, cx: &mut App| {
+                let Some(words) = typed.update(cx, |typed, _| typed.take()) else {
+                    return;
+                };
+                apply(&words, window, cx);
+                window.refresh();
+            })
+        };
+        let at_once = !self.on_enter_or_leave;
         let shown = self.shown;
         div()
             .flex()
@@ -196,19 +255,29 @@ impl RenderOnce for Stepper {
                 )),
             )
             .child(
-                TextField::new(child("well"), shown.words(value))
+                TextField::new(child("well"), words)
                     .name(self.name.clone())
                     .width(self.well)
                     .disabled(self.disabled)
-                    .on_change(move |words: &str, window, cx| {
-                        let Some(number) = parse(words) else {
-                            return;
-                        };
-                        let number = number.clamp(low, high);
-                        if number != value
-                            && let Some(on_change) = &typed
-                        {
-                            on_change(&number, window, cx);
+                    .on_change({
+                        let typed = typed.clone();
+                        move |words: &str, window, cx| {
+                            typed.update(cx, |typed, _| *typed = Some(words.to_owned()));
+                            if at_once {
+                                apply(words, window, cx);
+                            }
+                        }
+                    })
+                    .on_enter({
+                        let settle = settle.clone();
+                        move |window, cx| settle(window, cx)
+                    })
+                    .on_blur(move |window, cx| settle(window, cx))
+                    .on_escape({
+                        let typed = typed.clone();
+                        move |window, cx| {
+                            typed.update(cx, |typed, _| *typed = None);
+                            window.refresh();
                         }
                     }),
             )
@@ -240,5 +309,7 @@ mod tests {
         assert_eq!(Shown::Change.step(1, -1), -1);
         assert_eq!(Shown::Change.step(-1, 1), 1);
         assert_eq!(Shown::Plain.step(1, -1), 0);
+        assert_eq!(Shown::Signed.words(0), "+0");
+        assert_eq!(Shown::Signed.step(1, -1), 0);
     }
 }

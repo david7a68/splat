@@ -199,6 +199,44 @@ impl Jump {
     }
 }
 
+/// Ctrl+S for Lookup's edit form, before the page's: the form takes the key while its Status
+/// or Text field has the keyboard, and saves when its Save would (egui: the form took the key
+/// when it could save and had the keyboard, and Lookup drew before the page,
+/// `main:src/world/edit.rs:1301`, `main:src/lib.rs:3057`). True when Lookup took the key.
+pub(crate) fn lookup_save_key(root: &mut SplatRoot, window: &Window, cx: &gpui::App) -> bool {
+    if !root.app.lookup.open {
+        return false;
+    }
+    let crate::lookup::panel_view::Showing::Entry(position) = root.app.lookup.showing() else {
+        return false;
+    };
+    let Some((campaign, index)) = super::world(root) else {
+        return false;
+    };
+    let Some(item) = index.items.get(position) else {
+        return false;
+    };
+    if !root.app.lookup.reader.editing(item.entry.id, &campaign)
+        || !root
+            .pages
+            .lookup
+            .jump
+            .focused(&[Field::Status, Field::Text], window, cx)
+    {
+        return false;
+    }
+    if root
+        .app
+        .lookup
+        .reader
+        .draft_can_save(item, &index, &campaign)
+        && let Some(nav) = root.app.lookup.reader.save_draft(item, &index, &campaign)
+    {
+        root.app.lookup.follow_nav(nav);
+    }
+    true
+}
+
 /// The reader's body for the note `item`, in `host`'s reader.
 pub(crate) fn render_reader(
     root: &mut SplatRoot,
