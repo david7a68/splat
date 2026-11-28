@@ -614,6 +614,16 @@ impl Reader {
             .is_some_and(|draft| draft.campaign == campaign.id)
     }
 
+    /// Whether the open form of `item` would save now, as its Save would: it has changes, and
+    /// no open Log line of the note holds it (`LOG_WAITS_FOR_SAVE`). Ctrl+S follows it.
+    pub fn draft_can_save(&self, item: &Item, index: &ContentIndex, campaign: &Campaign) -> bool {
+        let id = item.entry.id;
+        self.edits
+            .get(&id)
+            .is_some_and(|draft| draft.campaign == campaign.id && draft.dirty())
+            && !(super::takes_log(item, index) && self.log_waits((campaign.id, id)))
+    }
+
     /// An edit form with changes, or a Log line with typed words, that is not saved.
     pub fn has_unsaved_edits(&self) -> bool {
         self.edits.values().any(EditDraft::dirty) || self.typed_log_lines().next().is_some()
