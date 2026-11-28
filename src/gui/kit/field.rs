@@ -414,8 +414,7 @@ impl RenderOnce for TextField {
         match self.focus {
             Some(FocusAt::End) => input.update(cx, |input, cx| input.focus(window, cx)),
             Some(FocusAt::All) => {
-                let handle = input.read(cx).focus_handle(cx);
-                window.focus(&handle, cx);
+                input.update(cx, |input, cx| input.focus(window, cx));
                 window.dispatch_action(Box::new(gpui_component::input::SelectAll), cx);
             }
             None => {}
@@ -595,10 +594,10 @@ impl EditorHandle {
         self.1.read(cx).focus_handle(cx).is_focused(window)
     }
 
-    /// Give it the keyboard.
+    /// Give it the keyboard, its caret drawn at once. (`window.focus` alone does not start
+    /// gpui-base's caret, so a field the program focused showed none until a key or a press.)
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
-        let handle = self.1.read(cx).focus_handle(cx);
-        window.focus(&handle, cx);
+        self.1.update(cx, |input, cx| input.focus(window, cx));
     }
 
     /// The words it shows now.
@@ -780,8 +779,7 @@ impl RenderOnce for TextEditor {
         });
         let input = state.read(cx).input.clone();
         if self.focus {
-            let handle = input.read(cx).focus_handle(cx);
-            window.focus(&handle, cx);
+            input.update(cx, |input, cx| input.focus(window, cx));
         }
         let focused = input.read(cx).focus_handle(cx).is_focused(window);
         let ty = self.ty.unwrap_or(if self.mono {
@@ -997,18 +995,24 @@ mod tests {
 
     const MARK: &str = "<!-- splat:check journey=j-1 at=12 sum=9f3a -->";
 
-    /// Show a Markdown editor of `words` in place of the page, with `links` on; its handle.
-    fn show(shell: &mut Shell, words: &str, links: bool) -> EditorHandle {
+    /// Show a Markdown editor of `words` in place of the page, with `links` on; its handle. With
+    /// `focus`, the program gives it the keyboard in the frame that makes it (a page that opens a
+    /// note for typing).
+    fn show(shell: &mut Shell, words: &str, links: bool, focus: bool) -> EditorHandle {
         let kept: Rc<RefCell<Option<EditorHandle>>> = Rc::default();
         let draw_kept = kept.clone();
         let words = Rc::new(RefCell::new(words.to_owned()));
         shell.update(move |root, _, cx| {
             let (kept, words) = (draw_kept.clone(), words.clone());
             root.pages.reader.preview = Some(Rc::new(move |_, window, cx| {
+                let fresh = kept.borrow().is_none();
                 let handle = kept
                     .borrow_mut()
                     .get_or_insert_with(|| EditorHandle::new("", window, cx))
                     .clone();
+                if focus && fresh {
+                    handle.focus(window, cx);
+                }
                 let typed = words.clone();
                 let editor = TextEditor::new("source-editor", words.borrow().clone())
                     .on_change(move |now: &str, _, _| *typed.borrow_mut() = now.to_owned())
@@ -1033,28 +1037,38 @@ mod tests {
     #[test]
     fn a_splat_mark_folds_off_the_carets_line_and_the_caret_shows() {
         let mut shell = Shell::new("gpui-source-fold", Seed::Campaign);
-        let text = format!("The road east.\n{MARK}\nWolves at dusk.\n");
-        let handle = show(&mut shell, &text, false);
+        let text = format!("\nThe road east.\n{MARK}\nWolves at dusk.\n");
+        let handle = show(&mut shell, &text, false, true);
         let mark = text.find(MARK).unwrap()..text.find(MARK).unwrap() + MARK.len();
         let read = |shell: &mut Shell, handle: &EditorHandle| {
             let handle = handle.clone();
             shell.update(move |_, _, cx| (handle.folded(cx), handle.words(cx).to_string()))
         };
-        assert_eq!(
-            read(&mut shell, &handle).0,
-            vec![mark.clone()],
-            "an editor without the keyboard folds every mark"
+        // The caret is drawn in an editor the program gave the keyboard as it made it: the window
+        // has the keyboard, and the caret does not blink (`docs/design-system.md`, Motion). Half
+        // a second on, a blinking caret would be in its hidden half. On the empty first line only
+        // the caret differs from the well beside it.
+        shell.wait(std::time::Duration::from_millis(500));
+        let caret = {
+            let handle = handle.clone();
+            shell.update(move |_, _, cx| handle.caret_bounds(cx))
+        }
+        .expect("the caret's place");
+        let image = shell.screenshot();
+        let at = |x: f32, y: f32| *image.get_pixel(x as u32, y as u32);
+        let (x, y) = (f32::from(caret.left()), f32::from(caret.center().y));
+        let well = at(x + 20.0, y);
+        assert!(
+            (-1..=1).any(|dx| at(x + dx as f32, y) != well),
+            "a caret is drawn at {caret:?}"
         );
-        shell.click("Source editor");
-        let at_start = handle.clone();
-        shell.update(move |_, _, cx| at_start.set_caret(0, cx));
         assert_eq!(
             read(&mut shell, &handle).0,
             vec![mark.clone()],
             "off its line"
         );
         // Down onto the mark's line: it opens, letter by letter.
-        shell.press("down");
+        shell.press("down down");
         assert!(
             read(&mut shell, &handle).0.is_empty(),
             "on its line it opens"
@@ -1070,30 +1084,13 @@ mod tests {
         let (folded, words) = read(&mut shell, &handle);
         assert_eq!(
             words,
-            format!("The road east.\n{MARK}\nGrey Wolves at dusk.\n")
+            format!("\nThe road east.\n{MARK}\nGrey Wolves at dusk.\n")
         );
         assert_eq!(folded, vec![mark.clone()]);
-        // The caret is drawn: the window has the keyboard, and the caret does not blink
-        // (`docs/design-system.md`, Motion). On the empty last line only the caret differs from
-        // the well beside it.
-        let (end, len) = (handle.clone(), words.len());
-        let caret = shell
-            .update(move |_, _, cx| {
-                end.set_caret(len, cx);
-                end.caret_bounds(cx)
-            })
-            .expect("the caret's place");
-        // Half a second on, where a blinking caret would be in its hidden half.
-        shell.wait(std::time::Duration::from_millis(500));
-        let image = shell.screenshot();
-        let at = |x: f32, y: f32| *image.get_pixel(x as u32, y as u32);
-        let (x, y) = (f32::from(caret.left()), f32::from(caret.center().y));
-        let well = at(x + 20.0, y);
-        assert!(
-            (-1..=1).any(|dx| at(x + dx as f32, y) != well),
-            "a caret is drawn at {caret:?}"
-        );
         shell.capture("gpui-source-fold__01-caret-off-the-mark__1200x800");
+        // An editor without the keyboard folds every mark.
+        shell.update(|_, window, cx| window.blur(cx));
+        assert_eq!(read(&mut shell, &handle).0, vec![mark]);
     }
 
     /// Ctrl+click on a link in the words follows it, as the Reader does; a plain click only
@@ -1109,7 +1106,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
         let text = "Ride to [[Verori|The home country]] or [[Nowhere at all]].\n";
-        let handle = show(&mut shell, text, true);
+        let handle = show(&mut shell, text, true, false);
         shell.click("Source editor");
         let place = |shell: &mut Shell, words: &str| {
             let (handle, at) = (handle.clone(), text.find(words).unwrap() + 2);
