@@ -535,8 +535,6 @@ pub(super) struct PlanProjection {
     /// Each scene's line among the model's lines, at each place (before each planned fight and
     /// after the last).
     pub(super) scenes: Vec<Vec<usize>>,
-    /// The place a row stands at before each model line, and after the last.
-    pub(super) line_place: Vec<(usize, usize)>,
     pub(super) scene_count: usize,
     /// The groups the note links that are not fights, by their place in `Plan::groups`.
     pub(super) planned_groups: Vec<usize>,
@@ -565,11 +563,7 @@ impl PlanProjection {
         }
         let mut planned = Vec::new();
         let mut scenes: Vec<Vec<usize>> = vec![Vec::new()];
-        let mut line_place = Vec::with_capacity(model.lines.len() + 1);
-        let place_now =
-            |scenes: &Vec<Vec<usize>>| (scenes.len() - 1, scenes.last().map_or(0, Vec::len));
         for (at, line) in model.lines.iter().enumerate() {
-            line_place.push(place_now(&scenes));
             match line {
                 ModelLine::Scene(_) => scenes
                     .last_mut()
@@ -594,7 +588,6 @@ impl PlanProjection {
                 }
             }
         }
-        line_place.push(place_now(&scenes));
         let planned_groups = linked_names(body)
             .iter()
             .filter(|name| {
@@ -638,7 +631,6 @@ impl PlanProjection {
             model,
             planned,
             scenes,
-            line_place,
             planned_groups,
             planned_results,
         }
@@ -654,8 +646,9 @@ pub enum Place {
     Footer,
 }
 
-/// Where each scene result shows in this frame, decided once before anything is drawn
-/// (`Sessions::shown_at`).
+/// Where each scene result shows in this frame, decided once before anything is drawn. The GPUI
+/// plan draws no message among its rows or under the Scene field, so each is `Footer`
+/// (`gv_plan_footer`).
 #[derive(Clone, Copy, Default)]
 pub(super) struct Shown {
     pub(super) added: Option<Place>,
@@ -668,7 +661,6 @@ pub(super) struct Shown {
 pub(super) struct Fault {
     pub(super) what: SceneFault,
     pub(super) met: String,
-    pub(super) place: Place,
     /// The act waits in the draft: its words end when the note is saved.
     pub(super) waits: bool,
 }
@@ -2954,21 +2946,6 @@ impl Sessions {
         messages
     }
 
-    /// Where a scene act's words show, decided as they are shown: at the act's own place while
-    /// that place is drawn (the open Scene field, or a row's place among the shown scenes), else
-    /// in the plan's footer. Words never go to a place that is not drawn. `rows` are the scenes
-    /// at each place, or `None` while they fold.
-    pub(super) fn shown_at(&self, place: Place, rows: Option<&[Vec<usize>]>) -> Place {
-        let drawn = match place {
-            Place::Field => self.scenes.field.is_some(),
-            Place::Row((position, at)) => {
-                rows.is_some_and(|rows| rows.get(position).is_some_and(|row| at <= row.len()))
-            }
-            Place::Footer => true,
-        };
-        if drawn { place } else { Place::Footer }
-    }
-
     /// Keep what a frame measured for the next frame's fold. Folded scenes keep the height they
     /// had when last shown. Returns whether the fold changes in the next frame, which is then
     /// due at once.
@@ -3097,9 +3074,8 @@ impl Sessions {
         Arc::clone(cache.model.as_ref().expect("the model was just built"))
     }
 
-    /// The scenes' results whose own place is not drawn, in the plan's message footer
-    /// (`shown_at`): the Scene field's once it closes, a row's while the scenes fold, and a
-    /// removal whose row's place is gone. The Undo stays the note's, so it stays in reach.
+    /// The scenes' results shown in the plan's message footer (`Shown`). The Undo stays the
+    /// note's, so it stays in reach.
     fn scene_messages<'f>(
         &self,
         frame: &'f PaneFrame,
@@ -3178,7 +3154,7 @@ impl Sessions {
             )
         };
         use design::results::FailedAct;
-        let (result, place, failed) = match act {
+        let (result, failed) = match act {
             SceneAct::StartFight(_) | SceneAct::AddToLog(..) => return,
             SceneAct::Add(words) => {
                 let result = draft.apply(note, Apply::Now, |text| Some(add_scene(text, &words)));
@@ -3195,9 +3171,9 @@ impl Sessions {
                         field.focus = true;
                     }
                 }
-                (result.map(drop), Place::Field, (failed, false))
+                (result.map(drop), (failed, false))
             }
-            SceneAct::Tick(slot, task) => {
+            SceneAct::Tick(_, task) => {
                 let what = scene(&plain_links(&task.words));
                 let within = within.clone();
                 let failed = if task.done {
@@ -3213,9 +3189,9 @@ impl Sessions {
                         Some(&ticked(&task.line, !task.done)),
                     )
                 });
-                (result.map(drop), Place::Row(slot), (failed, false))
+                (result.map(drop), (failed, false))
             }
-            SceneAct::Remove(slot, line, task) => {
+            SceneAct::Remove(_, line, task) => {
                 let result = draft.apply(note, Apply::Now, |text| {
                     change_line(text, task.at, &task.line, None)
                 });
@@ -3227,12 +3203,11 @@ impl Sessions {
                     scenes.removed = Some((line, plain_links(&task.words), undo.clone()));
                     Self::mark_plan(marks, folder, PlanKind::SceneRemoved);
                 }
-                (result.map(drop), Place::Row(slot), (failed, false))
+                (result.map(drop), (failed, false))
             }
             // The Undo of an add takes the scene back out of the note.
             SceneAct::UndoAdd => (
                 scenes.added.take().map_or(Ok(()), |undo| undo.undo(draft)),
-                Place::Field,
                 (
                     FailedAct::NotRemoved {
                         what: scene(&scenes.added_words),
@@ -3241,7 +3216,7 @@ impl Sessions {
                     true,
                 ),
             ),
-            SceneAct::UndoRemove(place) => {
+            SceneAct::UndoRemove(_) => {
                 let removed = scenes.removed.take();
                 let failed = FailedAct::NotPutBack {
                     what: scene(removed.as_ref().map_or("", |(_, words, _)| words.as_str())),
@@ -3249,7 +3224,6 @@ impl Sessions {
                 };
                 (
                     removed.map_or(Ok(()), |(_, _, undo)| undo.undo(draft)),
-                    place,
                     (failed, true),
                 )
             }
@@ -3268,7 +3242,6 @@ impl Sessions {
             };
             scenes.fault = Some(Fault {
                 met: draft.body.as_str().to_owned(),
-                place,
                 waits: matches!(what, SceneFault::NotSaved),
                 what,
             });
