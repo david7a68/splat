@@ -151,8 +151,10 @@ pub(super) fn render(
                                     .pr(S)
                                     .child(roster_pane),
                             )
+                            // Its default is its own width: Home on the splitter goes back to
+                            // it (the kit reads the dragged width itself).
                             .column(
-                                add_width,
+                                natural_add_width(content, window),
                                 PANEL_MIN_WIDTH..ADD_PANE_MAX_WIDTH,
                                 div().size_full().pl(M).child(side),
                             )
