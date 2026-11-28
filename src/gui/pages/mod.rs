@@ -102,7 +102,7 @@ pub(crate) fn render_page(
 
 /// Ctrl+S on the page shown (the root's one owner, `SplatRoot::save`, calls it after the Notes
 /// panel and Lookup's edit form had their turn): each area's `save_key` saves exactly what its own Save would
-/// (`design::save_row::save_key`). A page that needs a
+/// (`DraftState::can_save`). A page that needs a
 /// campaign saves nothing while none is open (it shows the no-campaign state).
 pub(crate) fn save_key(root: &mut SplatRoot, cx: &mut Context<SplatRoot>) {
     let needs_campaign = !matches!(root.app.page, Page::Library | Page::Settings | Page::Run);
