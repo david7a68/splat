@@ -594,6 +594,35 @@ fn a_click_scrolls_its_target_into_view() {
     assert_eq!(pressed.get(), 1, "and nothing pressed it");
 }
 
+/// A press long after the last frame starts a timed result at the press's time: the Timeline's
+/// Add keeps its result and Undo, though no frame moved the clock since long before (the
+/// pointer still on Add, then a press and release within one frame). GPUI's test mode draws
+/// after each input, which the app does not, so the clock is set back between the press and
+/// the release, where the Add's handler runs.
+#[test]
+fn a_press_long_after_the_last_frame_keeps_its_undo() {
+    let mut shell = Shell::new("gpui-still-press", Seed::Campaign);
+    shell.click("Timeline");
+    if shell.bounds("Start with day 1").is_some() {
+        shell.click("Start with day 1");
+    } else {
+        shell.click("Add Day");
+    }
+    let add = shell.into_view("Add Long rest");
+    shell.hold_and_move(add, add);
+    // The last frame was long ago: the clock stands far behind the release.
+    splat_design::frame_clock::set(-1000.0);
+    shell.release(add);
+    assert!(
+        shell.bounds("Undo add Long rest").is_some(),
+        "the Add's result keeps its Undo: {:?}",
+        super::kit::probe::names()
+            .into_iter()
+            .filter(|name| name.starts_with("Undo"))
+            .collect::<Vec<_>>()
+    );
+}
+
 /// Ctrl+S has one owner (`SplatRoot::save`): with drafts open on two pages, it saves only the
 /// draft of the page shown, wherever the keyboard is (a rail item the DM just pressed, the
 /// Lookup field), and nothing while a menu is open over the page.

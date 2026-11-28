@@ -812,7 +812,11 @@ impl Render for SplatRoot {
             // listener of the path once before it looks at the stop (`dispatch_key_down_up_event`).
             // Without this one, that call went to a part's own key listener: a dialog's frame
             // closed the dialog on the Escape that had closed its drop-down.
-            .capture_key_down(|_, _, _| {})
+            // It moves the frame clock to the key's time too (`clock_on_press` for presses).
+            .capture_key_down({
+                let ctx = self.ctx.clone();
+                move |_, _, _| ctx.tick_clock()
+            })
             .on_action(cx.listener(Self::toggle_lookup))
             .on_action(cx.listener(Self::toggle_notes))
             .on_action(cx.listener(Self::toggle_trackers))
@@ -831,6 +835,7 @@ impl Render for SplatRoot {
             .text_size(theme::Type::Body.size())
             // First, so a touchpad's scroll is at the chosen speed before anything sees it.
             .child(touchpad::listener(self.app.touchpad_speed))
+            .child(clock_on_press(self.ctx.clone()))
             .child(rail::column(self, window).render(
                 window.viewport_size().width,
                 rail.when(panels_inert, |rail| rail.opacity(0.6)),
@@ -840,4 +845,30 @@ impl Render for SplatRoot {
             .child(main)
             .children(dialogs.into_iter().flatten())
     }
+}
+
+/// The frame clock moves to the time of each press, before any handler reads it: the clock moves
+/// only as a frame starts, and a press and its release can come in one frame long after the last
+/// one (the pointer still on Add for half a minute), so a timed result the press starts (an Add
+/// with its Undo) would be born old and end at once.
+fn clock_on_press(ctx: StateContext) -> impl IntoElement {
+    gpui::canvas(
+        |_, _, _| {},
+        move |_, _, window, _| {
+            let down = ctx.clone();
+            window.on_mouse_event(move |_: &gpui::MouseDownEvent, phase, _, _| {
+                if phase == gpui::DispatchPhase::Capture {
+                    down.tick_clock();
+                }
+            });
+            let up = ctx.clone();
+            window.on_mouse_event(move |_: &gpui::MouseUpEvent, phase, _, _| {
+                if phase == gpui::DispatchPhase::Capture {
+                    up.tick_clock();
+                }
+            });
+        },
+    )
+    .absolute()
+    .size_0()
 }
