@@ -151,6 +151,10 @@ fn editor(
                         .text_type(Type::Prose)
                         .markdown_source()
                         .fill()
+                        .on_note_link(cx.listener(|root, target: &str, _, cx| {
+                            root.app.sessions.gv_open_link(target);
+                            cx.notify();
+                        }))
                         .on_change(cx.listener(|root, words: &str, _, cx| {
                             root.app.sessions.gv_template_edited(words);
                             cx.notify();

@@ -23,8 +23,10 @@ use gpui::{
     SharedString, Styled, Subscription, Window, div, prelude::*,
 };
 use gpui_component::input::{
-    Input, InputEvent, InputState, TextDecoration, Textarea, TextareaState,
+    InlineToken, InlineTokenError, Input, InputContent, InputEvent, InputState, TextDecoration,
+    Textarea, TextareaState,
 };
+use std::ops::Range;
 use std::rc::Rc;
 
 type OnChange = Rc<dyn Fn(&str, &mut Window, &mut App)>;
@@ -41,26 +43,50 @@ pub struct FieldState<S: 'static> {
     markdown: bool,
     /// Where each section heading of the source ends (its rule goes under that line).
     rules: Rc<Vec<usize>>,
+    /// The `splat:` marks of the source that fold off the caret's line (`kit::markdown_source`).
+    folds: Vec<Range<usize>>,
+    /// The marks folded now, once the input took them; `None` after a change of the words.
+    shut: Option<Vec<Range<usize>>>,
     /// The field has taken the caller's words once (`follow`).
     shown: bool,
     _changes: Subscription,
+    /// The caret and the focus move: a mark on the caret's line opens, the others fold.
+    _moves: Subscription,
 }
 
-/// A field whose words can carry decorations (a text editor's Markdown source); a one-line
-/// field carries none.
+/// A field whose words can carry decorations and folded marks (a text editor's Markdown
+/// source); a one-line field carries none.
 trait Decorate {
     fn decorate(&mut self, decorations: Vec<TextDecoration>, cx: &mut Context<Self>)
+    where
+        Self: Sized;
+    /// Fold the tokens of `content`: its text is the field's, and the history stays.
+    fn fold(
+        &mut self,
+        content: InputContent,
+        cx: &mut Context<Self>,
+    ) -> Result<(), InlineTokenError>
     where
         Self: Sized;
 }
 
 impl Decorate for InputState {
     fn decorate(&mut self, _: Vec<TextDecoration>, _: &mut Context<Self>) {}
+    fn fold(&mut self, _: InputContent, _: &mut Context<Self>) -> Result<(), InlineTokenError> {
+        Ok(())
+    }
 }
 
 impl Decorate for TextareaState {
     fn decorate(&mut self, decorations: Vec<TextDecoration>, cx: &mut Context<Self>) {
         self.set_decorations(decorations, cx);
+    }
+    fn fold(
+        &mut self,
+        content: InputContent,
+        cx: &mut Context<Self>,
+    ) -> Result<(), InlineTokenError> {
+        self.set_tokens(content, cx)
     }
 }
 
@@ -72,6 +98,9 @@ macro_rules! field_state {
                     &input,
                     window,
                     |this: &mut Self, input, event: &InputEvent, window, cx| {
+                        if matches!(event, InputEvent::Focus | InputEvent::Blur) {
+                            this.refold(window, cx);
+                        }
                         if matches!(event, InputEvent::Blur) {
                             if let Some(on_blur) = this.on_blur.clone() {
                                 on_blur(window, cx);
@@ -86,12 +115,15 @@ macro_rules! field_state {
                             return;
                         }
                         this.last = now.clone();
-                        this.restyle(&now, cx);
+                        this.restyle(&now, window, cx);
                         if let Some(on_change) = this.on_change.clone() {
                             on_change(&now, window, cx);
                         }
                     },
                 );
+                let moves = cx.observe_in(&input, window, |this: &mut Self, _, window, cx| {
+                    this.refold(window, cx)
+                });
                 Self {
                     input,
                     last: SharedString::default(),
@@ -99,20 +131,65 @@ macro_rules! field_state {
                     on_blur: None,
                     markdown: false,
                     rules: Rc::default(),
+                    folds: Vec::new(),
+                    shut: None,
                     shown: false,
                     _changes: changes,
+                    _moves: moves,
                 }
             }
 
             /// Style the words again, when they are Markdown source: once per change of them.
-            fn restyle(&mut self, words: &str, cx: &mut Context<Self>) {
+            fn restyle(&mut self, words: &str, window: &Window, cx: &mut Context<Self>) {
                 if !self.markdown {
                     return;
                 }
                 let style = super::markdown_source::style(words);
                 self.rules = Rc::new(style.rules);
+                self.folds = style.folds;
+                self.shut = None;
                 self.input
                     .update(cx, |input, cx| input.decorate(style.decorations, cx));
+                self.refold(window, cx);
+            }
+
+            /// Fold each `splat:` mark off the lines that hold the caret or the selection, and
+            /// open the marks on them; while the field does not have the keyboard, all fold
+            /// (egui's layouter). Only a move to another line, a change of focus or of the words
+            /// changes what folds; any other notice of the input costs a compare.
+            fn refold(&mut self, window: &Window, cx: &mut Context<Self>) {
+                if !self.markdown
+                    || (self.folds.is_empty() && self.shut.as_ref().is_some_and(Vec::is_empty))
+                {
+                    return;
+                }
+                let input = self.input.read(cx);
+                // The input changed words the field has not heard of yet: their change event
+                // folds them.
+                if input.text().len() != self.last.len() {
+                    return;
+                }
+                let open = input.focus_handle(cx).is_focused(window).then(|| {
+                    super::markdown_source::caret_lines(&self.last, input.selected_range())
+                });
+                let shut = super::markdown_source::shut(&self.folds, open.as_ref());
+                if self.shut.as_ref() == Some(&shut) {
+                    return;
+                }
+                let mut content = InputContent::new(self.last.clone());
+                for range in &shut {
+                    let token = InlineToken::new(
+                        super::markdown_source::FOLD_TOKEN,
+                        self.last[range.clone()].to_owned(),
+                    )
+                    .with_label(super::markdown_source::FOLD_MARK);
+                    content = match content.clone().with_token(range.clone(), token) {
+                        Ok(content) => content,
+                        Err(_) => content,
+                    };
+                }
+                let folded = self.input.update(cx, |input, cx| input.fold(content, cx));
+                self.shut = folded.is_ok().then_some(shut);
             }
 
             /// Take the caller's value: words the program changed replace the field's.
@@ -144,7 +221,7 @@ macro_rules! field_state {
                             input.set_value(value.clone(), window, cx);
                         }
                     });
-                    self.restyle(&value, cx);
+                    self.restyle(&value, window, cx);
                 }
                 self.shown = true;
             }
@@ -441,6 +518,16 @@ pub struct TextEditor {
     markdown: bool,
     read_only: bool,
     own_write: bool,
+    links: Option<Links>,
+}
+
+/// What Ctrl+click on a link in a text editor does (`TextEditor::follow_links`).
+#[derive(Clone)]
+struct Links {
+    /// The note being edited, for a link relative to it.
+    from: Option<uuid::Uuid>,
+    /// The caller's own way to open a note link; else the Reader's (Lookup opens it).
+    on_note: Option<OnChange>,
 }
 
 /// A text editor's state that the caller keeps (`TextEditor::handle`), so the caller can read and
@@ -478,6 +565,17 @@ impl EditorHandle {
     #[cfg(test)]
     pub fn selection(&self, cx: &App) -> std::ops::Range<usize> {
         self.1.read(cx).selected_range()
+    }
+
+    /// The byte ranges folded to a mark now (`kit::markdown_source`), for a test.
+    #[cfg(test)]
+    pub fn folded(&self, cx: &App) -> Vec<Range<usize>> {
+        self.1
+            .read(cx)
+            .tokens()
+            .iter()
+            .map(|span| span.range())
+            .collect()
     }
 
     /// Where the character at byte `at` was last drawn, in window coordinates (its line's
@@ -553,7 +651,29 @@ impl TextEditor {
             markdown: false,
             read_only: false,
             own_write: false,
+            links: None,
         }
+    }
+
+    /// With Ctrl held (Cmd on a Mac), a press on a link in the words follows it, as in the
+    /// Reader; a plain press only places the caret (egui's `pressed_note_link`). A web link opens
+    /// the browser, a dice link asks for its roll, a note link opens in Lookup, and a link that
+    /// names nothing in the campaign does nothing. `from` is the note being edited.
+    pub fn follow_links(mut self, from: Option<uuid::Uuid>) -> Self {
+        let on_note = self.links.take().and_then(|links| links.on_note);
+        self.links = Some(Links { from, on_note });
+        self
+    }
+
+    /// As `follow_links`, with the caller's own way to open a note link (a session note opens an
+    /// event in the Timeline). It gets the note the link names.
+    pub fn on_note_link(mut self, handler: impl Fn(&str, &mut Window, &mut App) + 'static) -> Self {
+        let from = self.links.take().and_then(|links| links.from);
+        self.links = Some(Links {
+            from,
+            on_note: Some(Rc::new(handler)),
+        });
+        self
     }
 
     /// The words can be read, selected and copied, but not changed (a built-in entry's source).
@@ -654,7 +774,7 @@ impl RenderOnce for TextEditor {
             if markdown && !state.markdown {
                 state.markdown = true;
                 let words = state.input.read(cx).value();
-                state.restyle(&words, cx);
+                state.restyle(&words, window, cx);
             }
             state.follow(&value, on_change, own_write, window, cx)
         });
@@ -684,6 +804,9 @@ impl RenderOnce for TextEditor {
                 // The text area fills the frame's rows, so a press anywhere in the frame puts
                 // the caret in it (a frame of no fixed height gives `h_full` nothing to fill).
                 let area = Textarea::new(&input)
+                    .when(self.markdown, |area| {
+                        area.token(|token, _, _| fold_mark(token.line_height()))
+                    })
                     .appearance(false)
                     .readonly(self.read_only)
                     .aria_label(name.clone())
@@ -700,6 +823,14 @@ impl RenderOnce for TextEditor {
         if self.fill {
             frame = frame.h_full();
         }
+        if let Some(links) = self.links.clone() {
+            let input = input.clone();
+            frame = frame.on_mouse_up(gpui::MouseButton::Left, move |event, window, cx| {
+                if event.modifiers.secondary(cx) {
+                    follow_link_at(&input, &links, event.position, window, cx);
+                }
+            });
+        }
         if self.markdown {
             frame = frame
                 .relative()
@@ -708,6 +839,70 @@ impl RenderOnce for TextEditor {
         let frame = target(frame, name);
         target(frame, element_name(&self.id))
     }
+}
+
+/// A folded `splat:` mark: a faint `⋯` in the icon face, `XS` of room round it, on its line.
+fn fold_mark(line: gpui::Pixels) -> impl IntoElement {
+    div()
+        .h(line)
+        .flex()
+        .items_center()
+        .px(XS / 2.0)
+        .child(super::text::icon(
+            super::markdown_source::FOLD_MARK,
+            Type::Body,
+            colors().faint,
+        ))
+}
+
+/// Follow the link under the pointer at `position`, if the pointer is on its characters.
+fn follow_link_at(
+    input: &Entity<TextareaState>,
+    links: &Links,
+    position: gpui::Point<gpui::Pixels>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    use gpui::EntityInputHandler as _;
+    let Some(at) = input.update(cx, |input, cx| {
+        input.character_index_for_point(position, window, cx)
+    }) else {
+        return;
+    };
+    let words = input.read(cx).value();
+    // The index is in UTF-16 units; the links are in bytes.
+    let mut units = 0;
+    let Some(byte) = words.char_indices().find_map(|(byte, letter)| {
+        let here = units >= at;
+        units += letter.len_utf16();
+        here.then_some(byte)
+    }) else {
+        return;
+    };
+    let Some(mut target) = super::markdown_source::link_at(&words, byte) else {
+        return;
+    };
+    let ctx = cx
+        .try_global::<super::markdown::Host>()
+        .map(|host| host.0.clone());
+    if let super::markdown::LinkTarget::Note(note) = &target {
+        let index = ctx
+            .as_ref()
+            .and_then(|ctx| ctx.get(crate::requests::LINK_INDEX));
+        if index.is_some_and(|index| {
+            matches!(
+                index.resolve_link(note, links.from),
+                crate::world::Go::Missing(_)
+            )
+        }) {
+            target = super::markdown::LinkTarget::Missing;
+        } else if let Some(on_note) = &links.on_note {
+            on_note(note, window, cx);
+            window.refresh();
+            return;
+        }
+    }
+    super::markdown::follow(&target, links.from, (None, None, ctx.as_ref()), window, cx);
 }
 
 /// The rule under each section heading of a Markdown source, as the Reader draws it: a hairline
@@ -789,4 +984,160 @@ pub fn field(
 /// Help under a field or a section: `Small` muted words that wrap at `READER_MEASURE`.
 pub fn help(words: impl Into<SharedString>) -> Div {
     super::text::text(Type::Small, colors().muted, words).max_w(READER_MEASURE)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EditorHandle, TextEditor};
+    use crate::fixtures::Seed;
+    use crate::gui::harness::Shell;
+    use gpui::{IntoElement, Modifiers, point, px};
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    const MARK: &str = "<!-- splat:check journey=j-1 at=12 sum=9f3a -->";
+
+    /// Show a Markdown editor of `words` in place of the page, with `links` on; its handle.
+    fn show(shell: &mut Shell, words: &str, links: bool) -> EditorHandle {
+        let kept: Rc<RefCell<Option<EditorHandle>>> = Rc::default();
+        let draw_kept = kept.clone();
+        let words = Rc::new(RefCell::new(words.to_owned()));
+        shell.update(move |root, _, cx| {
+            let (kept, words) = (draw_kept.clone(), words.clone());
+            root.pages.reader.preview = Some(Rc::new(move |_, window, cx| {
+                let handle = kept
+                    .borrow_mut()
+                    .get_or_insert_with(|| EditorHandle::new("", window, cx))
+                    .clone();
+                let typed = words.clone();
+                let editor = TextEditor::new("source-editor", words.borrow().clone())
+                    .on_change(move |now: &str, _, _| *typed.borrow_mut() = now.to_owned())
+                    .handle(&handle)
+                    .name("Source editor")
+                    .markdown_source()
+                    .rows(8);
+                if links {
+                    editor.follow_links(None)
+                } else {
+                    editor
+                }
+                .into_any_element()
+            }));
+            cx.notify();
+        });
+        kept.borrow().clone().expect("the editor's handle")
+    }
+
+    /// A `splat:` mark folds while the caret is off its line and opens on it, as egui's did; the
+    /// words keep every byte. The focused editor draws its caret in a capture.
+    #[test]
+    fn a_splat_mark_folds_off_the_carets_line_and_the_caret_shows() {
+        let mut shell = Shell::new("gpui-source-fold", Seed::Campaign);
+        let text = format!("The road east.\n{MARK}\nWolves at dusk.\n");
+        let handle = show(&mut shell, &text, false);
+        let mark = text.find(MARK).unwrap()..text.find(MARK).unwrap() + MARK.len();
+        let read = |shell: &mut Shell, handle: &EditorHandle| {
+            let handle = handle.clone();
+            shell.update(move |_, _, cx| (handle.folded(cx), handle.words(cx).to_string()))
+        };
+        assert_eq!(
+            read(&mut shell, &handle).0,
+            vec![mark.clone()],
+            "an editor without the keyboard folds every mark"
+        );
+        shell.click("Source editor");
+        let at_start = handle.clone();
+        shell.update(move |_, _, cx| at_start.set_caret(0, cx));
+        assert_eq!(
+            read(&mut shell, &handle).0,
+            vec![mark.clone()],
+            "off its line"
+        );
+        // Down onto the mark's line: it opens, letter by letter.
+        shell.press("down");
+        assert!(
+            read(&mut shell, &handle).0.is_empty(),
+            "on its line it opens"
+        );
+        shell.press("down");
+        assert_eq!(
+            read(&mut shell, &handle).0,
+            vec![mark.clone()],
+            "and folds after"
+        );
+        // Words typed elsewhere keep the mark whole, and it stays folded.
+        shell.type_text("Grey ");
+        let (folded, words) = read(&mut shell, &handle);
+        assert_eq!(
+            words,
+            format!("The road east.\n{MARK}\nGrey Wolves at dusk.\n")
+        );
+        assert_eq!(folded, vec![mark.clone()]);
+        // The caret is drawn: the window has the keyboard, and the caret does not blink
+        // (`docs/design-system.md`, Motion). On the empty last line only the caret differs from
+        // the well beside it.
+        let (end, len) = (handle.clone(), words.len());
+        let caret = shell
+            .update(move |_, _, cx| {
+                end.set_caret(len, cx);
+                end.caret_bounds(cx)
+            })
+            .expect("the caret's place");
+        // Half a second on, where a blinking caret would be in its hidden half.
+        shell.wait(std::time::Duration::from_millis(500));
+        let image = shell.screenshot();
+        let at = |x: f32, y: f32| *image.get_pixel(x as u32, y as u32);
+        let (x, y) = (f32::from(caret.left()), f32::from(caret.center().y));
+        let well = at(x + 20.0, y);
+        assert!(
+            (-1..=1).any(|dx| at(x + dx as f32, y) != well),
+            "a caret is drawn at {caret:?}"
+        );
+        shell.capture("gpui-source-fold__01-caret-off-the-mark__1200x800");
+    }
+
+    /// Ctrl+click on a link in the words follows it, as the Reader does; a plain click only
+    /// places the caret; a link that names nothing does nothing.
+    #[test]
+    fn ctrl_click_on_a_link_in_the_editor_follows_it() {
+        let mut shell = Shell::new("gpui-source-links", Seed::World);
+        for _ in 0..300 {
+            if shell.read(|root| root.app.lookup.index().is_some()) {
+                break;
+            }
+            shell.wait(std::time::Duration::from_millis(100));
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let text = "Ride to [[Verori|The home country]] or [[Nowhere at all]].\n";
+        let handle = show(&mut shell, text, true);
+        shell.click("Source editor");
+        let place = |shell: &mut Shell, words: &str| {
+            let (handle, at) = (handle.clone(), text.find(words).unwrap() + 2);
+            let bounds = shell
+                .update(move |_, _, cx| handle.bounds_at(at, cx))
+                .expect("the words are drawn");
+            point(bounds.left() + px(1.0), bounds.center().y)
+        };
+        let ctrl = Modifiers {
+            control: true,
+            ..Modifiers::default()
+        };
+        let home = place(&mut shell, "home");
+        shell.click_at(home);
+        assert!(
+            !shell.read(|root| root.app.lookup.open),
+            "a plain click only places the caret"
+        );
+        let nowhere = place(&mut shell, "Nowhere");
+        shell.click_at_with(nowhere, ctrl);
+        assert!(
+            !shell.read(|root| root.app.lookup.open),
+            "a link to nothing does nothing"
+        );
+        shell.click_at_with(home, ctrl);
+        assert!(
+            shell.read(|root| root.app.lookup.open),
+            "Ctrl+click opened the note in Lookup"
+        );
+    }
 }

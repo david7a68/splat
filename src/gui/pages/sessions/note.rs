@@ -294,6 +294,10 @@ pub(super) fn editor(
         .markdown_source()
         .fill()
         .own_write(own_write)
+        .on_note_link(cx.listener(|root, target: &str, _, cx| {
+            root.app.sessions.gv_open_link(target);
+            cx.notify();
+        }))
         .on_change(cx.listener(move |root, words: &str, window, cx| {
             let before = root
                 .app

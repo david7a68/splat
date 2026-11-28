@@ -571,6 +571,7 @@ fn roster_column(
                 roster.notes.clone(),
             )
             .name("Read-aloud and notes")
+            .follow_links(None)
             .placeholder(
                 "What you read to the table, then your tactics. The run shows this before the first turn.",
             )

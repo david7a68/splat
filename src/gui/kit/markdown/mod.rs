@@ -932,7 +932,7 @@ fn warning(words: &str) -> AnyElement {
 }
 
 /// Follow a pressed link: the caller's handler, else the reader's routing.
-fn follow(
+pub(super) fn follow(
     target: &LinkTarget,
     from: Option<uuid::Uuid>,
     (on_link, on_target, ctx): (Option<&OnLink>, Option<&OnTarget>, Option<&StateContext>),

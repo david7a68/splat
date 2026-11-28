@@ -428,6 +428,8 @@ fn entry(
         // A built-in entry's source reads and copies, but takes no typing (egui's
         // `interactive(editable)`).
         .read_only(!editable)
+        .follow_links(view.entry.as_ref().map(|entry| entry.id))
+        .on_note_link(follow_note(index, &view, cx))
         .on_change(cx.listener(move |root, words: &str, _, cx| {
             if editable {
                 root.app.library.edit_draft(words);
@@ -511,17 +513,7 @@ fn read_body(
         root.app.library.open_link(*at);
         cx.notify();
     });
-    let link_index = index.clone();
-    let from = view.entry.as_ref().map(|entry| entry.id);
-    let follow = cx.listener(move |root, note: &str, _, cx| {
-        if let Some(index) = &link_index
-            && let crate::world::Go::Item(_, heading) = index.resolve_link(note, from)
-        {
-            crate::markdown_view::want_heading(&root.ctx, heading);
-        }
-        root.app.library.follow_link(note, link_index.as_deref());
-        cx.notify();
-    });
+    let follow = follow_note(index, view, cx);
     let reader = EntryView::new(
         ElementId::Name(format!("library-body-{}", view.note).into()),
         view.name.clone(),
@@ -553,6 +545,26 @@ fn read_body(
         .child(head)
         .child(reader)
         .into_any_element()
+}
+
+/// A note link pressed in the entry (its reader, or Ctrl+click in its source): the Library opens
+/// the note it names, at its heading.
+fn follow_note(
+    index: &Option<Arc<ContentIndex>>,
+    view: &ReaderView,
+    cx: &mut Context<SplatRoot>,
+) -> impl Fn(&str, &mut Window, &mut gpui::App) + 'static {
+    let link_index = index.clone();
+    let from = view.entry.as_ref().map(|entry| entry.id);
+    cx.listener(move |root, note: &str, _, cx| {
+        if let Some(index) = &link_index
+            && let crate::world::Go::Item(_, heading) = index.resolve_link(note, from)
+        {
+            crate::markdown_view::want_heading(&root.ctx, heading);
+        }
+        root.app.library.follow_link(note, link_index.as_deref());
+        cx.notify();
+    })
 }
 
 /// A changed file: its warning with the two choices, then the comparison (or the draft alone
