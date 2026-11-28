@@ -398,11 +398,30 @@ fn columns_keep_the_widths_the_dm_drags() {
     // focus colour, Right moves it by L, and Home gives the list back its default width.
     assert!(
         shell
-            .bounds("Resize column library_entries (focused)")
+            .bounds("Resize Library entries column (focused)")
             .is_some(),
         "the pressed splitter shows the focus ring"
     );
     shell.capture("gpui-columns__03-page-splitter-focused__1200x800");
+    // Tab order follows the page: the splitter left of the entries comes before their search,
+    // the one left of the reader after the list.
+    shell.click("id:library-search");
+    shell.press("shift-tab");
+    assert!(
+        shell
+            .bounds("Resize Library categories column (focused)")
+            .is_some(),
+        "Shift+Tab from the search reaches the splitter on its left"
+    );
+    shell.press("tab");
+    assert!(
+        shell
+            .bounds("Resize Library categories column (focused)")
+            .is_none(),
+        "and Tab goes back to the search"
+    );
+    let list = shell.bounds("column library_entries").expect("the list");
+    shell.click_at(point(list.right(), list.center().y));
     shell.press("right");
     let right = saved(&mut shell, "library_entries").expect("the list's width is kept");
     assert!(
@@ -1055,7 +1074,7 @@ fn dialogs() {
     shell.click_at(point(list.right(), foot));
     assert!(
         shell
-            .bounds("Resize column library_entries (focused)")
+            .bounds("Resize Library entries column (focused)")
             .is_none(),
         "the splitter under the backdrop did not take the keyboard"
     );

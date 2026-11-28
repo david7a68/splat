@@ -62,6 +62,28 @@ pub fn set_column_width(key: &str, width: Option<f32>, cx: &mut App) {
     }
 }
 
+/// A column's words in its splitter's accessible name (`Resize Library entries column`), by
+/// the column's id, as egui named them.
+pub fn column_words(key: &str) -> &'static str {
+    match key {
+        "navigation" => "navigation",
+        "library_sections" => "Library categories",
+        "library_entries" => "Library entries",
+        "world_list_panel" => "World notes",
+        "session_list_panel" => "sessions",
+        "template_list_panel" => "templates",
+        "campaign_modules" => "campaign packages",
+        "party_members" => "party members",
+        "session_notes" => "session notes",
+        "session_note_frame" => "note",
+        "lookup" => "Lookup",
+        "timeline_detail_panel" => "timeline details",
+        "run_panel" | "run_setup_panel" | "run_ended_log" => "fight panel",
+        "encounter_add" => "creature search",
+        _ => "side panel",
+    }
+}
+
 /// Which edge of the window or page the column stands at.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Side {
@@ -232,6 +254,7 @@ fn splitter(
         .track_focus(focus)
         .role(Role::Splitter)
         .aria_label(SharedString::from(format!("Resize {} column", column.name)))
+        .aria_description(super::panes::KEY_HELP)
         .on_drag(EdgeDrag(key), |_, _, _, cx| cx.new(|_| NoGhost))
         .on_key_down(move |event, window, cx| {
             let pressed = event.keystroke.key.as_str();

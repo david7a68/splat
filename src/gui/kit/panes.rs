@@ -258,8 +258,11 @@ impl RenderOnce for Columns {
                     sign,
                     default: fixed.width?,
                     range: fixed.range.clone()?,
-                    name: format!("Resize column {}", fixed.key.unwrap_or("between the panes"))
-                        .into(),
+                    name: format!(
+                        "Resize {} column",
+                        super::edge::column_words(fixed.key.unwrap_or(""))
+                    )
+                    .into(),
                 })
             })
             .collect();
@@ -281,11 +284,13 @@ impl RenderOnce for Columns {
                     let (band, laid, focus) =
                         splitter.render(&self.id, at, (&state, &save), window, cx);
                     presses.push((laid, focus));
+                    // The band first: its Tab stop comes before the pane's own controls, as the
+                    // edge stands left of them.
                     div()
                         .relative()
                         .size_full()
-                        .child(content)
                         .child(band)
+                        .child(content)
                         .into_any_element()
                 }
                 None => content,
@@ -371,7 +376,7 @@ struct Splitter {
     sign: f32,
     default: Pixels,
     range: Range<Pixels>,
-    /// Its accessible name and harness target (`Resize column library_entries`).
+    /// Its accessible name and harness target (`Resize Library entries column`).
     name: SharedString,
 }
 
@@ -421,6 +426,7 @@ impl Splitter {
             .track_focus(&focus)
             .role(Role::Splitter)
             .aria_label(name.clone())
+            .aria_description(KEY_HELP)
             .on_key_down(move |event, window, cx| {
                 if event.keystroke.modifiers.modified() {
                     return;
@@ -466,3 +472,6 @@ impl Splitter {
         )
     }
 }
+
+/// A splitter's key help (egui's description).
+pub const KEY_HELP: &str = "Left and Right move the edge. Home restores the natural width.";
