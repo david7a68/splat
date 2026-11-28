@@ -955,13 +955,24 @@ fn warning(words: &str) -> AnyElement {
 
 /// Where a pressed link is: the note it is in, and the entry its rolls are kept under.
 #[derive(Clone, Copy)]
-struct From<'a> {
+pub(super) struct From<'a> {
     document: Option<uuid::Uuid>,
     entry: Option<&'a SharedString>,
 }
 
+impl From<'_> {
+    /// A press in a note's source (the text editor): it is in no reader's entry, so a roll
+    /// keeps the name it has.
+    pub(super) fn source(document: Option<uuid::Uuid>) -> Self {
+        Self {
+            document,
+            entry: None,
+        }
+    }
+}
+
 /// Follow a pressed link: the caller's handler, else the reader's routing.
-fn follow(
+pub(super) fn follow(
     target: &LinkTarget,
     from: From<'_>,
     (on_link, on_target, ctx): (Option<&OnLink>, Option<&OnTarget>, Option<&StateContext>),

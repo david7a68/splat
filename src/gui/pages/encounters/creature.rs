@@ -160,6 +160,7 @@ pub(super) fn pane(view: &CreatureView, cx: &mut Context<SplatRoot>) -> AnyEleme
                 .name("Creature text")
                 .mono()
                 .rows(12)
+                .follow_links(None)
                 .on_change(field(cx, CreatureField::Body)),
             ),
         );

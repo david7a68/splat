@@ -256,7 +256,10 @@ fn library_browse() {
   runs frames until the app is idle. It also waits for a read of the party's sheets in flight, on the
   read's own result, as egui's driver did: the party bar, the run's Sheet tab and synced roster rows
   show those sheets. `wait(Duration)` moves the clock on (timers, the poll).
-- `bounds(name)` and `click_at(point)` find and press a place. `drag(from, to)` drags (a splitter), and
+- The window has the system's keyboard from the start, as the app's does once it opens, so a focused
+  field draws its caret and selection in a capture. `screenshot()` gives a capture's pixels to a test.
+- `bounds(name)` and `click_at(point)` find and press a place; `click_at_with(point, Modifiers)` presses
+  with keys held (a Ctrl+click). `drag(from, to)` drags (a splitter), and
   `drag_target(from, to)` drags between two targets by name. `scroll(at, ScrollDelta, Modifiers)`
   scrolls: `Pixels` is a touchpad, `Lines` a wheel.
 - `frame_cost(frames)` gives the mean time of a quiet frame (`gui::tests::frame_cost_report`).

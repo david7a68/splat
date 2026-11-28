@@ -572,6 +572,9 @@ pub fn install(cx: &mut App) {
     use gpui_component::{Theme, ThemeMode};
     Theme::change(ThemeMode::Dark, None, cx);
     Theme::update(cx, |theme| {
+        // Text cursors do not blink (`docs/design-system.md`, Motion and scrolling), as egui's
+        // did not.
+        theme.cursor_blink = gpui_component::input::CursorBlink::steady();
         let k = colors();
         let t = &mut theme.colors;
         t.background = k.page;

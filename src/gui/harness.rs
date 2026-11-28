@@ -97,6 +97,10 @@ impl Shell {
             .expect("a headless window");
         // One device pixel per pixel, as the reference captures (`*__1200x800.png`).
         cx.simulate_window_scale_factor_change(handle.into(), 1.0);
+        // The window has the system's keyboard, as the app's has once it opens: a focused field
+        // draws its caret and its selection only then.
+        cx.update_window(handle.into(), |_, window, _| window.activate_window())
+            .expect("the window");
         let mut shell = Self {
             cx,
             window: handle.into(),
@@ -211,18 +215,23 @@ impl Shell {
 
     /// Press at a place in the window, then settle.
     pub(crate) fn click_at(&mut self, position: gpui::Point<Pixels>) {
+        self.click_at_with(position, Modifiers::default());
+    }
+
+    /// Press at a place in the window with `modifiers` held (a Ctrl+click), then settle.
+    pub(crate) fn click_at_with(&mut self, position: gpui::Point<Pixels>, modifiers: Modifiers) {
         for input in [
             PlatformInput::MouseDown(MouseDownEvent {
                 button: MouseButton::Left,
                 position,
-                modifiers: Modifiers::default(),
+                modifiers,
                 click_count: 1,
                 first_mouse: false,
             }),
             PlatformInput::MouseUp(MouseUpEvent {
                 button: MouseButton::Left,
                 position,
-                modifiers: Modifiers::default(),
+                modifiers,
                 click_count: 1,
             }),
         ] {
@@ -411,6 +420,14 @@ impl Shell {
             })
             .expect("the window");
         self.settle();
+    }
+
+    /// Render the window and give its pixels (a test reads what a capture shows).
+    pub(crate) fn screenshot(&mut self) -> image::RgbaImage {
+        self.settle();
+        self.cx
+            .capture_screenshot(self.window)
+            .unwrap_or_else(|error| panic!("no screenshot: {error:#}"))
     }
 
     /// Render the window and write it to `artifacts/screenshots/gpui/<name>.png`.
