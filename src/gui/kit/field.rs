@@ -900,7 +900,13 @@ fn follow_link_at(
             return;
         }
     }
-    super::markdown::follow(&target, links.from, (None, None, ctx.as_ref()), window, cx);
+    super::markdown::follow(
+        &target,
+        super::markdown::From::source(links.from),
+        (None, None, ctx.as_ref()),
+        window,
+        cx,
+    );
 }
 
 /// The rule under each section heading of a Markdown source, as the Reader draws it: a hairline
