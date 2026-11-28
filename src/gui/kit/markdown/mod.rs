@@ -77,6 +77,7 @@ pub struct Markdown {
     on_target: Option<OnTarget>,
     on_note: Option<OnLink>,
     jump: Option<ScrollHandle>,
+    entry: Option<SharedString>,
 }
 
 /// `markdown(id, source)`: a Markdown document (see [`Markdown`]).
@@ -101,6 +102,7 @@ impl Markdown {
             on_target: None,
             on_note: None,
             jump: None,
+            entry: None,
         }
     }
 
@@ -179,6 +181,13 @@ impl Markdown {
         handler: impl Fn(&LinkTarget, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_target = Some(Rc::new(handler));
+        self
+    }
+
+    /// The entry whose words these are: a dice link's preview roll is kept under its name, so
+    /// the result shows under this entry whichever reader was drawn last (`rolls::set_entry`).
+    pub fn entry(mut self, name: impl Into<SharedString>) -> Self {
+        self.entry = Some(name.into());
         self
     }
 
@@ -264,6 +273,7 @@ impl RenderOnce for Markdown {
             on_target: self.on_target.clone().or_else(|| {
                 let on_note = self.on_note.clone()?;
                 let document = self.document;
+                let entry = self.entry.clone();
                 Some(Rc::new(
                     move |target: &LinkTarget, window: &mut Window, cx: &mut App| {
                         if let LinkTarget::Note(note) = target {
@@ -271,12 +281,17 @@ impl RenderOnce for Markdown {
                             window.refresh();
                         } else {
                             let ctx = host(cx);
-                            follow(target, document, (None, None, ctx.as_ref()), window, cx);
+                            let from = From {
+                                document,
+                                entry: entry.as_ref(),
+                            };
+                            follow(target, from, (None, None, ctx.as_ref()), window, cx);
                         }
                     },
                 ) as OnTarget)
             }),
             ctx: ctx.clone(),
+            entry: self.entry.clone(),
             kept: kept.clone(),
             reader: Key::new("gpui_reader").with(format!("{:?}", self.id)),
         };
@@ -642,6 +657,8 @@ struct Draw {
     on_link: Option<OnLink>,
     on_target: Option<OnTarget>,
     ctx: Option<StateContext>,
+    /// The entry a dice link's preview roll is kept under (`Markdown::entry`).
+    entry: Option<SharedString>,
     kept: Entity<Prepared>,
     /// The reader's key in the state context, where a roll table keeps its state.
     reader: Key,
@@ -710,11 +727,16 @@ impl Draw {
             let on_link = self.on_link.clone();
             let on_target = self.on_target.clone();
             let ctx = self.ctx.clone();
-            let from = self.document;
+            let document = self.document;
+            let entry = self.entry.clone();
             move |pressed: usize, window: &mut Window, cx: &mut App| {
                 let Some((_, target)) = which.get(pressed).and_then(|index| links.get(*index))
                 else {
                     return;
+                };
+                let from = From {
+                    document,
+                    entry: entry.as_ref(),
                 };
                 follow(
                     target,
@@ -931,10 +953,17 @@ fn warning(words: &str) -> AnyElement {
         .into_any_element()
 }
 
+/// Where a pressed link is: the note it is in, and the entry its rolls are kept under.
+#[derive(Clone, Copy)]
+struct From<'a> {
+    document: Option<uuid::Uuid>,
+    entry: Option<&'a SharedString>,
+}
+
 /// Follow a pressed link: the caller's handler, else the reader's routing.
 pub(super) fn follow(
     target: &LinkTarget,
-    from: Option<uuid::Uuid>,
+    from: From<'_>,
     (on_link, on_target, ctx): (Option<&OnLink>, Option<&OnTarget>, Option<&StateContext>),
     window: &mut Window,
     cx: &mut App,
@@ -963,7 +992,7 @@ pub(super) fn follow(
         }
         LinkTarget::Note(note) => {
             if let Some(ctx) = ctx {
-                crate::markdown_view::send_note_link(ctx, note.clone(), from);
+                crate::markdown_view::send_note_link(ctx, note.clone(), from.document);
             }
         }
         LinkTarget::Lookup(words) => {
@@ -973,6 +1002,10 @@ pub(super) fn follow(
         }
         LinkTarget::Roll(link) => {
             if let Some(ctx) = ctx {
+                // The roll is named at the press, so the reader drawn last does not decide.
+                if let Some(entry) = from.entry {
+                    crate::rolls::set_entry(ctx, entry);
+                }
                 let keys = window.modifiers();
                 crate::rolls::ask_pressed(ctx, link, keys.shift, keys.control || keys.platform);
             }

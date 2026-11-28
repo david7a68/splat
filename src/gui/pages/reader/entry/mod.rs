@@ -206,6 +206,9 @@ pub(super) struct Out<'w> {
     pub window: &'w Window,
     pub ctx: Option<StateContext>,
     pub document: Option<uuid::Uuid>,
+    /// The entry's name: a roll pressed in its parts is kept under it (`rolls::set_entry` at the
+    /// press, as the reader drawn last is not the one pressed).
+    pub name: SharedString,
     pub on_open: Option<OnOpen>,
     pub on_note: Option<OnNote>,
     pub jump: Option<ScrollHandle>,
@@ -268,7 +271,9 @@ impl Out<'_> {
 
     /// The Reader's Markdown of this entry.
     pub fn markdown(&self, id: ElementId, text: &str) -> AnyElement {
-        let mut markdown = kit::Markdown::new(id, text.to_owned()).document(self.document);
+        let mut markdown = kit::Markdown::new(id, text.to_owned())
+            .document(self.document)
+            .entry(self.name.clone());
         if self.wide {
             markdown = markdown.wide_tables();
         }
@@ -282,7 +287,8 @@ impl Out<'_> {
     pub fn compact_markdown(&self, id: ElementId, text: &str) -> AnyElement {
         let markdown = kit::Markdown::new(id, text.to_owned())
             .fields()
-            .document(self.document);
+            .document(self.document)
+            .entry(self.name.clone());
         self.notes_to_caller(markdown).into_any_element()
     }
 
@@ -335,6 +341,7 @@ impl EntryView {
             window,
             ctx,
             document: entry.map(|entry| entry.id),
+            name: self.name.clone(),
             on_open: self.on_open.clone(),
             on_note: self.on_note.clone(),
             jump: self.jump.clone(),

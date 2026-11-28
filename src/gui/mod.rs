@@ -456,12 +456,12 @@ impl SplatRoot {
         }
     }
 
-    /// Ctrl+S, with one owner for the whole window, side panels before the page (each takes the
-    /// key with `design::save_row::save_key`): nothing
+    /// Ctrl+S, with one owner for the whole window, side panels before the page: nothing
     /// under a modal (the close prompt, the copy dialog, a kit dialog or menu); the Notes panel's
-    /// note when it had the keyboard; else the page shown (`pages::save_key`). No page binds
+    /// note when it had the keyboard; Lookup's edit form when its fields have the keyboard
+    /// (`world::reader::lookup_save_key`); else the page shown (`pages::save_key`). No page binds
     /// Ctrl+S itself, so the key saves the same thing wherever the keyboard is.
-    fn save(&mut self, _: &Save, _: &mut Window, cx: &mut Context<Self>) {
+    fn save(&mut self, _: &Save, window: &mut Window, cx: &mut Context<Self>) {
         if self.modal_open(cx) {
             return;
         }
@@ -469,7 +469,7 @@ impl SplatRoot {
         let notes_panel = app.sessions.notes_open && app.page != Page::Sessions && !app.lookup.open;
         if notes_panel && app.sessions.gv_note_had_focus() {
             app.sessions.gv_save_note();
-        } else {
+        } else if !pages::world::reader::lookup_save_key(self, window, cx) {
             pages::save_key(self, cx);
         }
         cx.notify();

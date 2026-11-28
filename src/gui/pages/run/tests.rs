@@ -150,6 +150,34 @@ fn encounter_run_live() {
     let after = current_name(&mut shell);
     assert_ne!(before, after, "N moves the turn");
     shell.capture("encounter-run__09-next-turn-by-keyboard__1200x800");
+
+    // Correct: the well keeps the DM's words while they type, so a cleared Current HP and a
+    // new number are one step, one Log line and one Undo step, on Enter (egui's stepper).
+    shell.click("Ember Cultist");
+    shell.update(|root, _, _| root.app.encounters.run_mut().unwrap().panel = Panel::Record);
+    shell.settle();
+    let counts = |shell: &mut Shell| {
+        shell.read(|root| {
+            let run = root.app.encounters.run().unwrap();
+            (run.history.len(), run.state.log.len())
+        })
+    };
+    let (steps, lines) = counts(&mut shell);
+    shell.click("Current HP");
+    shell.press("end backspace backspace backspace backspace");
+    shell.type_text("9");
+    assert_eq!(
+        counts(&mut shell),
+        (steps, lines),
+        "no step while the DM types"
+    );
+    shell.press("enter");
+    assert_eq!(participant(&mut shell, "Ember Cultist").hp, Some(9));
+    assert_eq!(
+        counts(&mut shell),
+        (steps + 1, lines + 1),
+        "one step and one Log line for the typed number"
+    );
 }
 
 /// The live run at the smallest window.
@@ -209,6 +237,34 @@ fn encounter_run_setup() {
         shell.click(&format!("Initiative for {name}"));
         shell.type_text(&format!("{}", 10 + at));
     }
+    // Correct: a negative initiative bonus is typed from its sign (egui's signed stepper).
+    let first = players[0].clone();
+    shell.update(|root, _, _| {
+        let run = root.app.encounters.run_mut().unwrap();
+        let at = run
+            .state
+            .participants
+            .iter()
+            .position(|p| p.name == first)
+            .unwrap();
+        run.select(at);
+        run.panel = Panel::Record;
+    });
+    shell.settle();
+    if participant(&mut shell, &players[0])
+        .initiative_bonus
+        .is_none()
+    {
+        shell.click("Enter Initiative bonus");
+    }
+    shell.click("Initiative bonus");
+    shell.press("ctrl-a backspace");
+    shell.type_text("-1");
+    shell.press("enter");
+    assert_eq!(
+        participant(&mut shell, &players[0]).initiative_bonus,
+        Some(-1)
+    );
     assert_eq!(
         shell.read(|root| root.app.encounters.run().unwrap().setup_blocked()),
         None

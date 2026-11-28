@@ -34,6 +34,11 @@ pub struct State {
     pub history_open: bool,
     /// The side choice whose `Other…` field is open, by its id.
     pub other_side: Option<String>,
+    /// The words typed in the open `Other…` field: the side, once Enter or leaving the field
+    /// sends them.
+    pub other_words: String,
+    /// The `Other…` field takes the keyboard in the next frame only (the frame it opens).
+    pub other_focus: std::cell::Cell<bool>,
     /// Each loot list's kept state, by its key (`loot::list`).
     pub loot: std::collections::HashMap<String, loot::LootState>,
     /// Each Changes form's Other effect being typed, by the form's key.

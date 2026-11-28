@@ -96,6 +96,16 @@ fn first_target(shell: &mut Shell, prefix: &str) -> String {
         .unwrap_or_else(|| panic!("no target starts with {prefix:?}"))
 }
 
+/// Choose `Other…` in the side choice whose id starts with `id`, and type `words` one key at a
+/// time (each key draws a frame), then Enter.
+fn other_side(shell: &mut Shell, id: &str, words: &str) {
+    let choice = first_target(shell, id);
+    shell.click(&choice);
+    shell.click("Other…");
+    shell.type_text(words);
+    shell.press("enter");
+}
+
 /// The roster's length in the open draft.
 fn roster_len(shell: &mut Shell) -> usize {
     shell.read(|root| {
@@ -315,11 +325,54 @@ fn a_group_is_edited_and_saved() {
     shell.click(&more);
     let more = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
     assert_eq!(more[0].1, members[0].1 + 1, "+ adds one to the count");
+    // The count's well keeps the DM's words while they type: cleared, then `12`, is 12.
+    let well = first_target(&mut shell, "How many of ");
+    shell.click(&well);
+    shell.press("ctrl-a backspace");
+    shell.type_text("12");
+    let typed = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
+    assert_eq!(typed[0].1, 12, "a cleared count takes the typed 12");
+    shell.press("enter");
     assert_eq!(
         shell.read(|root| root.app.encounters.group_open()),
         Some(true)
     );
-    shell.click("id:member-menu-0-button");
+    // A, an unrelated B, Undo of A (AGENTS.md): the member gets a change of its own, is
+    // removed, the notes change after it; Undo brings the member back whole (its count and its
+    // change) and the notes keep their new words.
+    let change = first_target(&mut shell, "id:member-change-");
+    let index: usize = change
+        .rsplit('-')
+        .next()
+        .and_then(|at| at.parse().ok())
+        .expect("the member's index");
+    shell.click(&change);
+    let ac_how = first_target(&mut shell, "id:changes-how:AC:");
+    shell.click(&ac_how);
+    shell.click("Add");
+    shell.click("Done with changes");
+    let member_ac = move |shell: &mut Shell| {
+        shell.read(move |root| {
+            use splat_encounters_ui::encounters::model::{ChangesOf, GroupAt};
+            root.app
+                .encounters
+                .changes_form(&ChangesOf::Member(GroupAt::Open, index))
+                .and_then(|form| {
+                    form.rows
+                        .iter()
+                        .find(|row| row.label == "AC")
+                        .map(|row| (row.how, row.number))
+                })
+        })
+    };
+    let changed = member_ac(&mut shell);
+    assert_eq!(
+        changed.map(|(how, _)| how),
+        Some(splat_encounters_ui::encounters::model::ChangeHow::Add),
+        "the member's own change"
+    );
+    let whole = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
+    shell.click(&format!("id:member-menu-{index}-button"));
     shell.click("Remove");
     let fewer = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
     assert_eq!(
@@ -328,10 +381,29 @@ fn a_group_is_edited_and_saved() {
         "Remove takes the member away"
     );
     shell.capture("encounter-groups__10-group-member-removed-with-undo__1200x800");
+    shell.click("Group notes");
+    shell.press("ctrl-end");
+    shell.type_text(" Watch the bridge.");
+    let notes = |shell: &mut Shell| {
+        shell.update(|root, _, _| {
+            root.app
+                .encounters
+                .group_frame(None)
+                .map(|view| view.fields.notes)
+                .unwrap_or_default()
+        })
+    };
+    let typed = notes(&mut shell);
+    assert!(typed.ends_with("Watch the bridge."), "{typed:?}");
     let undo = first_target(&mut shell, "Undo ");
     shell.click(&undo);
     let back = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
-    assert_eq!(back.len(), members.len(), "Undo brings the member back");
+    assert_eq!(
+        back, whole,
+        "Undo brings the member back in its place, with its count"
+    );
+    assert_eq!(member_ac(&mut shell), changed, "and with its own change");
+    assert_eq!(notes(&mut shell), typed, "the notes typed after it stay");
     shell.click("Save group");
     assert_eq!(
         shell.read(|root| root.app.encounters.group_open()),
@@ -532,6 +604,27 @@ fn a_rows_changes_are_edited_in_its_form() {
         "the form shows its Done"
     );
     shell.capture("run-overrides__03-slot-changes-open__1200x800");
+    // The open row's `Other…` side keeps the words typed one key at a time: one side, `night watch`,
+    // and no side for each letter.
+    other_side(&mut shell, "id:roster-side:", "night watch");
+    let form_sides = shell.update(|root, _, _| {
+        let ctx = root.ctx.clone();
+        root.app
+            .encounters
+            .roster_view(&ctx, &root.app.party, false)
+            .and_then(|roster| {
+                roster
+                    .rows
+                    .iter()
+                    .find_map(|row| row.form.as_ref().map(|f| (f.side.clone(), f.sides.clone())))
+            })
+    });
+    let (side, sides) = form_sides.expect("the open row's form");
+    assert_eq!(side, "night watch");
+    assert!(
+        !sides.iter().any(|side| side == "n" || side == "h"),
+        "no letter became a side: {sides:?}"
+    );
     // AC: Same → Add, then one more with +.
     let ac_how = first_target(&mut shell, "id:changes-how:AC:");
     shell.click(&ac_how);
@@ -579,8 +672,42 @@ fn a_members_changes_and_its_replacement() {
     shell.click(&change);
     assert!(shell.bounds("Maximum HP: how it changes").is_some());
     shell.capture("encounter-groups__03-group-member-changes__1200x800");
+    // `Other…` keeps the words typed one key at a time: one side, `night watch`, on Enter, for the
+    // member's changed side and the group's Default side.
+    let index: usize = change
+        .rsplit('-')
+        .next()
+        .and_then(|at| at.parse().ok())
+        .expect("the member's index");
+    other_side(&mut shell, "id:changes-side:", "night watch");
+    let side = shell.read(move |root| {
+        use splat_encounters_ui::encounters::model::{ChangesOf, GroupAt, SideView};
+        match root
+            .app
+            .encounters
+            .changes_form(&ChangesOf::Member(GroupAt::Open, index))
+            .map(|form| form.side)
+        {
+            Some(SideView::Group { side, .. }) => side,
+            _ => String::new(),
+        }
+    });
+    assert_eq!(side, "night watch", "the member's changed side");
+    other_side(&mut shell, "id:group-side:", "night watch");
+    let side = shell.update(|root, _, _| {
+        root.app
+            .encounters
+            .group_frame(None)
+            .map(|view| view.fields.side)
+    });
+    assert_eq!(
+        side.as_deref(),
+        Some("night watch"),
+        "the group's Default side"
+    );
     shell.click("Done with changes");
     assert!(shell.bounds("Maximum HP: how it changes").is_none());
+    shell.click("Save group");
     shell.click("id:group-back");
     open_group(&mut shell, "Lost");
     // The member whose change cannot stand shows the change under its fault.

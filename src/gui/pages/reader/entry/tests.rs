@@ -38,6 +38,18 @@ fn show_entry(
     subtitle: &'static str,
     opened: Rc<Cell<Option<usize>>>,
 ) -> ScrollHandle {
+    show_entries(shell, width, (entry, None), subtitle, opened)
+}
+
+/// [`show_entry`], with a second entry's view built after the first (as Lookup's is built after
+/// the page's reader).
+fn show_entries(
+    shell: &mut Shell,
+    width: f32,
+    (entry, also): (Entry, Option<Entry>),
+    subtitle: &'static str,
+    opened: Rc<Cell<Option<usize>>>,
+) -> ScrollHandle {
     let scroll = ScrollHandle::new();
     let column = scroll.clone();
     let preview: Preview = Rc::new(move |root, _, cx| {
@@ -76,7 +88,21 @@ fn show_entry(
                             links,
                         )
                         .on_open(move |index, _, _| opened.set(Some(index))),
-                    ),
+                    )
+                    .children(also.as_ref().map(|also| {
+                        EntryView::new(
+                            ("also", also.id.as_u128() as u64),
+                            also.name.clone(),
+                            Some(also),
+                            also.body.clone(),
+                            Source {
+                                path: also.path.clone(),
+                                owner: "Built-in".into(),
+                                builtin: true,
+                            },
+                            Rc::new(NoLinks),
+                        )
+                    })),
             )
             .into_any_element()
     });
@@ -131,6 +157,60 @@ fn creature_stat_block_and_its_dice() {
     // A press on an ability's modifier asks for its check; outside a run the preview stream
     // rolls it, and its result is kept for the entry.
     let mut shell = shell("library-browse", Seed::Empty, at(DEFAULT));
+    // Another entry's view is built after this one (Lookup's, beside the Library's reader): a
+    // press in the first keeps its roll under the first, the one pressed.
+    let dragon = builtin("definitions/creatures/adult_black_dragon.md");
+    let aboleth = builtin("definitions/creatures/aboleth.md");
+    let both = show_entries(
+        &mut shell,
+        READER,
+        (dragon.clone(), Some(aboleth)),
+        "Creature · CR 14 · D&D 2024 · SRD 5.2.1",
+        Rc::new(Cell::new(None)),
+    );
+    let rolled_for = |shell: &mut Shell, name: &str, link: &RollLink| {
+        shell.read(|root| crate::rolls::plain::preview_words(&root.ctx, name, &[link]))
+    };
+    let check = RollLink::d20(D20::Check, 6, "Strength");
+    let action = crate::rolls::plain::actions_of(&dragon.body)[0].clone();
+    let skill = RollLink::d20(D20::Skill, 11, "Perception");
+    // An ability's number, an action's tile and a Skills dice link, each pressed in its view.
+    let skills = crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with("Perception"))
+        .expect("the Skills row")
+        .to_string();
+    let presses = [
+        (
+            &check,
+            format!("{} +6", crate::rolls::link_label(&check)),
+            false,
+        ),
+        (
+            &action.1.link,
+            crate::rolls::link_label(&action.1.link).to_owned(),
+            false,
+        ),
+        (&skill, skills, true),
+    ];
+    for (link, name, at_start) in presses {
+        scroll_to(&mut shell, &both, &name);
+        let bounds = shell.bounds(&name).expect("the target's place");
+        // A Skills link's target covers its skill's name, at the row's start.
+        shell.click_at(if at_start {
+            point(bounds.left() + px(8.0), bounds.center().y)
+        } else {
+            bounds.center()
+        });
+        assert!(
+            rolled_for(&mut shell, "Adult Black Dragon", link).is_some_and(|p| !p.is_empty()),
+            "{link:?} was rolled for the Adult Black Dragon, the entry pressed"
+        );
+        assert!(
+            rolled_for(&mut shell, "Aboleth", link).is_none(),
+            "{link:?} is not kept under the entry built last"
+        );
+    }
     let scroll = show_entry(
         &mut shell,
         READER,
@@ -138,18 +218,8 @@ fn creature_stat_block_and_its_dice() {
         "Creature · CR 14 · D&D 2024 · SRD 5.2.1",
         Rc::new(Cell::new(None)),
     );
-    let check = RollLink::d20(D20::Check, 6, "Strength");
-    shell.click(&format!("{} +6", crate::rolls::link_label(&check)));
-    let rolled = shell.read(|root| {
-        crate::rolls::plain::preview_words(&root.ctx, "Adult Black Dragon", &[&check])
-    });
-    assert!(
-        rolled.is_some_and(|parts| !parts.is_empty()),
-        "the Strength check was rolled for the Adult Black Dragon"
-    );
     // In a run, the armed action's tile row says what to do now and offers what can follow; a
     // press on a follow-up goes to the run.
-    let dragon = builtin("definitions/creatures/adult_black_dragon.md");
     let armed = crate::rolls::plain::actions_of(&dragon.body)[0]
         .1
         .link

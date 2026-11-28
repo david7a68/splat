@@ -213,6 +213,7 @@ fn cell(width: f32, text: &str, role: Type, color: gpui::Hsla) -> AnyElement {
 fn link_cell(out: &Out<'_>, width: f32, text: &str, link: &RollLink) -> AnyElement {
     let c = colors();
     let ctx = out.ctx.clone();
+    let entry = out.name.clone();
     let pressed = link.clone();
     let id = parts::child(&out.id, format!("dice-{}", link.destination()));
     let element = div()
@@ -238,6 +239,8 @@ fn link_cell(out: &Out<'_>, width: f32, text: &str, link: &RollLink) -> AnyEleme
         .with_tooltip(crate::rolls::hint(link))
         .on_click(move |_, window, _| {
             if let Some(ctx) = &ctx {
+                // Named at the press: the reader drawn last is not the one pressed.
+                crate::rolls::set_entry(ctx, &entry);
                 let keys = window.modifiers();
                 crate::rolls::ask_pressed(ctx, &pressed, keys.shift, keys.control || keys.platform);
                 window.refresh();
@@ -462,7 +465,8 @@ fn skills_detail(out: &mut Out<'_>, text: &str) -> AnyElement {
                 kit::Markdown::new(id, markdown)
                     .skills()
                     .full_width()
-                    .document(out.document),
+                    .document(out.document)
+                    .entry(out.name.clone()),
                 out.window,
             )
             .into_any_element()
