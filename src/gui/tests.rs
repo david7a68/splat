@@ -413,7 +413,10 @@ fn columns_keep_the_widths_the_dm_drags() {
     assert!((f32::from(list.size.width) - right).abs() <= 1.0);
     shell.press("left left");
     let left = saved(&mut shell, "library_entries").expect("the list's width is kept");
-    assert!((left - (right - 32.0)).abs() <= 1.0, "Left narrows it: {left}");
+    assert!(
+        (left - (right - 32.0)).abs() <= 1.0,
+        "Left narrows it: {left}"
+    );
     shell.press("home");
     assert_eq!(
         saved(&mut shell, "library_entries"),
@@ -495,12 +498,13 @@ fn a_scroll_bar_paints_inside_its_lane() {
                 .size_full()
                 .child(gpui::div().flex_1())
                 .child(
-                    gpui::div().w(px(300.0)).h_full().child(
-                        Pane::new("lane-pane").child(super::kit::target(
+                    gpui::div()
+                        .w(px(300.0))
+                        .h_full()
+                        .child(Pane::new("lane-pane").child(super::kit::target(
                             gpui::div().w_full().h(px(3000.0)).bg(fill),
                             "lane-content",
-                        )),
-                    ),
+                        ))),
                 )
                 .into_any_element()
         }));
@@ -567,19 +571,28 @@ fn a_click_scrolls_its_target_into_view() {
                     ),
                 )
                 .child(
-                    gpui::div().w(px(300.0)).h(px(100.0)).overflow_hidden().child(
-                        gpui::div().mt(px(400.0)).child(
-                            Button::secondary("hidden-button", "Hidden button")
-                                .on_click(move |_, _, _| hidden.set(hidden.get() + 100)),
+                    gpui::div()
+                        .w(px(300.0))
+                        .h(px(100.0))
+                        .overflow_hidden()
+                        .child(
+                            gpui::div().mt(px(400.0)).child(
+                                Button::secondary("hidden-button", "Hidden button")
+                                    .on_click(move |_, _, _| hidden.set(hidden.get() + 100)),
+                            ),
                         ),
-                    ),
                 )
                 .into_any_element()
         }));
         cx.notify();
     });
-    let before = shell.bounds("Low button").expect("the low button is laid out");
-    assert!(before.top() > shell.size().height, "it starts below the window");
+    let before = shell
+        .bounds("Low button")
+        .expect("the low button is laid out");
+    assert!(
+        before.top() > shell.size().height,
+        "it starts below the window"
+    );
     shell.click("Low button");
     assert_eq!(pressed.get(), 1, "the low button took the press");
     let after = shell.bounds("Low button").expect("the low button");
@@ -590,7 +603,10 @@ fn a_click_scrolls_its_target_into_view() {
     let unreachable = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         shell.click("Hidden button");
     }));
-    assert!(unreachable.is_err(), "a target no scroll reaches fails the press");
+    assert!(
+        unreachable.is_err(),
+        "a target no scroll reaches fails the press"
+    );
     assert_eq!(pressed.get(), 1, "and nothing pressed it");
 }
 
@@ -608,7 +624,7 @@ fn a_press_long_after_the_last_frame_keeps_its_undo() {
     } else {
         shell.click("Add Day");
     }
-    let add = shell.into_view("Add Long rest");
+    let add = shell.scroll_into_view("Add Long rest");
     shell.hold_and_move(add, add);
     // The last frame was long ago: the clock stands far behind the release.
     splat_design::frame_clock::set(-1000.0);
@@ -1083,7 +1099,10 @@ fn dialogs() {
     assert!(!menu_open(&mut shell), "Escape closed it");
     assert!(dialog_open(&mut shell), "and not the dialog");
     shell.press("escape");
-    assert!(!dialog_open(&mut shell), "the second Escape closes the dialog");
+    assert!(
+        !dialog_open(&mut shell),
+        "the second Escape closes the dialog"
+    );
     shell.click("Copy to…");
     wait_for(&mut shell, "the copy plan", |root| {
         root.app
@@ -1176,7 +1195,11 @@ fn dialogs() {
     assert!(shell.read(|root| root.app.library.dirty()));
     // Save and close writes the draft to its file and closes the window.
     let file = file_holding(shell.home(), "Ash Exposure");
-    assert!(!std::fs::read_to_string(&file).unwrap().contains("Draft ruling."));
+    assert!(
+        !std::fs::read_to_string(&file)
+            .unwrap()
+            .contains("Draft ruling.")
+    );
     assert!(!close(&mut shell));
     assert!(
         shell.click_to_close("Save and close"),

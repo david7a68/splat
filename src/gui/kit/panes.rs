@@ -14,9 +14,9 @@
 //! Keep targets clear of a splitter: a pane's content has `M` padding at its sides.
 use crate::gui::theme::{FOCUS_WIDTH, HAIRLINE_WIDTH, L, M, S, SPLITTER_WIDTH, colors};
 use gpui::{
-    AnyElement, App, DispatchPhase, Entity, ElementId, FocusHandle, IntoElement, MouseDownEvent,
-    ParentElement, Pixels,
-    RenderOnce, Role, ScrollHandle, SharedString, Styled, Window, canvas, div, prelude::*,
+    AnyElement, App, DispatchPhase, ElementId, Entity, FocusHandle, IntoElement, MouseDownEvent,
+    ParentElement, Pixels, RenderOnce, Role, ScrollHandle, SharedString, Styled, Window, canvas,
+    div, prelude::*,
 };
 use gpui_component::{ResizableState, h_resizable, resizable_panel};
 use std::ops::Range;
@@ -258,11 +258,8 @@ impl RenderOnce for Columns {
                     sign,
                     default: fixed.width?,
                     range: fixed.range.clone()?,
-                    name: format!(
-                        "Resize column {}",
-                        fixed.key.unwrap_or("between the panes")
-                    )
-                    .into(),
+                    name: format!("Resize column {}", fixed.key.unwrap_or("between the panes"))
+                        .into(),
                 })
             })
             .collect();

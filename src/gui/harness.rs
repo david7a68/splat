@@ -206,12 +206,12 @@ impl Shell {
     /// its scroll view hides is first scrolled into view with the wheel, as the DM would; one
     /// that no scroll brings into view fails the test, so no test presses what the DM cannot see.
     pub(crate) fn click(&mut self, name: &str) {
-        let at = self.into_view(name);
+        let at = self.scroll_into_view(name);
         self.click_at(at);
     }
 
     /// The middle of the target `name`, scrolled into its view first (see `click`).
-    pub(crate) fn into_view(&mut self, name: &str) -> Point<Pixels> {
+    pub(crate) fn scroll_into_view(&mut self, name: &str) -> Point<Pixels> {
         let find = |name: &str| {
             kit::probe::find_in_view(name).unwrap_or_else(|| {
                 panic!(
@@ -278,7 +278,7 @@ impl Shell {
     /// `Discard and close`): true when the window is gone after it. No settle follows, as there
     /// is no window left to draw.
     pub(crate) fn click_to_close(&mut self, name: &str) -> bool {
-        let at = self.into_view(name);
+        let at = self.scroll_into_view(name);
         for input in [
             PlatformInput::MouseDown(MouseDownEvent {
                 button: MouseButton::Left,
