@@ -136,7 +136,9 @@ pub(super) fn measure() -> Pixels {
 }
 
 /// A side choice: Party, Enemies, the encounter's other sides and
-/// `Other…`, which opens a field for a new side's name. `id` keys it; `name` names it.
+/// `Other…`, which opens a field for a new side's name. `id` keys it; `name` names it. The field
+/// keeps the DM's words while they type and takes the keyboard only as it opens; Enter or
+/// leaving it makes the words one side, and Escape closes it with no change.
 pub(super) fn side_choice(
     root: &SplatRoot,
     (id, name): (String, &'static str),
@@ -176,24 +178,47 @@ pub(super) fn side_choice(
                         root.pages.encounters.other_side = None;
                         pick(root, side);
                     }
-                    None => root.pages.encounters.other_side = Some(open_id.clone()),
+                    None => {
+                        root.pages.encounters.other_side = Some(open_id.clone());
+                        root.pages.encounters.other_words.clear();
+                        root.pages.encounters.other_focus.set(true);
+                    }
                 }
                 cx.notify();
             })),
     );
     if other_open {
+        // The typed words, as one side, once; an empty field changes nothing.
+        let send = move |root: &mut SplatRoot| {
+            if root.pages.encounters.other_side.is_none() {
+                return;
+            }
+            root.pages.encounters.other_side = None;
+            let words = std::mem::take(&mut root.pages.encounters.other_words);
+            let words = words.trim();
+            if !words.is_empty() {
+                on_pick(root, words);
+            }
+        };
+        let blur = send.clone();
         row = row.child(
-            kit::TextField::new(ElementId::Name(format!("{id}:other").into()), "")
-                .name(format!("Other side for {name}"))
-                .placeholder("Side name")
-                .width(px(96.0))
-                .focus(true)
-                .on_change(
-                    cx.listener(move |root: &mut SplatRoot, words: &str, _, cx| {
-                        on_pick(root, words);
-                        cx.notify();
-                    }),
-                ),
+            kit::TextField::new(
+                ElementId::Name(format!("{id}:other").into()),
+                root.pages.encounters.other_words.clone(),
+            )
+            .name(format!("Other side for {name}"))
+            .placeholder("Side name")
+            .width(px(96.0))
+            .focus(root.pages.encounters.other_focus.take())
+            .on_change(cx.listener(move |root: &mut SplatRoot, words: &str, _, _| {
+                words.clone_into(&mut root.pages.encounters.other_words);
+            }))
+            .on_enter(super::editor::on_key(cx, send))
+            .on_blur(super::editor::on_key(cx, blur))
+            .on_escape(super::editor::on_key(cx, |root| {
+                root.pages.encounters.other_side = None;
+                root.pages.encounters.other_words.clear();
+            })),
         );
     }
     row
