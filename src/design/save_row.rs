@@ -17,8 +17,7 @@
 //! `docs/design-system.md` (Buttons, the save row paragraph) is the rule; this is its one copy.
 //!
 //! Caller duties left: route `Ctrl+S` through [`DraftState::can_save`], so the key saves exactly
-//! when the button can (taken through [`save_key`], the one rule for every page's key), and show
-//! a refusal's or a failure's sentence in the pane's footer. A
+//! when the button can, and show a refusal's or a failure's sentence in the pane's footer. A
 //! caller that paints a word itself (`SaveWord::status`) holds the rule only when it takes that
 //! word from [`DraftState::word`].
 //!
@@ -71,49 +70,8 @@
 //! # use splat_design::ownership::Diagnosis;
 //! let found = Diagnosis { refused: None, missing: None, incomplete: None, unreadable: true }; // <- by hand
 //! ```
-use super::{Action, Density, Status, Tone, colors, components::status, icons};
-use egui::{self, Ui};
+use super::{Status, Tone, colors, icons};
 use std::borrow::Cow;
-
-/// The page's `Ctrl+S`, one rule for every page (issues #513, #514): it is taken from this
-/// frame's input only while `ready` (the draft can be saved; the editor is the one the key is
-/// for), the place is enabled, and no modal is open ([`set_modal`]). A page takes it before its
-/// fields, so no field reads it, and saves after them, so the words typed in that frame are in
-/// the save. A raw take of the key is counted (`design::results::STAGED`).
-pub fn save_key(ui: &Ui, ready: bool) -> bool {
-    ready && ui.is_enabled() && take_save_key(ui.ctx())
-}
-
-/// [`save_key`] for a page that takes the key before it draws (it has no `Ui` yet); its caller
-/// knows whether the page is enabled.
-pub fn save_key_before_drawing(ctx: &egui::Context, ready: bool) -> bool {
-    ready && take_save_key(ctx)
-}
-
-fn take_save_key(ctx: &egui::Context) -> bool {
-    if modal_open(ctx) {
-        return false;
-    }
-    ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
-}
-
-fn modal_id() -> egui::Id {
-    egui::Id::new("design_save_key_modal")
-}
-
-/// The app says, once each pass before any page draws, whether a modal is open (its own dialogs,
-/// the full-window image, any egui modal: `art::modal_open`). No page's `Ctrl+S` acts beneath
-/// it ([`save_key`]).
-pub fn set_modal(ctx: &egui::Context, open: bool) {
-    let pass = ctx.cumulative_pass_nr();
-    ctx.data_mut(|data| data.insert_temp(modal_id(), (pass, open)));
-}
-
-fn modal_open(ctx: &egui::Context) -> bool {
-    let pass = ctx.cumulative_pass_nr();
-    ctx.data(|data| data.get_temp::<(u64, bool)>(modal_id()))
-        .is_some_and(|(set, open)| open && set == pass)
-}
 
 /// Whether the draft differs from the saved text: the same type as a revised value's change.
 pub use super::memo::Changed;
@@ -378,18 +336,7 @@ pub const CHANGED_ON_DISK: &str = "Choose what to do with the changed file first
 pub const NO_CHANGES: &str = "No changes to save.";
 /// The campaign-switch reason of a draft whose Save would write.
 pub const SAVE_OR_DISCARD_TO_SWITCH: &str = "Save or discard to switch campaign.";
-/// The campaign-switch reason's short forms on a draft head's narrow save row (ruling M24).
-pub const SAVE_OR_DISCARD_SHORT: &str = "Save or discard to switch.";
-pub const DISCARD_SHORT: &str = "Discard to switch.";
 
-/// The short form of a campaign-switch reason (ruling M24), for a row too narrow for it.
-pub fn switch_short(full: &str) -> &'static str {
-    if full == DISCARD_TO_SWITCH {
-        DISCARD_SHORT
-    } else {
-        SAVE_OR_DISCARD_SHORT
-    }
-}
 /// The campaign-switch reason of a draft whose Save waits: Discard is the one way out.
 pub const DISCARD_TO_SWITCH: &str = "Discard to switch campaign.";
 
@@ -531,31 +478,6 @@ impl<'a> DraftState<'a> {
         self
     }
 
-    /// `Cancel` shows: a form draft with no changes, the comparison not owning the pane.
-    pub fn cancel_shown(&self) -> bool {
-        self.cancels.is_some() && !self.changed() && !self.on_disk
-    }
-
-    /// The form's reason after `Cancel` while it shows.
-    fn cancel_reason(&self) -> Option<&'a str> {
-        self.cancels.flatten().filter(|_| self.cancel_shown())
-    }
-
-    /// Every sentence this draft's row can paint after its controls, whatever it holds now:
-    /// the widest decides where a form draft's reasons stand.
-    fn reasons(&self) -> Vec<&'a str> {
-        let locks: &[&'a str] = if self.locks_campaign {
-            &[SAVE_OR_DISCARD_TO_SWITCH, DISCARD_TO_SWITCH]
-        } else {
-            &[]
-        };
-        self.holds
-            .into_iter()
-            .chain(locks.iter().copied())
-            .chain(self.cancels.flatten())
-            .collect()
-    }
-
     /// This draft locks the campaign switch while it has changes.
     pub fn locks_campaign(mut self) -> Self {
         self.locks_campaign = true;
@@ -677,16 +599,6 @@ impl<'a> DraftState<'a> {
         self.changed() && !self.on_disk
     }
 
-    /// The sentence the row paints after its controls now: the caller's while something else
-    /// waits for the draft too (`holds`), else the campaign-switch reason, else a clean form's
-    /// reason after `Cancel`.
-    fn row_reason(&self) -> Option<&'a str> {
-        self.holds
-            .filter(|_| self.changed())
-            .or(self.lock_reason())
-            .or(self.cancel_reason())
-    }
-
     /// The campaign-switch reason after `Discard`, for a draft that locks the switch.
     pub fn lock_reason(&self) -> Option<&'static str> {
         (self.locks_campaign && self.changed()).then(|| {
@@ -697,56 +609,27 @@ impl<'a> DraftState<'a> {
             }
         })
     }
-}
 
-/// The state words of a draft editor that its `DraftState` can reach when it never says
-/// `changed_on_disk`, `not_saved` or `repairs` (the group editor): new, unsaved, invalid in each
-/// cause, saved and no changes.
-pub const EDIT_WORDS: [SaveWord; 8] = [
-    SaveWord::Invalid(InvalidCause::Incomplete),
-    SaveWord::Invalid(InvalidCause::Refused),
-    SaveWord::Invalid(InvalidCause::Missing),
-    SaveWord::Invalid(InvalidCause::Unreadable),
-    SaveWord::New,
-    SaveWord::Unsaved,
-    SaveWord::Saved,
-    SaveWord::NoChanges,
-];
+    /// A form draft's quiet `Cancel` (`cancels`): it stands where `Discard` would while the
+    /// draft has no changes and the comparison does not own the pane. It is never blocked.
+    pub fn cancel_shown(&self) -> bool {
+        self.cancels.is_some() && !self.changed() && !self.on_disk
+    }
 
-/// Every state word a save row can show.
-pub const ALL_WORDS: [SaveWord; 10] = [
-    SaveWord::Invalid(InvalidCause::Incomplete),
-    SaveWord::Invalid(InvalidCause::Refused),
-    SaveWord::Invalid(InvalidCause::Missing),
-    SaveWord::Invalid(InvalidCause::Unreadable),
-    SaveWord::New,
-    SaveWord::ChangedOnDisk,
-    SaveWord::NotSaved,
-    SaveWord::Unsaved,
-    SaveWord::Saved,
-    SaveWord::NoChanges,
-];
-
-/// Layout step 6 (`DraftHead`): what a draft editor's head is given to plan from. Widths only,
-/// never the draft's state: the plan is the same in every state the draft can reach.
-#[derive(Clone, Copy, Debug)]
-pub struct HeadSpec<'a> {
-    /// Every state word the draft can reach (`EDIT_WORDS` for a draft that is never changed on
-    /// disk, left unsaved by a failed write or repaired): the row is measured by the widest.
-    pub words: &'a [SaveWord],
-    /// The room from the name field's start to its owning column's edge.
-    pub column: f32,
-    /// The room from the name field's start to the end of the title line.
-    pub line: f32,
-    /// The title line's actions after the name (Save in its widest weight, and any others), with
-    /// the gaps between them.
-    pub actions: f32,
-    /// The save row's room, from its start to its reasons' edge, less anything that stands at its
-    /// end (a run's state).
-    pub row: f32,
-    /// Each reason slot of the save row, in row order (Save's own reason first, then the
-    /// campaign-switch reason).
-    pub reasons: &'a [ReasonSlot<'a>],
+    /// The one reason the row says after its state word and `Discard` or `Cancel`: with changes,
+    /// the lock sentence (`holds`, else [`Self::lock_reason`]); with none, the reason after
+    /// `Cancel` (`cancels`).
+    pub fn row_reason(&self) -> Option<&str> {
+        if self.on_disk {
+            None
+        } else if self.changed() {
+            self.holds
+                .filter(|_| self.locks_campaign)
+                .or_else(|| self.lock_reason())
+        } else {
+            self.cancels.flatten()
+        }
+    }
 }
 
 /// One reason's place on a draft head's save row (layout step 6): every form the reason can take
@@ -773,83 +656,11 @@ impl<'a> ReasonSlot<'a> {
             short: &[],
         }
     }
-
-    /// The widest of `words` on one line.
-    fn widest(ui: &Ui, words: &[&str]) -> f32 {
-        let small = super::Type::Small.font(ui);
-        words
-            .iter()
-            .map(|words| super::number_width(ui, words, &small))
-            .fold(0.0, f32::max)
-    }
-}
-
-/// A reason in its short form on the save row (ruling M24): the short words, muted, with the
-/// full reason in the hover text and the accessible description.
-pub fn short_reason(ui: &mut Ui, short: &str, full: &str) {
-    let response = ui.label(super::Type::Small.rich(ui, short).color(colors().muted));
-    super::named(ui, &response, full);
-    ui.ctx()
-        .accesskit_node_builder(response.id, |node| node.set_description(full));
-    let _ = response.on_hover_text(full);
-}
-
-/// The height of `slot`'s own line under the save row, `width` wide: the tallest of its forms
-/// and of its substitutes after their icon, so it is the same in every state (layout step 6).
-pub fn slot_height(ui: &Ui, slot: &ReasonSlot<'_>, width: f32) -> f32 {
-    let small = super::Type::Small.font(ui);
-    let tall = |words: &str, width: f32| {
-        ui.painter()
-            .layout(
-                words.to_owned(),
-                small.clone(),
-                colors().muted,
-                width.max(0.0),
-            )
-            .size()
-            .y
-    };
-    let forms = slot
-        .forms
-        .iter()
-        .map(|words| tall(words, width))
-        .fold(0.0, f32::max);
-    slot.substitutes
-        .iter()
-        .map(|words| tall(words, width - super::tokens::ICON_SLOT - super::tokens::S))
-        .fold(forms, f32::max)
-}
-
-/// Where a draft editor's head puts its parts (layout step 6, I7 and I8), from [`head_plan`].
-#[derive(Clone, Debug, PartialEq)]
-pub struct HeadPlan {
-    /// The name field's width; its margins (`S` each side) are outside it.
-    pub name_width: f32,
-    /// The actions stand on the name's line, `L` after the field; else on a line of their own
-    /// under it, from the text edge.
-    pub actions_beside: bool,
-    /// For each reason of [`HeadSpec::reasons`]: on the save row, or on a line of its own under
-    /// it, kept in every state.
-    pub on_row: Vec<bool>,
-    /// For each reason on the row: in its short form (ruling M24), in every state.
-    pub short: Vec<bool>,
 }
 
 /// The narrowest a name field gets so that the actions stand beside it; narrower, the actions
 /// take their own line and the name its full width.
 pub const NAME_LEAST: f32 = 160.0;
-
-/// The widest state word the save row can show, with its icon.
-fn widest_word(ui: &Ui, words: &[SaveWord]) -> f32 {
-    let small = super::Type::Small.font(ui);
-    words
-        .iter()
-        .map(|word| {
-            let status = word.status();
-            super::number_width(ui, &format!("{} {}", status.icon, status.word), &small)
-        })
-        .fold(0.0, f32::max)
-}
 
 /// How wide a draft's name field may be, given the room to its column's edge (its margins
 /// outside). It ends at `FORM_WIDTH` or at the column, whichever comes first. Within `XL` of the
@@ -863,55 +674,6 @@ pub fn name_width(column: f32) -> f32 {
     }
 }
 
-/// A draft editor's head, planned before it paints from the widths and fonts only (layout step
-/// 6). The name field is no wider than `FORM_WIDTH`, and ends at its column's edge when that is
-/// within `XL`; the actions stand `L` after it while the name keeps at least `NAME_LEAST`, else
-/// on their own line. Each reason takes the save row while it fits beside the widest state word
-/// and `Discard`, whether or not either shows now: so no state the draft reaches (clean, dirty,
-/// refused, new) moves a reason, the row's height or the first field.
-pub fn head_plan(ui: &Ui, spec: &HeadSpec<'_>) -> HeadPlan {
-    use super::tokens::{L, S};
-    let gap = ui.spacing().item_spacing.x;
-    let margins = 2.0 * S;
-    let least = Density::Scan.control();
-    let column = (spec.column - margins).max(least);
-    let full = name_width(column);
-    let beside = spec.line - margins - L - spec.actions;
-    let (name_width, actions_beside) = if beside >= full.min(NAME_LEAST) {
-        (full.min(beside).max(least), true)
-    } else {
-        (full, false)
-    };
-    let mut room = spec.row
-        - widest_word(ui, spec.words)
-        - Action::quiet("Discard").natural_width(ui)
-        - 2.0 * gap;
-    let (on_row, short) = spec
-        .reasons
-        .iter()
-        .map(|slot| {
-            // Its forms, else its short forms (M24), else a line of its own below the row.
-            for (words, short) in [(slot.forms, false), (slot.short, true)] {
-                if words.is_empty() {
-                    continue;
-                }
-                let width = ReasonSlot::widest(ui, words) + gap;
-                if width <= room {
-                    room -= width;
-                    return (true, short);
-                }
-            }
-            (false, false)
-        })
-        .unzip();
-    HeadPlan {
-        name_width,
-        actions_beside,
-        on_row,
-        short,
-    }
-}
-
 /// What the DM pressed in a save row.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[must_use]
@@ -922,481 +684,9 @@ pub struct SaveRow {
     pub cancel: bool,
 }
 
-/// The save row of `state`, as wide as the `Ui`: the word, `Discard` and any lock reason at the
-/// left, `save` (its words, such as `Save` or `Save changes`) at the right with `Ctrl+S`.
-pub fn save_row(ui: &mut Ui, state: &DraftState<'_>, save: &str) -> SaveRow {
-    save_row_with(ui, state, save, None)
-}
-
-/// Why other actions of the pane wait for this draft (M2, the reader toolbar's draft reason):
-/// a long and a short whole form, both the toolbar part's own words, and whether it holds.
-#[derive(Clone, Copy, Debug)]
-pub(in crate::design) struct RowReason<'r> {
-    pub long: &'r str,
-    pub short: &'r str,
-    pub locked: bool,
-}
-
-/// `save_row`, with `reason` in the room between the left parts and Save: the long form when it
-/// fits whole, else the short one, measured before paint from the fonts with `Discard` and the
-/// widest word, so the choice does not change when the draft becomes dirty. Painted while it
-/// holds; nothing while open. Only a row too narrow for the short form keeps a slot under it,
-/// in both states (R29), so nothing moves while the DM types.
-pub(in crate::design) fn save_row_with(
-    ui: &mut Ui,
-    state: &DraftState<'_>,
-    save: &str,
-    reason: Option<RowReason<'_>>,
-) -> SaveRow {
-    let save_action = |width: f32| {
-        match state.save_weight() {
-            SaveWeight::Primary => Action::primary(save),
-            SaveWeight::Secondary => Action::secondary(save),
-        }
-        .density(Density::Read)
-        .blocked(state.save_blocked())
-        .key("Ctrl+S")
-        // Its widest weight's width in every state, so a change of weight moves nothing.
-        .min_width(width)
-    };
-    let gap = ui.spacing().item_spacing.x;
-    let small = super::Type::Small.font(ui);
-    // Save's widest form (primary or secondary weight) and the widest lock sentence the draft can
-    // show (`locks_campaign`), whatever the draft holds now: the form depends on the width only.
-    let save_width = [Action::primary(save), Action::secondary(save)]
-        .into_iter()
-        .map(|action| {
-            action
-                .density(Density::Read)
-                .key("Ctrl+S")
-                .natural_width(ui)
-        })
-        .fold(0.0, f32::max);
-    let lock_width = if state.locks_campaign {
-        [SAVE_OR_DISCARD_TO_SWITCH, DISCARD_TO_SWITCH]
-            .into_iter()
-            .map(|words| super::number_width(ui, words, &small) + gap)
-            .fold(0.0, f32::max)
-    } else {
-        0.0
-    };
-    let on_line = reason.and_then(|reason| {
-        // The widest word and its icon, whatever the draft holds.
-        let word = [
-            SaveWord::Invalid(InvalidCause::Incomplete),
-            SaveWord::Invalid(InvalidCause::Refused),
-            SaveWord::Invalid(InvalidCause::Unreadable),
-            SaveWord::New,
-            SaveWord::ChangedOnDisk,
-            SaveWord::NotSaved,
-            SaveWord::Unsaved,
-            SaveWord::Saved,
-            SaveWord::NoChanges,
-        ]
-        .into_iter()
-        .map(|word| {
-            let status = word.status();
-            super::number_width(ui, &format!("{} {}", status.icon, status.word), &small)
-        })
-        .fold(0.0, f32::max);
-        let room = ui.available_width()
-            - save_width
-            - word
-            - Action::quiet("Discard").natural_width(ui)
-            - lock_width
-            - 4.0 * gap;
-        let fits = |words: &str| super::number_width(ui, words, &small) <= room;
-        if fits(reason.long) {
-            Some(reason.long)
-        } else if fits(reason.short) {
-            Some(reason.short)
-        } else {
-            None
-        }
-    });
-    // A form draft's reasons (the lock sentence while it has changes, Cancel's while clean)
-    // stand on the row when the widest fits beside the widest word, the widest of Discard and
-    // Cancel, and Save; else on a line under the row that keeps its room in every state.
-    let form = state.cancels.is_some();
-    let below = form && {
-        let word = [SaveWord::Unsaved, SaveWord::NoChanges]
-            .into_iter()
-            .map(|word| {
-                let status = word.status();
-                super::number_width(ui, &format!("{} {}", status.icon, status.word), &small)
-            })
-            .fold(0.0, f32::max);
-        let room = ui.available_width()
-            - save_width
-            - word
-            - Action::quiet("Discard")
-                .natural_width(ui)
-                .max(Action::quiet("Cancel").natural_width(ui))
-            - 4.0 * gap;
-        state
-            .reasons()
-            .iter()
-            .any(|words| super::number_width(ui, words, &small) > room)
-    };
-    let mut pressed = SaveRow::default();
-    ui.horizontal(|ui| {
-        ui.set_min_height(Density::Scan.control());
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            pressed.save = save_action(save_width).show(ui).clicked();
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                status(ui, state.status());
-                if state.discard_shown() {
-                    let mut discard = Action::quiet("Discard");
-                    if let Some(name) = state.discard_name {
-                        discard = discard.name(name);
-                    }
-                    pressed.discard = discard.show(ui).clicked();
-                }
-                if state.cancel_shown() {
-                    pressed.cancel = Action::quiet("Cancel").show(ui).clicked();
-                }
-                if !below && let Some(reason) = state.row_reason() {
-                    super::blocked_reason(ui, Some(reason));
-                }
-                if let Some(reason) = reason
-                    && reason.locked
-                    && let Some(words) = on_line
-                {
-                    let response =
-                        ui.label(super::Type::Small.rich(ui, words).color(colors().muted));
-                    if words != reason.long {
-                        super::named(ui, &response, reason.long);
-                        let _ = response.on_hover_text(reason.long);
-                    }
-                }
-            });
-        });
-    });
-    // A form draft's reasons under the row: the one that holds now, or the widest kept
-    // unseen, so the row's height is the same in every state.
-    if below {
-        match state.row_reason() {
-            Some(reason) => super::blocked_reason(ui, Some(reason)),
-            None => {
-                let widest = state.reasons().into_iter().max_by(|a, b| {
-                    super::number_width(ui, a, &small)
-                        .total_cmp(&super::number_width(ui, b, &small))
-                });
-                ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
-                    super::blocked_reason(ui, widest);
-                });
-            }
-        }
-    }
-    // Too narrow for the short form: a slot under the row, its room kept while open.
-    if let Some(reason) = reason
-        && on_line.is_none()
-    {
-        if reason.locked {
-            super::blocked_reason(ui, Some(reason.long));
-        } else {
-            ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
-                super::blocked_reason(ui, Some(reason.long));
-            });
-        }
-    }
-    pressed
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Issues #513 and #514: every page's `Ctrl+S` is `save_key`, one rule. It is taken once,
-    /// and only while the page is ready, its place is enabled, and the app says no modal is open
-    /// (`set_modal`); a key it refuses stays in the input for no one.
-    #[test]
-    fn ctrl_s_is_taken_only_by_a_ready_enabled_page_with_no_modal() {
-        use crate::design::test_harness::Themed as _;
-        #[derive(Default)]
-        struct Page {
-            ready: bool,
-            enabled: bool,
-            modal: bool,
-            /// The takes of this frame: the page's, then a second asker's.
-            taken: (bool, bool),
-        }
-        let mut h = egui_kittest::Harness::builder().themed_ui_state(
-            |ui, page: &mut Page| {
-                set_modal(ui.ctx(), page.modal);
-                if !page.enabled {
-                    ui.disable();
-                }
-                page.taken = (save_key(ui, page.ready), save_key(ui, true));
-            },
-            Page {
-                ready: true,
-                enabled: true,
-                ..Page::default()
-            },
-        );
-        // The theme's frame first: the page draws from the next one.
-        h.run();
-        let press = |h: &mut egui_kittest::Harness<'_, Page>| {
-            // One frame holds the whole press (a queued key press spreads over frames).
-            h.input_mut().events.push(egui::Event::Key {
-                key: egui::Key::S,
-                physical_key: None,
-                pressed: true,
-                repeat: false,
-                modifiers: egui::Modifiers::COMMAND,
-            });
-            h.step();
-            h.state().taken
-        };
-        assert_eq!(press(&mut h), (true, false), "a ready page takes it, once");
-        h.state_mut().modal = true;
-        assert_eq!(
-            press(&mut h),
-            (false, false),
-            "#514: beneath a modal no page takes it"
-        );
-        h.state_mut().modal = false;
-        h.state_mut().enabled = false;
-        assert_eq!(
-            press(&mut h),
-            (false, false),
-            "a disabled page takes it not"
-        );
-        h.state_mut().enabled = true;
-        h.state_mut().ready = false;
-        assert_eq!(
-            press(&mut h),
-            (false, true),
-            "a page that is not ready leaves it"
-        );
-    }
-
-    /// M2 (B2 packet 3, F2): the save row with the toolbar's draft reason chooses its form
-    /// (long or short on its line, or the slot under it) from the width only. Across widths on
-    /// both fit boundaries, walking clean → valid dirty → invalid → clean (with and without the
-    /// campaign-switch lock), the room the reason adds is the same in every state, so it moves
-    /// nothing. (The row's own campaign-switch sentence wraps at very narrow widths and grows
-    /// the row with or without the reason; that is the row's, measured apart here.)
-    #[test]
-    fn the_reason_form_depends_on_the_width_only() {
-        let reason = |locked| RowReason {
-            long: "Save or discard to copy, add an entry or change packages.",
-            short: "Save or discard first.",
-            locked,
-        };
-        let states = |locks: bool| {
-            let base = |changed| {
-                let state = DraftState::new(DraftOrigin::Saved, changed, Primary::Draft);
-                if locks { state.locks_campaign() } else { state }
-            };
-            [
-                (base(Changed::No), false),
-                (base(Changed::Yes), true),
-                (
-                    base(Changed::Yes).check(Diagnosis::refused("Bad id.")),
-                    true,
-                ),
-                (base(Changed::No), false),
-            ]
-        };
-        let ctx = egui::Context::default();
-        crate::design::theme::install(&ctx);
-        let mut forms = std::collections::BTreeSet::new();
-        for locks in [false, true] {
-            for width in (240..=900).step_by(4) {
-                let mut tops = Vec::new();
-                for (state, locked) in states(locks) {
-                    let mut top = 0.0;
-                    let mut plain = 0.0;
-                    for _ in 0..2 {
-                        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                            egui::CentralPanel::default().show(ctx, |ui| {
-                                let rect = egui::Rect::from_min_size(
-                                    ui.cursor().min,
-                                    egui::vec2(width as f32, 1_000.0),
-                                );
-                                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                                    let start = ui.cursor().top();
-                                    let _ = save_row_with(ui, &state, "Save", Some(reason(locked)));
-                                    top = ui.label("After").rect.top() - start;
-                                });
-                                let rect = egui::Rect::from_min_size(
-                                    ui.cursor().min,
-                                    egui::vec2(width as f32, 1_000.0),
-                                );
-                                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                                    let start = ui.cursor().top();
-                                    let _ = save_row_with(ui, &state, "Save", None);
-                                    plain = ui.label("After").rect.top() - start;
-                                });
-                            });
-                        });
-                    }
-                    tops.push(top - plain);
-                }
-                forms.insert(tops[0] as i64);
-                assert!(
-                    tops.iter().all(|top| (top - tops[0]).abs() < 0.5),
-                    "at {width} (campaign lock {locks}) the control after the row moved: {tops:?}"
-                );
-            }
-        }
-        assert!(
-            forms.len() >= 2,
-            "the sweep reached the slot under the row: {forms:?}"
-        );
-        // Layout step 6 (`head_plan`, I8; SL4): a draft head's reasons are planned for the
-        // complete state set. At every width, each state the draft reaches (clean, new and empty,
-        // dirty, refused, just saved) draws its word, its Discard and every reason the plan puts
-        // on the row in its longest form, and the row keeps one height in every state (a reason
-        // with no room would wrap and grow it) and stays inside its room: so a state change never
-        // pushes a reason off the row, and nothing under it moves.
-        // The group editor's two slots, with G122's substitutions in the switch reason's place.
-        let reasons = [
-            ReasonSlot::of(&["Add a creature first."]),
-            ReasonSlot {
-                forms: &[SAVE_OR_DISCARD_TO_SWITCH, DISCARD_TO_SWITCH],
-                substitutes: &[
-                    "Its encounter was deleted. See Belongs to.",
-                    "A creature here cannot be saved. See its row.",
-                ],
-                short: &[SAVE_OR_DISCARD_SHORT, DISCARD_SHORT],
-            },
-        ];
-        let head_states = [
-            DraftState::new(DraftOrigin::Saved, Changed::No, Primary::Draft).locks_campaign(),
-            DraftState::new(DraftOrigin::New, Changed::Yes, Primary::Draft)
-                .locks_campaign()
-                .check(Diagnosis::incomplete("Add a creature first.")),
-            DraftState::new(DraftOrigin::Saved, Changed::Yes, Primary::Draft).locks_campaign(),
-            DraftState::new(DraftOrigin::Saved, Changed::Yes, Primary::Draft)
-                .locks_campaign()
-                .check(Diagnosis::refused("Bad id.")),
-            DraftState::new(DraftOrigin::Saved, Changed::No, Primary::Draft)
-                .locks_campaign()
-                .just_saved(),
-        ];
-        let mut placed = std::collections::BTreeSet::new();
-        let mut short_seen = false;
-        for width in (240..=900).step_by(4) {
-            let width = width as f32;
-            let mut heights = Vec::new();
-            for state in &head_states {
-                let mut right = 0.0;
-                let mut height = 0.0;
-                let mut plan = None;
-                let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        let rect =
-                            egui::Rect::from_min_size(ui.cursor().min, egui::vec2(width, 1_000.0));
-                        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                            let head = head_plan(
-                                ui,
-                                &HeadSpec {
-                                    words: &EDIT_WORDS,
-                                    column: width,
-                                    line: width,
-                                    actions: 120.0,
-                                    row: width,
-                                    reasons: &reasons,
-                                },
-                            );
-                            let row = ui.horizontal(|ui| {
-                                // As the editors' save rows: one control high in every state.
-                                ui.set_min_height(Density::Scan.control());
-                                status(ui, state.status());
-                                if state.discard_shown() {
-                                    let _ = Action::quiet("Discard").show(ui);
-                                }
-                                for ((slot, on_row), short) in
-                                    reasons.iter().zip(&head.on_row).zip(&head.short)
-                                {
-                                    if *on_row && *short {
-                                        short_reason(ui, slot.short[0], slot.forms[0]);
-                                    } else if *on_row {
-                                        super::super::blocked_reason(ui, Some(slot.forms[0]));
-                                    }
-                                }
-                            });
-                            right = row.response.rect.right() - rect.left();
-                            height = row.response.rect.height();
-                            // Each slot under the row is reserved `slot_height` high; every form
-                            // and every substitute (after its icon) fits in it, at this width.
-                            for (slot, on_row) in reasons.iter().zip(&head.on_row) {
-                                if *on_row {
-                                    continue;
-                                }
-                                let kept = slot_height(ui, slot, width);
-                                let drawn = slot
-                                    .forms
-                                    .iter()
-                                    .map(|words| (*words, 0.0))
-                                    .chain(slot.substitutes.iter().map(|words| {
-                                        (*words, super::super::tokens::ICON_SLOT + super::super::tokens::S)
-                                    }))
-                                    .map(|(words, icon)| {
-                                        let rect = egui::Rect::from_min_size(
-                                            ui.cursor().min + egui::vec2(icon, 0.0),
-                                            egui::vec2(width - icon, 1_000.0),
-                                        );
-                                        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                                            super::super::blocked_reason(ui, Some(words));
-                                        })
-                                        .response
-                                        .rect
-                                        .height()
-                                    })
-                                    .fold(0.0, f32::max);
-                                assert!(
-                                    drawn <= kept + 0.5,
-                                    "at {width} a form of {slot:?} is {drawn} tall in its slot of {kept}"
-                                );
-                            }
-                            plan = Some(head);
-                        });
-                    });
-                });
-                let plan = plan.expect("the head was planned");
-                placed.insert(plan.on_row.clone());
-                short_seen |= plan.short.iter().any(|short| *short);
-                assert!(
-                    right <= width + 0.5,
-                    "at {width} the row of {:?} is {right} wide, past its room: {plan:?}",
-                    state.word()
-                );
-                heights.push((state.word(), height));
-            }
-            assert!(
-                heights.iter().all(|(_, h)| (h - heights[0].1).abs() < 0.5),
-                "at {width} the row's height changes with the state: {heights:?}"
-            );
-        }
-        assert!(
-            placed.len() >= 2 && short_seen,
-            "the sweep reached a reason under the row and a short form on it (M24): {placed:?}, {short_seen}"
-        );
-    }
-
-    /// Ruling M24 (Astra's P3 on PR 668): a short reason on the row paints its short words and
-    /// gives the full reason as its accessible description (and its name and hover text).
-    #[test]
-    fn a_short_reason_describes_the_full_reason() {
-        use egui_kittest::kittest::{NodeT, Queryable};
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(400.0, 100.0))
-            .build_ui(|ui| short_reason(ui, SAVE_OR_DISCARD_SHORT, SAVE_OR_DISCARD_TO_SWITCH));
-        harness.run_steps(2);
-        let node = harness
-            .query_by_label(SAVE_OR_DISCARD_TO_SWITCH)
-            .or_else(|| harness.query_by_label(SAVE_OR_DISCARD_SHORT))
-            .expect("the short reason is an accessible node");
-        assert_eq!(
-            node.accesskit_node().description(),
-            Some(SAVE_OR_DISCARD_TO_SWITCH.to_owned()),
-            "the short reason's accessible description is the full reason"
-        );
-    }
 
     /// The rule as a table: each row is one state and the word, weight, reason and Discard it
     /// gives. Rows name the round that ruled them.
@@ -1826,170 +1116,5 @@ mod tests {
                 .lock_reason(),
             Some(SAVE_OR_DISCARD_TO_SWITCH)
         );
-    }
-
-    /// The row draws what the state decides: the word, Discard only with changes, and Save with
-    /// its weight's type. One press reaches only its own control.
-    #[test]
-    fn the_row_draws_the_state() {
-        use crate::design::test_harness::ThemedPage as _;
-        use egui_kittest::kittest::Queryable;
-        // M-W0.3: an open form's draft (`cancels`, World's edit form): clean, `Cancel` and its
-        // reason; changed, `Discard` and the caller's sentence (`holds`).
-        const CANCEL_WHY: &str = "Cancel to add a Log line.";
-        const HOLDS: &str = "Save or discard to add a Log line or switch campaign.";
-        let form = |changed| {
-            DraftState::new(DraftOrigin::Saved, changed, Primary::Draft)
-                .locks_campaign()
-                .cancels(Some(CANCEL_WHY))
-                .holds(HOLDS)
-        };
-        for (state, word, discard, cancel, reason) in [
-            (
-                DraftState::new(DraftOrigin::Saved, Changed::Yes, Primary::Draft),
-                "Unsaved",
-                true,
-                false,
-                None,
-            ),
-            (
-                DraftState::new(DraftOrigin::Saved, Changed::No, Primary::Draft),
-                "No changes",
-                false,
-                false,
-                None,
-            ),
-            // A repair's row names its write.
-            (
-                DraftState::new(DraftOrigin::Saved, Changed::No, Primary::Draft)
-                    .repairs("Save replaces the unread choice on line 23 with these settings"),
-                "Save replaces the unread choice on line 23",
-                false,
-                false,
-                None,
-            ),
-            (
-                form(Changed::No),
-                "No changes",
-                false,
-                true,
-                Some(CANCEL_WHY),
-            ),
-            (form(Changed::Yes), "Unsaved", true, false, Some(HOLDS)),
-        ] {
-            let pressed = std::cell::Cell::new(SaveRow::default());
-            let mut harness = egui_kittest::Harness::builder()
-                .with_size(egui::vec2(600.0, 80.0))
-                .themed_ui(|ui| {
-                    let row = save_row(ui, &state, "Save");
-                    if row.save || row.discard || row.cancel {
-                        pressed.set(row);
-                    }
-                });
-            harness.run();
-            assert!(harness.query_by_label_contains(word).is_some(), "{word}");
-            assert_eq!(
-                harness.query_by_label("Discard").is_some(),
-                discard,
-                "{word}"
-            );
-            assert_eq!(harness.query_by_label("Cancel").is_some(), cancel, "{word}");
-            if let Some(reason) = reason {
-                assert!(
-                    harness.query_by_label(reason).is_some(),
-                    "{word}: the row says {reason:?}"
-                );
-            }
-            if cancel {
-                harness.get_by_label("Cancel").click();
-                harness.run();
-                assert_eq!(
-                    pressed.get(),
-                    SaveRow {
-                        save: false,
-                        discard: false,
-                        cancel: true
-                    }
-                );
-            }
-            if discard {
-                harness.get_by_label("Discard").click();
-                harness.run();
-                assert_eq!(
-                    pressed.get(),
-                    SaveRow {
-                        save: false,
-                        discard: true,
-                        cancel: false
-                    }
-                );
-                harness.get_by_label("Save").click();
-                harness.run();
-                assert_eq!(
-                    pressed.get(),
-                    SaveRow {
-                        save: true,
-                        discard: false,
-                        cancel: false
-                    }
-                );
-            }
-        }
-        // A narrow form: its reasons go on a line under the row, and the row with that line is
-        // as tall clean as changed, so the first edit moves nothing; a wide one keeps them on
-        // the row.
-        // A form with nothing waiting says nothing while clean: the line under the row keeps
-        // its room unseen.
-        let plain = |changed| {
-            DraftState::new(DraftOrigin::Saved, changed, Primary::Draft)
-                .locks_campaign()
-                .cancels(None)
-        };
-        for (width, under, waits) in [
-            (300.0, true, true),
-            (800.0, false, true),
-            (300.0, true, false),
-        ] {
-            let mut heights = Vec::new();
-            for changed in [Changed::No, Changed::Yes] {
-                let state = if waits { form(changed) } else { plain(changed) };
-                let (after, save, words) = (
-                    std::cell::Cell::new(0.0),
-                    std::cell::Cell::new(egui::Rect::NOTHING),
-                    std::cell::Cell::new(egui::Rect::NOTHING),
-                );
-                let mut harness = egui_kittest::Harness::builder()
-                    .with_size(egui::vec2(width + 20.0, 200.0))
-                    .themed_ui(|ui| {
-                        ui.set_max_width(width);
-                        let start = ui.cursor().top();
-                        let _ = save_row(ui, &state, "Save changes");
-                        after.set(ui.label("After").rect.top() - start);
-                    });
-                harness.run();
-                save.set(harness.get_by_label("Save changes").rect());
-                let reason = match (changed, waits) {
-                    (Changed::Yes, true) => Some(HOLDS),
-                    (Changed::Yes, false) => Some(SAVE_OR_DISCARD_TO_SWITCH),
-                    (Changed::No, true) => Some(CANCEL_WHY),
-                    (Changed::No, false) => None,
-                };
-                if let Some(reason) = reason {
-                    words.set(harness.get_by_label(reason).rect());
-                    assert_eq!(
-                        words.get().top() >= save.get().bottom(),
-                        under,
-                        "{width}: {reason:?} {:?} under the row (Save {:?}): {under}",
-                        words.get(),
-                        save.get()
-                    );
-                }
-                heights.push(after.get());
-            }
-            assert!(
-                (heights[0] - heights[1]).abs() < 0.5,
-                "{width}: the row keeps its height clean and changed: {heights:?}"
-            );
-        }
     }
 }

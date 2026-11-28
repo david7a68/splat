@@ -1,7 +1,7 @@
 //! Read-only API transport and the background reads that keep every party sheet current,
 //! whichever page is showing, from the time Splat connects to D&D Beyond.
 use crate::auth::Session;
-use eframe::egui;
+use crate::state_context::StateContext;
 use reqwest::{
     blocking::{Client, Response},
     redirect::Policy,
@@ -480,7 +480,7 @@ impl Drop for Reader {
 impl Reader {
     pub fn sync(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         epoch: u64,
         campaign: Option<(Uuid, String, std::path::PathBuf)>,
         connected: bool,
@@ -513,13 +513,25 @@ impl Reader {
     pub fn loading(&self) -> bool {
         self.pending.is_some()
     }
-    fn load_cache(&mut self, ctx: &egui::Context) {
+    /// Block until the read in flight has sent all it has (its thread ends, never a clock),
+    /// and hand its events to the next `poll`, which takes them as it takes any. A test's wait.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn wait_for_load(&mut self) {
+        if let Some(rx) = self.pending.take() {
+            let (tx, ready) = mpsc::channel();
+            for event in rx.iter() {
+                let _ = tx.send(event);
+            }
+            self.pending = Some(ready);
+        }
+    }
+    fn load_cache(&mut self, ctx: &StateContext) {
         let Some(scope) = self.scope.clone() else {
             return;
         };
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         let gate = self.gate.clone();
         thread::spawn(move || {
             let result = crate::hermetic::character_cache()
@@ -533,13 +545,13 @@ impl Reader {
     }
     /// Saves the cached sheets again, after this computer's claim has settled. It works without
     /// a session, so a DM who starts offline still gets the copies.
-    fn save_cached_later(&mut self, ctx: &egui::Context) {
+    fn save_cached_later(&mut self, ctx: &StateContext) {
         let Some(scope) = self.scope.clone() else {
             return;
         };
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         let gate = self.gate.clone();
         thread::spawn(move || {
             if let Ok(records) = crate::hermetic::character_cache()
@@ -550,7 +562,7 @@ impl Reader {
             ctx.request_repaint();
         });
     }
-    pub fn tick(&mut self, session: Option<Session>, ctx: &egui::Context) {
+    pub fn tick(&mut self, session: Option<Session>, ctx: &StateContext) {
         self.poll();
         // An idle app draws no frames, so ask for one when the cached saves are due.
         if let Some(due) = self.cache_saves_at {
@@ -661,7 +673,7 @@ impl Reader {
             && self.next.is_none_or(|t| t <= now)
             && (self.refresh_requested || (!self.stream_open && self.on_page) || safety_due)
     }
-    pub fn refresh(&mut self, session: Session, ctx: &egui::Context, full: bool) {
+    pub fn refresh(&mut self, session: Session, ctx: &StateContext, full: bool) {
         // A request by hand counts for this call only. If the call cannot read now, a later
         // automatic read must not inherit it.
         let by_hand = std::mem::take(&mut self.by_hand);
@@ -697,7 +709,7 @@ impl Reader {
         self.refresh_requested = false;
         self.last_check = Some(Instant::now());
         self.next = Some(Instant::now() + INTERVAL);
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         let gate = self.gate.clone();
         let failures = self.portrait_failures.clone();
         thread::spawn(move || {
@@ -923,7 +935,7 @@ impl Reader {
     }
     /// The DM asked to read the party now. This read saves the sheets on this computer, even when
     /// another computer saves the automatic reads.
-    pub fn refresh_by_hand(&mut self, session: Session, ctx: &egui::Context) {
+    pub fn refresh_by_hand(&mut self, session: Session, ctx: &StateContext) {
         self.by_hand = true;
         self.refresh(session, ctx, true);
     }
@@ -1076,7 +1088,7 @@ mod tests {
     #[test]
     fn switching_campaign_closes_workers_and_discards_late_replies() {
         let mut reader = Reader::default();
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let id = Uuid::new_v4();
         reader.scope = Some(Scope {
             epoch: 1,
@@ -1173,7 +1185,7 @@ mod tests {
         // automatic read.
         let hour = Duration::from_secs(60 * 60);
         let session = crate::auth::Session::for_test(hour, hour);
-        reader.refresh(session, &egui::Context::default(), true);
+        reader.refresh(session, &StateContext::new(), true);
         assert!(!reader.by_hand);
     }
     #[test]
@@ -1351,14 +1363,9 @@ mod tests {
                     .clone()
             );
             assert!(record.entry().is_ok());
-            let ctx = egui::Context::default();
-            let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    for (page, _) in crate::party::SHEET_PAGES {
-                        crate::party::sheet_page(ui, &record, page, "", None);
-                    }
-                });
-            });
+            for (page, _) in crate::party::SHEET_PAGES {
+                let _ = crate::party::sheet_entries(&record, page);
+            }
             cache.save(local, &record).unwrap();
         }
         cache
@@ -1373,7 +1380,7 @@ mod tests {
             "Verified supplied totals, attacks, schema entries and persistent cache for {} party members.",
             members.len()
         );
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let stream = crate::party_stream::Stream::start(session, remote.into(), &ctx);
         match stream.rx.recv_timeout(Duration::from_secs(20)) {
             Ok(crate::party_stream::Event::Open) => println!(

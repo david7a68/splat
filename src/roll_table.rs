@@ -1,167 +1,101 @@
 //! Roll tables: a one-line marker above a table in any note makes it rollable. A row has no
 //! effect by itself. The Markdown reader draws the control, and the app decides whose dice roll.
-use crate::design::outcome::{BodyMessage, Notice, Sentence};
-use crate::design::{self, Action, Density, Type, colors};
-use eframe::egui;
+use crate::state_context::{Key, Slot, StateContext};
 use splat::execution::dice::Random;
 pub use splat_campaign::roll_table::*;
 
 #[derive(Clone, Default)]
 struct RollState {
-    typed: String,
     result: Option<String>,
     value: Option<i64>,
 }
 
-/// One table's roll state in one reader. `reader` is the reader's own `Ui` id, so World and
+/// One table's roll state in one reader. `reader` is the reader's own key, so World and
 /// Lookup showing the same table keep their own typed roll, result and field (round 26 AE1).
-fn roll_state_id(reader: egui::Id, key: &str) -> egui::Id {
-    egui::Id::new(("roll_table", reader, key))
+fn roll_state(reader: Key, key: &str) -> Slot<RollState> {
+    Slot::new("roll_table").with((reader, key))
 }
 
-fn request_id() -> egui::Id {
-    egui::Id::new("roll_table_request")
-}
+/// The pending roll.
+const REQUEST: Slot<TableRoll> = Slot::new("roll_table_request");
 
 /// The roll state that asked for the pending roll, so its result goes back to that reader only.
-fn requester_id() -> egui::Id {
-    egui::Id::new("roll_table_requester")
-}
+const REQUESTER: Slot<Slot<RollState>> = Slot::new("roll_table_requester");
 
-/// A warning under a table, in the words its marker's parser gave: a typed notice in the
-/// reader's body, where the table is.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "a body place: a table’s warning stands under the table it is about, in its parser’s words (Ban::Body, Ban::Words)"
-)]
-fn table_warning(ui: &mut egui::Ui, words: &str) {
-    if let Some(words) = Sentence::outside(words) {
-        let _ = BodyMessage::<()>::from(Notice::warning(words)).show(ui);
-    }
-}
-
-/// **Roll** and a box for a typed result, under a marked table. `reader` is the id of the
-/// reader that shows the table: the same one `matched_row` gets.
-pub fn roll_control(
-    ui: &mut egui::Ui,
-    reader: egui::Id,
-    marker: &Result<Marker, String>,
-    table: &[Vec<String>],
-) {
-    let checked = marker
-        .as_ref()
-        .map_err(String::clone)
-        .and_then(|marker| Ok((marker, table_rows(&marker.dice, table)?)));
-    let (Marker { key, dice, per }, rows) = match checked {
-        Ok(checked) => checked,
-        // One bad table says so where it is. The rest of the note still reads.
-        Err(error) => {
-            table_warning(ui, &error);
-            return;
-        }
-    };
-    let id = roll_state_id(reader, key);
-    let mut state: RollState = ui.data(|data| data.get_temp(id)).unwrap_or_default();
-    let mut request = None;
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = design::S;
-        if Action::secondary(&format!("Roll {dice}"))
-            .icon(design::icons::DICE)
-            .density(Density::Read)
-            .show(ui)
-            .clicked()
-        {
-            request = Some(None);
-        }
-        let response = design::number_field_with_id(
-            ui,
-            id.with("typed"),
-            &format!("Typed roll for {}", design::reader::human_label(key)),
-            &mut state.typed,
-            "Typed roll",
-            design::XXL * 3.0,
-            Density::Read.control(),
-        );
-        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            match design::parse_signed(&state.typed) {
-                Some(value) => request = Some(Some(value)),
-                None if state.typed.trim().is_empty() => {}
-                None => state.result = Some("Type a whole number.".to_owned()),
-            }
-            state.typed.clear();
-        }
-    });
-    if let Some(typed) = request {
-        let roll = TableRoll {
-            key: key.clone(),
-            dice: dice.clone(),
-            typed,
-            rows,
-        };
-        ui.data_mut(|data| {
-            data.insert_temp(request_id(), roll);
-            data.insert_temp(requester_id(), id);
-        });
-    }
-    // One line under the Roll row is kept for the result, empty until the first roll, so a roll
-    // moves nothing below the table. A result longer than the line ends in `…`; its hover and
-    // its accessible name keep it whole, and the table marks the rolled row.
-    let line = Type::Body.line();
-    let (rect, _) =
-        ui.allocate_exact_size(egui::vec2(ui.available_width(), line), egui::Sense::hover());
-    if let Some(result) = &state.result {
-        let mut slot = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(rect)
-                .layout(egui::Layout::left_to_right(egui::Align::Center)),
-        );
-        slot.add(egui::Label::new(Type::Body.rich(&slot, result).color(colors().text)).truncate());
-    }
-    // The table still rolls; only a journey's checks need the word. Round 27 FE4: every warning
-    // under a table has one form, `table_warning`, as a fault in its dice or rows has.
-    if let Some(warning) = per.warning() {
-        table_warning(ui, &warning);
-    }
-    ui.data_mut(|data| data.insert_temp(id, state));
-}
-
-pub fn take_roll(ctx: &egui::Context) -> Option<TableRoll> {
-    ctx.data_mut(|data| data.remove_temp::<TableRoll>(request_id()))
+pub fn take_roll(ctx: &StateContext) -> Option<TableRoll> {
+    ctx.take(REQUEST)
 }
 
 /// Show a roll's result under its table, in the reader that asked for it.
-pub fn settle_roll(ctx: &egui::Context, result: String) {
-    ctx.data_mut(|data| {
-        let Some(id) = data.get_temp::<egui::Id>(requester_id()) else {
-            return;
-        };
-        data.remove::<egui::Id>(requester_id());
-        let mut state: RollState = data.get_temp(id).unwrap_or_default();
-        state.value = result
-            .split_whitespace()
-            .nth(1)
-            .and_then(|word| word.parse().ok());
-        state.result = Some(result);
-        data.insert_temp(id, state);
-    });
+pub fn settle_roll(ctx: &StateContext, result: String) {
+    let Some(slot) = ctx.take(REQUESTER) else {
+        return;
+    };
+    let mut state = ctx.get(slot).unwrap_or_default();
+    state.value = result
+        .split_whitespace()
+        .nth(1)
+        .and_then(|word| word.parse().ok());
+    state.result = Some(result);
+    ctx.set(slot, state);
 }
 
-pub fn matched_row(
-    ui: &egui::Ui,
-    reader: egui::Id,
+/// The rolled row of a table in one reader (its header is row 0), for any view: the state is
+/// kept in `ctx` under the reader's key.
+pub fn matched_in(
+    ctx: &StateContext,
+    reader: Key,
     marker: &Result<Marker, String>,
     table: &[Vec<String>],
 ) -> Option<usize> {
     let Marker { key, dice, .. } = marker.as_ref().ok()?;
-    let value = ui
-        .data(|data| data.get_temp::<RollState>(roll_state_id(reader, key)))?
-        .value?;
+    let value = ctx.get(roll_state(reader, key))?.value?;
     table_rows(dice, table)
         .ok()?
         .iter()
         .position(|row| (row.min..=row.max).contains(&value))
         .map(|row| row + 1)
 }
+
+/// The last result line of a table in one reader.
+pub fn result_in(ctx: &StateContext, reader: Key, key: &str) -> Option<String> {
+    ctx.get(roll_state(reader, key))?.result
+}
+
+/// Ask for a roll of a marked table in one reader: `typed` is a roll the DM
+/// typed, `None` to roll the dice. Its result comes back to this reader (`settle_roll`). The
+/// error is the warning a bad table shows under itself.
+pub fn ask_in(
+    ctx: &StateContext,
+    reader: Key,
+    marker: &Result<Marker, String>,
+    table: &[Vec<String>],
+    typed: Option<i64>,
+) -> Result<(), String> {
+    let marker = marker.as_ref().map_err(String::clone)?;
+    let rows = table_rows(&marker.dice, table)?;
+    let slot = roll_state(reader, &marker.key);
+    let roll = TableRoll {
+        key: marker.key.clone(),
+        dice: marker.dice.clone(),
+        typed,
+        rows,
+    };
+    ctx.set(REQUEST, roll);
+    ctx.set(REQUESTER, slot);
+    Ok(())
+}
+
+/// A typed roll that is not a whole number, in one reader: its result line says so.
+pub fn typed_not_a_number_in(ctx: &StateContext, reader: Key, key: &str) {
+    let slot = roll_state(reader, key);
+    let mut state = ctx.get(slot).unwrap_or_default();
+    state.result = Some(TYPED_NOT_A_NUMBER.to_owned());
+    ctx.set(slot, state);
+}
+
+/// The result line of a typed roll that is not a whole number.
+const TYPED_NOT_A_NUMBER: &str = "Type a whole number.";
 
 /// With no run open, a result only shows. It uses dice of its own.
 pub fn roll_alone(roll: &TableRoll) -> Result<String, String> {

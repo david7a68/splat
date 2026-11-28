@@ -396,13 +396,6 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
-/// Test hook: `hook` runs once inside the next `ContentEdits` write, after its files are checked
-/// and directly before it writes.
-#[cfg(any(test, feature = "test-support"))]
-pub fn before_next_write(hook: impl FnOnce() + 'static) {
-    BEFORE_WRITE.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
-}
-
 /// A repair keeps the registered identity and never overwrites a later disk edit.
 pub struct ContentEdits {
     files: Vec<(PathBuf, String, String, String)>,

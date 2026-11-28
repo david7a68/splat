@@ -1,0 +1,451 @@
+//! Trackers in Lookup's panel: the empty state's route, the Tournament's note in play beside the
+//! Session page, a quick action and its Undo, a Due row and `Done`, an amount typed for an action
+//! that asks, and the panel's captures (`trackers__*`, paired with the references).
+use crate::fixtures::Seed;
+use crate::gui::harness::Shell;
+use crate::gui::pages::sessions::tests::capture;
+use gpui::{px, size};
+use std::fs;
+
+const EXAMPLE: &str = include_str!("../../../../docs/design/world-examples/heralds-tournament.md");
+
+/// A day mark of the Tournament, as egui's scenario adds it.
+const MONTH_END: &str = "> day_marks:\n>   month_end:\n>     name: End of month\n>     every: 30\n>     from: 2\n>     say: Move the rival powers. Pay each team its prize money, and roll Instability if chaos has begun.\n>     changes:\n>     - {tracker: favor, add: 1}\n";
+
+fn table(heading: &str, key: &str, dice: &str, rows: &[(&str, &str)]) -> String {
+    let mut text = format!(
+        "## {heading}\n\n<!-- splat:rolls key={key} dice={dice} -->\n\n| {} | Result |\n| --- | --- |\n",
+        dice.trim_start_matches('1')
+    );
+    for (value, row) in rows {
+        text.push_str(&format!("| {value} | {row} |\n"));
+    }
+    text.push('\n');
+    text
+}
+
+/// The vault's Tournament note as the example writes it (with `Fight minute` asking for its
+/// amount), its tables, and the note in play, as the switch in Campaign → Rules and runs saves it.
+fn race_in_play(shell: &mut Shell) {
+    shell.update(|root, _, _| {
+        let campaign = root.app.campaigns.active_campaign().expect("a campaign");
+        let dir = campaign.path.clone();
+        let start = EXAMPLE.find("````markdown\n").unwrap() + "````markdown\n".len();
+        let end = start + EXAMPLE[start..].find("````").unwrap();
+        let id = splat::character::stable_id("Tournament.md");
+        let note = EXAMPLE[start..end]
+            .replace("<a new UUID>", &id.to_string())
+            .replace(
+                ">     - label: Fight minute\n>       add: 1",
+                ">     - label: Fight minute\n>       add: ask",
+            );
+        fs::write(dir.join("Tournament.md"), note).unwrap();
+        let rival = [
+            ("1", "Loses its way in the Kitchens."),
+            ("2–5", "Moves one room on."),
+            ("6", "Takes a seal and wounds a rival."),
+        ];
+        let wander = [
+            ("1-6", "Nothing comes."),
+            ("7-8", "Two Sand Wraiths at the next door."),
+        ];
+        let tables = [
+            table("Rival Track", "rival_track", "1d6", &rival),
+            table("Wandering, 0:00 to 0:39", "wander_early", "1d8", &wander),
+            table("Wandering, 0:40 to 1:19", "wander_middle", "1d8", &wander),
+            table("Wandering, 1:20 and later", "wander_late", "1d8", &wander),
+            table("Gifts", "gifts", "1d6", &[("1-6", "A healing potion.")]),
+        ];
+        fs::write(
+            dir.join("Undercroft Tables.md"),
+            format!("# Undercroft Tables\n\n{}", tables.concat()),
+        )
+        .unwrap();
+        let catalogue = crate::content_workspace::Catalogue::load(&[], Some(&campaign)).unwrap();
+        let mut options = crate::encounter_settings::Options::load(&campaign, &catalogue).unwrap();
+        options.in_play.push(id);
+        let document = crate::content_workspace::CampaignDocument::load(&campaign).unwrap();
+        options.save(&campaign, &document.text).unwrap();
+        root.app.lookup.refresh();
+        root.app.lookup.files_changed = true;
+    });
+    // The content is read again in the background: wait for that read's result, not a clock.
+    read_content_again(shell);
+    assert!(
+        shell.read(|root| root.app.trackers.in_play()),
+        "the note is in play"
+    );
+}
+
+/// The content index read that `Lookup::refresh` started, carried to its end: the frame that
+/// starts the read has run (`update` settles), so this blocks on the read's own result, and the
+/// frames after it take the new index as any frame does. No wall clock, so a loaded machine
+/// only makes it slower.
+pub(crate) fn read_content_again(shell: &mut Shell) {
+    shell.update(|root, _, _| root.app.lookup.wait_for_load());
+    shell.settle();
+}
+
+/// The evening's session, as the egui scenario made it: `The Race`, with the Shrine of Cinders
+/// planned for tonight, its note saved, on the Session page's plan.
+fn the_race_session(shell: &mut Shell) {
+    shell.click("Session");
+    shell.click("New session");
+    shell.type_text("The Race");
+    shell.click("Create session");
+    shell.update(|root, _, cx| {
+        let words = root.app.sessions.gv_note_words(false).unwrap_or_default();
+        let words = words.replace(
+            "## Plan for tonight\n",
+            "## Plan for tonight\n\n- [[Shrine of Cinders]]\n",
+        );
+        root.app.sessions.gv_note_edited(false, &words);
+        root.app.sessions.flush();
+        cx.notify();
+    });
+    shell.update(|root, _, _| root.app.encounters.wait_for_load());
+    shell.settle();
+}
+
+/// Beside Lookup the Session page has tabs: the plan's (egui `show_plan`).
+fn show_plan(shell: &mut Shell) {
+    if shell.bounds("id:session-tabs-Plan").is_some() {
+        shell.click("id:session-tabs-Plan");
+    }
+}
+
+/// The Trackers view back at its top, where the Due rows are, as the DM scrolls to them: the
+/// harness presses a target where it was laid out, in view or not.
+fn view_top(shell: &mut Shell) {
+    shell.update(|root, _, cx| {
+        root.pages
+            .trackers
+            .scroll
+            .set_offset(gpui::point(px(0.0), px(0.0)));
+        cx.notify();
+    });
+}
+
+/// Press `name` in the Trackers view, scrolled first so the target is whole in view, as the DM
+/// scrolls to it (egui's driver aimed at a target in view): the harness presses where a target
+/// was laid out, in view or not.
+fn press_in_view(shell: &mut Shell, name: &str) {
+    let target = shell
+        .bounds(name)
+        .unwrap_or_else(|| panic!("no target named {name:?}"));
+    shell.update(|root, _, cx| {
+        let scroll = &root.pages.trackers.scroll;
+        let (view, now) = (scroll.bounds(), scroll.offset());
+        let y = crate::gui::kit::reveal::offset_for(
+            target,
+            view,
+            now.y,
+            scroll.max_offset().y,
+            crate::gui::kit::reveal::Align::Least,
+        );
+        scroll.set_offset(gpui::point(now.x, y));
+        cx.notify();
+    });
+    shell.settle();
+    shell.click(name);
+}
+
+fn value(shell: &mut Shell, key: &str, instance: Option<&str>) -> i64 {
+    shell.read(|root| {
+        root.app
+            .trackers
+            .state
+            .value(&root.app.trackers.rules, key, instance)
+    })
+}
+
+/// T19.1: with no house rule note in play, Ctrl+T shows the empty state, whose route shows
+/// Campaign → Rules and runs.
+#[test]
+fn no_note_in_play_routes_to_the_rules() {
+    let mut shell = Shell::new("trackers-empty", Seed::Campaign);
+    crate::gui::pages::encounters::tests::ready(&mut shell);
+    shell.press("ctrl-t");
+    assert!(shell.read(|root| root.app.lookup.on_trackers()));
+    assert!(
+        shell.bounds(crate::trackers::view::RULES_ROUTE).is_some(),
+        "the empty state shows its route"
+    );
+    capture(&mut shell, "trackers__00-no-house-rules__1200x800");
+    shell.click(crate::trackers::view::RULES_ROUTE);
+    shell.settle();
+    assert_eq!(shell.read(|root| root.app.page), crate::Page::Campaign);
+    assert!(shell.read(|root| root.app.campaign_tab == crate::CampaignTab::RunSettings));
+}
+
+/// T19.2: a quick action is one press and its result has `Undo: <label>`; a press that passes a
+/// mark raises a Due row; `Done` ends it; an action that asks takes a typed amount on Enter, and
+/// Escape ends the amount without closing Lookup.
+#[test]
+fn quick_actions_notices_and_amounts() {
+    let mut shell = Shell::new("trackers-race", Seed::Campaign);
+    race_in_play(&mut shell);
+    the_race_session(&mut shell);
+    shell.press("ctrl-t");
+    show_plan(&mut shell);
+    assert!(
+        shell.bounds("Enter room").is_some(),
+        "the pinned trackers show"
+    );
+    capture(
+        &mut shell,
+        "trackers__02-trackers-beside-the-plan__1200x800",
+    );
+
+    // A quick action and its Undo.
+    shell.click("Enter room");
+    shell.settle();
+    assert_eq!(value(&mut shell, "race_clock", None), 10);
+    assert!(
+        shell.bounds("Undo: Enter room").is_some(),
+        "the result has its Undo"
+    );
+    shell.click("Undo: Enter room");
+    shell.settle();
+    assert_eq!(value(&mut shell, "race_clock", None), 0);
+
+    // As egui's scenario: a press that passes a mark raises its Due row (the race's Bell); Done
+    // ends it. The Due row comes above the action, and the action stays under the still pointer.
+    let before = shell.bounds("Cistern or Sands").expect("the action");
+    shell.click("Cistern or Sands");
+    shell.settle();
+    let after = shell.bounds("Cistern or Sands").expect("the action");
+    assert!(
+        (after.top() - before.top()).abs() < px(1.0),
+        "the action stays under the pointer: {before:?} then {after:?}"
+    );
+    // The Due row came above the held action: back to the view's top to reach its Done.
+    view_top(&mut shell);
+    assert_eq!(shell.read(|root| root.app.trackers.due()), 1);
+    assert!(shell.bounds("Done: Bell").is_some(), "the Bell is due");
+    capture(&mut shell, "trackers__03-trackers-a-notice__1200x800");
+    // A Due row's controls are named by its notice, not its place in the list.
+    let names = crate::gui::kit::probe::names();
+    assert!(
+        names
+            .iter()
+            .any(|name| name.starts_with("id:trackers-due-") && name.ends_with("-done"))
+            && !names
+                .iter()
+                .any(|name| name.starts_with("id:trackers-due-0-")),
+        "Due ids come from the notice: {names:?}"
+    );
+    shell.click("Done: Bell");
+    shell.settle();
+    assert_eq!(shell.read(|root| root.app.trackers.due()), 0);
+    // Back at the top, the blank room the hold added is gone.
+    assert_eq!(
+        shell.read(|root| root.pages.trackers.hold.room.get()),
+        px(0.0),
+        "no blank room the view no longer needs"
+    );
+    let race = value(&mut shell, "race_clock", None);
+
+    // An action that asks: its field, a typed amount and Enter. Enter is the press: a Due row
+    // it raises comes above, and the action keeps its place.
+    let before = shell.bounds("Fight minute").expect("the action");
+    shell.click("Fight minute");
+    shell.settle();
+    assert!(
+        shell.read(|root| root.app.trackers.takes_escape()),
+        "the field asks"
+    );
+    shell.type_text("40");
+    shell.press("enter");
+    shell.settle();
+    assert_eq!(value(&mut shell, "race_clock", None), race + 40);
+    assert!(
+        shell.read(|root| root.app.trackers.due()) > 0,
+        "the amount raised a Due row"
+    );
+    let after = shell.bounds("Fight minute").expect("the action");
+    assert!(
+        (after.top() - before.top()).abs() < px(1.0),
+        "Enter keeps the action's place: {before:?} then {after:?}"
+    );
+    // Escape ends a typed amount, not Lookup.
+    shell.click("Fight minute");
+    shell.settle();
+    shell.type_text("5");
+    shell.press("escape");
+    shell.settle();
+    assert!(!shell.read(|root| root.app.trackers.takes_escape()));
+    assert!(
+        shell.read(|root| root.app.lookup.on_trackers()),
+        "Lookup stays"
+    );
+    assert_eq!(
+        value(&mut shell, "race_clock", None),
+        race + 40,
+        "Escape presses nothing"
+    );
+    // The typed amount's Undo takes it and its Due row back, so the evening goes on as egui's.
+    shell.click("Undo: Fight minute");
+    shell.settle();
+    assert_eq!(value(&mut shell, "race_clock", None), race);
+    assert_eq!(shell.read(|root| root.app.trackers.due()), 0);
+
+    // As egui's scenario: the race reaches 40, the second bell rolls each rival and the
+    // wandering table, and two seals are taken: three notices are due.
+    press_in_view(&mut shell, "Enter room");
+    press_in_view(&mut shell, "Enter room");
+    shell.settle();
+    assert_eq!(value(&mut shell, "race_clock", None), 40);
+    for _ in 0..3 {
+        press_in_view(&mut shell, "Roll Rival Track");
+    }
+    press_in_view(&mut shell, "Roll Wandering, 0:40 to 1:19");
+    press_in_view(&mut shell, "Take seal: Old Guard");
+    press_in_view(&mut shell, "Take seal: Party");
+    shell.settle();
+    assert_eq!(shell.read(|root| root.app.trackers.due()), 3);
+    // As egui's DM: Ctrl+T twice, and the view opens at its top with the three notices.
+    shell.press("ctrl-t");
+    shell.press("ctrl-t");
+    assert!(shell.read(|root| root.app.lookup.on_trackers()));
+    assert_eq!(
+        shell.read(|root| root.pages.trackers.scroll.offset().y),
+        px(0.0),
+        "the view opens at its top"
+    );
+    capture(&mut shell, "trackers__03-trackers-three-notices__1200x800");
+    // A wrong press seen late: the opposite action corrects it; Undo steps back through
+    // tonight's acts, newest first, and the second Undo takes the Party's seal out.
+    press_in_view(&mut shell, "Lose seal: Party");
+    shell.settle();
+    assert_eq!(shell.read(|root| root.app.trackers.due()), 2);
+    shell.click("Undo: Lose seal");
+    shell.settle();
+    assert_eq!(shell.read(|root| root.app.trackers.due()), 3);
+    shell.click("Undo: Take seal");
+    shell.settle();
+    assert_eq!(shell.read(|root| root.app.trackers.due()), 2);
+    assert_eq!(value(&mut shell, "seals", Some("Party")), 0);
+
+    // egui's day marks: the month ends every 30 days from Day 2; Day 1, then 61 days on the
+    // road. Done ends Day 32, and the road's Undo takes Day 62's row away.
+    let note = shell.read(|root| {
+        root.app
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join("Tournament.md")
+    });
+    let text = fs::read_to_string(&note).unwrap();
+    fs::write(
+        &note,
+        text.replacen("> trackers:\n", &format!("{MONTH_END}> trackers:\n"), 1),
+    )
+    .unwrap();
+    shell.update(|root, _, _| {
+        root.app.lookup.refresh();
+        root.app.lookup.files_changed = true;
+    });
+    read_content_again(&mut shell);
+    let road = shell.update(|root, _, cx| {
+        use crate::timeline::Kind;
+        let timeline = &mut root.app.timeline;
+        timeline.add(Kind::Day, None);
+        let road = timeline.add(Kind::Travel, None);
+        timeline.event_mut(&road).unwrap().duration = "61 days".into();
+        timeline.touch();
+        timeline.save();
+        cx.notify();
+        road
+    });
+    shell.settle();
+    assert_eq!(shell.read(|root| root.app.trackers.due()), 3);
+    press_in_view(&mut shell, "Done: End of month, Day 32");
+    shell.settle();
+    shell.update(|root, _, cx| {
+        root.app.timeline.undo_add(&road);
+        root.app.timeline.save();
+        cx.notify();
+    });
+    shell.settle();
+    assert_eq!(shell.read(|root| root.app.trackers.due()), 2);
+
+    // Last week's wrong press, from another session: the Keyring's seal.
+    use crate::trackers::ledger::{self, Entry, Op};
+    let wrong = Entry {
+        id: "c-01de5ea1".into(),
+        tracker: Some("seals".into()),
+        instance: Some("Keyring".into()),
+        add: Some(1),
+        why: Some("Take seal".into()),
+        session: Some(uuid::Uuid::from_u128(7)),
+        ..Entry::default()
+    };
+    let ledger_path = note.with_file_name(ledger::FILE);
+    ledger::commit(&ledger_path, |_| Ok(Op::Restore(vec![(None, wrong)]))).unwrap();
+    shell.update(|root, _, cx| {
+        root.app.trackers.read_disk();
+        cx.notify();
+    });
+    shell.settle();
+    assert_eq!(shell.read(|root| root.app.trackers.due()), 3);
+    // The note's reader in Lookup has each tracker's folded history under the note, drawn by
+    // the shared World reader.
+    // As the DM looks it up: its name typed in Lookup's search, and the found note opened.
+    shell.update(|root, _, cx| {
+        root.app.lookup.back_from_trackers();
+        cx.notify();
+    });
+    shell.click(crate::lookup::SEARCH_NAME);
+    shell.type_text("Tournament");
+    // The search shows its best match, the note; Enter closes the result list.
+    shell.press("enter");
+    let history = crate::gui::kit::probe::names()
+        .into_iter()
+        .find(|name| name.starts_with("Seals history"))
+        .unwrap_or_else(|| {
+            panic!(
+                "the history of Seals shows: {:?}",
+                crate::gui::kit::probe::names()
+            )
+        });
+    assert_eq!(
+        history, "Seals history 2",
+        "this week's seal and last week's"
+    );
+    assert_eq!(
+        shell.read(|root| root.app.page),
+        crate::Page::Sessions,
+        "the plan stays beside Lookup"
+    );
+    shell.click(&history);
+    // egui's state: three notices due, and the Seals history holds the Old Guard's seal and
+    // last week's wrong press on the Keyring.
+    assert_eq!(shell.read(|root| root.app.trackers.due()), 3);
+    let names = crate::gui::kit::probe::names();
+    for words in ["Take seal: Keyring +1", "Take seal: Old Guard +1"] {
+        assert!(
+            names.iter().any(|name| name.contains(words)),
+            "the history shows {words:?}: {names:?}"
+        );
+    }
+    capture(
+        &mut shell,
+        "trackers__07-tracker-history-in-the-reader__1200x800",
+    );
+}
+
+/// The panel at the smallest window, with the race in play.
+#[test]
+fn trackers_at_the_smallest_window() {
+    let mut shell = Shell::with_size("trackers-small", Seed::Campaign, size(px(960.0), px(640.0)));
+    race_in_play(&mut shell);
+    the_race_session(&mut shell);
+    shell.press("ctrl-t");
+    show_plan(&mut shell);
+    shell.click("Cistern or Sands");
+    shell.settle();
+    assert_eq!(shell.read(|root| root.app.trackers.due()), 1);
+    capture(&mut shell, "trackers__03-trackers-a-notice__960x640");
+}

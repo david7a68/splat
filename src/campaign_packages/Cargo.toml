@@ -10,19 +10,12 @@ splat-character = { path = "../../crates/character" }
 splat-content = { path = "../../crates/content" }
 splat-content-ui = { path = "../content_ui" }
 splat-design = { path = "../design" }
-eframe = { version = "0.33", default-features = false }
 uuid = { version = "1", features = ["v4", "serde"] }
 serde_yaml_ng = "0.10"
 tempfile = "3"
 
 [features]
-test-support = ["splat-content-ui/test-support", "dep:egui_kittest"]
-
-[dependencies.egui_kittest]
-version = "0.33"
-features = ["wgpu", "eframe"]
-optional = true
+test-support = ["splat-content-ui/test-support"]
 
 [dev-dependencies]
 splat-content-ui = { path = "../content_ui", features = ["test-support"] }
-egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }

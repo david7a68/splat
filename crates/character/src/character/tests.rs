@@ -36,6 +36,53 @@ fn inventory_instances_and_creature_identity_remain_stable() {
     assert_ne!(a.inventory[0].id, a.inventory[1].id);
     assert_eq!(a.inventory[0].definition_id, a.inventory[1].definition_id);
     assert_eq!(a.inventory[0].attuned_to, Some(a.definition.splat_id));
+    // A source that sends its keys in another order makes the same record, hash and notes, and
+    // a note's maps are written in one order whatever order the model holds them in.
+    fn reversed(value: &Value) -> Value {
+        match value {
+            Value::Object(map) => Value::Object(
+                map.iter()
+                    .rev()
+                    .map(|(k, v)| (k.clone(), reversed(v)))
+                    .collect(),
+            ),
+            Value::Array(items) => Value::Array(items.iter().map(reversed).collect()),
+            other => other.clone(),
+        }
+    }
+    let c = EntitySnapshot::from_beyond(
+        reversed(&a.source.raw),
+        reversed(&a.source.computed),
+        "456",
+        "123",
+        10,
+        11,
+    )
+    .unwrap();
+    assert_eq!(c.source.content_hash, a.source.content_hash);
+    let source = json!({"id": 1, "sources": [{"sourceId": 1, "pageNumber": 2}], "name": "Rage"});
+    assert_eq!(
+        pin(&reversed(&source), &["id", "name", "sources"]),
+        pin(&source, &["id", "name", "sources"])
+    );
+    let text = |s: &EntitySnapshot| {
+        s.content_notes()
+            .unwrap()
+            .into_iter()
+            .map(|note| note.markdown)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(text(&c), text(&a));
+    let notes = a.content_notes().unwrap();
+    let note = notes.last().unwrap();
+    let entry = Entry::parse(&note.relative_path, &note.markdown).unwrap();
+    let fields = serde_json::to_value(&entry.fields).unwrap();
+    let body = rules::source_body(&entry);
+    let body = body.trim_matches('\n');
+    assert_eq!(
+        rules::written(&note.relative_path, &reversed(&fields), body).unwrap(),
+        rules::written(&note.relative_path, &fields, body).unwrap()
+    );
 }
 #[test]
 fn entry_uses_creature_schema_without_claiming_execution() {

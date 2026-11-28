@@ -1,10 +1,10 @@
 //! The party at a glance, above the Session page while a session is played. Each member is a
 //! portrait, HP and a few numbers, with the parts the roster uses. The rest is on hover, and a
 //! click opens the sheet.
-use crate::design::{self, Density, Type, colors, icons};
-use eframe::egui::{self, Color32, pos2, vec2};
+use crate::design::Color;
+use crate::design::{self, Density};
 use splat_campaign::encounter_run::effect::Condition;
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 use uuid::Uuid;
 
 /// One party member, as the bar shows them.
@@ -31,7 +31,7 @@ pub struct Source {
     pub icon: &'static str,
     pub word: String,
     pub short: &'static str,
-    pub color: Color32,
+    pub color: Color,
 }
 
 /// The bar holds one line of items, so that what is below it does not move.
@@ -39,24 +39,16 @@ pub fn height() -> f32 {
     Density::Read.row()
 }
 
-/// Smaller than a Party row's readout, so that more numbers fit beside it.
-fn hp_fonts(ui: &egui::Ui) -> design::HpFonts {
-    design::HpFonts {
-        current: Type::Numeral.font(ui),
-        max: Type::Small.font(ui),
-    }
-}
 const PORTRAIT: f32 = 24.0;
-/// The HP bar under the readout, as on a Party row.
-const BAR: f32 = 3.0;
 
-fn known(n: Option<i64>) -> String {
+/// A number, or `?` when the sheet does not say.
+pub fn known(n: Option<i64>) -> String {
     n.map_or_else(|| "?".to_owned(), |n| n.to_string())
 }
 
 impl Glance {
     /// The numbers after HP, in the order the Party list compares them. Only a caster has a DC.
-    fn stats(&self) -> Vec<(&'static str, Option<i64>)> {
+    pub fn stats(&self) -> Vec<(&'static str, Option<i64>)> {
         let mut stats = vec![
             ("AC", self.ac),
             ("Per", self.perception),
@@ -69,7 +61,7 @@ impl Glance {
     }
 
     /// Everything the bar knows after the name, a fact to a line, for hover.
-    fn facts(&self) -> Vec<String> {
+    pub fn facts(&self) -> Vec<String> {
         let mut hp = format!(
             "HP {}",
             crate::combat_sync::fraction(known(self.hp), known(self.max_hp))
@@ -106,124 +98,9 @@ impl Glance {
     }
 }
 
-/// What the DM did with the bar this frame.
-pub enum Choice {
-    /// Open this member's sheet.
-    Open(String),
-    Hide,
-}
-
-/// One item's parts, measured once with every stat. The fit keeps the first few stats.
-struct Item {
-    /// The portrait goes after the optional stats and before AC, so that words name each item.
-    portrait: bool,
-    /// The name drawn: the first name, its initial, or none (see [`Names`]).
-    name: Option<Arc<egui::Galley>>,
-    /// The first name, so that the DM need not know each portrait.
-    first: Option<Arc<egui::Galley>>,
-    /// The first name's initial (`B.`), when even first names do not fit. Hover and the
-    /// accessible name keep the full name.
-    initial: Option<Arc<egui::Galley>>,
-    hp_width: f32,
-    temp: Option<Arc<egui::Galley>>,
-    /// The HP state's icon and word, or the icon alone (see [`Step`]).
-    word: Option<Arc<egui::Galley>>,
-    full_word: Option<Arc<egui::Galley>>,
-    icon_word: Option<Arc<egui::Galley>>,
-    /// Each stat as one run of text: its muted label, a space, and its value.
-    stats: Vec<Arc<egui::Galley>>,
-    /// The width this item had earlier in the fight, at this level, so that it never narrows
-    /// and nothing after it moves back. Zero outside a fight.
-    held: f32,
-}
-
-impl Item {
-    fn measure(ui: &egui::Ui, glance: &Glance) -> Self {
-        let c = colors();
-        let fonts = hp_fonts(ui);
-        let small = Type::Small.font(ui);
-        // The same slots as `hp_readout`: the current HP, then the slash and a maximum of three digits.
-        let hp_width = design::number_width(ui, &known(glance.hp), &fonts.current)
-            + design::number_width(
-                ui,
-                &"0".repeat(3.max(known(glance.max_hp).len())),
-                &fonts.max,
-            );
-        let painter = ui.painter();
-        let temp = (glance.temp > 0).then(|| {
-            painter.layout_no_wrap(design::temp_hp_text(glance.temp), small.clone(), c.hp.temp)
-        });
-        let state = design::hp_word(glance.hp, glance.max_hp);
-        let word = state.map(|(icon, word, color)| {
-            painter.layout_no_wrap(format!("{icon} {word}"), small.clone(), color)
-        });
-        let icon_word = state
-            .map(|(icon, _, color)| painter.layout_no_wrap(icon.to_owned(), small.clone(), color));
-        let first = glance.name.split_whitespace().next().unwrap_or_default();
-        let name = (!first.is_empty())
-            .then(|| painter.layout_no_wrap(first.to_owned(), small.clone(), c.text));
-        let initial = first
-            .chars()
-            .next()
-            .map(|letter| painter.layout_no_wrap(format!("{letter}."), small.clone(), c.text));
-        let stats = glance
-            .stats()
-            .into_iter()
-            .map(|(label, value)| {
-                let mut job = egui::text::LayoutJob::default();
-                job.append(label, 0.0, egui::TextFormat::simple(small.clone(), c.muted));
-                job.append(
-                    &format!(" {}", known(value)),
-                    0.0,
-                    egui::TextFormat::simple(small.clone(), c.text),
-                );
-                painter.layout_job(job)
-            })
-            .collect();
-        Self {
-            portrait: true,
-            name: name.clone(),
-            first: name,
-            initial,
-            hp_width,
-            temp,
-            word: word.clone(),
-            full_word: word,
-            icon_word,
-            stats,
-            held: 0.0,
-        }
-    }
-
-    /// The width with the first `shown` stats.
-    fn width(&self, shown: usize) -> f32 {
-        self.held.max(self.content_width(shown))
-    }
-
-    fn content_width(&self, shown: usize) -> f32 {
-        design::XS
-            + if self.portrait {
-                PORTRAIT + design::XS
-            } else {
-                0.0
-            }
-            + self.name.as_ref().map_or(0.0, |g| g.size().x + design::S)
-            + self.hp_width
-            + self.temp.as_ref().map_or(0.0, |g| design::XS + g.size().x)
-            + self.word.as_ref().map_or(0.0, |g| design::S + g.size().x)
-            + self
-                .stats
-                .iter()
-                .take(shown)
-                .map(|stat| design::S + stat.size().x)
-                .sum::<f32>()
-            + design::XS
-    }
-}
-
 /// Which name each item draws.
 #[derive(Clone, Copy, PartialEq, Debug)]
-enum Names {
+pub enum Names {
     First,
     Initial,
 }
@@ -231,11 +108,11 @@ enum Names {
 /// One way to draw the bar: how many stats, with or without portraits, which names, and
 /// whether the HP state keeps its word.
 #[derive(Clone, Copy, PartialEq, Debug)]
-struct Step {
-    shown: usize,
-    portrait: bool,
-    names: Names,
-    state_word: bool,
+pub struct Step {
+    pub shown: usize,
+    pub portrait: bool,
+    pub names: Names,
+    pub state_word: bool,
 }
 
 /// From the fullest bar down. The optional stats (Per, Ins, DC) drop from the end, down to AC. Then the portraits go together, then AC.
@@ -244,7 +121,7 @@ struct Step {
 /// icon and colour without its word. No item is ever cut off: when even that does not fit, the
 /// items that fit show whole and `N more` names the rest. Every item shows the same parts, and
 /// hover and the accessible name keep everything.
-fn steps(most: usize) -> Vec<Step> {
+pub fn steps(most: usize) -> Vec<Step> {
     let step = |shown, portrait, names, state_word| Step {
         shown,
         portrait,
@@ -264,34 +141,11 @@ fn steps(most: usize) -> Vec<Step> {
     steps
 }
 
-/// Draw every item as `step` says.
-fn set(items: &mut [Item], step: Step) {
-    for item in items {
-        item.portrait = step.portrait;
-        item.name = match step.names {
-            Names::First => item.first.clone(),
-            Names::Initial => item.initial.clone(),
-        };
-        item.word = if step.state_word {
-            item.full_word.clone()
-        } else {
-            item.icon_word.clone()
-        };
-    }
-}
-
-/// The width of every item drawn as `step` says, and the gaps between them.
-fn needed(items: &mut [Item], step: Step, gap: f32) -> f32 {
-    set(items, step);
-    items.iter().map(|item| item.width(step.shown)).sum::<f32>()
-        + gap * items.len().saturating_sub(1) as f32
-}
-
 /// What a fight holds from frame to frame, in the bar's own state, keyed to the run. The level
 /// may drop when the words need it, but it never rises, and no item narrows, until the fight
 /// ends. A new bar width or a new party measures again.
-#[derive(Clone)]
-struct Hold {
+#[derive(Clone, Debug, PartialEq)]
+pub struct Hold {
     run: Uuid,
     width: f32,
     party: Vec<String>,
@@ -301,61 +155,120 @@ struct Hold {
     widths: Vec<f32>,
 }
 
-/// The bar's contents. It returns what the DM chose.
-pub fn show(
-    ui: &mut egui::Ui,
-    glances: &[Glance],
-    source: &Source,
-    fight: Option<Uuid>,
-) -> Option<Choice> {
-    let mut choice = None;
-    let hold_id = egui::Id::new("party_bar_hold");
-    let bar_width = ui.available_width();
-    let party: Vec<String> = glances.iter().map(|glance| glance.id.clone()).collect();
-    let gap = design::M;
-    let label =
-        ui.painter()
-            .layout_no_wrap("Party".to_owned(), Type::Label.font(ui), colors().muted);
-    let source_width = |word: &str| {
-        ui.painter()
-            .layout_no_wrap(
-                format!("{} {word}", source.icon),
-                Type::Small.font(ui),
-                source.color,
-            )
-            .size()
-            .x
-    };
-    let mut items: Vec<Item> = glances.iter().map(|g| Item::measure(ui, g)).collect();
-    let room =
-        ui.available_width() - label.size().x - design::L - Density::Read.control() - design::S;
+/// One item's parts, measured by whichever toolkit draws the bar: each width in points. The fit
+/// ([`fit`]) chooses the parts every item draws.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Measured {
+    /// The first name, and its initial (`B.`).
+    pub first: Option<f32>,
+    pub initial: Option<f32>,
+    /// The HP readout's slots: the current HP and a slash with three digits of maximum.
+    pub hp: f32,
+    /// `+5`, when the member has temporary HP.
+    pub temp: Option<f32>,
+    /// The HP state's icon and word, and its icon alone.
+    pub full_word: Option<f32>,
+    pub icon_word: Option<f32>,
+    /// Each stat as one run: its label, a space, and its value.
+    pub stats: Vec<f32>,
+}
+
+impl Measured {
+    /// The item's width when drawn as `step` says.
+    pub fn width(&self, step: Step) -> f32 {
+        let name = match step.names {
+            Names::First => self.first,
+            Names::Initial => self.initial,
+        };
+        let word = if step.state_word {
+            self.full_word
+        } else {
+            self.icon_word
+        };
+        design::XS
+            + if step.portrait {
+                PORTRAIT + design::XS
+            } else {
+                0.0
+            }
+            + name.map_or(0.0, |w| w + design::S)
+            + self.hp
+            + self.temp.map_or(0.0, |w| design::XS + w)
+            + word.map_or(0.0, |w| design::S + w)
+            + self
+                .stats
+                .iter()
+                .take(step.shown)
+                .map(|w| design::S + w)
+                .sum::<f32>()
+            + design::XS
+    }
+}
+
+/// The room the items have, and what the hold of a fight is keyed to.
+pub struct Room {
+    /// The width the items may take.
+    pub room: f32,
+    /// The gap between two items.
+    pub gap: f32,
+    /// The bar's whole width: a new width measures again.
+    pub bar_width: f32,
+    /// The run being fought, if any.
+    pub fight: Option<Uuid>,
+    /// The members' ids, in order: a new party measures again.
+    pub party: Vec<String>,
+}
+
+/// How the bar is drawn: the step, each item's width, how many items show whole, and what a
+/// fight holds for the next frame (`None` outside a fight).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Fitted {
+    pub step: Step,
+    pub widths: Vec<f32>,
+    pub kept: usize,
+    pub hold: Option<Hold>,
+}
+
+/// Fit the items to the room (see [`steps`]). No item is ever cut off: when even the narrowest
+/// step does not fit, the items that fit show whole and `N more` (`more(hidden)` wide) names the
+/// rest. In a fight (`room.fight`), `held` is the last frame's hold: the level never rises, and
+/// at the same level no item narrows, so nothing after an item moves back while HP changes.
+pub fn fit(
+    items: &[Measured],
+    room: Room,
+    more: impl Fn(usize) -> f32,
+    held: Option<&Hold>,
+) -> Fitted {
+    let Room {
+        room,
+        gap,
+        bar_width,
+        fight,
+        party,
+    } = room;
     let steps = steps(items.iter().map(|item| item.stats.len()).max().unwrap_or(0));
     let held = fight.and_then(|run| {
-        ui.data(|data| data.get_temp::<Hold>(hold_id))
-            .filter(|hold| {
-                hold.run == run
-                    && hold.width == bar_width
-                    && hold.party == party
-                    && hold.steps == steps.len()
-            })
+        held.filter(|hold| {
+            hold.run == run
+                && hold.width == bar_width
+                && hold.party == party
+                && hold.steps == steps.len()
+                && hold.widths.len() == items.len()
+        })
     });
+    let needed = |step: Step| {
+        items.iter().map(|item| item.width(step)).sum::<f32>()
+            + gap * items.len().saturating_sub(1) as f32
+    };
     let fitted = steps
         .iter()
-        .position(|&step| needed(&mut items, step, gap) <= room)
+        .position(|&step| needed(step) <= room)
         .unwrap_or_else(|| {
             // Below every step, the narrowest one, so that the most items show whole.
             (0..steps.len())
-                .min_by(|&a, &b| {
-                    needed(&mut items, steps[a], gap).total_cmp(&needed(&mut items, steps[b], gap))
-                })
+                .min_by(|&a, &b| needed(steps[a]).total_cmp(&needed(steps[b])))
                 .unwrap_or(0)
         });
-    // No item is ever cut off. When even the narrowest step does not fit, the items that fit
-    // show whole, and `N more` names the rest on hover and in its accessible name.
-    let (painter, small) = (ui.painter().clone(), Type::Small.font(ui));
-    let more = |hidden: usize| {
-        painter.layout_no_wrap(format!("{hidden} more"), small.clone(), colors().muted)
-    };
     // How many items show whole, from the first, with these widths.
     let fit = |widths: &[f32]| {
         (0..=widths.len())
@@ -367,973 +280,231 @@ pub fn show(
                 let count = if hidden == 0 {
                     0.0
                 } else {
-                    gap + more(hidden).size().x + 2.0 * design::XS
+                    gap + more(hidden) + 2.0 * design::XS
                 };
                 shown + count <= room
             })
             .unwrap_or(0)
     };
     // Each item's width at this step, with or without the widths a fight held.
-    let measure = |items: &mut [Item], index: usize, hold: Option<&Hold>| {
-        set(items, steps[index]);
-        for (at, item) in items.iter_mut().enumerate() {
-            item.held = hold.map_or(0.0, |hold| hold.widths[at]);
-        }
+    let measure = |index: usize, hold: Option<&Hold>| {
         items
             .iter()
-            .map(|item| item.width(steps[index].shown))
+            .enumerate()
+            .map(|(at, item)| {
+                hold.map_or(0.0, |hold| hold.widths[at])
+                    .max(item.width(steps[index]))
+            })
             .collect::<Vec<f32>>()
     };
-    let fresh = fit(&measure(&mut items, fitted, None));
+    let fresh = fit(&measure(fitted, None));
     // In a fight the level never rises, and at the same level no item narrows. The held widths
     // are measured again at the held level each frame. When they would hide a player who shows
     // without the hold, they are dropped, and the held level stays: its items are no wider than
     // a fuller level's, so the same players fit.
-    let (index, widths, kept) = match held.as_ref() {
+    let (index, widths, kept) = match held {
         Some(hold) if fitted <= hold.step => {
-            let widths = measure(&mut items, hold.step, Some(hold));
+            let widths = measure(hold.step, Some(hold));
             let kept = fit(&widths);
             if kept >= fresh {
                 (hold.step, widths, kept.min(hold.kept).max(fresh))
             } else {
-                let widths = measure(&mut items, hold.step, None);
+                let widths = measure(hold.step, None);
                 let kept = fit(&widths);
                 (hold.step, widths, kept)
             }
         }
-        _ => {
-            let widths = measure(&mut items, fitted, None);
-            (fitted, widths, fresh)
-        }
+        _ => (fitted, measure(fitted, None), fresh),
     };
-    let step = steps[index];
-    set(&mut items, step);
-    for (item, width) in items.iter_mut().zip(&widths) {
-        item.stats.truncate(step.shown);
-        // Paint each item at the width it was measured with.
-        item.held = *width;
-    }
-    ui.data_mut(|data| match fight {
-        Some(run) => data.insert_temp(
-            hold_id,
-            Hold {
-                run,
-                width: bar_width,
-                party,
-                steps: steps.len(),
-                step: index,
-                kept,
-                widths: widths.clone(),
-            },
-        ),
-        None => data.remove::<Hold>(hold_id),
+    let hold = fight.map(|run| Hold {
+        run,
+        width: bar_width,
+        party,
+        steps: steps.len(),
+        step: index,
+        kept,
+        widths: widths.clone(),
     });
-    // The source is measured by itself, after the items are fitted: it shows whenever the room
-    // they leave holds it, at any level, in full or else in its short form. It never takes room
-    // from an item, so it never moves one, and a fight's hold does not keep it hidden.
-    let hidden = glances.len() - kept;
-    let used = widths[..kept].iter().sum::<f32>()
-        + gap * kept.saturating_sub(1) as f32
-        + if hidden == 0 {
-            0.0
-        } else {
-            gap + more(hidden).size().x + 2.0 * design::XS
-        };
-    let free = room - used - design::L;
-    let shown_source = [source.word.as_str(), source.short]
-        .into_iter()
-        .map(|word| (word, source_width(word)))
-        .find(|&(_, width)| width <= free);
-    let room = shown_source.map_or(room, |(_, width)| room - width - design::L);
-    items.truncate(kept);
-    ui.horizontal_centered(|ui| {
-        ui.spacing_mut().item_spacing.x = design::L;
-        // In its own column, as `Add` is on the plan's strip.
-        ui.add(egui::Label::new(label));
-        ui.allocate_ui_with_layout(
-            vec2(room.max(0.0), height()),
-            egui::Layout::left_to_right(egui::Align::Center),
-            |ui| {
-                ui.spacing_mut().item_spacing.x = gap;
-                ui.set_clip_rect(ui.clip_rect().intersect(ui.max_rect()));
-                for (glance, item) in glances.iter().zip(items) {
-                    if paint(ui, glance, item, &source.word).clicked() {
-                        choice = Some(Choice::Open(glance.id.clone()));
-                    }
-                }
-                let hidden = &glances[kept..];
-                if !hidden.is_empty() {
-                    more_players(ui, more(hidden.len()), hidden);
-                }
-            },
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = design::S;
-            if design::icon_button(ui, icons::CLOSE, "Hide the party").clicked() {
-                choice = Some(Choice::Hide);
-            }
-            if let Some((word, _)) = shown_source {
-                source_status(ui, source, word);
-            }
-        });
-    });
-    choice
-}
-
-/// The source as a status, as `design::status` draws one, in its full or short words. Hover and
-/// the accessible name always give the full words.
-fn source_status(ui: &mut egui::Ui, source: &Source, word: &str) {
-    let format = egui::TextFormat::simple(Type::Small.font(ui), source.color);
-    let mut job = egui::text::LayoutJob::default();
-    job.append(&format!("{} {word}", source.icon), 0.0, format);
-    let response = ui.add(egui::Label::new(job).truncate());
-    design::named(ui, &response, &format!("{} {}", source.icon, source.word));
-    response.on_hover_text(&source.word);
-}
-
-/// The players that do not fit, as a muted count. It takes keyboard focus. Hover, focus and the
-/// accessible name list each one with HP.
-fn more_players(ui: &mut egui::Ui, count: Arc<egui::Galley>, hidden: &[Glance]) {
-    let c = colors();
-    let size = count.size() + vec2(2.0 * design::XS, 0.0);
-    let (rect, response) = ui.allocate_exact_size(
-        vec2(size.x, height()),
-        egui::Sense::focusable_noninteractive(),
-    );
-    ui.painter().galley(
-        egui::pos2(
-            rect.left() + design::XS,
-            rect.center().y - count.size().y / 2.0,
-        ),
-        count,
-        c.muted,
-    );
-    if response.has_focus() {
-        ui.painter().rect_stroke(
-            rect,
-            design::RADIUS_CONTROL,
-            egui::Stroke::new(2.0, c.focus),
-            egui::StrokeKind::Inside,
-        );
+    Fitted {
+        step: steps[index],
+        widths,
+        kept,
+        hold,
     }
-    let hp = |glance: &Glance| glance.facts().into_iter().next().unwrap_or_default();
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(
-            egui::WidgetType::Label,
-            true,
-            format!(
-                "{} more: {}",
-                hidden.len(),
-                hidden
-                    .iter()
-                    .map(|glance| format!("{} · {}", glance.name, hp(glance)))
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            ),
-        )
-    });
-    // On hover, and while the count has keyboard focus.
-    let lines: Vec<design::TipLine<'_>> = hidden
-        .iter()
-        .flat_map(|glance| {
-            [
-                design::TipLine::title(glance.name.as_str()),
-                design::TipLine::detail(hp(glance)),
-            ]
-        })
-        .collect();
-    design::rich_tip(response, &lines);
-}
-
-fn paint(ui: &mut egui::Ui, glance: &Glance, item: Item, source: &str) -> egui::Response {
-    let c = colors();
-    let (rect, response) = ui.allocate_exact_size(
-        vec2(item.width(item.stats.len()), height()),
-        egui::Sense::click(),
-    );
-    let mut facts = glance.facts();
-    facts.push(source.to_owned());
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(
-            egui::WidgetType::Button,
-            true,
-            format!("{} · {}", glance.name, facts.join(" · ")),
-        )
-    });
-    let painter = ui.painter();
-    if response.hovered() {
-        painter.rect_filled(rect, design::RADIUS_CONTROL, c.hover);
-    }
-    if response.has_focus() {
-        painter.rect_stroke(
-            rect,
-            design::RADIUS_CONTROL,
-            egui::Stroke::new(2.0, c.focus),
-            egui::StrokeKind::Inside,
-        );
-    }
-    let y = rect.center().y;
-    let mut x = rect.left() + design::XS;
-    if item.portrait {
-        let picture =
-            egui::Rect::from_min_size(pos2(x, y - PORTRAIT / 2.0), egui::Vec2::splat(PORTRAIT));
-        crate::art::portrait(ui, picture, glance.portrait.as_deref(), &glance.name, None);
-        x = picture.right() + design::XS;
-    }
-    if let Some(name) = item.name {
-        let width = name.size().x;
-        painter.galley(pos2(x, y - 1.0 - name.size().y / 2.0), name, c.text);
-        x += width + design::S;
-    }
-    // The readout shares the label's line. Its bar takes the item's bottom edge, as on a Party row.
-    let line = y - 1.0;
-    let right = x + item.hp_width;
-    design::hp_readout(
-        ui,
-        painter,
-        right,
-        line,
-        glance.hp,
-        glance.max_hp,
-        &hp_fonts(ui),
-    );
-    let bar = egui::Rect::from_min_max(pos2(x, rect.bottom() - BAR), pos2(right, rect.bottom()));
-    design::hp_bar(painter, bar, glance.hp, glance.max_hp, glance.temp);
-    x = right;
-    let put = |x: &mut f32, before: f32, galley: Arc<egui::Galley>| {
-        *x += before;
-        let width = galley.size().x;
-        painter.galley(pos2(*x, line - galley.size().y / 2.0), galley, c.text);
-        *x += width;
-    };
-    if let Some(temp) = item.temp {
-        put(&mut x, design::XS, temp);
-    }
-    if let Some(word) = item.word {
-        put(&mut x, design::S, word);
-    }
-    for stat in item.stats {
-        put(&mut x, design::S, stat);
-    }
-    let lines: Vec<design::TipLine<'_>> =
-        std::iter::once(design::TipLine::title(glance.name.as_str()))
-            .chain(
-                facts
-                    .iter()
-                    .map(|fact| design::TipLine::detail(fact.as_str())),
-            )
-            .collect();
-    design::rich_tip(response, &lines).on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const NAMES: [&str; 6] = [
-        "Brannoch Ironhide",
-        "Iselle Varn",
-        "Kestrel Moor",
-        "Oren Thistlewick",
-        "Sable Quill",
-        "Wren Ashdown",
-    ];
+    /// One member's measured parts: Bloodied members have the state's word.
+    fn member(bloodied: bool) -> Measured {
+        Measured {
+            first: Some(60.0),
+            initial: Some(14.0),
+            hp: 40.0,
+            temp: None,
+            full_word: bloodied.then_some(50.0),
+            icon_word: bloodied.then_some(12.0),
+            // AC, Per, Ins, DC.
+            stats: vec![34.0, 38.0, 36.0, 32.0],
+        }
+    }
 
-    /// `count` players. The first `bloodied` are at 11/41; the last `temp` have 5 temporary HP.
-    fn party(count: usize, bloodied: usize, temp: usize) -> Vec<Glance> {
-        NAMES[..count]
+    fn party(count: usize, bloodied: usize) -> Vec<Measured> {
+        (0..count).map(|at| member(at < bloodied)).collect()
+    }
+
+    fn room(width: f32, fight: Option<Uuid>) -> Room {
+        Room {
+            room: width,
+            gap: design::M,
+            bar_width: width,
+            fight,
+            party: (0..5).map(|at| at.to_string()).collect(),
+        }
+    }
+
+    /// `N more`'s width.
+    fn more(_: usize) -> f32 {
+        50.0
+    }
+
+    /// Where a step stands in the order, fullest first.
+    fn level(fitted: &Fitted) -> usize {
+        steps(4)
             .iter()
-            .enumerate()
-            .map(|(at, name)| Glance {
-                id: at.to_string(),
-                name: (*name).to_owned(),
-                portrait: None,
-                hp: Some(if at < bloodied { 11 } else { 41 }),
-                max_hp: Some(41),
-                temp: if at + temp >= count { 5 } else { 0 },
-                ac: Some(15),
-                perception: Some(14),
-                insight: Some(11),
-                investigation: Some(10),
-                spell_dc: Some(13),
-                conditions: Vec::new(),
-            })
-            .collect()
+            .position(|step| *step == fitted.step)
+            .unwrap()
     }
 
-    /// What one bar width draws.
-    #[derive(Debug, PartialEq)]
-    struct Drawn {
-        /// Items that paint their whole first name, and items that paint its initial.
-        firsts: usize,
-        initials: usize,
-        portraits: usize,
-        /// Items whose accessible name is the full name, then HP.
-        spoken: usize,
-        ac: usize,
-        per: usize,
-        /// Items that paint the word `Bloodied` beside its icon.
-        bloodied: usize,
-        /// Items that paint the Bloodied state: its icon alone, or its icon and word.
-        states: usize,
-        /// Each item's rect, and the rect of Hide the party at the bar's right edge.
-        items: Vec<egui::Rect>,
-        close: egui::Rect,
-        /// The source status's rect, when it shows, and its painted words.
-        source: Option<egui::Rect>,
-        source_words: Option<String>,
-        /// The accessible name of `N more` and its rect, when some players do not fit.
-        more: Option<String>,
-        more_rect: Option<egui::Rect>,
-        /// Painted shapes that reach past their clip rect: what the DM would see cut off.
-        cut: Vec<String>,
-    }
-
-    impl Drawn {
-        /// Nothing painted reaches past its clip rect (the room box, which ends before the source
-        /// status when it shows). Every item and `N more` lie before Hide the party, and Hide the
-        /// party is in the window.
-        fn whole(&self, width: f32) -> bool {
-            self.cut.is_empty()
-                && self.close.right() <= width
-                && self
-                    .items
-                    .iter()
-                    .chain(&self.more_rect)
-                    .all(|item| item.left() >= 0.0 && item.right() <= self.close.left())
-        }
-
-        fn parts(&self) -> (usize, usize, usize, usize, usize, usize) {
-            (
-                self.firsts,
-                self.initials,
-                self.portraits,
-                self.ac,
-                self.per,
-                self.bloodied,
-            )
-        }
-    }
-
-    fn draw(width: f32, glances: &[Glance]) -> Drawn {
-        let ctx = egui::Context::default();
-        design::theme::install(&ctx);
-        ctx.enable_accesskit();
-        draw_in(&ctx, width, glances, None)
-    }
-
-    /// One frame of the bar in `ctx`, which keeps the bar's state between frames.
-    fn draw_in(ctx: &egui::Context, width: f32, glances: &[Glance], fight: Option<Uuid>) -> Drawn {
-        let source = Source {
-            icon: icons::OK,
-            word: "From tonight".to_owned(),
-            short: "Tonight",
-            color: colors().muted,
-        };
-        draw_with(ctx, width, glances, fight, &source)
-    }
-
-    /// One frame of the bar in `ctx` with this source.
-    fn draw_with(
-        ctx: &egui::Context,
-        width: f32,
-        glances: &[Glance],
-        fight: Option<Uuid>,
-        source: &Source,
-    ) -> Drawn {
-        let output = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    vec2(width, 200.0),
-                )),
-                ..Default::default()
-            },
-            |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    show(ui, glances, source, fight);
-                });
-            },
-        );
-        fn walk(shape: &egui::Shape, texts: &mut Vec<String>, circles: &mut usize) {
-            match shape {
-                egui::Shape::Vec(shapes) => {
-                    shapes.iter().for_each(|shape| walk(shape, texts, circles));
-                }
-                egui::Shape::Text(text) => texts.push(text.galley.job.text.clone()),
-                egui::Shape::Circle(_) => *circles += 1,
-                _ => {}
-            }
-        }
-        let (mut texts, mut circles, mut cut) = (Vec::new(), 0, Vec::new());
-        for clipped in &output.shapes {
-            walk(&clipped.shape, &mut texts, &mut circles);
-            let bounds = clipped.shape.visual_bounding_rect();
-            if bounds.is_positive() && !clipped.clip_rect.expand(0.5).contains_rect(bounds) {
-                cut.push(format!("{bounds:?} past {:?}", clipped.clip_rect));
-            }
-        }
-        let first = |glance: &Glance| glance.name.split_whitespace().next().unwrap().to_owned();
-        let painted = |word: String| texts.iter().filter(|text| **text == word).count();
-        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
-        let rect = |node: &egui::accesskit::Node| {
-            let b = node.bounds().expect("bounds");
-            egui::Rect::from_min_max(
-                egui::pos2(b.x0 as f32, b.y0 as f32),
-                egui::pos2(b.x1 as f32, b.y1 as f32),
-            )
-        };
-        let items: Vec<_> = glances
-            .iter()
-            .filter_map(|glance| {
-                nodes
-                    .iter()
-                    .find(|(_, node)| {
-                        node.label().is_some_and(|label| {
-                            label.starts_with(&format!("{} · HP ", glance.name))
-                        })
-                    })
-                    .map(|(_, node)| rect(node))
-            })
-            .collect();
-        let stat = |label: &str| texts.iter().filter(|text| text.starts_with(label)).count();
-        Drawn {
-            firsts: glances.iter().map(|g| painted(first(g))).sum(),
-            initials: glances
-                .iter()
-                .map(|g| painted(format!("{}.", first(g).chars().next().unwrap())))
-                .sum(),
-            portraits: circles,
-            spoken: items.len(),
-            ac: stat("AC "),
-            per: stat("Per "),
-            bloodied: texts
-                .iter()
-                .filter(|text| text.ends_with(" Bloodied"))
-                .count(),
-            states: texts
-                .iter()
-                .filter(|text| *text == icons::BLOODIED || text.ends_with(" Bloodied"))
-                .count(),
-            items,
-            more: nodes
-                .iter()
-                .filter_map(|(_, node)| node.label().or_else(|| node.value()))
-                .map(|words| words.to_string())
-                .find(|words| words.contains(" more: ")),
-            more_rect: nodes
-                .iter()
-                .find(|(_, node)| {
-                    node.label()
-                        .or_else(|| node.value())
-                        .is_some_and(|words| words.contains(" more: "))
-                })
-                .map(|(_, node)| rect(node)),
-            cut,
-            source: nodes
-                .iter()
-                .find(|(_, node)| {
-                    node.label()
-                        .or_else(|| node.value())
-                        .is_some_and(|words| words == format!("{} From tonight", icons::OK))
-                })
-                .map(|(_, node)| rect(node)),
-            source_words: texts
-                .iter()
-                .find(|text| text.starts_with(&format!("{} ", icons::OK)))
-                .cloned(),
-            close: nodes
-                .iter()
-                .find(|(_, node)| node.label() == Some("Hide the party"))
-                .map(|(_, node)| rect(node))
-                .expect("Hide the party"),
-        }
-    }
-
-    /// `N more` is in the tab order. Focus on it shows the same list as hover: each hidden player's
-    /// full name.
-    #[test]
-    fn n_more_takes_keyboard_focus_and_shows_the_hidden_players() {
-        let ctx = egui::Context::default();
-        design::theme::install(&ctx);
-        ctx.enable_accesskit();
-        let glances = party(6, 6, 6);
-        let source = Source {
-            icon: icons::OK,
-            word: "From tonight".to_owned(),
-            short: "Tonight",
-            color: colors().muted,
-        };
-        let frame = |events: Vec<egui::Event>| {
-            ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        vec2(500.0, 200.0),
-                    )),
-                    events,
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        show(ui, &glances, &source, None);
-                    });
-                },
-            )
-        };
-        let tab = egui::Event::Key {
-            key: egui::Key::Tab,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: egui::Modifiers::NONE,
-        };
-        let mut output = frame(Vec::new());
-        let words = |output: &egui::FullOutput, id| {
-            output
-                .platform_output
-                .accesskit_update
-                .as_ref()?
-                .nodes
-                .iter()
-                .find(|(node, _)| *node == id)
-                .and_then(|(_, node)| node.label().or_else(|| node.value()))
-                .map(str::to_owned)
-        };
-        // The number of hidden players, when focus is on `N more`.
-        let focused_more = |output: &egui::FullOutput| {
-            output
-                .platform_output
-                .accesskit_update
-                .as_ref()
-                .and_then(|update| words(output, update.focus))
-                .filter(|words| words.contains(" more: "))
-                .and_then(|words| words.split_whitespace().next()?.parse::<usize>().ok())
-        };
-        let more = |output: &egui::FullOutput| focused_more(output).is_some();
-        let mut presses = 0;
-        while !more(&output) && presses < 12 {
-            output = frame(vec![tab.clone()]);
-            presses += 1;
-        }
-        let hidden = focused_more(&output).expect("Tab reaches N more within 12 presses");
-        assert!(hidden > 0 && hidden < NAMES.len(), "{hidden} hidden");
-        // The list shows while focus stays.
-        output = frame(Vec::new());
-        output = if more(&output) {
-            frame(Vec::new())
+    /// The items that show and `N more` fit the room.
+    fn whole(fitted: &Fitted, items: usize, width: f32) -> bool {
+        let shown = fitted.widths[..fitted.kept].iter().sum::<f32>()
+            + design::M * fitted.kept.saturating_sub(1) as f32;
+        let count = if fitted.kept == items {
+            0.0
         } else {
-            output
+            design::M + more(items - fitted.kept) + 2.0 * design::XS
         };
-        let mut texts = Vec::new();
-        fn walk(shape: &egui::Shape, texts: &mut Vec<String>) {
-            match shape {
-                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, texts)),
-                egui::Shape::Text(text) => texts.push(text.galley.job.text.clone()),
-                _ => {}
+        shown + count <= width
+    }
+
+    /// FT3 and its repair: the optional stats drop first, then the portraits go together, then
+    /// AC. Then first names shorten to an initial, then the state word to its icon.
+    #[test]
+    fn no_item_is_cut_off_and_ac_stays_until_the_portraits_have_gone() {
+        let step = |shown, portrait, names, state_word| Step {
+            shown,
+            portrait,
+            names,
+            state_word,
+        };
+        assert_eq!(
+            steps(4),
+            [
+                step(4, true, Names::First, true),
+                step(3, true, Names::First, true),
+                step(2, true, Names::First, true),
+                step(1, true, Names::First, true),
+                step(1, false, Names::First, true),
+                step(0, false, Names::First, true),
+                step(0, false, Names::Initial, true),
+                step(0, false, Names::Initial, false),
+            ]
+        );
+        // No item is ever cut off: at every width, the items that show are whole, and a wider
+        // bar never shows a lower level or fewer players.
+        for bloodied in [0, 3, 5] {
+            let items = party(5, bloodied);
+            let mut last: Option<Fitted> = None;
+            for width in (30..=200).map(|step| step as f32 * 10.0) {
+                let fitted = fit(&items, room(width, None), more, None);
+                assert!(whole(&fitted, 5, width), "{bloodied} Bloodied, {width}");
+                if let Some(last) = &last {
+                    assert!(level(&fitted) <= level(last) && fitted.kept >= last.kept);
+                }
+                last = Some(fitted);
             }
-        }
-        for clipped in &output.shapes {
-            walk(&clipped.shape, &mut texts);
-        }
-        for name in &NAMES[NAMES.len() - hidden..] {
+            let wide = last.unwrap();
             assert!(
-                texts.iter().any(|text| text == name),
-                "focus shows {name}: {texts:?}"
+                level(&wide) == 0 && wide.kept == 5,
+                "a wide bar shows everything"
+            );
+            let narrow = fit(&items, room(300.0, None), more, None);
+            assert!(
+                narrow.kept < 5,
+                "the narrowest bar keeps whole items and counts the rest"
             );
         }
     }
 
     /// Round 13 FT1, the lead's ruling: in a fight, the level may drop when the words need it,
-    /// but it never rises, and no item moves back, until the fight ends or the bar's width
-    /// changes. Outside a fight the level fits the words in view.
+    /// but it never rises, and no item narrows, until the fight ends or the bar's width
+    /// changes. The hold never hides a player who shows without it (review of PR 185).
     #[test]
     fn a_fight_holds_the_level_and_places_until_it_ends() {
-        let level = |at: &Drawn| {
-            (
-                at.firsts,
-                at.initials,
-                at.portraits,
-                at.ac,
-                at.per,
-                at.spoken,
-            )
-        };
-        let lefts = |at: &Drawn| at.items.iter().map(|item| item.left()).collect::<Vec<_>>();
-        let calm = party(5, 0, 0);
-        let hurt = party(5, 1, 0);
+        let (calm, hurt) = (party(5, 0), party(5, 1));
+        let fight = Some(Uuid::from_u128(7));
         let mut held = 0;
-        for width in (30..=200).map(|step| step as f32 * 10.0).chain([1040.0]) {
-            // Where one Bloodied player needs a lower level than a calm party, and every player
-            // still shows. Narrower bars, where the hold must give way rather than hide a
-            // player, are checked below.
-            let fresh = draw(width, &hurt);
-            if level(&draw(width, &calm)) == level(&fresh) || fresh.spoken < 5 {
+        for width in (30..=200).map(|step| step as f32 * 10.0) {
+            let fresh = |items: &[Measured], width: f32| fit(items, room(width, None), more, None);
+            let at = |items: &[Measured], hold: Option<&Hold>, fight: Option<Uuid>| {
+                fit(items, room(width, fight), more, hold)
+            };
+            let before = at(&calm, None, fight);
+            let bloodied = at(&hurt, before.hold.as_ref(), fight);
+            let healed = at(&calm, bloodied.hold.as_ref(), fight);
+            for (fitted, items) in [(&bloodied, &hurt), (&healed, &calm)] {
+                assert!(whole(fitted, 5, width), "{width}: {fitted:?}");
+                assert!(
+                    fitted.kept >= fresh(items, width).kept,
+                    "{width}: the hold hid a player"
+                );
+            }
+            if level(&fresh(&hurt, width)) == level(&fresh(&calm, width))
+                || fresh(&hurt, width).kept < 5
+            {
                 continue;
             }
             held += 1;
-            let ctx = egui::Context::default();
-            design::theme::install(&ctx);
-            ctx.enable_accesskit();
-            let fight = Some(Uuid::from_u128(7));
-            let before = draw_in(&ctx, width, &calm, fight);
-            let bloodied = draw_in(&ctx, width, &hurt, fight);
-            never_fewer(&before, width, &calm);
-            never_fewer(&bloodied, width, &hurt);
             assert_ne!(
                 level(&before),
                 level(&bloodied),
                 "the level drops at {width}"
             );
-            assert!(bloodied.whole(width), "{width}: {bloodied:?}");
-            let healed = draw_in(&ctx, width, &calm, fight);
-            never_fewer(&healed, width, &calm);
             assert_eq!(
                 level(&healed),
                 level(&bloodied),
                 "the level holds at {width}"
             );
-            assert_eq!(healed.bloodied + healed.states, 0, "healed at {width}");
-            for (a, b) in lefts(&bloodied).iter().zip(lefts(&healed)) {
-                assert!(
-                    (a - b).abs() < 0.5,
-                    "no item moves back at {width}: {a} then {b}"
-                );
-            }
-            // Another fight is measured again.
-            let next = draw_in(&ctx, width, &calm, Some(Uuid::from_u128(8)));
+            assert!(
+                healed
+                    .widths
+                    .iter()
+                    .zip(&bloodied.widths)
+                    .all(|(healed, bloodied)| healed >= bloodied),
+                "no item narrows at {width}"
+            );
+            // Another fight, another width, or the end of the run measures again.
+            let next = at(&calm, healed.hold.as_ref(), Some(Uuid::from_u128(8)));
             assert_eq!(
                 level(&next),
                 level(&before),
                 "a new fight starts fresh at {width}"
             );
-            draw_in(&ctx, width, &hurt, fight);
-            // A window or rail change measures again, still in the fight.
-            let wider = draw_in(&ctx, width + 10.0, &calm, fight);
+            let wider = fit(&calm, room(width + 10.0, fight), more, healed.hold.as_ref());
             assert_eq!(
                 level(&wider),
-                level(&draw(width + 10.0, &calm)),
+                level(&fresh(&calm, width + 10.0)),
                 "resize at {width}"
             );
-            draw_in(&ctx, width, &hurt, fight);
-            // The run ends: the level fits the words again.
-            let ended = draw_in(&ctx, width, &calm, None);
-            assert_eq!(level(&ended), level(&before), "the run ended at {width}");
+            let ended = at(&calm, healed.hold.as_ref(), None);
+            assert!(ended.hold.is_none() && level(&ended) == level(&before));
         }
         assert!(
             held > 2,
             "some widths need a lower level for one Bloodied player"
-        );
-
-        // Review of PR 185: the hold never hides a player who shows without it. Each player is
-        // Bloodied in turn and healed before the next, in one fight.
-        let mut whole_party = 0;
-        for width in (30..=200).map(|step| step as f32 * 10.0).chain([1040.0]) {
-            let all_shown = draw(width, &party(5, 5, 0)).spoken == 5;
-            whole_party += usize::from(all_shown);
-            let ctx = egui::Context::default();
-            design::theme::install(&ctx);
-            ctx.enable_accesskit();
-            let fight = Some(Uuid::from_u128(9));
-            draw_in(&ctx, width, &calm, fight);
-            for player in 0..5 {
-                let mut turn = party(5, 0, 0);
-                turn[player].hp = Some(11);
-                let bloodied = draw_in(&ctx, width, &turn, fight);
-                let healed = draw_in(&ctx, width, &calm, fight);
-                never_fewer(&bloodied, width, &turn);
-                never_fewer(&healed, width, &calm);
-                assert!(
-                    bloodied.whole(width),
-                    "{width}, player {player}: {bloodied:?}"
-                );
-                assert!(
-                    healed.whole(width),
-                    "{width}, player {player} healed: {healed:?}"
-                );
-                if all_shown {
-                    for (frame, at) in [("Bloodied", &bloodied), ("healed", &healed)] {
-                        assert!(
-                            at.items.len() == 5 && at.more.is_none(),
-                            "{width}, player {player} {frame}: a player is hidden: {at:?}"
-                        );
-                    }
-                }
-            }
-        }
-        assert!(whole_party > 100, "most widths show a whole Bloodied party");
-
-        // Re-review of PR 185: where five Bloodied players need `N more`, healing them all in the
-        // same fight keeps the level that five Bloodied needed. It never rises mid-fight.
-        // Which parts show, not how many items show them: a healed bar may show more players.
-        let parts = |at: &Drawn| {
-            [at.firsts, at.initials, at.portraits, at.ac, at.per].map(|count| count > 0)
-        };
-        let all = party(5, 5, 0);
-        let (mut crowded, mut icon_only) = (0, 0);
-        for width in (30..=200).map(|step| step as f32 * 10.0).chain([1040.0]) {
-            if draw(width, &all).spoken == 5 {
-                continue;
-            }
-            crowded += 1;
-            let ctx = egui::Context::default();
-            design::theme::install(&ctx);
-            ctx.enable_accesskit();
-            let fight = Some(Uuid::from_u128(10));
-            let before = draw_in(&ctx, width, &calm, fight);
-            let bloodied = draw_in(&ctx, width, &all, fight);
-            let healed = draw_in(&ctx, width, &calm, fight);
-            for (at, glances) in [(&before, &calm), (&bloodied, &all), (&healed, &calm)] {
-                never_fewer(at, width, glances);
-                assert!(at.whole(width), "{width}: {at:?}");
-            }
-            assert_eq!(
-                parts(&healed),
-                parts(&bloodied),
-                "the level rose mid-fight at {width}"
-            );
-            // The steps either side of the held one can look the same with everyone healed, so
-            // one player stays Bloodied: a held icon-only level keeps the icon without its word.
-            let one = party(5, 1, 0);
-            draw_in(&ctx, width, &all, fight);
-            let one_left = draw_in(&ctx, width, &one, fight);
-            never_fewer(&one_left, width, &one);
-            assert!(one_left.whole(width), "{width}: {one_left:?}");
-            if bloodied.bloodied == 0 {
-                icon_only += usize::from(draw(width, &one).bloodied > 0);
-                assert!(
-                    one_left.states == 1 && one_left.bloodied == 0,
-                    "the state word came back mid-fight at {width}: {one_left:?}"
-                );
-            }
-        }
-        assert!(
-            icon_only > 0,
-            "some widths would show the word again without the hold"
-        );
-        assert!(
-            crowded > 3,
-            "some widths need N more for five Bloodied players"
-        );
-    }
-
-    /// Round 14 FT1: the source is measured by itself, after the items are fitted. It shows
-    /// whenever the room the items leave holds it, at any level: in full, or else in its short
-    /// form, and never overlaps an item or Hide the party. Its accessible name keeps the full
-    /// words. Before, it showed only when the fullest level fitted beside it. It never takes
-    /// room from an item: a source that fits at no width, full or short, leaves every item and
-    /// `N more` exactly where they are with the usual source.
-    #[test]
-    fn the_source_shows_whenever_the_room_after_the_items_holds_it() {
-        let (full, short) = (
-            format!("{} From tonight", icons::OK),
-            format!("{} Tonight", icons::OK),
-        );
-        // Wider than the widest bar tested, in both forms.
-        let never = Source {
-            icon: icons::OK,
-            word: "Never fits ".repeat(300),
-            short: Box::leak("Never ".repeat(400).into_boxed_str()),
-            color: colors().muted,
-        };
-        let (mut below_fullest, mut shortened, mut compared) = (0, 0, 0);
-        for (count, bloodied, temp) in [(5, 3, 2), (5, 0, 0), (6, 6, 6)] {
-            let glances = party(count, bloodied, temp);
-            let drawn: Vec<_> = (30..=200)
-                .map(|step| (step as f32 * 10.0, draw(step as f32 * 10.0, &glances)))
-                .collect();
-            let case = format!("{count} players, {bloodied} Bloodied, {temp} with temporary HP");
-            let width = |words: &str| {
-                drawn
-                    .iter()
-                    .find(|(_, at)| at.source_words.as_deref() == Some(words))
-                    .and_then(|(_, at)| at.source)
-                    .map(|source| source.width())
-                    .unwrap_or_else(|| panic!("{case}: some width shows {words:?}"))
-            };
-            let (full_width, short_width) = (width(&full), width(&short));
-            assert!(
-                short_width < full_width,
-                "{case}: the short form is shorter"
-            );
-            // First, at every width: the items and `N more` are where they are with a source
-            // that never fits.
-            for (bar, at) in &drawn {
-                let ctx = egui::Context::default();
-                design::theme::install(&ctx);
-                ctx.enable_accesskit();
-                let without = draw_with(&ctx, *bar, &glances, None, &never);
-                assert!(
-                    without.source.is_none()
-                        && without.source_words.is_none()
-                        && without.items == at.items
-                        && without.more_rect == at.more_rect,
-                    "{case}: the source takes no room from the items at {bar}: with it \
-                     {:?} {:?}, with one that never fits {:?} {:?}",
-                    at.items,
-                    at.more_rect,
-                    without.items,
-                    without.more_rect
-                );
-                compared += usize::from(!at.items.is_empty());
-            }
-            let fullest = drawn.last().unwrap().1.parts();
-            let mut shown = 0;
-            for (bar, at) in &drawn {
-                assert!(at.whole(*bar), "{case}: cut off at {bar}: {at:?}");
-                // The right edge of what the items use: the last item, or `N more`.
-                let last = at
-                    .items
-                    .iter()
-                    .chain(&at.more_rect)
-                    .map(|rect| rect.right())
-                    .fold(0.0, f32::max);
-                let free = at.close.left() - last;
-                // A form gives way only when the room the items leave cannot hold it: the
-                // gap to Hide the party is less than the words, a gap either side, and the
-                // spacing beside the button.
-                let holds = |width: f32| free >= width + 3.0 * design::L;
-                match at.source {
-                    Some(source) => {
-                        shown += 1;
-                        assert!(
-                            source.left() >= last + design::L - 0.5
-                                && source.right() <= at.close.left(),
-                            "{case}: the source sits after the items at {bar}: {at:?}"
-                        );
-                        below_fullest += usize::from(at.parts() != fullest);
-                        let words = at.source_words.as_deref();
-                        assert!(
-                            words == Some(full.as_str())
-                                || words == Some(short.as_str()) && !holds(full_width),
-                            "{case}: the full words show when they fit at {bar}: {at:?}"
-                        );
-                        shortened += usize::from(words == Some(short.as_str()));
-                    }
-                    None => assert!(
-                        !holds(short_width) && at.source_words.is_none(),
-                        "{case}: {free} px free but no source at {bar}: {at:?}"
-                    ),
-                }
-            }
-            assert!(
-                shown > 0 && drawn[0].1.source.is_none(),
-                "{case}: the narrowest bar has no room for the source"
-            );
-        }
-        // The comparison above saw real items, not two empty bars.
-        assert!(compared > 400, "{compared} bars with items compared");
-        assert!(
-            below_fullest > 10 && shortened > 3,
-            "the source shows at levels below the fullest, in short form where full words do \
-             not fit: {below_fullest}, {shortened}"
-        );
-    }
-
-    /// The hold never shows fewer players than a fresh bar with the same party.
-    fn never_fewer(at: &Drawn, width: f32, glances: &[Glance]) {
-        let fresh = draw(width, glances).spoken;
-        assert!(
-            at.spoken >= fresh,
-            "{width}: {} players shown, {fresh} without the hold: {at:?}",
-            at.spoken
-        );
-    }
-
-    /// FT3 and its repair: the optional stats drop first, then the portraits go together, then
-    /// AC. Then first names shorten to an initial, then the state word to its icon. No item is
-    /// ever cut off: at every width tested, from 300 px to 2000 px, each item lies whole before
-    /// Hide the party, and the players that do not fit are named by `N more`.
-    #[test]
-    fn no_item_is_cut_off_and_ac_stays_until_the_portraits_have_gone() {
-        for (count, bloodied, temp) in [(5, 3, 2), (5, 5, 5), (6, 1, 6), (6, 6, 6), (5, 0, 0)] {
-            let glances = party(count, bloodied, temp);
-            let drawn: Vec<_> = (30..=200)
-                .map(|step| (step * 10, draw(step as f32 * 10.0, &glances)))
-                .collect();
-            let case = format!("{count} players, {bloodied} Bloodied, {temp} with temporary HP");
-            for (width, at) in &drawn {
-                assert!(
-                    at.whole(*width as f32),
-                    "{case}: cut off at {width}: {at:?}"
-                );
-                // Every player is named: by its item, or by `N more`.
-                let hidden: Vec<_> = glances[at.spoken..].iter().map(|g| &g.name).collect();
-                assert!(
-                    at.spoken > 0
-                        && (hidden.is_empty() && at.more.is_none()
-                            || at.more.as_ref().is_some_and(|more| {
-                                more.starts_with(&format!("{} more: ", hidden.len()))
-                                    && hidden
-                                        .iter()
-                                        .all(|name| more.contains(&format!("{name} · HP ")))
-                            })),
-                    "{case}: {hidden:?} at {width}: {at:?}"
-                );
-                let n = at.spoken;
-                // Each shown player at 11/41 keeps the Bloodied state: its icon, with or without
-                // its word.
-                assert_eq!(
-                    at.states,
-                    bloodied.min(n),
-                    "{case}: the Bloodied state stays at {width}: {at:?}"
-                );
-                let (firsts, initials, portraits, ac, per, _) = at.parts();
-                assert!(
-                    [0, n].contains(&firsts)
-                        && [0, n].contains(&initials)
-                        && [0, n].contains(&portraits)
-                        && [0, n].contains(&ac)
-                        && [0, n].contains(&per),
-                    "{case}: the parts go together, never item by item, at {width}: {at:?}"
-                );
-                assert!(
-                    firsts + initials == n,
-                    "{case}: names stay at {width}: {at:?}"
-                );
-                assert!(
-                    portraits == 0 || ac == n,
-                    "{case}: AC before portraits at {width}"
-                );
-                assert!(
-                    per == 0 || portraits == n,
-                    "{case}: portraits before Per at {width}"
-                );
-                assert!(
-                    initials == 0 || ac == 0,
-                    "{case}: AC before first names at {width}"
-                );
-            }
-            assert_eq!(
-                drawn.last().unwrap().1.parts(),
-                (count, 0, count, count, count, bloodied),
-                "{case}: a wide bar shows everything"
-            );
-            assert!(
-                drawn[0].1.spoken < count,
-                "{case}: the narrowest bar keeps whole items and counts the rest"
-            );
-        }
-        // Every step of the order is reached, narrow to wide, for 3 Bloodied and 2 with temp HP.
-        let glances = party(5, 3, 2);
-        let drawn: Vec<_> = (30..=200)
-            .map(|step| draw(step as f32 * 10.0, &glances).parts())
-            .collect();
-        let order = [
-            (0, 5, 0, 0, 0, 0),
-            (0, 5, 0, 0, 0, 3),
-            (5, 0, 0, 0, 0, 3),
-            (5, 0, 0, 5, 0, 3),
-            (5, 0, 5, 5, 0, 3),
-            (5, 0, 5, 5, 5, 3),
-        ];
-        let reached: Vec<_> = order
-            .iter()
-            .map(|step| drawn.iter().position(|at| at == step))
-            .collect();
-        assert!(
-            reached.iter().all(Option::is_some) && reached.is_sorted(),
-            "each step shows at some width, narrow to wide: {reached:?} {drawn:?}"
         );
     }
 }

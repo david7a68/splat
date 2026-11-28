@@ -1,42 +1,10 @@
-//! Back and Forward through what a reader opened: Alt+Left and Alt+Right, or the mouse's
-//! side buttons. Library and Lookup each keep their own trail, so each request goes to
-//! one of them and is then taken, so the other does not act on it too.
-//!
-//! The side buttons never reach egui: `set_aside` takes them out of the raw input, or a
-//! press would also move a text caret, close a popup or take focus where the pointer is.
-use eframe::egui;
+//! Back and Forward through what a reader opened. Library and Lookup each keep their own
+//! trail.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
     Back,
     Forward,
-}
-
-/// How a step was asked for. A key goes to the reader with focus; a button press goes
-/// to the reader under the pointer.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Request {
-    Key,
-    Button(egui::Pos2),
-}
-
-impl Step {
-    fn of_key(key: egui::Key) -> Option<Self> {
-        match key {
-            egui::Key::ArrowLeft => Some(Step::Back),
-            egui::Key::ArrowRight => Some(Step::Forward),
-            _ => None,
-        }
-    }
-
-    /// Egui names the mouse's Back button Extra1 and its Forward button Extra2.
-    fn of_button(button: egui::PointerButton) -> Option<Self> {
-        match button {
-            egui::PointerButton::Extra1 => Some(Step::Back),
-            egui::PointerButton::Extra2 => Some(Step::Forward),
-            _ => None,
-        }
-    }
 }
 
 /// One reader's history: the places Back and Forward go to, oldest first. The open entry
@@ -104,115 +72,9 @@ impl<T> Trail<T> {
     }
 }
 
-/// The first side-button press set aside, and the number of the pass it is for.
-type Press = (u64, Step, egui::Pos2);
-
-fn press_id() -> egui::Id {
-    egui::Id::new("history_button_press")
-}
-
-/// Take the side buttons out of this frame's raw input, and keep the first press for
-/// `take_if` in the coming pass only.
-pub fn set_aside(ctx: &egui::Context, events: &mut Vec<egui::Event>) {
-    let mut first = None;
-    events.retain(|event| match event {
-        egui::Event::PointerButton {
-            pos,
-            button,
-            pressed,
-            ..
-        } => match Step::of_button(*button) {
-            Some(step) => {
-                if *pressed {
-                    first.get_or_insert((step, *pos));
-                }
-                false
-            }
-            None => true,
-        },
-        _ => true,
-    });
-    if let Some((step, pos)) = first {
-        let pass = ctx.cumulative_pass_nr();
-        ctx.data_mut(|data| data.insert_temp::<Press>(press_id(), (pass, step, pos)));
-    }
-}
-
-/// Take the first Back or Forward request waiting in this pass, if `accept` wants it,
-/// so no other reader acts on it too.
-pub fn take_if(ctx: &egui::Context, accept: impl FnOnce(Request) -> bool) -> Option<Step> {
-    let key = ctx.input(|input| {
-        input.events.iter().find_map(|event| match event {
-            egui::Event::Key {
-                key,
-                pressed: true,
-                modifiers,
-                ..
-            } if modifiers.matches_logically(egui::Modifiers::ALT) => {
-                Some((Step::of_key(*key)?, *key))
-            }
-            _ => None,
-        })
-    });
-    if let Some((step, key)) = key {
-        let taken = accept(Request::Key)
-            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, key));
-        return taken.then_some(step);
-    }
-    let pass = ctx.cumulative_pass_nr();
-    let (_, step, pos) = ctx
-        .data(|data| data.get_temp::<Press>(press_id()))
-        .filter(|(set_for, ..)| *set_for == pass)?;
-    accept(Request::Button(pos)).then(|| {
-        ctx.data_mut(|data| data.remove::<Press>(press_id()));
-        step
-    })
-}
-
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use super::*;
-
-    /// Run one pass with these events, as eframe passes them on.
-    pub(crate) fn frame<T>(
-        events: Vec<egui::Event>,
-        mut act: impl FnMut(&egui::Context) -> T,
-    ) -> T {
-        let ctx = egui::Context::default();
-        let mut raw = egui::RawInput {
-            events,
-            ..Default::default()
-        };
-        set_aside(&ctx, &mut raw.events);
-        let mut out = None;
-        let _ = ctx.run(raw, |ctx| out = Some(act(ctx)));
-        out.unwrap()
-    }
-
-    pub(crate) fn press(button: egui::PointerButton, pos: egui::Pos2) -> egui::Event {
-        egui::Event::PointerButton {
-            pos,
-            button,
-            pressed: true,
-            modifiers: egui::Modifiers::NONE,
-        }
-    }
-
-    const AT: egui::Pos2 = egui::pos2(10.0, 20.0);
-
-    fn key(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
-        egui::Event::Key {
-            key,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers,
-        }
-    }
-
-    fn twice(ctx: &egui::Context) -> (Option<Step>, Option<Step>) {
-        (take_if(ctx, |_| true), take_if(ctx, |_| true))
-    }
 
     /// Go with `here` open, where every place but "gone" is found.
     fn go(trail: &mut Trail<&'static str>, step: Step, here: &'static str) -> Option<&'static str> {
@@ -265,72 +127,5 @@ pub(crate) mod tests {
             (trail.peek(Step::Back), trail.peek(Step::Forward)),
             (None, None)
         );
-    }
-
-    #[test]
-    fn side_buttons_go_back_and_forward_once_and_never_reach_egui() {
-        let mut events = vec![
-            press(egui::PointerButton::Extra1, AT),
-            egui::Event::PointerButton {
-                pos: AT,
-                button: egui::PointerButton::Extra1,
-                pressed: false,
-                modifiers: egui::Modifiers::NONE,
-            },
-            press(egui::PointerButton::Primary, AT),
-        ];
-        set_aside(&egui::Context::default(), &mut events);
-        assert_eq!(events, [press(egui::PointerButton::Primary, AT)]);
-        let taken = frame(vec![press(egui::PointerButton::Extra1, AT)], twice);
-        assert_eq!(taken, (Some(Step::Back), None));
-        let taken = frame(vec![press(egui::PointerButton::Extra2, AT)], twice);
-        assert_eq!(taken, (Some(Step::Forward), None));
-        let taken = frame(vec![press(egui::PointerButton::Middle, AT)], twice);
-        assert_eq!(taken, (None, None));
-    }
-
-    #[test]
-    fn a_refused_request_waits_for_another_reader() {
-        let taken = frame(vec![press(egui::PointerButton::Extra1, AT)], |ctx| {
-            let refused = take_if(ctx, |source| {
-                assert_eq!(source, Request::Button(AT));
-                false
-            });
-            (refused, take_if(ctx, |_| true))
-        });
-        assert_eq!(taken, (None, Some(Step::Back)));
-    }
-
-    #[test]
-    fn a_press_does_not_outlast_its_pass() {
-        let ctx = egui::Context::default();
-        let mut events = vec![press(egui::PointerButton::Extra1, AT)];
-        set_aside(&ctx, &mut events);
-        let _ = ctx.run(egui::RawInput::default(), |_| {});
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            assert_eq!(take_if(ctx, |_| true), None);
-        });
-    }
-
-    #[test]
-    fn alt_arrows_go_back_and_forward_once() {
-        let alt = egui::Modifiers::ALT;
-        let taken = frame(vec![key(egui::Key::ArrowLeft, alt)], twice);
-        assert_eq!(taken, (Some(Step::Back), None));
-        let taken = frame(vec![key(egui::Key::ArrowRight, alt)], twice);
-        assert_eq!(taken, (Some(Step::Forward), None));
-        let taken = frame(
-            vec![key(egui::Key::ArrowRight, egui::Modifiers::NONE)],
-            twice,
-        );
-        assert_eq!(taken, (None, None));
-    }
-
-    /// Ctrl+Alt+Left is not Alt+Left, so no reader may act on it.
-    #[test]
-    fn another_modifier_with_alt_is_not_a_step() {
-        let ctrl_alt = egui::Modifiers::ALT | egui::Modifiers::CTRL;
-        let taken = frame(vec![key(egui::Key::ArrowLeft, ctrl_alt)], twice);
-        assert_eq!(taken, (None, None));
     }
 }

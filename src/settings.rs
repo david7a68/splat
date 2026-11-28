@@ -1,36 +1,14 @@
+use crate::state_context::StateContext;
 use crate::{
     auth::Session,
     credentials::{Action, Worker},
-    design::{self, Density, Status, Type, colors, icons},
+    design::{self, Status, colors, icons},
 };
-use eframe::egui;
 use std::{
     sync::mpsc,
     time::{Duration, Instant},
 };
-use zeroize::{Zeroize, Zeroizing};
-
-/// The account's warning, a typed notice in the account column: a sign-in the desktop keyring
-/// did not save asks to connect again (true when the DM chooses it); any other is the keyring's
-/// own words.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "a body place: the account’s warning stands in the account column, in the keyring’s words (Ban::Body, Ban::Words)"
-)]
-fn account_warning(ui: &mut egui::Ui, keyring: bool, warning: &str) -> bool {
-    use design::outcome::{BodyMessage, Choice, MessageChoice, Notice, Sentence};
-    let notice = if keyring {
-        Notice::warning(crate::sentence!(
-            "This computer did not save your sign-in. Unlock your password manager, then connect again."
-        ))
-        .choice(Choice::new(MessageChoice::Choice("Connect again"), ()))
-    } else if let Some(words) = Sentence::outside(warning) {
-        Notice::warning(words)
-    } else {
-        return false;
-    };
-    BodyMessage::from(notice).show(ui).is_some()
-}
+use zeroize::Zeroize;
 
 pub struct Settings {
     cookie_input: String,
@@ -41,10 +19,6 @@ pub struct Settings {
     /// Connect. Every other error (a failed removal, restore or worker) keeps its message in the
     /// Settings footer, with its recovery. Set with `error`, from the request that failed.
     connect_failed: bool,
-    /// Connect's press, kept until its reply (issue #698, M0279; `Reveal::ask_on_result`): a
-    /// failed Connect brings its kept cookie, its cause and Connect whole into view together;
-    /// any other reply, or a new request, ends it.
-    reveal: design::reveal::Reveal,
     pub campaign_form_open: bool,
     sign_in_again: bool,
     session: Option<Session>,
@@ -91,22 +65,6 @@ pub enum Account {
     RefreshFailing,
 }
 
-impl Account {
-    const ALL: [Self; 6] = [
-        Self::Busy,
-        Self::Connected,
-        Self::NotConnected,
-        Self::Failed,
-        Self::KeyringWarning,
-        Self::RefreshFailing,
-    ];
-}
-
-/// The cookie field keeps its id when Settings changes between one and two columns, so a DM who
-/// is pasting keeps the focus and the cursor.
-const SESSION_COOKIE: design::FieldId =
-    crate::field_id!("session_cookie").once(design::Once::Settings);
-
 const SESSION_ENDED: &str = "Your sign-in ended. Select Connect to sign in again.";
 
 /// 5, 10, 20, 40, then 60 seconds. Renewal starts a minute before the token ends at most,
@@ -122,7 +80,6 @@ impl Default for Settings {
             focus_cookie: false,
             connecting: false,
             connect_failed: false,
-            reveal: design::reveal::Reveal::default(),
             campaign_form_open: false,
             sign_in_again: false,
             session: None,
@@ -159,18 +116,6 @@ impl Settings {
     pub(crate) fn focus_sign_in(&mut self) {
         self.focus_cookie = true;
         self.sign_in_again = true;
-    }
-    #[cfg(test)]
-    pub fn busy(&self) -> bool {
-        self.busy
-    }
-
-    /// A session past its end, so that the next frame ends it by the real path.
-    #[cfg(test)]
-    pub fn simulate_session_expiry(&mut self) {
-        self.simulated = None;
-        self.refresh_error = None;
-        self.session = Some(Session::for_test(Duration::ZERO, Duration::ZERO));
     }
 
     #[cfg(test)]
@@ -210,15 +155,6 @@ impl Settings {
                     Some("Could not reach D&D Beyond. Check your connection.".into());
             }
         }
-        self.account_epoch += 1;
-    }
-
-    /// An account error that is not a failed Connect (a failed removal, restore or worker), so
-    /// that it stands in the account's footer, as `request` sets it; `None` ends it.
-    #[cfg(test)]
-    pub fn simulate_error(&mut self, error: Option<&str>) {
-        self.error = error.map(str::to_owned);
-        self.connect_failed = false;
         self.account_epoch += 1;
     }
 
@@ -262,11 +198,9 @@ impl Settings {
         (self.account_epoch, self.session.clone())
     }
 
-    fn send(&mut self, action: Action, ctx: &egui::Context) {
+    fn send(&mut self, action: Action, ctx: &StateContext) {
         self.restoring = matches!(&action, Action::Restore);
         self.connecting = matches!(&action, Action::Connect { .. });
-        // A new request ends a Connect's awaited reveal; Connect's press asks again after this.
-        self.reveal.end();
         self.forgetting = matches!(&action, Action::Forget);
         self.refreshing = matches!(&action, Action::Refresh(_));
         self.saves = matches!(
@@ -281,14 +215,14 @@ impl Settings {
         self.error = None;
         self.connect_failed = false;
         self.busy = true;
-        let worker = self.worker.get_or_insert_with(|| Worker::new(ctx.clone()));
+        let worker = self.worker.get_or_insert_with(|| Worker::new(ctx.waker()));
         if let Err(error) = worker.send(self.generation, action) {
             self.error = Some(error);
             self.busy = false;
         }
     }
 
-    pub fn poll(&mut self, ctx: &egui::Context) {
+    pub fn poll(&mut self, ctx: &StateContext) {
         if !self.initialized {
             self.initialized = true;
             self.send(Action::Restore, ctx);
@@ -303,7 +237,6 @@ impl Settings {
                         self.busy = false;
                         match reply.result {
                             Ok(outcome) => {
-                                self.reveal.end();
                                 if outcome.session.is_some() {
                                     // Kept only for a retry after a failed attempt.
                                     self.cookie_input.zeroize();
@@ -341,11 +274,6 @@ impl Settings {
                                 self.remembered = false;
                                 self.error = Some(error);
                                 self.connect_failed = self.connecting;
-                                if self.connecting {
-                                    self.reveal.result_came(ctx);
-                                } else {
-                                    self.reveal.end();
-                                }
                                 // A failed removal says to select Disconnect again.
                                 self.saved_session = self.restoring || self.forgetting;
                             }
@@ -383,7 +311,7 @@ impl Settings {
         }
     }
 
-    fn disconnect(&mut self, ctx: &egui::Context) {
+    fn disconnect(&mut self, ctx: &StateContext) {
         self.session = None;
         self.cookie_input.zeroize();
         self.warning = None;
@@ -417,82 +345,6 @@ impl Settings {
         Status { icon, word, color }
     }
 
-    pub fn show_compact(&mut self, ui: &mut egui::Ui) {
-        let id = egui::Id::new("compact_account_open");
-        let mut open = ui
-            .ctx()
-            .data(|data| data.get_temp::<bool>(id).unwrap_or(false));
-        open |= self.focus_cookie
-            || self.sign_in_again
-            || ui.ctx().data(|data| {
-                data.get_temp::<bool>(egui::Id::new("focus_cookie"))
-                    .unwrap_or(false)
-            });
-        design::heading(
-            ui,
-            design::Heading::Group {
-                title: "D&D Beyond account",
-                count: 0,
-            },
-        );
-        // Round 28 FO3: a connected account opens its sign-in and Disconnect as a caret section,
-        // as the other inline forms on this page open (`Add campaign`).
-        let details = !open
-            && !matches!(
-                self.account(),
-                Account::NotConnected | Account::Failed | Account::RefreshFailing
-            );
-        if open {
-            self.show_account(ui, false, true);
-        } else {
-            ui.horizontal(|ui| {
-                // A fixed slot: the action after the status stays in place when the state
-                // changes (family F8).
-                let every: Vec<_> = Account::ALL
-                    .into_iter()
-                    .flat_map(|account| [(account, false), (account, true)])
-                    .collect();
-                design::status_slot(
-                    ui,
-                    &every,
-                    (self.account(), self.signed_out()),
-                    Self::status_of,
-                );
-                if self.account() == Account::RefreshFailing {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "Sync works for about one more minute.")
-                            .color(colors().muted),
-                    );
-                }
-                if !details
-                    && design::Action::quiet(
-                        if matches!(self.account(), Account::NotConnected | Account::Failed) {
-                            "Connect…"
-                        } else {
-                            "Connect again…"
-                        },
-                    )
-                    .show(ui)
-                    .clicked()
-                {
-                    open = true;
-                }
-            });
-            if details {
-                // The section says whether it is open (expanded) to a screen reader.
-                design::section_with_id(ui, "compact_sign_in_details", "Sign-in details", |ui| {
-                    self.show_account(ui, false, false)
-                });
-            }
-        }
-        ui.ctx().data_mut(|data| data.insert_temp(id, open));
-    }
-
-    pub fn show(&mut self, ui: &mut egui::Ui) {
-        self.show_account(ui, true, true);
-    }
-
     /// The account's errors that are not a failed Connect (a failed removal, restore or worker),
     /// in the Settings footer, so their recovery stays in view whatever the cookie field holds.
     /// A failed Connect's cause sits beside Connect instead (round 27 FA1); an ended session is
@@ -510,252 +362,9 @@ impl Settings {
             ));
         }
     }
-
-    /// `status`: draw the account's status line (a caret section under the compact status line
-    /// does not say it again).
-    fn show_account(&mut self, ui: &mut egui::Ui, heading: bool, status: bool) {
-        if heading {
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), Density::Read.control()),
-                egui::Layout::left_to_right(egui::Align::Center),
-                |ui| {
-                    design::heading(
-                        ui,
-                        design::Heading::Group {
-                            title: "D&D Beyond account",
-                            count: 0,
-                        },
-                    );
-                },
-            );
-        }
-        let small = |ui: &mut egui::Ui, text: &str| design::help(ui, text);
-        self.sign_in_again |= ui.ctx().data(|data| {
-            data.get_temp::<bool>(egui::Id::new("focus_cookie"))
-                .unwrap_or(false)
-        });
-        let account = self.account();
-        let state = self.connection_status();
-        if status {
-            ui.horizontal(|ui| {
-                design::status(ui, state);
-            });
-        }
-        match account {
-            // Round 28 FH6: the help says whether the sign-in was saved.
-            Account::Connected if self.remembered => {
-                small(ui, "Splat signs in again when it starts.");
-            }
-            Account::Connected => {
-                small(ui, "Splat stays signed in while it is open.");
-            }
-            Account::RefreshFailing => {
-                small(
-                    ui,
-                    "Splat keeps trying. Sync works for about one more minute.",
-                );
-            }
-            _ => {}
-        }
-        // Round 27 FA1: a failed Connect's cause sits in the reason slot left of Connect, where
-        // the DM pressed (it was in the page's footer, far from Connect); other errors stay in
-        // the footer (`footer_messages`). An ended session is the account's state, so its help
-        // stays here.
-        if let Some(error) = self
-            .error
-            .as_deref()
-            .filter(|error| *error == SESSION_ENDED)
-        {
-            small(ui, error);
-        }
-        if let Some(warning) = &self.warning
-            && account_warning(ui, account == Account::KeyringWarning, warning)
-        {
-            self.focus_sign_in();
-        }
-        if account == Account::RefreshFailing
-            && design::Action::secondary("Connect again")
-                .show(ui)
-                .clicked()
-        {
-            self.focus_sign_in();
-        }
-        if self.sign_in_again || matches!(account, Account::NotConnected | Account::Failed) {
-            if self.error.as_deref() != Some(SESSION_ENDED) {
-                small(
-                    ui,
-                    "Connect your account to import campaigns and read characters.",
-                );
-            }
-            if design::link(ui, "Open D&D Beyond sign-in").clicked() {
-                ui.ctx()
-                    .open_url(egui::OpenUrl::new_tab("https://www.dndbeyond.com/sign-in"));
-            }
-            ui.scope_builder(egui::UiBuilder::new().id("account_cookie_help"), |ui| {
-                design::section(ui, "How to get your sign-in cookie", |ui| {
-                    ui.label("1. Sign in to D&D Beyond in your browser.");
-                    ui.label(
-                        "2. Open developer tools (F12), then Application or Storage → Cookies.",
-                    );
-                    let mut instruction = egui::text::LayoutJob::default();
-                    for (words, style) in [
-                        ("3. Select dndbeyond.com and copy the value of ", Type::Body),
-                        ("CobaltSession", Type::Mono),
-                        (".", Type::Body),
-                    ] {
-                        instruction.append(
-                            words,
-                            0.0,
-                            egui::TextFormat {
-                                font_id: style.font(ui),
-                                color: colors().text,
-                                ..Default::default()
-                            },
-                        );
-                    }
-                    ui.label(instruction);
-                    ui.label("4. Paste only the value below and select Connect.");
-                });
-            });
-            let mut cookie_rect = None;
-            let cookie_width = design::small_field(ui, "Sign-in cookie", None, None, |ui| {
-                let hint = design::placeholder(ui, "Paste sign-in cookie");
-                let width = 420.0_f32.min(ui.available_width() - 2.0 * design::S);
-                let response = SESSION_COOKIE.single_line(ui, &mut self.cookie_input, |edit| {
-                    edit.password(true)
-                        .hint_text(hint)
-                        .min_size(egui::vec2(0.0, Density::Read.control()))
-                        .margin(egui::vec2(design::S, 5.0))
-                        .desired_width(width)
-                });
-                design::named(ui, &response, "Paste sign-in cookie");
-                self.focus_cookie |= ui
-                    .ctx()
-                    .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("focus_cookie")))
-                    .unwrap_or(false);
-                // M0541 (M-P0.31): the field takes the keyboard; the pane's focus arbiter
-                // brings it whole into view above the footer, by the least scroll, also when the
-                // request came from another page (`focus_sign_in`).
-                if std::mem::take(&mut self.focus_cookie) {
-                    response.request_focus();
-                }
-                cookie_rect = Some(response.rect);
-                response.rect.width()
-            });
-            ui.checkbox(
-                &mut self.remember,
-                "Remember my D&D Beyond sign-in on this computer",
-            );
-            let row = ui
-                .horizontal(|ui| {
-                    ui.set_max_width(cookie_width);
-                    let reason = self
-                        .cookie_input
-                        .trim()
-                        .is_empty()
-                        .then_some("Paste your sign-in cookie first.");
-                    // Round 27 FA1: the reason slot left of Connect holds a failed Connect's cause
-                    // while Connect is open. It lives until the next Connect, Disconnect or a working
-                    // sign-in, as before; while the cookie field is empty, the slot names that step.
-                    // Only a Connect's failure goes here (`connect_failed`); the others keep their
-                    // footer message (`footer_messages`).
-                    let failure = self
-                        .error
-                        .as_deref()
-                        .filter(|_| self.connect_failed && reason.is_none());
-                    let action = if reason.is_none()
-                        && account != Account::Connected
-                        && !self.campaign_form_open
-                    {
-                        design::Action::primary("Connect")
-                    } else {
-                        design::Action::secondary("Connect")
-                    };
-                    let (clicked, act) = ui
-                        .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let connect = action.blocked(reason).show(ui);
-                            let act = design::reveal::Act::clicked(ui, &connect);
-                            ui.spacing_mut().item_spacing.x = design::S;
-                            // Round 28 FA11: a reason that fits on one line sits `S` left of
-                            // Connect; a longer one starts at the field's left edge and wraps from
-                            // there, so no line is left with one word. Measured, not a fixed width.
-                            let shown = reason.or(failure);
-                            let fits = shown.is_none_or(|words| {
-                                design::number_width(ui, words, &Type::Small.font(ui))
-                                    <= ui.available_width()
-                            });
-                            if fits {
-                                design::blocked_reason(ui, shown);
-                            } else {
-                                ui.with_layout(
-                                    egui::Layout::left_to_right(egui::Align::Center)
-                                        .with_main_wrap(true),
-                                    |ui| design::blocked_reason(ui, shown),
-                                );
-                            }
-                            (connect.clicked(), act)
-                        })
-                        .inner;
-                    if clicked {
-                        self.sign_in_again = false;
-                        let cookie = Zeroizing::new(self.cookie_input.trim().to_owned());
-                        self.send(
-                            crate::credentials::Action::Connect {
-                                cookie,
-                                remember: self.remember,
-                            },
-                            ui.ctx(),
-                        );
-                        // M0279 (M-P0.32): the reply comes later. A failure shows the kept cookie,
-                        // the cause beside Connect and Connect together, by the least scroll; the
-                        // cause can wrap, so the target is the field to the row's end.
-                        if let Some(act) = act {
-                            self.reveal.ask_on_result(act, self.generation, "connect");
-                        }
-                    }
-                })
-                .response
-                .rect;
-            if let Some(cookie) = cookie_rect {
-                self.reveal
-                    .mark(ui, self.generation, "connect", cookie.union(row));
-            }
-            small(
-                ui,
-                "Splat sends your sign-in cookie only to D&D Beyond. With the box ticked, Splat signs in again when it starts.",
-            );
-        }
-        if matches!(
-            account,
-            Account::Connected | Account::KeyringWarning | Account::RefreshFailing
-        ) {
-            small(
-                ui,
-                if self.remembered {
-                    "Disconnect removes Splat’s saved D&D Beyond sign-in. It does not sign your browser out of D&D Beyond."
-                } else {
-                    "Disconnect signs Splat out. It does not sign your browser out of D&D Beyond."
-                },
-            );
-        }
-        // Only when there is something to forget. It follows the trust text.
-        if (!matches!(account, Account::NotConnected | Account::Failed)
-            || self.warning.is_some()
-            || self.saved_session)
-            && design::Action::quiet(if account == Account::Busy {
-                "Cancel"
-            } else {
-                "Disconnect"
-            })
-            .line_start()
-            .density(Density::Read)
-            .show(ui)
-            .clicked()
-        {
-            self.disconnect(ui.ctx());
-        }
-    }
 }
+
+mod view;
 
 #[cfg(test)]
 mod tests {
@@ -766,11 +375,11 @@ mod tests {
         expires_in: Duration,
     ) -> (
         Settings,
-        egui::Context,
+        StateContext,
         mpsc::Receiver<(u64, Action)>,
         mpsc::Sender<Reply>,
     ) {
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let (worker, commands, results) = Worker::test_channels();
         let mut settings = Settings::default();
         settings.initialized = true;
@@ -779,96 +388,9 @@ mod tests {
         (settings, ctx, commands, results)
     }
 
-    /// Round 28 FO3: in the compact layout a connected account opens `Sign-in details` as a
-    /// caret section, by keyboard too; its expanded state is in the accessible tree, and it
-    /// holds Disconnect.
-    #[test]
-    fn sign_in_details_is_a_caret_section_that_opens_by_keyboard() {
-        use crate::design::test_harness::Themed as _;
-        use egui_kittest::kittest::{NodeT, Queryable};
-        let mut settings = Settings::default();
-        settings.simulate(Account::Connected);
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(600.0, 600.0))
-            .themed_ui_state(
-                |ui, settings: &mut Settings| settings.show_compact(ui),
-                settings,
-            );
-        harness.run_steps(3);
-        let expanded = |harness: &egui_kittest::Harness<'_, Settings>| {
-            harness
-                .get_by_label("Sign-in details")
-                .accesskit_node()
-                .data()
-                .is_expanded()
-        };
-        assert_eq!(expanded(&harness), Some(false));
-        assert!(harness.query_all_by_label("Disconnect").next().is_none());
-        harness.get_by_label("Sign-in details").focus();
-        harness.run_steps(2);
-        harness.key_press(egui::Key::Enter);
-        harness.run_steps(4);
-        assert_eq!(expanded(&harness), Some(true), "Enter opens the section");
-        assert!(
-            harness.query_all_by_label("Disconnect").next().is_some(),
-            "the open section holds Disconnect"
-        );
-        assert_eq!(
-            harness.query_all_by_label_contains("Connected").count(),
-            1,
-            "the status shows once"
-        );
-    }
-
-    /// The keyring warning names the sign-in and offers Connect again. M0541 (M-P0.31,
-    /// `m-p0-sign-in-focus`): drawn in a pane under 120 px of other content in a 300 px window,
-    /// Connect again gives the cookie field the keyboard, and the pane's focus arbiter brings it
-    /// whole into view by the least scroll: its bottom near the view's bottom, not at its centre.
-    #[test]
-    fn a_keyring_warning_names_the_sign_in() {
-        use crate::design::test_harness::Themed as _;
-        use egui_kittest::kittest::Queryable;
-        let mut settings = Settings::default();
-        settings.simulate(Account::KeyringWarning);
-        const SIZE: egui::Vec2 = egui::vec2(600.0, 300.0);
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(SIZE)
-            .themed_ui_state(
-                |ui, settings: &mut Settings| {
-                    let footer = design::Footer::new("keyring_test", SIZE.x);
-                    footer.pane_content(ui, design::pane::ContentScroll::default(), |ui| {
-                        ui.allocate_exact_size(egui::vec2(1.0, 120.0), egui::Sense::hover());
-                        settings.show_account(ui, true, true);
-                    });
-                },
-                settings,
-            );
-        harness.run();
-        harness.get_by_label(
-            "This computer did not save your sign-in. Unlock your password manager, then connect again.",
-        );
-        let link = harness.get_by_label("Connect again").rect();
-        assert!(
-            link.bottom() <= SIZE.y,
-            "Connect again is in view: {link:?}"
-        );
-        harness.get_by_label("Connect again").click();
-        harness.run_steps(6);
-        let field = harness.get_by_label("Paste sign-in cookie").rect();
-        assert!(
-            harness.ctx.memory(|memory| memory.focused()).is_some(),
-            "m-p0-sign-in-focus: the field has the keyboard"
-        );
-        assert!(
-            field.top() >= 0.0 && field.bottom() <= SIZE.y && field.bottom() > 0.6 * SIZE.y,
-            "m-p0-sign-in-focus: the field is whole, at the view's lower part: {field:?} in {SIZE:?}"
-        );
-    }
-
     #[test]
     fn a_failed_removal_keeps_disconnect_until_it_works() {
-        use crate::design::test_harness::Themed as _;
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let (worker, commands, results) = Worker::test_channels();
         let mut settings = Settings::default();
         settings.initialized = true;
@@ -883,83 +405,23 @@ mod tests {
             .unwrap();
         settings.poll(&ctx);
         assert!(settings.saved_session, "the message says to select it");
-        // Round 23 SF1: only a failed Connect scrolls its retry into view.
-        assert!(
-            !settings.reveal.running(),
-            "a failed removal is not a retry"
-        );
-        // Round 27 review: drawn as the Settings tab draws it, with the cookie field empty (a
-        // Disconnect clears it), the removal's error stays in view with Disconnect to try
-        // again. Only a failed Connect's cause moves to the slot beside Connect.
+        // Round 27 review: with the cookie field empty (a Disconnect clears it), the removal's
+        // error stays in the footer, with Disconnect to try again. Only a failed Connect's cause
+        // moves to the slot beside Connect.
         assert!(settings.cookie_input.is_empty());
-        use egui_kittest::kittest::Queryable;
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(1200.0, 800.0))
-            .themed_ui_state(
-                |ui, settings: &mut Settings| {
-                    let frame = design::outcome::PaneFrame::new(ui);
-                    let mut messages = design::outcome::Messages::<design::outcome::NoPress>::new(
-                        &frame,
-                        "settings_footer",
-                        600.0,
-                    );
-                    settings.footer_messages(&mut messages);
-                    let _ = messages.pane(ui, design::Body::Content, |ui| settings.show(ui));
-                },
-                std::mem::take(&mut settings),
-            );
-        harness.run_steps(3);
+        let mut messages = design::outcome::Messages::<design::outcome::NoPress>::new();
+        settings.footer_messages(&mut messages);
         assert!(
-            harness
-                .query_all_by_label("The saved cookie could not be removed.")
-                .next()
-                .is_some(),
-            "the removal's error is drawn"
+            messages
+                .into_plain()
+                .iter()
+                .any(|line| line.words == "The saved cookie could not be removed."),
+            "the removal's error is in the footer"
         );
-        assert!(harness.query_all_by_label("Disconnect").next().is_some());
-        settings = std::mem::take(harness.state_mut());
-        drop(harness);
-        // Issue #698 (M0279, `m-p0-connect-reveal`): drawn as the Settings tab draws it, in a
-        // pane whose column hosts reveals, under 200 px of other content, in a window too short
-        // for the whole form. Connect's
-        // press waits for its reply while the form gives way to the busy state; the failure then
-        // brings the kept cookie and Connect whole into view together.
+        assert!(settings.can_forget() && settings.connect_failure().is_none());
+        // A failed Connect's cause is beside Connect, not in the footer.
         settings.cookie_input = "test-cookie".into();
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(600.0, 600.0))
-            .themed_ui_state(
-                |ui, settings: &mut Settings| {
-                    settings.poll(ui.ctx());
-                    let footer = design::Footer::new("connect_test", 600.0);
-                    footer.pane_content(
-                        ui,
-                        design::pane::ContentScroll::default().hosts_reveals(),
-                        |ui| {
-                            // Other content above the account, as the campaigns are.
-                            ui.allocate_exact_size(egui::vec2(1.0, 200.0), egui::Sense::hover());
-                            settings.show_account(ui, true, true);
-                        },
-                    );
-                },
-                std::mem::take(&mut settings),
-            );
-        harness.run_steps(3);
-        let connect = |harness: &egui_kittest::Harness<'_, Settings>| {
-            harness
-                .get_by_role_and_label(egui::accesskit::Role::Button, "Connect")
-                .rect()
-        };
-        harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Connect")
-            .click();
-        harness.run_steps(2);
-        assert!(
-            harness.state().reveal.waits(),
-            "Connect's press waits for its reply"
-        );
-        const SHORT: f32 = 300.0;
-        harness.set_size(egui::vec2(600.0, SHORT));
-        harness.run_steps(4);
+        settings.connect(&ctx);
         let (id, _) = commands.recv().unwrap();
         results
             .send(Reply {
@@ -967,28 +429,20 @@ mod tests {
                 result: Err("Could not reach D&D Beyond.".into()),
             })
             .unwrap();
-        harness.run_steps(8);
-        let whole = |rect: egui::Rect| rect.top() >= 0.0 && rect.bottom() <= SHORT;
-        let cookie = harness.get_by_label("Paste sign-in cookie").rect();
-        assert!(
-            harness.state().reveal.ended() == Some(design::reveal::End::Whole)
-                && whole(cookie)
-                && whole(connect(&harness)),
-            "m-p0-connect-reveal: a failed Connect shows its retry: cookie {cookie:?}, Connect {:?}, {:?}",
-            connect(&harness),
-            harness.state().reveal.ended()
+        settings.poll(&ctx);
+        assert_eq!(
+            settings.connect_failure(),
+            Some("Could not reach D&D Beyond.")
         );
-        // A new request ends a waiting reveal, before its reply.
-        harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Connect")
-            .click();
-        harness.run_steps(2);
-        assert!(harness.state().reveal.waits());
-        let _ = commands.recv().unwrap();
-        settings = std::mem::take(harness.state_mut());
-        drop(harness);
+        assert_eq!(
+            settings.cookie(),
+            "test-cookie",
+            "the cookie stays for a retry"
+        );
+        let mut messages = design::outcome::Messages::<design::outcome::NoPress>::new();
+        settings.footer_messages(&mut messages);
+        assert!(messages.into_plain().is_empty());
         settings.disconnect(&ctx);
-        assert!(!settings.reveal.running());
         let (id, _) = commands.recv().unwrap();
         results
             .send(Reply {
@@ -997,10 +451,7 @@ mod tests {
             })
             .unwrap();
         settings.poll(&ctx);
-        assert!(
-            !settings.reveal.running(),
-            "a failed removal is not a retry"
-        );
+        assert!(settings.saved_session && settings.connect_failure().is_none());
         settings.disconnect(&ctx);
         let (id, _) = commands.recv().unwrap();
         results
@@ -1077,7 +528,7 @@ mod tests {
 
     #[test]
     fn disconnect_clears_input_and_ignores_late_auth_results() {
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let (worker, commands, results) = Worker::test_channels();
         let mut settings = Settings::default();
         settings.initialized = true;

@@ -1,8 +1,15 @@
 # Splat design system
 
-The brief is `docs/ux-intent.md`. This document records the visual decisions and why they were made. The code
-is `src/design/`. Tokens are the only source of colour, size and type. A lint test (`src/design/lint.rs`)
-keeps other code from adding raw values.
+The brief is `docs/ux-intent.md`. This document records the visual decisions and why they were made. The UI is
+GPUI. The code is in two places: `src/gui/` draws (the theme and the kit), and `src/design/` holds the tokens,
+the plain-data parts (messages, kept results, the save row) and the lint ([Widgets](#widgets)). Tokens are the
+only source of colour, size and type. A lint test (`src/design/lint.rs`) keeps other code from adding raw
+values.
+
+The area sections after Widgets state rules by what the DM sees. Some of them still name a part of the egui
+widget layer that the GPUI port deleted (for example `TitleLine`, `ScrollColumn`, `Footer::pane`,
+`reveal::jump`, `ActionLine`, `PaneColumns`). Read such a name as the role it had: the rule is the behaviour,
+and [Widgets](#widgets) says which kit part draws it now.
 
 ## Art direction: a working ledger, at night
 
@@ -23,8 +30,8 @@ It is not a dashboard, and it is not parchment.
 
 ## Type
 
-Fonts are in `assets/fonts/` with their licences. All are OFL. egui 0.33 rasterizes with `ab_glyph` and has no
-variable axes or OpenType features, so these are static files.
+Fonts are in `assets/fonts/` with their licences. All are OFL, except Hack and Phosphor (MIT). They are static files, one
+for each weight and cut. `gui::theme::install` loads them, and the test harness loads only these fonts.
 
 | Face | Use | Why |
 |---|---|---|
@@ -32,13 +39,13 @@ variable axes or OpenType features, so these are static files.
 | Source Serif 4 (Text, Italic, Semibold) | Prose | A sturdy text serif with lining tabular digits, so `65 (10d8 + 20)` lines up |
 | Source Serif 4 Subhead (Semibold) | Titles | The optical cut for 18 to 28 px |
 | Source Serif 4 SmText (Regular, Semibold) | Stat blocks | The optical cut for 13 to 14 px, for the compact table at 1x |
-| egui's monospace | Library and template editors, code in a note | Source text only. `Type::Mono` |
+| Hack (`splat_assets::MONO`) | Library and template editors, code in a note | Source text only. `Type::Mono` |
 
 `design::number` right-aligns ordinary text. HP and initiative hold their place because the font's digits have
 one width. Do not paint digits in fixed cells.
 
 **Fallback.** Every UI family falls back to Source Serif 4 for symbols such as `× – — ½ ¼ ¾ ⅓ ⅔`, then
-Phosphor, then egui's defaults.
+Phosphor.
 
 **Scale.** Each role is one `design::Type` value. Do not add sizes outside it.
 
@@ -121,15 +128,14 @@ The colour-distance test keeps changed participants and damaged HP distinct from
 | `Scan` | 30 | 32 | Run setup, Encounters, Party, Lookup results |
 | `Read` | 28 | 28 | Library, Settings, Campaign, and the run's footer |
 
-Every control the app draws is at least 24 px (WCAG 2.5.8, and the `target-size` check). The exception is
-egui's own scroll bar, which is 8 px. The check reports it as chrome. It stays 8 px because egui paints the
-handle at the width it senses, and the wheel and the page keys also scroll. Tab steps over it
-(`Splat::skip_unnamed_focus`). The check counts a node as a bar only if it has no role and no name and matches
-the full length of a scroll surface's edge. A reader table's sideways bar has its own lane below the last row.
-While that lane is below view, egui floats the bar up to the reader's visible bottom edge, and the lane goes with
+Every control the app draws is at least 24 px (WCAG 2.5.8, `MIN_TARGET`). The exception is the scroll bar,
+which is `SCROLL_BAR_WIDTH` (8 px) in a lane that the column keeps for it; the wheel, the touchpad and the page
+keys also scroll. Tab steps over it. No app control or text lies over a scroll bar or a splitter: the press
+there belongs to the bar or the splitter. A reader table's sideways bar has its own lane below the last row.
+While that lane is below view, the bar floats up to the reader's visible bottom edge, and the lane goes with
 it: rows pass under the lane's hairline, as they pass under the fixed header at the top, so the bar never covers
 cell text. Cells under the lane are out of view and are not controls. The bar stays hidden while its table is
-below view.
+below view ([Known gaps](#known-gaps)).
 
 Reader tables keep each column at least as wide as its longest word. The prose measure never makes a table
 scroll: a table that fits the pane shows whole. A table that cannot fit the pane scrolls sideways
@@ -138,10 +144,10 @@ through the header; a table that fits has no column rules. A rollable table keep
 before every row's range, and its first column is sized with the slot, so the rolled row's range stays at the
 others' x. The
 header stays at the reader’s top edge until the table leaves view. Ordinary wheel scrolling still moves down
-the note. The ergonomics check permits side clipping only where a real horizontal scroll bar can reveal the
-text; it still rejects clipping in ordinary readers and text cut to an ellipsis.
+the note. Text is clipped at the side only where a real horizontal scroll bar can reveal it; ordinary readers
+never clip text or cut it to an ellipsis.
 
-A column's drag handle stays egui chrome: 10 px wide and as tall as the column. Tab gives it focus, shown
+A column's splitter is `SPLITTER_WIDTH` (10 px) wide and as tall as the column. Tab gives it focus, shown
 by an accent line. Left and Right move its edge by `L`. Home restores its natural width, which follows the
 window again. The chosen width is saved after a drag or key press. Each handle has an accessible name and
 key help. At the table, the rail uses its natural width; a wider desk width stays saved.
@@ -162,153 +168,672 @@ are one height, so Encounters, Session and the rest keep their places when a run
 
 ## Widgets
 
-`theme::install` sets one global `egui::Style` for hover, active and disabled states, focus rings, selection,
-text edits, solid scroll bars, windows, tooltips and separators. Text cursors do not blink. Motion draws the
-eye during long sessions, so no scroll that the app makes is animated (R43): it lands in one jump, one pass
-after the pass that asks for it (egui keeps the target for that pass). A `ScrollColumn` made with
-`hosts_reveals` (R46) is immediate: its scrolls land in the pass that asks, and egui keeps no target, so no older
-request lands after a reveal ended. The DM's own wheel and drag scroll as before. After the DM opens a form,
-`design::reveal` brings the whole form into view once, in the column of the pressed control, only in a column
-that hosts reveals (R34, R44, R46); the Settings pane's column (the import form) is the one today.
-A press whose result comes later asks with `Reveal::ask_on_result` (issue #698): the request waits, with no deadline
-and moving nothing, until the owner calls `Reveal::result_came`, and every other end applies while it waits, judged by
-its own column: the DM's input to that column (the column queue's rule: the focused control is in it, or, with nothing
-focused, the pointer is over it), a focus that moves into it, the owner's end, leaving the page. Input to another column,
-for the seconds the work runs, leaves it waiting. Every request that moves a column by itself (a region's request, a jump,
-`bring_into_view`, a retry, a measured body's request, an asked reveal, a waiting one) is judged by one entry point,
-`reveal::cancel` (Sol 2-011): the DM's input to its own column ends it (a wheel over it, a press or drag in it, a key
-that moves a view or a caret or activates a control, text, an accessibility action on a control in it), input to
-another column never does, and a focus that such input moved or that went to another column is not an end. The raw
-reader is private to that module, and a two-column case table runs every request kind through the same inputs. Outside
-the design a request asks `reveal::dm_scrolls` (the Session plan's row reveal), and a raw read of the DM's scroll or
-drag (`raw_scroll_delta`, `smooth_scroll_delta`, `is_decidedly_dragging`) in shipping code fails the design lint
-(`raw-scroll-input`), whose allowlist holds only the entry point's reads and Lookup's closing of its results list. A
-pane's focus reveal and a footer part's wait only for the DM's press, hold or release in their own column, judged by the
-same entry point (a press in another column holds neither). In a design file, any read of the DM's input outside the
-entry point's module (an input event, a key, the pointer's press state or place, a scroll delta) fails the design lint
-(`input-read`), whose allowlist counts each part's own reader (a list's keys, a column's resize) for review. A failed
-Connect in Settings brings its kept cookie, its
-cause and Connect whole into view this way (M0279).
-A column that moves by itself with no press in it does so only through a typed jump, `reveal::jump(ui, top,
-JumpTo::…)` (ruling M18, layout PR 10c), from a closed list: `LinkedHeading` (a reader opened at a linked section,
-its heading at the view's top; the World and Lookup reader and the Library reader; a recording's text on the Sessions page opened at a timeline marker, the marker's line at the view's top, measured again and asked again in each draw until it lands, so a resize before the column moves keeps it right; the DM's own input in that column ends it, input elsewhere does not) and `ListedRow` (a list's row
-the page opened at, with the row before it at the view's top; the Timeline's list, M0556). The column writes the jump as its
-own offset at its next pass, where it writes a reveal's; the DM's own input to that column in between drops it, and so does the DM's scroll that is still going on (a drag of the column, the wheel's smooth rest, a fling after a drag). No raw
-`scroll_to_cursor` or `scroll_to_rect` does this.
-Its least-scroll form, `reveal::bring_into_view(ui, rect, JumpTo::…)` (M-P0.25), keeps a whole control in view with
-no press: nothing when it is whole in view; else its nearer edge at the view's edge, and its top at the view's top
-when it is taller than the view. `OpenMenuControl` is a list row's `⋯` whose menu is open when its pane shrinks
-(the Encounters lists, M0259): the button comes back, so the menu does not hang from a control the DM cannot see.
-`ListedRow` here is History's opened run (M0194): its row, its Read-only line and its Final state come whole into
-view, also when the run was opened from another page.
-`AddedTarget` is the card that took what the DM added from another column (an encounter's group that a creature
-from the Add pane went to, M0226): the card comes whole into view, once per add.
-`CheckResult` is a journey's check whose result an act just wrote (a roll, an entered number; the Timeline
-detail, M0546): its line comes whole into view. The Timeline detail's form scrolls in its own pane's column, its
-header drawn before the pane (M0559): wide, a pane with no footer (its results stay in the list's footer); narrow,
-the pane that holds the open event's footer. Another event, a link or the page opened again opens the form at
-its top (`ContentScroll::from_top`, M0560); a filter or a search changes only the list, so the form keeps its place.
-While the header and the pane's footer (with its gap) leave the form less than one control row, the header scrolls
-with the form. A request for the
-keyboard from another page needs no reveal of its own: the Settings sign-in field takes the focus when it draws, and
-its pane's focus arbiter brings it whole into view by the least scroll (M0541).
-A retry that would move a column by itself ends on any scroll of the DM's in it (`reveal::dm_scrolls`: a wheel over it,
-a press or drag that started on its content or its bar, a scroll key), so the column stays where the DM leaves it (the
-row menu's bring-back, review of PR 770).
+The code has two halves:
 
-`design::components` holds the shared parts, each a function or a small builder:
+- **Drawing.** `src/gui/theme.rs` and the kit (`src/gui/kit/`, one file for each part). Pages build every
+  control from the kit. The kit wraps gpui-component in Splat's tokens; pages never call gpui-component
+  directly.
+- **Plain data.** `src/design/` holds what does not draw: the tokens, the typed messages and their one
+  order (`design::outcome`), the kept results and their Undo (`design::results`), the save row's rules
+  (`design::save_row`), the per-change cache (`design::memo`), the number and count formatters, and the
+  design lint. A page builds the data, and a kit part draws it.
 
-| Part | Function | Notes |
-|---|---|---|
-| Page header | `page_header` | Title and one `Small` muted state or count on the same baseline; actions at the right; hairline, then an `L` gap. The Campaign page's header is a `TitleLine` (M0280, ruling M23): its action follows the title as the part places it, and `Campaign entries` says on hover what it opens (`TitleAction::hint`). Never repeat the campaign name. The title and its count go first: the actions get the width they leave, and a status link among them wraps there, so the count is never cut |
-| Nav item | `nav_item` | Icon and word; accent bar when selected |
-| Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and adds a hover reason and accessible description. An action is never wider than the room its `Ui` gives it (a `line_start` one may also hang its padding and icon in the gutter): in less room it gives up its keyboard hint, then its words (its icon alone, centred), then its icon, and nothing it holds paints outside its rect. `.wraps()` is for an action whose words must all show (a repair that names a file, World's `Make <file> a separate note`): words that do not fit wrap in the room it has and it grows taller, with its own padding, border and target; words that fit stay on one line. Never a raw egui button styled to look like one. For one blocked control, show `blocked_reason` beside it in `Small` text, then an `L` gap before the next action. `.key("N")` shows the key beside the word |
-| Split button | `split_action` | Default `Action`, then a caret menu for other actions |
-| Field | `field`, `small_field`, `small_field_needing` | Sentence-case muted `Small` label, control, help and error; accessible name. The help is `help`. A value something needs now (a setting that blocks processing) is the field's warning (`small_field_needing`): the warning icon in the warning colour and the words directly below the control, before the field's help, and the field's controls carry the warning as their accessible description, so it is said when the empty field takes the focus; a missing value is never muted help (round 31 SR4/AR4). The field adds `L` from the last line of its help or error to the next thing, so help never reads as the next field's; a caller adds no space after a field |
-| Help | `help` | Help under a field or a section: `Small` muted words that wrap at `READER_MEASURE`, whatever the pane's width. Every help line uses it: the gate's `help-measure` check fails on any muted `Small` label wider than `READER_MEASURE`, whether it wraps, is cut or keeps one line. A row's own detail line is not help: it is inside its row's control, or it is marked with `row_detail` and lies inside a row that the row component gave `register_row` (`row` and the Encounters list row do). A mark outside every registered row changes nothing |
-| Text fields | `labelled_field`, `line_field`, `number_field`, `FieldId::search`, `named`, `edit_in_place`, `edit_line_in_place`, `write_under_history`; `TextDraft`, `Face`; `FieldName` (`field_id!`), `FieldId`, `Once`, `RowKey`, `TextOwner`, `Editor` | Accessible name and a 26 px target; left-aligned numbers keep the caret off digits; placeholders use faint `Body` text. A multi-line document editor (`FieldId::editor`, `EditorRegion::editor`, `editor_view`) edits a `TextDraft` in a `Face`: it keeps its laid-out text by the draft's key, so a quiet frame lays out, hashes and copies none of the words (layout PR 9b); a host compares a draft's words with `as_str()`, and a program's change goes through `replace`, `edit` or `edit_in_place`. `write_under_history` is the app's own write into words the DM may be typing (the Notes panel's part of a note): the DM's Undo steps go on under it, each with the app's change, so Ctrl+Z takes back the typing and keeps the app's words. When the change cannot reach a step (its place is not in that step), the history ends at the write, so Ctrl+Z never takes the app's words out. A change the field's owner did not make (a reload of an outside edit) ends that history instead. egui keeps a field's cursor and text Undo under its id, so the id says whose text the field edits. `field_id!` gives a `FieldName` (a string literal; each name once, the lint checks it), which draws nothing until its owner is said: `of(key)` for the field of one object (its identity: a `Uuid`, or an object that is a `TextOwner` through `TextKey::of`, or a run's participant through `ParticipantKey::of(run, participant)` (the run's id and the participant's key, so two runs never share a participant's field; also the id of that participant's `Dropdown`), or an `Option` of one; never an `egui::Id`, a bare text, a path or a name, which a save or a rename changes while the DM types, or a place in the layout; a position or a path can only be a counted escape, `RowIndex::from_data` or `TextKey::from_data`), or `once(Once::…)` for a field that exists once in the app, with one of a closed set of reasons (`Settings`, `PageSearch`, `CreateForm`, `Example`). A field that edits one object of many (an event, a session, a member, a picker of an entry) is never `Once`. A layout branch (one or two columns, a form that opens above it) never takes the field's focus, cursor or selection. That the key comes from the object's data is the caller's duty; `RowIndex::from_data` and `TextKey::from_data` are counted escapes (`Ban::RowKey`), and `TextKey::of` needs none. The named parts (`labelled_field`, `line_field`, `FieldId::search`, `CreateField`) add the label to the id, so one name with two labels is two fields; read such a field's id with `FieldId::named_id(label)`. These field parts drop egui's text Undo for their id when the bound text is not the text the field last had with focus (the program or another object replaced it): `FieldId::single_line`, `multi_line`, `editor` and `search`, the parts drawn through them (`line_field`, `labelled_field`, `CreateField`), and `number_field`. They check before the draw while the field has focus, and on a frame with a press while it has a record (at most 32 fields keep one; the oldest goes with its history). So another object's words never come back through Ctrl+Z; when the two texts are equal, only the owner's key keeps them apart. Staged raw fields (the counted `TextEdit` rows) are outside the guard. A caller does not rewrite the bound text while the field has focus (a trim, a format, a clear in the frame of `changed()`): keep the typed words while it has focus and store the cleaned value. A field's own edit of its text (a command typed in it takes its words out, words go in at its caret, the page adds words to the open note) goes through `edit_in_place`, so its Undo history stays and Ctrl+Z goes back through the edit; the guard's record moves to the edited text only when it held the text before the edit, so another object's text that came first still drops the history. Two live widgets with one id fail the gate's `widget-id-clash` check in every state (egui's warnings, and the record of the fields the design drew). A field no part draws (a password, a code font) is drawn by `FieldId::single_line` or `multi_line`; an editor that reads where its text was laid out (the galley, its place, the cursor, the clip rect) uses `FieldId::editor`. `clippy.toml` lists the ways to make a text field that it refuses outside `src/design/`. `FieldId::search` is the one search field: while it holds text, a quiet `Clear` shows inside the field's right end; `Clear` empties it and gives it focus back. Its frame is exactly the `width` given. `Clear`'s place is kept inside the frame from the first frame, so the text area is the same with and without text: nothing moves or narrows while the DM types or deletes, and the hint keeps the same room (whole words, or the start of a word that does not fit with an ellipsis). Below `search_min_row` the frame still keeps to its width and the text area gives way. The old `search_field` (no `Clear`) is gone |
-| Scroll column | `ScrollColumn`, `sideways_scroll` | A vertical scroll area that keeps the scroll bar's lane whether or not the bar shows: its content ends one lane before its right edge, so nothing moves when the bar comes. It sets the app's scroll style on its own `Ui`, so a caller's style cannot take the lane away. It gives its width as the most its content may take: a form that narrows itself keeps its width; `full_width` makes the content fill the column. `sideways_too` adds a sideways scroll for a wide table; `sideways_scroll(ui, id, Sideways, add)` is a sideways strip inside a page's column; `Sideways::fit` sizes it to its content, `without_bar` hides its bar while its foot is out of view, and its offset is egui's under its own id, so a caller names whose content it is (a reader's table: surface, document and rows) and writes no offset. `follows_focus` is for a column outside a pane (the session banner): a control of it that gains keyboard focus comes whole into its view by the pane's focus rules (once per focus, room or place; never while the pointer presses; the DM's wheel is not pulled back); in a pane's body the pane is that one arbiter. `clippy.toml` disallows every `ScrollArea` constructor outside `src/design/` |
-| Slot | `Slot`, `status_slot` | Fixed room for a value that changes in place, as wide as its widest example (`Slot`, a non-empty array checked when the program compiles) or its widest status (`status_slot`, from the one function that makes the status). A wider value is cut with an ellipsis; it never pushes the next control. |
-| Turn heading | `TurnHeading`, `KeptTurnHeading`, `TurnStrip` | The run's first line: the round, the current turn's name, `Add` and `Next turn`, fitted and painted by one part from data; the caller gets presses. Ruling R22: in a line that holds a name, a key letter gives up its room before the name is cut: `’s turn` gives way first, then `Next turn`'s `N` and its room, then the name's words (whole words, then the first word's letters). With Lookup open the letter does not show and its room goes with it. The part keeps one result per run and chooses again only when the data or the metrics change. The run strip on the other pages is `TurnStrip` (M0274, M0275), fitted as one candidate by the same rules: its title (`Round 3`, or the run's state and name), `<name>’s turn` in the turn colour and `Next: <name>` in the next colour, then its end (Next turn, Back to run and the statuses), right to left. `Next: …` goes first; then the turn's name gives up whole words, then letters, never all of them (at least its first letter and copy mark); the end never shortens. A shortened piece keeps its whole words as its name and hover. The host draws the band (its panel, fill and height). |
-| Title line | `TitleLine`, `TitleAction`, `title_placement` | A title (and its context) and its actions, by measure, never by a fixed width: the actions follow the title when all fit on its line, the first one's icon `L` after the title; else all of them sit on one row under the title, when that row fits; only when it cannot, the rows wrap at whole actions, filled from the left. Each width is measured once and drawn at that width. Every action keeps its `Word` (a literal checked when the program compiles, `word!`, at most 20 characters, so it fits whole in the narrowest pane, a side panel at its minimum); there is no icon-only or hidden action. A view toggle (`TitleLine::toggle(icon, name, hint, on)`, the session list's show and hide) is not an action: it changes what the page shows beside it, never its data. It is an icon target at the right end of the title's own line, left of a close icon, however the actions are placed; its name is its accessible name and its hint (with its key) shows on hover; it tells assistive tools whether it is on (`on`, a toggle button's pressed state); the title and the actions beside it keep clear of it; the keyboard reaches it after the actions and before the close icon, as they stand on the line; and its press is `TitleLineResponse::toggled`. A plain status (`TitleLine::state(now, every)`, a draft's `Saved` or `Unsaved`, a built-in template's `Read-only`) stands at the right end of the title's own line, in the room of the widest of the statuses the line can show (`every`), so a change of its word never reflows the line, left of a toggle and a close icon, however the actions are placed: its icon and word in its tone, in exactly its measured room, not a control, opening nothing; a change of its word never moves the actions, and the title and the actions beside it keep clear of it. An action may show its keyboard command (`TitleAction::key(key!("N"))`), measured with it. A form's or a detail's own title takes `TitleType::Panel` (`Heading` type, as `Heading::Panel`). What the title is may stand before it, `TitleLine::kind(words, name)` in muted `Small` `XS` from the title (a Timeline event's `⚔ Combat`, or its icon alone for a day): its accessible name is `name`, never the icon's glyph, and an icon alone says its name on hover. A `⋯` menu (`TitleLine::more(name, menu)`) stands at the right end of the title's own line, right of a plain status and left of a view toggle and a close icon, however the actions are placed, and opens its menu under it. A form's header keeps its actions at the line's end (`TitleLine::actions_at_end`, before the status and the `⋯`): the Timeline event's `Copy link` ends at the form's edge for every event, on the title's line when everything fits, else on rows under it, right-aligned and wrapped within the room before the status and the `⋯`. An action whose word does not say all it does has a hover hint (`TitleAction::hint`, as `Action::hint`: `Campaign entries` says "This campaign’s own entries, in the Library"); a blocked action shows its reason on hover instead. A link action (`TitleAction::link(word)`, Party's `Connect to refresh`) is a text link in the link colour, its target at least `XL` wide and one `Read` control high (`title_link`), so it stands level with the actions beside it, measured and placed as an action; it has no icon, key or lock (M-Y0.2). A menu action (`TitleLine::menu(action, menu)`) is a menu button in its action's weight, with its icon and its name (the Library's quiet `Packages`; World's secondary `New ▾` with `+`), its caret after its word, placed and kept as an action, that opens its menu under it; while it is blocked it is disabled with its reason and an open menu is not drawn. A status link (`TitleLine::status(status, menu)`, `3 files need fixing` in its tone) is the last piece, placed and kept as an action, and opens its menu under it (`menu_popup`). A second status link that acts when pressed (`TitleLine::status_press`, World's `N notes cannot be read`, which opens the first one's repair) follows it, placed and kept the same way; its press is `TitleLineResponse::status_pressed`. When the line spans several panes, `TitleLine::menu_room(room)` gives each of its menus the column under its control (from the control's rect): the menu keeps inside it, one lane clear of its edges (`MenuPopup::within`). A page's own header is `TitleLine::page()`: the line at least a `Scan` control high, then a rule and `L`, as `page_header` draws (the Library's header). A title with no actions that is wider than its line wraps clear of the close icon (issue #567). A close icon (`TitleLine::close(name)`) stands at the right end of the title's own line however the actions are placed; the title and the actions beside it keep clear of it, and its press is `TitleLineResponse::closed`. World's and Lookup's title lines use `title_placement`. A back link that starts a line is `TitleLine::back(word, BackEdge)`: one quiet `Read` target that holds its word at the text edge and then a return arrow `XS` after the word, centred on its line, with an optional muted context after it (`Back to recordings  2026-01-01 19:00`, `All events`). The word is always shown and is the accessible name. The arrow never hangs left of the word: the gutter is narrower than an icon. `BackEdge::Text` lines the word up with text at the column's edge (its padding hangs `S` into the gutter); `BackEdge::Segments` with a `segmented` row's words. A bare arrow with its word on hover only is the old form, and it is gone: the step back through a reader's history is `Action::history_back(key)` (`Back`, its arrow before the word, `Alt+Left` after it when it fits; the Library's toolbar draws it through `ReaderToolbar::back(history, hint)`, Lookup's title line directly), and only the design system holds its arrow (`icons::HISTORY_BACK` is private to it). The lint's `arrow-label` rule refuses a control whose label is only an arrow, as a literal or by the glyph's name (`ARROW_…`, `CARET_…`, the legacy back arrow), also in `icon_button`, `Link::new`, `Button::new`, `.link` and `.button`. An Encounters editor's back (R38) is `EditorHead`: the part draws the back line on a line of its own and then the editor's name row under it, in one top-down child. The back line is one 28 px row in every state: the destination's word (`BackTo`: Encounters, Plan, Session; it also gives the accessible name) at the text edge, the arrow after it, and, while a draft holds the editor, that draft's reason painted after the link in muted `Small` words (R35), its long form when it fits, else its whole short form, never wrapped or cut. Both forms fit from the narrowest pane (316 px, `PANEL_MIN_WIDTH - 2·M`) up. The drafts that hold it are a fixed recipe per editor (the group, or the encounter, then a creature open beside it), read from the draft owner (`DraftOwner`). So the head adds 34 px (the row and one item gap) above the name row and nothing more. `TitleLine::back(` and the Recordings row's `BackEdge::Segments` are counted per file. Each row of actions drawn under a title registers its rect and its title's rect (`TitleActionRow`); the gate reads them through `Driver::title_action_rows` |
-| Inline creation | `InlineCreate`, `CreateField`, `CreateChoice`, `CreateDropdown`, `Selection`, `SideAction`, `Create`, `KeptLine`, `create_reasons!` | The one inline creation order, fixed by the type: fields and choices, each field with its help: the named Create after the last field on its line (after its side action, such as `Browse…`), then the last field's help, then the kept line. A drop-down (`CreateDropdown` with a `Selection`: choices only, no command row, so no press is lost) may follow a text field, and a second one may follow it (a third does not compile); after the drop-downs a form may end with an optional choice and one last text field, which Create follows on its line (Library's New entry: Name, Kind, Destination, a choice, Folder). A text field may offer suggestions (`CreateField::suggestions`): while it takes the keyboard or its words change, a menu under it holds those that contain its words, and a press fills the field; the DM may still type anything. Otherwise a drop-down is the form's last part; a form that ends with it has an action line under it, `Create` then quiet `Cancel` at the text edge, and the kept line under that, so neither the chosen value nor a preview's length moves Create. The form declares every reason Create can be blocked with (`create_reasons!`); at one width the kept line is as tall as the tallest of them (and every declared side-action lock reason, stacked) for the life of the form, so nothing below it moves while the DM types or a reason, a lock, Cancel or a preview comes and goes. A resize may change its height, as it changes every wrapped text. A preview keeps one rendered row (a line break shows as a space; the hover and the accessible name keep the words whole). A side action locks only with its reason (`SideAction::locked_when(condition, sentence!(…))`): disabled, the reason its description and hover, and its words on the kept line. The form takes the width of the column it is drawn in (a reader's measure), never past the clip: a side action and Create that do not fit beside a field of `CREATE_FIELD_MIN` go under it in rows of whole actions (never a cut or split word; the rows depend only on the actions and the column, not on the typed text), and Cancel that starts a line (on the kept line, or wrapped under Create) holds its words at the text edge, its padding hanging left of it only where the clip shows it. Enter in a field presses Create when nothing blocks it; Escape presses Cancel when it shows. During an input method's composition in a field, and in a frame with its commit, Enter and Escape belong to the input method: they leave the frame's input before the field draws, so the field keeps the keyboard and the commit lands, and they press nothing. The composition belongs to its field and ends when that field loses the keyboard (a press on another control, which egui lets through and which keeps the uncommitted words as typed; the form closed), when the window loses the keyboard (egui keeps the field's focus then), or with a commit. After Create, the caller gives the keyboard to what was made, or back to the form after a failed act. See Keeping a draft A field may hold its hint in place of its caption (`CreateField::placeholder`; its label is then its accessible name), and Create and Cancel may show their keys (`Create::key`, `KeptLine::cancel_key`). A form may have a layer above it that Escape closes first (`escape_closes_above`: a chosen suggestion), after the input method's guard, as every Escape goes. A caller that puts words before the form on its line asks the form for its field's width beside Create (`create_field_width`; `AddFieldForm::field_width`), so it never measures the form's actions again. A form may put Create and Cancel on an action line under its last field (`actions_under`), as a form that ends with a drop-down does, so the field keeps the whole room; with nothing its kept line could hold, it has none. `add_field` is this form of one such field, `Add` and `Cancel` with their keys under it, and its suggestions under them, a chosen one the layer above it |
-| Menu popup | `menu_popup`, `menu_popup_at`, `row_menu`, `menu_submenu`, `MenuPopup::show_submenus`, `Submenus` | A menu that opens under its control. A menu that opens at a place rather than a control (Sessions' `/` menu at the note's text cursor) is `menu_popup_at(ui, id, rect)`: the same room, side, width, keys and close rules, opened and closed by its caller (no press toggles it), and above the place when there is no room below. `menu_popup(ui, &control)` keeps the menu inside the pane `ui` draws in, one scroll lane clear of its edges (a splitter, a scroll bar): it opens rightward from the control, or leftward when the control's right edge leaves more room; that room is the menu's largest width. `.within(room)` gives it a smaller room that the control's layout owns (a header column above two panes, a list beside its splitter), as `Dropdown::within` does: the part intersects it with the pane and chooses the side and width inside it again, one lane clear of its edges; it never widens the pane's room. A menu is never wider than its room, also when the room is narrower than a control, and a control that reaches past the room's inner edges anchors the menu at those edges; a room with no space for the menu's frame shows no menu. `clippy.toml` disallows egui's `Area`, `Window`, `Modal`, layers and painters, popups, menus, drop-downs (`ComboBox`) and tooltips with drawn content outside `src/design/`; the lint refuses a layer written by hand, so a foreground layer has one home. Words on hover stay `on_hover_text` A menu of several submenus (the creature Filter's facts, M0051) is `menu_popup(ui, &control).show_submenus(|ui, submenus| …)`: each submenu is a row of the menu with its word and caret (`submenus.show(ui, id, words, contents)`), and its choices open under it, in the menu, so none lies over the next row at any width. Each row opens and closes on its own, so a press moves no row above it and the pressed row stays under the pointer (G1b); the rows scroll in the menu when the open ones are taller than 60% of the window. Each row tells a screen reader whether it is open, and Tab reaches each row and then its open choices. Its rows and choices keep the menu open; a click outside it or Escape closes it. Only that menu makes a `Submenus`, so no menu that a click inside closes holds one. `menu_submenu` stays the one submenu of a menu (Move to) A note under a menu choice (why it is blocked, or what it does: `Already first.`, `Clear the results first.`, the loot menu's no-tables line, the Timeline's and the Session plan's `This run is open.`, the plan's New and Start fight reasons, a tracker's played Remove, a recording's `This recording is in use.`) is `choice_note(ui, icon_slot, note)`: it starts at the choice's words (the quiet action's padding `S`, and the icon slot when the choice or its menu keeps one), ends `S` before the menu's edge and wraps there, and the menu asks for its width with it. `blocked_reason` lays its words out in a column that never justifies, so a wrapped reason never spreads in a justified layout such as a menu; there is no local copy of either (the Encounters list's own `blocked_reason` and its note placement are gone). |
-| Editable numbers | `stepper`, `signed_stepper`, `grouped_stepper` | A value the DM can change: − and + beside the number in a bordered well. A modifier uses `signed_stepper`: it shows `+2` and `−1` with a true minus (`signed`) and reads back either form the DM types (`−3`, `-3`, `+2`, `2`); its buttons and limits are the stepper's. Every typed signed number goes through one reader, `parse_signed` (a run's amounts and initiative fields, Arrivals' totals, a typed roll, a tracker's Amount, World's initiative), and a `number_field` keeps digits, `+`, `-` and the true minus (`number_char`), so the DM can type what the app shows. A field never drops a sign from what was typed: `3−5` stays as typed and reads as nothing, so no other number is applied. A count that can reach the thousands uses `grouped_stepper`: it shows its digits grouped (`1,000` stays `1,000`, as `count` writes them) and reads back what the DM types with or without the commas. A value without a stepper is read only, so the two never look alike. The D&D Beyond sheet panel uses it for every value Splat can send; in each of its blocks the labels share one column (the widest label plus `S`) and every well has the widest value's width, so each − and each + share an x. At a limit, − or + is disabled; when the caller gives the limit's reason, that button says it on hover and in its accessible description. An enclosing lock's reason comes first |
-| Dialog | `dialog`, `dialog_actions` | `egui::Modal`, for the brief's modal tasks only; one action line, red at the left, keep and commit at the right, commit last |
-| Section | `Section`, `section_row`, `section`, `section_with_id`, `section_opened`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows; `quiet_section` for technical details at a page's end. Its header tells a screen reader whether it is open (expanded). `Section` is the one form (M0412): closed at first and then as the DM leaves it, under its title; `id` keeps its state under the owner's id when the title changes (a count, a state word); `default_open` is its state the first time it is drawn (Add from D&D Beyond with no folders, an empty campaign list's form, a short list of lines); `open` opens or closes it this frame for its owner (Party's Combat sync, a search). The other functions are its short forms. A list whose rows open in place (a sheet's spells, each a fixed row with its name and its facts) uses `section_row(ui, id, header, body)`: the caller draws the row for its state, and the part says whether it is open, opens or closes it on a click and draws the body under it at the row's edge. `clippy.toml` refuses `egui::CollapsingHeader::new`, `egui::Ui::collapsing` and `CollapsingState`'s drawing (`show_header`, `show_toggle_button`, `show_body_indented`, `show_body_unindented`) outside these two |
-| Table row | `table_row` | Fixed cell widths and hairline for Markdown tables and sheets; no stripes; height follows text |
-| Rail toggle | `nav_toggle` | Lookup and panels; its own `Open` word distinguishes it from the current page |
-| Segmented | `segmented`, `counted_tab` | Words with an underline, no pill. Each segment is as wide as its words in their widest state (`Strong`), and its words start `S` from its left edge, so nothing moves when the choice changes |
-| List row | `row`, `two_line_row` | Fixed height for `show_rows`; paints hover in the current frame |
-| Action rows | `action_rows::action_row`, `RowAction`, `Columns` (facts measured from data); `action_rows::MeasuredColumn` (`end`, `start`), `ActionSlot` (`rect`, `scope`, `child`, `done`) (facts measured in the list's last pass) | A list whose rows hold facts and actions puts its actions in one column `L` after its widest facts (I6). Spare width lies after the actions, never between the facts and the actions, and a row's gap above `4L` is a counted residual (ruling L2). A list whose facts are measured from data (a creature search) uses `action_row`: when the facts, `L` and the actions do not fit, each row's actions wrap under its facts at the text edge. A list whose facts keep their own room, where they wrap or give way (the encounter roster, a group's members, the Session plan; recipe A, note-5a-2), uses `MeasuredColumn`. Each row's facts keep the room they had without the column, so line breaks and row height never depend on it. The column comes from the widest facts and actions the list drew in its last pass; where the widest facts, `L` and the widest actions do not fit a row, every row keeps its actions at its far edge. `end` ends each row's actions at the column's end, so the menus line up; `start` starts them at the column in the row's own recipe width, for a list of mixed row kinds. The slot decides where the actions stand and draws their region, right to left; `done` measures and records the row. The list's columns are the part's own (`columns` and `measured` are private), so no list places its actions by a column of its own. A list whose column grew is drawn once more in the same frame. |
-| Status | `status`, `wrapped_status`, `status_link`, `Status`, `rail_status_detail`, `KindStatus`, `StatusKind` | Icon, word and colour; a `KindStatus` paints its icon and its word apart, in the colours its `StatusKind` decides (no free colour): `Recording` paints only its record icon in the `recording` token, its words and time in the text colour (R5); `status_link` opens where the DM can act. A status that wraps (`wrapped_status`, `status_link`, `rail_status_detail`) paints its icon and its word where a one-line status paints them; every line after the first starts at the word, never under the icon |
-| Stat tile | `stat_tile`, `fact::roll_tile`, `fact::tile_label` | Sentence-case muted `Small` label over a large value, no box; a value that rolls is `roll_tile`; a label that holds its own number says `Str: 8` (`tile_label`, the fact form) |
-| HP | `hp_bar`, `hp_readout`, `hp_state`, `design::fraction` | Fixed slots; separate temporary HP. Every displayed HP fraction is compact (`62/62`), through one formatter; stored text and service payloads keep their format |
-| Empty state | `empty_state` | Icon, serif title with no full stop (`Nothing planned yet`), purpose and one next step at the top of an empty pane or page, with normal padding; it starts at one y on every page (the Encounters page steps past its header without an extra item gap) |
-| Heading | `heading(ui, Heading::Group / Label / Section / Panel / Status / Name)` | A heading adds its own space: `Heading::above` (`L`; `XL` for a serif `Section` and a `Name`) from the item before it, none when it is first in its column, and `XS` under it, so a heading belongs to what follows; in a row it adds none. `Group`: `Label` capitals, nonzero count muted, no rule; serif `Section` headings belong to readers and stat blocks. `Panel`: a panel's, form's or band's own title in `Heading` type and the text colour (Combat sync's `Short rest`, the run strip's `Round 3`). `Status`: a heading that says a state, its icon first and the whole heading in the state's colour, named by its word (`⚠ Hit points conflict`). `Name`: a sheet's own name in `Display` type beside its picture (Party). Clippy refuses the old `group_heading` and `group_label` outside `src/design/` (staged); the old `reader::section_heading` is gone |
-| Indent | `indent(ui, levels, Gap::…, add)` (`quote` is `indent` at `Gap::L`) | A block set in by `levels` steps of a scale step from the text edge, on one line with no item spacing added: a tree's rows by depth (the World list: one step in, and one more for each level), a block quote by level. The caller names the level; it never adds a measured space |
-| List item | `list_item(ui, depth, Gap::…, mark, add)` | A list item's words at its level, with its mark (a bullet, a number, a task's box) in its own column. Each level is one step, the mark ends at the words' left edge, and the words wrap at that edge: a wrapped line never starts under the mark, and an item's mark stands under its parent's words. With no mark (a second paragraph of an item) the words keep the item's edge. The Reader uses it at `XL` a level; a plan row's leading icon uses it at depth 0, where the icon takes its own width |
-| First-line slot | `FirstLine { top, height }.slot(ui, size, control, add)`, `dropped(ui, size, drop, add)` | A block placed by its rect `drop` below its slot's top, or on a row's first line (its centre on the line's centre), in a slot that still holds the drop, so what follows starts below it as when a space came first. The run page's setup row, the World value that is `Not found`, a history row's date and the New entry's `Create entry` use it |
-| Block unless empty | `unless_empty(ui, add)` | A block that takes no room, and leaves no item gap, when it draws nothing; says whether it drew (a `Ui::scope` always allocates, and its item gap with it) |
-| Line held to a height | `at_least(ui, height, add)` | `add`'s block, and room after it, so what follows starts at least `height` below where the block starts: a line that keeps one height while what it shows changes (the Sessions record line while its recording runs: a control's height and `XS`), so what follows never moves. The height comes from tokens, never from the content |
-| Empty line | `empty_line(ui, Type::…)` | The room of one line of a type with no words in it, as tall as a label of that type and with its item gap, for a line kept for words still to come (a marker's placement line before the marker is added); it draws nothing and has no accessible node |
-| Exact gap | `gap_to_next(ui, Gap::…)` | Exactly one step of the scale between the item before and the next, whatever the item spacing is (the step less the spacing egui already leaves, down a column or along a line, never below none). `gap` leaves a step on top of the spacing; use `gap_to_next` where the distance itself is the step (a choice list's end, a `Change` action after its value). A caller never reads `item_spacing` to subtract it: that measured space is the recipe this part replaces |
-| Gap | `gap(ui, Gap::…)`, `quote` | Space between two things is one step of the scale (`XS` to `XXL`); no other amount exists. A reader's block quote is set in by `QUOTE_INDENT` (`L`) a level through `quote(ui, depth, add)`: the reader names the depth, the part owns the indent. Clippy refuses `Ui::add_space` and `Ui::allocate_space` outside `src/design/` (staged, counted by function in `STAGED_ALLOWS` as `Ban::Extras`). A change of `item_spacing` through `spacing_mut` is not refused: a reviewer reads it, and the gate's alignment and stillness checks see its effects |
-| Choice | `choice`, `choice_value`, `choice_wrapped`, `choice_wrapped_value` | One choice of a menu, drop-down or list. The selected one shows the check (`icons::OK`) in a fixed column, so every choice's words start at one x. Clippy refuses egui's `selectable_value`, `selectable_label`, `Button::selectable`, `Button::selected` and `SelectableLabel::new` outside `src/design/` (staged). Not this part, each with its own: a radio, a checkbox, the toggle (`Action::selected`) and tabs (`segmented`, `counted_tab`, `overflow_tabs`). `choice_wrapped` is the same row in a list whose rows wrap (the drop-down's): its words wrap at word boundaries. Only a word wider than the menu’s room ends in an ellipsis; accessibility keeps the full label. A blocked choice shows its reason under them and takes no press or keyboard focus. **Width:** a choice never takes more width than its column gives. In a column it takes the column's width (`choice` cuts its words with an ellipsis, `choice_wrapped` wraps them); on a line it takes its words' width, at most the rest of the line. While egui measures an auto-sized menu, a choice asks for its words' width inside the menu's room, so the menu is as wide as its widest choice and never wider than its room. **Words:** `choice` and `choice_value` take only the app's fixed words (`&'static str`); words from the user's data (a name, a path, a title, a session's label) do not compile there and go through `choice_wrapped` or `choice_wrapped_value` |
-| Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height. Ends with the icon set's muted caret (`icons::NEXT`), as sections and dropdowns do, never egui's solid triangle. Opens right of its menu when it fits inside the opening pane with `S` to spare, else left; in a pane too narrow for either (a 316 px column), below its own row (above it when it does not fit below), so it never covers the row that opened it and the parent menu stays reachable; never over a splitter or scroll bar |
-| Row menu | `row_menu` | Quiet `⋯` at the right end of the row's content, never at the pane's edge when the row is narrower than the pane, named `More actions for <name>`; holds Remove and Delete. Opens under the `⋯`, and ends at its right edge when it would cross the pane's splitter or scroll bar |
-| Words ending with actions | `line_end::words_ending_with` | A row's quiet actions at the right end of its words' last line when they fit there (at least the row's item gap after the last painted word), else on a line of their own at the right, as tall as the actions. One owner measures the last line: it is as tall as the actions, and its words and the actions stand on its one centre (within a pixel), so the actions never reach over the line above and the last line's words keep its centre with them (M0574). The wrapped rows above it are their own label with the words' pitch; the last line follows them with no gap. Only Trackers' Due rows call it (ruling M21) |
-| Drop-down | `Dropdown` (`new`, `choice`, `choice_with_short_label`, `blocked_choice`, `choices`, `group`, `width`, `blocked`, `command`, `show`, `editable_value`, `selected_words`) | Groups of choices: `.group()` between two choices puts a rule above the next one (`All`, then `D&D 2024` and the packages), as the command has; the list's height counts each rule. One choice from a list: a field-like control with the chosen label, cut at its end, whole on hover and in its accessible name; a caret; `Read` height. Its list opens under it (above it when it does not fit below, ending above the field's caption, so it never covers the words that name the choice), as wide as it, inside the body that owns it: a pane's body room above its footer (`pane::body_room`), else the visible part of its `Ui`; a list taller than its room scrolls inside itself. Rows are at least `Read` height and wrap their words inside the list (never cut), with the chosen row's check mark in an icon slot. A blocked choice shows its reason on its row and takes no press and no keyboard focus. Enter or Space opens the list on the chosen row, the arrow keys and Tab move, the focused row always in view; Enter or Space chooses, Escape closes; focus then goes back to the control. A blocked or disabled drop-down closes its list and takes no selection or command; it shows a lock and says why on hover and in its accessible description. One command may follow the choices below a rule (`Add campaign`). Its id comes from a `FieldId`. `clippy.toml` bans `egui::ComboBox` outside `src/design/` |
-| Tip | `rich_tip`, `TipLine` | A tooltip of typed lines (a `Strong` title, `Body` words, a `Small` muted detail, words with their own colours), up to 360 px wide, on hover and while the control has keyboard focus. The lines are also the control's accessible description. Words alone stay `on_hover_text`; `clippy.toml` bans egui's drawn tooltips outside `src/design/` |
-| Drag source | `drag_source`, `Ghost` | A grip that carries a payload while dragged (none when the item cannot move), with the grabbing cursor and a ghost by the pointer: the icon and words in the accent colour on a raised plate, `M` right of the pointer, kept inside the window, on the tooltip layer. A drop target reads the payload with `dnd_release_payload` |
-| Image viewer | `popups::image_viewer`, `ImageSize` | An image in a modal over a rail-coloured backdrop, with Close (Esc) and its name; a click on the image closes it. The caller says the size: `Known` (from the file's header) sizes the modal before the texture loads, fitted to the window and never grown; `Unknown` waits for the texture |
-| Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. A line of More alone (the plan's `Scene`) comes last there and takes no part in the fit, so no action moves for it, and a strip with no More has none. Keep the strip on one line |
-| Typed message | `design::outcome`: `sentence!`, `Sentence`, `Verb`, `UndoStep`, `MessageChoice`, `Done`, `Said`, `Notice`, `FaultMessage`, `Outcome`, `Fault`, `Severity`; places `Footer::outcome`, `banner`, `row_fault`, `PagePlaceholder` | The one way to draw a message. A caller gives data, never a tone, a closure or an action: `Done` (a finished change, success tone, words `<Verb past> <object>.` and its Undo `Undo <verb> <object>` from the same `Verb`: only `Done` holds one verb for both), `Said` (a finished change in the domain's words, success tone; the named escape for a result that is not a verb and an object, whose Undo verb a reviewer checks), `Notice` (`Notice::new`: info tone; `Notice::warning`: a warning before an act, what the act will cost, in the warning tone; a notice is never an error, which is a fault), `Outcome::Refused` (warning; legacy, counted in `design::results::STAGED`: an attempted act that failed is a `Refusal` on its entry, ruling M7) and `FaultMessage` (tone from the fault's `Severity`: `CannotRead` and `NotSaved` are errors, `NeedsFixing` is a warning). A pane's footer messages are `Messages<'f, A>`: owned, typed values built before the body runs, holding no borrow of the app (`'static` words, `Sentence`, `UndoStep`, ids), so the body may change any of the app, also the store a result came from. They and every kept line borrow the pane's local `PaneFrame` (`let frame = PaneFrame::new(ui);`), so a line cannot be kept past its frame and shown after its result was replaced or ended. What a pane may keep across frames is a `Projection` of a result (its words, tone, Undo and lock, choices and footer place, as data, with no ticket), made by the owner's `Retained::refresh` only when the store's revision, the owner key or the owner's input revisions changed; only `Results::present`, with this frame's `PaneFrame` and the live store, turns it into this frame's `KeptLine` with its ticket, and it refuses a projection made from another store or revision, for another key (scope included) or from other inputs (`Mismatch`): nothing is drawn (ruling L9, `docs/design/retained-results.md`). `Messages::pane` (or `pane_content`) draws the body and then the footer (`Footer::pane`'s placement) and returns `Paned { body, pressed }`: the body's value, and at most one `Press { id, ticket }` per frame, the first in the footer's drawing order. The id is the caller's kind of action (an enum; `NoPress` when nothing can be pressed); a kept line's press also carries the store's `Ticket` of that entry, and the store acts by it (`Results::undo_by`, `use_press_by`): a replaced or ended entry is `ByTicket::Gone` and nothing changes, so a press reaches only the entry its line showed. Each kept line's controls take their egui ids from its ticket, so a result added or removed above it moves no keyboard focus or pending pointer press onto another result's control. Each Undo (`UndoStep::pressed_as(id)`) and each choice (`Choice::new(MessageChoice, id)`) carries its id, and may carry a lock: `.blocked(reason)` for a lock that holds for as long as the control is drawn (the reason is a `Sentence`, never optional), and `.locked_when(condition, reason)` for a lock that comes and goes at run time, which keeps the reason's line while it is open so nothing below moves (ruling R29: that kept line is a reservation, not content; in a footer at its cap it gives up its room first, so it never makes the footer scroll, and a lock that comes there pushes the lines under its reason); a lock written as `.blocked(condition.then_some(reason))` does not compile. A locked Undo or choice is disabled, with its reason as its accessible description and in painted `Small` muted words on a line of its own at the message's words (each reason once), as every blocked action says why; a locked Undo keeps its place. A `KeptOutcome` (`Done`, `Said`, a `Notice` or `FaultMessage` with its Undo, or an `Offer`) takes no order. An `Offer` is something the DM may do now about a kept entry (Library's link offer): its words in the info tone, at least one choice, and no Undo; its choices' presses come back with the entry's ticket like any kept line's, and it is never a success-tone `Said`, since nothing was done yet. `Shown::outcome(&frame, |value| …)` makes a `KeptLine` from a store's view, with its ticket (not `Clone`, its ticket private), and `Messages::kept` adds it; the call ends the store's borrow. `Messages::outcome` takes no `KeptOutcome`. What the types do not hold stays with the caller: class a result as a result (`Notice::new(sentence!("Removed Bell."))` needs no store), choose the right owner and store (a caller can take B's view and describe A), and derive the words from that view's value. The staged path for a caller that still issues its own order is `Messages::outcome_at` (`Ban::Order`). The body places' `PagePlaceholder` gives back the caller's id of its pressed choice too. A fault's words have one form, `<name> · line N: <Cause>` (`fault_words`): the cause starts with a capital after its place, and the word `line` after a name stays lowercase (R36; `layout::cause_words` is the one home of that capital). Words are a `Sentence`: `sentence!` checks the template at compile time (a capital, number or value first; `.`, `?` or `!` last; curly apostrophes; no code word such as `identity`, `cached` or `keyring`); words from outside the app go through `Sentence::outside`, which adds the end mark and the capital, except that it leaves the first letter alone when the first white-space-separated word holds `/` or `\` or ends in a dot-extension (Unicode letters and digits), and gives nothing for blank words; a message that names a file or a path uses `Sentence::outside_after(lead!("Changed on disk:"), text)`, checked lead words first and the outside text exactly as it came, so the caller says what it knows in its own checked words. The template check cannot see a template's values: an argument may carry outside words. `Sentence::outside`, the macro's helpers, `Footer::outcome_at` and the body places below are Clippy `disallowed-methods`: the compiler resolves every alias, import and function reference, and each use the review agreed to carries one suppression on its innermost function, one row in `design::results::STAGED_ALLOWS` (`Ban::Words`, `Ban::Sentence`, `Ban::Order`, `Ban::Body`). Undo comes first, quiet with its icon, its words at the message's words. Its words are typed (`UndoStep`: a `Verb`, an optional object, and the joining word the verb's table entry gives, `Verb::join`: `of` for discard, `to` for change, none for the others), so no caller writes Undo words: `Undo discard of Bridge Ambush`, `Undo remove Take seal`, `Undo tick`. A change's Undo names the field by its name on screen when one field changed, else the note (ruling R16): `Undo change to Part of`, `Undo change to Ashfall Faction`. Its accessible name is always the whole form; its visible words are the whole form when the line has room, else the short form for a verb with a joining word (`Undo discard`), else the whole form cut only in its object, never in its verb or in the part that tells two steps apart. The only Undo of its verb in its footer (ruling M9, `UndoStep::alone`) also measures its whole form first and shows it wherever it fits; only where it does not fit does it give up its object, whole (`Undo discard`, `Undo tick`: its result names the object), never cut; two Undos of one verb keep what tells them apart. An Undo with no object (`UndoStep::verb`: `Undo add`) cannot name what it takes back even where the line has room: its uses are counted per file (`design::results::STAGED`), so a new one fails; give the object with `UndoStep::of`. A result whose object comes first (`“…” ticked in Horn Rings.`) is `Done::new(Verb::Tick, …).object_first().within(name)`; its Undo tells itself apart by the same place. Choices follow `L` after it on its line when all fit, else on the lines under it from the words; a `Choice` is bordered, a `Lose` red with exactly `L` before it, a `Link` a link. A choice may say what pressing it does (`Choice::help`, ruling M8), as a body fault's `Repair` does: one help line under it in the help words, painted, never only on hover (`action_help`, the one help line of both). The help line sits `XS` under its choice (or under the choice's lock reason), and the next safe choice starts `L` below it, so it reads as its own choice's and never the next one's. The help belongs to its action: it is the action's accessible description (after its lock's reason while that holds), and a keyboard focus on the action brings the action and its whole help line into view together, in a footer that scrolls and in a pane's body (`components::reveal_with`). A message whose choices have help draws each choice on a line of its own from the words, its help under it, in the same safe-first order, a red choice exactly `M` below the bottom of the line before it (that choice's help, else the choice); a message without help keeps the line above. `banner` is a notice that came by itself at the top of a body (no Undo, no choice, no order), `row_fault` a fault drawn at its row, `PagePlaceholder` the fault of a page or section whose body cannot show, with its repair choices, `BodyMessage` a typed message drawn in a body, outside its footer, where the thing it is about stands (the Run's header notice and setup warnings, a group row's faults): made only from a `Notice`, a `FaultMessage` or a finished change said where it happened (`BodyMessage::result`: success tone, its choices and no way back; the Run's header band says its last result), with its choices, close icon and file line drawn as a footer line draws them, giving back the caller's id of the choice pressed; it holds no Undo and no ticket, so a finished change whose Undo the DM may press stays a kept line in its footer. Its compact form (`BodyMessage::compact`, the Run's setup rows and header band) is a row message's size: `Small` words with the tone's icon and bar, its choices (a link, a bordered choice, the close icon) in one band after the words on their line, its file line after the words when it fits, else under them, and a fault's help lines under its words; it draws no choice's help line and no lock's reason line, so a test or debug build refuses a choice with either (draw the full form), and it measures its words once per change of the words or of the font, theme or scale (review of PR 592); `FormOpener` a fault whose one choice opens an inline creation form in its place (Library's `Register a copy`): closed, the fault and its choice as a body fault's repair; open, the fault, the form's title and the caller's typed `InlineCreate` under it, the form's Cancel closing it; `PlacedResult` a finished change said at the place where it happened, with its Undo, for an owner that keeps that Undo with its data in place, not in a store (a Session plan row removed from tonight, at the removed row's place; `Scene added to tonight.` under the Scene field): success tone, no choices, its Undo typed and, as the only Undo at its place, whole wherever it fits (M9), giving back the caller's id; and `BodyFault` a fault in a body that the DM repairs from where it is: each `Repair` is bordered, on its own line from the fault's words, with its lock's reason and an optional help line under it, and gives back the caller's id when pressed. When its words quote a value cut around `…` (World's unread values), `BodyFault::whole(sentence)` gives the whole sentence as the words' hover and accessible description (round 25 FD4). Choice words that hold the DM's data are `ChoiceWords`, one type for a footer choice (`Choice::named`) and a body repair: the app's fixed words as a template literal checked at compile time, with the objects as values (`choice!("Repair {}", name)`, `choice!("Move {} before {}", a, b)`), or fixed words alone (`"Open in Library"`); no `String` is ever a whole label. When the line is short the part cuts every object to the same number of letters (at least three) with `…`, never the fixed words, and names the action with the whole words. A choice may give shorter forms of itself, longest first, each made by `choice!` (`ChoiceWords::or_shorter`): a form gives up a whole part, never a piece of one (Arrivals' Move gives up the whole parenthesis first); the first form that fits shows whole, and only when none fits are the last form's objects cut. These body places take any `Ui`, so each use is a reviewed suppression (`Ban::Body`); a plain `ui.label` is out of static reach (the gate's stillness check covers content that moves). A fault's kind decides its severity in one place, and every place maps a severity to one tone. Test builds register each message's rect and place (`message_rects`) for the gate. The functions below are deprecated: a file that still calls them holds one `#![allow(deprecated)]`, which the lint counts; a child module of such a file writes its own `#![warn(deprecated)]` (the lint requires it), so the compiler stops every call, import and alias there. The lint reads attributes with `syn` (`design::attributes`, shared with the suppression table), so a list across lines, `cfg_attr` and an attribute in a macro all count. `MessageChoice::Dismiss(Lost)` is the close icon: the part puts it at the right end of the message's first line, centred on that line; `Lost::TypedWords` means the press records `Done::new(Verb::Dismiss, …).undo(id)` in the pane's `Results` store (ruling R3). The lint's `phrase-owner` rule counts a close icon named by hand (`Dismiss this …`) A result's place under a block that keeps one line whether or not a result shows is `PlacedResult::show_line(result, ui)` (M0561, the Timeline journey's check result under its table): one `Read` control high, its words cut by whole words before its whole Undo (the whole words on hover and as their name), so a result that comes or goes moves nothing below it. |
-| Message (deprecated) | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; `message`'s words end at their last painted word, not at the space a wrapped row broke at; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
-| Message footer | `Messages` (`new`, `outcome`, `kept`, `rows_end_whole`, `pane`, `pane_content`, `pane_then`, `pane_content_then`, `pane_editor_then`), `PaneFrame`, `KeptLine`, `Press`, `Ticket`, `Footer` (`new`, `pane`, `pane_then`, `pane_content_then`, `pane_editor_then`; every app footer holds only owned, typed data. The closure lines `result`, `legacy_reason` and `legacy_notice` are `#[cfg(test)]`, for the design system's own pane tests only; `legacy_kept`, `legacy_kept_line`, `kept_result` and `draft_discarded` are gone), `Body` (`Content`, `Fills(Fills::because(FillsReason))`), `ResultOrder` | One per pane. Every result, reason and notice that comes and goes sits in its pane's footer; a `Messages` footer's lines are typed data, never closures (layout PR 2b): the footer keeps a plan per footer (its one order, its accessible name, each Undo's short form, each kept Undo's words as fitted to its room with their whole form, the room its lines take and the room each open lock's reason keeps), made by the pass that draws them only when the lines (compared as data, with the state their file lines draw from), the width, the scale or the style changed, so an unchanged frame sorts, names, counts Undo verbs, builds and fits no Undo label and lays out no reservation, and the pane knows an unchanged footer's height before it draws (a changed footer's first frame measures it and places it in that same frame: see below); each footer decides its own reasons' room (ruling R29) with no state shared with another pane, and the plan of a footer that no frame drew since the last is dropped; no body place remains (a reserved reason slot beside a control is not a body place). The caller gives the body to `Footer::pane` as a closure and gets no y; it draws no footer by hand (`show_by_hand` is staged out: Clippy refuses it and the lint counts the calls left). A `Body::Content` pane is the body's scroll column (lane kept): the footer sits `S` below the content when egui laid the content out shorter than the room and it is not scrolled, and is pinned at the bottom of the pane otherwise. A body that takes all the room reads as tall, so the footer is pinned below it and never over a control. The column's viewport is the real room, however small. A body control that gains keyboard focus scrolls whole into view above the footer, with its whole field block: a field part (`field`, `small_field` and the parts drawn through them) registers its caption, control, help and error as the block of its focused control (layout PR 10), and an action its help line. The pane is the one arbiter of this focus clearance: it checks the focused block again when the body's room changes and when the block itself changes with the same focus (a provider change adds or removes help, a reason comes, the content above moves it), and then scrolls only when the block is not whole in view; a block taller than the view that grows in the same room (an editor as the DM types) keeps its own caret follow. The DM's own wheel moves neither, so it is never pulled back. Nothing moves while the pointer presses, holds or releases in the body's column (`reveal::cancel`; a press in another column holds nothing here); a focus that came with a press, and whose block is cut but fits the view, then comes whole into view at the release: a click on a field whose caption or control is cut, and a drop-down's chosen row. While a drop-down's list is open (the keyboard on its rows), its control is the arbiter's subject in place of the focused row, so a click that opens the list of a cut drop-down brings its whole field into view (layout PR 10b). A block taller than the view (an editor's text) is never pulled to its top by a click; an editor viewport's block is its fixed frame. Words that an act brought at another field (the reason of a field a choice left empty) come into view with the focused control through `pane::reveal_with_focus`, never a scroll of their own. A quiet `line_start` action hangs its padding (8 px), and its icon slot if it has one (28 px in all, `LINE_START_REACH`), left of the text edge: the pane's clip reaches that far into the margin left of the pane, inside the parent's clip and never over a band that a layout part reserved before the body drew (a `Column`'s splitter grab band, a `ScrollColumn`'s lane; `pane::reserve`, this pass only). Every `ScrollColumn` in a pane's body (the pane's own `Content` column, a column in a `Fills` body, a nested pane's) starts its scroll area at that same place, holds its content in by the same width and clips there, so the scroll area (what egui and the gate read as the column's room), the paint and the presses agree and the text edge stays at the pane's left, at any depth of panes and columns. A `line_start` action is always whole in its own clip: where the room is shorter than its hang (a menu, whose clip ends at its content edge; a splitter's band 11 px from the text edge; a window edge), it first gives up its left padding, so its words stay at the text edge, and only an icon that still does not fit moves the words by what is missing; nothing else moves. Its press area is its painted area inside its room, registered for clicks in every frame (focus, Enter, Space and AccessKit work wherever the pointer is); a press directly on a splitter band or a scroll lane is that control's, and a press just outside the action's edge can reach it by egui's nearest-target rule, as for every control (ruling R19). `ScrollColumn::show_rows` and `show_viewport` and a raw clip that a caller sets are outside this rule (the action stays whole; the surface may not cover it). The pane never paints or takes a press left of its own rect. `Footer::pane_content(ui, ContentScroll, add)` is `Body::Content` with typed options: `from_top` opens the column at its top, and `holds_presses` keeps a pressed control under the pointer through the one change its press makes to the content above it (the body calls `hold_press` at the press and `held_seen` where it draws the control; the first change of the content's height in the press's frame or the 3 frames after it is corrected once, by scrolling as much as the control moved, with blank room after the content only while that needs it, and the hold ends; no change in those frames, the DM's own wheel or drag, or `from_top` ends it earlier; a second press replaces it; anything later is the pane's normal stillness). Trackers uses both. `Footer::pane_editor(ui, |ui, region| …)` (and `Messages::pane_editor`; `pane_editor_then` when the body's acts start or end the footer's lines, as Lookup's reader's do, so an act's result and its Undo show in its own frame: issue #761) is `Body::Content` for a body that holds one editor which grows with its text, with a save row after it: the body gets one `EditorRegion`, which draws the editor once through its `FieldId` (`region.editor(ui, field, text, style)`); it cannot be copied, used twice or kept after the closure. While the content fits, the region is as tall as the text and the pane is plain `Body::Content`, so the footer is `S` under the save row. The region draws the editor's fixed frame (the field's well, its hairline and an `S` inner margin) at the whole width it is given: all four outside edges stay in view, the text and its scroll lane are inside the frame (the lane subtracted once), and the frame and a save row under it share their outside right edge. The part sets the frame, the margin and the text's width; a caller's style sets only the text's face, so no caller frames the text inside the scroll or keeps the lane outside the frame (layout PR 9, I10). When it does not fit, the region (the frame) is the room less the rest of the content and less the footer; the text scrolls inside the frame, and the save row and the footer stay in view. A footer that gains or loses a line keeps the save row whole in view, and a focused editor keeps its caret in view: a caret that was in view stays in view after a new layout (the editor narrower or shorter), measured in that layout, in the first frame shown; a caret the DM scrolled away from, and a named jump's place, stay where they are. A body that does not use the region is `Body::Content`. The region (the frame) is `max(floor(room − rest), min(64, room) + frame)` tall, where `frame` is its margin and stroke, so the text view keeps 64 px: Save stays in view while the rest of the content fits the room less that; else the pane scrolls, and only there may the pane's scroll cut the frame (the 64 px least region of ruling L3, counted: `EditorFrameRecord::least`). An editor outside a `pane_editor` body uses the same closed part, `pane::editor_view(ui, height, field, text, style)`: `ViewHeight::AtMost(h)` is as tall as its text up to `h` (Campaign's repair, which the page's scroll holds whole), and `ViewHeight::Fills` takes the rest of the `Ui`'s height with any text (a Session note, which fills its `Fills` body above the footer). A Session template is the pane's editor region (`Messages::pane_editor`, layout step 11c). Its one offset writer takes one named request per pass, before the caret follow (`pane::jump_editor_view(ctx, field, EditorJump)`): `Top` opens the text at its top (a newly selected note, asked once by the selection), and `Show { top, bottom }` brings a place in the text into view, centred, focus or not (where the plan wrote a note's rewards). The owner asks once per its own event, never every frame; a caller never writes the viewport's offset itself. A body whose acts start or end its footer's messages (a form whose fields, Save and Discard change what its footer says) uses `pane_then(ui, body, add, then)` (`Messages` and `Footer`): `then` gets what the body returned and adds the messages from the state the body's acts left, after the body and before the footer paints, so the frame of an act shows the message it brought and never one it ended, also when egui draws that frame in one pass. A typed footer's demand is known before the pane places it: when its lines, its width or its locks change, its plan is made by drawing its lines in a context of their own (same fonts, style and scale), so the pane places it and draws its lines once, in their place, in that pass; its controls' targets and accessible bounds are where they are painted. Lines that come after the body (`pane_then`) are planned after the body: when their demand is not the one the body's room was made for, the footer is drawn where the next pass places it (it follows the content when the content fits the room left above it, else it is pinned, a third of the pane at most), the body's paint stops `S` above it at its last whole row, and the pass is drawn again with the body in its room. A legacy footer not measured with its words is laid out below short content in its whole room there and fitted to what it shows; pinned, it takes its new height a pass later. A header that must not scroll is drawn before the pane. A vertical `ScrollColumn` inside a `Content` pane is refused in debug builds and tests, and drawn in place (the pane scrolls it) in a release build. The footer's identity is scoped to the pane's parent `Ui`, so one pane function in two `push_id` scopes keeps two footers apart; two panes with one identity in one scope are refused. A banned owner or function is never renamed (`use … as …`) or aliased (`type … =`): the source lint refuses it, and the legacy host freeze refuses an alias of any path it counts, `src/design/` too (Tests). The freeze lists every function that still uses one of those paths; none may use more, and no new function may. `Body::Fills` is the one escape, for a body that manages its own room (an editor, the live roster, columns that each scroll); its footer is pinned, and each scroll column directly in a `Fills` body ends at its own last whole registered row while a footer or the session banner ends the body (a row is never cut between its lines; a hairline marks where the column's rows stop; a focused row that a new edge would hide scrolls whole into its column's view), and Clippy refuses `Fills::because` outside `src/design/`, so each use carries a counted allow. A pane whose messages call `Messages::rows_end_whole` treats its body's own bottom as such an edge too: with no footer line, its `Content` body or `Fills` columns also end at the last whole registered row, with the hairline (the run's character sheet at the window's bottom; layout step 11a). Content must keep its place at the body's top: Clippy refuses `Ui::centered_and_justified` and `Ui::vertical_centered_justified` outside `src/design/`. In every case the body's top never moves; only its room's bottom comes up while the footer holds a message. When content goes on below the room, a hairline marks the footer's top edge, so a cut line reads as a list that goes on; a footer below a short body has no hairline. Nothing in the body takes a press under the footer or in the `S` above it. A page whose body cannot show draws its message as the page's content at the empty-state place, not in a footer. The footer is absent when it holds nothing. Pinned, it is as tall as what it holds up to one third of the pane; below short, unscrolled content it is as tall as what it holds up to the pane's end, so it never cuts a message while room is left under it (ruling Q-c: the third is a pinned footer's cap only; a footer placed by hand, staged out, keeps the third). An open lock's kept reason line counts toward that height only while it fits in that room; past it, the line is not drawn and the footer keeps its height (ruling R29). Beyond that room its words scroll inside it, beside a lane kept for its scroll bar: it is one focusable group named with every message in its order. Tab reaches each control in it, scrolled into view (also while the DM holds a press in another column), and then the group; arrows and Page Up or Page Down scroll it while it has focus, and the wheel scrolls it. Its words sit `PART_INSET` (the ring's width and a hairline) inside its edge, so the focus ring never crosses a letter. Each result is its own message with its own Undo, and its own `ResultOrder`, issued when its action is done (an Undo and then the same action again issue a new one; a redraw, changed words, or another result that hides or goes never do). Its order: the newest failed answer to the DM's last act first (`Messages::answer`, one per footer, a counted use: ruling Q-x; the page that holds it ends it at the next act). When that act was a press of a kept line of the footer (`Press::line`, a failed Undo) and the footer follows its content (its top stays and it grows down), the answer stands directly under that line instead, so the line the DM pressed keeps its place under the pointer (an answer that replaces one already standing first takes that first place); a pinned footer (its bottom stays and it grows up) keeps the answer first; then a refused attempt kept on its result (`Results::undo_or_refuse`) while it is the newest answer of the footer (ruling R42 as amended: an answer is a line with an act order; a refusal ranks by its attempt's order and keeps its result's ticket); then results with a live Undo, newest first by that order; then reasons (Save's reason, a parse error, a disk failure); then other notices, and then results with no Undo, newest first, among them a refused attempt that is no longer the newest answer, by its attempt's order. Standing lines (faults, warnings, reasons, notices with no act order) never move for an answer. One function sorts every footer and every save row's messages (`outcome::footer_order`). The result says whether its Undo is live (`has_undo`); the footer chooses the order. A state word stays on the save row; a fault that belongs to one row stays on the row |
-| Body room | `pane::keep_room(ui, Room)`, `Room` (`LogEntry`), `pane::reveal_with_focus_and_growth(ui, field, room, Growth)`, `Growth` (`ResultWithUndo`) | Room a body keeps for content that an act will add (ruling R30, D-2; layout step 11b). Both sets are closed, and each height comes from tokens and line heights, never from the content. `Room::LogEntry` is `L`, a Log heading, `S` and two prose lines: the room for one new Log entry under a note's body while a field whose act writes a Log line is open (Status, Place, Part of). The part draws the space; no caller adds raw space for it. `reveal_with_focus_and_growth(ui, field, room, growth)` names that room, extended down by `Growth::ResultWithUndo` (`S` and two `Read` controls: a result line and its Undo), for its one field, while that field has the keyboard. The pane's focus arbiter then brings the field, the room and the growth into view above the footer when the keyboard comes to the field, so the new entry lands in room already in view and the footer grows into room already clear: nothing moves at the act. Another control that takes the keyboard (the field's own Save) is revealed alone, and so is the field when its block, the room and the growth together are taller than the body room: a rect that spans both edges of the view makes no scroll. A picker that closes with its act keeps the room and does not name it: it gives back more than the room, and the scroll area's clamp would undo that scroll. |
-| Message space (being replaced) | `MessageSpace`, `fixed_part` | The two-line space below a save row, for callers not yet moved to `Footer`; removed when none use it. Its part keeps its words `PART_INSET` inside its edge, as the footer does |
-| Kept results | `Results<Owner, T>` (`design::results`), `Kept`, `Ends`, `Hold` | One store per kind of kept result (a result with Undo, an offer). A page whose kinds each hold one result keeps one mark store for them, the data beside it behind one boundary that changes data and mark together (Encounters' `KeptResult`; Library's `LibraryKept`, `src/library/kept.rs`, where every file key is the whole file: owner kind, owner id and path). `record` at the action issues its `ResultOrder`, and the order lives in the entry, so every object keeps its own order and a draw, which has `&Results`, cannot issue one. A new action of the same owner ends its earlier result. Each kind says what every end event does to it (`Ends`: the owner changed, the disk changed, its press). An Undo leaves the store only when it works (`undo` keeps the entry on `Err`). A result shows only in its owner's scope (campaign or content root). `ResultOrder::issue` outside the store is counted and can only go down (`design::results::STAGED`). The store publishes `revision()`, which advances at every change a projection reads (an entry came or left, a refusal was set or ended, a lock changed through `set_locks`, a value was changed in place, a life ended) and never at a read. A kind that ends by itself declares `Kept::LIFE`, is recorded with `record_timed` (which asks for a repaint at its end) and ends in its owner's update (`expire`), before any projection of it is made or shown: no reader and no footer reads the frame clock (`frame_clock` counts the reads left, which can only go down). A refused act's answer is a `Refusal` (`design::results::refusal`, ruling M7): an attempted act that failed and changed nothing, whatever page it is on (Start fight, Continue fight, Carry over, the plan's scenes, links and run files, a tracker's acts and its history, Add to fight); a standing fault or a notice is not one, and uses `FaultMessage` or `Notice`. It has three required parts, each a bounded enum whose words the part writes: what was not done to which thing (`FailedAct` and `Thing`: `No fight started from Shrine of Cinders.`, `The scene “Talk to Hobb” was not ticked in Session 2.`), why (`Cause`, which alone gives the tone, R41: a file or folder that cannot be read or written is an error; a change, a missing file or folder, a replaced file, a place another file now holds, or a rule of the app the act did not meet is a warning), and one next step (`Recovery`: by hand in a file, a `Step` in the app first, another `Way`, or a new run; R45: the act is not offered again). Ruling M13: at a tracker's own limit (its `min`, or every name rolled), and by ruling M15 when Continue fight or the Undo of an ending is refused by the run rule after the fight's encounter was deleted (`… A later fight or rest was played, and its encounter was deleted.`; while the encounter exists the step is `Start a new run to play it again.`), the DM's only choice is not to do the act, so the answer ends at its cause (`Nothing was recorded for Lose favor. Crowd Favor cannot go below 0.`); only `Refusal::at_limit`, which takes a `Limit`, builds a refusal with no next step, and its uses are counted (`design::results::STAGED`). A fault in the tracker rules says where to fix it: `Rivals has no line for Party. Add Party to the per list of Rivals in its house rule note first.` A tracker's act, roll, Undo, history Remove and its Undo that wrote nothing get their cause from the trackers' closed list (`splat_campaign::trackers::Refused`: a limit, a rules fault, a part changed or gone, a file changed or unreadable, a later entry that depends on it), which holds names and no words; an unreadable rules file is named as itself (`Splat cannot read Campaign.md. Check Campaign.md first.` or the house rule notes, M-S0.5); the app writes the act, the cause and the step (`trackers::refusal`). A roll table's own faults are `No roll table has the key “gems”.`, `The roll table “gems” cannot roll.` and `The roll table “gems” has no row for 7.`; an amount the rules cannot read is `Splat cannot read an amount of Rivals.`, and an asked amount that did not come is `No amount was typed. Type the amount in the action’s field first.` (M-S0.3). Both footers show the refusal as a fault in its cause's tone, never as legacy `Outcome::Refused`. A name is a checked `Name`, never blank, and an encounter's rows are `Rows` (`the 2 Cinder Wolf rows`); nothing in it is made from text. The words are `<act>. <cause>. <next step>.`: `No fight started from Shrine of Cinders. Splat cannot read the file of Cinder Wolf. Fix Cinder Wolf in Library first.` An owner that must revise its own kept result on an event that is no press (the Timeline's removal follows the run's updates, M0543) records it with `record_held`, keeps the `Hold` it gets back, and revises with `revise_held`: only that entry, never a newer one of the same owner (it is `Gone` then), and no press, Undo or use goes by a hold. `revise` by owner stays banned and counted. |
-| Save row | `save_row`, `DraftState`, `SaveWord` (`design::save_row`) | The one place that decides the state word, Save's weight, why Save waits, Discard and the campaign-switch reason (see Buttons). The caller says what is true of the draft; `Ctrl+S` follows `DraftState::can_save`. `save_row_state` calls are counted and can only go down |
-| Per-change cache | `Memo`, `Memos`, `Revised`, `Revision`, `Measure` (`design::memo`) | A cache keyed only by revisions. A revision advances only on a stated change: `Revised::revise` when its closure returns `Changed::Yes`, `Revised::set` when the new value differs (it needs `Eq`). A pointer address, a frame count or an input epoch is not a key: the type does not take one. A `Revised` or `Memo` value is `Sync`, so it holds no `Cell` or `RefCell`. `ptr_eq` calls are counted and can only go down. A fitted or measured text is kept with the owner's revision and a `Measure` (its room, font, the theme's font generation and the display scale), never a hash of its content; an owner with many rows keeps one entry for each in `Memos` and drops the rows it no longer shows with `retain` (ruling M6) |
-| Side panel | `side_panel_width`, `TitleLine::close` | One width rule for Lookup, Notes and the run; separate participant and fight tabs. A panel's title row is a title line with its close icon (`panel_header` is gone) |
-| Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
-| Measured blocks | `Laid`, `LaidUi` (`slot`, `put`, `in_slot`), `Block::Measured`, `BlockRegion::show_laid` | A block whose height varies (a Session plan row) is laid out before anything paints, by a recipe of `src/design/` that measures every part with the fonts alone (layout 11c): its texts are galleys at fixed rects, each control has a slot, and no spacing comes from the `Ui`. Only a recipe makes a `Laid`; its `block()` gives the whole-block plan its height, its head (the boundary where a block taller than the view may split), its stable key and its layout revision. A block list changes revision with any of these, a reorder of equal heights too. In a `Body::Content` pane the region decides from its plan, before any block draws, which blocks are whole in the pane's visible room: only those draw; a block cut at either edge has no paint, no press area and no accessible node, and a hairline marks the cut. A block taller than the room that meets it keeps its clipped paint, counted (L6), so its controls stay reachable. A block drawn from a layout the plan did not measure is refused (a panic in debug and test builds, a counted skip in a release build). In debug and test builds every shape a block paints (its visual bounds) and every widget it adds lie in its rect. A request names a block by its key (`Navigation::Show`). A column holds one queued request, whoever asked it (a region's request, `reveal::jump`, `reveal::bring_into_view`): the newest replaces older ones, and one rule ends it and a column's own retry (`reveal::dm_scrolls`): only the DM's input to that column counts (a wheel over it, a drag or a press begun in it, or a key that moves a view or a caret, typed text or an input method event while the focus is in it; the innermost column of the focused control owns the keys). A press held still makes a request wait; a shortcut (Ctrl+S, Ctrl+Page Down) moves nothing. Tab, Shift+Tab, the arrows, Home and End go across blocks that are not drawn: the target block comes whole into view and its control takes the focus; the key's own request survives the key |
-| List lines | `ActionLine`, `LineAction`, `LineColumns`, `LineHeading`, `line_slot` (issue #683); `wrap`, `WrapRoom` (W1) | A line of a list whose rows vary in height (a tracker's line, an Arrivals group) is a measured block laid by `ActionLine`: a group heading bound to its first line (SH9; `LineHeading`, with no space above where it starts its column, as `design::heading`; `NoticeRow` lays the same heading), a title over it, and parts over it in slots of the caller's measured height (an Arrivals group's head line and status, `LINE_GAP` apart) when it has them; the block's head runs from its top to the line's bottom, so all of that stays whole with the line; then its name in the list's name column (from its indent, one control tall, the caller's fitted words; or the caller's taller words in the cell, `row`, with the value and the actions beside it centred in that row), `S`, its value at the value column's right edge, then its actions (`LineAction`: each with its own key and its measured width), `S` apart. Beside the value they wrap to the first action's edge; under the name they start at the indent; wrapped rows stand `XS` apart, a control tall each. Every recipe that wraps a row of items places them from `wrap` (`WrapRoom` in, `Wrapped` out): its rects never leave the room, so no recipe keeps a copy of the rule. An action wider than a whole row takes a row of its own, its slot cut at the block's edge, and the action cuts its words there by its own one-line rule: every action stays in the block. Each action's slot is keyed by its action (`Laid::with_slot_keys`), so hiding an earlier action moves no focus. Parts under the line (a row fault) take slots of their own measured height, each after the column's gap. The list measures its columns and decides beside or under (two actions fit); the recipe lays the rest before paint, and the host draws its controls in the slots (an action in its slot, an amount field in its action's). A host that keeps its layouts gives each action its words, keyboard hint and icon as laid (`Action::laid_words`, a `LaidAction`): they hold no colour, so the action's kind and state colour them as it paints, and a primary that paints as a secondary lays its own words. In a region the block holds the column's gap at its end (`tail`). |
-| Notice rows | `NoticeRow`, `NoticeRoll`, `notice_slot`, `check_height`; `outcome::row_fault_height` (layout 11c scope C) | A notice that came due with the steps it asks for (a Trackers Due row) is a measured block laid by `NoticeRow`: a group heading bound to its first row (SH9; the block's head; no space above it where it starts its column, as `design::heading`), then its words. A row with no roll and no check ends its words with its finish actions (`Done` and its menu) where they fit after the last line, on a line a control tall; else they take a line of their own at the right. Its rolls follow, each as wide as it measures with its blocked reason (Small, muted) `S` after it, wrapping at the edge by the one rule of a list's actions (`pane::wrap`, rows the column's gap apart); a roll whose action and reason do not fit the row together takes a row of its own, its action cut to the row and its reason on the lines under it, so every part stays in the block; then the results set in by `L`; then one check box per change, as tall as egui draws its words there (`check_height`). Each part stands the column's gap under the one before. The recipe lays it all before paint; the host draws the rolls, check boxes and finish actions in their slots (each roll's and check's slot keyed by its own key, so a control keeps its id when another goes) and keeps the layout, with the row's names and labels, by its revision, its measure, the font atlas's epoch and the theme. `outcome::row_fault_height` measures a `row_fault` before paint, for a recipe's slot (a tracker line's repeated-field warning). |
-| Fit-height region | `BlockRegion::fit_height` | Outside a `Body::Content` pane a region is as tall as the room it is given; a fit region is as tall as its blocks, up to that room (layout 11c, note C0-parts Part A). In a child of a shared composite (`PaneColumns::shared_task`) its scroll column then adds the height it hides, so the composite is measured by its blocks: a short list leaves the composite to its taller column and the footer follows it by `S`; a long one stops at the room and scrolls, every row whole at its edge (`ScrollColumn::fit_height`'s rule, for blocks). In a `Content` pane a region already draws its whole extent in place. |
-| Check lines | `CheckLine`, `check_slot` | A checkbox whose words wrap, as a measured block of a list (layout 11c, note C0-parts Part C): its height is `check_height`'s, the one rule a notice row's checks use (the icon and its gap, then the words wrapped in the rest, at least an interact height), and the host draws egui's own check box in its slot, so its press target (the box and every row of its words), its role and its name are egui's. A line that cannot be chosen lays its words alone, muted, in Small type, with no box. |
-| Composite columns | `PaneColumns` (`shared_task`, `independent`; `fixed`, `resizable`, `rest`, `trailing`, `least_height`; `edges`, `edges_in`), `PaneEdges` (`header`, `child_header`, `show_children`, `outer`, `child`, `child_within`) | Children side by side in one pane (layout step 7). `edges` resolves every child's edges once, before anything of the pane paints, from the room and this pass's splitter drag or key; the header (`header`, the composite's outer edge: its children and gutters, never the window), a child's toolbar (`child_header`) and the children (`show_children`) all use those edges, so they share one right edge in every pass of a drag. Edges kept to a later pass or used in another room are refused and resolved again. A shared task in a `Body::Content` pane is as tall as its tallest child's whole content (each child's scroll columns add what they hide), up to the room left and at least its `least_height` while taller, so the footer follows the taller child by `S` and a resizable child's rule ends there; in any other body it fills the room left. Independent children are whole-height hosts of their own panes and footers. Children are still drawn by a closure: each host is a counted `composite-child` row of the legacy freeze until its children are closed blocks |
-| Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px reserves 24 px of layout width from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the underline covers only the word, and the next item starts after the whole target, so two short links side by side never share a press area. An icon before the words is not part of the underline: draw it as its own glyph, as `status_link` does |
-| Number | `number`, `number_width` | Right-aligned digits |
-| Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
+Each part's doc comment says more. Before you add a part, look for it below. A page's own copy of a kit
+part is merged into the kit.
 
-All form labels use sentence-case muted `Small`, including `field`, `labelled_field` and `small_field`. Use `Label` capitals for group and column headings. A heading over one input is a field label, including `Group notes` and `Read-aloud and notes`. These two notes fields come from one builder (`notes_field`): an `S` inner margin, and the frame ends at the column's right edge. An empty section inside a list page
-has one muted line below its heading, with no zero count or full empty state. Tabs and page headers omit zero
-counts. Roster, Members and Recordings use an underlined tab with a muted, nonzero count. Overflow tabs use a quiet
-caret menu without a button border; it names and underlines the selected page when that page is inside. Fight and Packages
-menus put the caret after the word. Keep remains the default focus when closing could lose work.
+### Theme
 
-A drop-down menu stays inside its owning pane and clip. A header above a split passes the
-list pane’s current room through `Dropdown::within`; it cannot widen the part’s room. Timeline's
-header rooms use the current header clip and start on the control's row, so their menus open
-below with the part's height cap and inner scroll. A long session menu can cover the list footer
-while open; a deferred menu API would bound it. An explicit room prefers the full label's one-line width,
-clamped to that room; default-room menus retain their width policy. A short
-room shows the whole rows it can hold and scrolls inside. Below one row, the menu closes and
-returns the keyboard to its control. Open row metrics follow the words, fonts, width and scale;
-a closed control does no row measurement.
+`gui::theme` has `colors()` (every token of `design::tokens`, plus `backdrop`, `shadow` and `selection`),
+the spaces `XS S M L XL XXL`, `ICON_SLOT`, `RADIUS_CONTROL`, `RADIUS_LAYER`, `HAIRLINE_WIDTH`,
+`FOCUS_WIDTH`, `MARK_WIDTH`, `LINE_GAP`, `MIN_TARGET`, `SCROLL_BAR_WIDTH`, `SPLITTER_WIDTH`, the rail,
+panel and measure widths (`READER_MEASURE`, `LIST_MEASURE`, `FORM_WIDTH`, `PANEL_MIN_WIDTH`, …),
+`Density::{Glance, Scan, Read}.control()/.row()`, `RunScale` (`RUN_COMPACT`, `RUN_REGULAR`, `RUN_LARGE`,
+`fit`) and `Type` (the 19 roles). Set text with `.ty(Type::Body)` and icons with `.icon_font(Type::Body)`
+(trait `TypeExt`). `theme::install` loads the fonts and sets gpui-component's theme from the tokens. The
+colours are `design::Color` tokens (8-bit sRGB); `theme::color` turns one into a GPUI colour, and
+`colors()` is built from them. A test (`the_gpui_theme_is_the_design_tokens`) keeps the GPUI colours, type
+and sizes equal to `design::tokens`.
 
-A closed drop-down shows its chosen value in regular `Body` weight. The `Dropdown` part owns
-that font, including editable and empty values; callers supply no weight. A short chosen label may
-paint in the control while the menu, hover and accessible value keep the full label.
+### Motion and scrolling
 
-Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and
-come first. Only one accent-filled primary action can be visible. An open run's strip owns primary `Next turn`
-on other pages; `Back to run` is secondary. Use a `status_link`, such as `Running · Round 2`, to open its
-state. An on toggle uses `selected`, its word and an icon or check, without accent fill. A menu's selected choice has a check
-before its words, and the other choices keep that slot empty, so every choice's words start at one x. Use red only for an
-action that loses something. Keep Delete and Remove in row menus.
+- Text cursors do not blink. Motion draws the eye during long sessions, so no scroll that the app makes
+  is animated (R43): it lands in one jump. The DM's own wheel and drag scroll as usual.
+- The app moves a column by itself only for a reveal or a typed jump, from a closed list (ruling M18).
+  The kit part is `kit::reveal` (`reveal::revealed(element, &handle, align)` for one frame,
+  `reveal::reveal(&handle, align)`); a Markdown view jumps with `.jump_in(&handle)` and
+  `markdown::jump_here`. The list:
+  - A form that the DM opened comes whole into view once, in the column of the pressed control (R34,
+    R44, R46).
+  - A press whose result comes later (issue #698) waits, and moves nothing, until the result comes.
+  - `LinkedHeading`: a reader opened at a linked section shows that heading at the view's top (the
+    World, Lookup and Library readers). A recording's text opened at a timeline marker shows the
+    marker's line at the top. It is measured again until it lands, so a resize before the column moves
+    keeps it right.
+  - `ListedRow`: a list opened at a row shows the row before it at the view's top (the Timeline's list,
+    M0556). History's opened run brings its row, its Read-only line and its Final state whole into view,
+    also when another page opened it (M0194).
+  - `AddedTarget`: the card that took what the DM added from another column (an encounter's group that
+    a creature from the Add pane went to) comes whole into view, once for each add (M0226).
+  - `CheckResult`: a journey's check whose result an act just wrote (a roll, an entered number) comes
+    whole into view (the Timeline detail, M0546).
+  - `OpenMenuControl`: a row's `⋯` whose menu is open when its pane shrinks comes back into view, so the
+    menu does not hang from a control that the DM cannot see (the Encounters lists, M0259).
+- The least scroll keeps a whole control in view: nothing when it is whole in view; else its nearer edge
+  at the view's edge; its top at the view's top when it is taller than the view (M-P0.25).
+- One rule ends each of these requests and each retry (Sol 2-011). The DM's input to the request's own
+  column ends it: a wheel over it, a press or drag in it, a key that moves a view or a caret or presses a
+  control, typed text. Input to another column never ends it, and a focus move is not an end. So a
+  column stays where the DM leaves it (review of PR 770).
+- A request for the keyboard from another page needs no reveal of its own. The Settings sign-in field
+  takes the focus, and its pane brings it whole into view by the least scroll (M0541). A failed Connect
+  in Settings brings its kept cookie, its cause and Connect whole into view (M0279).
+- The Timeline detail's form scrolls in its own pane's column, with its header drawn before the pane
+  (M0559). Wide, the pane has no footer (its results stay in the list's footer). Narrow, the pane holds
+  the open event's footer. Another event, a link or the page opened again opens the form at its top
+  (M0560). A filter or a search changes only the list, so the form keeps its place. While the header and
+  the footer leave the form less than one control row, the header scrolls with the form.
+
+### The kit
+
+Ids are `impl Into<ElementId>`, words `impl Into<SharedString>`, and handlers
+`Fn(&ClickEvent, &mut Window, &mut App)` unless the row says otherwise (`cx.listener` makes them).
+
+| Part | Call | Use |
+| --- | --- | --- |
+| Text (`text`) | `text(Type, Hsla, words) -> Div`, `one_line(Type, Hsla, words)`, `text::path_line(Type, Hsla, path)` (a file path cut at its start), `icon(glyph, Type, Hsla)`, `label(words, count)`, `heading(Heading::{Group{title,count}, Section, Panel, Name}, first: bool)`, `rule()`, `gap(Pixels)`, `text::any(element)` | All words. `Label` is set in capitals for you, with its tracking |
+| Button (`button`) | `Button::{primary, secondary, quiet, destructive}(id, label)`, then `.icon(glyph)`, `.key("Ctrl+S")`, `.hint(words)`, `.blocked(Option<reason>)`, `.density(Density)`, `.selected(bool)`, `.plain()`, `.line_start()`, `.full_width()`, `.focus_handle(&FocusHandle)`, `.name(words)`, `.on_click(f)` | One primary in a view. `line_start` for a quiet action that starts a line, unless the line starts beside a splitter (the frame would touch it). A primary's key is in its words' colour, so it reads on the accent. With `focus_handle` (a dialog's safe default) it shows the focus ring whenever it has the keyboard, also when a press opened the dialog. Found by its words, its `.name`, or `id:<id>` (`button::element_name`). See [Buttons and actions](#buttons-and-actions) |
+| Icon button | `IconButton::new(id, glyph, name).hint(words).toggled(bool).disabled(bool).on_click(f)` | `⋯`, `×`, a view toggle; never an action that needs words. `disabled` draws it at the disabled opacity and ignores its press |
+| Link (`link`) | `Link::new(id, words)` or `link(id, words)`, then `.small()`, `.wrap()`, `.hint(words)`, `.name(words)`, `.on_click(f)` | A move to another place (a note, a file, a page), never an act that changes data. Accent words, underlined, the focus colour on hover; at least `XL` wide and 24 px high. One line by default; `.wrap()` for words of unknown length (a note's name, a path): in a row it gives way to the row's other parts and wraps there |
+| Text field (`field`) | `TextField::new(id, value).placeholder(..).name(..).masked().disabled(bool).width(px).on_change(\|&str, window, cx\|).on_enter(f).on_escape(f).on_blur(f)`, `.focus(bool)` / `.focus_selected(bool)`, `.text_type(Type)`, `.trailing(element)`, `.search()` | One line. `search()` for a search field: the magnifier in muted at its left, then the words. `trailing` puts a control inside the frame after the words: an editable combo's chevron (the Library's folder fields, `forms::folder_combo`). `text_type(Type::Heading)` for a name that heads its editor (one `Scan` control high). Two-way sync with your `String`: give the value each frame, take edits in `on_change`. `focus(true)` takes the keyboard with the caret after the words (a field that opens for typing); `focus_selected(true)` takes it with all the words selected (a rename that a press opened). Give either for one frame. `on_escape` stops the press there: the window's Escape does not also run. See [Text fields](#text-fields) |
+| Editor | `TextEditor::new(id, value).placeholder(..).name(..).rows(n).mono().text_type(Type).markdown_source().fill().focus(bool).handle(&EditorHandle).own_write(bool).on_change(f)` | Several lines that wrap; a press anywhere in its frame puts the caret in it. Its words are in its type: `Body` by default, `Prose` with `markdown_source()`, `Mono` with `mono()`; `text_type(Type::Prose)` for a note. `EditorHandle::show_words` is the field's own edit and keeps its Undo history; `show_other_words`, or a changed value without `own_write(true)`, ends it. `markdown_source()` styles Markdown where it is typed (`kit::markdown_source`: bold, italic, code fill, faint markup, accent links, a rule under each section heading) |
+| Editor handle | `EditorHandle::new(placeholder, window, cx)`, `.caret(cx)`, `.set_caret(byte, cx)`, `.select(range, cx)`, `.selection(cx)`, `.words(cx)`, `.show_words(words, window, cx)`, `.focus(window, cx)`, `.focused(window, cx)`, `.bounds_at(byte, cx)`, `.caret_bounds(cx)` | An editor state that the page keeps (in its `State`, by what it edits), to read and place the caret and to write at it. `bounds_at` places a menu at a character (the note's `/` menu) |
+| Comparison (`comparison`) | `DraftComparison::new(id, draft, disk).source().headings(draft, disk)` | A draft beside its changed file (`design::grouped_draft_comparison`): the count and heading, `Next difference`, aligned rows with the changed ones marked and a missing line hatched. See [Keeping a draft](#keeping-a-draft) |
+| Reveal (`reveal`) | `reveal::revealed(element, &ScrollHandle, Option<Align::{Least, Top}>)`, `reveal::reveal(&handle, align)` | Bring a row into view, for one frame, in a column that the page scrolls (`scroll_column_with`): a plan row after an add, a check's result after a roll. See [Motion and scrolling](#motion-and-scrolling) |
+| Field block | `field(caption, Option<help>, Option<error>, control) -> Div`, `help(words) -> Div` | Caption, control, help, error, then `L`. See [Fields and help](#fields-and-help) |
+| Value block (`value_block`) | `ValueBlock::new(HeadingRow::new(title).note(HeadingNote::..).action(Button), first).field(..).save_row(..).messages(Vec<Message>)` or `.end()` | One settings value: heading row, field, save row, its messages. Its stages are typed: a field comes before its save row |
+| Fact (`fact`) | `fact::fact_line(label, values)`, `fact::words(label, values)`, `fact::tile_label(..)`, `fact::roll_tile(label, link)` | `Label: a · b` on its own line (no line ends at a dot). A stat tile whose value rolls. A label that holds its own number says `Str: 8` |
+| Stepper (`stepper`) | `Stepper::new(id, name, value, range).well(px).disabled(bool).change().grouped().on_change(\|&i64, window, cx\|)`, `stepper::well_for(window, digits)`, `stepper::digits(n)` | A value that the DM can change: `Decrease <name>`, a well to type in, `Increase <name>`. See [Editable numbers](#editable-numbers) |
+| Roll number (`roll_link`) | `RollNumber::new(id, words, Type, RollLink).entry(name).roller(Option<row>)` | A number that rolls (a sheet's modifier, save, skill). It asks through `rolls::ask_pressed` as a Markdown dice link does. With `roller` it rolls for that run row, else it previews |
+| Measure (`measure`) | `measure::width(window, Type, words)`, `icon_width(window, Type, glyph)`, `digit_width(window, Type)` | The width of words on one line, from GPUI's text layout, for a part that fits its content to its room (the party bar) |
+| Rows (`list`) | `Row::new(id, name).height(px).grows().selected(bool).on_click(f).child(..)`, `two_line_row(id, title, detail, selected)` | List rows with hover, selection and focus. `grows` makes `height` a minimum, for words that wrap |
+| Tabs (`tabs`) | `Segmented::new(id, options, chosen).small().on_select(\|&usize, window, cx\|)` | Page tabs and small exclusive choices: words with an underline, no pill and no fill (the chosen segment has no hover fill). Each segment is as wide as its words in their widest state (`Strong`), and its words start `S` from its left edge, so nothing moves when the choice changes. `.small()` for sub-tabs in a narrow pane (`Small` words) |
+| Checkbox (`checkbox`) | `Checkbox::new(id, label, checked).mixed(bool).name(words).blocked(..).on_click(f)`, `Switch::new(id, label, on).blocked(..).on_click(f)` | Yes/no settings. `mixed` draws the partly-chosen dash. Words that wrap stay inside the press target. A line that cannot be chosen shows its words alone, muted, in `Small`, with no box |
+| Menu (`menu`) | `MenuButton::new(id, Button).item(MenuItem::new(label).icon(..).checked(bool).blocked(Option<reason>).destructive().on_click(f))` | A row's `⋯`, `New ▾`. See [Menus, drop-downs and choices](#menus-drop-downs-and-choices) |
+| Status menu | `StatusMenu::new(id, Status).item(MenuItem)` | A status that opens a menu under it (`2 notes need fixing`) |
+| Drop-down | `Dropdown::new(id, name, options, Option<chosen>).placeholder(..).blocked(..).lock_when_blocked().width(px).density(..).small().focus(bool).command(MenuItem).on_select(\|&usize, window, cx\|)` | Choose one value. Its value is `Body`; `small()` only for the rail's campaign switcher (two lines of a long name). `lock_when_blocked` shows a lock in place of the caret and keeps the words in the text colour while it cannot change (the campaign switcher). `focus(true)` for one frame gives it the keyboard |
+| Popover | `Popover::new(id, Button, content).on_status(..)` | Content in a raised layer under a button |
+| Creature filter (`creature_filter`) | `FilterBar::new(id, &Filter, \|\| choices, cx).on_change(\|&Filter, window, cx\|)`, `FilterBar::menu_id(&id)` | The Filter menu (a submenu for each fact, the challenge's Lowest and Highest rows), a chip for each chosen value, Clear filters. `choices` runs only while the menu is open. The caller keeps the filter |
+| Menu layer | `menu::layer_for(&id, content)` with `menu::open_popup(id, window, cx)`, `menu::is_open(&id, cx)`, `menu::any_open(cx)`, `menu::close_open_popup(window, cx)` | A menu that code opens (a row's right-click menu): draw the layer after its element while `is_open` |
+| Section (`section`) | `Section::new(id, title, open).blocked(Option<reason>).on_toggle(\|&bool, window, cx\|).child(..)` | A `Strong` title after a caret. With `on_toggle` the caller keeps whether it is open; without it the section keeps that under its id, starting at `open`. See [Sections](#sections) |
+| Quiet section | `QuietSection::new(id, title).default_open(bool).child(..)`, or caller-kept `.open(bool).on_toggle(\|&bool, window, cx\|)` | A caret and muted `Small` words that open what most readers skip (Technical details), at a page's end. It keeps its own open state, unless the caller gives `open` and `on_toggle` (to build a costly body only while it is open) |
+| Dialog (`dialog`) | `Dialog::new(id, title).child(..).destructive(Button).action(safe).action(commit).on_escape(f)` | Modal tasks only. Draw it while it is open; it covers the window. One action line: red at the left, keep and commit at the right, commit last. When it opens, the first action at the right that is not the primary commit has the keyboard, so Enter keeps the DM's work. Tab and Shift+Tab stay inside it. A menu opened in it draws above it |
+| Message (`outcome`) | `Message::new(Tone::{Info, Success, Warning, Error}, words).small().detail(element).action(element).destructive(element)` | A message that no footer owns. Safe action first, `L` before the destructive one |
+| Footer messages (`messages`) | `kit::messages::lines(id, lines, cx.listener(\|root, pressed: &kit::messages::Pressed<A>, window, cx\| { if let Some(press) = pressed.take() { … } }))`, `kit::messages::message(id, line, on_press, small)`, `kit::messages::tone(design::Tone)` | Every pane footer's and save row's messages, from `design::outcome`'s plain lines. See [Messages and results](#messages-and-results) |
+| Status (`status`) | `Status::new(glyph, word, color).icon_color(c)`, `status(&Status)`, `status_link(id, Status).hint(..).on_click(f)` | Icon, word and colour; a status link's word is underlined. See [Status, HP and facts](#status-hp-and-facts) |
+| HP (`hp`) | `hp::readout(hp, max, current: Type, max: Type)`, `hp::readout_in_slot(.., slot)` (the maximum's slot as measured, for a line fitted by measured widths), `hp::bar(hp, max, temp, width)`, `hp::word(hp, max) -> Option<(icon, word, Hsla)>`, `hp::temp(temp, Type)`, `hp::hp_color(HpState)`, `hp::current_color(HpState)` | HP at a glance. Colour is never the only sign |
+| Portrait (`portrait`) | `portrait(Option<&Path>, name, size) -> Div` | A round picture, or the name's initial on a quiet disc |
+| Empty state (`empty`) | `empty_state(glyph, title, body, Option<action>)` | An empty pane or page: icon, serif title with no full stop (`Nothing planned yet`), purpose and one next step, at the top with normal padding. It starts at one y on every page |
+| Page header (`title`) | `page_header(title, Option<context>, Vec<AnyElement>)`, `page_header_with(title, Option<AnyElement>, Vec<AnyElement>)`, `title::actions(items)` | A page's first line, rule and `L`. `_with` for a context that is an element (a status). See [Title lines](#title-lines) |
+| Scroll (`scroll`) | `scroll_column(id, content)`, `scroll::scroll_column_with(id, &ScrollHandle, content)`, `scroll::sideways(id, content)` | A column that keeps its bar's lane whether or not the bar shows: its content ends one lane before its right edge, so nothing moves when the bar comes. The bar shows whenever the content runs past the column (not only while it scrolls) |
+| Virtual list (`virtual_list`) | `uniform_column(id, &UniformListScrollHandle, count, cx.processor(\|root, range, window, cx\| Vec<row>))`, `measured_column(id, &ListState, \|at, window, cx\| AnyElement)` | A long list that builds only the rows in view, in a column that keeps its bar's lane. `uniform_column` when every row has one height (Library entries, Timeline events); `measured_column` when rows have their own heights (World's headings and notes; `splice` the `ListState` when the rows change). Keep the handle or state in the page's GPUI state |
+| Panes (`panes`) | `Pane::new(id).header(..).footer(element).fixed().flush().scroll(&ScrollHandle).child(..)`, `Columns::new(id).column(width, min..max, pane).saved(key).rest(pane)` | Task columns with splitters; messages in the footer. `.saved(key)` keeps the DM's width after a restart (`library_entries`, `world_list_panel`, …). A saved column is the harness target `column <key>`. See [Panes and footers](#panes-and-footers) |
+| Edge column (`edge`) | `EdgeColumn::new(key, Side, natural, min..=max).page_keeps(px).name(words)`, `.width(room, cx)`, `.render(room, content, window, cx)`; `edge::column_width(key, cx)`, `set_column_width` | A side column with a splitter on its inner edge: the rail, the side panel, the run's panel. See [Columns and side panels](#columns-and-side-panels) |
+| Layer (`layer`) | `layer::attach(container, &id, match_width, \|widest, tallest\| element)`, `layer::room_start(lane)` / `room_end()` | Where a raised layer opens (menus, drop-downs and popovers use it). A part that owns a room other than `Pane` and `EdgeColumn` wraps its children in `room_start`/`room_end` |
+| Markdown (`markdown`) | `markdown(id, source)` / `Markdown::new(id, source)` | Every Markdown document. See [Reader parts](#reader-parts) |
+| Nav (`nav`) | `NavItem::new(..).detail(..).selected(bool).hint(..).name(..).on_click(f)`, `NavToggle::new(..).hint(..).on_click(f)` | The rail only: icon and word, an accent bar when selected. A toggle (Lookup, panels) has its own `Open` word, so it is not read as the current page |
+| Tooltip (`tooltip`) | `.with_tooltip(words)` on an element with an id (`WithTooltip`), `tooltip::tip(words)` | Hints and blocked reasons |
+| Target | `kit::target(element, name)` | Name your own pressable element for the harness |
+
+### Menus, drop-downs and choices
+
+Menus, drop-downs and popovers keep which one is open in a GPUI global (`kit::menu`), so there is no
+open flag in a page's state. `kit::menu::any_open(cx)`, `open_popup(id, window, cx)` and
+`close_open_popup` exist for keys.
+
+- A layer opens under its trigger, or above it when it does not fit below and there is more room above.
+  It stays inside the pane body (above the footer, clear of the scroll bar's lane) or the side column that
+  holds the trigger, else inside the window. It never lies over a splitter or a scroll bar. A long layer
+  scrolls inside itself, and in narrow room its words wrap.
+- A menu is never wider than its room. A menu that opens at a place rather than a control (Sessions' `/`
+  menu at the note's caret) keeps the same room, side, width, keys and close rules. Its caller opens and
+  closes it, and it opens above the place when there is no room below.
+- A menu of several submenus (the creature Filter's facts, M0051) shows each submenu as a row of the menu
+  with its word and caret. Its choices open under the row, inside the menu, so none lies over the next row
+  at any width. Each row opens and closes on its own, so a press moves no row above it and the pressed row
+  stays under the pointer (G1b). The rows scroll in the menu when the open ones are taller than 60% of the
+  window. Each row tells a screen reader whether it is open, and Tab reaches each row and then its open
+  choices. A click inside keeps the menu open; a click outside it or Escape closes it.
+- One submenu in a menu (Move to) matches quiet `Read` actions: `S` horizontal padding, `Strong` type and
+  `Read` height. It ends with the icon set's muted caret (`icons::NEXT`), as sections and drop-downs do.
+  It opens at the right of its menu when it fits inside the pane with `S` to spare, else at the left. In a
+  pane too narrow for either (a 316 px column), it opens below its own row (above it when it does not fit
+  below), so it never covers the row that opened it and the parent menu stays reachable.
+- A row menu is a quiet `⋯` at the right end of the row's content (never at the pane's edge when the row
+  is narrower than the pane), named `More actions for <name>`. It holds Remove and Delete. It opens under
+  the `⋯`, and ends at the `⋯`'s right edge when it would cross the pane's splitter or scroll bar.
+- A note under a menu choice (why it is blocked, or what it does: `Already first.`,
+  `Clear the results first.`, `This run is open.`, `This recording is in use.`) starts at the choice's
+  words, ends `S` before the menu's edge and wraps there. The menu takes its width with the note. A
+  blocked reason never spreads its words, as justified text does.
+- A choice of a menu, drop-down or list shows the check (`icons::OK`) in a fixed column when it is
+  selected. Every choice keeps that column, so every choice's words start at one x. Radios, checkboxes,
+  toggles (`Button::selected`) and tabs (`Segmented`) are other parts. A blocked choice shows its reason
+  under its words and takes no press or keyboard focus.
+- A choice never takes more width than its column gives. In a column it takes the column's width; on a
+  line it takes its words' width, at most the rest of the line. A menu is as wide as its widest choice,
+  and never wider than its room. Fixed choice words are the app's own. Words from the DM's data (a name,
+  a path, a title) wrap at word boundaries. Only a word wider than the menu's room ends in an ellipsis,
+  and the accessible name keeps the whole label.
+- A drop-down is a field-like control with the chosen label (cut at its end, whole on hover and in its
+  accessible name), a caret and `Read` height. The `Dropdown` part owns the font of the chosen value
+  (regular `Body`, also for editable and empty values); callers give no weight. A short chosen label may
+  show in the control while the menu, hover and accessible value keep the whole label.
+- A drop-down's list opens under it (above it when it does not fit below, ending above the field's
+  caption, so it never covers the words that name the choice), as wide as the control, inside the body
+  that owns it. A list taller than its room scrolls inside itself. A short room shows the whole rows it
+  can hold. Below one row, the list closes and gives the keyboard back to its control. Rows are at least
+  `Read` height and wrap their words inside the list. Groups of choices have a rule between them
+  (`All`, then `D&D 2024` and the packages). One command may follow the choices below a rule
+  (`Add campaign`).
+- With the keyboard: Enter or Space opens the list on the chosen row; the arrow keys and Tab move, and
+  the focused row is always in view; Enter or Space chooses; Escape closes. Focus then goes back to the
+  control. A blocked drop-down closes its list, takes no choice or command, shows a lock and says why on
+  hover and in its accessible description.
+- A header above a split gives a drop-down the list pane's current room; it cannot widen the part's
+  room. Timeline's header menus open below on the control's row, with the part's height cap and inner
+  scroll.
+- Words on hover alone are a tooltip. A tooltip of typed lines (a `Strong` title, `Body` words, a muted
+  `Small` detail, words with their own colours) is up to 360 px wide and shows on hover and while the
+  control has keyboard focus. Its lines are also the control's accessible description.
+
+### Buttons and actions
+
+- A button is never wider than the room it is given. A `line_start` button may also hang its padding and
+  icon in the gutter. In less room it gives up its keyboard hint, then its words (its icon alone,
+  centred), then its icon. Nothing it holds paints outside its rect.
+- An action whose words must all show (a repair that names a file, World's
+  `Make <file> a separate note`) wraps its words in its room and grows taller, with its own padding,
+  border and target. Words that fit stay on one line.
+- `.blocked(reason)` disables an action and gives it a hover reason and an accessible description. For
+  one blocked control, show the reason beside it in `Small` words, then an `L` gap before the next action.
+  `.key("N")` shows the key beside the word.
+- A split button is a default action, then a caret menu for other actions.
+- Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet
+  and come first. Only one accent-filled primary action can be visible. An open run's strip owns primary
+  `Next turn` on other pages; `Back to run` is secondary. A status link, such as `Running · Round 2`, opens
+  its state. An on toggle uses `selected`, its word and an icon or check, without accent fill. Use red only
+  for an action that loses something. Keep Delete and Remove in row menus.
+- Every focusable kit control is a Tab stop with an accessibility role and name (`role` and
+  `aria_label`; a button's hover words or blocked reason is its description): Button, Link, CheckBox,
+  Tab, MenuItem, ComboBox, Dialog, Menu, Splitter. A blocked button or menu item is not a Tab stop. A
+  page element that the DM can press needs the same: `.focusable().tab_stop(true).role(..).aria_label(..)`,
+  or a kit part.
+- A link has the `Link` role and is at least 24 px high. A word narrower than 24 px keeps 24 px of width
+  from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the
+  underline covers only the word, and the next item starts after the whole target. So two short links
+  side by side never share a press area. An icon before the words is not part of the underline: it is
+  its own glyph, as in a status link.
+- The step back through a reader's history is `Back` with its arrow before the word and `Alt+Left` after
+  it when it fits. No control's label is only an arrow (the lint's `arrow-label` rule). A back link that
+  starts a line holds its word at the text edge, then a return arrow `XS` after the word, with an
+  optional muted context after it (`Back to recordings  2026-01-01 19:00`, `All events`). The word is
+  always shown and is the accessible name. The arrow never hangs left of the word.
+- An Encounters editor's back (R38) is a line of its own above the editor's name row: one 28 px row in
+  every state, with the destination's word (Encounters, Plan, Session; also the accessible name) at the
+  text edge and the arrow after it. While a draft holds the editor, that draft's reason follows the link
+  in muted `Small` words (R35): its long form when it fits, else its whole short form, never wrapped or
+  cut. Both forms fit from the narrowest pane (316 px, `PANEL_MIN_WIDTH - 2·M`) up. The drafts that hold
+  it are a fixed recipe for each editor: the group, or the encounter, then a creature open beside it.
+
+### Text fields
+
+- A field has an accessible name and at least a 24 px target. Numbers are left-aligned, so the caret
+  stays off digits. Placeholders use faint `Body` words.
+- A field's id says whose text it edits. The kit keeps a field's caret, selection and text Undo under its
+  id, so the id comes from the object the field edits: its `Uuid`, or a run's participant by the run's id
+  and the participant's key (two runs never share a participant's field). Never a bare text, a path, a
+  name or a place in the layout: a save or a rename changes those while the DM types. A field that edits
+  one object of many (an event, a session, a member, a picker of an entry) is never a field that exists
+  once. A layout change (one or two columns, a form that opens above it) never takes the field's focus,
+  caret or selection. Two live fields never share an id.
+- When the program or another object replaced the field's text, its text Undo is dropped, so another
+  object's words never come back through Ctrl+Z.
+- A caller does not rewrite the bound text while the field has focus (a trim, a format, a clear). Keep
+  the typed words while it has focus and store the cleaned value.
+- A field's own edit of its text (a command typed in it takes its words out, words go in at its caret,
+  the page adds words to the open note) keeps its Undo history, so Ctrl+Z goes back through the edit.
+- The app's own write into words that the DM may be typing (the Notes panel's part of a note) keeps the
+  DM's Undo steps under it, each with the app's change, so Ctrl+Z takes back the typing and keeps the
+  app's words. When the change cannot reach a step, the history ends at the write, so Ctrl+Z never takes
+  the app's words out. A change that the field's owner did not make (a reload of an outside edit) ends
+  that history.
+- The search field: while it holds text, a quiet `Clear` shows inside the field's right end. `Clear`
+  empties it and gives it the focus back. Its frame is exactly the width given, and `Clear`'s place is
+  kept inside the frame from the first frame. So nothing moves or narrows while the DM types or deletes,
+  and the hint keeps the same room (whole words, or the start of a word that does not fit, with an
+  ellipsis).
+- An editor that grows with its text has a fixed frame (the field's well, its hairline and an `S` inner
+  margin) at the whole width given. The text and its scroll lane are inside the frame, and the frame and
+  a save row under it share their outside right edge. When the text does not fit, it scrolls inside the
+  frame, and the save row and the footer stay in view. The text view keeps at least 64 px (ruling L3). A
+  focused editor keeps its caret in view after a new layout (narrower or shorter). A caret that the DM
+  scrolled away from stays where it is. A newly selected note opens at its top. A place that the app
+  wrote (a note's rewards) comes into view, centred, once for each event, never every frame.
+
+### Fields and help
+
+- All form labels are sentence-case muted `Small`. `Label` capitals are for group and column headings. A
+  heading over one input is a field label.
+- Help under a field or a section is muted `Small` words that wrap at `READER_MEASURE`, whatever the
+  pane's width. A row's own detail line is not help: it is part of its row.
+- A value that something needs now (a setting that blocks processing) is the field's warning: the
+  warning icon in the warning colour and the words directly below the control, before the field's help.
+  The field's controls carry the warning as their accessible description, so it is said when the empty
+  field takes the focus. A missing value is never muted help (round 31 SR4/AR4).
+- A field block adds `L` from the last line of its help or error to the next thing, so help never reads
+  as the next field's. A caller adds no space after a field.
+
+### Editable numbers
+
+- A value that the DM can change has − and + beside the number in a bordered well. A value without a
+  stepper is read-only, so the two never look alike.
+- A modifier shows `+2` and `−1` with a true minus (`design::signed`) and reads back either form that the
+  DM types (`−3`, `-3`, `+2`, `2`). Every typed signed number goes through one reader,
+  `design::parse_signed` (a run's amounts and initiative fields, Arrivals' totals, a typed roll, a
+  tracker's Amount, World's initiative). A number field keeps digits, `+`, `-` and the true minus
+  (`design::number_char`), so the DM can type what the app shows. A field never drops a sign from what was
+  typed: `3−5` stays as typed and reads as nothing, so no other number is applied.
+- A count that can reach the thousands (`Stepper::grouped`) shows its digits grouped (`1,000`, as
+  `design::count` writes them) and reads back what the DM types with or without the commas.
+  `Stepper::change` shows a change (`+3`, `−1`) and its steps skip 0.
+- At a limit, − or + is disabled. When the caller gives the limit's reason, that button says it on hover
+  and in its accessible description. An enclosing lock's reason comes first.
+- The D&D Beyond sheet panel uses steppers for every value that Splat can send. In each of its blocks the
+  labels share one column (the widest label plus `S`), and every well has the widest value's width
+  (`stepper::well_for`), so each − and each + share an x.
+
+### Sections
+
+- A section's header tells a screen reader whether it is open. It is closed at first, and then stays as
+  the DM leaves it, under its id. The id keeps its state when the title changes (a count, a state word).
+  A section may start open the first time it is drawn (Add from D&D Beyond with no folders, an empty
+  campaign list's form, a short list of lines), and its owner may open or close it (Party's Combat sync,
+  a search).
+- A list whose rows open in place (a sheet's spells, each a fixed row with its name and its facts) draws
+  the body under the row at the row's edge.
+
+### Title lines
+
+A title line holds a title (and its context) and its actions, placed by measure, never by a fixed width.
+
+- The actions follow the title when all fit on its line, the first one's icon `L` after the title. Else
+  they all sit on one row under the title, when that row fits. Only when it cannot do the rows wrap at
+  whole actions, filled from the left. The title and its count go first; the actions get the width they
+  leave, so the count is never cut. A title with no actions that is wider than its line wraps clear of the
+  close icon (issue #567).
+- Every action keeps its word, at most 20 characters, so it fits whole in the narrowest pane (a side
+  panel at its minimum). There is no icon-only or hidden action. An action may show its key. An action
+  whose word does not say all it does has a hover hint (`Campaign entries` says "This campaign’s own
+  entries, in the Library"); a blocked action shows its reason on hover instead.
+- At the right end of the title's own line, however the actions are placed, stand in this order: a plain
+  status, a `⋯` menu, a view toggle, a close icon. The title and the actions keep clear of them.
+  - A plain status (a draft's `Saved` or `Unsaved`, a built-in template's `Read-only`) has the room of the
+    widest status that the line can show, so a change of its word never moves the actions. It is not a
+    control.
+  - A view toggle (the session list's show and hide) changes what the page shows beside it, never its
+    data. It is an icon target. Its name is its accessible name, and its hint (with its key) shows on hover.
+    It tells assistive tools whether it is on. The keyboard reaches it after the actions and before the
+    close icon.
+- A form's or a detail's own title takes the `Heading` type. What the title is may stand before it in
+  muted `Small` words, `XS` from the title (a Timeline event's `⚔ Combat`, or its icon alone for a day).
+  Its accessible name is the name, never the icon's glyph, and an icon alone says its name on hover.
+- A form's header keeps its actions at the line's end, before the status and the `⋯`: the Timeline
+  event's `Copy link` ends at the form's edge, on the title's line when everything fits, else on rows
+  under it, right-aligned.
+- A link action (Party's `Connect to refresh`) is a text link, at least `XL` wide and one `Read` control
+  high, so it stands level with the actions beside it; it has no icon, key or lock (M-Y0.2). A menu action
+  (the Library's quiet `Packages`; World's secondary `New ▾` with `+`) is a menu button in its action's
+  weight, its caret after its word. While it is blocked it is disabled with its reason, and an open menu
+  is not drawn. A status link (`3 files need fixing` in its tone) is the last piece and opens its menu
+  under it. A second status link that acts when pressed (World's `N notes cannot be read`) follows it.
+- When the line spans several panes, each of its menus keeps inside the column under its control.
+- A page's own header is at least a `Scan` control high, then a rule and `L` (`page_header`). The
+  Campaign page's header action follows the title, and `Campaign entries` says on hover what it opens.
+  Never repeat the campaign name.
+- A side panel's title row is a title line with its close icon.
+
+### Inline creation
+
+One order for every inline creation form (Settings' Add campaign, Manage packages: Add folder, Create
+package, Register a copy; the Library's New entry):
+
+- Fields and choices come first, each field with its help. The named Create follows the last field on
+  that field's line (after its side action, such as `Browse…`), centred on it. Choices
+  (`Choose for this campaign`) come before that last field. A field may hold its hint in place of its
+  caption; its label is then its accessible name.
+- Under the last field and its help is one kept line, as tall as the tallest reason that can block
+  Create, and kept when empty, so typing moves nothing: quiet Cancel or Clear at its start when there is
+  something to cancel, then the `Small` blocked reason, or, once nothing blocks the action, its preview
+  (`Will create …`). A preview keeps one line: a preview that does not fit gives way at its start
+  (`Will create …/modules/copper_coast`), and its hover and accessible name keep it whole. A resize may
+  change the line's height.
+- A form that ends with a drop-down has an action line under it: `Create`, then quiet `Cancel` at the text
+  edge, then the kept line. So neither the chosen value nor a preview's length moves Create. A form may
+  put Create and Cancel on that action line for a field too, so the field keeps the whole room.
+- A side action locks only with its reason: disabled, with the reason as its description and hover, and
+  its words on the kept line.
+- The form takes the width of its column, never past the clip. A side action and Create that do not fit
+  beside a field go under it, in rows of whole actions. Cancel that starts a line holds its words at the
+  text edge.
+- A text field may offer suggestions: while it has the keyboard or its words change, a menu under it holds
+  those that contain its words, and a press fills the field. The DM may still type anything. Escape closes
+  a chosen suggestion first.
+- Enter in a field presses Create when nothing blocks it. Escape presses Cancel when it shows. During an
+  input method's composition, Enter and Escape belong to the input method: they press nothing, and the
+  field keeps the keyboard so the commit lands. After Create, the caller gives the keyboard to what was
+  made, or back to the form after a failed act.
+- The Create action keeps its words while the DM types. Help under a choice or field has `L` before the
+  next field's label. Creation and copy fields share one right edge. Save rows keep their commit at the
+  right edge.
+
+### Lists and rows
+
+- A list row has a fixed height, or a least height when its words wrap. It paints hover in the current
+  frame.
+- A list whose rows hold facts and actions puts its actions in one column `L` after its widest facts
+  (I6). Spare width lies after the actions, never between the facts and the actions. When the widest
+  facts, `L` and the widest actions do not fit a row, every row keeps its actions at its far edge, or,
+  in a list whose facts are measured from data (a creature search), each row's actions wrap under its
+  facts at the text edge. A row's line breaks and height never depend on the action column.
+- Wrapped actions place by one rule: they never leave the room; beside a value they wrap to the first
+  action's edge; under a name they start at the indent; wrapped rows stand `XS` apart, a control tall
+  each. An action wider than a whole row takes a row of its own and cuts its words there. Hiding an
+  earlier action moves no focus.
+- A group heading belongs to its first row and stays whole with it. It has no space above it where it
+  starts its column.
+- A row's quiet actions stand at the right end of its words' last line when they fit there (at least the
+  row's item gap after the last word), else on a line of their own at the right. The last line is as tall
+  as the actions, and its words and the actions share its centre (M0574). Only Trackers' Due rows do this
+  (ruling M21).
+- A Trackers Due row (a notice that came due, with the steps it asks for) shows a group heading bound to
+  its first row, then its words. A row with no roll and no check ends its words with its finish actions
+  (`Done` and its menu). Its rolls follow, each with its blocked reason (`Small`, muted) `S` after it, then
+  the results set in by `L`, then one check box for each change.
+- A list item's mark (a bullet, a number, a task's box) stands in its own column. Each level is one step,
+  the mark ends at the words' left edge, and the words wrap at that edge: a wrapped line never starts
+  under the mark.
+- A table row has fixed cell widths and a hairline, for Markdown tables and sheets. It has no stripes. Its
+  height follows its text.
+- A block cut at the edge of its column shows a hairline where the column's rows stop. A row is never cut
+  between its lines while a footer ends the column. A focused row that a new edge would hide scrolls whole
+  into view. Tab, the arrows, Home and End reach rows that are out of view: the row comes whole into view
+  and its control takes the focus.
+
+### Status, HP and facts
+
+- A status is an icon, a word and a colour. `Recording` paints only its record icon in the `recording`
+  token, and its words and time in the text colour (R5). A status link opens where the DM can act. A
+  status that wraps starts every line after the first at the word, never under the icon.
+- A slot for a value that changes in place is as wide as its widest example or its widest status. A wider
+  value is cut with an ellipsis. It never pushes the next control.
+- A stat tile is a sentence-case muted `Small` label over a large value, with no box.
+- HP has fixed slots and a separate temporary HP. Every displayed HP fraction is compact (`62/62`),
+  through one formatter (`design::fraction`). Stored text and service payloads keep their format.
+- Headings add their own space: `L` (`XL` for a serif `Section` and a `Name`) from the item before, none
+  when first in their column, and `XS` under them, so a heading belongs to what follows. In a row a
+  heading adds none. `Group` is `Label` capitals with a muted nonzero count and no rule. Serif `Section`
+  headings belong to readers and stat blocks. `Panel` is a panel's, form's or band's own title in
+  `Heading` type and the text colour (Combat sync's `Short rest`, the run strip's `Round 3`). A status
+  heading starts with its icon and is all in the state's colour, named by its word
+  (`⚠ Hit points conflict`). `Name` is a sheet's own name in `Display` type beside its picture (Party).
+- Space between two things is one step of the scale (`XS` to `XXL`). No other amount exists. A reader's
+  block quote is set in by `L` for each level. A tree's rows (the World list) are set in one step for each
+  level. A line that keeps one height while what it shows changes (the Sessions record line while its
+  recording runs) takes its height from tokens, never from its content.
+- `design::number` right-aligns digits. `design::count` writes `1 entry` and `2,108 entries`; zero gives no
+  text, and empty unit words give only the number.
+
+### Columns and side panels
+
+- The rail, page lists and panels have a splitter on their inner edge: a band `SPLITTER_WIDTH` (10 px)
+  wide, as tall as the column. Tab gives it focus, shown by an accent line. Left and Right move its edge by
+  `L`. Home restores its natural width, which follows the window again. The chosen width is saved after a
+  drag or a key and kept across restarts. Each splitter has an accessible name (`Resize Lookup column`)
+  and key help. A column keeps the page's room (`page_keeps`, `RUN_LIST_KEEPS`). Content next to it
+  reaches the column's edge, with its text measured inside it.
+- Lookup, Notes and the run's panels share one width rule, with separate participant and fight tabs.
+- A pane that can hold an action at its text edge keeps a gutter at least `L` wide, so the target never
+  reaches a column splitter. The World page's centre has an `L` left gutter for this.
+
+### Panes and footers
+
+- Every result, reason and notice that comes and goes sits in its pane's footer, one footer for each
+  pane. A page whose body cannot show draws its message as the page's content, at the empty-state place,
+  not in a footer. The footer is absent when it holds nothing.
+- The body's top never moves. Below short content the footer sits `S` under it and is as tall as what it
+  holds, up to the pane's end. Else it is pinned at the pane's bottom and holds up to one third of the pane
+  (ruling Q-c). Only the body's room comes up while the footer holds a message.
+- When content goes on below the room, a hairline marks the footer's top edge, so a cut line reads as a
+  list that goes on. A footer below a short body has no hairline. Nothing in the body takes a press under
+  the footer or in the `S` above it.
+- Beyond its room the footer's words scroll inside it, beside a lane kept for its scroll bar. It is one
+  focusable group named with every message in its order. Tab reaches each control in it, scrolled into
+  view, and then the group. The arrows and Page Up or Page Down scroll it while it has focus, and the wheel
+  scrolls it. Its words sit `PART_INSET` (the focus ring's width and a hairline) inside its edge, so the
+  focus ring never crosses a letter.
+- A body control that gains the keyboard scrolls whole into view above the footer, with its whole field
+  block (caption, control, help, error) or its action's help line. The pane checks this again when its
+  room changes or the block changes, and scrolls only when the block is not whole in view. Nothing moves
+  while the pointer presses, holds or releases in that column. The DM's own wheel is never pulled back. A
+  block taller than the view is never pulled to its top by a click.
+- Room that an act will fill is kept before the act (ruling R30). While a field whose act writes a Log
+  line is open (Status, Place, Part of), the body keeps room under the note for one new Log entry
+  (`L`, a Log heading, `S` and two prose lines), plus `S` and two `Read` controls for a result line and
+  its Undo. When the keyboard comes to the field, the field, that room and the growth come into view
+  above the footer together. So nothing moves at the act.
+- A `line_start` action hangs its padding (8 px), and its icon slot if it has one, left of the text edge.
+  It is always whole in its own clip: where the room is shorter than its hang, it first gives up its left
+  padding, so its words stay at the text edge. A press on a splitter or a scroll lane belongs to that
+  control (ruling R19).
+- The pressed control stays under the pointer through the one change its press makes to the content
+  above it (Trackers).
+- A header that must not scroll is drawn before the pane.
+
+### Messages and results
+
+The data is in `src/design/` and the drawing in `kit::messages`. A page builds `Messages` as it would for
+any footer (`let frame = PaneFrame::new(); let mut messages = Messages::new();`: a kept line borrows the
+frame, so no line outlives the frame it was made in), then calls `messages.into_plain() -> Vec<PlainLine<A>>`. `RowMessages::into_plain()`, `KeptLine`,
+`FaultMessage` and `Notice::into_plain()` give one `PlainLine<A>`. An owner that feeds both a footer and a
+save row writes to `impl plain::Sink<'f, A>`. A view with its own choice look (a banner) takes
+`plain::ChoiceForm`. The kit draws the lines (`kit::messages::lines`), in the one order
+(`outcome::footer_order`).
+
+**Typed messages.** A caller gives data, never a tone, a closure or an action:
+
+- `Done`: a finished change, success tone, words `<Verb past> <object>.` and its Undo
+  `Undo <verb> <object>` from the same `Verb`.
+- `Said`: a finished change in the domain's words, success tone; the named escape for a result that is
+  not a verb and an object. A reviewer checks its Undo verb.
+- `Notice` (`Notice::new`: info tone; `Notice::warning`: what an act will cost, before it, in the warning
+  tone). A notice is never an error; an error is a fault.
+- `FaultMessage`: its tone comes from the fault's `Severity`: `CannotRead` and `NotSaved` are errors,
+  `NeedsFixing` is a warning. A fault's kind decides its severity in one place.
+- `Offer`: something the DM may do now about a kept entry (the Library's link offer): words in the info
+  tone, at least one choice, no Undo. It is never a success-tone `Said`, since nothing was done yet.
+- `Outcome::Refused` is legacy and counted (`design::results::STAGED`). A refused act is a `Refusal` on
+  its entry (ruling M7).
+- In a body, outside the footer, where the thing stands: `banner` (a notice that came by itself at the
+  top of a body), `row_fault` (a fault at its row), `PagePlaceholder` (the fault of a page or section
+  whose body cannot show, with its repair choices), `BodyMessage` (a notice, a fault, or a finished change
+  said where it happened, with no Undo; the Run's header notice and setup warnings, a group row's
+  faults), `PlacedResult` (a finished change at its place, with its Undo, for an owner that keeps that Undo
+  with its data: a Session plan row removed from tonight; a result line that keeps one `Read` control's
+  height so nothing below moves, M0561), `BodyFault` (a fault that the DM repairs where it is; each
+  `Repair` bordered on its own line; `BodyFault::whole` gives a cut value's whole sentence on hover and as
+  its description) and `FormOpener` (a fault whose one choice opens an inline creation form in its place,
+  the Library's `Register a copy`). `BodyMessage::compact` is a row message's size: `Small` words with
+  the tone's icon and bar, its choices in one band after the words, and no help or lock reason lines.
+
+**Words.** Words are a `Sentence`. `sentence!` checks the template when the program compiles: a capital,
+number or value first; `.`, `?` or `!` last; curly apostrophes; no code word such as `identity`, `cached`
+or `keyring`. Words from outside the app go through `Sentence::outside`, which adds the end mark and the
+capital (it leaves the first letter alone when the first word is a path or a file name). A message that
+names a file or a path uses `Sentence::outside_after(lead!("Changed on disk:"), text)`. A fault's words
+have one form, `<name> · line N: <Cause>` (`fault_words`): the cause starts with a capital, and `line`
+stays lowercase (R36). Choice words that hold the DM's data are `ChoiceWords` (`choice!("Repair {}",
+name)`): no `String` is ever a whole label. When the line is short, every object is cut to the same number
+of letters (at least three) with `…`, never the fixed words, and the action is named with the whole words.
+A choice may give shorter forms of itself (`ChoiceWords::or_shorter`): a form gives up a whole part, never
+a piece of one. `clippy.toml` lists the escapes (`Sentence::outside` and the macros' helpers); each use
+carries one reviewed suppression on its innermost function, counted for its file in
+`src/design/lint_allowlist.txt` (`ban-allow`).
+
+**Undo.** Undo comes first, quiet with its icon, its words at the message's words. Its words are typed
+(`UndoStep`: a `Verb`, an optional object, and the joining word from the verb's table, `Verb::join`), so no
+caller writes Undo words: `Undo discard of Bridge Ambush`, `Undo remove Take seal`, `Undo tick`. A change's
+Undo names the field by its name on screen when one field changed, else the note (ruling R16). Its
+accessible name is always the whole form. Its visible words are the whole form when the line has room,
+else the short form for a verb with a joining word (`Undo discard`), else the whole form cut only in its
+object. The only Undo of its verb in its footer (ruling M9, `UndoStep::alone`) shows its whole form
+wherever it fits, and else gives up its whole object. An Undo with no object (`UndoStep::verb`) is counted
+for each file. A result whose object comes first (`“…” ticked in Horn Rings.`) is
+`Done::new(Verb::Tick, …).object_first().within(name)`.
+
+**Choices and locks.** Choices follow `L` after the Undo on its line when all fit, else on the lines under
+it from the words. A `Choice` is bordered, a `Primary` filled, a `Lose` red with exactly `L` before it, a
+`Link` a link. A message may hold one primary choice, the act the DM most likely takes next, where nothing
+else on the screen is primary (a recording alert's `Record again`, the record line's `Start recording`, an
+empty Notes panel's `New session`). A choice may say what pressing it does (`Choice::help`, ruling M8): one
+help line `XS` under it, painted, never only on hover, and also its accessible description. The next safe
+choice starts `L` below that help. A message whose choices have help draws each choice on a line of its
+own; a red choice stands exactly `M` below the line before it. `MessageChoice::Dismiss(Lost)` is the close
+icon, at the right end of the message's first line; `Lost::TypedWords` records a `Done` with its Undo
+(ruling R3). An Undo or a choice may carry a lock: `.blocked(reason)` for as long as it is drawn, and
+`.locked_when(condition, reason)` for a lock that comes and goes, which keeps the reason's line while it is
+open so nothing below moves (ruling R29). A locked control is disabled, with its reason as its description
+and in muted `Small` words on a line of its own at the message's words. A locked Undo keeps its place. A
+locked control gives no press.
+
+**Presses.** A press is a `Press { id, ticket }` (`PlainLine::press_undo()`, `press_choice(at)`). The id is
+the caller's kind of action. A kept line's ticket reaches only the entry that the line showed: the store
+acts by it (`Results::undo_by`, `use_press_by`), and a replaced or ended entry is `ByTicket::Gone`, so
+nothing changes. A kept line's controls take their ids from its ticket, so a result that comes or goes
+above it moves no focus onto another result's control.
+
+**Order.** One function sorts every footer and every save row's messages (`outcome::footer_order`): the
+newest failed answer to the DM's last act first (one for each footer; ruling Q-x). When that act was a
+press of a kept line and the footer grows down, the answer stands directly under that line, so the line
+keeps its place under the pointer. Then a refused attempt kept on its result while it is the newest answer
+(ruling R42); then results with a live Undo, newest first; then reasons (Save's reason, a parse error, a
+disk failure); then other notices, then results with no Undo, newest first. Standing lines (faults,
+warnings, reasons, notices) never move for an answer. A state word stays on the save row. A fault that
+belongs to one row stays on the row.
+
+**Kept results.** `Results<Owner, T>` (`design::results`) is one store for each kind of kept result (a
+result with Undo, an offer). A page whose kinds each hold one result keeps one mark store for them, with
+the data beside it behind one boundary that changes data and mark together (Encounters' `KeptResult`;
+Library's `LibraryKept`).
+
+- `record` at the action issues its order, and the entry keeps it, so a draw cannot issue one. A new
+  action of the same owner ends its earlier result. Each kind says what each end event does to it
+  (`Ends`: the owner changed, the disk changed, its press). An Undo leaves the store only when it works.
+  A result shows only in its owner's scope (campaign or content root).
+- The store's `revision()` advances at every change that a view reads, and never at a read. A view keeps
+  a `Projection` of a result (its words, tone, Undo, lock and choices, with no ticket), made again only
+  when the revision, the owner key or the owner's inputs changed. Only `Results::present` with the live
+  store turns it into a `KeptLine` with its ticket; it refuses a projection from another store, revision,
+  key or input (ruling L9, `docs/design/retained-results.md`).
+- A kind that ends by itself declares `Kept::LIFE`, is recorded with `record_timed` (which asks for a
+  repaint at its end), and ends in its owner's update (`expire`). No reader and no footer reads the clock.
+- An owner that must revise its own result on an event that is not a press (the Timeline's removal
+  follows the run's updates, M0543) records it with `record_held` and revises with `revise_held`: only
+  that entry, never a newer one of the same owner. `revise` by owner is banned.
+- A refused act's answer is a `Refusal` (`design::results::refusal`, ruling M7): an act that failed and
+  changed nothing (Start fight, Continue fight, Carry over, the plan's scenes, links and run files, a
+  tracker's acts and its history, Add to fight). It has three parts, each a bounded enum whose words the
+  part writes: what was not done to which thing (`FailedAct`, `Thing`), why (`Cause`, which alone gives
+  the tone, R41: a file or folder that cannot be read or written is an error; a change, a missing or
+  replaced file, a place another file now holds, or an app rule that the act did not meet is a warning),
+  and one next step (`Recovery`; R45: the act is not offered again). The words are
+  `<act>. <cause>. <next step>.`: `No fight started from Shrine of Cinders. Splat cannot read the file of
+  Cinder Wolf. Fix Cinder Wolf in Library first.` At a tracker's own limit, and when Continue fight or
+  the Undo of an ending is refused after the fight's encounter was deleted, the DM's only choice is not
+  to act, so the answer ends at its cause (`Refusal::at_limit`, rulings M13 and M15; counted). A tracker's
+  refusals take their cause from `splat_campaign::trackers::Refused`, which holds names and no words. A
+  name is a checked `Name`, never blank; an encounter's rows are `Rows` (`the 2 Cinder Wolf rows`).
+
+**Per-change cache.** `Memo`, `Memos`, `Revised`, `Revision` and `Measure` (`design::memo`) are a cache
+keyed only by revisions. A revision advances only on a stated change: `Revised::revise` when its closure
+returns `Changed::Yes`, `Revised::set` when the new value differs. A pointer address, a frame count or an
+input epoch is not a key. A fitted or measured text is kept with its owner's revision and a `Measure` (its
+room, font, the theme's font generation and the display scale), never a hash of its content. An owner
+with many rows keeps one entry for each row in `Memos` and drops the rows it no longer shows with
+`retain` (ruling M6).
+
+### The run's lines
+
+- The run's first line holds the round, the current turn's name, `Add` and `Next turn`, fitted by one rule
+  (`design::turn_heading`). Ruling R22: in a line that holds a name, a key letter gives up its room before
+  the name is cut: `’s turn` gives way first, then `Next turn`'s `N` and its room, then the name's words
+  (whole words, then the first word's letters). With Lookup open the letter does not show and its room
+  goes with it. The fit is chosen again only when the data or the metrics change.
+- The run strip on other pages (M0274, M0275) fits by the same rules: its title (`Round 3`, or the run's
+  state and name), `<name>’s turn` in the turn colour and `Next: <name>` in the next colour, then its end
+  (Next turn, Back to run and the statuses), right to left. `Next: …` goes first; then the turn's name
+  gives up whole words, then letters, never all of them (at least its first letter and copy mark); the end
+  never shortens. A shortened piece keeps its whole words as its name and hover.
+- The Add strip has `Add` in its own `Label` column and one line of quiet icon-and-word buttons. It shows
+  all seven actions when they fit. Else it keeps Fight, Group (plan only) and Long rest, and puts Day,
+  Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names
+  its actions. A line of More alone (the plan's `Scene`) comes last and takes no part in the fit, so no
+  action moves for it. The strip stays on one line.
+
+### Other parts
+
+- A drag source is a grip that carries a payload while dragged (none when the item cannot move), with the
+  grabbing cursor and a ghost by the pointer: the icon and words in the accent colour on a raised plate,
+  `M` right of the pointer, kept inside the window.
+- An image viewer shows an image in a modal over a rail-coloured backdrop, with Close (Esc) and its name.
+  A click on the image closes it. A known size (from the file's header) sizes the modal before the image
+  loads, fitted to the window and never grown.
+
+### Known gaps
+
+The GPUI app does not yet meet these rules:
+
+- A splitter of `kit::Columns` (gpui-component's) cannot take the keyboard. Only the edge columns (the
+  rail, Lookup, the session notes and the run's panels) move with Left, Right and Home. Some columns do
+  not save their width yet (`timeline_detail_panel`, `session_note_frame`, the encounter editors' Add
+  column).
+- Reader text cannot be selected or copied, and links cannot be reached with Tab (GPUI's
+  `InteractiveText` has neither). A dice link or tile has no right-click mode menu (Shift and Ctrl still
+  choose advantage and disadvantage). A wide table's header does not stay at the top while its rows
+  scroll. Images do not open full size. A lone action tile keeps 208 px instead of the row's width.
+- Markdown source where a note is typed (`TextEditor::markdown_source`) has one size and face for each
+  editor: headings keep the prose size (bold), code keeps the prose face, and a `splat:` mark stays whole
+  (faint) and does not fold to `⋯` off the caret's line.
+
+### General rules
+
+All form labels use sentence-case muted `Small`. Use `Label` capitals for group and column headings. A
+heading over one input is a field label, including `Group notes` and `Read-aloud and notes`. These two notes
+fields come from one builder: an `S` inner margin, and the frame ends at the column's right edge. An empty
+section inside a list page has one muted line below its heading, with no zero count or full empty state.
+Tabs and page headers omit zero counts. Roster, Members and Recordings use an underlined tab with a muted,
+nonzero count. Overflow tabs use a quiet caret menu without a button border; it names and underlines the
+selected page when that page is inside. Fight and Packages menus put the caret after the word. Keep remains
+the default focus when closing could lose work.
+
+An open menu or drop-down measures its rows from the words, fonts, width and scale. A closed one measures
+no rows.
+
+### The save row
+
+`design::save_row` (`DraftState`, `SaveWord`, `SaveWeight`) decides the state word, Save's weight, why
+Save waits, Discard and the campaign-switch reason. The caller says what is true of the draft. `Ctrl+S`
+follows `DraftState::can_save` through the root's save owner (`gui::pages::save_key`). The root's `Save`
+binding is the only `Ctrl+S` binding: `design::results::STAGED` counts it, so a page cannot add its own.
 
 A save row keeps its state and quiet `Discard` at the left and `Save` at the right. A draft that Save's own check
 refuses says `Invalid`, changed or not: validity comes before whether the text changed. An encounter draft is
@@ -341,17 +866,18 @@ reason after Unsaved and Discard in the save row. While Save is blocked, Discard
 says `Discard to switch campaign.`; while Save is open it says `Save or discard to switch campaign.` Reserve its height so the first edit moves no content. Run
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
-A quiet action that ends a line of text, such as the Last time line's `Carry over`, uses `in_line`: it is
-24 px high (`XL`), as a link is, so the line keeps the height it has without the action.
+A quiet action that ends a line of text, such as the Last time line's `Carry over`, is 24 px high (`XL`), as
+a link is, so the line keeps the height it has without the action.
 
-A quiet action at the start of a line uses `line_start`: its words start at the text edge of the line above,
-and its padding hangs `S` into the gutter. A back link at the start of a line is `TitleLine::back`, never a quiet action with a back icon. Outside a message, such an action has no icon (Lookup's `Show N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
+A quiet action at the start of a line uses `Button::line_start`: its words start at the text edge of the
+line above, and its padding hangs `S` into the gutter. A back link at the start of a line is the back link of
+[Buttons and actions](#buttons-and-actions), never a quiet action with a back icon. Outside a message, such an action has no icon (Lookup's `Show N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
 and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
-(`undo_message`, `actions_message` and a typed message's choices), an action with an icon that starts a line
+(an Undo or a typed message's choice), an action with an icon that starts a line
 hangs its icon into the message's own icon column, so its words start at the message's words. An Undo on its
 own line below its message keeps its target inside the message's column: it never starts left of the
 message's bar, so in Lookup, whose reader starts at its scroll area's edge, no part of it is cut. A
-choice without an icon on its own line below a result message (`message_choice_row`: `Use the copy in
+choice without an icon on its own line below a result message (`Use the copy in
 encounters` below a package's registration message, and `Build an encounter` below a copied campaign's) has
 the secondary border, as the same choice beside a plain result has. It sits below the result and its Undo,
 and its border starts at the message's words. On a result, only Undo is quiet. In a
@@ -382,8 +908,8 @@ below, at the warning's words. A reader's
 file line below its title is not a message action and keeps its place.
 A pane that can hold such an action at its text edge keeps a gutter at least `L` wide, so the target never
 reaches a column splitter. The World page's centre has an `L` left gutter for this.
-Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
-icon on the message line, or below only when it is wider than the room after the words (the line is measured
+Other message actions use a secondary border. An Undo is a quiet action with the undo icon on the message
+line, or below only when it is wider than the room after the words (the line is measured
 as it is drawn: the inset, the words, one gap and the action). An Undo never stands alone: its result is a short message
 that it follows (`Links now say “<name>”.` with `Undo link update`, after the offer `Change links from “<old>” to
 “<new>”.` with `Update N links`, `The first heading now says <name>.` with
@@ -395,17 +921,10 @@ only that registration: settings changed since, such as a registered package, st
 those files. If one no longer holds what the action wrote, the result and its Undo go away. A result that also
 offers another action stays, and its Undo is blocked with the reason. The change still happened, so the
 result's words keep the text colour: only Undo greys, on the message line, and the reason follows in `Small`
-muted words at the message words (`library::kept_undo_message`). An Undo that waits for an open draft keeps its
+muted words at the message words. An Undo that waits for an open draft keeps its
 words in the text colour too; the draft's reason is the save row's. Discard recovery is an Undo message too: info icon, bar,
-`Body` text that names the draft, and quiet `Undo discard of <name>`, which names the draft in its visible words wherever they fit and always in its accessible name. Inline creation (`InlineCreate`) uses a Label title and fields; the
-named Create action follows the last field on that field's line (after its Browse…), centred on it. Choices
-(`Choose for this campaign`) come before that last field. Below the field and its help is one line, as tall as a control and
-kept when empty, so typing moves nothing: quiet Cancel or Clear at its start when there is something to cancel,
-then the `Small` blocked reason, or, once nothing blocks the action, its preview (`Will create …`) on that same line.
-A preview that does not fit gives way at its start (`Will create …/modules/copper_coast`); its hover and accessible
-name keep it whole. The Create action keeps its words while the DM types. Help under a choice or field in these
-forms has `L` before the next field's label. Settings' Add campaign, Manage packages (Add folder, Create package,
-Register a copy) and New entry have this one order; save rows keep their commit at the right edge. Creation and copy fields share one right edge.
+`Body` text that names the draft, and quiet `Undo discard of <name>`, which names the draft in its visible words wherever they fit and always in its accessible name. An inline creation form has a `Label` title; its order
+is in [Inline creation](#inline-creation).
 
 Several safe choices after a message share one line when they fit. Put a destructive choice at the end
 after an `L` gap, or on its own line below after an `M` gap. A message may hold one primary choice
@@ -451,7 +970,7 @@ column, above the choices. World Overwrite saves valid text; invalid text return
 editor without a write. World Reload keeps the replaced draft for one `Undo reload` on its message line until
 the next edit. If the note changes again on disk before that edit, the held draft comes back as unsaved work and
 the choices show again: Overwrite writes only the DM's own changes over the newest file, with Undo, and Reload
-holds the draft again for `Undo reload`. A deleted note does not bring the held draft back. A run offers `Save as a new run`, then an `L` gap (16 px in all, egui's item spacing included) and red `Replace the file with this run`, a typed message's choices (`MessageChoice::Lose` for the red one): both start at the message text. An encounter, group or encounter creature draft (`src/encounters/disk.rs`) draws `Overwrite with my draft`, an `L` gap and red `Reload and lose my draft` (or `Let it go` when the file is gone) the same way, under the last of its messages: a note that another file uses the same identity comes before the choices.
+holds the draft again for `Undo reload`. A deleted note does not bring the held draft back. A run offers `Save as a new run`, then an `L` gap (16 px in all) and red `Replace the file with this run`, a typed message's choices (`MessageChoice::Lose` for the red one): both start at the message text. An encounter, group or encounter creature draft (`src/encounters/disk.rs`) draws `Overwrite with my draft`, an `L` gap and red `Reload and lose my draft` (or `Let it go` when the file is gone) the same way, under the last of its messages: a note that another file uses the same identity comes before the choices.
 Below the choices, as World's lines do, one `Small` line for each part that differs says it in the DM's words, with a
 muted label: `Name: your draft says “…”; the file says “…”.`, `Notes: your draft adds “Ash on the water.”; the file adds
 “Written outside Splat.”`, and for a table by its heading, `Roster: the file names the same 8 rows in another form.` A
@@ -469,7 +988,67 @@ line`.
 
 ## The Reader
 
-`library::view::show` is the only entry reader. Library, Lookup, the run panel and campaign entries call it
+### Reader parts
+
+The Reader parts (`src/gui/kit/markdown/`, `src/gui/pages/reader/`) give every page its Markdown and entry
+views. Pressed links, rolls and roll tables go through the app's state context (`StateContext`, which
+`kit::markdown::Host` holds, installed by `pages::reader::init`), and the frame logic routes them (`Splat::route`,
+`poll_background`). So a page calls the same state methods after a reader (`markdown_view::take_lookup_link`,
+`rolls::take_ask`, …) and needs no handler for them.
+
+**Markdown** (`kit::Markdown`) draws headings, paragraphs, emphasis, code, block quotes, rules, lists (each
+mark in its own column, nested levels, #949), task boxes, tables, roll tables (`<!-- splat:rolls … -->`:
+**Roll** and a typed roll under the table, the rolled row marked), inventory and `Field`/`Value` tables,
+figures (local art in place) and links. A note link (`[[Name]]`, resolved in the link index) goes to Lookup.
+A bold name that resolves to one entry goes to Lookup. A missing link shows its warning and goes nowhere. A
+web link opens the browser. A dice link asks for its roll (Shift for advantage, Ctrl for disadvantage).
+Short links get `XL` of width. Long words break between graphemes. Parsed blocks and table columns are kept
+under the element id, and made again only when the words, mode, document, link index, art or width change.
+
+| Call | Use |
+| --- | --- |
+| `Markdown::new(id, source)` | Reader prose at `READER_MEASURE`; `ProseCompact` below `READER_MEASURE - 60` |
+| `.document(entry.id)` | The note shown: its links resolve from it, and a followed note link says where it came from |
+| `.compact()` | `ProseCompact` at any width |
+| `.fields()` | `Stat` field rows; `Field`/`Value` tables become label/value rows |
+| `.skills()` | A stat block's Skills row: each bonus's target covers its skill's name |
+| `.row_words(muted)` | A plan row's words: `Body` on `XL` lines, no space after |
+| `.full_width()` / `.wide_tables()` | Fill the parent / tables take the parent while prose keeps the measure |
+| `.jump_in(&handle)` | The scroll column that a typed jump (`markdown_view::want_heading`) scrolls |
+| `.on_note(f)` | A note link goes to the caller with the note's words; web links, bold names and dice keep the reader's routing (World's and the Library's readers) |
+| `markdown::jump_here(handle)` | A heading drawn outside a document (a note's or an entry's section): put it before the heading when `markdown_view::wanted_heading` says so |
+| `.on_link(f)` / `.on_target(f)` | Replace the reader's routing (a note's `splat-note:…`, a URL, a bold name / any `LinkTarget`) |
+
+**Entry view** (`pages::reader::entry`) is the one reader of a content entry, for the Library, Lookup, the
+run's side panel and campaign entries:
+
+```rust
+use crate::gui::pages::reader::entry::{self, EntryView, Source};
+// Links: what related, feature and spell links open (`entry::index_links(index)` or `Rc::new(NoLinks)`).
+EntryView::new(id, &name, Some(&entry), entry.body.clone(), Source::from(&origin), links)
+    .empty_value_block(false)                // the value block above drew no row
+    .run(RunValues { .. })                   // live vitals, printed values under them
+    .related(element)                        // the related entries
+    .on_open(|index: usize, window, cx| …)   // a followed related, feature or spell link
+    .on_note(|note: &str, window, cx| …)     // a note link in its words (else it goes to Lookup)
+    .jump_in(&scroll);                       // typed jumps to section headings
+// `.render_with(&links, window, cx)` draws it now with borrowed links (the Library's own notes).
+entry::title_with_art(title, subtitle, Some(&entry), cx)  // name, subtitle and picture
+```
+
+It draws line warnings, a reading's summary, a creature's stat block (identity, vitals, the ability table
+whose modifiers and saves roll, detail rows, rules prose with actions as tiles and Spellcasting lists as
+spell tiles), or the common layout (item summary, spell or encounter facts, source facts and prose, sections
+under headings), class traits and features, related entries, then the closed end sections. Its parts are
+public for pages that draw pieces of an entry: `entry::parts::{title, subtitle, heavy_rule, identity,
+section_heading, detail, stat_detail, detail_row, facts, help, source_prose, item}` and
+`entry::tiles::tile_row` (action tiles from `rolls::plain::roll_tiles`). World's note reader is one view for
+two hosts (`pages::world::reader::Host`: World's page and Lookup's compact panel), each with its own
+`world::Reader`.
+
+### Entry reader rules
+
+The entry view is the only entry reader. Library, Lookup, the run panel and campaign entries use it
 (T6.4). A caller that draws a value block above the entry tells the reader when that block drew no row
 (`empty_value_block`). The reader then leaves out its own gap before the prose, unless line warnings sit
 above it. World uses this, so a typed note with no set values starts its prose where a plain note's does.
@@ -1728,8 +2307,8 @@ keeps the whole room; in a narrow column `Cancel` wraps under `Add` at the text 
 line; Escape lets go of a chosen one first. So the DM sees how to finish, and the form's keys and input-method guard are the
 one form's. Enter or `Add` adds; Escape or `Cancel` clears the words and the caller closes the field. Keys only,
 with no actions, is `add_field(id, name, hint).keys_only(beside_width, beside)`: its field is its owner's (`FieldId`,
-so focus and text history follow the owner, not the place) and its line keeps one `Read` row's height. It is staged (Clippy,
-`Ban::Extras`, one row each in `STAGED_ALLOWS`) for the two flows this section and the run's Effect describe. The loot list's field, which stays open, has keys only: no button, Enter
+so focus and text history follow the owner, not the place) and its line keeps one `Read` row's height. Only the two flows that this section and the run's Effect
+describe use it. The loot list's field, which stays open, has keys only: no button, Enter
 adds, Escape clears the chosen suggestion, or the words when none is chosen, and the field stays open after Enter where several
 lines follow each other, as loot lines do. Suggestions under it, `ROLL TABLES` then `ITEMS`, are chosen
 only by arrows then Enter, or a click. `Roll on a table` beside the field lists every table. A creature's list
@@ -1898,7 +2477,7 @@ control of the line moves. That room alone decides: it shows with its word while
 beside a name that its slot cut; else with its icon; and not at all otherwise. Where it has no room, the
 Conditions tab's field says `Other effect, such as Bless 10 rounds`. With several rows selected it is absent.
 `Effect` makes line two one `add_field`, `Effect on <name>, such as Bless 10 rounds`, that belongs to its row,
-with keys only (`add_field(…).keys_only`, staged), keyed by its participant, so the row keeps its height: Enter adds and Escape clears, and both put focus in Amount; another selection or Next turn closes it, and its
+with keys only, keyed by its participant, so the row keeps its height: Enter adds and Escape clears, and both put focus in Amount; another selection or Next turn closes it, and its
 words wait for that row. `E` opens that field, or the Conditions tab's `Other effect…` field with focus when
 `Effect` has no room. Both fields read one rule: `10 rounds`; `1 minute`, as 10 rounds; `on its turn`; `3 uses`;
 `recharge 6`, `recharge 5–6` or `recharge 5-6` at the end. Anything else stays words. An official condition's
@@ -2062,7 +2641,7 @@ cultist moved 10+ feet straight toward the target immediately before the hit:`),
 
 Every such menu opens from the keyboard as well: Shift+F10 on the focused tile, number or row, or a screen reader's
 `show context menu`, opens it with the focus on its first choice, and the focus goes back to its owner when it
-closes. The Menu key does the same where the toolkit passes it on (egui 0.33 does not). Hover on a roll says
+closes. The Menu key does the same where the toolkit passes it on. Hover on a roll says
 `Right-click or Shift+F10 for more`.
 
 Numbers in tables that roll (attribute Mod and Save cells, skills, a sheet's abilities, saves and skills, a death
@@ -2954,61 +3533,38 @@ with the campaign.
 
 ## Icons
 
-Use `egui-phosphor` (MIT, Phosphor Regular). `.gitignore` forbids committed images, so icons are glyphs or
-painter shapes. All icons come from `design::icons`, which names only glyphs in use. Never pass raw symbols as
-widget text. Icons support words; replace words only for universal meanings, with accessible names and
-tooltips. `PIN` marks an effect with a time: the dock's `Effect`, a row's count of effects and the notice
-line's reminders.
+Icons are Phosphor Regular (MIT), from the bundled font (`assets/fonts/Phosphor-Regular.ttf`).
+`.gitignore` forbids committed images, so icons are glyphs or drawn shapes. All icons come from
+`gui::icons`, which names only glyphs in use (`icons::RUN`, `icons::WARN`, …); `icons::phosphor::*` holds
+the raw glyphs. The code points live in `design::icons` (which `gui::icons` re-exports), so a state
+method names its icon from there; to add a glyph, look up its code point in the font and add a constant
+with the glyph's Phosphor name in its doc line. Never pass raw
+symbols as widget text (the lint's `raw-symbol` rule). Icons support words; replace words only for universal
+meanings, with accessible names and tooltips. `PIN` marks an effect with a time: the dock's `Effect`, a row's
+count of effects and the notice line's reminders.
 
 ## Tests
 
-- `design::tokens::tests` checks WCAG contrast over token pairs.
-- `design::lint` checks raw colours, type sizes and straight apostrophes inside words in the desktop and
-  Trackers sources and in the campaign, character, content and execution crates. The design and visual
-  test sources have their own rules.
-  The shrink-only allowlist is in `src/design/lint_allowlist.txt`.
-- `design::lint::legacy` freezes the layout and host paths that the pane mechanism replaces (migration 32,
-  ruling L12): closure pane hosts (`Footer::pane` and `Messages::pane` and kin), hand-placed footers, `Fills`
-  (also the Sessions wrapper `fills_body`), closure virtual rows, `register_row`, clips that a caller sets, raw
-  scroll areas, scroll requests and offsets, page regions, and each owner's messages fed into a footer by hand
-  (`footer_messages`, one feeder or more; Settings' footer fed by three owners is the mixed-footer debt).
-  It reads the tokens: every mention of a frozen function counts (a method or associated call, a reference, a
-  macro's argument), in the app and in `src/design/`. Only `#[test]` and `#[cfg(test)]` items count nothing,
-  and files that only `cfg(test)` module declarations load (by module path, `#[path]` resolved); a file's
-  name proves nothing. `src/design/legacy_hosts.tsv` lists each function that uses one (`Type::name` in an
-  `impl`), with its count and the pane's owner. Rows of `host-region` (the allowed host composition) and of
-  `design` (the design system's implementation boundary) are frozen, not debt. The list is exact. No row
-  may grow against the merge base with `origin/main`: the test counts the base's own source again (read with
-  `git`), so a use added together with its row fails, and so does a new function around a counted use, in
-  the app or in the design system. When the base cannot be read, the test fails: fetch `origin/main`, or
-  name the base in `SPLAT_LEGACY_BASE` (refused in the landing gate). Some uses fail with no row and no
-  raise: a frozen function named but not called (a reference, a macro's argument), a frozen path inside
-  `macro_rules!`, and an alias (`… as …`, `Owner::{self as …}`, `type … =`) of a frozen owner or function,
-  anywhere. A raise is a
-  line `legacy-host / <capability> / <file> / <function> => <reason>` in the gate's raise file
-  (`SPLAT_STILLNESS_RAISE`), which the lead passes at landing; the test reads the line, not who wrote it.
-  The freeze guards against accidental growth in ordinary refactoring, not against a deliberate disguise
-  (ruling L13): review catches that. Its named limits: it reads syntax, not types (a `.pane` method with three
-  or more arguments counts on any type; `Self::pane` counts only in `impl Footer` and `impl Messages`); two
-  functions of one name in one file share a row; a macro from another crate or a pasted name is not seen; and a
-  live inline module with `#[path]` (such as `#[path = "."] mod live { mod shared; }`) that loads a file which
-  a test-only declaration also loads is not resolved, so that file can read as test-only. Raw width, height and
-  layout setters are not frozen yet. `src/design/c3_ledger.tsv` holds the 85 round-31 C3 deductions with their
-  roots and owning steps, and claims no geometry; a row is never removed, its step closes it (`closed #<PR>`).
-- The gallery visual scenario shows tokens and shared choices as PNGs. Run rows, dialogs and other
-  whole-screen parts appear in their own scenarios. The gallery includes clean, dirty and discarded save rows
-  and the hanging Add strip.
-- `visual_tests::ergonomics` checks target size, accessible names, visibility, overlap, clipping, keyboard
-  reach and workflow goals. Overlap includes labels except those fully inside their interactive ancestor.
-  Clipping includes ellipses and text past pane edges, read from painted shapes. Missing-glyph checks fail for
-  characters absent from the chosen font and fallbacks. `help-measure` fails on a muted `Small` label wider than
-  `READER_MEASURE`, in any wrap mode: help that skipped `help`. Row details marked with `row_detail` pass only inside a row given to `register_row`. All checks except workflow goals have seeded unit
-  failures, including an unassigned glyph and a 560 px help label. Workflow goals were verified by deliberately breaking the app.
-- An overlap of an app control or text with a scroll bar or a column splitter is an app fault
-  (`no-overlap/app-vs-chrome`), because egui can give the press to the bar or splitter. No baseline may
-  allow it. A menu item over its own popup background stays egui chrome: egui's hit test gives the item every
-  press, and a press on a disabled item reaches the background, which has no action.
-- Every scenario run must report all brief section 8 tests; the baseline refuses failed goals. `visual-compare
-  <labelA> <labelB>` lists differences above rendering noise. Tests ensure thin unnamed controls in scroll
-  content or popups do not count as egui chrome. The capture suite rejects consecutive identical pixels at the
-  same size; an intended repeat needs `expect_same` and a reason on the second step.
+- `design::tokens::tests` checks WCAG contrast over token pairs. A `gui::theme` test keeps the GPUI values
+  equal to the tokens.
+- `design::lint` reads every Rust file of the app, `src/gui/` included, and the campaign, character, content
+  and execution crates. It fails on raw colours and type sizes outside `src/design/`
+  (`raw-colour`, `raw-size`), raw icon text (`raw-symbol`), a straight apostrophe inside a word of a UI string
+  (`straight-apostrophe`), a phrase, fact, HP fraction or sheet label written outside its owner
+  (`phrase-owner`, `fact-owner`, `hp-fraction-owner`, `sheet-label-owner`), a control whose label is only an
+  arrow (`arrow-label`), an alias of a `clippy.toml` ban (`banned-alias`), and a suppression of a ban (`ban-allow`, counted for
+  each file; `ban-allow-wide`, on a file, a module, an `impl` or a trait, never allowed). The shrink-only allowlist is
+  `src/design/lint_allowlist.txt`: a count above it fails, and a count below it asks you to lower it.
+- `design::results::STAGED` counts the calls that a part replaces (`Outcome::Refused(`, an Undo with no
+  object, a `Ctrl+S` binding outside the root, …) for each file. The counts can only go down
+  (`design::results::tests::staged_calls_only_shrink`).
+- `clippy.toml` lists the paths that a design part replaces (kept results by owner instead of by ticket,
+  unchecked sentences and words). `check` runs Clippy with `-D warnings`, so a new call outside
+  its owner fails. A function that still calls one carries its own
+  `#[allow(clippy::disallowed_methods, reason = "...")]` on the innermost function, and the design lint
+  counts each file's (`ban-allow`): a new one fails until its count is raised on purpose.
+- The GUI tests (`devenv shell -- gui-test`, [Development](development.md#gui-tests)) drive each page
+  through the harness and write captures. The kit gallery shows every kit part, its menu and its dialog. No
+  test compares the captures: look at each capture that a change can affect, at each size it is taken.
+- An app control or text over a scroll bar or a column splitter is an app fault, because the press there
+  belongs to the bar or splitter. Fix the clearance; no review may accept it.

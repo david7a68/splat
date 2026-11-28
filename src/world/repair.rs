@@ -1,157 +1,25 @@
 //! The same source editor for broken notes in Campaign and World.
 #![warn(deprecated)] // Its old message functions are gone; the parent file still allows them.
 use super::file_fault::FileFault;
-use crate::design::memo::Changed;
 use crate::design::memo::Revised;
 use crate::design::text_draft::{DraftKey, KeptCompare, TextDraft};
 use crate::{
     design::{
-        self, colors,
+        self,
         outcome::{
             Fault, FaultMessage, KeptOutcome, Messages, Notice, PaneFrame, Sentence, Severity,
             UndoStep, Verb,
         },
-        pane::EditorRegion,
-        save_row::{DraftState, Primary},
     },
     library::write_note,
     persistence::Campaign,
 };
-use eframe::egui;
 use uuid::Uuid;
 
 /// The repair editor's accessible name. It names the file, so a DM who tabs between two open
 /// repairs hears which is which. Selectors that ask for `Note text` still find it.
 pub fn editor_name(path: &str) -> String {
     format!("Note text: {path}")
-}
-
-/// The repair editor's field. A broken note has no identity that the app can read (its text
-/// does not parse), so its path is its owner: two repairs open at once are two fields.
-const REPAIR_TEXT: design::layout::FieldName = crate::field_id!("world_repair_text");
-
-/// The source editor's face: the note's text in monospace, as wide as its room.
-/// The source editor's face: the note's text in monospace, laid out once per change (layout
-/// PR 9b).
-fn source_face(ui: &egui::Ui) -> design::pane::Face {
-    design::pane::Face::Font(egui::TextStyle::Monospace.resolve(ui.style()))
-}
-
-fn source_style(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
-    edit.font(egui::TextStyle::Monospace)
-        .desired_width(f32::INFINITY)
-}
-
-/// The part of the error line's mark (`from` to `to`, screen y) that lies in the editor's view:
-/// none when it lies outside it.
-fn mark_in_view(from: f32, to: f32, view: egui::Rangef) -> Option<(f32, f32)> {
-    let (from, to) = (from.max(view.min), to.min(view.max));
-    (from < to).then_some((from, to))
-}
-
-/// The source editor itself: the note's text in the editor's face, named for its file, with the
-/// error line marked. One closed editor viewport in both places (layout PR 9): its fixed frame
-/// keeps all four edges in view, and the text and its lane scroll inside it. In a pane's editor
-/// region (World), or a viewport of its own up to `most` tall that the page's scroll holds
-/// (Campaign). Its two events (changed, gained focus), its outside frame and its id.
-/// Where the source editor's viewport is.
-enum Place<'r> {
-    /// World's repair pane: its editor region.
-    Region(EditorRegion<'r>),
-    /// A viewport of its own, up to this tall, in a page's scroll (Campaign).
-    AtMost(f32),
-}
-
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: a path is a broken note’s only identity (design::results::STAGED_ALLOWS)"
-)]
-fn source_editor(
-    ui: &mut egui::Ui,
-    place: Place<'_>,
-    path: &str,
-    draft: &mut TextDraft,
-    error_line: Option<usize>,
-) -> ((bool, bool), egui::Rect, egui::Id) {
-    let field = REPAIR_TEXT.of(design::TextKey::from_data(path));
-    let face = source_face(ui);
-    let output = match place {
-        Place::Region(region) => region.editor(ui, field, draft, face, source_style),
-        Place::AtMost(most) => design::pane::editor_view(
-            ui,
-            design::pane::ViewHeight::AtMost(most),
-            field,
-            draft,
-            face,
-            source_style,
-        ),
-    };
-    design::named(ui, &output.response, &editor_name(path));
-    let active = (output.response.changed(), output.response.gained_focus());
-    if let Some(line) = error_line {
-        let position = draft
-            .lines()
-            .take(line.saturating_sub(1))
-            .map(|line| line.chars().count() + 1)
-            .sum();
-        let row = output
-            .galley
-            .pos_from_cursor(egui::text::CCursor::new(position));
-        let y = output.galley_pos.y + row.top();
-        // The mark is in the frame's left margin, and only where the text is in view.
-        if let Some((from, to)) = mark_in_view(y, y + row.height(), output.view.y_range()) {
-            ui.painter().vline(
-                output.frame.left() + design::XS,
-                from..=to,
-                egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
-            );
-        }
-    }
-    (active, output.frame, output.response.id)
-}
-
-/// The same source editor in its pane's editor region (World's repair pane): as tall as its
-/// text while the pane's content fits; when it does not, the region gives way and its text
-/// scrolls inside the fixed frame, so the save row under it and the footer stay in view. Its
-/// two events: the DM changed the text, and focus moved into it.
-fn editor_in_pane(
-    ui: &mut egui::Ui,
-    region: EditorRegion<'_>,
-    path: &str,
-    draft: &mut TextDraft,
-    error_line: Option<usize>,
-) -> (bool, bool) {
-    source_editor(ui, Place::Region(region), path, draft, error_line).0
-}
-
-/// The source editor, with its two events apart: the DM changed the text, and focus moved into
-/// it. A caller that keeps a result for one draft ends it on a change, not on focus. Campaign's
-/// repair keeps it in a viewport of its own, up to six rows high, which the page scrolls whole.
-pub fn editor_events(
-    ui: &mut egui::Ui,
-    path: &str,
-    draft: &mut TextDraft,
-    error_line: Option<usize>,
-) -> (bool, bool) {
-    const MAX_HEIGHT: f32 = design::XXL * 6.0 + design::L + design::S + design::XS;
-    let (active, _frame, id) =
-        source_editor(ui, Place::AtMost(MAX_HEIGHT), path, draft, error_line);
-    // The page brings the editor's whole fixed frame into view through its focus clearance
-    // (`pane::reveal_focus`: an editor viewport's block is its frame), never by a raw scroll of
-    // its own, so a press on a partly shown editor moves nothing while the pointer is down
-    // (layout step 11c, review of PR 719). A screen reader's request to show it gives it the
-    // keyboard, which the clearance then follows.
-    let reveal = ui.input(|input| {
-        input.events.iter().any(|event| {
-            matches!(event, egui::Event::AccessKitActionRequest(request)
-                if request.action == egui::accesskit::Action::ScrollIntoView
-                    && request.target == egui::accesskit::NodeId::from(id.value()))
-        })
-    });
-    if reveal {
-        ui.memory_mut(|memory| memory.request_focus(id));
-    }
-    active
 }
 
 /// Why Save would not write this draft: a path outside its folder, a fault in its text and the
@@ -285,7 +153,7 @@ impl Fault for RepairFault {
 
 /// What the DM can press in the repair's footer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RepairAct {
+pub enum RepairAct {
     Undo,
 }
 
@@ -353,9 +221,9 @@ impl Repair {
             .map(|(_, reason)| reason.as_str())
     }
 
-    /// `run_open`: an open run owns `Next turn`, the screen's primary action, so Save stays
-    /// secondary.
-    pub fn show(&mut self, ui: &mut egui::Ui, campaign: &Campaign, run_open: bool) -> bool {
+    /// The file on disk, read again: a draft with no changes follows it, and a changed draft
+    /// keeps it for the DM's choice. A failure on the disk ends with any change of the draft.
+    pub fn follow_disk(&mut self, campaign: &Campaign) {
         if let Ok(path) = crate::library::note_path(&campaign.path, &self.path)
             && let Ok(text) = std::fs::read_to_string(path)
             && text != *self.baseline
@@ -380,16 +248,16 @@ impl Repair {
         {
             self.failed = None;
         }
-        // Save's own checks: the state word, its cause and Save's availability all come from them.
-        let (problem, line) = refusal(campaign, &self.path, &self.draft);
-        // The pane's footer (round 26 FA1): a result with a live Undo (Undo discard or Undo
-        // reload), then Save's reason. The comparison of a changed file owns the pane alone.
-        let frame = PaneFrame::new(ui);
-        let mut messages = Messages::new(
-            &frame,
-            ("world_repair_footer", &self.path),
-            ui.available_width().min(design::LIST_MEASURE),
-        );
+    }
+
+    /// The pane's footer (round 26 FA1): a result with a live Undo (Undo discard or Undo
+    /// reload), then Save's reason. The comparison of a changed file owns the pane alone.
+    fn footer_lines<'f>(
+        &self,
+        frame: &'f PaneFrame,
+        messages: &mut Messages<'f, RepairAct>,
+        problem: Option<&str>,
+    ) {
         if self.disk.is_none() {
             let name = self
                 .path
@@ -398,7 +266,7 @@ impl Repair {
                 .unwrap_or(&self.path)
                 .to_owned();
             if let Some(shown) = self.undos.get(&self.owner()) {
-                messages.kept(shown.outcome(&frame, |undo| {
+                messages.kept(shown.outcome(frame, |undo| {
                     match undo {
                         RepairUndo::Discard { .. } => KeptOutcome::Notice(
                             Notice::new(crate::sentence!("{} draft discarded.", name)),
@@ -416,8 +284,8 @@ impl Repair {
                     }
                 }));
             }
-            let fault = match (&problem, self.failure()) {
-                (Some(problem), _) => Some(RepairFault::Refused(problem.clone())),
+            let fault = match (problem, self.failure()) {
+                (Some(problem), _) => Some(RepairFault::Refused(problem.to_owned())),
                 (None, Some(failure)) => Some(RepairFault::NotSaved(failure.to_owned())),
                 (None, None) => None,
             };
@@ -425,64 +293,6 @@ impl Repair {
                 messages.outcome(FaultMessage::new(fault));
             }
         }
-        let paned = messages.pane_editor(ui, |ui, region| {
-            self.body(ui, region, campaign, run_open, problem, line)
-        });
-        if let Some(press) = paned.pressed {
-            match press.id {
-                RepairAct::Undo => {
-                    let Some(ticket) = press.ticket else {
-                        return paned.body;
-                    };
-                    // A replaced or ended result (`Gone`) does nothing.
-                    if let Ok((undo, ())) = self.undos.undo_by(ticket, |_| Ok::<_, ()>(())) {
-                        let _ = self.draft.replace(undo.draft());
-                        self.failed = None;
-                        // The draft changed, so Save's check runs again on the words now in the
-                        // editor.
-                        ui.ctx().request_repaint();
-                    }
-                }
-            }
-        }
-        paned.body
-    }
-
-    /// The pane's body: the title, the file line, then the comparison of a changed file, or the
-    /// editor (in the pane's editor region) and its save row. True when Save or Overwrite saved.
-    fn body(
-        &mut self,
-        ui: &mut egui::Ui,
-        region: EditorRegion<'_>,
-        campaign: &Campaign,
-        run_open: bool,
-        problem: Option<String>,
-        line: Option<usize>,
-    ) -> bool {
-        design::reader::title(
-            ui,
-            std::path::Path::new(&self.path)
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .as_ref(),
-        );
-        super::file_actions(ui, campaign, &self.path);
-        if let Some(disk) = self.disk.clone() {
-            let choice = design::disk_conflict_choices(ui, design::ConflictSubject::This("note"));
-            design::grouped_draft_comparison(ui, &self.draft, &disk, &self.path, true);
-            if let Some(choice) = choice {
-                return self.choose(campaign, choice, disk, problem.is_some());
-            }
-            return false;
-        }
-        // The two-version comparison above keeps the pane's width. The ordinary editor and its
-        // save row end together at `LIST_MEASURE`, so Save stays near the state and Discard.
-        ui.scope(|ui| {
-            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-            self.edit(ui, region, campaign, run_open, problem, line)
-        })
-        .inner
     }
 
     /// The DM's choice after the file changed on disk under a changed draft. True when an
@@ -519,64 +329,6 @@ impl Repair {
         }
     }
 
-    /// The editor and its save row; the footer follows the save row (round 27 FE2). A long note
-    /// keeps Save in view: the editor's region gives way and scrolls (round 28, P2).
-    fn edit(
-        &mut self,
-        ui: &mut egui::Ui,
-        region: EditorRegion<'_>,
-        campaign: &Campaign,
-        run_open: bool,
-        problem: Option<String>,
-        line: Option<usize>,
-    ) -> bool {
-        // Nothing above the editor comes and goes: its reason and its results are in the pane's
-        // footer (round 26), so the editor never moves.
-        let (changed, _) = editor_in_pane(ui, region, &self.path, &mut self.draft, line);
-        if changed {
-            // An edit ends both Undo results: Undo would replace the words just typed.
-            self.undos.owner_changed(&self.owner());
-            self.failed = None;
-        }
-        // One rule for the save row (`DraftState`): a draft Save refuses is Invalid, changed or
-        // not; after Save failed on the disk it stays open to try again, but is not primary; an
-        // open run owns the primary action.
-        let mut state = DraftState::new(
-            design::save_row::DraftOrigin::Saved, // a repair edits a file on disk
-            Changed::from(self.dirty()),
-            if run_open {
-                Primary::Elsewhere
-            } else {
-                Primary::Draft
-            },
-        )
-        .locks_campaign();
-        if let Some(problem) = &problem {
-            state = state.check(design::save_row::Diagnosis::refused(problem.as_str()));
-        }
-        if self.failure().is_some() {
-            state = state.not_saved();
-        }
-        let pressed = design::save_row(ui, &state, "Save repaired note");
-        let save = pressed.save || design::save_row::save_key(ui, state.can_save());
-        let mut saved = false;
-        if save {
-            saved = self.save(campaign);
-        }
-        if pressed.discard {
-            let draft = self.draft.replace(self.baseline.as_str());
-            // Discard replaces Reload's Undo: one Undo per draft.
-            self.undos.record(RepairUndo::Discard {
-                owner: self.owner(),
-                draft,
-            });
-            self.failed = None;
-            // The footer drawn before this body showed the draft before Discard.
-            ui.ctx().request_repaint();
-        }
-        saved
-    }
-
     fn save(&mut self, campaign: &Campaign) -> bool {
         let result = match refusal(campaign, &self.path, &self.draft) {
             (Some(reason), _) => Err(reason),
@@ -603,26 +355,110 @@ impl Repair {
     }
 }
 
+/// The repair as data, for the GPUI reader.
+pub struct RepairView {
+    /// The file's name, the pane's title.
+    pub file: String,
+    pub path: String,
+    pub text: String,
+    /// The file on disk changed under a changed draft: its text, for the DM's choice.
+    pub disk: Option<String>,
+    /// Why Save would not write, and the line to fix.
+    pub problem: Option<String>,
+    pub line: Option<usize>,
+    pub dirty: bool,
+    /// Save failed on the disk for this draft.
+    pub failed: bool,
+}
+
+impl Repair {
+    /// The repair as it stands, after following its file (`follow_disk`).
+    pub fn view(&mut self, campaign: &Campaign) -> RepairView {
+        self.follow_disk(campaign);
+        let (problem, line) = refusal(campaign, &self.path, &self.draft);
+        RepairView {
+            file: std::path::Path::new(&self.path)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned(),
+            path: self.path.clone(),
+            text: self.draft.as_str().to_owned(),
+            disk: self.disk.clone(),
+            problem,
+            line,
+            dirty: self.dirty(),
+            failed: self.failure().is_some(),
+        }
+    }
+
+    /// The footer's lines as data.
+    pub fn footer_plain(
+        &self,
+        campaign: &Campaign,
+    ) -> Vec<design::outcome::plain::PlainLine<RepairAct>> {
+        let (problem, _) = refusal(campaign, &self.path, &self.draft);
+        let frame = design::outcome::PaneFrame::new();
+        let mut messages = Messages::new();
+        self.footer_lines(&frame, &mut messages, problem.as_deref());
+        messages.into_plain()
+    }
+
+    /// The DM's words in the editor: an edit ends both Undo results.
+    pub fn set_text(&mut self, words: &str) {
+        if self.draft.as_str() != words {
+            let _ = self.draft.replace(words);
+            self.undos.owner_changed(&self.owner());
+            self.failed = None;
+        }
+    }
+
+    /// `Save repaired note`. True when it saved.
+    pub fn press_save(&mut self, campaign: &Campaign) -> bool {
+        let (problem, _) = refusal(campaign, &self.path, &self.draft);
+        problem.is_none() && self.dirty() && self.save(campaign)
+    }
+
+    /// `Discard`: the draft goes back to the file, with its Undo.
+    pub fn press_discard(&mut self) {
+        let draft = self.draft.replace(self.baseline.as_str());
+        self.undos.record(RepairUndo::Discard {
+            owner: self.owner(),
+            draft,
+        });
+        self.failed = None;
+    }
+
+    /// The choice after the file changed under the draft. True when an Overwrite saved.
+    pub fn press_choice(
+        &mut self,
+        campaign: &Campaign,
+        choice: design::DiskConflictChoice,
+    ) -> bool {
+        let Some(disk) = self.disk.clone() else {
+            return false;
+        };
+        let (problem, _) = refusal(campaign, &self.path, &self.draft);
+        self.choose(campaign, choice, disk, problem.is_some())
+    }
+
+    /// A footer press: the Undo of Discard or Reload, by its ticket.
+    pub fn press_footer(&mut self, press: design::outcome::Press<RepairAct>) {
+        let Some(ticket) = press.ticket else {
+            return;
+        };
+        if let Ok((undo, ())) = self.undos.undo_by(ticket, |_| Ok::<_, ()>(())) {
+            let _ = self.draft.replace(undo.draft());
+            self.failed = None;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The error line's mark shows only where the text is in view, as the clip it replaced cut it:
-    /// whole when inside, cut at the view's edge, nothing when outside (view 100 to 200).
-    #[test]
-    fn the_error_mark_is_cut_at_the_editors_view() {
-        let view = egui::Rangef::new(100.0, 200.0);
-        for (mark, shown) in [
-            ((120.0, 138.0), Some((120.0, 138.0))),
-            ((90.0, 108.0), Some((100.0, 108.0))),
-            ((192.0, 210.0), Some((192.0, 200.0))),
-            ((60.0, 80.0), None),
-            ((210.0, 228.0), None),
-            ((80.0, 100.0), None),
-        ] {
-            assert_eq!(mark_in_view(mark.0, mark.1, view), shown, "mark {mark:?}");
-        }
-    }
+    use crate::design::memo::Changed;
+    use crate::design::save_row::{DraftState, Primary};
 
     fn campaign(root: &std::path::Path) -> Campaign {
         Campaign {
@@ -634,54 +470,46 @@ mod tests {
         }
     }
 
-    /// Draws the repair once. True when it painted an accent-filled (primary) button.
+    /// The repair as its pane shows it (`Repair::view` and its footer), in the one rule of a
+    /// save row (`DraftState`): whether Save is primary, and the state word and the footer's
+    /// words, one per line.
+    fn painted(repair: &mut Repair, campaign: &Campaign, run_open: bool) -> (bool, String) {
+        let view = repair.view(campaign);
+        let mut state = DraftState::new(
+            design::save_row::DraftOrigin::Saved,
+            Changed::from(view.dirty),
+            if run_open {
+                Primary::Elsewhere
+            } else {
+                Primary::Draft
+            },
+        )
+        .locks_campaign();
+        if let Some(problem) = &view.problem {
+            state = state.check(design::save_row::Diagnosis::refused(problem.as_str()));
+        }
+        if view.failed {
+            state = state.not_saved();
+        }
+        let mut words = format!("{}\n", state.word().words());
+        if view.disk.is_none() {
+            for line in repair.footer_plain(campaign) {
+                words.push_str(&line.words);
+                words.push('\n');
+            }
+        }
+        (
+            state.save_weight() == design::save_row::SaveWeight::Primary,
+            words,
+        )
+    }
+
     fn show_with(repair: &mut Repair, campaign: &Campaign, run_open: bool) -> bool {
         painted(repair, campaign, run_open).0
     }
 
-    /// Draws the repair once: whether a primary button showed, and every painted word.
-    fn painted(repair: &mut Repair, campaign: &Campaign, run_open: bool) -> (bool, String) {
-        let ctx = egui::Context::default();
-        design::theme::install(&ctx);
-        let mut frame = || {
-            ctx.run(egui::RawInput::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    assert!(!repair.show(ui, campaign, run_open));
-                });
-            })
-        };
-        let mut output = None;
-        let shown = design::pane::text_work(|| output = Some(frame()));
-        let output = output.expect("one frame");
-        // Layout PR 9b: when the repair shows its editor, the next frames draw it again and do
-        // no text work.
-        if shown.drawn > 0 {
-            let work = design::pane::text_work(|| {
-                let _ = (frame(), frame());
-            });
-            assert!(
-                work.is_quiet(2),
-                "9b-quiet: the repair editor's quiet frames: {work:?}"
-            );
-        }
-        let accent = colors().accent_fill;
-        let mut words = String::new();
-        let mut primary = false;
-        for clipped in &output.shapes {
-            match &clipped.shape {
-                egui::Shape::Rect(rect) if rect.fill == accent => primary = true,
-                egui::Shape::Text(text) => {
-                    words.push_str(&text.galley.job.text);
-                    words.push('\n');
-                }
-                _ => {}
-            }
-        }
-        (primary, words)
-    }
-
     fn show(repair: &mut Repair, campaign: &Campaign) {
-        show_with(repair, campaign, false);
+        let _ = repair.view(campaign);
     }
 
     #[test]

@@ -16,7 +16,6 @@ splat-content-ui = { path = "../content_ui" }
 splat-design = { path = "../design" }
 splat-session-records = { path = "../session_records" }
 splat-execution = { path = "../../crates/execution" }
-eframe = { version = "0.33", default-features = false }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["raw_value"] }
@@ -35,4 +34,3 @@ pulldown-cmark = "0.13"
 splat-session-records = { path = "../session_records", features = ["test-support"] }
 splat-content-ui = { path = "../content_ui", features = ["test-support"] }
 splat-encounters-ui = { path = "../encounters_ui", features = ["test-support"] }
-egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }

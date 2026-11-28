@@ -3,11 +3,11 @@ extern crate self as splat;
 use splat_content::content;
 
 pub use splat_design::design::layout;
-pub use splat_design::{choice, create_reasons, field_id, frame_clock, key, lead, sentence, word};
+pub use splat_design::{choice, create_reasons, frame_clock, lead, sentence, state_context, word};
 
 use splat_content_ui::{
-    auth, content_workspace, design, hermetic, library, lookup, markdown_source, markdown_view,
-    npc_generator, persistence, roll_table, world,
+    auth, content_workspace, design, hermetic, library, lookup, npc_generator, persistence,
+    roll_table, world,
 };
 use splat_session_records::{difficulty, encounter_run, encounters};
 

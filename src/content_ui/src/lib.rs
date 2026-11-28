@@ -2,7 +2,7 @@
 extern crate self as splat;
 pub use splat_character::{character, memo};
 pub use splat_content::content;
-pub use splat_design::{choice, create_reasons, field_id, frame_clock, key, lead, sentence, word};
+pub use splat_design::{choice, create_reasons, frame_clock, lead, sentence, state_context, word};
 pub use splat_execution::execution;
 pub mod file_batch {
     pub use splat_campaign::file_batch::*;
@@ -39,6 +39,8 @@ pub mod matching;
 pub mod npc_generator;
 #[path = "../../persistence.rs"]
 pub mod persistence;
+#[path = "../../requests.rs"]
+pub mod requests;
 #[path = "../../roll_table.rs"]
 pub mod roll_table;
 #[path = "../../rolls.rs"]
@@ -57,10 +59,6 @@ pub mod session_notes;
 #[cfg(any(test, feature = "test-support"))]
 #[path = "../../test_support.rs"]
 pub mod test_support;
-
-#[cfg(test)]
-#[path = "../../trackers/reader.rs"]
-mod tracker_reader;
 
 #[cfg(test)]
 fn workspace() -> std::path::PathBuf {

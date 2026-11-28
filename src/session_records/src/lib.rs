@@ -2,7 +2,7 @@
 extern crate self as splat;
 use splat_content::content;
 use splat_content_ui::{design, hermetic, library, roll_table, session_notes as sessions};
-pub use splat_design::{field_id, sentence};
+pub use splat_design::{sentence, state_context};
 use splat_execution::execution;
 pub mod encounter_run;
 pub mod encounters;

@@ -117,8 +117,38 @@ pub struct Source {
     pub content_hash: String,
     /// Complete source records preserve fields not yet understood by the shared model.
     /// Never authoritative for stats already supplied by the computed service.
+    /// Both keep every object's keys in sorted order: see [`sorted`].
+    #[serde(deserialize_with = "sorted_value")]
     pub raw: Value,
+    #[serde(deserialize_with = "sorted_value")]
     pub computed: Value,
+}
+
+/// `value` with every object's keys in sorted order, at any depth.
+///
+/// serde_json's map keeps insertion order when a crate in the build turns on its
+/// `preserve_order` feature (GPUI does). A D&D Beyond record then keeps the service's key order,
+/// and so would its source hash, the order of its action, spell, modifier and choice groups, and
+/// the notes made from it. Sorted, they are the same in every build and for every source order.
+pub(crate) fn sorted(mut value: Value) -> Value {
+    value.sort_all_objects();
+    value
+}
+
+/// The pin of a D&D Beyond definition: a SHA-256 of `keys` of `source`, as compact JSON with every
+/// object's keys sorted. `scripts/dndbeyond_class_links.py` makes the same pin (its `pin`), and
+/// the built-in catalogues hold the pins it made.
+pub(crate) fn pin(source: &Value, keys: &[&str]) -> String {
+    let selected: serde_json::Map<_, _> = keys
+        .iter()
+        .map(|key| ((*key).to_owned(), source[*key].clone()))
+        .collect();
+    let bytes = serde_json::to_vec(&sorted(Value::Object(selected))).expect("JSON source");
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+fn sorted_value<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Value, D::Error> {
+    Value::deserialize(deserializer).map(sorted)
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -196,6 +226,7 @@ impl EntitySnapshot {
         raw_fetched_at: u64,
         fetched_at: u64,
     ) -> Result<Self, String> {
+        let (raw, computed) = (sorted(raw), sorted(computed));
         if id(&raw["id"]).as_deref() != Some(character_id)
             || id(&computed["characterId"]).as_deref() != Some(character_id)
             || id(&raw["campaign"]["id"]).as_deref() != Some(campaign_id)

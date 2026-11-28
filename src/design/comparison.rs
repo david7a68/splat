@@ -54,38 +54,39 @@ impl Layout {
     }
 }
 
+/// Two texts' lines aligned for a side-by-side comparison: each
+/// row's line on each side (`None`: no line there), how many rows differ, and the first row of
+/// each run of differing rows (a `Next difference` stop). For a view that keeps it between
+/// frames itself (the GPUI comparison keeps it until either text changes).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Aligned {
+    pub rows: Vec<[Option<String>; 2]>,
+    pub changed: usize,
+    pub groups: Vec<usize>,
+}
+
+/// Align `text`'s two sides (`[draft, disk]`): about n × m line comparisons, so a caller keeps
+/// the result while the texts stay.
+pub fn aligned(text: [&str; 2]) -> Aligned {
+    let lines = text.map(|text| text.lines().collect::<Vec<_>>());
+    let layout = Layout::of(&lines);
+    Aligned {
+        rows: layout
+            .rows
+            .iter()
+            .map(|row| [0, 1].map(|side| row[side].map(|at| lines[side][at].to_owned())))
+            .collect(),
+        changed: layout.changed,
+        groups: layout.groups,
+    }
+}
+
 impl<'a> Comparison<'a> {
-    /// Uncached, for tests; the app uses `cached`.
-    #[cfg(test)]
+    /// Uncached: a UI that keeps its own copy of the result (`kit::comparison`) calls this once
+    /// per pair of texts.
     pub fn new(text: [&'a str; 2]) -> Self {
         let lines = text.map(|text| text.lines().collect::<Vec<_>>());
         Self::from_layout(&lines, Layout::of(&lines))
-    }
-
-    /// The same comparison, aligned only when either text changes. Alignment costs about
-    /// n × m line comparisons, too much to repeat every frame for a long note.
-    pub fn cached(ctx: &egui::Context, slot: egui::Id, text: [&'a str; 2]) -> Self {
-        let lines = text.map(|text| text.lines().collect::<Vec<_>>());
-        let layout = Self::cached_layout(ctx, slot, text, &lines);
-        Self::from_layout(&lines, (*layout).clone())
-    }
-
-    fn cached_layout(
-        ctx: &egui::Context,
-        slot: egui::Id,
-        text: [&str; 2],
-        lines: &[Vec<&str>; 2],
-    ) -> std::sync::Arc<Layout> {
-        let texts = egui::Id::new((text[0], text[1])).value();
-        let kept = ctx.data(|data| data.get_temp::<(u64, std::sync::Arc<Layout>)>(slot));
-        match kept {
-            Some((seen, layout)) if seen == texts => layout,
-            _ => {
-                let layout = std::sync::Arc::new(Layout::of(lines));
-                ctx.data_mut(|data| data.insert_temp(slot, (texts, layout.clone())));
-                layout
-            }
-        }
     }
 
     fn from_layout(lines: &[Vec<&'a str>; 2], layout: Layout) -> Self {
@@ -202,6 +203,20 @@ mod tests {
             ),
         ] {
             let comparison = Comparison::new([left, right]);
+            let shared = aligned([left, right]);
+            assert_eq!(
+                shared
+                    .rows
+                    .iter()
+                    .map(|row| [row[0].as_deref(), row[1].as_deref()])
+                    .collect::<Vec<_>>(),
+                expected,
+                "the shared alignment is the comparison's"
+            );
+            assert_eq!(
+                (shared.changed, shared.groups),
+                (comparison.changed, comparison.groups.clone())
+            );
             let rows: Vec<_> = comparison.columns[0]
                 .iter()
                 .zip(&comparison.columns[1])
@@ -266,33 +281,6 @@ mod tests {
                 );
                 assert_eq!(comparison.changed + equal, comparison.columns[0].len());
             }
-        }
-    }
-    #[test]
-    fn aligned_row_count_reuses_the_layout_and_invalidates_on_either_source() {
-        let ctx = egui::Context::default();
-        let slot = egui::Id::new("source rows");
-        for (text, expected) in [
-            (["removed\nanchor", "anchor\ninserted"], 3),
-            (["anchor", "anchor\ninserted"], 2),
-            (["anchor", "anchor"], 1),
-            (["", ""], 0),
-        ] {
-            assert_eq!(
-                Comparison::cached(&ctx, slot, text).columns[0].len(),
-                expected
-            );
-            let first = ctx
-                .data(|data| data.get_temp::<(u64, std::sync::Arc<super::Layout>)>(slot))
-                .unwrap()
-                .1;
-            let painted = Comparison::cached(&ctx, slot, text);
-            let second = ctx
-                .data(|data| data.get_temp::<(u64, std::sync::Arc<super::Layout>)>(slot))
-                .unwrap()
-                .1;
-            assert!(std::sync::Arc::ptr_eq(&first, &second));
-            assert_eq!(painted.columns[0].len(), expected);
         }
     }
 }

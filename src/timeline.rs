@@ -8,6 +8,7 @@ pub mod checks;
 
 use crate::design::icons;
 use crate::encounter_run::{SavedRunInfo, Standing};
+use crate::state_context::StateContext;
 pub use splat_campaign::timeline::*;
 use std::{
     collections::BTreeMap,
@@ -893,6 +894,16 @@ impl Book {
         })
     }
 
+    /// The rail's short words for `attention_status`, as the notes have `Notes changed`: the
+    /// rail's column holds them whole; the whole words are its hover.
+    pub fn rail_word(&self) -> &'static str {
+        if self.conflict {
+            "Timeline changed"
+        } else {
+            "Timeline not saved"
+        }
+    }
+
     /// Why this event is not in `Timeline.md`, in the words the Timeline page shows, or none.
     pub fn event_not_saved(&self, id: &str) -> Option<String> {
         if !self.not_saved() || !self.event_unsaved(id) {
@@ -908,7 +919,7 @@ impl Book {
         self.dirty && (self.conflict || self.error.is_some())
     }
 
-    pub fn poll(&mut self, ctx: &eframe::egui::Context) {
+    pub fn poll(&mut self, ctx: &StateContext) {
         let now = Instant::now();
         if self.dirty {
             // Test builds save only when told to, so a capture never depends on the clock.
@@ -1738,7 +1749,7 @@ mod tests {
         let mut repaired = event(Kind::Travel, "1 hour");
         repaired.id = "t-repaired".into();
         fs::write(&path, render(&[repaired], &BTreeMap::new()).unwrap()).unwrap();
-        book.poll(&eframe::egui::Context::default());
+        book.poll(&StateContext::new());
         assert!(book.unreadable.is_none());
         assert_eq!(book.events.len(), 2);
         assert_eq!(book.events[1].run, Some(fact(RunState::Running).id));
@@ -1760,7 +1771,7 @@ mod tests {
         book.record_change(Some(&fact(RunState::Running)), &later, None, None);
         fs::write(&path, &saved).unwrap();
         book.last_check = None;
-        book.poll(&eframe::egui::Context::default());
+        book.poll(&StateContext::new());
         assert!(book.unreadable.is_none());
         assert_eq!(
             book.events[1].result, "Round 5",
@@ -1786,7 +1797,7 @@ mod tests {
         book.save();
         let copy = dir.path().join("Timeline (conflict).md");
         fs::copy(dir.path().join(FILE), &copy).unwrap();
-        book.poll(&eframe::egui::Context::default());
+        book.poll(&StateContext::new());
         assert!(book.duplicate.as_deref() == Some(copy.as_path()));
         assert!(copy.exists());
         // M4 review: the copy is renamed outside, then removed, while the book is dirty (an
@@ -1797,11 +1808,11 @@ mod tests {
         let renamed = dir.path().join("Timeline (old).md");
         fs::rename(&copy, &renamed).unwrap();
         book.last_check = None;
-        book.poll(&eframe::egui::Context::default());
+        book.poll(&StateContext::new());
         assert_eq!(book.duplicate.as_deref(), Some(renamed.as_path()));
         fs::remove_file(&renamed).unwrap();
         book.last_check = None;
-        book.poll(&eframe::egui::Context::default());
+        book.poll(&StateContext::new());
         assert_eq!(book.duplicate, None);
     }
 
@@ -2933,14 +2944,14 @@ mod tests {
         };
         book.record_run(&next, None, true);
         book.last_check = None;
-        book.poll(&eframe::egui::Context::default());
+        book.poll(&StateContext::new());
         assert!(book.gone, "nothing to find yet");
         fs::write(&path, valid).unwrap();
         // A file that went is looked for once each pause between looks, not on each frame.
-        book.poll(&eframe::egui::Context::default());
+        book.poll(&StateContext::new());
         assert!(book.gone, "the next look is after the pause");
         book.last_check = None;
-        book.poll(&eframe::egui::Context::default());
+        book.poll(&StateContext::new());
         assert!(!book.gone && book.unreadable.is_none());
         assert_eq!(book.events[1].result, "Round 4");
     }
@@ -3085,6 +3096,11 @@ mod tests {
         crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Ruling);
         assert_eq!(party_state(&book.events, session), before);
         book.remove(&id);
+        assert_eq!(party_state(&book.events, session), before);
+        // A Long rest from the Add strip restores; removing it takes the ruling back.
+        let added = book.add_long_rest(session);
+        assert!(party_state(&book.events, session).rested);
+        book.remove(&added);
         assert_eq!(party_state(&book.events, session), before);
     }
 

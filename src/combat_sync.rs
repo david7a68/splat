@@ -1,7 +1,7 @@
 //! Conflict-aware combat sheet synchronization with D&D Beyond.
 //! Writes use source identities and absolute values, followed by a raw read-back.
 use crate::auth::Session;
-use eframe::egui;
+use crate::state_context::StateContext;
 use reqwest::{Method, blocking::Client, redirect::Policy};
 use serde_json::{Value, json};
 use splat::character::EntitySnapshot;
@@ -414,10 +414,19 @@ struct Mutation {
     expected: Value,
 }
 fn mutations(remote: &Remote, key: &str, target: &Value) -> Result<Vec<Mutation>, String> {
-    let current = remote
+    // Both in field order. serde_json's map keeps insertion order when a crate in the build turns
+    // on `preserve_order` (GPUI does). The shape check compares the two field lists, and the
+    // writes and their read-backs go in one order.
+    let mut current = remote
         .groups
         .get(key)
-        .ok_or("This combat stat is unavailable on the sheet.")?;
+        .ok_or("This combat stat is unavailable on the sheet.")?
+        .clone();
+    current.sort_all_objects();
+    let current = &current;
+    let mut target = target.clone();
+    target.sort_all_objects();
+    let target = &target;
     let mut body = target
         .as_object()
         .cloned()
@@ -876,18 +885,33 @@ impl crate::design::outcome::Fault for ActionFailed<'_> {
     }
 }
 
+/// One sync conflict, as `CombatSync::conflict_rows` gives it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConflictRow {
+    /// The value group's key, for `use_remote` and `keep_local`.
+    pub key: String,
+    /// `HP conflict`.
+    pub title: String,
+    /// The sheet's words about it.
+    pub message: String,
+    /// The value in Splat and on D&D Beyond, in words.
+    pub splat: String,
+    pub beyond: String,
+    /// The two choices' words.
+    pub use_label: String,
+    pub keep_label: String,
+    /// Why neither choice works now (a sheet read is running).
+    pub busy: Option<&'static str>,
+    /// Why Keep does not work now.
+    pub keep_blocked: Option<&'static str>,
+}
+
 #[derive(Default)]
 pub struct CombatSync {
     pub enabled: bool,
     scope: Option<(u64, String, String)>,
     remote: Option<Remote>,
     desired: Sheet,
-    /// The stepper wells, and what they were measured from.
-    wells: Option<(WellsKey, Wells)>,
-    /// How often frames asked for the wells, and how often the values were read to measure
-    /// them (`CachedWork` in tests).
-    #[cfg(any(test, feature = "test-support"))]
-    pub(crate) well_counts: (usize, usize),
     blocked: BTreeMap<String, String>,
     pending: Option<Pending>,
     gate: Option<Arc<AtomicBool>>,
@@ -1162,7 +1186,7 @@ impl CombatSync {
     }
     pub fn tick(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         session: Option<Session>,
         epoch: u64,
         campaign: &str,
@@ -1267,7 +1291,7 @@ impl CombatSync {
                 sent: desired.clone(),
                 action: action.as_ref().map(SheetAction::name),
             });
-            let ctx = ctx.clone();
+            let ctx = ctx.waker();
             std::thread::spawn(move || {
                 static LOCKS: OnceLock<Mutex<BTreeMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
                 let result = (|| {
@@ -1450,233 +1474,43 @@ impl CombatSync {
         self.error = None;
         self.updated = true;
     }
-    /// Each conflict with both values and its two ways out. The run shows this beside
-    /// the roster, so it does not stop the table.
-    pub fn conflicts(&mut self, ui: &mut egui::Ui) {
-        self.conflicts_inner(ui, None, true);
-    }
-    pub fn conflicts_for(&mut self, ui: &mut egui::Ui, name: &str) {
-        self.conflicts_inner(ui, Some(name), false);
-    }
-    fn conflicts_inner(&mut self, ui: &mut egui::Ui, name: Option<&str>, explanation: bool) {
-        use crate::design::{self, Action, Density, Type, colors};
-        for (key, message) in self.blocked.clone() {
-            let c = colors();
-            let status = format!("{} {} conflict", design::icons::WARN, self.group_name(&key));
-            match name {
-                // FK3: the ended view's one heading form, the name in the text colour.
-                Some(name) => {
-                    sync_heading(ui, name, &status, c.sync.conflict);
+    /// Each conflict as a view in any toolkit shows it: its title, the sheet's words, both
+    /// values, and the two choices with their words and reasons.
+    pub fn conflict_rows(&self) -> Vec<ConflictRow> {
+        let max = self.max_hp().unwrap_or(0);
+        let busy = self.busy().then_some("Wait for the current sheet read.");
+        let read_only = self.read_only();
+        self.blocked
+            .iter()
+            .map(|(key, message)| {
+                let sheet = self.remote.as_ref().and_then(|r| r.groups.get(key));
+                let writable = read_only
+                    || self
+                        .remote
+                        .as_ref()
+                        .is_some_and(|r| r.can_edit && r.groups.contains_key(key));
+                ConflictRow {
+                    key: key.clone(),
+                    title: format!("{} conflict", self.group_name(key)),
+                    message: message.clone(),
+                    splat: describe(key, self.desired.get(key), max),
+                    beyond: describe(key, sheet, max),
+                    use_label: format!("Use {} from D&D Beyond", short_value(key, sheet, max)),
+                    keep_label: format!(
+                        "Keep {}, {}",
+                        short_value(key, self.desired.get(key), max),
+                        if read_only {
+                            "in Splat only"
+                        } else {
+                            "send to D&D Beyond"
+                        }
+                    ),
+                    busy,
+                    keep_blocked: busy.or((!writable)
+                        .then_some("This sign-in cannot edit this character on D&D Beyond.")),
                 }
-                None => {
-                    design::heading(
-                        ui,
-                        design::Heading::Status(design::Status {
-                            icon: design::icons::WARN,
-                            word: &format!("{} conflict", self.group_name(&key)),
-                            color: c.sync.conflict,
-                        }),
-                    );
-                }
-            }
-            if explanation {
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, message.as_str()).color(c.text)).wrap(),
-                );
-            }
-            // The two values side by side, so the difference is what the eye finds.
-            egui::Grid::new(("conflict_values", &key))
-                .num_columns(2)
-                .spacing([design::L, 2.0])
-                .show(ui, |ui| {
-                    for (label, value) in [
-                        ("Splat", self.desired.get(&key)),
-                        (
-                            "D&D Beyond",
-                            self.remote.as_ref().and_then(|r| r.groups.get(&key)),
-                        ),
-                    ] {
-                        ui.label(Type::Small.rich(ui, label).color(colors().muted));
-                        ui.label(
-                            Type::Strong
-                                .rich(ui, describe(&key, value, self.max_hp().unwrap_or(0)))
-                                .color(colors().text),
-                        );
-                        ui.end_row();
-                    }
-                });
-            ui.push_id(&key, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    let busy = self.busy().then_some("Wait for the current sheet read.");
-                    let max = self.max_hp().unwrap_or(0);
-                    let sheet = self.remote.as_ref().and_then(|r| r.groups.get(&key));
-                    let read_only = self.read_only();
-                    let (use_label, keep_label) = (
-                        format!("Use {} from D&D Beyond", short_value(&key, sheet, max)),
-                        format!(
-                            "Keep {}, {}",
-                            short_value(&key, self.desired.get(&key), max),
-                            if read_only {
-                                "in Splat only"
-                            } else {
-                                "send to D&D Beyond"
-                            }
-                        ),
-                    );
-                    let use_word = &use_label;
-                    let keep_word = &keep_label;
-                    if Action::secondary(use_word)
-                        .hint(&use_label)
-                        .name("Use D&D Beyond values")
-                        .density(Density::Read)
-                        .blocked(busy)
-                        .show(ui)
-                        .clicked()
-                    {
-                        self.use_remote(&key);
-                    }
-                    let writable = read_only
-                        || self
-                            .remote
-                            .as_ref()
-                            .is_some_and(|r| r.can_edit && r.groups.contains_key(&key));
-                    if Action::secondary(keep_word)
-                        .hint(&keep_label)
-                        .name("Keep Splat values and retry")
-                        .density(Density::Read)
-                        .blocked(busy.or(
-                            (!writable).then_some(
-                                "This sign-in cannot edit this character on D&D Beyond.",
-                            ),
-                        ))
-                        .show(ui)
-                        .clicked()
-                    {
-                        self.keep_local(&key);
-                    }
-                });
-            });
-        }
-    }
-    pub fn show(&mut self, ui: &mut egui::Ui) {
-        let was = self.enabled;
-        ui.checkbox(&mut self.enabled, "Sync this sheet with D&D Beyond");
-        crate::design::help(
-            ui,
-            "During a fight, Sync party in the run turns sync on for the whole party.",
-        );
-        if was && !self.enabled {
-            self.stop();
-        }
-        if !was && self.enabled {
-            self.start();
-        }
-        if !self.enabled {
-            if let Some(error) = &self.error {
-                ui.colored_label(crate::design::colors().result.error, error);
-            }
-            crate::design::help(
-                ui,
-                "Enable to read the live sheet. Edits made here will then update D&D Beyond.",
-            );
-            return;
-        }
-        crate::design::help(ui, "Splat checks the sheet every 15 seconds.");
-        if self.busy() {
-            ui.horizontal(|ui| {
-                crate::design::spinner(ui);
-                ui.label("Checking character…");
-            });
-        }
-        if let Some(e) = &self.error {
-            ui.colored_label(crate::design::colors().result.error, e);
-        }
-        ui.horizontal(|ui| {
-            if crate::design::Action::secondary("Check now")
-                .density(crate::design::Density::Read)
-                .blocked_if(self.busy(), "Wait for the current sheet read.")
-                .show(ui)
-                .clicked()
-            {
-                self.refresh_only = true;
-                self.next = None;
-            }
-            if self.dirty() {
-                ui.label("Local changes pending");
-            } else if self.remote.is_some() {
-                ui.label("Values match the last read");
-            }
-        });
-        self.conflicts(ui);
-        let Some(remote) = &self.remote else {
-            // Help with a link in it: the reader measure, as `design::help` keeps.
-            ui.set_max_width(ui.available_width().min(crate::design::READER_MEASURE));
-            ui.horizontal_wrapped(|ui| {
-                use crate::design::{self, Type};
-                ui.spacing_mut().item_spacing.x = 0.0;
-                // Round 27 FO2: the heading says the state (`Waiting for the first sheet read`);
-                // the block says only the next step.
-                let words = "If the first sheet read does not come, check the connection in ";
-                for word in words.split_inclusive(' ') {
-                    ui.label(Type::Small.rich(ui, word).color(design::colors().muted));
-                }
-                if ui.available_width()
-                    < design::number_width(ui, "Settings.", &Type::Small.font(ui))
-                {
-                    ui.end_row();
-                }
-                if design::small_link(ui, "Settings").clicked() {
-                    ui.ctx().data_mut(|data| {
-                        data.insert_temp(egui::Id::new("open_account_settings"), true)
-                    });
-                }
-                ui.label(Type::Small.rich(ui, ".").color(design::colors().muted));
-            });
-            return;
-        };
-        use crate::design::{self, Type, colors, icons};
-        let max_hp = remote.max_hp;
-        let writable = remote.can_edit;
-        // Say once, at the top, which values can change and what a change does.
-        ui.horizontal_wrapped(|ui| {
-            let (icon, color, words) = if writable {
-                (
-                    icons::EDIT,
-                    colors().accent,
-                    "Values with − and + are editable. Splat sends a change to D&D Beyond half a second after you stop, then reads the sheet to confirm it.",
-                )
-            } else {
-                (
-                    icons::READ_ONLY,
-                    colors().sync.read_only,
-                    "Read only: D&D Beyond reports that this sign-in cannot edit this character. Nothing here can change.",
-                )
-            };
-            ui.label(Type::Small.rich(ui, icon).color(color));
-            // Round 25 review: help keeps the reader measure.
-            design::help(ui, words);
-        });
-        // Round 26: an action's result sits in the sheet's footer (`footer_messages`), so neither
-        // the result nor its dismissal or the next read moves the fields.
-        let wells = self.wells(ui, max_hp);
-        let before = self.desired.groups.clone();
-        ui.add_enabled_ui(writable, |ui| {
-            self.life(ui, max_hp, wells);
-            self.rests(ui, max_hp);
-            self.sheet_conditions(ui, wells);
-            self.spending(ui, wells);
-            self.purse(ui, wells);
-            self.inventory(ui, wells);
-            self.companions(ui, wells);
-        });
-        if self.desired.groups != before {
-            self.desired.touch();
-            self.changed = Some(Instant::now());
-        }
-        design::help(
-            ui,
-            "Concentration, custom effects, initiative and DM notes stay in Splat. D&D Beyond has no place for them.",
-        );
+            })
+            .collect()
     }
     /// Round 26: a sync action's result (a rest taken, or why it failed), in the footer of the
     /// sheet pane. It lives until its close icon, the next action or another character. A taken
@@ -1750,616 +1584,6 @@ impl CombatSync {
             Some(name) => name.clone(),
             None => group_label(key).into(),
         }
-    }
-    /// The stepper wells for this frame: kept until a value, the maximum HP or the type size
-    /// changes, so an unchanged frame or a resize reads no values.
-    fn wells(&mut self, ui: &egui::Ui, max_hp: i64) -> Wells {
-        use crate::design::Type;
-        #[cfg(any(test, feature = "test-support"))]
-        {
-            self.well_counts.0 += 1;
-        }
-        let key = (
-            self.desired.revision,
-            max_hp,
-            Type::Small.font(ui).size.to_bits(),
-            ui.style()
-                .drag_value_text_style
-                .resolve(ui.style())
-                .size
-                .to_bits(),
-        );
-        if let Some((cached, wells)) = self.wells
-            && cached == key
-        {
-            return wells;
-        }
-        let wells = self.measure_wells(ui, max_hp);
-        self.wells = Some((key, wells));
-        wells
-    }
-    /// Reads every value the panel shows to find each block's widest. Only `wells` calls it.
-    fn measure_wells(&mut self, ui: &egui::Ui, max_hp: i64) -> Wells {
-        #[cfg(any(test, feature = "test-support"))]
-        {
-            self.well_counts.1 += 1;
-        }
-        let digit = digit_width(ui);
-        let well = |values: &mut dyn Iterator<Item = i64>| {
-            well_for(ui, digit, values.map(digits).max().unwrap_or(1))
-        };
-        let groups = &self.desired.groups;
-        let field = |key: &str, field: &str| groups.get(key).and_then(|g| g[field].as_i64());
-        let named = |prefix: &'static str| {
-            self.remote
-                .iter()
-                .flat_map(move |remote| remote.named(prefix))
-                .filter_map(|(key, _, _)| groups.get(key))
-        };
-        let life = well(
-            &mut [
-                Some(max_hp),
-                field("hp", "temporaryHitPoints"),
-                field("hp_bonus", "bonusHitPoints"),
-            ]
-            .into_iter()
-            .flatten(),
-        );
-        let slots = well(
-            &mut ["slots", "pact"]
-                .into_iter()
-                .filter_map(|key| groups.get(key))
-                .flat_map(|slots| {
-                    (1..=9).filter_map(|level| slots[format!("level{level}")].as_i64())
-                }),
-        );
-        let limited = well(&mut named("limited/").filter_map(|group| group["uses"].as_i64()));
-        let currency = well(
-            &mut COINS
-                .iter()
-                .filter_map(|(coin, _, _)| field("currency", coin)),
-        );
-        let exhaustion = well(&mut field("conditions", "4").into_iter());
-        let inventory = well(&mut named("item/").flat_map(|item| {
-            [
-                item["quantity"].as_i64(),
-                item.get("charges").and_then(Value::as_i64),
-            ]
-            .into_iter()
-            .flatten()
-        }));
-        let companions = well(&mut named("creature/").flat_map(|creature| {
-            [
-                creature["removedHitPoints"].as_i64(),
-                creature["temporaryHitPoints"].as_i64(),
-            ]
-            .into_iter()
-            .flatten()
-        }));
-        Wells {
-            life,
-            slots,
-            limited,
-            currency,
-            exhaustion: Column::new(ui, &["Exhaustion level"], exhaustion),
-            inventory: Column::new(ui, &["Quantity", "Charges spent"], inventory),
-            companions: Column::new(ui, &["Damage taken", "Temporary HP"], companions),
-        }
-    }
-    /// HP, temporary HP, the maximum HP modifier, death saves and inspiration.
-    fn life(&mut self, ui: &mut egui::Ui, max_hp: i64, wells: Wells) {
-        use crate::design;
-        design::heading(ui, design::Heading::Label("Hit points"));
-        sheet_grid(ui, "sheet_life", wells.life, |ui| {
-            if let Some(hp) = self.desired.groups.get_mut("hp") {
-                let mut current = current_hp(hp, max_hp);
-                let note = Some(format!("of {max_hp}"));
-                if edit_row(ui, "Current HP", &mut current, 0..=max_hp, note) {
-                    hp["removedHitPoints"] = (max_hp - current).into();
-                }
-                step_field(hp, "temporaryHitPoints", |n| {
-                    edit_row(ui, "Temporary HP", n, 0..=MAX_HP_BONUS, None)
-                });
-            }
-            if let Some(bonus) = self.desired.groups.get_mut("hp_bonus") {
-                step_field(bonus, "bonusHitPoints", |n| {
-                    let range = -MAX_HP_BONUS..=MAX_HP_BONUS;
-                    edit_row(ui, "Maximum HP modifier", n, range, None)
-                });
-                // Round 27 FN3: the help sits directly under the stepper it explains, before
-                // the death saves, at the stepper's x. Round 26 AM2: it keeps the reader measure.
-                ui.label("");
-                // A top-down cell: a grid cell lays out left to right and centres a wrapping
-                // label in its row.
-                ui.vertical(|ui| {
-                    design::help(
-                        ui,
-                        "The maximum HP modifier raises or lowers maximum HP, as Aid does.",
-                    );
-                });
-                ui.end_row();
-            }
-            if let Some(death) = self.desired.groups.get_mut("death") {
-                for (field, label) in [
-                    ("successCount", "Death save successes"),
-                    ("failCount", "Death save failures"),
-                ] {
-                    step_field(death, field, |n| edit_row(ui, label, n, 0..=3, None));
-                }
-            }
-            if let Some(inspiration) = self.desired.groups.get_mut("inspiration") {
-                row_label(ui, "Inspiration");
-                let mut on = inspiration["inspiration"] == true;
-                if ui.checkbox(&mut on, "Has inspiration").changed() {
-                    inspiration["inspiration"] = on.into();
-                }
-                ui.end_row();
-            }
-        });
-    }
-    /// Short rest, long rest and restore to life. D&D Beyond applies each one itself.
-    fn rests(&mut self, ui: &mut egui::Ui, max_hp: i64) {
-        use crate::design::{self, Action, Density, Type, colors, icons};
-        design::heading(ui, design::Heading::Label("Rests and recovery"));
-        let blocker = self.action_blocker();
-        let hp = self.desired.get("hp").map(|hp| current_hp(hp, max_hp));
-        // Taken out while it shows, and put back unless the DM takes the rest or cancels.
-        match self.rest_form.take() {
-            None => {
-                ui.horizontal_wrapped(|ui| {
-                    if Action::secondary("Short rest…")
-                        .icon(icons::SHORT_REST)
-                        .density(Density::Read)
-                        .blocked(blocker)
-                        .show(ui)
-                        .clicked()
-                    {
-                        self.rest_form = Some(RestForm::Short {
-                            hit_dice: BTreeMap::new(),
-                            reset_max_hp_bonus: false,
-                        });
-                    }
-                    if Action::secondary("Long rest…")
-                        .icon(icons::LONG_REST)
-                        .density(Density::Read)
-                        .blocked(blocker)
-                        .show(ui)
-                        .clicked()
-                    {
-                        self.rest_form = Some(RestForm::Long {
-                            reset_max_hp_bonus: false,
-                            reduce_exhaustion: true,
-                        });
-                    }
-                    // Restore to life is for a character at 0 HP, as on the sheet.
-                    if hp == Some(0) {
-                        for (full, label) in [
-                            (true, "Restore to life with full HP"),
-                            (false, "Restore to life with 1 HP"),
-                        ] {
-                            if Action::secondary(label)
-                                .density(Density::Read)
-                                .blocked(blocker)
-                                .show(ui)
-                                .clicked()
-                            {
-                                let _ = self.request(SheetAction::RestoreLife { full });
-                            }
-                        }
-                    }
-                });
-                // Round 26 AM2: help keeps the reader measure.
-                design::help(
-                    ui,
-                    "A rest goes to D&D Beyond once, when you take it. D&D Beyond resets the resources by its own rules.",
-                );
-            }
-            Some(mut form) => {
-                let (title, take_label, note) = match form {
-                    RestForm::Short { .. } => (
-                        "Short rest",
-                        "Take short rest",
-                        "This marks the hit dice as spent. Add the HP that they give in Current HP.",
-                    ),
-                    RestForm::Long { .. } => (
-                        "Long rest",
-                        "Take long rest",
-                        "D&D Beyond restores HP, hit dice, spell slots and resources by its own rules.",
-                    ),
-                };
-                design::heading(ui, design::Heading::Panel(title));
-                let reset_max_hp_bonus = match &mut form {
-                    RestForm::Short {
-                        hit_dice,
-                        reset_max_hp_bonus,
-                    } => {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, "Hit dice to spend")
-                                .color(colors().muted),
-                        );
-                        // A class has at most 20 hit dice: two digits, with no scan.
-                        let well = well_for(ui, digit_width(ui), 2);
-                        sheet_grid(ui, "sheet_short_rest", well, |ui| {
-                            for dice in self.hit_dice() {
-                                let left = (dice.level - dice.used).max(0);
-                                edit_row(
-                                    ui,
-                                    &format!("{} (d{})", dice.name, dice.die),
-                                    hit_dice.entry(dice.class).or_insert(0),
-                                    0..=left,
-                                    Some(format!("{left} of {} left", dice.level)),
-                                );
-                            }
-                        });
-                        reset_max_hp_bonus
-                    }
-                    RestForm::Long {
-                        reset_max_hp_bonus, ..
-                    } => reset_max_hp_bonus,
-                };
-                ui.checkbox(reset_max_hp_bonus, "Reset the maximum HP modifier to 0");
-                if let RestForm::Long {
-                    reduce_exhaustion, ..
-                } = &mut form
-                {
-                    ui.checkbox(reduce_exhaustion, "Reduce Exhaustion by one level");
-                }
-                design::help(ui, note);
-                let (mut take, mut cancel) = (false, false);
-                ui.horizontal(|ui| {
-                    take = Action::primary(take_label)
-                        .density(Density::Read)
-                        .blocked(blocker)
-                        .show(ui)
-                        .clicked();
-                    cancel = Action::quiet("Cancel")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked();
-                });
-                if take {
-                    let _ = self.request(form.into_action());
-                } else if !cancel {
-                    self.rest_form = Some(form);
-                }
-            }
-        }
-    }
-    fn sheet_conditions(&mut self, ui: &mut egui::Ui, wells: Wells) {
-        crate::design::section(ui, "Sheet conditions", |ui| {
-            if let Some(Value::Object(conditions)) = self.desired.groups.get_mut("conditions") {
-                ui.horizontal_wrapped(|ui| {
-                    for (id, name) in CONDITIONS {
-                        let key = id.to_string();
-                        let mut present = conditions.contains_key(&key);
-                        if ui.checkbox(&mut present, name).changed() {
-                            if present {
-                                conditions.insert(
-                                    key.clone(),
-                                    if id == 4 { 1.into() } else { Value::Null },
-                                );
-                            } else {
-                                conditions.remove(&key);
-                            }
-                        }
-                    }
-                });
-                // On its own line: a stepper inside a wrapping row can run off a narrow column.
-                if let Some(level) = conditions.get_mut("4") {
-                    let mut n = level.as_i64().unwrap_or(1);
-                    if labelled_stepper(
-                        ui,
-                        wells.exhaustion,
-                        "Exhaustion level",
-                        "Exhaustion level",
-                        &mut n,
-                        1..=6,
-                        None,
-                    ) {
-                        *level = n.into();
-                    }
-                }
-            }
-        });
-    }
-    /// Spell slots and limited uses spent.
-    fn spending(&mut self, ui: &mut egui::Ui, wells: Wells) {
-        use crate::design;
-        design::section(ui, "Spell slots spent", |ui| {
-            sheet_grid(ui, "sheet_slots", wells.slots, |ui| {
-                for (key, label, levels) in [("slots", "Spell slots", 9), ("pact", "Pact slots", 5)]
-                {
-                    let Some(slots) = self.desired.groups.get_mut(key) else {
-                        continue;
-                    };
-                    for level in 1..=levels {
-                        let label = format!("{label}, level {level}");
-                        step_field(slots, &format!("level{level}"), |n| {
-                            edit_row(ui, &label, n, 0..=99, None)
-                        });
-                    }
-                }
-            });
-        });
-        let remote = self.remote.as_ref();
-        design::section(ui, "Limited uses spent", |ui| {
-            sheet_grid(ui, "sheet_limited", wells.limited, |ui| {
-                for (key, label, _) in remote.into_iter().flat_map(|r| r.named("limited/")) {
-                    if let Some(resource) = self.desired.groups.get_mut(key) {
-                        step_field(resource, "uses", |n| {
-                            edit_row(ui, label, n, 0..=MAX_COUNT, None)
-                        });
-                    }
-                }
-            });
-        });
-    }
-    fn purse(&mut self, ui: &mut egui::Ui, wells: Wells) {
-        let Some(purse) = self.desired.groups.get_mut("currency") else {
-            return;
-        };
-        crate::design::section(ui, "Currency", |ui| {
-            sheet_grid(ui, "sheet_currency", wells.currency, |ui| {
-                for (field, _, name) in COINS {
-                    step_field(purse, field, |n| edit_row(ui, name, n, 0..=MAX_COUNT, None));
-                }
-            });
-        });
-    }
-    /// Each item's quantity, and the charges spent where it has charges.
-    fn inventory(&mut self, ui: &mut egui::Ui, wells: Wells) {
-        use crate::design;
-        let Some(remote) = &self.remote else {
-            return;
-        };
-        let items: Vec<_> = remote.named("item/").collect();
-        if items.is_empty() {
-            return;
-        }
-        // One label column and one well width for every item, so each − and each + of the
-        // section sits on one x (round 24 FK4).
-        let column = wells.inventory;
-        // The title holds the count, so the section keeps its own id as items come and go.
-        design::section_with_id(
-            ui,
-            "sheet_inventory",
-            format!("Inventory · {} items", items.len()),
-            |ui| {
-                for (key, name, max) in items {
-                    let Some(item) = self.desired.groups.get_mut(key) else {
-                        continue;
-                    };
-                    // The name on its own line, and each value on a line under it, so a narrow
-                    // column never cuts one off.
-                    row_label(ui, name);
-                    ui.indent(key, |ui| {
-                        step_field(item, "quantity", |n| {
-                            let name = format!("{name} quantity");
-                            labelled_stepper(ui, column, "Quantity", &name, n, 1..=MAX_COUNT, None)
-                        });
-                        if item.get("charges").is_some() {
-                            step_field(item, "charges", |n| {
-                                let name = format!("{name} charges spent");
-                                let note = max.map(|max| format!("of {max}"));
-                                labelled_stepper(
-                                    ui,
-                                    column,
-                                    "Charges spent",
-                                    &name,
-                                    n,
-                                    0..=MAX_COUNT,
-                                    note,
-                                )
-                            });
-                        }
-                    });
-                    design::gap(ui, design::Gap::XS);
-                }
-                design::help(
-                    ui,
-                    "Party inventory and the coins in containers stay on D&D Beyond.",
-                );
-            },
-        );
-    }
-    /// Companion and summon HP, as damage taken: the sheet works their maximum out itself.
-    fn companions(&mut self, ui: &mut egui::Ui, wells: Wells) {
-        use crate::design;
-        let Some(remote) = &self.remote else {
-            return;
-        };
-        let creatures: Vec<_> = remote.named("creature/").collect();
-        if creatures.is_empty() {
-            return;
-        }
-        let column = wells.companions;
-        design::section(ui, "Companions and summons", |ui| {
-            for (key, name, max) in creatures {
-                let Some(creature) = self.desired.groups.get_mut(key) else {
-                    continue;
-                };
-                row_label(ui, name);
-                ui.indent(key, |ui| {
-                    // The sheet works a companion's maximum out itself. The stat block's
-                    // average is only a guide, so it is a note and not a limit.
-                    step_field(creature, "removedHitPoints", |n| {
-                        let name = format!("{name} damage taken");
-                        let note = max.map(|max| format!("Stat block average {max} HP"));
-                        labelled_stepper(ui, column, "Damage taken", &name, n, 0..=MAX_COUNT, note)
-                    });
-                    step_field(creature, "temporaryHitPoints", |n| {
-                        let name = format!("{name} temporary HP");
-                        labelled_stepper(
-                            ui,
-                            column,
-                            "Temporary HP",
-                            &name,
-                            n,
-                            0..=MAX_HP_BONUS,
-                            None,
-                        )
-                    });
-                });
-                design::gap(ui, design::Gap::XS);
-            }
-        });
-    }
-}
-/// A small label, the value's stepper and an optional note, kept together on one line.
-fn labelled_stepper(
-    ui: &mut egui::Ui,
-    column: Column,
-    label: &str,
-    name: &str,
-    value: &mut i64,
-    range: std::ops::RangeInclusive<i64>,
-    note: Option<String>,
-) -> bool {
-    use crate::design::{Type, colors};
-    ui.horizontal(|ui| {
-        // The stepper starts at the block's label column, whatever this label's width: the
-        // label takes a cell that ends one item gap before it.
-        let cell = egui::vec2(
-            (column.label - ui.spacing().item_spacing.x).max(0.0),
-            ui.spacing().interact_size.y,
-        );
-        ui.allocate_ui_with_layout(
-            cell,
-            egui::Layout::left_to_right(egui::Align::Center),
-            |ui| {
-                ui.set_min_size(cell);
-                ui.label(Type::Small.rich(ui, label).color(colors().muted));
-            },
-        );
-        ui.spacing_mut().interact_size.x = column.well;
-        stepper_and_note(ui, name, value, range, note)
-    })
-    .inner
-}
-/// One block of labelled steppers: its label column (the widest label plus `S`) and one well
-/// width (the widest value), so every − and every + of the block share an x.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Column {
-    label: f32,
-    well: f32,
-}
-impl Column {
-    fn new(ui: &egui::Ui, labels: &[&str], well: f32) -> Self {
-        use crate::design::{self, Type};
-        let font = Type::Small.font(ui);
-        let label = labels
-            .iter()
-            .map(|label| {
-                ui.fonts_mut(|fonts| {
-                    fonts.layout_no_wrap(
-                        (*label).to_owned(),
-                        font.clone(),
-                        egui::Color32::PLACEHOLDER,
-                    )
-                })
-                .size()
-                .x
-            })
-            .fold(0.0, f32::max)
-            + design::S;
-        Self { label, well }
-    }
-}
-/// Every block's well width and label column. `CombatSync::wells` keeps them until a value, the
-/// maximum HP or the type size changes; only `CombatSync::measure_wells` reads the values.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Wells {
-    life: f32,
-    slots: f32,
-    limited: f32,
-    currency: f32,
-    exhaustion: Column,
-    inventory: Column,
-    companions: Column,
-}
-/// What the wells were measured from: the values' revision, the maximum HP, and the label and
-/// number type sizes.
-type WellsKey = (u64, i64, u32, u32);
-/// The characters a whole number shows: its digits, and a minus sign when it is negative.
-fn digits(value: i64) -> usize {
-    value
-        .unsigned_abs()
-        .checked_ilog10()
-        .map_or(1, |log| log as usize + 1)
-        + usize::from(value < 0)
-}
-/// The widest digit in the stepper's number type.
-fn digit_width(ui: &egui::Ui) -> f32 {
-    let font = ui.style().drag_value_text_style.resolve(ui.style());
-    ('0'..='9')
-        .map(|digit| {
-            ui.fonts_mut(|fonts| {
-                fonts.layout_no_wrap(digit.to_string(), font.clone(), egui::Color32::PLACEHOLDER)
-            })
-            .size()
-            .x
-        })
-        .fold(0.0, f32::max)
-}
-/// A stepper's well that holds `digits` characters: their width plus the well's padding, never
-/// below the usual control width.
-fn well_for(ui: &egui::Ui, digit: f32, digits: usize) -> f32 {
-    (digit * digits as f32 + 2.0 * ui.spacing().button_padding.x).max(ui.spacing().interact_size.x)
-}
-/// A row label in a sheet grid.
-fn row_label(ui: &mut egui::Ui, label: &str) {
-    use crate::design::{Type, colors};
-    ui.label(Type::Body.rich(ui, label).color(colors().text));
-}
-/// One grid row: a label, the value's stepper, and an optional note. True on a change.
-fn edit_row(
-    ui: &mut egui::Ui,
-    label: &str,
-    value: &mut i64,
-    range: std::ops::RangeInclusive<i64>,
-    note: Option<String>,
-) -> bool {
-    row_label(ui, label);
-    let changed = ui
-        .horizontal(|ui| stepper_and_note(ui, label, value, range, note))
-        .inner;
-    ui.end_row();
-    changed
-}
-/// The value's stepper, and a small note after it. True on a change.
-fn stepper_and_note(
-    ui: &mut egui::Ui,
-    name: &str,
-    value: &mut i64,
-    range: std::ops::RangeInclusive<i64>,
-    note: Option<String>,
-) -> bool {
-    use crate::design;
-    let changed = design::stepper(ui, name, value, range);
-    if let Some(note) = note {
-        design::help(ui, &note);
-    }
-    changed
-}
-/// A two-column grid of sheet values: a label on the left, its stepper on the right. Every
-/// well is `well` wide, so the − and + of the grid each share an x.
-fn sheet_grid(ui: &mut egui::Ui, id: &str, well: f32, rows: impl FnOnce(&mut egui::Ui)) {
-    use crate::design;
-    ui.scope(|ui| {
-        ui.spacing_mut().interact_size.x = well;
-        egui::Grid::new(id)
-            .num_columns(2)
-            .spacing([design::L, design::XS])
-            .show(ui, rows);
-    });
-}
-/// Edit the whole number at `field` in a sheet group. The group changes only when `edit` says
-/// the number changed.
-fn step_field(group: &mut Value, field: &str, edit: impl FnOnce(&mut i64) -> bool) {
-    let mut n = group[field].as_i64().unwrap_or(0);
-    if edit(&mut n) {
-        group[field] = n.into();
     }
 }
 /// Current HP from the HP group, never below 0.
@@ -2472,35 +1696,8 @@ fn group_label(key: &str) -> &str {
     }
 }
 
-/// A character's sync block heading in the ended view, one form for every state (FK3): the
-/// name in `Heading` and the text colour, ` · `, then the status's icon and word in its colour.
-/// A status is an icon, a word and a colour; the name never takes the status colour.
-pub fn sync_heading(
-    ui: &mut egui::Ui,
-    name: &str,
-    status: &str,
-    color: egui::Color32,
-) -> egui::Response {
-    use crate::design::{Type, colors};
-    let font = Type::Heading.font(ui);
-    let mut job = egui::text::LayoutJob::default();
-    for (text, color) in [
-        (name, colors().text),
-        (" · ", colors().muted),
-        (status, color),
-    ] {
-        job.append(
-            text,
-            0.0,
-            egui::text::TextFormat {
-                font_id: font.clone(),
-                color,
-                ..Default::default()
-            },
-        );
-    }
-    ui.add(egui::Label::new(job).wrap())
-}
+#[path = "combat_sync/view.rs"]
+pub mod view;
 
 #[cfg(test)]
 mod tests {
@@ -2727,6 +1924,15 @@ mod tests {
             json!({"characterId":123,"id":4,"level":2,"totalHp":30})
         );
         assert_eq!(changes.last().unwrap().expected, target);
+        // The writes go in one order whatever order the target's fields are in.
+        let bodies =
+            |changes: Vec<Mutation>| changes.into_iter().map(|m| m.body).collect::<Vec<_>>();
+        assert_eq!(
+            bodies(mutations(&r, "conditions", &json!({"12":null,"4":2})).unwrap()),
+            bodies(changes)
+        );
+        // A run saved by an older build holds its fields in sorted order, not the sheet's.
+        assert!(mutations(&r, "death", &json!({"failCount": 1, "successCount": 0})).is_ok());
         assert!(mutations(&r, "conditions", &json!({"4":7})).is_err());
     }
     #[test]
@@ -2913,30 +2119,6 @@ mod tests {
         assert_eq!(*sync.desired, sent);
         assert!(sync.blocked.contains_key("hp"));
     }
-    #[test]
-    fn render_connected_controls_at_minimum_size() {
-        let remote = remote();
-        let mut sync = CombatSync::default();
-        sync.enabled = true;
-        *sync.desired.write() = remote.groups.clone();
-        sync.remote = Some(remote);
-        let ctx = egui::Context::default();
-        let before = sync.desired.clone();
-        let out = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(700.0, 600.0),
-                )),
-                ..Default::default()
-            },
-            |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| sync.show(ui));
-            },
-        );
-        assert!(!out.shapes.is_empty());
-        assert_eq!(*sync.desired, before);
-    }
     fn full_remote(can_edit: bool) -> Remote {
         Remote::from_raw(
             123,
@@ -3069,6 +2251,8 @@ mod tests {
         );
         // The sheet works maximums out itself, so the stat block's numbers are not limits.
         assert!(mutations(&r, "item/8", &wand(1, 8)).is_ok());
+        // A run saved by an older build holds its fields in sorted order, not the sheet's.
+        assert!(mutations(&r, "item/8", &json!({"charges": 8, "id": 8, "quantity": 1})).is_ok());
         let summon = json!({"id": 9, "removedHitPoints": 12, "temporaryHitPoints": 0});
         assert!(mutations(&r, "creature/9", &summon).is_ok());
         assert!(mutations(&r, "hp_bonus", &json!({"bonusHitPoints": 1000})).is_err());
@@ -3209,210 +2393,5 @@ mod tests {
         assert!(
             matches!(sync.notice(), Some(ActionNotice::Failed(words)) if words.contains("Check the sheet"))
         );
-    }
-    #[test]
-    fn render_every_editable_group_at_minimum_size() {
-        let remote = full_remote(true);
-        let mut sync = CombatSync::default();
-        sync.enabled = true;
-        *sync.desired.write() = remote.groups.clone();
-        sync.remote = Some(remote);
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        // Round 25 FD3: the action notice ends with its close icon, after its words.
-        const TAKEN: &str =
-            "D&D Beyond took the long rest. The values below are the sheet’s new values.";
-        // Round 25 review, round 26: the result sits in the sheet's footer, drawn as Party draws
-        // it (the sheet's scroll column in the footer's pane), so the first editable field keeps
-        // its y before the result, while it shows, after an error result and after it ends, at
-        // 960, 1200 and 1920. The result must be in view while it lives.
-        let field_top = |sync: &mut CombatSync, size: egui::Vec2| {
-            let out = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        let frame = crate::design::outcome::PaneFrame::new(ui);
-                        let mut messages = crate::design::outcome::Messages::new(
-                            &frame,
-                            "sync_test_sheet",
-                            crate::design::LIST_MEASURE,
-                        );
-                        sync.footer_messages(&frame, &mut messages);
-                        // The pane is the sheet's scroll column.
-                        let paned =
-                            messages.pane(ui, crate::design::Body::Content, |ui| sync.show(ui));
-                        sync.footer_press(paned.pressed);
-                    });
-                },
-            );
-            let notice = out.shapes.iter().find_map(|clipped| match &clipped.shape {
-                egui::Shape::Text(text)
-                    if text.galley.job.text.starts_with("D&D Beyond")
-                        && clipped.clip_rect.contains_rect(egui::Rect::from_min_size(
-                            text.pos,
-                            text.galley.size(),
-                        )) =>
-                {
-                    Some(text.pos.y)
-                }
-                _ => None,
-            });
-            let top = out.platform_output.accesskit_update.and_then(|update| {
-                update.nodes.iter().find_map(|(_, node)| {
-                    (node.label() == Some("Increase Current HP"))
-                        .then(|| node.bounds().map(|bounds| bounds.y0))
-                        .flatten()
-                })
-            });
-            // Round 28 (package P), G6 from the painted words: when the sheet's scroll output
-            // says it fits, its footer stands no more than `2 × L` below the last word.
-            let footer = crate::design::pane::footer_rect(&ctx, egui::Id::new("sync_test_sheet"));
-            let record = crate::design::pane::pane_record(&ctx, egui::Id::new("sync_test_sheet"));
-            let words = out
-                .shapes
-                .iter()
-                .filter_map(|clipped| match &clipped.shape {
-                    egui::Shape::Text(text) => Some(
-                        egui::Rect::from_min_size(text.pos, text.galley.size())
-                            .intersect(clipped.clip_rect),
-                    ),
-                    _ => None,
-                });
-            let fits = record.is_some_and(|record| record.fits());
-            let gap = footer.zip(record).and_then(|(footer, record)| {
-                crate::design::pane::short_body_gap(&record, 1.0, footer, words)
-            });
-            (top, notice, fits, gap)
-        };
-        let mut fitting = Vec::new();
-        for size in [
-            egui::vec2(960.0, 640.0),
-            egui::vec2(1200.0, 800.0),
-            egui::vec2(1920.0, 1080.0),
-        ] {
-            let mut tops = Vec::new();
-            let mut shown = Vec::new();
-            let mut gaps = Vec::new();
-            for notice in [
-                None,
-                Some(ActionNotice::Taken("long rest")),
-                Some(ActionNotice::Failed(
-                    "D&D Beyond did not take the long rest. Check the sheet in D&D Beyond, then read it again before you send another change.".into(),
-                )),
-                None,
-            ] {
-                let expected = notice.is_some();
-                sync.end_action_notice();
-                if let Some(notice) = notice {
-                    sync.action_notice.record(notice);
-                }
-                // Two passes: the first lays out, the second reads the settled place.
-                field_top(&mut sync, size);
-                let (top, notice, fits, gap) = field_top(&mut sync, size);
-                tops.push(top);
-                shown.push(notice.is_some() == expected);
-                if expected {
-                    fitting.push(fits);
-                    gaps.push(gap);
-                }
-            }
-            assert!(
-                tops[0].is_some() && tops.iter().all(|top| *top == tops[0]),
-                "At {size:?}, Increase Current HP top with no result, a result, an error and none \
-                 again: {tops:?}"
-            );
-            assert!(
-                shown.iter().all(|shown| *shown),
-                "At {size:?}, the result is in view exactly while it lives: {shown:?}"
-            );
-            assert!(
-                gaps.iter().all(Option::is_none),
-                "At {size:?}, the sheet's footer stands below a short sheet: gaps {gaps:?}"
-            );
-        }
-        assert!(
-            fitting.iter().any(|fits| *fits),
-            "the sheet is short at one size at least, so the footer check above can fail: {fitting:?}"
-        );
-        sync.action_notice.record(ActionNotice::Taken("long rest"));
-        let before = sync.desired.clone();
-        for form in [
-            None,
-            Some(RestForm::Short {
-                hit_dice: BTreeMap::new(),
-                reset_max_hp_bonus: false,
-            }),
-            Some(RestForm::Long {
-                reset_max_hp_bonus: false,
-                reduce_exhaustion: true,
-            }),
-        ] {
-            sync.rest_form = form;
-            let out = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(700.0, 600.0),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        // Round 26: the result sits in the sheet's footer.
-                        let frame = crate::design::outcome::PaneFrame::new(ui);
-                        let mut messages = crate::design::outcome::Messages::new(
-                            &frame,
-                            "sync_test_footer",
-                            600.0,
-                        );
-                        sync.footer_messages(&frame, &mut messages);
-                        let paned =
-                            messages.pane(ui, crate::design::Body::Content, |ui| sync.show(ui));
-                        sync.footer_press(paned.pressed);
-                    });
-                },
-            );
-            assert!(!out.shapes.is_empty());
-            let words = out.shapes.iter().find_map(|clipped| match &clipped.shape {
-                egui::Shape::Text(text) if text.galley.job.text == TAKEN => {
-                    Some(egui::Rect::from_min_size(text.pos, text.galley.size()))
-                }
-                _ => None,
-            });
-            let close = out
-                .platform_output
-                .accesskit_update
-                .as_ref()
-                .and_then(|update| {
-                    update.nodes.iter().find_map(|(_, node)| {
-                        (node.label() == Some("Dismiss this message")).then(|| node.bounds())
-                    })
-                })
-                .flatten();
-            assert!(
-                words
-                    .zip(close)
-                    .is_some_and(|(words, close)| close.x0 as f32 > words.right()
-                        && (close.y0 as f32) < words.top() + crate::design::L),
-                "words {words:?}, close {close:?}"
-            );
-        }
-        assert_eq!(*sync.desired, before);
-    }
-    #[test]
-    fn a_stepper_never_changes_a_value_outside_its_range_by_itself() {
-        let ctx = egui::Context::default();
-        let mut value = 33;
-        let mut changed = true;
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                changed = crate::design::stepper(ui, "Damage taken", &mut value, 0..=30);
-            });
-        });
-        assert!(!changed);
-        assert_eq!(value, 33);
     }
 }

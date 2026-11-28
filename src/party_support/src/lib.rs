@@ -2,12 +2,12 @@
 extern crate self as splat;
 use splat_character::character;
 use splat_content::content;
-pub use splat_design::{field_id, sentence};
+pub use splat_design::{sentence, state_context};
 
 #[cfg(test)]
 use splat_content_ui::test_support;
 use splat_content_ui::{
-    art, auth, content_workspace, design, dndbeyond, hermetic, persistence, rolls, sheet_writer,
+    auth, content_workspace, design, dndbeyond, hermetic, persistence, rolls, sheet_writer,
 };
 
 #[path = "../../combat_sync.rs"]

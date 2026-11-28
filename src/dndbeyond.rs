@@ -1,6 +1,6 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
+use crate::state_context::StateContext;
 use crate::{auth::Session, campaigns::Campaigns};
-use eframe::egui;
 use reqwest::{blocking::Client, redirect::Policy};
 use serde::Deserialize;
 use std::{
@@ -113,31 +113,6 @@ fn fetch(session: Session) -> Result<Vec<RemoteCampaign>, String> {
     parse(&bytes)
 }
 
-fn connection_help(ui: &mut egui::Ui) {
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        for word in "Connect your account in ".split_inclusive(' ') {
-            ui.label(
-                crate::design::Type::Small
-                    .rich(ui, word)
-                    .color(crate::design::colors().muted),
-            );
-        }
-        if crate::design::small_link(ui, "Settings").clicked() {
-            ui.ctx()
-                .data_mut(|data| data.insert_temp(egui::Id::new("open_account_settings"), true));
-        }
-        crate::design::gap(ui, crate::design::Gap::XS);
-        for word in "to update this link.".split_inclusive(' ') {
-            ui.label(
-                crate::design::Type::Small
-                    .rich(ui, word)
-                    .color(crate::design::colors().muted),
-            );
-        }
-    });
-}
-
 /// The link's one kept result, `Campaign link saved.`, of the local campaign whose link was
 /// saved. It ends with the next refresh or link, a failed link attempt, an account change, and a
 /// change of the open campaign (`poll`, every frame, on any page).
@@ -168,9 +143,6 @@ impl crate::design::results::Kept for LinkSaved {
 pub struct DndBeyond {
     account_epoch: u64,
     campaigns: Vec<RemoteCampaign>,
-    /// The widest remote campaign name, measured once per list (round 27 AN2). It ends when
-    /// `campaigns` is replaced or cleared.
-    name_column: Option<f32>,
     pending: Option<Receiver<Result<Vec<RemoteCampaign>, String>>>,
     loaded: bool,
     error: Option<String>,
@@ -208,16 +180,6 @@ impl DndBeyond {
         }
     }
 
-    /// Give one remote campaign another name, as a new list from D&D Beyond would. Tests only:
-    /// the test list is fixed (`fetch`).
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn rename_remote(&mut self, id: &str, name: &str) {
-        for remote in self.campaigns.iter_mut().filter(|remote| remote.id == id) {
-            remote.name = name.to_owned();
-        }
-        self.name_column = None;
-    }
-
     /// A list is on its way, so what is on screen is due to change.
     #[cfg(any(test, feature = "test-support"))]
     pub fn busy(&self) -> bool {
@@ -236,13 +198,7 @@ impl DndBeyond {
         self.message.end_unreachable(|_| false);
     }
 
-    pub fn poll(
-        &mut self,
-        ctx: &egui::Context,
-        epoch: u64,
-        connected: bool,
-        local: &mut Campaigns,
-    ) {
+    pub fn poll(&mut self, ctx: &StateContext, epoch: u64, connected: bool, local: &mut Campaigns) {
         let open = local.active_campaign().map(|campaign| campaign.id);
         if open != self.open {
             self.open = open;
@@ -254,7 +210,6 @@ impl DndBeyond {
             self.pending_link = None;
             self.requested_visible_link = None;
             self.campaigns.clear();
-            self.name_column = None;
             local.cancel_import();
             self.loaded = false;
             self.account_epoch = epoch;
@@ -269,7 +224,6 @@ impl DndBeyond {
                     match result {
                         Ok(campaigns) => {
                             self.campaigns = campaigns;
-                            self.name_column = None;
                             self.loaded = true;
                             self.error = None;
                             if let Some((id, remote_id)) = self.pending_link.take() {
@@ -302,151 +256,16 @@ impl DndBeyond {
         }
     }
 
-    fn refresh(&mut self, session: Session, ctx: &egui::Context) {
+    fn refresh(&mut self, session: Session, ctx: &StateContext) {
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.error = None;
         self.end_link_result();
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         thread::spawn(move || {
             let _ = tx.send(fetch(session));
             ctx.request_repaint();
         });
-    }
-
-    /// How to import from D&D Beyond, under the open Add campaign form when no account is
-    /// connected, in the narrow layout (the account section is then below the campaigns, often
-    /// out of view). It follows the form, so opening the form never moves what is above it, and
-    /// it depends on the form, the session and the layout, never on what is in view (review of
-    /// PR 320: it was drawn above the form when the account heading left the view, and moved
-    /// the pressed `Add campaign` by its height).
-    pub fn import_hint(ui: &mut egui::Ui) {
-        if ui.ctx().content_rect().width() >= 1000.0 {
-            return;
-        }
-        ui.horizontal_wrapped(|ui| {
-            ui.label("To import from D&D Beyond,");
-            if crate::design::link(ui, "connect your account").clicked() {
-                ui.ctx()
-                    .data_mut(|data| data.insert_temp(egui::Id::new("focus_cookie"), true));
-            }
-            ui.label("first.");
-        });
-    }
-
-    pub fn show_import(
-        &mut self,
-        ui: &mut egui::Ui,
-        session: Option<Session>,
-        local: &mut Campaigns,
-    ) {
-        // Without a session there is nothing to list: the open Add campaign form says how to
-        // import (`import_hint`).
-        if session.is_none() {
-            return;
-        }
-        let header = crate::design::Section::new("Add from D&D Beyond")
-            .default_open(local.all().is_empty())
-            .show(ui, |ui| {
-                let Some(session) = session else {
-                    ui.label("Connect your account first, or open an existing folder below.");
-                    return;
-                };
-                if (!self.loaded && self.error.is_none() && self.pending.is_none())
-                    || crate::design::Action::secondary("Refresh from D&D Beyond")
-                        .density(crate::design::Density::Read)
-                        .blocked_if(self.pending.is_some(), "Already refreshing.")
-                        .show(ui)
-                        .clicked()
-                {
-                    self.refresh(session, ui.ctx());
-                }
-                if self.pending.is_some() {
-                    ui.horizontal(|ui| {
-                        crate::design::spinner(ui);
-                        crate::design::blocked_reason(ui, Some("Already refreshing."));
-                    });
-                }
-                // Round 26: the list's error is in the pane's footer (`footer_messages`).
-                if self.loaded && self.campaigns.is_empty() {
-                    ui.label("No campaigns returned for this account.");
-                }
-                // Round 27 AN2: one action column, `L` after the widest name, so each Add or
-                // Added sits near its name (it was at the column's far edge).
-                let font = crate::design::Type::Strong.font(ui);
-                let column = *self.name_column.get_or_insert_with(|| {
-                    self.campaigns
-                        .iter()
-                        .map(|remote| crate::design::number_width(ui, &remote.name, &font))
-                        .fold(0.0, f32::max)
-                });
-                for remote in &self.campaigns {
-                    let added = local.is_added(&remote.id);
-                    let row = ui.horizontal(|ui| {
-                        use crate::design::{self, Action, L};
-                        let item_gap = ui.spacing().item_spacing.x;
-                        // Round 27 review: the action's room comes first, so Add (or Added) is
-                        // always whole inside the column; the name gets what is left, and a name
-                        // too long for it ends in `…`, whole on hover.
-                        let action =
-                            Action::secondary("Add…")
-                                .natural_width(ui)
-                                .max(design::number_width(
-                                    ui,
-                                    &format!("{} Added", design::icons::OK),
-                                    &design::Type::Body.font(ui),
-                                ));
-                        let name_room = (ui.available_width() - action - L).max(0.0);
-                        let words = design::one_line(
-                            ui,
-                            &remote.name,
-                            font.clone(),
-                            design::colors().text,
-                            name_room,
-                        );
-                        let cut = words.elided;
-                        // One action column, `L` after the widest name that fits: the name
-                        // takes a cell of that width.
-                        ui.spacing_mut().item_spacing.x = L;
-                        let cell = egui::vec2(column.min(name_room), ui.spacing().interact_size.y);
-                        ui.allocate_ui_with_layout(
-                            cell,
-                            egui::Layout::left_to_right(egui::Align::Center),
-                            |ui| {
-                                ui.set_min_size(cell);
-                                ui.set_max_width(cell.x);
-                                let name = ui.add(egui::Label::new(words));
-                                if cut {
-                                    name.on_hover_text(&remote.name);
-                                }
-                            },
-                        );
-                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                            ui.spacing_mut().item_spacing.x = item_gap;
-                            if added {
-                                crate::design::status(
-                                    ui,
-                                    crate::design::Status {
-                                        icon: crate::design::icons::OK,
-                                        word: "Added",
-                                        color: crate::design::colors().muted,
-                                    },
-                                );
-                            } else if !local.importing(&remote.id) {
-                                let add = crate::design::Action::secondary("Add…")
-                                    .name(&format!("Add {} from D&D Beyond", remote.name))
-                                    .show(ui);
-                                if let Some(act) = crate::design::reveal::Act::clicked(ui, &add) {
-                                    local.start_import(act, &remote.id, &remote.name);
-                                }
-                            }
-                        });
-                    });
-                    crate::design::register_row(ui, row.response.rect);
-                    local.show_import_form(ui, &remote.id);
-                }
-            });
-        crate::design::locked_control(ui, &header.header_response);
     }
 
     /// Round 26: the D&D Beyond list's error and, on Link and folder (`link`), the link's result,
@@ -475,194 +294,14 @@ impl DndBeyond {
             }));
         }
     }
-
-    pub fn show(
-        &mut self,
-        ui: &mut egui::Ui,
-        session: Option<Session>,
-        local: &mut Campaigns,
-        blocked: Option<&str>,
-    ) {
-        // Ruling R24, row 93: the block's heading row is the one form of the Link and folder
-        // page's three values; its note is the link's state.
-        use crate::design::HeadingNote;
-        let note = if self.pending.is_some() {
-            HeadingNote::Busy("Refreshing…")
-        } else if session.is_none() {
-            HeadingNote::Muted("Not connected · showing the name saved on this computer")
-        } else {
-            HeadingNote::Status(crate::design::Status {
-                icon: crate::design::icons::ONLINE,
-                word: "Connected",
-                color: crate::design::colors().connection.connected,
-            })
-        };
-        let (block, _) = crate::design::ValueBlock::new(
-            ui,
-            crate::design::HeadingRow::new("D&D Beyond").note(note),
-        );
-        let (block, ()) = block.field(|ui| self.show_link(ui, session, local, blocked));
-        block.end();
-    }
-
-    /// The link's field: the campaign picker, its refresh and its help.
-    fn show_link(
-        &mut self,
-        ui: &mut egui::Ui,
-        session: Option<Session>,
-        local: &mut Campaigns,
-        blocked: Option<&str>,
-    ) {
-        let Some(campaign) = local.active_campaign() else {
-            ui.label("Select a local campaign to configure its D&D Beyond link.");
-            return;
-        };
-        if session.is_none() {
-            connection_help(ui);
-        }
-        // Round 28 FO7: the pane's lock (a run) blocks Refresh list as it blocks the picker.
-        if crate::design::Action::secondary("Refresh list")
-            .density(crate::design::Density::Read)
-            .blocked(if let Some(lock) = blocked {
-                Some(lock)
-            } else if session.is_none() {
-                Some("Connect to D&D Beyond in Settings first.")
-            } else if self.pending.is_some() {
-                Some("Already refreshing.")
-            } else {
-                None
-            })
-            .show(ui)
-            .clicked()
-            && let Some(session) = session.clone()
-        {
-            self.pending_link = campaign
-                .dndbeyond_campaign_id
-                .clone()
-                .map(|id| (campaign.id, id));
-            self.requested_visible_link = self.pending_link.clone();
-            self.refresh(session, ui.ctx());
-        }
-        // Round 26: the link's error and result are in the pane's footer (`footer_messages`).
-        let current = campaign.dndbeyond_campaign_id;
-        let mut selected = current.clone();
-        // A link the list does not hold yet (not refreshed, or gone from the account) keeps
-        // its saved name as a choice, so the control still names it.
-        let unlisted = current
-            .as_ref()
-            .filter(|id| !self.campaigns.iter().any(|c| &c.id == *id))
-            .map(|id| {
-                let name = campaign
-                    .dndbeyond_campaign_name
-                    .clone()
-                    .unwrap_or_else(|| format!("Campaign {id}"));
-                (Some(id.clone()), name)
-            });
-        ui.horizontal(|ui| {
-            let mut choices = crate::design::Dropdown::new(
-                crate::field_id!("ddb_link").of(campaign.id),
-                "D&D Beyond campaign link",
-            )
-            .choice(None, "Not linked")
-            .choices(unlisted);
-            for remote in &self.campaigns {
-                choices = if local.linked_elsewhere(&remote.id) {
-                    choices.blocked_choice(
-                        Some(remote.id.clone()),
-                        remote.name.as_str(),
-                        "Already linked to another campaign.",
-                    )
-                } else {
-                    choices.choice(Some(remote.id.clone()), remote.name.as_str())
-                };
-            }
-            // Round 26 FN6: one width in every state. A lock keeps the form's width, so the
-            // picker ends with the Session folder field; its reason is above.
-            let dropdown = choices
-                .width(ui.available_width().min(crate::design::FORM_WIDTH))
-                .blocked(blocked)
-                .show(ui, &mut selected);
-            if ui.is_rect_visible(dropdown.response.rect) {
-                self.visible_last_frame = true;
-                let key = current.clone().map(|id| (campaign.id, id));
-                if key.is_some()
-                    && key != self.requested_visible_link
-                    && self.pending.is_none()
-                    && let Some(session) = session
-                {
-                    self.requested_visible_link = key.clone();
-                    self.pending_link = key;
-                    self.refresh(session, ui.ctx());
-                }
-            }
-        });
-        if selected != current {
-            match local.link(selected.clone()) {
-                Ok(()) => {
-                    self.requested_visible_link = None;
-                    self.message.record(LinkSaved(campaign.id));
-                    self.error = None;
-                    if let Some(remote) = self
-                        .campaigns
-                        .iter()
-                        .find(|c| Some(&c.id) == selected.as_ref())
-                        && let Err(error) =
-                            local.cache_remote_name(campaign.id, &remote.id, &remote.name)
-                    {
-                        self.error = Some(error);
-                    }
-                }
-                // A failed attempt is the newest answer: the older success ends.
-                Err(error) => {
-                    self.error = Some(error);
-                    self.end_link_result();
-                }
-            }
-        }
-        if let Some(id) = &current {
-            ui.horizontal_wrapped(|ui| {
-                if let Some(remote) = self.campaigns.iter().find(|c| &c.id == id) {
-                    if let Some(dm) = &remote.dm_username {
-                        ui.label(format!("DM: {dm}"));
-                    }
-                    if let Some(count) = remote.player_count {
-                        ui.label(format!("Players: {count}"));
-                    }
-                }
-                if crate::design::link(ui, "Open D&D Beyond campaign").clicked() {
-                    ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
-                        "https://www.dndbeyond.com/campaigns/{id}"
-                    )));
-                }
-            });
-        }
-        if self.loaded && self.campaigns.is_empty() {
-            ui.label("No campaigns returned for this account.");
-        }
-    }
 }
+
+#[path = "dndbeyond/view.rs"]
+pub mod view;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn iter1_c_offline_link_opens_account_settings() {
-        use crate::design::test_harness::ThemedPage as _;
-        use egui_kittest::kittest::Queryable;
-        let mut harness = egui_kittest::Harness::builder().themed(|ctx| {
-            egui::CentralPanel::default().show(ctx, connection_help);
-        });
-        harness.run_steps(2);
-        harness.get_by_label("Settings").click();
-        harness.run_steps(2);
-        assert!(
-            harness
-                .ctx
-                .data(|data| data.get_temp::<bool>(egui::Id::new("open_account_settings")))
-                .unwrap_or(false)
-        );
-    }
 
     #[test]
     fn visibility_keeps_request_marker_until_setting_leaves_view() {
@@ -711,12 +350,7 @@ mod tests {
             pending: Some(rx),
             ..Default::default()
         };
-        campaigns.poll(
-            &egui::Context::default(),
-            1,
-            false,
-            &mut Campaigns::default(),
-        );
+        campaigns.poll(&StateContext::new(), 1, false, &mut Campaigns::default());
         assert!(tx.send(Ok(Vec::new())).is_err());
         assert!(campaigns.campaigns.is_empty());
     }

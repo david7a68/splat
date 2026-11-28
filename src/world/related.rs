@@ -2,12 +2,8 @@
 //! here: what is in this place, what is part of this group, the events that concern it, and
 //! each line elsewhere that names it. See `docs/design/world-data.md`.
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
-use super::{Go, Role, date_words, lines::Line, type_group, type_label, world_type};
-use crate::{
-    design::{self, Type, colors},
-    lookup::{ContentIndex, Item, Mention},
-};
-use eframe::egui;
+use super::{Role, date_words, lines::Line, type_group, type_label, world_type};
+use crate::lookup::{ContentIndex, Item, Mention};
 use std::collections::BTreeMap;
 
 /// A group with more lines than this starts closed, so a page with many links stays short.
@@ -31,143 +27,6 @@ pub(crate) fn page_group(item: &Item) -> (u8, String) {
     }
 }
 
-/// A page's name as a link, then what it is, in words that wrap. The name and the words are one
-/// paragraph with one line pitch, `Small`'s (FG2): the words' first line follows the name, and
-/// each wrapped line starts at the name's edge. The name keeps its `XL` target, centred on the
-/// first line, so the paragraph has that room above and below it and no target overlaps.
-fn page_row(ui: &mut egui::Ui, index: &ContentIndex, position: usize) -> bool {
-    let item = &index.items[position];
-    let detail = match item.summary() {
-        "" if item.entry.kind == "world" => type_label(world_type(&item.entry)),
-        summary => summary.to_owned(),
-    };
-    let c = colors();
-    let width = ui.available_width().max(1.0);
-    let name = index.name_of(item);
-    let name_galley = design::one_line(ui, name, Type::Body.font(ui), c.accent, width);
-    let name_width = name_galley.size().x;
-    let target_width = name_width.max(design::XL);
-    let line = Type::Small.line();
-    let detail_galley = (!detail.is_empty()).then(|| {
-        let mut job = egui::text::LayoutJob::default();
-        job.append(
-            &detail,
-            target_width + ui.spacing().item_spacing.x,
-            egui::TextFormat {
-                font_id: Type::Small.font(ui),
-                line_height: Some(line),
-                color: c.muted,
-                ..Default::default()
-            },
-        );
-        job.wrap.max_width = width;
-        ui.fonts_mut(|fonts| fonts.layout_job(job))
-    });
-    let lines = detail_galley
-        .as_ref()
-        .map_or(line, |galley| galley.size().y.max(line));
-    // The target's room above and below the first line.
-    let pad = (design::XL - line) / 2.0;
-    let (rect, row) =
-        ui.allocate_exact_size(egui::vec2(width, lines + pad * 2.0), egui::Sense::hover());
-    design::register_row(ui, rect);
-    let first = rect.top() + pad;
-    let target = egui::Rect::from_min_size(rect.min, egui::vec2(target_width, design::XL));
-    let response = ui.interact(target, row.id.with("link"), egui::Sense::click());
-    response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), name));
-    if ui.is_rect_visible(rect) {
-        let color = if response.hovered() {
-            c.focus
-        } else {
-            c.accent
-        };
-        let top = first + line / 2.0 - name_galley.size().y / 2.0;
-        ui.painter().hline(
-            rect.left()..=rect.left() + name_width,
-            top + name_galley.size().y - 1.0,
-            egui::Stroke::new(1.0, color),
-        );
-        ui.painter()
-            .galley(egui::pos2(rect.left(), top), name_galley, color);
-        if let Some(galley) = detail_galley {
-            ui.painter()
-                .galley(egui::pos2(rect.left(), first), galley, c.muted);
-        }
-        if response.has_focus() {
-            design::focus_ring(ui, target);
-        }
-    }
-    response
-        .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .clicked()
-}
-
-/// History rows put each date in one column, as wide as the widest date plus an `S` gap, so
-/// names and summaries share their left edges. The column takes at most a third of the width,
-/// and a longer date wraps in it. A row without a date keeps the column empty.
-fn history_rows(ui: &mut egui::Ui, index: &ContentIndex, history: &[usize]) -> Option<Go> {
-    let dates: Vec<Option<String>> = history
-        .iter()
-        .map(|&position| date_words(&index.items[position].entry))
-        .collect();
-    let font = Type::Small.font(ui);
-    let column = dates
-        .iter()
-        .flatten()
-        .map(|date| {
-            ui.painter()
-                .layout_no_wrap(date.clone(), font.clone(), colors().muted)
-                .size()
-                .x
-        })
-        .fold(0.0_f32, f32::max)
-        .min(ui.available_width() / 3.0);
-    let mut go = None;
-    for (&position, date) in history.iter().zip(&dates) {
-        let clicked = ui
-            .horizontal_top(|ui| {
-                let gap = ui.spacing().item_spacing.x;
-                ui.spacing_mut().item_spacing.x = design::S;
-                let size = egui::vec2(column, design::XL);
-                ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
-                    ui.set_min_size(size);
-                    ui.set_max_width(column);
-                    // The first line sits on the name's line; a wrapped date grows down.
-                    let line = design::FirstLine {
-                        top: 0.0,
-                        height: size.y,
-                    };
-                    line.slot(ui, egui::vec2(column, size.y), Type::Small.line(), |ui| {
-                        if let Some(date) = date {
-                            ui.add(
-                                egui::Label::new(Type::Small.rich(ui, date).color(colors().muted))
-                                    .wrap(),
-                            );
-                        }
-                    });
-                });
-                ui.spacing_mut().item_spacing.x = gap;
-                page_row(ui, index, position)
-            })
-            .inner;
-        if clicked {
-            go = Some(Go::Item(position, None));
-        }
-    }
-    go
-}
-
-/// One line from another page. Pressing it opens that page at the line's heading.
-fn fact(ui: &mut egui::Ui, line: &Line, names: &[String]) -> bool {
-    let words = line.snippet(names, LINE_WIDTH);
-    let (label, text) = match &line.label {
-        Some(label) if words.starts_with(&format!("{label}:")) => words.split_at(label.len() + 1),
-        _ => ("", words.as_str()),
-    };
-    design::line_link(ui, label, text).clicked()
-}
-
 /// A source note's name: a session's as the Sessions page gives it (`ContentIndex::shown_name`).
 /// A copy of this note, or any file with its name, is named by its path, as search rows name
 /// duplicates.
@@ -182,153 +41,149 @@ fn source_name(index: &ContentIndex, item: &Item, source: usize) -> String {
     }
 }
 
-/// The lines other pages hold about this one, by the kind of page and then by page.
-/// `listed` holds the pages that a list above already shows with their summaries.
-fn from_other_pages(
-    ui: &mut egui::Ui,
-    item: &Item,
-    index: &ContentIndex,
-    listed: &[usize],
-) -> Option<Go> {
+/// One page in a related list, as data: its place, name and what it is.
+pub struct PageFacts {
+    pub position: usize,
+    pub name: String,
+    pub detail: String,
+}
+
+/// A line from another page: its label, its words and the heading it opens at.
+pub struct LineFacts {
+    pub label: String,
+    pub text: String,
+    pub heading: Option<String>,
+}
+
+/// One kind of page under From other notes: its title, its count of lines, whether it starts
+/// open, and each page with its lines and the count left out.
+pub struct FromGroup {
+    pub title: String,
+    pub count: usize,
+    pub open: bool,
+    pub pages: Vec<(usize, String, Vec<LineFacts>, usize)>,
+}
+
+/// What the reader shows of related notes, as data.
+#[derive(Default)]
+pub struct RelatedFacts {
+    pub here: Vec<PageFacts>,
+    /// Members by kind; the kind's title only when there are several kinds.
+    pub members: Vec<(Option<String>, Vec<PageFacts>)>,
+    pub history: Vec<(Option<String>, PageFacts)>,
+    pub from: Vec<FromGroup>,
+    pub also: Vec<(usize, String)>,
+}
+
+fn page_facts(index: &ContentIndex, position: usize) -> PageFacts {
+    let item = &index.items[position];
+    let detail = match item.summary() {
+        "" if item.entry.kind == "world" => type_label(world_type(&item.entry)),
+        summary => summary.to_owned(),
+    };
+    PageFacts {
+        position,
+        name: index.name_of(item).to_owned(),
+        detail,
+    }
+}
+
+/// What is here, who is part of this, its history, and what other pages say about it, as data.
+pub fn related_facts(item: &Item, index: &ContentIndex) -> RelatedFacts {
+    let mut facts = RelatedFacts::default();
+    let here = index.inside(&item.entry);
+    let mut listed = here.clone();
+    facts.here = here.iter().map(|&at| page_facts(index, at)).collect();
+    let members = index.members(item.entry.id);
+    listed.extend(members);
+    let mut groups: BTreeMap<(u8, String), Vec<usize>> = BTreeMap::new();
+    for &position in members {
+        groups
+            .entry(page_group(&index.items[position]))
+            .or_default()
+            .push(position);
+    }
+    let several = groups.len() > 1;
+    facts.members = groups
+        .into_iter()
+        .map(|((_, title), positions)| {
+            (
+                several.then_some(title),
+                positions.iter().map(|&at| page_facts(index, at)).collect(),
+            )
+        })
+        .collect();
+    let history = index.history_of(item.entry.id);
+    listed.extend(history);
+    facts.history = history
+        .iter()
+        .map(|&at| (date_words(&index.items[at].entry), page_facts(index, at)))
+        .collect();
     let mentions = index.lines_about(item.entry.id);
     if mentions.is_empty() {
-        return None;
+        return facts;
     }
     let mut names = vec![item.entry.name.to_lowercase()];
     names.extend(super::aliases(&item.entry).iter().map(|a| a.to_lowercase()));
     type Pages<'a> = Vec<(usize, Vec<&'a Line>)>;
     let mut groups: BTreeMap<(u8, String), Pages> = BTreeMap::new();
-    let mut only_linked = Vec::new();
     for page in mentions.chunk_by(|a, b| a.source == b.source) {
         let source = page[0].source;
-        let facts: Vec<&Line> = page
+        let said = listed.contains(&source);
+        let summary = index.items[source].summary();
+        let lines: Vec<&Line> = page
             .iter()
             .filter_map(|&Mention { line, .. }| Some(&index.items[source].lines[line?]))
             .filter(|line| !line.bare)
-            .collect();
-        // A summary that a list above shows is not said twice.
-        let said = listed.contains(&source);
-        let summary = index.items[source].summary();
-        let facts: Vec<&Line> = facts
-            .into_iter()
             .filter(|line| !(said && line.label.is_none() && line.text == summary))
             .collect();
-        if facts.is_empty() {
+        if lines.is_empty() {
             if !said {
-                only_linked.push(source);
+                facts.also.push((source, source_name(index, item, source)));
             }
         } else {
             groups
                 .entry(page_group(&index.items[source]))
                 .or_default()
-                .push((source, facts));
+                .push((source, lines));
         }
     }
-    if groups.is_empty() && only_linked.is_empty() {
-        return None;
-    }
-    let mut go = None;
-    design::heading(ui, design::Heading::Section("From other notes"));
-    for ((_, title), pages) in &groups {
-        let count: usize = pages.iter().map(|(_, facts)| facts.len()).sum();
-        design::Section::new(design::group_heading_text(ui, title, count))
-            .id(("lines_about", item.entry.id, title))
-            .default_open(count <= OPEN_LINES)
-            .show(ui, |ui| {
-                for (source, facts) in pages {
-                    ui.push_id(source, |ui| {
-                        if design::link(ui, &source_name(index, item, *source)).clicked() {
-                            go = Some(Go::Item(*source, None));
-                        }
-                        for line in facts.iter().take(LINES_PER_PAGE) {
-                            if fact(ui, line, &names) {
-                                go = Some(Go::Item(*source, line.heading.clone()));
-                            }
-                        }
-                        if facts.len() > LINES_PER_PAGE {
-                            ui.label(
-                                Type::Small
-                                    .rich(
-                                        ui,
-                                        design::count(
-                                            facts.len() - LINES_PER_PAGE,
-                                            "more line",
-                                            "more lines",
-                                        ),
-                                    )
-                                    .color(colors().muted),
-                            );
-                        }
-                    });
-                }
-            });
-    }
-    if !only_linked.is_empty() {
-        ui.horizontal_wrapped(|ui| {
-            ui.label(
-                Type::Small
-                    .rich(ui, "Also linked from")
-                    .color(colors().muted),
-            );
-            for source in only_linked {
-                if design::link(ui, &source_name(index, item, source)).clicked() {
-                    go = Some(Go::Item(source, None));
-                }
+    facts.from = groups
+        .into_iter()
+        .map(|((_, title), pages)| {
+            let count: usize = pages.iter().map(|(_, lines)| lines.len()).sum();
+            FromGroup {
+                title,
+                count,
+                open: count <= OPEN_LINES,
+                pages: pages
+                    .into_iter()
+                    .map(|(source, lines)| {
+                        let more = lines.len().saturating_sub(LINES_PER_PAGE);
+                        let shown = lines
+                            .iter()
+                            .take(LINES_PER_PAGE)
+                            .map(|line| {
+                                let words = line.snippet(&names, LINE_WIDTH);
+                                let (label, text) = match &line.label {
+                                    Some(label) if words.starts_with(&format!("{label}:")) => {
+                                        let (label, text) = words.split_at(label.len() + 1);
+                                        (label.to_owned(), text.to_owned())
+                                    }
+                                    _ => (String::new(), words.clone()),
+                                };
+                                LineFacts {
+                                    label,
+                                    text,
+                                    heading: line.heading.clone(),
+                                }
+                            })
+                            .collect();
+                        (source, source_name(index, item, source), shown, more)
+                    })
+                    .collect(),
             }
-        });
-    }
-    go
-}
-
-/// What is here, who is part of this, its history, and what other pages say about it.
-pub fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> Option<Go> {
-    let mut go = None;
-    let here = index.inside(&item.entry);
-    let mut listed = here.clone();
-    if !here.is_empty() {
-        design::heading(ui, design::Heading::Section("Here"));
-        for position in here {
-            if page_row(ui, index, position) {
-                go = Some(Go::Item(position, None));
-            }
-        }
-    }
-    let members = index.members(item.entry.id);
-    listed.extend(members);
-    if !members.is_empty() {
-        design::heading(ui, design::Heading::Section("Members"));
-        let mut groups: BTreeMap<(u8, String), Vec<usize>> = BTreeMap::new();
-        for &position in members {
-            groups
-                .entry(page_group(&index.items[position]))
-                .or_default()
-                .push(position);
-        }
-        let several = groups.len() > 1;
-        for ((_, title), positions) in groups {
-            if several {
-                design::heading(
-                    ui,
-                    design::Heading::Group {
-                        title: &title,
-                        count: positions.len(),
-                    },
-                );
-            }
-            for position in positions {
-                if page_row(ui, index, position) {
-                    go = Some(Go::Item(position, None));
-                }
-            }
-        }
-    }
-    let history = index.history_of(item.entry.id);
-    listed.extend(history);
-    if !history.is_empty() {
-        design::heading(ui, design::Heading::Section("History"));
-        if let Some(to) = history_rows(ui, index, history) {
-            go = Some(to);
-        }
-    }
-    go.or(from_other_pages(ui, item, index, &listed))
+        })
+        .collect();
+    facts
 }

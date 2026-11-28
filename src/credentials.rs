@@ -1,5 +1,5 @@
 use crate::auth::{self, Session};
-use eframe::egui;
+use crate::state_context::Waker;
 use std::{
     sync::mpsc::{self, Receiver, Sender},
     thread,
@@ -199,7 +199,7 @@ impl Worker {
         (Self { tx, rx }, commands, results)
     }
 
-    pub fn new(ctx: egui::Context) -> Self {
+    pub fn new(ctx: Waker) -> Self {
         let (tx, commands) = mpsc::channel();
         let (results, rx) = mpsc::channel();
         // One worker serializes keyring writes and deletes. A late connect can

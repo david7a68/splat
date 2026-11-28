@@ -4,16 +4,15 @@
 use crate::content_workspace::patch_fields;
 use crate::design::memo::Revised;
 use crate::design::text_draft::{KeptCompare, TextDraft};
-use crate::encounter_settings::GroupingWords;
+use crate::state_context::StateContext;
 use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
-    design::{self, Action, Density, Status, Tone, Type, colors, icons},
+    design::{self, Tone, colors, icons},
     library::{note_path, write_note},
     party::Party,
     persistence::{Campaign, Module},
 };
-use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use splat::content::{
@@ -29,12 +28,10 @@ use std::{
 };
 use uuid::Uuid;
 
-/// Where the party members that Add participants offers come from.
-const PARTY_SOURCE: &str = "Party members come from the sheets Splat saved last.";
+/// Where the Add participants pane's party members come from (the GPUI editor's help).
+pub const PARTY_SOURCE: &str = "Party members come from the sheets Splat saved last.";
 /// Where an encounter that this editor cannot change is repaired.
 const REPAIR_IN_ENTRIES: &str = "Repair this encounter in Campaign → Campaign entries.";
-/// Under `House rules in play`: where the trackers of a note in play are.
-const HOUSE_RULES_HELP: &str = "Trackers (Ctrl+T) shows the trackers of each note in play.";
 /// An encounter whose party rows the campaign fills, which this editor and the run cannot change.
 const PARTY_FROM_CAMPAIGN: &str = "This encounter fills some rows from the campaign’s party. Edit those rows in Campaign → Campaign entries. This editor adds party members from the sheets Splat saved last.";
 
@@ -329,20 +326,25 @@ fn named_note_path(root: &std::path::Path, folder: &str, name: &str) -> Result<S
 
 #[path = "encounters/disk.rs"]
 mod disk;
+/// The creature pane, replacement and narrow tabs as plain data, for the GPUI page.
+#[path = "encounters/forms.rs"]
+pub mod forms;
 #[path = "encounters/groups.rs"]
 mod groups;
 #[path = "encounters/history.rs"]
 mod history;
+/// The page as plain data and its acts, for the GPUI page (`src/gui/pages/encounters/`).
+#[path = "encounters/model.rs"]
+pub mod model;
 #[path = "encounters/results_key.rs"]
 mod results_key;
+#[path = "encounters/run_settings_view.rs"]
+mod run_settings_view;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
 pub(crate) use groups::{
-    ENCOUNTER_DELETED, MemberFaultView, MemberRepair, NO_MAX_HP_CAUSE, member_fault,
-    member_fault_row,
+    EDIT_GROUP, ENCOUNTER_DELETED, NO_MAX_HP_CAUSE, PACKAGES_LINK, member_fault,
 };
-#[cfg(any(test, feature = "test-support"))]
-pub use groups::{change_copies, group_checks, member_comparisons};
 pub use history::{Template, template_of};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -399,7 +401,7 @@ impl Default for Setup {
 }
 /// A table row that the parser excluded. Keep its identity beside the repair.
 #[derive(Clone, Debug)]
-pub(crate) struct RosterFault {
+pub struct RosterFault {
     pub name: String,
     pub line: usize,
     pub problem: String,
@@ -522,11 +524,6 @@ thread_local! {
     /// (frames that asked for the owned-group check, groups that the check or its key read)
     static OWNED_GROUP_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
 }
-/// The counts of the owned-group check, for `CachedWork` (F5).
-#[cfg(any(test, feature = "test-support"))]
-pub fn owned_group_work() -> (usize, usize) {
-    OWNED_GROUP_WORK.with(std::cell::Cell::get)
-}
 
 /// The next step for a group's member row that blocks Save (N2): `Fix the Cinder Wolf row of
 /// Ash Hounds before you save.`
@@ -551,12 +548,6 @@ thread_local! {
     static FAIL_NEXT_WRITE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
-/// A test makes the next Save of an encounter fail at its write, as a full disk would.
-#[cfg(any(test, feature = "test-support"))]
-pub fn fail_next_encounter_write(error: &str) {
-    FAIL_NEXT_WRITE.with(|next| *next.borrow_mut() = Some(error.to_owned()));
-}
-
 /// A group's refusal as the encounter's Save says it: `Group <name>: <words>`.
 fn named_group_words(name: &str, words: &str) -> String {
     match name.trim() {
@@ -571,11 +562,6 @@ fn empty_group_words(name: &str) -> String {
         "" => "Add a creature to the new group first.".to_owned(),
         name => format!("Add a creature to {name} first."),
     }
-}
-
-/// Where the editor leaves the roster's unread rows, for the roster to show in their places.
-fn roster_fault_rows_id(draft: Uuid) -> egui::Id {
-    egui::Id::new(("roster_fault_rows", draft))
 }
 
 /// Save's reason for the encounter's unread roster rows (`reason`), as its typed diagnosis.
@@ -593,48 +579,6 @@ pub(crate) fn unread_row_tone() -> Tone {
     unread_rows_found(String::new())
         .tone()
         .unwrap_or(Tone::Error)
-}
-
-/// The icon and colour of that tone inside the row's muted words, as `design::message` draws it.
-pub(crate) fn unread_row_mark() -> (&'static str, egui::Color32) {
-    match unread_row_tone() {
-        Tone::Error => (icons::ERROR, colors().result.error),
-        _ => (icons::WARN, colors().result.warning),
-    }
-}
-
-/// A roster row's own mark for its unread row fault (FC3): short, as a row's other faults are.
-fn roster_row_fault_words(line: usize) -> String {
-    format!("Line {line} not read")
-}
-
-/// FC3: an unread roster row in its place, with no number (it is not in the roster Splat reads)
-/// and its warning mark. The message above names its cause, and its file line the repair.
-fn unread_roster_row(ui: &mut egui::Ui, fault: &RosterFault) {
-    ui.push_id(("unread_roster_row", fault.line), |ui| {
-        ui.horizontal(|ui| {
-            ui.set_min_height(Density::Glance.row());
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                ui.add(
-                    egui::Label::new(Type::Strong.rich(ui, &fault.name).color(colors().text))
-                        .truncate(),
-                );
-                // FA5, AA2: the whole mark, icon and words, in the fault's tone (R41: an unread
-                // row is an error, `unread_row_mark`); the name keeps the text colour.
-                let (icon, color) = unread_row_mark();
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(ui, format!("{icon} {}", roster_row_fault_words(fault.line)))
-                            .color(color),
-                    )
-                    .wrap(),
-                );
-            });
-        });
-        design::rule(ui);
-    });
 }
 
 /// A roster row's fault at its place: the row's name and the file's line. Its words are the
@@ -783,10 +727,6 @@ fn unread_note(
 
 pub use splat_content_ui::content_actions::content_issue_count;
 
-pub use splat_content_ui::content_actions::issue_count_title;
-
-pub use splat_content_ui::content_actions::file_line;
-
 /// The encounter file's flags (`unread_notes`), the unread roster rows among them (`faults`) and
 /// the file's path in the campaign.
 struct UnreadRows {
@@ -871,12 +811,6 @@ fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
 }
 
 struct Draft {
-    /// M0205: after `Done` closes a roster row's changes, the least scroll that shows that row
-    /// whole in the roster's column (`design::reveal`): owned by this draft, it ends with it.
-    roster_reveal: design::reveal::Reveal,
-    /// The words typed in a field that stores a cleaned value, while it has focus
-    /// (`groups::TypedWords`): they end with the draft.
-    typed: groups::TypedWords,
     recovery: disk::Recovery,
     id: Uuid,
     path: String,
@@ -940,9 +874,7 @@ impl Draft {
             "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: New encounter\n---\n\n## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n"
         );
         Self {
-            typed: groups::TypedWords::default(),
             recovery: Default::default(),
-            roster_reveal: Default::default(),
             id,
             path: format!("Encounters/{id}.md"),
             origin: design::save_row::DraftOrigin::New,
@@ -996,9 +928,7 @@ impl Draft {
             (prose, Vec::new())
         };
         Ok(Self {
-            typed: groups::TypedWords::default(),
             recovery: Default::default(),
-            roster_reveal: Default::default(),
             id: entry.id,
             path: path.into(),
             origin: design::save_row::DraftOrigin::Saved,
@@ -1600,8 +1530,6 @@ fn set_table_value(text: &mut String, key: &str, value: &str) -> bool {
 
 /// What the DM did with the creature open beside the roster.
 enum CreatureStep {
-    /// Saved it (the pane saved it after its fields, in the frame of the press).
-    Saved,
     Close,
 }
 
@@ -1738,16 +1666,6 @@ impl CreatureEditor {
         Ok(())
     }
 }
-/// Where test builds keep the roster column's scroll id for a draft (`roster_pane`).
-#[cfg(any(test, feature = "test-support"))]
-fn roster_scroll_key(draft: Uuid) -> egui::Id {
-    egui::Id::new(("encounter_roster_scroll", draft))
-}
-
-/// The page's Ctrl+S, taken from this frame's input (`Encounters::save_shortcut`).
-pub(super) fn take_save_key(ctx: &egui::Context) -> bool {
-    design::save_row::save_key_before_drawing(ctx, true)
-}
 
 struct Creature {
     unavailable: Option<String>,
@@ -1769,213 +1687,9 @@ struct Creature {
     /// Habitat, type, size and the other facts that search and the filter use.
     facets: Option<Facets>,
 }
-const ROSTER_MAX_WIDTH: f32 = design::LIST_MEASURE;
-const ADD_PANE: &str = "encounter_add";
-const ADD_PANE_MAX_WIDTH: f32 = 640.0;
-const RESULT_ROW: f32 = design::ACTION_ROW;
-/// A result's stats, each in its own place, so that they can be compared down the list. The
-/// first place holds a party copy's word, which has no challenge rating. The package follows
-/// if the row has room for it.
-/// `hp_missing` comes from the creature's stats: the HP fault is data, never found in the words.
-pub fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>, hp_missing: bool) {
-    if hp_missing {
-        ui.horizontal_wrapped(|ui| {
-            for part in detail_parts(detail, hp_missing) {
-                if part.hp_fault {
-                    design::status(
-                        ui,
-                        design::Status {
-                            icon: design::icons::WARN,
-                            word: HP_NOT_SET,
-                            color: part.color(),
-                        },
-                    );
-                } else {
-                    ui.label(Type::Small.rich(ui, part.words).color(part.color()));
-                }
-            }
-        });
-        return;
-    }
-    const COLUMNS: [(&str, &str); 3] = [("CR ", "CR 1/8"), ("HP ", "HP 999"), ("AC ", "AC 25")];
-    let parts: Vec<&str> = detail.split(" · ").collect();
-    let other = parts
-        .iter()
-        .find(|part| !COLUMNS.iter().any(|(prefix, _)| part.starts_with(prefix)));
-    // A row of plain words: it sits close under its name, not at a control's height.
-    ui.spacing_mut().interact_size.y = 0.0;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        for (prefix, widest) in COLUMNS {
-            let gap = if prefix == "CR " {
-                design::M
-            } else {
-                design::S
-            };
-            let width = design::number_width(ui, widest, &Type::Small.font(ui)) + gap;
-            let part = parts
-                .iter()
-                .find(|part| part.starts_with(prefix))
-                .or(other.filter(|_| prefix == COLUMNS[0].0));
-            ui.allocate_ui_with_layout(
-                egui::vec2(width, Type::Small.line()),
-                egui::Layout::left_to_right(egui::Align::Center),
-                |ui| {
-                    ui.set_min_width(width);
-                    if let Some(part) = part {
-                        ui.label(Type::Small.rich(ui, *part).color(colors().muted));
-                    }
-                },
-            );
-        }
-        if detail.starts_with("NPC · as ") {
-            design::gap(ui, design::Gap::XS);
-            ui.label(
-                Type::Small
-                    .rich(ui, parts[..2].join(" · "))
-                    .color(colors().muted),
-            );
-        }
-        // Only whole: a cut name says nothing, and Read always shows it.
-        if let Some(source) = source
-            && design::number_width(ui, source, &Type::Small.font(ui)) + design::M - design::S
-                <= ui.available_width()
-        {
-            design::gap(ui, design::Gap::XS);
-            ui.label(Type::Small.rich(ui, source).color(colors().muted));
-        }
-    });
-}
 
 const STILL_READING: &str = "Still reading this campaign.";
 const ADD_PARTICIPANTS_FIRST: &str = "Add participants first.";
-
-/// Layout step 6b (ruling M24): the encounter save row's two reason slots. The campaign-switch
-/// reason; then the row's other reason (the creature's open changes, a read in progress, no
-/// participants). Each stands on the row in its full form, else in its short form in every state
-/// (`row_short`; "Add participants first." has no shorter sensible form and keeps its words),
-/// else, only on a row narrower than that, on a line of its own below.
-const ROW_REASONS: [design::save_row::ReasonSlot<'static>; 2] = [
-    design::save_row::ReasonSlot {
-        forms: &[
-            design::save_row::SAVE_OR_DISCARD_TO_SWITCH,
-            design::save_row::DISCARD_TO_SWITCH,
-        ],
-        substitutes: &[],
-        short: &[
-            design::save_row::SAVE_OR_DISCARD_SHORT,
-            design::save_row::DISCARD_SHORT,
-        ],
-    },
-    design::save_row::ReasonSlot {
-        forms: &[BLOCKED_BY_CREATURE, STILL_READING, ADD_PARTICIPANTS_FIRST],
-        substitutes: &[],
-        short: &[
-            design::Unsaved::Creature.short_reason(),
-            "Still reading.",
-            ADD_PARTICIPANTS_FIRST,
-        ],
-    },
-];
-
-/// The short form of the encounter save row's other reason (ruling M24).
-fn row_short(full: &str) -> &'static str {
-    match full {
-        BLOCKED_BY_CREATURE => design::Unsaved::Creature.short_reason(),
-        STILL_READING => "Still reading.",
-        _ => ADD_PARTICIPANTS_FIRST,
-    }
-}
-
-/// A reason on the encounter's save row: its full words, or with `short` its short form and the
-/// full words in hover and the accessible description (ruling M24).
-fn row_reason(ui: &mut egui::Ui, words: Option<&str>, short: Option<fn(&str) -> &'static str>) {
-    match (words, short) {
-        (Some(full), Some(short)) => design::save_row::short_reason(ui, short(full), full),
-        (words, _) => blocked_reason(ui, words),
-    }
-}
-
-/// Layout step 6b: the encounter editor's roster and Add participants as one composite, in panes
-/// `width` wide: the roster has the rest of the room, and Add participants trails at the right
-/// at its own or dragged width (`Column::right`). The head resolves its edges before it paints
-/// (`editor_view`), and the body draws its columns in them (`editor_panes`).
-fn editor_columns(ctx: &egui::Context, width: f32) -> design::PaneColumns {
-    let add = design::side_panel_width(ctx.content_rect().width())
-        .max(width - ROSTER_MAX_WIDTH)
-        .min(ADD_PANE_MAX_WIDTH);
-    design::PaneColumns::shared_task("encounter_editor_columns")
-        .rest(0.0)
-        .trailing(
-            0.0,
-            design::Column::right(ADD_PANE, add, design::PANEL_MIN_WIDTH..=ADD_PANE_MAX_WIDTH)
-                .page_keeps(design::RUN_LIST_KEEPS)
-                .frame(egui::Frame::new().inner_margin(egui::Margin {
-                    left: design::S as i8,
-                    right: 0,
-                    top: design::S as i8,
-                    bottom: 0,
-                })),
-        )
-}
-
-/// Where the roster's rows and rules end, in its child `rest` of `editor_columns`: its panel's
-/// `S` margin before the Add column's splitter, at most `ROSTER_MAX_WIDTH` (`editor_panes`), less
-/// its scroll column's lane.
-/// The head's name field ends there (FA9, FI9).
-fn roster_edge(rest: egui::Rangef) -> f32 {
-    // The roster's scroll column keeps its bar's lane (`roster_pane`).
-    rest.min + (rest.span() - design::S).min(ROSTER_MAX_WIDTH) - design::lane_width()
-}
-
-/// The roster and Add participants side by side: the roster at most `ROSTER_MAX_WIDTH`, then
-/// the Add column at its own or dragged width.
-fn editor_panes_width(ui: &egui::Ui) -> f32 {
-    let add_width = if design::column_dragged(ui.ctx(), ADD_PANE) {
-        design::column_widths(ui.ctx())
-            .get(ADD_PANE)
-            .copied()
-            .unwrap_or(ADD_PANE_MAX_WIDTH)
-    } else {
-        ADD_PANE_MAX_WIDTH
-    };
-    ui.available_width()
-        .min(ROSTER_MAX_WIDTH + add_width + design::S)
-}
-
-fn editor_save_state(
-    ui: &mut egui::Ui,
-    state: Status<'_>,
-    dirty: bool,
-    blocked: Option<&str>,
-) -> bool {
-    ui.set_min_height(Density::Read.control());
-    design::status(ui, state);
-    dirty
-        && Action::quiet("Discard")
-            .density(Density::Read)
-            .blocked(blocked)
-            .show(ui)
-            .clicked()
-}
-
-/// The width a vertical scroll area's content keeps whether or not its bar shows: the room
-/// before the area, less the bar's lane. Content set to this width does not move when a list
-/// grows long enough to scroll.
-pub(super) fn scroll_lane(ui: &egui::Ui) -> f32 {
-    (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0)
-}
-
-/// Help above a list that can gain a scroll bar: it wraps at the bar's lane, as the list's
-/// rows end there (FL3).
-pub(super) fn lane_help(ui: &mut egui::Ui, text: &str) {
-    ui.scope(|ui| {
-        ui.set_max_width(scroll_lane(ui));
-        design::help(ui, text);
-    });
-}
-
-pub use splat_content_ui::content_actions::creature_name_link;
 
 /// `changed` holds this creature's values when a slot or member changes them.
 /// The creature's hit points, after its changes. None is the `HP not set` fault.
@@ -2033,89 +1747,6 @@ fn slot_sheet<'a>(
         .ok()?;
     let creature = snapshot.creatures.iter().find(|c| c.id == id)?;
     party.sheet(creature.character.as_deref()?)
-}
-/// `ROSTER 8 · XP 1,050 · Moderate (up to 1,125)`: the editor's roster heading, with the
-/// difficulty in its one form at its end (F1, FB6). `difficulty::Line` decides what gives way
-/// (N7): the limit, then the XP number; a fight with no word says whose input is not known (X2,
-/// FB4). Hover and the accessible name keep what was cut.
-fn roster_heading(
-    ui: &mut egui::Ui,
-    count: usize,
-    difficulty: Option<&crate::difficulty::Difficulty>,
-) {
-    let mut job = design::group_heading_text(ui, "Roster", count);
-    let heading = job.text.clone();
-    let room = ui.available_width();
-    let lead = {
-        let mut lead = job.clone();
-        crate::difficulty::append(&mut lead, ui, Type::Label, " · ", colors().muted);
-        crate::difficulty::width(ui, &lead)
-    };
-    let fitted = difficulty.and_then(|difficulty| {
-        crate::difficulty::Line::roster(difficulty, crate::difficulty::Summary::default())
-            .fit(|text| lead + design::number_width(ui, text, &Type::Label.font(ui)) <= room)
-    });
-    let Some(fitted) = fitted else {
-        ui.label(job);
-        return;
-    };
-    crate::difficulty::append(&mut job, ui, Type::Label, " · ", colors().muted);
-    crate::difficulty::append_form(&mut job, ui, Type::Label, &fitted.form);
-    let response = ui.label(job);
-    describe_line(ui, response, difficulty, &fitted, &heading);
-}
-
-/// The hover and accessible description of a difficulty line: the party's budgets with a word;
-/// else, when the reason was cut, its whole words.
-fn describe_line(
-    ui: &egui::Ui,
-    response: egui::Response,
-    difficulty: Option<&crate::difficulty::Difficulty>,
-    fitted: &crate::difficulty::Fitted,
-    lead: &str,
-) {
-    match difficulty {
-        Some(crate::difficulty::Difficulty {
-            rating: Some(rating),
-            ..
-        }) => {
-            crate::difficulty::describe(ui, response, rating);
-        }
-        Some(crate::difficulty::Difficulty {
-            missing: Some(missing),
-            ..
-        }) if fitted.cut => {
-            if let Some(whole) = missing.words() {
-                let named = if lead.is_empty() {
-                    whole.clone()
-                } else {
-                    format!("{lead} · {whole}")
-                };
-                design::named(ui, &response, &named);
-                response.on_hover_text(whole);
-            }
-        }
-        _ => {}
-    }
-}
-
-/// `XP 1,050 · Moderate (up to 1,125)` at the right of the narrow editor's tab row, in the one
-/// form (F1, FB6), through `difficulty::Line` (N7): with less room, `XP 1,050 · Moderate`; a
-/// fight with no word says whose input is not known (X2).
-fn narrow_difficulty(ui: &mut egui::Ui, difficulty: &crate::difficulty::Difficulty) {
-    let room = ui.available_width() - design::L;
-    let Some(fitted) =
-        crate::difficulty::Line::roster(difficulty, crate::difficulty::Summary::default())
-            .fit(|text| design::number_width(ui, text, &Type::Small.font(ui)) <= room)
-    else {
-        return;
-    };
-    let mut job = egui::text::LayoutJob::default();
-    crate::difficulty::append_form(&mut job, ui, Type::Small, &fitted.form);
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        let response = ui.label(job);
-        describe_line(ui, response, Some(difficulty), &fitted, "");
-    });
 }
 
 /// The campaign's party for F1, by the ID of each copy's note, with its level from the saved
@@ -2278,63 +1909,6 @@ fn roster_summary(
             .collect(),
     }
 }
-/// Keep a stat label with its value. A second line can break between facts.
-/// The detail that fits before the change link, and whether it still holds the HP fault. The fault
-/// is shortened as late as the hit points it stands for.
-fn changed_detail_parts(
-    ui: &egui::Ui,
-    detail: &str,
-    word: &str,
-    width: f32,
-    hp_missing: bool,
-) -> (String, bool) {
-    let font = Type::Small.font(ui);
-    let reserved = design::number_width(ui, word, &font) + design::number_width(ui, " · ", &font);
-    let width = (width - reserved).max(0.0);
-    let mut parts = detail_parts(detail, hp_missing);
-    let kept = |parts: &[DetailPart<'_>]| parts.iter().any(|part| part.hp_fault);
-    if design::number_width(ui, detail, &font) <= width {
-        return (detail.into(), kept(&parts));
-    }
-    while !parts.is_empty() {
-        let priority = |part: &DetailPart<'_>| {
-            let words = part.words;
-            if words.starts_with("as ") {
-                6
-            } else if part.hp_fault || words.starts_with("HP ") {
-                4
-            } else if !(["CR ", "AC "]
-                .iter()
-                .any(|prefix| words.starts_with(prefix)))
-                && !["Enemies", "Party", "Rivals"].contains(&words)
-            {
-                1
-            } else if words.starts_with("CR ") {
-                2
-            } else if words.starts_with("AC ") {
-                3
-            } else {
-                5
-            }
-        };
-        let remove = parts
-            .iter()
-            .enumerate()
-            .min_by_key(|(at, part)| if *at == 0 { 5 } else { priority(part) })
-            .map(|(at, _)| at)
-            .unwrap();
-        parts.remove(remove);
-        let text = parts
-            .iter()
-            .map(|part| part.words)
-            .collect::<Vec<_>>()
-            .join(" · ");
-        if design::number_width(ui, &text, &font) <= width {
-            return (text, kept(&parts));
-        }
-    }
-    (String::new(), false)
-}
 
 /// The detail part of a creature without hit points.
 const HP_NOT_SET: &str = "HP not set";
@@ -2347,7 +1921,7 @@ pub(crate) struct DetailPart<'a> {
 
 impl DetailPart<'_> {
     /// The fault has the warning status colour, icon and words; every other part is muted.
-    pub fn color(&self) -> egui::Color32 {
+    pub fn color(&self) -> crate::design::Color {
         if self.hp_fault {
             colors().result.warning
         } else {
@@ -2371,28 +1945,6 @@ pub(crate) fn detail_parts(detail: &str, hp_missing: bool) -> Vec<DetailPart<'_>
             DetailPart { words, hp_fault }
         })
         .collect()
-}
-
-/// A detail line as one label: muted, with the HP fault part, if any, in the warning colour.
-/// Without the fault it is drawn exactly as before.
-pub(crate) fn detail_text(ui: &egui::Ui, detail: &str, hp_missing: bool) -> egui::WidgetText {
-    let parts = detail_parts(detail, hp_missing);
-    if !parts.iter().any(|part| part.hp_fault) {
-        return Type::Small.rich(ui, detail).color(colors().muted).into();
-    }
-    let mut job = egui::text::LayoutJob::default();
-    for (at, part) in parts.iter().enumerate() {
-        let format = |color| egui::TextFormat {
-            font_id: Type::Small.font(ui),
-            color,
-            ..Default::default()
-        };
-        if at > 0 {
-            job.append(" · ", 0.0, format(colors().muted));
-        }
-        job.append(part.words, 0.0, format(part.color()));
-    }
-    job.into()
 }
 
 fn stat_line(text: &str) -> String {
@@ -2480,36 +2032,11 @@ pub(super) fn creature_unreadable(
 /// The icon and colour of that tone inside the row's muted words, as `design::message` draws it.
 fn missing_creature_mark(
     unreadable: Option<&crate::content_workspace::UnreadableNote>,
-) -> (&'static str, egui::Color32) {
+) -> (&'static str, crate::design::Color) {
     match missing_creature_tone(unreadable) {
         Tone::Error => (icons::ERROR, colors().result.error),
         _ => (icons::WARN, colors().result.warning),
     }
-}
-
-/// The encounter's read-aloud text and notes: the editor's one multi-line field, keyed by the
-/// draft (two encounters never share its text or its Undo).
-const NOTES_FIELD: design::layout::FieldName = crate::field_id!("encounter_notes");
-const NOTES_LABEL: &str = "Read-aloud and notes";
-
-/// The face of a notes field: the font egui gives a text edit with no font set, laid out once
-/// per change (layout PR 9b).
-fn plain_face(ui: &egui::Ui) -> design::pane::Face {
-    design::pane::Face::Font(egui::FontSelection::default().resolve(ui.style()))
-}
-
-/// The face of a creature's text: monospace, laid out once per change (layout PR 9b).
-fn mono_face(ui: &egui::Ui) -> design::pane::Face {
-    design::pane::Face::Font(egui::TextStyle::Monospace.resolve(ui.style()))
-}
-
-/// A DM's notes in an editor. Every notes field has the same inner margin, and its frame ends at
-/// the right edge of the column it is in.
-fn notes_style(edit: egui::TextEdit<'_>, rows: usize) -> egui::TextEdit<'_> {
-    edit.desired_rows(rows)
-        // The width holds the margins, so the frame ends at the column's right edge.
-        .desired_width(f32::INFINITY)
-        .margin(egui::vec2(design::S, design::S))
 }
 
 /// A roster row's shown name: its creature's, the last name Splat knew for an entry that is
@@ -2566,126 +2093,6 @@ fn roster_row(index: usize, slot: &Slot, snapshot: &Snapshot) -> String {
         index + 1,
         roster_name(slot, definition, &snapshot.known_creature_names)
     )
-}
-
-/// A creature result's facts (layout PR 4): its name, a link that reads it in Lookup, over its
-/// stats, or over its warning when it cannot be added. Returns whether the name was pressed and
-/// the facts' width (`creature_facts_width`).
-fn creature_facts(ui: &mut egui::Ui, c: &Creature) -> (bool, f32) {
-    ui.spacing_mut().item_spacing.y = 0.0;
-    let read = creature_name_link(ui, &c.name)
-        .on_hover_text("Read this entry in Lookup")
-        .clicked();
-    if let Some(reason) = &c.unavailable {
-        // A status is an icon, a word and a colour, like the other warnings here. It wraps,
-        // because a warning must not be cut to an ellipsis at 960, in the two lines its row
-        // reserves (`Row::Action { status }`): in a very narrow pane, a longer one ends in `…`
-        // there, its whole words on hover and in its accessible name (issue #585).
-        design::wrapped_status_rows(
-            ui,
-            design::Status {
-                icon: icons::WARN,
-                word: reason,
-                color: colors().result.warning,
-            },
-            2,
-        );
-    } else {
-        detail_columns(ui, &c.detail, c.source.as_deref(), c.hp_missing);
-    }
-    (read, creature_facts_width(ui, c))
-}
-
-/// The width of a creature result's facts, from the tokens they are drawn with: its name, or its
-/// stats' three columns and its package, or its warning.
-fn creature_facts_width(ui: &egui::Ui, c: &Creature) -> f32 {
-    let (body, small) = (Type::Body.font(ui), Type::Small.font(ui));
-    let name = design::number_width(ui, &c.name, &body);
-    let detail = match &c.unavailable {
-        Some(reason) => {
-            design::number_width(ui, icons::WARN, &body)
-                + ui.spacing().item_spacing.x
-                + design::number_width(ui, reason, &body)
-        }
-        None => {
-            let columns: f32 = [
-                ("CR 1/8", design::M),
-                ("HP 999", design::S),
-                ("AC 25", design::S),
-            ]
-            .into_iter()
-            .map(|(widest, gap)| design::number_width(ui, widest, &small) + gap)
-            .sum();
-            // An NPC's `NPC · as …` follows the columns (`detail_columns`).
-            let parts: Vec<&str> = c.detail.split(" · ").collect();
-            let npc = if c.detail.starts_with("NPC · as ") && parts.len() >= 2 {
-                design::XS + design::number_width(ui, &parts[..2].join(" · "), &small)
-            } else {
-                0.0
-            };
-            columns
-                + npc
-                + c.source.as_deref().map_or(0.0, |source| {
-                    design::XS + design::number_width(ui, source, &small)
-                })
-        }
-    };
-    name.max(detail)
-}
-
-/// A creature result's action: `action` (`Add`, `Use`), blocked with its reason and `Open in
-/// World` beside it when the creature cannot be added, or `In roster` when it is there already.
-fn creature_action<'a>(
-    c: &'a Creature,
-    action: &'a str,
-    name: &'a str,
-    already: bool,
-) -> design::RowAction<'a> {
-    if already {
-        // Round 31 SD10, AD11 (in-roster-check-role): the same checked status as `Party in
-        // roster` above the results: its check, its word and its colour.
-        return design::RowAction::Status(Status {
-            icon: icons::OK,
-            word: "In roster",
-            color: colors().muted,
-        });
-    }
-    design::RowAction::Action {
-        words: action,
-        name,
-        blocked: c.unavailable.as_deref(),
-        recovery: c.unavailable.as_ref().map(|_| OPEN_IN_WORLD),
-    }
-}
-
-/// `Open in World`: the recovery beside a creature that cannot be added.
-const OPEN_IN_WORLD: &str = "Open in World";
-
-/// The widest action recipe of a creature list: `action`, blocked with its recovery, and `In
-/// roster`, so a row whose action changes keeps the column where it was.
-fn creature_actions_width(ui: &egui::Ui, action: &str) -> f32 {
-    [
-        design::RowAction::Action {
-            words: action,
-            name: action,
-            blocked: Some(""),
-            recovery: Some(OPEN_IN_WORLD),
-        },
-        design::RowAction::Status(Status {
-            icon: icons::OK,
-            word: "In roster",
-            color: colors().muted,
-        }),
-    ]
-    .iter()
-    .map(|recipe| recipe.width(ui))
-    .fold(0.0, f32::max)
-}
-
-/// A pressed `Open in World`: the World page opens on that creature.
-fn open_in_world(ui: &egui::Ui, c: &Creature) {
-    ui.ctx()
-        .data_mut(|data| data.insert_temp(egui::Id::new("reveal_encounter_npc"), c.id));
 }
 
 /// FF8: the creature search's separation of a copied note (`Rook Ambry copy.md is now a
@@ -2769,22 +2176,9 @@ thread_local! {
     static SEPARATION_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// What a press of a copied note's repair in the creature search did, for the page to record.
-enum Separated {
-    Done {
-        change: crate::world::Change,
-        path: String,
-        note: Uuid,
-    },
-    Failed {
-        path: String,
-        error: String,
-    },
-}
-
 /// A note's identity changed (a separation or its Undo): the shell reads the campaign again.
-fn note_identity_changed(ctx: &egui::Context) {
-    ctx.data_mut(|data| data.insert_temp(egui::Id::new("encounter_identity_changed"), true));
+fn note_identity_changed(ctx: &StateContext) {
+    ctx.set(crate::requests::ENCOUNTER_IDENTITY_CHANGED, true);
 }
 
 /// A separation's change, with the note's text before and after it.
@@ -2802,216 +2196,6 @@ impl Clone for IdentityChange {
 thread_local! {
     /// How often a separation's change, with its note text, was copied.
     static IDENTITY_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-/// How often a separation's change was copied, for its test.
-#[cfg(test)]
-pub(crate) fn identity_copies() -> usize {
-    IDENTITY_COPIES.with(std::cell::Cell::get)
-}
-
-/// A copied note is still a search result, with the same repair used by Lookup.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "ruling M20: the duplicate repair in the search results (`Ban::Body`)"
-)]
-fn duplicate_creature_results(
-    ui: &mut egui::Ui,
-    query: &str,
-    separated: &std::cell::Cell<Option<Separated>>,
-) -> bool {
-    let Some(index) = ui.ctx().data(|data| {
-        data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
-    }) else {
-        return false;
-    };
-    let Some(campaign) = &index.campaign else {
-        return false;
-    };
-    let mut seen = BTreeSet::new();
-    for item in &index.items {
-        if !item.entry.name.to_lowercase().contains(query)
-            || !(item.entry.kind == "creature"
-                || (item.entry.kind == "world" && crate::world::fights(&item.entry)))
-        {
-            continue;
-        }
-        let Some(paths) = index.duplicate_world.get(&item.entry.path) else {
-            continue;
-        };
-        let mut identity = paths.clone();
-        identity.sort();
-        if !seen.insert(identity) {
-            continue;
-        }
-        let users: Vec<_> = index
-            .items
-            .iter()
-            .filter(|other| {
-                other.entry.kind == "encounter"
-                    && crate::library::encounter_uses_entry(&other.entry, &item.entry)
-            })
-            .map(|other| other.entry.name.clone())
-            .collect();
-        let noun = crate::world::IdentityNoun::of(&item.entry);
-        // M0178: the duplicate repair's one form (`world::DuplicateIdentity`), as Library and
-        // World say it: each file's repair, with what it leaves the encounters that use it.
-        let mut fault = design::outcome::BodyFault::new(&crate::world::DuplicateIdentity(noun));
-        for (position, path) in paths.iter().enumerate() {
-            let filename = path.rsplit('/').next().unwrap_or(path);
-            let mut repair = design::outcome::Repair::new(
-                crate::world::separate_choice(noun, filename),
-                position,
-            );
-            if let Some(remaining) = paths.iter().find(|other| *other != path)
-                && !users.is_empty()
-            {
-                repair = repair.help(crate::world::duplicate_consequence(
-                    crate::world::KeptBy::Encounters(&users),
-                    remaining.rsplit('/').next().unwrap_or(remaining),
-                    position == 0,
-                ));
-            }
-            fault = fault.repair(repair);
-        }
-        if let Some(path) = fault.show(ui).and_then(|at| paths.get(at)) {
-            // FF8: the result, its Undo or the failure goes to the page's store, which the
-            // editor's footer shows. A new separation of another note is a result of its own; a
-            // failed one keeps the last change and its Undo.
-            separated.set(Some(match crate::world::new_identity(campaign, path) {
-                Ok((change, note)) => {
-                    note_identity_changed(ui.ctx());
-                    Separated::Done {
-                        change,
-                        path: path.clone(),
-                        note,
-                    }
-                }
-                Err(error) => Separated::Failed {
-                    path: path.clone(),
-                    error,
-                },
-            }));
-        }
-    }
-    !seen.is_empty()
-}
-
-fn replace_missing_creature(
-    ui: &mut egui::Ui,
-    snapshot: &Snapshot,
-    count: usize,
-    name: &str,
-) -> Option<(Uuid, bool)> {
-    let key = ui.id().with("replacement_creature");
-    let mut search = ui
-        .ctx()
-        .data_mut(|data| data.get_temp::<String>(key))
-        .unwrap_or_default();
-    let width = ui.available_width();
-    let _ = crate::field_id!("replacement_creature_search")
-        .once(crate::design::Once::PageSearch)
-        .search(
-            ui,
-            "Replacement creature",
-            &mut search,
-            "Choose another creature…",
-            width,
-        );
-    let all_key = key.with("all");
-    let mut all = ui
-        .ctx()
-        .data_mut(|data| data.get_temp::<bool>(all_key))
-        .unwrap_or(true);
-    if count > 1 {
-        ui.checkbox(&mut all, format!("Replace all {count} {name} rows"));
-    }
-    let query = search.to_lowercase();
-    // The five, kept for this picker and worked out again only when the words or the
-    // campaign's encounters (a new read: `Snapshot::revision`) change: a repaint ranks nothing
-    // (review of PR 450, P2). They live while the picker is drawn (`ReplacementPickers`).
-    let frame = ui.ctx().cumulative_frame_nr();
-    let kept = ui.ctx().data_mut(|data| {
-        let pickers = data.get_temp_mut_or_default::<ReplacementPickers>(replacement_pickers_id());
-        pickers.sweep(frame);
-        pickers
-            .kept
-            .get_mut(&key)
-            .filter(|kept| kept.snapshot == snapshot.revision && kept.query == query)
-            .map(|kept| {
-                kept.drawn = frame;
-                kept.found.clone()
-            })
-    });
-    let found = match kept {
-        Some(found) => found,
-        None => {
-            let found = std::sync::Arc::new(replacement_indices(&snapshot.creatures, &query));
-            ui.ctx().data_mut(|data| {
-                data.get_temp_mut_or_default::<ReplacementPickers>(replacement_pickers_id())
-                    .kept
-                    .insert(
-                        key,
-                        ReplacementKept {
-                            snapshot: snapshot.revision,
-                            query: query.clone(),
-                            found: found.clone(),
-                            drawn: frame,
-                        },
-                    );
-            });
-            found
-        }
-    };
-    let mut replaced = None;
-    // Layout PR 4: the action column starts `L` after the widest facts.
-    let shown: Vec<&Creature> = found
-        .iter()
-        .filter_map(|&at| snapshot.creatures.get(at))
-        .collect();
-    let columns = design::Columns::measure(
-        ui.available_width(),
-        shown.iter().map(|c| creature_facts_width(ui, c)),
-        [creature_actions_width(ui, "Use")],
-    );
-    let height = design::action_rows::row_height(RESULT_ROW, columns);
-    for (row, creature) in shown.into_iter().enumerate() {
-        ui.push_id(creature.id, |ui| {
-            let (rect, _) = ui.allocate_exact_size(
-                egui::vec2(columns.width(ui.available_width()), height),
-                egui::Sense::hover(),
-            );
-            let name = format!("Use {}", creature.name);
-            let (read, pressed) = design::action_row(
-                ui,
-                rect,
-                columns,
-                "replacement_picker",
-                row,
-                |ui| creature_facts(ui, creature),
-                creature_action(creature, "Use", &name, false),
-            );
-            if pressed.recovery {
-                open_in_world(ui, creature);
-            }
-            if pressed.action {
-                replaced = Some((creature.id, all));
-            }
-            if read {
-                ui.ctx().data_mut(|data| {
-                    data.insert_temp(
-                        egui::Id::new("markdown_clicked_lookup"),
-                        creature.name.clone(),
-                    )
-                });
-            }
-        });
-    }
-    ui.ctx().data_mut(|data| {
-        data.insert_temp(key, search);
-        data.insert_temp(all_key, all);
-    });
-    replaced
 }
 
 /// The replacement picker's five results for the lower-case `query`: the creatures that the
@@ -3054,55 +2238,6 @@ fn replacement_indices(creatures: &[Creature], query: &str) -> Vec<usize> {
     found.into_iter().map(|(.., at)| at).take(5).collect()
 }
 
-/// One replacement picker's five, with the read of the encounters and the words they are for,
-/// and the frame that last drew the picker.
-#[derive(Clone)]
-struct ReplacementKept {
-    snapshot: Uuid,
-    query: String,
-    found: std::sync::Arc<Vec<usize>>,
-    drawn: u64,
-}
-
-/// Every replacement picker's five in one context, by the picker's id (its row's). A picker
-/// that no frame drew since the last one has closed (its row folded, its draft or the page
-/// gone): the store's sweep, once per frame when a picker draws, drops its five. So the store
-/// holds the pickers of the last frame that drew one, not every row ever opened (review of
-/// PR 466, P3).
-#[derive(Clone, Default)]
-struct ReplacementPickers {
-    kept: std::collections::HashMap<egui::Id, ReplacementKept>,
-    swept: Option<u64>,
-}
-
-impl ReplacementPickers {
-    /// Once per frame, by the first picker that draws: it visits each kept picker once
-    /// (counted in tests: `REPLACEMENT_SWEPT`), not once for every picker that draws.
-    fn sweep(&mut self, frame: u64) {
-        if self.swept == Some(frame) {
-            return;
-        }
-        self.swept = Some(frame);
-        #[cfg(any(test, feature = "test-support"))]
-        REPLACEMENT_SWEPT.with(|visits| visits.set(visits.get() + self.kept.len()));
-        self.kept.retain(|_, kept| kept.drawn + 1 >= frame);
-    }
-}
-
-fn replacement_pickers_id() -> egui::Id {
-    egui::Id::new("encounters_replacement_pickers")
-}
-
-/// The number of replacement pickers whose five one context keeps, for a test of their end.
-#[cfg(test)]
-fn kept_replacement_pickers(ctx: &egui::Context) -> usize {
-    ctx.data_mut(|data| {
-        data.get_temp_mut_or_default::<ReplacementPickers>(replacement_pickers_id())
-            .kept
-            .len()
-    })
-}
-
 // Creatures the replacement picker visited on this thread, for a test that a repaint visits
 // none.
 #[cfg(any(test, feature = "test-support"))]
@@ -3112,15 +2247,6 @@ thread_local! {
 
 // Kept pickers the replacement pickers' sweep visited on this thread, for a test that it runs
 // once per frame (review of PR 473, P3).
-#[cfg(any(test, feature = "test-support"))]
-thread_local! {
-    static REPLACEMENT_SWEPT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-// Group members use the same picker without the roster's bulk action.
-fn choose_replacement_creature(ui: &mut egui::Ui, snapshot: &Snapshot) -> Option<EntryRef> {
-    replace_missing_creature(ui, snapshot, 1, "").map(|(id, _)| EntryRef::id(id))
-}
 
 /// The replacement's result for its Undo message.
 fn replacement_words(old: &str, rows: usize, new: &str) -> String {
@@ -3149,23 +2275,12 @@ fn replace_roster(
     }
 }
 
-struct SearchRoster<'a> {
-    already: &'a dyn Fn(&Creature) -> bool,
-    /// The creatures the roster's rows name: what `already` reads, so a change of the roster
-    /// ranks again (with no words, a party member on the roster is left out). Empty for a group.
-    on_roster: OnRoster<'a>,
-    /// Where a press of a copied note's repair says what it did (FF8), for the page's store.
-    separated: &'a std::cell::Cell<Option<Separated>>,
-}
-
 /// The creatures the roster's rows name, as a search's ranking reads them (issue #518): an
-/// encounter's slots, read in place, or a list of ids (a group's none, a test's). A repaint
-/// compares them with the kept ranking's copy in one walk that allocates nothing; a copy is made
+/// encounter's slots, read in place. A repaint compares them with the kept ranking's copy in one walk that allocates nothing; a copy is made
 /// only when the ranking is made again.
 #[derive(Clone, Copy)]
 enum OnRoster<'a> {
     Slots(&'a [Slot]),
-    Ids(&'a [Uuid]),
 }
 
 impl OnRoster<'_> {
@@ -3176,7 +2291,6 @@ impl OnRoster<'_> {
     /// Whether the roster names `kept`, in order.
     fn names(self, kept: &[Uuid]) -> bool {
         match self {
-            Self::Ids(ids) => ids == kept,
             Self::Slots(slots) => slots
                 .iter()
                 .filter_map(Self::slot_creature)
@@ -3188,7 +2302,6 @@ impl OnRoster<'_> {
         #[cfg(any(test, feature = "test-support"))]
         ROSTER_COPIES.with(|copies| copies.set(copies.get() + 1));
         match self {
-            Self::Ids(ids) => ids.to_vec(),
             Self::Slots(slots) => slots.iter().filter_map(Self::slot_creature).collect(),
         }
     }
@@ -3221,18 +2334,13 @@ struct SearchKey {
 }
 
 /// A search's ranking, kept for its view (the field's id) until its key changes: the creatures
-/// found, in the one order, by their place in the list; how many match as typed (no typo); and
-/// whether one of them cannot be added (its rows are taller).
+/// found, in the one order, by their place in the list; and how many match as typed (no typo).
 struct SearchRanked {
     key: SearchKey,
     /// The roster's creatures this ranking read (`OnRoster::names` checks them on a repaint).
     on_roster: Vec<Uuid>,
-    /// This ranking, as a revision: a new one for each new ranking (new words, a filter, another
-    /// read of the list or a change of the roster). The results' columns are kept by it.
-    revision: crate::design::memo::Revision,
     found: Arc<Vec<usize>>,
     as_typed: usize,
-    unavailable: bool,
 }
 
 impl SearchRanked {
@@ -3280,25 +2388,13 @@ impl SearchRanked {
         }
         let as_typed = ranked.iter().take_while(|(rank, _)| !rank.typo).count();
         let found: Vec<usize> = ranked.into_iter().map(|(_, at)| at).collect();
-        let unavailable = found
-            .iter()
-            .any(|&at| list.creatures[at].unavailable.is_some());
         Self {
             key,
             on_roster,
-            revision: crate::design::memo::Revised::new(()).revision(),
             found: Arc::new(found),
             as_typed,
-            unavailable,
         }
     }
-}
-
-/// How many times the ledger measured its lists on this thread (review of PR 581, #589): In
-/// progress, and Ready, Groups and History together. A test that an unchanged frame measures none.
-#[cfg(any(test, feature = "test-support"))]
-pub fn ledger_measures() -> usize {
-    list::LEDGER_MEASURED.with(std::cell::Cell::get)
 }
 
 // Creatures the encounter search's ranking visited on this thread, for a test that a repaint
@@ -3306,15 +2402,12 @@ pub fn ledger_measures() -> usize {
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static SEARCH_RANKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    /// How many times the search's results columns were measured on this thread (#565).
-    static RESULT_COLUMNS_MEASURED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// How many times a search copied the roster's creatures for its ranking (issue #518).
     static ROSTER_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 struct Snapshot {
     revision: Uuid,
-    campaign_root: std::path::PathBuf,
     catalogue: Catalogue,
     known_creature_names: BTreeMap<String, String>,
     creatures: Vec<Creature>,
@@ -3600,7 +2693,6 @@ impl Snapshot {
         );
         let mut snapshot = Self {
             revision: Uuid::new_v4(),
-            campaign_root: campaign.path.clone(),
             groups,
             known_creature_names,
             run_creatures,
@@ -3654,7 +2746,7 @@ impl Snapshot {
 }
 /// One of a draft's own results in the editor's footer.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum DraftResult {
+pub enum DraftResult {
     RemovedGroup,
     Replacement,
 }
@@ -3779,7 +2871,7 @@ impl design::results::Kept for EditorMark {
 /// `removed_saved_group`, `removed_encounter`) and ends with it (FI1, FJ4). Its footer order is
 /// issued when its action is done (`stamp_kept`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-enum KeptResult {
+pub enum KeptResult {
     Discarded,
     GroupDiscarded,
     RunDeleted,
@@ -3950,7 +3042,7 @@ fn outcome_words(words: &str) -> design::outcome::Sentence {
 
 /// What a press in an Encounters footer asks for. An Undo names its line by the press's ticket.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FooterPress {
+pub enum FooterPress {
     Undo,
     /// The Undo of the encounter draft's own result (`editor_results`).
     UndoEditor,
@@ -4088,13 +3180,9 @@ pub struct Encounters {
     /// A Save or a start was refused for the draft at `validation_path`, so its check runs again
     /// when that draft or the campaign changes. It ends with another draft.
     refusal_watch: bool,
-    /// B4c: the plan refusal's check, keyed by the snapshot revision and `plan_epoch`: whether
-    /// the refusal for that group still stands. An unchanged frame does not compare the drafts.
+    /// B4c: the plan refusal's check, keyed by the snapshot revision: whether the refusal for
+    /// that group still stands. An unchanged campaign read does not compare the drafts.
     plan_refusal_check: Option<(PlanRefusalKey, bool)>,
-    /// Bumped on each frame with an editing input and the frame after it, while a plan refusal
-    /// is stored (as `edit_epoch`, for every page).
-    plan_epoch: u64,
-    plan_edited_last_frame: bool,
     /// Test only: while set, `poll` takes no new read of the campaign (a load in flight waits),
     /// so a proof's window of unchanged frames keeps one snapshot revision.
     #[cfg(any(test, feature = "test-support"))]
@@ -4157,9 +3245,7 @@ pub struct Encounters {
     pub peek: Option<Uuid>,
     focus_name: bool,
     focus_search: bool,
-    /// Ctrl+S taken this frame by `save_shortcut`. The save is done after the fields it writes
-    /// have taken this frame's input (the creature's pane, the editor's `then`, the group
-    /// editor), so a key typed in the frame of Ctrl+S is saved too. `show_page` ends it.
+    /// Ctrl+S asked for this frame (`save_by_key_now`); `save_by_key` takes it.
     save_key: bool,
     editor_pane: EditorPane,
     expanded: Option<String>,
@@ -4215,6 +3301,9 @@ pub struct Encounters {
     member_results: design::Results<MemberOwner, MemberMark>,
     /// Each encounter draft's own results (a removed group, a replacement), for its editor.
     editor_results: design::Results<EditorOwner, EditorMark>,
+    /// The GPUI page's creature search: its ranking and its rows, kept until the ranking's key
+    /// or the roster it read changes (`model::Encounters::add_view`).
+    search_ranked: Option<(Arc<SearchRanked>, Arc<Vec<model::ResultRow>>)>,
 }
 pub use splat_session_records::encounters::PlanFight;
 /// What the page needs from the story: where each run's event is, and which sessions exist.
@@ -4228,7 +3317,8 @@ pub struct Story<'a> {
     pub revision: Option<(crate::design::memo::Revision, u64)>,
 }
 /// What the DM asked for from a row of the list. One press in a frame, so one of these.
-enum ListAction {
+#[derive(Clone, Debug)]
+pub enum ListAction {
     Resume(std::path::PathBuf),
     ReadHistory(std::path::PathBuf),
     ContinueFight(std::path::PathBuf),
@@ -4247,66 +3337,13 @@ enum EditorPane {
     Add,
 }
 const START_FIGHT: &str = "Start fight";
-const RELOAD_HINT: &str = "Read encounters and runs from disk again";
-const NAME_FIELD: &str = "Encounter name";
-const SEARCH_FIELD: &str = "Find a creature or party member";
 
-/// The encounter's name field. Its id comes from the draft, so each encounter keeps its own text
-/// history (Ctrl+Z in one never brings back another's words).
-fn name_field(ui: &mut egui::Ui, draft: &mut Draft, width: f32) -> egui::Response {
-    let font = Type::Heading.font(ui);
-    ENCOUNTER_NAME
-        .of(draft.id)
-        .single_line(ui, &mut draft.name, |edit| {
-            edit.desired_width(width)
-                .min_size(egui::vec2(0.0, Density::Scan.control()))
-                .margin(egui::vec2(design::S, design::XS))
-                .font(font)
-        })
-}
-
-const ENCOUNTER_NAME: design::FieldName = crate::field_id!("encounter_name");
-const CREATURE_NAME: design::FieldName = crate::field_id!("encounter_creature_name");
-/// The creature pane's Markdown text, by the creature's file.
-const CREATURE_TEXT: design::FieldName = crate::field_id!("encounter_creature_text");
-const INITIATIVE_GROUP: design::FieldName = crate::field_id!("roster_initiative_group");
-const RUN_FOLDER: design::FieldName = crate::field_id!("run_folder");
-const RUN_INITIATIVE: design::FieldName = crate::field_id!("run_initiative");
-const RUN_INSPIRATION: design::FieldName = crate::field_id!("run_inspiration");
-const SYNC_OPTION: &str = "Sync party with D&D Beyond";
-const REPEATABLE_OPTION: &str = "Keep in Ready during a run";
-const REPEATABLE_HELP: &str = "Lists this encounter under Ready to run while a fight from it is unfinished. Start fight waits until no fight is open.";
-const LOOT_FIELD: &str = "Loot";
-const ENCOUNTER_LOOT_HELP: &str =
-    "What the party finds when this fight ends. A creature’s own loot is in its Changes.";
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often this thread ran an encounter draft's full check.
     static VALIDATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// How many result keys this thread checked (`KeyWatch::alive`).
     static KEY_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-/// Whether this frame has an input that can change a draft: a key, text, a press, a wheel, a
-/// held pointer (a drag), a dropped file or an accessibility action. Hover alone cannot.
-fn edit_input(ctx: &egui::Context) -> bool {
-    ctx.input(|i| {
-        i.pointer.any_down()
-            || !i.raw.dropped_files.is_empty()
-            || i.events.iter().any(|event| {
-                matches!(
-                    event,
-                    egui::Event::Key { .. }
-                        | egui::Event::Text(_)
-                        | egui::Event::Paste(_)
-                        | egui::Event::Cut
-                        | egui::Event::Ime(_)
-                        | egui::Event::PointerButton { .. }
-                        | egui::Event::MouseWheel { .. }
-                        | egui::Event::AccessKitActionRequest(_)
-                )
-            })
-    })
 }
 
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
@@ -4318,9 +3355,9 @@ pub const GROUP_DRAFT: &str = "Group draft";
 pub const CREATURE_DRAFT: &str = "Creature draft";
 pub const RUN_SETTINGS_DRAFT: &str = "Run settings draft";
 const BLOCKED_BY_CREATURE: &str = design::Unsaved::Creature.reason();
-/// The key of the plan refusal's cached check: the campaign read's revision, the edit epoch and
-/// the refused group's id.
-type PlanRefusalKey = (Option<Uuid>, u64, Uuid);
+/// The key of the plan refusal's cached check: the campaign read's revision and the refused
+/// group's id.
+type PlanRefusalKey = (Option<Uuid>, Uuid);
 
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
@@ -4444,22 +3481,6 @@ impl Encounters {
         self.refused(invalid);
         self.start_refused = answer;
     }
-    /// N1: Save's checks of the open encounter's changed groups as one ranked diagnosis: the
-    /// first refused change (named `Group <name>: …`, as Save says it) outranks the first missing
-    /// part, whose group's origin comes with it. Checked again only when the campaign's read or a
-    /// changed group's own revision changes.
-    /// F5 (B3b): the owned-group check's key inputs now, and whether a campaign read is still
-    /// pending: a test holds them fixed and names the input that changed.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn owned_group_inputs(&self) -> Option<(Uuid, usize, u64, bool)> {
-        let (snapshot, draft) = (self.snapshot.as_ref()?, self.draft.as_ref()?);
-        Some((
-            snapshot.revision,
-            draft.groups.len(),
-            groups::revisions_issued(),
-            self.pending.is_some(),
-        ))
-    }
     fn owned_groups_diagnosis(&mut self) -> OwnedGroupsFound {
         let (Some(snapshot), Some(draft)) = (self.snapshot.as_ref(), self.draft.as_ref()) else {
             return OwnedGroupsFound {
@@ -4503,6 +3524,19 @@ impl Encounters {
     #[cfg(any(test, feature = "test-support"))]
     pub fn busy(&self) -> bool {
         self.pending.is_some()
+    }
+
+    /// Block until the load in flight has its result (its completion signal, never a clock),
+    /// and hand that result to the next `poll`, which takes it as it takes any. A test's wait.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn wait_for_load(&mut self) {
+        if let Some(rx) = self.pending.take() {
+            let (tx, ready) = mpsc::channel();
+            if let Ok(result) = rx.recv() {
+                let _ = tx.send(result);
+            }
+            self.pending = Some(ready);
+        }
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -4561,15 +3595,6 @@ impl Encounters {
             .as_mut()
             .expect("an open run")
             .simulate_read(name, more_damage);
-    }
-
-    /// Running syncs react to the session from now on, as real ones do.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn simulate_session_end(&mut self) {
-        self.run
-            .as_mut()
-            .expect("an open run")
-            .stop_simulating_sync();
     }
 
     /// Show an error line. An empty message clears it.
@@ -5033,15 +4058,6 @@ impl Encounters {
         });
         self.kept = kept;
     }
-    /// The group editor, as a part of the session's page.
-    pub fn group_in_plan_view(
-        &mut self,
-        ui: &mut egui::Ui,
-        active: &Campaign,
-        campaigns: &Campaigns,
-    ) {
-        self.group_editor_view(ui, active, campaigns, true);
-    }
     /// The groups a session's plan can offer and link: those for any encounter. A group that
     /// belongs to one encounter comes with that encounter.
     pub fn plan_groups(&self) -> Vec<Arc<crate::encounter_run::RunGroup>> {
@@ -5056,17 +4072,10 @@ impl Encounters {
     }
     /// B4c: whether the plan's refusal for `group` still stands: a draft is unsaved and the
     /// campaign still has the group. Read only while a refusal is stored; the drafts are
-    /// compared again only when the campaign was read again or a frame had an editing input
-    /// (or follows one: a click's change lands late in its frame).
-    pub fn plan_refusal_stands(&mut self, ctx: &egui::Context, group: Uuid) -> bool {
-        let edited = edit_input(ctx);
-        let edited_before = std::mem::replace(&mut self.plan_edited_last_frame, edited);
-        if edited || edited_before {
-            self.plan_epoch += 1;
-        }
+    /// compared again only when the campaign was read again.
+    pub fn plan_refusal_stands(&mut self, group: Uuid) -> bool {
         let key = (
             self.snapshot.as_ref().map(|snapshot| snapshot.revision),
-            self.plan_epoch,
             group,
         );
         if let Some((cached, stands)) = self.plan_refusal_check
@@ -5081,11 +4090,6 @@ impl Encounters {
                 .is_some_and(|snapshot| snapshot.groups.iter().any(|g| g.id == group));
         self.plan_refusal_check = Some((key, stands));
         stands
-    }
-    /// Test only: the campaign read's revision, which keys the plan refusal's check.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn snapshot_revision(&self) -> Option<Uuid> {
-        self.snapshot.as_ref().map(|snapshot| snapshot.revision)
     }
     /// Test only: whether the campaign read offers a creature of this name to the encounter
     /// search (the creatures the campaign's package choices use).
@@ -5385,7 +4389,7 @@ impl Encounters {
             .as_ref()
             .is_some_and(crate::encounter_run::Run::pending_sync)
     }
-    fn reload(&mut self, ctx: &egui::Context, campaign: Campaign, modules: Vec<Module>) {
+    fn reload(&mut self, ctx: &StateContext, campaign: Campaign, modules: Vec<Module>) {
         // A reload is a disk event too: a separated copy changed by another program ends.
         self.refresh_separations();
         self.creature = None;
@@ -5418,10 +4422,10 @@ impl Encounters {
         self.ready_lines = crate::difficulty::Kept::default();
         self.ready_lines_seen = None;
     }
-    fn start_load(&mut self, ctx: &egui::Context, campaign: Campaign, modules: Vec<Module>) {
+    fn start_load(&mut self, ctx: &StateContext, campaign: Campaign, modules: Vec<Module>) {
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         std::thread::spawn(move || {
             let _ = tx.send(Snapshot::load(&campaign, &modules));
             ctx.request_repaint();
@@ -5430,7 +4434,7 @@ impl Encounters {
     /// New content on disk. The open draft stays, however unsaved (T8.1).
     pub fn refresh_content(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         campaigns: &Campaigns,
         root: &std::path::Path,
     ) {
@@ -5448,7 +4452,7 @@ impl Encounters {
         }
     }
     /// Keep the snapshot current. The shell calls this every frame.
-    pub fn poll(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    pub fn poll(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         self.poll_reads(ctx, campaigns);
         self.note_run_facts();
     }
@@ -5478,7 +4482,7 @@ impl Encounters {
         self.run_facts.0.set(facts);
     }
 
-    fn poll_reads(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    fn poll_reads(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         #[cfg(any(test, feature = "test-support"))]
         if self.hold_reads {
             return;
@@ -5540,27 +4544,9 @@ impl Encounters {
         self.member_results
             .end_unreachable(|mark| mark.draft.alive());
     }
-    /// Ctrl+S on this page saves the open creature while it has changes, else the open
-    /// encounter or group. The key is taken here, before the page draws; the save is done
-    /// after the fields it writes have taken this frame's input (`save_key`): the creature's
-    /// in its pane's `then`, the encounter's in the editor's `then`, a group's after its
-    /// editor's fields. A digit typed in the frame of Ctrl+S is saved with it (review of PR 499).
-    /// `modal`: the app's one test (`crate::art::modal_open`: its dialogs, the full-window image, any
-    /// egui modal). While a modal is open the key is left alone, so nothing saves beneath it
-    /// (reviews of PR 499 and PR 525).
-    pub fn save_shortcut(&mut self, ctx: &egui::Context, modal: bool, campaigns: &Campaigns) {
-        // Taken for the open editor whether or not it has changes yet: the first edit can come
-        // in the same frame. Its owner saves only if it has changes after its fields ran.
-        if !modal
-            && (self.creature.is_some() || self.draft.is_some() || self.group_draft.is_some())
-            && campaigns.active_campaign().is_some()
-        {
-            self.save_key |= take_save_key(ctx);
-        }
-    }
-    /// The page's Ctrl+S that no pane took after its fields (the creature's pane was not drawn
-    /// this frame, a narrow window's other tab): saved now, as nothing of it was drawn.
-    fn save_by_key(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
+    /// The page's Ctrl+S: the open creature while it has changes, else the open group, else the
+    /// encounter draft.
+    fn save_by_key(&mut self, ctx: &StateContext, active: &Campaign, modules: &[Module]) {
         if !std::mem::take(&mut self.save_key) {
             return;
         }
@@ -5573,7 +4559,7 @@ impl Encounters {
             self.save_draft(ctx, active, modules);
         }
     }
-    fn save_draft(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
+    fn save_draft(&mut self, ctx: &StateContext, active: &Campaign, modules: &[Module]) {
         let Some(draft) = self.draft.as_mut() else {
             return;
         };
@@ -5728,6 +4714,10 @@ impl Encounters {
     }
     /// Read the campaign again now: a row must not show a new creature as unavailable.
     fn reload_snapshot(&mut self, active: &Campaign, modules: &[Module]) {
+        // A read made now is newer than any read still in flight: that one's result is older
+        // and must not replace this one when it lands.
+        self.pending = None;
+        self.refreshing = false;
         match Snapshot::load(active, modules) {
             // Run settings being edited are the DM's, and this read must not drop them.
             Ok(mut snapshot) => {
@@ -5769,194 +4759,6 @@ impl Encounters {
         self.saved = true;
         self.focus_search = true;
     }
-    /// Beside the roster, in place of the search. It says what this creature is, and only the
-    /// numbers a DM most often changes have fields of their own.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
-    )]
-    fn creature_pane(
-        ui: &mut egui::Ui,
-        editor: &mut CreatureEditor,
-        root: &std::path::Path,
-        save_key: &mut bool,
-    ) -> Option<CreatureStep> {
-        if editor.recovery.change.is_some() {
-            if let Some(keep) = editor.recovery.show(
-                ui,
-                &editor.text().unwrap_or_default(),
-                ("creature", &editor.fields.name),
-            ) {
-                if keep {
-                    if let Some(change) = editor.recovery.accept() {
-                        editor.path = change.path;
-                        editor.baseline = change.text.unwrap_or_default();
-                        editor.error = None;
-                    }
-                } else {
-                    return Some(CreatureStep::Close);
-                }
-            }
-            return None;
-        }
-        let dirty = editor.dirty();
-        let mut close = false;
-        // The heading and, while nothing is changed, `Done` at its right: one control high in
-        // both states, so the save row and the fields keep their place when `Done` goes.
-        ui.horizontal(|ui| {
-            ui.set_min_height(Density::Read.control());
-            ui.label(
-                Type::Heading
-                    .rich(ui, "This campaign’s creature")
-                    .color(colors().text),
-            );
-            if !dirty {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    close = Action::quiet("Done")
-                        .name("Done with this creature")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked();
-                });
-            }
-        });
-        // M0186: the save row by its one rule (`DraftState`): the word and `Discard` at the
-        // left, `Save creature` at the right. The encounter beside it owns the primary, so Save
-        // stays secondary; a failed Save says `Not saved` until the next one works.
-        let mut state = design::DraftState::new(
-            design::save_row::DraftOrigin::Saved,
-            if dirty {
-                design::save_row::Changed::Yes
-            } else {
-                design::save_row::Changed::No
-            },
-            design::save_row::Primary::Elsewhere,
-        )
-        // Issue #553: the encounter's own Discard can show beside it.
-        .discard_named("Discard creature changes");
-        if editor.error.is_some() {
-            state = state.not_saved();
-        }
-        let row = design::save_row(ui, &state, "Save creature");
-        let save = row.save;
-        // Discard drops the creature's changes and closes its pane.
-        close |= row.discard;
-        // A refused Save's reason sits in the pane's footer (typed: migration-32 L2c), so the
-        // fields keep their place. The pane's body fills its room: the creature's text is a
-        // Markdown editor as tall as the room under the fields. L1c (`pane_then`): Save (or
-        // Ctrl+S on it) is done after the fields, so it writes what this frame typed, and its
-        // reason is read after it: the frame of the press shows it.
-        let frame = design::outcome::PaneFrame::new(ui);
-        let messages = design::outcome::Messages::<design::outcome::NoPress>::new(
-            &frame,
-            ("creature_footer", editor.path.clone()),
-            ui.available_width(),
-        );
-        let body = design::pane::Body::Fills(design::pane::Fills::because(
-            design::pane::FillsReason::MarkdownEditor,
-        ));
-        let paned = messages.pane_then(
-            ui,
-            body,
-            move |ui| {
-                // The creature's fields, keyed by its file.
-                let key = design::TextKey::from_data(editor.path.clone());
-                // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
-                // AK2, FK3: `text_input` takes the frame's width, so the field ends where Save does.
-                design::field(ui, "Name", None, None, |ui| {
-                    let width = ui.available_width();
-                    design::line_field(
-                        ui,
-                        CREATURE_NAME.of(key.clone()),
-                        "Name",
-                        &mut editor.fields.name,
-                        "Name",
-                        width,
-                    )
-                });
-                let focus_hp = std::mem::take(&mut editor.focus);
-                ui.horizontal(|ui| {
-                    design::field(ui, "Hit points", None, None, |ui| {
-                        let response = design::number_field(
-                            ui,
-                            "Hit points",
-                            &mut editor.fields.hp,
-                            "HP",
-                            56.0,
-                            Density::Read.control(),
-                        );
-                        if focus_hp {
-                            design::focus_and_select(ui, response.id, &editor.fields.hp);
-                        }
-                    });
-                    design::field(ui, "Armor class", None, None, |ui| {
-                        design::number_field(
-                            ui,
-                            "Armor class",
-                            &mut editor.fields.armor_class,
-                            "AC",
-                            56.0,
-                            Density::Read.control(),
-                        );
-                    });
-                });
-                // The file's source, closed until wanted: the common changes have fields above.
-                design::quiet_section(ui, "Its text, as Markdown", |ui| {
-                    let room = ui.available_height();
-                    design::ScrollColumn::new("creature_text")
-                        .max_height(room)
-                        .fit_height()
-                        .show(ui, |ui| {
-                            let width = ui.available_width() - 2.0 * design::S - design::M;
-                            let output = CREATURE_TEXT.of(key).editor(
-                                ui,
-                                &mut editor.fields.body,
-                                mono_face(ui),
-                                |edit| {
-                                    edit.font(egui::TextStyle::Monospace)
-                                        .desired_width(width)
-                                        .margin(egui::vec2(design::S, design::S))
-                                },
-                            );
-                            if let Some(note) =
-                                crate::markdown_source::pressed_note_link(ui, &output, None)
-                            {
-                                crate::markdown_view::send_note_link(ui.ctx(), note, None);
-                            }
-                            design::named(ui, &output.response, "Creature text");
-                        });
-                });
-                editor
-            },
-            |editor, messages| {
-                // The page's Ctrl+S is this creature's while it has changes, after its fields
-                // took this frame's input (`save_shortcut`).
-                let keyed = *save_key && editor.dirty();
-                if keyed {
-                    *save_key = false;
-                }
-                let saved = (save || keyed)
-                    && match editor.save(root) {
-                        Ok(()) => true,
-                        Err(e) => {
-                            editor.error = Some(e);
-                            false
-                        }
-                    };
-                if let Some(error) = editor.error.clone() {
-                    messages.outcome(design::outcome::FaultMessage::new(&EncounterFault::Failed(
-                        error,
-                    )));
-                }
-                saved
-            },
-        );
-        if paned.body {
-            Some(CreatureStep::Saved)
-        } else {
-            close.then_some(CreatureStep::Close)
-        }
-    }
     /// What the roster and the creature beside it asked for, once neither pane is borrowed.
     fn after_panes(
         &mut self,
@@ -5966,7 +4768,6 @@ impl Encounters {
         modules: &[Module],
     ) {
         match step {
-            Some(CreatureStep::Saved) => self.creature_saved(active, modules),
             Some(CreatureStep::Close) => {
                 self.clear_notice();
                 self.creature = None;
@@ -6095,7 +4896,7 @@ impl Encounters {
     }
     pub fn tick_sync(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         session: Option<crate::auth::Session>,
         epoch: u64,
         active: Option<&Campaign>,
@@ -6129,10 +4930,11 @@ impl Encounters {
             }
         }
     }
-    /// The Run page. Returns true when the run has just closed.
-    pub fn show_run(&mut self, ui: &mut egui::Ui, active: &Campaign) -> bool {
+    /// What the run reads from this page before the Run page draws: the
+    /// campaign's creature names, groups, scale and creatures, and tonight's planned groups.
+    pub fn run_reads(&mut self) {
         let Some(run) = &mut self.run else {
-            return false;
+            return;
         };
         if let Some(snapshot) = &self.snapshot {
             run.set_roster_names(snapshot.revision, &snapshot.known_creature_names);
@@ -6140,9 +4942,13 @@ impl Encounters {
             run.creatures = Some(snapshot.run_creatures.clone());
         }
         run.planned.clone_from(&self.planned_groups);
-        if !run.show(ui) {
-            return false;
-        }
+    }
+    /// The DM closed the run on the Run page: it goes, and the list reads its
+    /// runs again.
+    pub fn close_shown_run(&mut self, active: &Campaign) {
+        let Some(run) = &self.run else {
+            return;
+        };
         // A setup nobody touched holds nothing. It would only be a line to remove later.
         if run.untouched_setup()
             && let Some(path) = run.path()
@@ -6151,7 +4957,6 @@ impl Encounters {
         }
         self.run = None;
         self.read_runs_again(active);
-        true
     }
     /// AB1: a folder that held this campaign's runs and is now gone is a read failure, not an
     /// empty list, also after a reload. The page remembers that the folder held runs until the
@@ -6186,69 +4991,6 @@ impl Encounters {
         s.take_run_list(read, missing);
         self.note_run_folder(&mut s);
         self.snapshot = Some(s);
-    }
-    pub fn show(
-        &mut self,
-        ui: &mut egui::Ui,
-        campaigns: &Campaigns,
-        party: &Party,
-        story: &Story<'_>,
-    ) {
-        // FA5: the title and the first column start at the shell's edge (x 148), as on World,
-        // Library and Campaign. A quiet action at its text edge uses `.line_start()`.
-        self.show_page(ui, campaigns, party, story);
-    }
-
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "ruling M20: the page’s placeholder while another campaign’s encounter is open (`Ban::Body`)"
-    )]
-    fn show_page(
-        &mut self,
-        ui: &mut egui::Ui,
-        campaigns: &Campaigns,
-        party: &Party,
-        story: &Story<'_>,
-    ) {
-        self.poll(ui.ctx(), campaigns);
-        let Some(active) = campaigns.active_campaign() else {
-            self.save_key = false;
-            return;
-        };
-        if self
-            .active
-            .as_ref()
-            .is_none_or(|c| c.id != active.id || c.path != active.path)
-        {
-            // M0192 (ruling M20): the page cannot show while another campaign's encounter is
-            // open, so its fault stands in place of its body, in the fault's tone.
-            let _: Option<FooterPress> =
-                design::outcome::PagePlaceholder::new(&EncounterFault::PreviousCampaignDraft)
-                    .show(ui);
-            self.save_key = false;
-            return;
-        }
-        if self.draft_dirty() {
-            self.message = None;
-        }
-        if self.group_draft.is_some() {
-            // Taken up on this page, it is this page's. Its save stays here, and links nothing.
-            self.group_in_plan = false;
-            self.group_editor_view(ui, &active, campaigns, false);
-            if self.peek.is_some() {
-                self.editor_pane = EditorPane::Add;
-            }
-        } else if self.draft.is_some() {
-            self.editor_view(ui, &active, campaigns, party);
-            // What was just read may be what the DM adds next, so the results stay in view.
-            if self.peek.is_some() {
-                self.editor_pane = EditorPane::Add;
-            }
-        } else {
-            self.list_view(ui, &active, campaigns, story);
-        }
-        // A Ctrl+S that no view took this frame ends with it.
-        self.save_key = false;
     }
 
     fn start_blocked(&self) -> Option<&'static str> {
@@ -6467,6 +5209,37 @@ impl Encounters {
             .collect()
     }
 
+    /// The list's footer lines, for both views: the kept results with their tickets, then why
+    /// the last act failed, then an unreadable run folder with `Choose folder`.
+    fn list_lines<'f>(
+        &mut self,
+        messages: &mut design::outcome::Messages<'f, FooterPress>,
+        frame: &'f design::outcome::PaneFrame,
+    ) {
+        let kinds = self.kept_results(true);
+        for line in self.kept_lines(frame, &kinds) {
+            messages.kept(line);
+        }
+        if let Some(error) = &self.error {
+            let fault = design::outcome::FaultMessage::new(&EncounterFault::Failed(error.clone()));
+            messages.outcome(fault);
+        }
+        if let Some(folder) = self
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.runs_unread.clone())
+        {
+            messages.outcome(
+                design::outcome::FaultMessage::new(&EncounterFault::RunFolder(folder)).choice(
+                    design::outcome::Choice::new(
+                        design::outcome::MessageChoice::Choice("Choose folder"),
+                        FooterPress::ChooseFolder,
+                    ),
+                ),
+            );
+        }
+    }
+
     /// The Undo of the kept result a footer press names by its ticket. A result that was
     /// replaced or ended since is `Gone`: nothing happens. A failed Undo keeps its result, with
     /// its order, and says why.
@@ -6484,33 +5257,6 @@ impl Encounters {
             }
         });
         self.kept = kept;
-    }
-
-    /// Keep what a press of a copied note's repair did: a separation goes in the store, newest,
-    /// with its order issued now; a failure is the reason, and the last separation stays.
-    fn record_separation(&mut self, separated: Option<Separated>) {
-        match separated {
-            Some(Separated::Done { change, path, note }) => {
-                if let Some(root) = self.active.as_ref().map(|active| active.path.clone()) {
-                    self.end_separation_failure(&root, &path);
-                    self.separations.record(Separation {
-                        owner: SeparationOwner { root, note },
-                        change: Arc::new(IdentityChange(change)),
-                        path,
-                    });
-                }
-            }
-            Some(Separated::Failed { path, error }) => {
-                if let Some(root) = self.active.as_ref().map(|active| active.path.clone()) {
-                    self.separation_error = Some(SeparationFailure {
-                        root,
-                        path,
-                        words: error,
-                    });
-                }
-            }
-            None => {}
-        }
     }
 
     /// Move the encounter draft's new results into the store, with their data (the order is
@@ -6578,27 +5324,6 @@ impl Encounters {
                     .map(|shown| shown.outcome(frame, |mark| mark.undo.outcome()))
             })
             .collect()
-    }
-
-    /// The encounter editor's footer, made before its body: the draft's own results (a removed
-    /// group, a replacement), the kept results (a discard), the copies' separations and the
-    /// groups' member results, each from its own store with its ticket; then why the last
-    /// separation, act or Save failed, then the file's unread rows. The page builds its footer
-    /// with `editor_lines` after the panes' acts (`pane_then`); this whole footer is for tests.
-    #[cfg(test)]
-    fn editor_messages<'f>(
-        &mut self,
-        frame: &'f design::outcome::PaneFrame,
-        width: f32,
-        root: &std::path::Path,
-        groups_reason: Option<(EncounterFault, String)>,
-        unread: Option<UnreadRows>,
-    ) -> design::outcome::Messages<'f, FooterPress> {
-        let draft_id = self.draft.as_ref().map(|draft| draft.id);
-        let mut messages =
-            design::outcome::Messages::new(frame, ("encounter_editor_footer", draft_id), width);
-        self.editor_lines(&mut messages, frame, root, groups_reason, unread);
-        messages
     }
 
     /// The editor footer's lines, from the state as it is now (`editor_view` reads them after
@@ -6686,7 +5411,7 @@ impl Encounters {
     /// from, by its ticket. A result that was replaced or ended since is `Gone`: nothing happens.
     fn editor_press(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         press: design::outcome::Press<FooterPress>,
         active: &Campaign,
         modules: &[Module],
@@ -6833,7 +5558,7 @@ impl Encounters {
     /// failed Undo keeps the separation and says why.
     fn undo_separation(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         ticket: design::results::Ticket,
         active: &Campaign,
     ) {
@@ -6957,358 +5682,8 @@ impl Encounters {
 
     pub fn clear_notice(&mut self) {}
 
-    /// The list's body, in the pane: the reading state, the content issues, the empty state, or
-    /// In progress, Ready, Groups and History. Returns the row action the DM pressed.
-    fn ledger_body(
-        &mut self,
-        ui: &mut egui::Ui,
-        story: &Story<'_>,
-        reveal: bool,
-        (loading, blocked, group_blocked, empty): (
-            bool,
-            Option<&'static str>,
-            Option<&'static str>,
-            bool,
-        ),
-    ) -> Option<ListAction> {
-        if self.pending.is_some() && self.snapshot.is_none() {
-            ui.horizontal(|ui| {
-                crate::design::spinner(ui);
-                ui.label(
-                    Type::Body
-                        .rich(ui, "Reading this campaign…")
-                        .color(colors().muted),
-                );
-            });
-            return None;
-        }
-        let Some(snapshot) = &self.snapshot else {
-            return None;
-        };
-        if !snapshot.issues.is_empty() {
-            design::section(
-                ui,
-                issue_count_title(ui, &content_issue_count(snapshot.issues.len())),
-                |ui| {
-                    for issue in &snapshot.issues {
-                        ui.add(
-                            egui::Label::new(Type::Small.rich(ui, issue).color(colors().muted))
-                                .wrap(),
-                        );
-                    }
-                },
-            );
-        }
-        if empty {
-            let mut create = false;
-            let mut create_group = false;
-            design::empty_state(
-                ui,
-                icons::ENCOUNTERS,
-                "No encounters yet",
-                "Build a roster from your party and the creatures this campaign can use. Then run it at the table.",
-                |ui| {
-                    ui.horizontal(|ui| {
-                        create = Action::primary("New encounter")
-                            .icon(icons::ADD)
-                            .blocked(blocked)
-                            .name("Create a first encounter")
-                            .show(ui)
-                            .clicked();
-                        design::gap(ui, design::Gap::L);
-                        create_group = Action::quiet("New group")
-                            .icon(icons::ADD)
-                            .blocked(group_blocked)
-                            .hint("A reusable set of creatures to add to a running encounter")
-                            .show(ui)
-                            .clicked();
-                    });
-                },
-            );
-            if create {
-                self.start_new_draft();
-            }
-            if create_group {
-                self.search.clear();
-                self.group_in_plan = false;
-                self.group_draft = Some(GroupDraft::new());
-                self.expanded = None;
-                self.focus_name = true;
-            }
-            return None;
-        }
-        let live = self
-            .run
-            .as_ref()
-            .and_then(crate::encounter_run::Run::live_info);
-        let mut page = history::arrange(
-            &snapshot.templates,
-            &snapshot.runs,
-            live.as_ref(),
-            story.events,
-            story.sessions,
-        );
-        page.runs_unread = snapshot.runs_unread.as_ref();
-        let start_blocked = self.start_blocked();
-        let mut action = None;
-        if self.ready_lines_seen != Some(snapshot.revision) {
-            let ids: std::collections::HashSet<Uuid> = snapshot
-                .templates
-                .iter()
-                .map(|template| template.id)
-                .collect();
-            self.ready_lines.retain(|id| ids.contains(id));
-            self.ready_lines_seen = Some(snapshot.revision);
-        }
-        // Layout PR 5a: one facts column across the ledger's lists, measured before the first.
-        let ledger = list::ledger(
-            ui,
-            &page,
-            snapshot,
-            live.as_ref(),
-            story,
-            &mut self.ready_lines,
-        );
-        // The list is the pane's scroll column, which keeps the scroll bar's lane (FB2).
-        in_progress_list(
-            ui,
-            &page,
-            &snapshot.templates,
-            live.as_ref(),
-            (start_blocked, loading),
-            story,
-            ledger.in_progress,
-            &mut action,
-        );
-        ready_list(
-            ui,
-            &page,
-            live.as_ref(),
-            start_blocked,
-            &mut self.ready_lines,
-            ledger.ready,
-            &mut action,
-        );
-        design::gap(ui, design::Gap::L);
-        group_list(ui, snapshot, group_blocked, ledger.groups, &mut action);
-        let opened = history_list(
-            ui,
-            &page,
-            start_blocked,
-            live.as_ref(),
-            self.history_read
-                .as_ref()
-                .map(|(path, summary)| list::Reading {
-                    path,
-                    summary,
-                    not_last: self.history_blocked,
-                }),
-            ledger.history,
-            &mut action,
-        );
-        // R2 (FJ2): when a run opens in History, the list's column moves once, by the least
-        // distance that brings the run's row, its Read-only line and its whole Final state into
-        // view (`reveal::bring_into_view`, M0194): a run already whole in view moves nothing, and
-        // only a run taller than the view goes to its top. The open can come from another page
-        // (a saved run opened from the Timeline or a session), so it is the column's own move,
-        // not a press's reveal. The row's gap is where the list paints `clip_rect_margin` above
-        // its top, so no letter of the line above shows cut (X37).
-        if reveal && let Some(span) = opened {
-            let top = span.min + ui.visuals().clip_rect_margin;
-            design::reveal::bring_into_view(
-                ui,
-                egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=span.max.max(top)),
-                design::reveal::JumpTo::ListedRow,
-            );
-        }
-        action
-    }
-
-    fn list_view(
-        &mut self,
-        ui: &mut egui::Ui,
-        active: &Campaign,
-        campaigns: &Campaigns,
-        story: &Story<'_>,
-    ) {
-        let size = egui::vec2(
-            ui.available_width().min(LIST_MEASURE),
-            ui.available_height(),
-        );
-        ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::LEFT), |ui| {
-            self.ledger_view(ui, active, campaigns, story);
-        });
-    }
-
-    fn ledger_view(
-        &mut self,
-        ui: &mut egui::Ui,
-        active: &Campaign,
-        campaigns: &Campaigns,
-        story: &Story<'_>,
-    ) {
-        ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-        let loading = self.pending.is_some();
-        let blocked = self.draft_dirty().then_some(BLOCKED_BY_DRAFT);
-        let settings_changed = self.settings_unsaved();
-        let new;
-        let new_group;
-        let reload;
-        // With nothing here yet, the page's one action is in its body.
-        let empty = self
-            .snapshot
-            .as_ref()
-            .is_some_and(|s| s.templates.is_empty() && s.runs.is_empty() && s.groups.is_empty());
-        // A group can be prepared while a run is open. It only joins the run when it is added.
-        let group_blocked = self.draft_dirty().then_some(BLOCKED_BY_DRAFT);
-        // Round 27 FM3: the counts belong to the list headings (`IN PROGRESS 2`, `READY TO RUN
-        // 1`), so the header's context says only that the page is still reading.
-        let context = if self.snapshot.is_none() {
-            "Reading encounters…".to_owned()
-        } else {
-            String::new()
-        };
-        // FE4, FA5: the title starts at the shell's edge (x 148), as Library's and World's do,
-        // and the content below it starts there too. The header is a child that the page only
-        // steps past.
-        let room = ui.available_rect_before_wrap();
-        let mut header = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(room)
-                .layout(egui::Layout::top_down(egui::Align::LEFT)),
-        );
-        {
-            let ui = &mut header;
-            // M0195: the header is the shared title line: the title, the page's reading state,
-            // New encounter, New group and Reload from disk. Where they do not fit beside the
-            // title, the line places them (under it, whole), not this page.
-            const NEW_ENCOUNTER: design::Word = crate::word!("New encounter");
-            const NEW_GROUP: design::Word = crate::word!("New group");
-            const RELOAD_WORD: design::Word = crate::word!("Reload from disk");
-            let reading = loading.then_some("Still reading this campaign.");
-            let reload_blocked = group_blocked.or(reading).or(settings_changed
-                .then_some("Save or discard the changes in Campaign, Rules and runs first."));
-            let mut line = design::TitleLine::new("Encounters")
-                .context((!context.is_empty()).then_some(context.as_str()));
-            if !empty {
-                line = line
-                    .action(
-                        design::TitleAction::secondary(NEW_ENCOUNTER)
-                            .icon(icons::ADD)
-                            .blocked(blocked.or(reading)),
-                    )
-                    .action(
-                        design::TitleAction::quiet(NEW_GROUP)
-                            .icon(icons::ADD)
-                            .blocked(group_blocked.or(reading))
-                            .hint("A reusable set of creatures to add to a running encounter"),
-                    );
-            }
-            // A run stays open through Reload, so a note fixed outside Splat reaches its Groups tab.
-            let shown = line
-                .action(
-                    design::TitleAction::quiet(RELOAD_WORD)
-                        .icon(icons::REFRESH)
-                        .blocked(reload_blocked)
-                        .hint(RELOAD_HINT),
-                )
-                .page()
-                .show(ui);
-            new = shown.clicked(NEW_ENCOUNTER);
-            new_group = shown.clicked(NEW_GROUP);
-            reload = shown.clicked(RELOAD_WORD);
-        }
-        let used = header.min_rect();
-        // FG3: the empty state starts where every page's empty state starts, `L` below the
-        // header's hairline, so the step past the header leaves out its item spacing.
-        let bare = empty && self.snapshot.as_ref().is_some_and(|s| s.issues.is_empty());
-        let step = if bare {
-            used.with_max_y(used.max.y - ui.spacing().item_spacing.y)
-        } else {
-            used
-        };
-        ui.advance_cursor_after_rect(step.with_min_x(room.min.x));
-        if new {
-            self.start_new_draft();
-            return;
-        }
-        if new_group {
-            self.search.clear();
-            self.group_in_plan = false;
-            self.group_draft = Some(GroupDraft::new());
-            self.expanded = None;
-            self.focus_name = true;
-            self.error = None;
-            self.message = None;
-            return;
-        }
-        if reload {
-            if self.has_run() {
-                self.error = None;
-                self.refresh_content(ui.ctx(), campaigns, &active.path);
-            } else {
-                self.reload(ui.ctx(), active.clone(), campaigns.modules().to_vec());
-                return;
-            }
-        }
-        // FI1, FJ4: results, reasons and notices sit in the pane's footer, made before the body
-        // runs, so a result that comes or goes moves no heading or row. The list is the pane's
-        // scroll column (part P), which keeps the scroll bar's lane (FB2).
-        let frame = design::outcome::PaneFrame::new(ui);
-        let mut messages = design::outcome::Messages::new(
-            &frame,
-            ("encounters_list_footer", active.id),
-            ui.available_width(),
-        );
-        let kinds = self.kept_results(true);
-        for line in self.kept_lines(&frame, &kinds) {
-            messages.kept(line);
-        }
-        let choose_folder = || {
-            design::outcome::Choice::new(
-                design::outcome::MessageChoice::Choice("Choose folder"),
-                FooterPress::ChooseFolder,
-            )
-        };
-        if let Some(error) = &self.error {
-            let fault = design::outcome::FaultMessage::new(&EncounterFault::Failed(error.clone()));
-            messages.outcome(fault);
-        }
-        if let Some(folder) = self
-            .snapshot
-            .as_ref()
-            .and_then(|snapshot| snapshot.runs_unread.clone())
-        {
-            messages.outcome(
-                design::outcome::FaultMessage::new(&EncounterFault::RunFolder(folder))
-                    .choice(choose_folder()),
-            );
-        }
-        // R2: History's `Open` scrolls the list once.
-        let reveal = std::mem::take(&mut self.history_reveal);
-        let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
-            self.ledger_body(ui, story, reveal, (loading, blocked, group_blocked, empty))
-        });
-        if let Some(press) = paned.pressed {
-            match press.id {
-                // Gone (replaced or ended) does nothing; a failed Undo keeps its line.
-                FooterPress::Undo => {
-                    if let Some(ticket) = press.ticket {
-                        self.undo_by_ticket(ticket, Some((active, campaigns.modules())));
-                    }
-                }
-                FooterPress::ChooseFolder => self.wants_run_folder = true,
-                // The list shows no member result, no separation and no run settings.
-                FooterPress::UndoMember
-                | FooterPress::UndoSeparation
-                | FooterPress::UndoEditor
-                | FooterPress::MoveRuns
-                | FooterPress::SaveWithoutMoving => {}
-            }
-        }
-        let Some(action) = paned.body else {
-            return;
-        };
+    /// A row action of the list (`ListAction`).
+    pub fn list_act(&mut self, action: ListAction, active: &Campaign, campaigns: &Campaigns) {
         self.clear_notice();
         match action {
             ListAction::BackToRun => self.go_to_run = true,
@@ -7437,7 +5812,7 @@ impl Encounters {
     /// The encounter file's flags and unread roster rows, from its source and the campaign's
     /// creature names. FC3: the roster shows each row that blocks Start fight in its place: the
     /// faults move there (kept for this draft in `ctx`); nothing is copied.
-    fn unread_rows(&self, ctx: &egui::Context) -> Option<UnreadRows> {
+    fn unread_rows(&self) -> Option<UnreadRows> {
         let no_names = BTreeMap::new();
         let names = self
             .snapshot
@@ -7450,8 +5825,6 @@ impl Encounters {
             .unwrap_or_default();
         let notes = unread_notes(&draft.path, &draft.flags, &faults);
         let count = faults.len();
-        let rows: Arc<Vec<RosterFault>> = Arc::new(faults);
-        ctx.data_mut(|data| data.insert_temp(roster_fault_rows_id(draft.id), rows));
         (!notes.is_empty()).then(|| UnreadRows {
             notes,
             faults: count,
@@ -7459,2225 +5832,138 @@ impl Encounters {
         })
     }
 
+    /// Rules and runs' footer (`run_settings`'s, and the GPUI tab's): a commit's effects first
+    /// (a save reloads the settings, a failure says why), then each line from its owner as the
+    /// acts left it: the discard's result with its Undo, each unread rule choice's warning, the
+    /// runs a folder change leaves with the folder's two choices, the error, and the open draft.
     #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: the editor’s two columns fill the page, each with its own scroll (`Fills::because`) (design::results::STAGED_ALLOWS)"
+        clippy::too_many_arguments,
+        reason = "the footer reads the frame’s acts (commit, the form’s run files) and its locks"
     )]
-    fn editor_view(
+    fn run_settings_footer<'f>(
         &mut self,
-        ui: &mut egui::Ui,
+        ctx: &StateContext,
+        frame: &'f design::outcome::PaneFrame,
+        messages: &mut design::outcome::Messages<'f, FooterPress>,
         active: &Campaign,
-        campaigns: &Campaigns,
-        party: &Party,
+        modules: &[Module],
+        commit: Option<Result<Option<String>, String>>,
+        form_left: Option<(String, Result<Vec<std::path::PathBuf>, String>)>,
+        run_open: bool,
+        draft_open: bool,
     ) {
-        if self.encounter_disk_view(ui, active, campaigns.modules()) {
-            return;
+        // The acts' own effects first: a save reloads the settings (which ends the
+        // error), and a failed attempt says why.
+        if let Some(commit) = commit {
+            self.options_committed(ctx, active, modules.to_vec(), commit);
         }
-        let no_names = BTreeMap::new();
-        let names = self
-            .snapshot
-            .as_ref()
-            .map(|snapshot| &snapshot.known_creature_names)
-            .unwrap_or(&no_names);
-        // In the footer, so a fault does not move the name field or its actions. Read before the
-        // header and the panes, for the roster's marks; the footer reads them again after the
-        // panes when the panes' acts read the campaign's creatures again (`pane_then`).
-        let read = self.snapshot.as_ref().map(|snapshot| snapshot.revision);
-        let unread_rows = self.unread_rows(ui.ctx());
-        let dirty = self.encounter_dirty();
-        let creature_dirty = self.creature_dirty();
-        let mut save = false;
-        let mut discard = false;
-        let mut run_it = false;
-        // Beside Lookup at the minimum window, the roster and the search take turns.
-        let compact = ui.available_width() < 760.0;
-        // The title and its actions need more room than the panes do.
-        let has_run = self.has_run();
-        // FC1: a draft that Save refuses says Invalid with its cause, and Save and Ctrl+S are
-        // blocked. The cause is the roster check Save runs first (this frame already makes it),
-        // or the last refusal while it still holds (`refresh_validation_error` checks it again).
-        let refusal = self
-            .shows_validation_error()
-            .then(|| self.error.clone())
-            .flatten();
-        let loading = self.pending.is_some();
-
-        let saved_note = self.message.clone();
-        let unfinished = self
-            .draft
-            .as_ref()
-            .and_then(|draft| {
-                self.snapshot.as_ref()?.runs.iter().find(|run| {
-                    run.standing == crate::encounter_run::Standing::Unfinished
-                        && (run.source == Some(draft.id)
-                            || (run.source.is_none() && run.encounter == draft.saved_name))
-                })
-            })
-            .cloned();
-        let mut start_another = false;
-        let roster_reason = self.draft.as_ref().and_then(|draft| {
-            Entry::parse(&draft.path, &draft.source)
-                .ok()
-                .and_then(|entry| roster_fault_reason(&draft.path, &roster_faults(&entry, names)))
-        });
-        // AB1: Save checks every changed group too, so an empty one makes the draft Invalid now,
-        // not after a refused Save. It is the frame's own state, read without parsing.
-        let empty_group = self.draft.as_ref().and_then(Draft::empty_group_reason);
-        // The typed check of the save row (R37, E2, N1): Save's checks of every changed group,
-        // ranked as the group editor ranks them, then a roster fault or the last refusal, which
-        // is a refused change. A missing part alone takes that group's origin (a new group with
-        // only its name is `New` in a saved encounter too); otherwise the encounter's own.
-        // F3: the encounter's own last refusal keeps its kind: a missing name is a missing part.
-        // F2: the footer paints the groups' first reason that no row says (R35).
-        let groups = self.owned_groups_diagnosis();
-        let own = refusal
-            .is_some()
-            .then(|| self.validation_error.as_ref().map(Invalid::diagnosis))
-            .flatten();
-        let draft_origin = self
-            .draft
-            .as_ref()
-            .map_or(design::save_row::DraftOrigin::Saved, |draft| draft.origin);
-        // A missing part says `New` only when every missing part is new: the encounter's own
-        // takes its origin, a group's that group's.
-        let missing_origins = [
-            groups.origin,
-            own.as_ref()
-                .filter(|own| own.only_incomplete())
-                .map(|_| draft_origin),
-        ];
-        let origin = if missing_origins.contains(&Some(design::save_row::DraftOrigin::Saved)) {
-            design::save_row::DraftOrigin::Saved
-        } else if missing_origins.contains(&Some(design::save_row::DraftOrigin::New)) {
-            design::save_row::DraftOrigin::New
-        } else {
-            draft_origin
+        // Then the footer's lines, each from its owner as the acts left it. The
+        // discard's result is the page's store's (`KeptResult::OptionsDiscarded`, Undo by
+        // its ticket): it ends when its draft was dropped (an edit, a save, another
+        // campaign), and shows while the form is unchanged.
+        let discarded = KeptOwner {
+            root: active.path.clone(),
+            kind: KeptResult::OptionsDiscarded,
         };
-        let found = groups
-            .found
-            .clone()
-            .and(
-                roster_reason
-                    .clone()
-                    .map_or_else(design::save_row::Diagnosis::valid, unread_rows_found),
-            )
-            .and(own.unwrap_or_else(design::save_row::Diagnosis::valid));
-        let groups_footer = groups.footer.zip(groups.cause);
-        // One `DraftState` decides the save row's word, Save's weight and reason, Discard and
-        // the campaign lock (migrate:O, rows 42 and 51). The encounter draft says `Invalid`
-        // only while it has changes; its rows name the faults of a clean one.
-        let state = {
-            let changed = if dirty {
-                design::memo::Changed::Yes
-            } else {
-                design::memo::Changed::No
-            };
-            // An open run's `Next turn` owns the one primary action.
-            let primary = if has_run {
-                design::save_row::Primary::Elsewhere
-            } else {
-                design::save_row::Primary::Draft
-            };
-            let mut state = design::DraftState::new(origin, changed, primary)
-                .locks_campaign()
-                .check_when_changed(found);
-            if saved_note.is_some() {
-                state = state.just_saved();
-            }
-            state
-        };
-        self.save_refused = dirty && !state.can_save();
-        // R38: the back line on a line of its own above the name row. The encounter's changes
-        // hold it first, then an unsaved creature.
-        let head = design::EditorHead::new(
-            design::EditorKind::Encounter {
-                from_session: self.from_session.is_some(),
-            },
-            &*self,
-        );
-        let draft_ref = self.draft.as_mut().expect("the editor has a draft");
-        let focus_name = &mut self.focus_name;
-        let focus_search_after_name = &mut self.focus_search;
-        // FA9, FI9: in a wide window the name field ends at the roster column's edge, so it
-        // does not stretch to the window's edge. Layout step 6b: the roster and Add participants
-        // are one composite (`editor_columns`) whose edges are resolved now, before the head
-        // paints, from this pass's room and splitter; the body draws its columns in the same
-        // edges (`editor_panes`). With the panes as tabs, the name takes the line.
-        let panes_width = editor_panes_width(ui);
-        let panes =
-            (!compact).then(|| editor_columns(ui.ctx(), panes_width).edges_in(ui, panes_width));
-        let roster_right = panes.as_ref().map_or(f32::INFINITY, |edges| {
-            roster_edge(edges.child_within(ui, panes_width, 0))
-        });
-        let (back, ()) = head.show(ui, |ui| {
-            {
-                // Layout step 6 (`DraftHead`, I7; SL3): the group editor's rule. Save and Start
-                // keep their widest width and follow the name field `L` after it, never at the far
-                // edge of the Add participants column; when the name would be narrower than
-                // `NAME_LEAST` beside them, they take a line of their own at the text edge. The
-                // plan comes from the widths only, so nothing moves while the DM types.
-                let gap = ui.spacing().item_spacing.x;
-                let start_word = if unfinished.is_some() {
-                    "Resume"
-                } else {
-                    START_FIGHT
-                };
-                // Each button is measured in its wider form, primary or secondary (the weight
-                // changes with the draft), and rounded up to the pixel: a button given exactly its
-                // natural width can lose its last letter to rounding.
-                let button = |word: &str| {
-                    Action::primary(word)
-                        .natural_width(ui)
-                        .max(Action::secondary(word).natural_width(ui))
-                        .ceil()
-                };
-                let save_width = button("Save encounter");
-                let start_width = button(start_word);
-                let actions = save_width
-                    + gap
-                    + start_width
-                    + if unfinished.is_some() {
-                        Action::quiet(icons::EXPAND)
-                            .density(Density::Read)
-                            .natural_width(ui)
-                            .ceil()
-                            + gap
-                    } else {
-                        0.0
-                    }
-                    + if has_run {
-                        design::number_width(ui, BLOCKED_BY_RUN, &Type::Small.font(ui)).ceil()
-                            + design::L
-                            + gap
-                    } else {
-                        0.0
-                    };
-                let left = ui.max_rect().left();
-                let line = ui.max_rect().right() - left;
-                let plan = design::save_row::head_plan(
-                    ui,
-                    &design::save_row::HeadSpec {
-                        words: &design::save_row::ALL_WORDS,
-                        column: (roster_right - left).min(line),
-                        line,
-                        actions,
-                        row: line,
-                        reasons: &[],
-                    },
-                );
-                let mut actions_ui = |ui: &mut egui::Ui, lead: f32, draft: &Draft| {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(lead + actions, Density::Scan.control()),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            let start_blocked = roster_reason
-                                .as_deref()
-                                .or(empty_group.as_deref())
-                                .or(has_run
-                                    .then_some(BLOCKED_BY_RUN)
-                                    .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                                    .or(loading.then_some("Still reading this campaign."))
-                                    .or(draft
-                                        .setup
-                                        .roster
-                                        .is_empty()
-                                        .then_some("Add participants first.")));
-                            if unfinished.is_some() {
-                                row_menu(ui, &draft.name, |ui| {
-                                    start_another =
-                                        menu_action(ui, "Start another fight", start_blocked);
-                                });
-                            }
-                            let word = start_word;
-                            // Unsaved changes own the primary: Resume waits until they are saved or
-                            // discarded.
-                            run_it = if has_run || dirty {
-                                Action::secondary(word)
-                            } else {
-                                Action::primary(word)
-                            }
-                            .min_width(start_width)
-                            .blocked(if unfinished.is_some() {
-                                has_run
-                                    .then_some(BLOCKED_BY_RUN)
-                                    .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                                    .or(loading.then_some("Still reading this campaign."))
-                            } else {
-                                start_blocked
-                            })
-                            .hint(if unfinished.is_some() {
-                                "Save this encounter and resume its unfinished run."
-                            } else {
-                                "Save this encounter and start a run."
-                            })
-                            .show(ui)
-                            .clicked();
-                            if has_run {
-                                blocked_reason(ui, Some(BLOCKED_BY_RUN));
-                                design::gap(ui, design::Gap::L);
-                            }
-                            save = match state.save_weight() {
-                                design::save_row::SaveWeight::Primary => {
-                                    Action::primary("Save encounter")
-                                }
-                                design::save_row::SaveWeight::Secondary => {
-                                    Action::secondary("Save encounter")
-                                }
-                            }
-                            .min_width(save_width)
-                            .blocked(state.save_blocked())
-                            .show(ui)
-                            .clicked();
-                        },
-                    );
-                };
-                ui.horizontal(|ui| {
-                    let response = name_field(ui, draft_ref, plan.name_width);
-                    design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
-                    if std::mem::take(focus_name) {
-                        design::focus_and_select(ui, response.id, &draft_ref.name);
-                    }
-                    if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                        *focus_search_after_name = true;
-                    }
-                    if plan.actions_beside {
-                        actions_ui(ui, design::L - gap, draft_ref);
-                    }
-                });
-                if !plan.actions_beside {
-                    ui.horizontal(|ui| actions_ui(ui, 0.0, draft_ref));
-                }
-            }
-        });
-        // Layout step 6b (I8): the save row's reasons have one place in every state, planned
-        // from the widths only (`head_plan`): the campaign-switch reason, then the row's other
-        // reason (the creature's, a read in progress, no participants), each on the row while
-        // it fits beside the widest state word and Discard (and the run's state at the row's
-        // end), else on a line of its own below, kept while it does not show.
-        let run_words = unfinished.as_ref().map(|run| {
-            run_state_word(
-                run,
-                self.run
-                    .as_ref()
-                    .and_then(|open| open.path())
-                    .is_none_or(|path| path != run.path),
-            )
-        });
-        let creature_here = creature_dirty && head.held_by() != Some(design::Unsaved::Creature);
-        let lock_shown = state.lock_reason();
-        let other_shown = creature_here
-            .then_some(BLOCKED_BY_CREATURE)
-            .or(loading.then_some(STILL_READING))
-            .or(
-                (!has_run && unfinished.is_none() && draft_ref.setup.roster.is_empty())
-                    .then_some(ADD_PARTICIPANTS_FIRST),
-            );
-        let small = Type::Small.font(ui);
-        let run_width = run_words.as_ref().map_or(0.0, |words| {
-            design::number_width(ui, &format!("{} {words}", icons::RUN), &small)
-                + 2.0 * ui.spacing().item_spacing.x
-        });
-        let row_plan = design::save_row::head_plan(
-            ui,
-            &design::save_row::HeadSpec {
-                // The encounter's draft can be changed on disk and left unsaved by a failed write.
-                words: &design::save_row::ALL_WORDS,
-                column: ui.available_width(),
-                line: ui.available_width(),
-                actions: 0.0,
-                row: ui.available_width() - run_width,
-                reasons: &ROW_REASONS,
-            },
-        );
-        let (lock_on_row, other_on_row) = (row_plan.on_row[0], row_plan.on_row[1]);
-        let (lock_short, other_short) = (row_plan.short[0], row_plan.short[1]);
-        ui.horizontal(|ui| {
-            ui.set_min_height(Density::Read.control());
-            // FB9, FC13: the unfinished run's state ends the row, apart from the save state,
-            // Discard and their reasons, so it reads as the run's and no reason that comes or
-            // goes moves it (FB5).
-            if let Some(words) = &run_words {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    design::status(
-                        ui,
-                        Status {
-                            icon: icons::RUN,
-                            word: words,
-                            color: colors().muted,
-                        },
-                    );
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        discard = editor_save_state(
-                            ui,
-                            state.word().status(),
-                            state.discard_shown(),
-                            creature_dirty.then_some(BLOCKED_BY_CREATURE),
-                        );
-                        // FB6: while Save is blocked, Discard is the one way out.
-                        row_reason(
-                            ui,
-                            lock_shown.filter(|_| lock_on_row),
-                            lock_short.then_some(design::save_row::switch_short),
-                        );
-                    });
-                });
-            } else {
-                discard = editor_save_state(
-                    ui,
-                    state.word().status(),
-                    state.discard_shown(),
-                    creature_dirty.then_some(BLOCKED_BY_CREATURE),
-                );
-                // FB6: while Save is blocked, Discard is the one way out.
-                row_reason(
-                    ui,
-                    lock_shown.filter(|_| lock_on_row),
-                    lock_short.then_some(design::save_row::switch_short),
-                );
-            }
-            // The creature's reason has one home: the back line paints it while it holds Back;
-            // while the encounter's changes hold Back, this row says it for Start and Save.
-            row_reason(
-                ui,
-                other_shown.filter(|_| other_on_row),
-                other_short.then_some(row_short as fn(&str) -> &'static str),
-            );
-        });
-        // Ruling M24: a reason the plan could not put on the row even in its short form (a row
-        // narrower than its short form) takes a line of its own below, as tall as its tallest
-        // form, kept while it does not show, so a reason that comes or goes moves no field (I8).
-        for (on_row, slot, shown) in [
-            (lock_on_row, &ROW_REASONS[0], lock_shown),
-            (other_on_row, &ROW_REASONS[1], other_shown),
-        ] {
-            if on_row {
-                continue;
-            }
-            let height = design::save_row::slot_height(ui, slot, ui.available_width());
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), height),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    ui.set_min_height(height);
-                    blocked_reason(ui, shown);
-                },
-            );
+        if self.discarded_options.is_none() {
+            self.kept.owner_changed(&discarded);
         }
-
-        if unfinished.is_some() {
-            // FB1: the open fight from this encounter takes its read-aloud text and notes at
-            // Save; anything else waits for the next fight.
-            let follows = self
-                .run
-                .as_ref()
-                .and_then(crate::encounter_run::Run::source)
-                .is_some_and(|source| Some(source) == self.draft.as_ref().map(|draft| draft.id));
-            blocked_reason(
-                ui,
-                Some(if follows {
-                    "Save gives this fight’s Prep the new read-aloud text and notes. Other changes apply to the next fight. To add to this fight, use Add to fight in the run."
-                } else {
-                    "Changes apply to the next fight. To add to this fight, use Add to fight in the run."
-                }),
-            );
-        }
-        design::rule(ui);
-        if back {
-            self.clear_notice();
-            self.draft = None;
-            self.message = None;
-            self.error = None;
-            self.creature = None;
-            self.wants_session = std::mem::take(&mut self.from_session);
-            self.plan_on_save = false;
-            return;
-        }
-        if discard {
-            self.discard_draft(active);
-            return;
-        }
-        if save {
-            self.save_draft(ui.ctx(), active, campaigns.modules());
-        }
-        if run_it || start_another {
-            if dirty {
-                self.save_draft(ui.ctx(), active, campaigns.modules());
-            }
-            if !self.draft_dirty() {
-                if !start_another && let Some(run) = &unfinished {
-                    self.open_saved_run(&run.path, active);
-                } else {
-                    self.open_run(active, campaigns.modules());
-                }
-                // A fight started from the session goes back there, not to this editor.
-                if self.from_session.is_some() && self.run.is_some() {
-                    self.draft = None;
-                    self.from_session = None;
-                    self.run_from_session = true;
-                    return;
-                }
-            }
-        }
-        // After a load in progress, so that a group just saved is among them.
-        if self.pending.is_none()
-            && let (Some(snapshot), Some(draft)) = (&self.snapshot, self.draft.as_mut())
-            && !draft.groups_read
-            && let Err(e) = draft.read_groups(&active.path, snapshot)
+        let snapshot = self.snapshot.as_ref();
+        if snapshot.is_some_and(|snapshot| snapshot.options == snapshot.saved_options)
+            && let Some(shown) = self.kept.get(&discarded)
         {
-            self.error = Some(e);
+            messages.kept(shown.outcome(frame, |_| options_discarded()));
         }
-        self.refresh_validation_error(false, edit_input(ui.ctx()));
-        // Shared, so an unchanged frame copies no list of names.
-        let difficulty = self.draft_difficulty();
-        // FA2, AB1: the editor's results and Save's reason sit in one footer pinned below the
-        // panes, so none of them moves the roster, its rows or the search. Results with a live
-        // Undo come first, then reasons. The roster and Add participants are columns, each with
-        // its own scroll (in the narrow layout, one of them under its tab): the body fills its
-        // room above the footer.
-        // L1c (`pane_then`): the footer's lines are read after the panes' acts (a replacement,
-        // a removed group, a member's change), so the frame of an act shows the result it
-        // brought and never one it ended.
-        let frame = design::outcome::PaneFrame::new(ui);
-        let draft_id = self.draft.as_ref().map(|draft| draft.id);
-        let messages = design::outcome::Messages::new(
-            &frame,
-            ("encounter_editor_footer", draft_id),
-            ui.available_width(),
-        );
-        let ctx = ui.ctx().clone();
-        let groups_reason = groups_footer.filter(|_| dirty);
-        let this = &mut *self;
-        let paned = messages.pane_then(
-            ui,
-            design::pane::Body::Fills(design::pane::Fills::because(
-                design::pane::FillsReason::Columns,
-            )),
-            move |ui| {
-                this.editor_panes(ui, active, campaigns, party, difficulty, panes);
-                this
-            },
-            |this, messages| {
-                // Ctrl+S that the creature's pane did not take: the encounter (or a creature whose
-                // pane was not drawn), after the fields took this frame's input.
-                this.save_by_key(&ctx, active, campaigns.modules());
-                // A creature saved or made yours in the panes reads the campaign's creatures
-                // again: then the unread rows are read again, with their names.
-                let unread = if this.snapshot.as_ref().map(|snapshot| snapshot.revision) == read {
-                    unread_rows
-                } else {
-                    this.unread_rows(&ctx)
-                };
-                this.editor_lines(messages, &frame, &active.path, groups_reason, unread);
-                this
-            },
-        );
-        if let Some(press) = paned.pressed {
-            paned
-                .body
-                .editor_press(&ctx, press, active, campaigns.modules());
-        }
-    }
-
-    /// The encounter editor's two columns, Add participants and the roster, in the pane's body
-    /// (`ui` ends at the footer's top). In the narrow layout they are tabs.
-    fn editor_panes(
-        &mut self,
-        ui: &mut egui::Ui,
-        active: &Campaign,
-        campaigns: &Campaigns,
-        party: &Party,
-        difficulty: Option<Arc<crate::difficulty::Difficulty>>,
-        // The roster's and Add participants' edges, resolved before the head (`editor_view`);
-        // none while the panes are tabs (a compact editor).
-        panes: Option<design::PaneEdges>,
-    ) {
-        let compact = panes.is_none();
-        let Some(snapshot) = &self.snapshot else {
-            crate::design::spinner(ui);
-            return;
-        };
-        let mut make_yours = None;
-        let mut creature_step = None;
-
-        let open_creature = self.creature.is_some();
-        let draft = self.draft.as_mut().expect("the editor has a draft");
-        let mut pane = self.editor_pane;
-        if compact {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                design::counted_tab(
-                    ui,
-                    &mut pane,
-                    EditorPane::Roster,
-                    "Roster",
-                    draft.setup.roster.len(),
-                    ("participant", "participants"),
-                );
-                design::segmented(
-                    ui,
-                    &mut pane,
-                    &[(
-                        EditorPane::Add,
-                        if open_creature {
-                            "This creature"
-                        } else {
-                            "Add participants"
-                        },
-                    )],
-                );
-                if let Some(difficulty) = &difficulty {
-                    narrow_difficulty(ui, difficulty);
-                }
-            });
-            self.editor_pane = pane;
-        }
-        // FF8: a press of a copied note's repair in the search, for the page's store.
-        let separated = std::cell::Cell::new(None);
-        let search = &mut self.search;
-        let focus_search = &mut self.focus_search;
-        let peek = &mut self.peek;
-        let expanded = &mut self.expanded;
-        let linked = active.dndbeyond_campaign_id.is_some();
-        if compact {
-            let go_to_search = match pane {
-                EditorPane::Roster => Self::roster_pane(
-                    ui,
-                    draft,
-                    snapshot,
-                    focus_search,
-                    expanded,
-                    linked.then_some(party),
-                    &mut make_yours,
-                    None,
-                ),
-                EditorPane::Add => {
-                    match &mut self.creature {
-                        Some(editor) => {
-                            creature_step =
-                                Self::creature_pane(ui, editor, &active.path, &mut self.save_key);
-                        }
-                        None => Self::add_pane(
-                            ui,
-                            draft,
-                            snapshot,
-                            search,
-                            focus_search,
-                            (peek, &separated),
-                            compact,
-                        ),
-                    }
-                    false
-                }
-            };
-            if go_to_search {
-                self.editor_pane = EditorPane::Add;
-            }
-
-            self.record_separation(separated.into_inner());
-            self.after_panes(creature_step, make_yours, active, campaigns.modules());
-            return;
-        }
-        // In a wide window the roster keeps a name near its controls, and the two panes
-        // stay together at the left.
-        let panes_width = editor_panes_width(ui);
-        ui.allocate_ui_with_layout(
-            // The panes end where the footer starts: the pane's body ends there.
-            egui::vec2(panes_width, ui.available_height().max(0.0)),
-            egui::Layout::top_down(egui::Align::LEFT),
-            |ui| {
-                ui.set_width(panes_width);
-                let creature = &mut self.creature;
-                let save_key = &mut self.save_key;
-                // Layout step 6b: the edges the head was drawn with (resolved again if this `Ui`
-                // is not the room they were made for).
-                let edges =
-                    panes.unwrap_or_else(|| editor_columns(ui.ctx(), panes_width).edges(ui));
-                edges.show_children(ui, |ui, index| {
-                    if index == 1 {
-                        match creature {
-                            Some(editor) => {
-                                creature_step =
-                                    Self::creature_pane(ui, editor, &active.path, save_key);
-                            }
-                            None => Self::add_pane(
-                                ui,
-                                draft,
-                                snapshot,
-                                search,
-                                focus_search,
-                                (peek, &separated),
-                                compact,
-                            ),
-                        }
-                        return;
-                    }
-                    // A panel clips to its own rect. It starts `S` before the roster's text edge, so
-                    // a line-start quiet action there keeps its whole press area.
-                    let rest = ui.available_rect_before_wrap();
-                    let mut roster_ui = ui.new_child(
-                        egui::UiBuilder::new().max_rect(rest.with_min_x(rest.min.x - design::S)),
-                    );
-                    egui::CentralPanel::default()
-                        // The panel's drag handle lies on this edge, so the roster stops short of it.
-                        .frame(egui::Frame::new().inner_margin(egui::Margin {
-                            left: design::S as i8,
-                            right: design::S as i8,
-                            top: design::S as i8,
-                            bottom: 0,
-                        }))
-                        .show_inside(&mut roster_ui, |ui| {
-                            // The content cap also holds after the DM moves the panel.
-                            ui.set_width(ui.available_width().min(ROSTER_MAX_WIDTH));
-                            Self::roster_pane(
-                                ui,
-                                draft,
-                                snapshot,
-                                focus_search,
-                                expanded,
-                                linked.then_some(party),
-                                &mut make_yours,
-                                Some(difficulty.as_deref()),
-                            );
-                        });
-                    ui.advance_cursor_after_rect(roster_ui.min_rect());
-                });
-            },
-        );
-
-        self.record_separation(separated.into_inner());
-        self.after_panes(creature_step, make_yours, active, campaigns.modules());
-    }
-
-    fn add_pane(
-        ui: &mut egui::Ui,
-        draft: &mut Draft,
-        snapshot: &Snapshot,
-        search: &mut String,
-        focus_search: &mut bool,
-        // Lookup's creature, and where a press of a copied note's repair says what it did (FF8).
-        (peek, separated): (&mut Option<Uuid>, &std::cell::Cell<Option<Separated>>),
-        compact: bool,
-    ) {
-        if !compact {
-            design::heading(
-                ui,
-                design::Heading::Group {
-                    title: "Add participants",
-                    count: 0,
-                },
-            );
-        }
-        // FB2: the party lines stay whatever the search adds to (the party always joins the
-        // roster), and `Adding to …` has one place directly above the search, so a change of
-        // target moves neither the search nor its results.
-        lane_help(ui, PARTY_SOURCE);
-        // Who is still to come: a party member belongs on a roster once.
-        let on_roster = |draft: &Draft, id: Uuid| {
-            draft
-                .setup
-                .roster
-                .iter()
-                .any(|slot| slot.creature.as_ref().is_some_and(|c| c.id == Some(id)))
-        };
-        let any_party = snapshot.creatures.iter().any(|c| c.party);
-        let missing: Vec<Uuid> = snapshot
-            .creatures
-            .iter()
-            .filter(|c| c.party && !on_roster(draft, c.id))
-            .map(|c| c.id)
+        // Each unread choice's warning names its line; the file's path and links follow
+        // the last one.
+        let rule_words: Vec<String> = snapshot
+            .map(|snapshot| rule_choices(snapshot, active.id))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(_, words)| words)
             .collect();
-        if !missing.is_empty() || !any_party {
-            if Action::secondary("Add party")
-                .icon(icons::PARTY)
-                .blocked(if !any_party {
-                    Some("No saved party copies yet. Connect to D&D Beyond in Settings.")
-                } else if missing.is_empty() {
-                    Some("The whole party is on the roster.")
-                } else {
-                    None
-                })
-                .show(ui)
-                .clicked()
-            {
-                for id in missing {
-                    draft.add(id, true);
-                }
-                *focus_search = true;
-            }
-        } else {
-            design::status(
-                ui,
-                Status {
-                    icon: icons::OK,
-                    word: "Party in roster",
-                    color: colors().muted,
-                },
-            );
-        }
-        if !any_party {
-            blocked_reason(
-                ui,
-                Some("No saved party copies yet. Connect to D&D Beyond in Settings."),
-            );
-        }
-        groups::add_target(ui, draft, snapshot);
-        if draft.target_group().is_some() {
-            let chosen = Self::creature_search(
-                ui,
-                snapshot.search_list(true),
-                search,
-                focus_search,
-                peek,
-                SearchRoster {
-                    already: &|_| false,
-                    on_roster: OnRoster::Ids(&[]),
-                    separated,
-                },
-            );
-            if let Some((id, party)) = chosen {
-                draft.add_selected(id, party, snapshot);
-            }
-            return;
-        }
-        let chosen = Self::creature_search(
-            ui,
-            snapshot.search_list(false),
-            search,
-            focus_search,
-            peek,
-            SearchRoster {
-                already: &|c: &Creature| snapshot.already_on_roster(draft, c),
-                // What `already` reads of the roster: the creatures its rows name.
-                on_roster: OnRoster::Slots(&draft.setup.roster),
-                separated,
-            },
-        );
-        if let Some((id, party)) = chosen {
-            draft.add_selected(id, party, snapshot);
-        }
-    }
-
-    /// The search and its results, for a roster and for a group. Returns what the DM added.
-    fn creature_search(
-        ui: &mut egui::Ui,
-        list: SearchList<'_>,
-        search: &mut String,
-        focus_search: &mut bool,
-        peek: &mut Option<Uuid>,
-        roster: SearchRoster<'_>,
-    ) -> Option<(Uuid, bool)> {
-        Self::creature_search_with_summary(ui, list, search, focus_search, peek, roster, "")
-    }
-
-    fn creature_search_with_summary(
-        ui: &mut egui::Ui,
-        list: SearchList<'_>,
-        search: &mut String,
-        focus_search: &mut bool,
-        peek: &mut Option<Uuid>,
-        roster: SearchRoster<'_>,
-        summary: &str,
-    ) -> Option<(Uuid, bool)> {
-        let mut chosen = None;
-        // The field ends at the results' scroll lane even when the bar is hidden.
-        // Each Add follows its row's facts.
-        let width = scroll_lane(ui);
-        let response = crate::field_id!("encounter_creature_search")
-            .once(crate::design::Once::PageSearch)
-            .search(
-                ui,
-                SEARCH_FIELD,
-                search,
-                "Find a creature by name or detail…",
-                width,
-            )
-            .field;
-        if std::mem::take(focus_search) {
-            design::focus_and_select(ui, response.id, search);
-        }
-        // The roster and a group share one filter, as the DM looks for the same creatures.
-        let filter_id = egui::Id::new("creature_search_filter");
-        let mut filter: Filter = ui.data(|data| data.get_temp(filter_id)).unwrap_or_default();
-        if crate::creature_filter::filter_bar(ui, &mut filter, || {
-            list.creatures().filter_map(|c| c.facets.as_ref()).collect()
-        }) {
-            ui.data_mut(|data| data.insert_temp(filter_id, filter.clone()));
-        }
-        if !summary.is_empty() {
-            let shown = design::words_that_fit(ui, summary, &Type::Small.font(ui), scroll_lane(ui));
-            ui.label(Type::Small.rich(ui, shown).color(colors().muted))
-                .on_hover_text(summary);
-        }
-        let query = search.to_lowercase();
-        // M-E0 (review of M-Q0.2): the ranking is kept for this search's view and worked out
-        // again only when one of its inputs changes (`SearchKey`): a repaint ranks nothing.
-        let key = SearchKey {
-            list: list.revision,
-            unlinked: list.unlinked,
-            query: query.clone(),
-            filter: filter.clone(),
-        };
-        // Kept behind an `Arc`, so a repaint's read copies nothing; the roster is compared in
-        // place (issue #518).
-        let kept_id = response.id.with("creature_search_ranked");
-        let ranked = match ui
-            .data(|data| data.get_temp::<Arc<SearchRanked>>(kept_id))
-            .filter(|kept| kept.key == key && roster.on_roster.names(&kept.on_roster))
-        {
-            Some(kept) => kept,
-            None => {
-                let ranked = Arc::new(SearchRanked::rank(
-                    key,
-                    list,
-                    &filter,
-                    roster.already,
-                    roster.on_roster.to_vec(),
+        if let Some((last, before)) = rule_words.split_last() {
+            for words in before {
+                messages.outcome(design::outcome::FaultMessage::new(
+                    &EncounterFault::FileWarning(words.clone()),
                 ));
-                ui.data_mut(|data| data.insert_temp(kept_id, ranked.clone()));
-                ranked
             }
-        };
-        let parsed = Query::parse(&query);
-        let creatures = list.creatures;
-        let as_typed = ranked.as_typed;
-        let matches = &ranked.found[..];
-        // Enter adds the best match, with focus kept for the next name. A name found only with
-        // a typo is a guess, so Enter does not add it.
-        if response.lost_focus()
-            && ui.input(|i| i.key_pressed(egui::Key::Enter))
-            && !query.is_empty()
-            && as_typed > 0
-            && let Some(first) = matches.first().map(|&at| &creatures[at])
-            && !(roster.already)(first)
-            && first.unavailable.is_none()
+            messages.outcome(
+                design::outcome::FaultMessage::new(&EncounterFault::FileWarning(last.clone()))
+                    .file(
+                        design::outcome::FileLine::new(&active.path, "Campaign.md")
+                            .edit()
+                            .show(),
+                    ),
+            );
+        }
+        // The run files the form read, unless an act changed the folder after it
+        // (Discard puts the saved one back).
+        let left = snapshot.zip(form_left).map(|(snapshot, (folder, left))| {
+            if snapshot.options.folder == folder {
+                left
+            } else {
+                snapshot
+                    .options
+                    .runs_left_in(&snapshot.saved_options, active)
+            }
+        });
+        if let Some(snapshot) = snapshot
+            && let Some(Ok(left)) = &left
+            && !left.is_empty()
         {
-            chosen = Some((first.id, first.party));
-            *focus_search = true;
-        }
-        let hidden_duplicates = duplicate_creature_results(ui, &query, roster.separated);
-        if as_typed == 0 && !matches.is_empty() {
-            ui.label(
-                Type::Small
-                    .rich(ui, crate::matching::CLOSE_NAMES)
-                    .color(colors().muted),
-            );
-        }
-        if as_typed == 0 && !hidden_duplicates {
-            let index = ui.ctx().data(|data| {
-                data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new(
-                    "reader_link_index",
-                ))
-            });
-            if let Some(index) = index {
-                // Kept for this search and worked out again only when its words or the index
-                // change: a repaint with no match as typed ranks nothing (review of PR 450).
-                let unused = index.unused_creatures_kept(ui.ctx(), response.id, &parsed.words);
-                for &(package, entry, ref name, ref owner) in unused.iter() {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(
-                            Type::Small
-                                .rich(
-                                    ui,
-                                    format!(
-                                        "{name} is in {owner}, which this campaign does not use."
-                                    ),
-                                )
-                                .color(colors().muted),
-                        );
-                        if design::link(ui, "Use it").clicked() {
-                            ui.ctx().data_mut(|data| {
-                                data.insert_temp(
-                                    egui::Id::new("use_package_entry"),
-                                    (package, entry),
-                                )
-                            });
-                        }
-                    });
-                }
-            }
-        }
-        if matches.is_empty() && !hidden_duplicates {
-            design::empty_state_with_body(
-                ui,
-                icons::SEARCH,
-                "No creatures match",
-                |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x =
-                            design::number_width(ui, " ", &Type::Body.font(ui));
-                        ui.label(
-                            Type::Body
-                                .rich(
-                                    ui,
-                                    if filter.is_empty() {
-                                        "Check the spelling, or check"
-                                    } else {
-                                        "Remove a filter, or check"
-                                    },
-                                )
-                                .color(colors().muted),
-                        );
-                        // FB4: one sentence in one size. The link is a Body link inside it, and
-                        // the full stop follows its last word.
-                        // The link and its full stop wrap together.
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 0.0;
-                            if design::link(ui, groups::PACKAGES_LINK).clicked() {
-                                ui.data_mut(|data| {
-                                    data.insert_temp(egui::Id::new("open_campaign_packages"), true)
-                                });
-                            }
-                            ui.label(Type::Body.rich(ui, ".").color(colors().muted));
-                        });
-                    });
-                },
-                |_| {},
-            );
-        }
-        ui.spacing_mut().item_spacing.y = 0.0;
-        // Layout PR 4: the action column starts `L` after the widest facts of every result
-        // (measured once per query and width), so each `Add` keeps its x as the DM scrolls.
-        // FH3, SH2: the results keep the scroll bar's lane whether or not the bar shows.
-        let lane = scroll_lane(ui);
-        // Review of PR 555 (#565): kept for this search's view by what the results are (the
-        // ranking itself, by its revision: a new ranking for new words, a filter, another read
-        // of the list, or a change of the roster; review of #875: with no words, a party member
-        // taken off the roster comes back into the results) and by what they were measured in
-        // (the lane, the font, the theme, the scale: `memo::Measure`), so changed results with
-        // the same query and count are measured again.
-        let columns_id = response.id.with("creature_search_columns");
-        let key = (
-            ranked.revision,
-            design::memo::Measure::of(ui, lane, &Type::Body.font(ui)),
-        );
-        let columns = match ui.ctx().data(|data| {
-            data.get_temp::<(
-                (design::memo::Revision, design::memo::Measure),
-                design::Columns,
-            )>(columns_id)
-        }) {
-            Some((kept, columns)) if kept == key => columns,
-            _ => {
-                #[cfg(any(test, feature = "test-support"))]
-                RESULT_COLUMNS_MEASURED.with(|count| count.set(count.get() + 1));
-                let columns = design::Columns::measure(
-                    lane,
-                    matches
-                        .iter()
-                        .map(|&at| creature_facts_width(ui, &creatures[at])),
-                    [creature_actions_width(ui, "Add")],
-                );
-                ui.ctx()
-                    .data_mut(|data| data.insert_temp(columns_id, (key, columns)));
-                columns
-            }
-        };
-        // The results are blocks of a region (layout 3b): whole rows only, one list box.
-        let block = design::Block::Row(design::Row::Action {
-            status: ranked.unavailable,
-            wrapped: columns.wrapped,
-        });
-        let kept = ui.ctx().data_mut(|data| {
-            data.get_temp_mut_or_insert_with(egui::Id::new("encounter_results_region"), || {
-                std::sync::Arc::new(egui::mutex::Mutex::new((
-                    design::RegionState::new("encounter_results"),
-                    design::memo::Revised::new(Vec::<design::Block>::new()),
-                )))
-            })
-            .clone()
-        });
-        let mut kept = kept.lock();
-        let (region, rows) = &mut *kept;
-        if rows.len() != matches.len() || rows.first() != Some(&block) {
-            rows.revise(|rows| {
-                *rows = vec![block; matches.len()];
-                design::memo::Changed::Yes
-            });
-        }
-        let add_width = columns.width(lane);
-        design::BlockRegion::new(("encounter_results", &query), region, rows)
-            .name("Creature results")
-            .show(ui, |ui, row| {
-                let c = &creatures[matches[row]];
-                let rect = egui::Rect::from_min_size(
-                    ui.max_rect().min,
-                    egui::vec2(add_width.min(ui.max_rect().width()), ui.max_rect().height()),
-                );
-                ui.push_id(c.id, |ui| {
-                    let (read, pressed) = design::action_row(
-                        ui,
-                        rect,
-                        columns,
-                        "encounter_results",
-                        row,
-                        |ui| creature_facts(ui, c),
-                        creature_action(c, "Add", "Add", (roster.already)(c)),
-                    );
-                    if read {
-                        *peek = Some(c.id);
-                    }
-                    if pressed.recovery {
-                        open_in_world(ui, c);
-                    }
-                    if pressed.action {
-                        chosen = Some((c.id, c.party));
-                        *focus_search = true;
-                    }
-                });
-            });
-        chosen
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn roster_pane(
-        ui: &mut egui::Ui,
-        draft: &mut Draft,
-        snapshot: &Snapshot,
-        focus_search: &mut bool,
-        expanded: &mut Option<String>,
-        linked_party: Option<&Party>,
-        make_yours: &mut Option<usize>,
-        // The heading, with the roster's difficulty when it is known. None when the tab row
-        // holds the heading's place.
-        heading: Option<Option<&crate::difficulty::Difficulty>>,
-    ) -> bool {
-        // All of it scrolls, so that the settings give up their room to a group being built.
-        // A line-start quiet action reaches `S` into the page's gutter. The scroll area starts
-        // there too, so it shows the whole target, and its margin keeps the text where it was.
-        // Its id is the draft's alone: the column keeps its scroll when the window crosses to
-        // the narrow layout (iter 7), and another encounter opens at its own top.
-        //
-        // Kept on its own scroll, not the pane's editor region (round 28, P2): a screen
-        // reader's ScrollIntoView on the notes would reach only the region's scroll column,
-        // never the column around it, so notes below the view could not be brought into it.
-        let area = ui.available_rect_before_wrap();
-        let scope = egui::UiBuilder::new()
-            .id(("encounter_roster", draft.id))
-            .max_rect(area.with_min_x(area.min.x - design::S));
-        ui.scope_builder(scope, |ui| {
-            // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family):
-            // the column keeps it.
-            let shown = design::ScrollColumn::new("encounter_editor")
-                .hosts_reveals()
-                .show(ui, |ui| {
-                    egui::Frame::new()
-                        .inner_margin(egui::Margin {
-                            left: design::S as i8,
-                            ..egui::Margin::ZERO
-                        })
-                        .show(ui, |ui| {
-                            ui.set_width(ui.available_width().min(design::LIST_MEASURE));
-                            Self::roster_column(
-                                ui,
-                                draft,
-                                snapshot,
-                                focus_search,
-                                expanded,
-                                linked_party,
-                                make_yours,
-                                heading,
-                            )
-                        })
-                        .inner
-                });
-            // Test builds keep the column's scroll id by its draft, for the scroll's tests.
-            #[cfg(any(test, feature = "test-support"))]
-            ui.data_mut(|data| data.insert_temp(roster_scroll_key(draft.id), shown.id));
-            shown.inner
-        })
-        .inner
-    }
-
-    /// The roster column's content: the roster, its options, the loot, the notes and the
-    /// encounter's groups.
-    #[allow(clippy::too_many_arguments)]
-    fn roster_column(
-        ui: &mut egui::Ui,
-        draft: &mut Draft,
-        snapshot: &Snapshot,
-        focus_search: &mut bool,
-        expanded: &mut Option<String>,
-        linked_party: Option<&Party>,
-        make_yours: &mut Option<usize>,
-        heading: Option<Option<&crate::difficulty::Difficulty>>,
-    ) -> bool {
-        if let Some(difficulty) = heading {
-            roster_heading(ui, draft.setup.roster.len(), difficulty);
-        }
-        // Without a link there is no sheet to sync with, whatever the note says.
-        let live = linked_party.filter(|_| draft.setup.combat_sync);
-        if draft.setup.roster.is_empty() {
-            design::gap(ui, design::Gap::S);
-            blocked_reason(
-                ui,
-                Some("No participants yet. Add the party and creatures from Add participants."),
-            );
-        }
-        Self::roster(
-            ui,
-            draft,
-            snapshot,
-            focus_search,
-            expanded,
-            live,
-            make_yours,
-        );
-        design::gap(ui, design::Gap::M);
-        if let Some(party) = linked_party {
-            Self::sync_option(ui, draft, snapshot, party);
-        }
-        ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
-        // FI7: what the option changes, in the form the sync option's help uses.
-        design::help(ui, REPEATABLE_HELP);
-        Self::loot_field(ui, draft);
-        design::gap(ui, design::Gap::M);
-        design::field(ui, NOTES_LABEL, None, None, |ui| {
-            let hint = design::placeholder(
-                ui,
-                "What you read to the table, then your tactics. The run shows this before the first turn.",
-            );
-            let output =
-                NOTES_FIELD
-                    .of(draft.id)
-                    .editor(ui, &mut draft.body, plain_face(ui), |edit| {
-                        notes_style(edit, 5).hint_text(hint)
-                    });
-            if let Some(note) = crate::markdown_source::pressed_note_link(ui, &output, None) {
-                crate::markdown_view::send_note_link(ui.ctx(), note, None);
-            }
-            design::named(ui, &output.response, NOTES_LABEL);
-        });
-        groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
-    }
-
-    /// What the party finds when this fight is over, one line each. The note keeps it as its
-    /// `## Loot` list, which Obsidian shows too.
-    fn loot_field(ui: &mut egui::Ui, draft: &mut Draft) {
-        // The heading keeps its own space above (`Heading::above`).
-        design::heading(
-            ui,
-            design::Heading::Group {
-                title: LOOT_FIELD,
-                count: draft.loot.len(),
-            },
-        );
-        if !draft.loot_owned {
-            blocked_reason(
-                ui,
-                Some(
-                    "The Loot section of this note has more than a list. Edit it in Read-aloud and notes.",
-                ),
-            );
-            return;
-        }
-        design::help(ui, ENCOUNTER_LOOT_HELP);
-        crate::loot_editor::show(ui, draft.id, "the encounter", &mut draft.loot, false);
-    }
-
-    /// Whether this encounter uses the party as D&D Beyond has it now. With it on, the DM sees
-    /// what the party has left while they choose what to put against it.
-    fn sync_option(ui: &mut egui::Ui, draft: &mut Draft, snapshot: &Snapshot, party: &Party) {
-        ui.checkbox(&mut draft.setup.combat_sync, SYNC_OPTION);
-        // The live fact stands directly under its control, the help after it (B4, lead ruling:
-        // at 960 the help, not the party's HP, is what goes below the view). With sync off, the
-        // fact is that nothing reaches D&D Beyond.
-        if draft.setup.combat_sync {
-            let sheets: Vec<_> = draft
-                .setup
-                .roster
+            let run_files = left.len();
+            let runs: Vec<_> = left
                 .iter()
-                .filter_map(|slot| slot_sheet(slot, snapshot, party))
+                .filter_map(|path| crate::encounter_run::Run::open(path, active.id).ok())
+                .filter(|run| !run.state_words(true).starts_with("Ended"))
                 .collect();
-            if let Some(line) = crate::party::party_line(&sheets, party.connected()) {
-                ui.horizontal_wrapped(|ui| {
-                    ui.add(
-                        egui::Label::new(Type::Small.rich(ui, line).color(colors().text)).wrap(),
-                    );
-                    if !party.connected() && design::link(ui, "Connect to sync").clicked() {
-                        ui.ctx().data_mut(|data| {
-                            data.insert_temp(egui::Id::new("open_account_settings"), true)
-                        });
-                    }
-                });
-            }
-        } else {
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, "Nothing in this encounter reaches D&D Beyond.")
-                        .color(colors().text),
-                )
-                .wrap(),
-            );
-        }
-        let words = if draft.setup.combat_sync {
-            "The party starts with the HP and conditions on their sheets. When connected, the run and D&D Beyond stay matched."
-        } else {
-            "The party starts from their saved copies and the starting values here. To sync a fight, select Sync party in the run."
-        };
-        // AD1: help under an option keeps the reader measure.
-        design::help(ui, words);
-    }
-
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
-    fn roster(
-        ui: &mut egui::Ui,
-        draft: &mut Draft,
-        snapshot: &Snapshot,
-        focus_search: &mut bool,
-        expanded: &mut Option<String>,
-        live: Option<&Party>,
-        make_yours: &mut Option<usize>,
-    ) {
-        let draft_id = draft.id;
-        let sides: Vec<_> = draft
-            .setup
-            .sides
-            .keys()
-            .filter_map(Value::as_str)
-            .map(str::to_owned)
-            .collect();
-        let (mut remove, mut duplicate, mut raise, mut lower) = (None, None, None, None);
-        let count = draft.setup.roster.len();
-        let mut replacement = None;
-        let missing_counts: Vec<_> = draft
-            .setup
-            .roster
-            .iter()
-            .map(|slot| {
-                draft
-                    .setup
-                    .roster
-                    .iter()
-                    .filter(|other| other.creature == slot.creature)
-                    .count()
-            })
-            .collect();
-        let fault_rows = ui
-            .data(|data| data.get_temp::<Arc<Vec<RosterFault>>>(roster_fault_rows_id(draft.id)))
-            .unwrap_or_default();
-        for (i, slot) in draft.setup.roster.iter_mut().enumerate() {
-            for fault in fault_rows.iter().filter(|fault| fault.before == i) {
-                unread_roster_row(ui, fault);
-            }
-            ui.push_id(slot.key.clone(), |ui| {
-                let resolved = slot
-                    .creature
-                    .as_ref()
-                    .and_then(|r| snapshot.catalogue.resolve_ref(r).ok());
-                let definition = resolved
-                    .and_then(|id| snapshot.catalogue.entries.get(&id))
-                    .map(|e| &e.entry);
-                let name = roster_name(slot, definition, &snapshot.known_creature_names);
-                let missing = definition.is_none();
-                let unreadable = slot
-                    .creature
-                    .as_ref()
-                    .and_then(|reference| snapshot.catalogue.unreadable_ref(reference));
-                let creature =
-                    resolved.and_then(|id| snapshot.creatures.iter().find(|c| c.id == id));
-                let synced = live.is_some() && creature.is_some_and(|c| c.party);
-                // A party sheet always has hit points; otherwise the stats and changes say.
-                let hp_missing = live
-                    .zip(creature)
-                    .and_then(|(party, creature)| party.sheet(creature.character.as_deref()?))
-                    .is_none()
-                    && creature.zip(definition).is_some_and(|(creature, entry)| {
-                        groups::shown_hp_missing(&slot.overrides, entry, &slot.side, creature)
-                    });
-                let detail = live
-                    .zip(creature)
-                    .and_then(|(party, creature)| party.sheet(creature.character.as_deref()?))
-                    .map_or_else(
-                        || {
-                            creature.zip(definition).map_or_else(
-                                String::new,
-                                |(creature, entry)| {
-                                    groups::shown_detail(
-                                        &slot.overrides,
-                                        entry,
-                                        &slot.side,
-                                        creature,
-                                    )
-                                },
-                            )
-                        },
-                        |record| crate::party::SheetNow::of(record).line(),
-                    );
-                // Its side says it is the party's, and the name has the room.
-                let detail = detail
-                    .strip_prefix("Party copy · ")
-                    .map_or_else(|| detail.clone(), str::to_owned);
-                let detail = roster_detail(&detail);
-                let detail = match creature.and_then(|creature| creature.source.as_deref()) {
-                    Some(source) => format!("{detail} · {source}"),
-                    None => detail,
-                };
-                let side_icon = if slot.side == "party" {
-                    icons::PARTY
-                } else if slot.side == "enemies" {
-                    icons::ENCOUNTERS
-                } else {
-                    icons::GROUP
-                };
-                let identity = definition
-                    .filter(|_| slot.overrides.contains_key("name"))
-                    .map(|entry| format!(" · as {}", entry.name))
-                    .unwrap_or_default();
-                let changed = definition.is_some_and(|entry| {
-                    !(slot.overrides.is_empty()
-                        || slot.overrides.len() == 1
-                            && snapshot.npc_name_for(entry, &slot.overrides).is_some())
-                });
-                let side = design::reader::human_label(&slot.side);
-                // The row states the fault in the tone of the message above the roster.
-                let (fault_icon, fault_color) = missing_creature_mark(unreadable);
-                // Two files of one identity: the row says the short cause, and the message above
-                // the roster and the row's hover name the files once.
-                let fault_words = unreadable.map_or(MISSING_CREATURE, |note| {
-                    if !note.duplicate {
-                        note.word.as_str()
-                    } else if crate::world::repair_in_world(&note.path) {
-                        // World's row words for the same fault.
-                        "Same note in two files"
-                    } else {
-                        crate::library::SAME_ENTRY
-                    }
-                });
-                let detail = if missing {
-                    format!("{side_icon} {side} · {fault_icon} {fault_words}")
-                } else if detail.is_empty() {
-                    format!("{side_icon} {side}{identity}")
-                } else {
-                    format!("{side_icon} {side} · {detail}{identity}")
-                };
-                let is_open = expanded.as_deref() == Some(slot.key.as_str());
-                let member_row = ui.horizontal(|ui| {
-                    ui.set_min_height(Density::Glance.row());
-                    // Layout PR 5b (I6), L5c: the actions end at the roster's column, `L` after
-                    // its widest facts, from its last pass; spare width lies after them. Where
-                    // they do not fit, the actions keep the far edge and the facts give way, as
-                    // before (`MeasuredColumn`). Every slot is reserved, so columns line up.
-                    let row = ui.available_rect_before_wrap();
-                    let (left, room) = (row.left(), row.width());
-                    let height = Density::Glance.row();
-                    let place = design::action_rows::MeasuredColumn::end("roster_row_columns")
-                        .slot(
-                            ui,
-                            egui::Rect::from_min_max(
-                                row.min,
-                                egui::pos2(row.right(), row.top() + height),
-                            ),
-                            left,
-                        );
-                    let drawn = place.scope(ui, |ui| {
-                        row_menu(ui, &name, |ui| {
-                            if menu_action(ui, "Edit", None) {
-                                *expanded = Some(slot.key.clone());
-                            }
-                            if menu_action(ui, "Move up", (i == 0).then_some("Already first.")) {
-                                raise = Some(i);
-                            }
-                            if menu_action(
-                                ui,
-                                "Move down",
-                                (i + 1 == count).then_some("Already last."),
-                            ) {
-                                lower = Some(i);
-                            }
-                            if menu_action(ui, "Duplicate", None) {
-                                duplicate = Some(i);
-                            }
-                            if creature.is_some_and(|c| !c.party) {
-                                if menu_action(ui, "Make it yours", None) {
-                                    *make_yours = Some(i);
-                                }
-                                choice_note(
-                                    ui,
-                                    "Make it yours",
-                                    Some("Edit a copy in this campaign."),
-                                );
-                            }
-                            if menu_action(ui, "Remove", None) {
-                                remove = Some(i);
-                            }
-                        });
-                        if let Some(note) = unreadable {
-                            if Action::quiet(if crate::world::repair_in_world(&note.path) {
-                                "Open in World"
-                            } else {
-                                "Open in Library"
-                            })
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                            {
-                                ui.ctx().data_mut(|data| {
-                                    data.insert_temp(
-                                        egui::Id::new("open_library_repair"),
-                                        note.path.clone(),
-                                    )
-                                });
-                            }
-                        } else {
-                            let edit = Action::quiet(if creature.is_none() {
-                                "Replace…"
-                            } else {
-                                "Edit"
-                            })
-                            .density(Density::Read)
-                            .name(groups::SLOT_OPTIONS)
-                            .selected(is_open)
-                            .show(ui);
-                            if edit.clicked() {
-                                *expanded = if is_open {
-                                    None
-                                } else {
-                                    // M0237: the form comes whole into view, by its column's
-                                    // reveal.
-                                    if let Some(act) = design::reveal::Act::clicked(ui, &edit) {
-                                        draft.roster_reveal.ask(
-                                            act,
-                                            draft_id,
-                                            ("roster_form", &slot.key),
-                                        );
-                                    }
-                                    Some(slot.key.clone())
-                                };
-                            }
-                        }
-                        let actions = ui.min_rect();
-                        // The facts keep their old room: the row less this row's actions (the item spacing
-                        // and `XS`), so they give way as before and are drawn at the width that measures them.
-                        let facts_room =
-                            (room - actions.width() - ui.spacing().item_spacing.x - design::XS)
-                                .max(0.0);
-                        let facts = ui
-                            .scope_builder(
-                                egui::UiBuilder::new()
-                                    .max_rect(egui::Rect::from_min_size(
-                                        egui::pos2(left, row.top()),
-                                        egui::vec2(facts_room, height),
-                                    ))
-                                    .layout(egui::Layout::top_down(egui::Align::LEFT)),
-                                |ui| {
-                                    ui.spacing_mut().item_spacing.y = 0.0;
-                                    ui.add(
-                                        egui::Label::new(
-                                            Type::Strong
-                                                .rich(ui, format!("{}. {name}", i + 1))
-                                                .color(colors().text),
-                                        )
-                                        .truncate(),
-                                    );
-                                    if missing {
-                                        let split = detail.find(fault_icon).unwrap_or(0);
-                                        let mut job = egui::text::LayoutJob::default();
-                                        for (text, color) in [
-                                            (&detail[..split], colors().muted),
-                                            (&detail[split..split + fault_icon.len()], fault_color),
-                                            (&detail[split + fault_icon.len()..], colors().muted),
-                                        ] {
-                                            job.append(
-                                                text,
-                                                0.0,
-                                                egui::TextFormat {
-                                                    font_id: Type::Small.font(ui),
-                                                    color,
-                                                    ..Default::default()
-                                                },
-                                            );
-                                        }
-                                        let shown = ui.add(egui::Label::new(job).wrap());
-                                        if let Some(note) = unreadable.filter(|note| note.duplicate)
-                                        {
-                                            shown.on_hover_text(&note.word);
-                                        }
-                                    } else if !detail.is_empty() {
-                                        if changed && !is_open {
-                                            ui.spacing_mut().interact_size.y = 0.0;
-                                            ui.horizontal(|ui| {
-                                                // The separator's own blanks are the gap on both sides, as in the text before it.
-                                                ui.spacing_mut().item_spacing.x = 0.0;
-                                                let word = definition
-                                                    .and_then(|entry| {
-                                                        Overrides::parse(&slot.overrides).ok().map(
-                                                            |overrides| {
-                                                                groups::change_words(
-                                                                    &overrides,
-                                                                    entry,
-                                                                    &slot.side,
-                                                                    &crate::loot_editor::missing_in(
-                                                                        ui.ctx(),
-                                                                        overrides.loot.as_deref(),
-                                                                    ),
-                                                                )
-                                                            },
-                                                        )
-                                                    })
-                                                    .unwrap_or_else(|| "Changed".into());
-                                                // FC9: the muted pencil before the words, as in
-                                                // the list.
-                                                let marked =
-                                                    format!("{}{word}", groups::change_mark());
-                                                let change_width = design::number_width(
-                                                    ui,
-                                                    &marked,
-                                                    &Type::Small.font(ui),
-                                                );
-                                                let (fitted, fault_kept) = changed_detail_parts(
-                                                    ui,
-                                                    &detail,
-                                                    &marked,
-                                                    ui.available_width(),
-                                                    hp_missing,
-                                                );
-                                                let detail_rect = ui
-                                                    .label(detail_text(
-                                                        ui,
-                                                        &stat_line(&fitted),
-                                                        fault_kept,
-                                                    ))
-                                                    .on_hover_text(&detail)
-                                                    .rect;
-                                                let separator = ui
-                                                    .label(
-                                                        Type::Small
-                                                            .rich(ui, " · ")
-                                                            .color(colors().muted),
-                                                    )
-                                                    .rect;
-                                                // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
-                                                let at = egui::pos2(
-                                                    separator.right(),
-                                                    detail_rect.center().y - design::XL / 2.0,
-                                                );
-                                                let mut inline = ui.new_child(
-                                                    egui::UiBuilder::new()
-                                                        .max_rect(egui::Rect::from_min_size(
-                                                            at,
-                                                            egui::vec2(change_width, design::XL),
-                                                        ))
-                                                        .layout(egui::Layout::top_down(
-                                                            egui::Align::Min,
-                                                        )),
-                                                );
-                                                let link = groups::change_link(&mut inline, &word);
-                                                if link.clicked() {
-                                                    if let Some(act) =
-                                                        design::reveal::Act::clicked(&inline, &link)
-                                                    {
-                                                        draft.roster_reveal.ask(
-                                                            act,
-                                                            draft_id,
-                                                            ("roster_form", &slot.key),
-                                                        );
-                                                    }
-                                                    *expanded = Some(slot.key.clone());
-                                                }
-                                                // Layout PR 5b: the facts' width holds the
-                                                // link (the roster's column measures it);
-                                                // their height keeps the row's pitch.
-                                                ui.expand_to_include_x(inline.min_rect().right());
-                                            });
-                                            return;
-                                        }
-                                        // What a player has left is the reason to look, so all of it shows.
-                                        ui.spacing_mut().interact_size.y = 0.0;
-                                        ui.horizontal_wrapped(|ui| {
-                                            ui.spacing_mut().item_spacing.x = 0.0;
-                                            for (at, part) in
-                                                detail_parts(&detail, hp_missing).iter().enumerate()
-                                            {
-                                                if at > 0 {
-                                                    ui.label(
-                                                        Type::Small
-                                                            .rich(ui, " · ")
-                                                            .color(colors().muted),
-                                                    );
-                                                }
-                                                if part.words == "Bloodied" {
-                                                    design::status(
-                                                        ui,
-                                                        Status {
-                                                            icon: icons::BLOODIED,
-                                                            word: part.words,
-                                                            color: colors().hp.bloodied,
-                                                        },
-                                                    );
-                                                } else {
-                                                    ui.label(
-                                                        Type::Small
-                                                            .rich(ui, stat_line(part.words))
-                                                            .color(part.color()),
-                                                    );
-                                                }
-                                            }
-                                        });
-                                    }
-                                },
-                            )
-                            .response
-                            .rect;
-                        // The row's facts share the actions' line.
-                        (
-                            egui::Rect::from_min_size(
-                                egui::pos2(left, facts.top()),
-                                egui::vec2(facts.width(), facts.height()),
-                            ),
-                            actions,
-                        )
-                    });
-                    // After the scope: the slot is not `Copy`, and its row ends once.
-                    place.done(ui, "roster", i, drawn.inner.0, drawn.inner.0, drawn.inner.1);
-                });
-                let member_row = member_row.response.rect;
-                draft
-                    .roster_reveal
-                    .mark(ui, draft_id, ("roster_row", &slot.key), member_row);
-                if is_open && missing && unreadable.is_none() {
-                    if let Some((creature, all)) =
-                        replace_missing_creature(ui, snapshot, missing_counts[i], &name)
-                    {
-                        replacement = Some((i, creature, all));
-                        *expanded = None;
-                    }
-                } else if is_open && !missing {
-                    // The row's fields, keyed by the draft and the row.
-                    let row_key = design::TextKey::from_data(&slot.key);
-                    ui.horizontal(|ui| {
-                        ui.label(Type::Small.rich(ui, "Side").color(colors().muted));
-                        side_control(
-                            ui,
-                            (
-                                list::SIDE_CHOICE.of(draft_id).with(&row_key),
-                                list::SIDE_OTHER.of(draft_id).with(&row_key),
-                            ),
-                            "Side",
-                            &mut slot.side,
-                            &sides,
-                        );
-                    });
-                    ui.horizontal_wrapped(|ui| {
-                        let field = INITIATIVE_GROUP.of(draft_id).with(&row_key);
-                        const GROUP_LABEL: &str = "Initiative group (optional)";
-                        // While the field has focus it keeps the exact words typed (a lone
-                        // space too): the field part drops its text Undo when the bound text is
-                        // rewritten under it.
-                        let group_id = field.named_id(GROUP_LABEL);
-                        let mut group = draft.typed.bound(group_id, || {
-                            slot.extra
-                                .get("initiative_group")
-                                .and_then(Value::as_str)
-                                .unwrap_or("")
-                                .to_owned()
-                        });
-                        let response = design::line_field(
-                            ui,
-                            field,
-                            GROUP_LABEL,
-                            &mut group,
-                            "Initiative group",
-                            120.0,
-                        );
-                        draft
-                            .typed
-                            .keep(group_id, response.has_focus(), group.clone());
-                        if response.changed() {
-                            if group.trim().is_empty() {
-                                slot.extra.remove("initiative_group");
-                            } else {
-                                slot.extra.insert("initiative_group".into(), group.into());
-                            }
-                        }
-                        // A synced player's sheet decides these. The values wait here in case
-                        // the DM turns sync off.
-                        let overrides: &[_] = if synced {
-                            &[]
-                        } else {
-                            &[("hp", "Starting HP"), ("temporary_hp", "Temp HP")]
-                        };
-                        for &(field, label) in overrides {
-                            let mut enabled = slot.initial.contains_key(field);
-                            if ui.checkbox(&mut enabled, label).changed() {
-                                if enabled {
-                                    slot.initial.insert(field.into(), 0.into());
-                                } else {
-                                    slot.initial.remove(field);
-                                }
-                            }
-                            if enabled {
-                                let mut value = slot
-                                    .initial
-                                    .get(field)
-                                    .and_then(Value::as_u64)
-                                    .and_then(|value| i64::try_from(value).ok())
-                                    .unwrap_or(0);
-                                if design::stepper(ui, label, &mut value, 0..=i64::MAX) {
-                                    slot.initial.insert(field.into(), value.into());
-                                }
-                            }
-                        }
-                    });
-                    design::help(
-                        ui,
-                        if synced {
-                            "D&D Beyond decides this player’s HP while this encounter syncs."
-                        } else {
-                            "With a value off, the creature’s own starting state applies."
-                        },
-                    );
-                    if let Some(entry) = definition {
-                        let end = groups::overrides_form(
-                            ui,
-                            &format!("{}:{}", draft.id, slot.key),
-                            &mut slot.overrides,
-                            entry,
-                            &slot.side,
-                            Some(&sides),
-                            &mut draft.typed,
-                        );
-                        if let Some(form) = end.form {
-                            draft.roster_reveal.mark(
-                                ui,
-                                draft_id,
-                                ("roster_form", &slot.key),
-                                form,
-                            );
-                        }
-                        if end.done {
-                            *expanded = None;
-                            // The row comes whole into view, by its column's one reveal.
-                            if let Some(act) = end.done_act {
-                                draft
-                                    .roster_reveal
-                                    .ask(act, draft_id, ("roster_row", &slot.key));
-                            }
-                        }
-                    }
-                }
-                design::rule(ui);
-            });
-        }
-        for fault in fault_rows.iter().filter(|fault| fault.before >= count) {
-            unread_roster_row(ui, fault);
-        }
-        if let Some((selected, creature, all)) = replacement {
-            let before = draft.setup.roster.clone();
-            replace_roster(&mut draft.setup.roster, selected, creature, all, snapshot);
-            let old = roster_name(&before[selected], None, &snapshot.known_creature_names);
-            let rows = before
-                .iter()
-                .zip(&draft.setup.roster)
-                .filter(|(was, now)| was.creature != now.creature)
-                .count();
-            let new = snapshot
-                .catalogue
-                .entries
-                .get(&creature)
-                .map_or_else(|| "the new creature".to_owned(), |e| e.entry.name.clone());
-            draft.new_results.push(DraftUndo::Replacement {
-                before,
-                after: draft.setup.roster.clone(),
-                words: replacement_words(&old, rows, &new),
-                replaced: old,
-            });
-        }
-        for side in draft.setup.roster.iter().flat_map(|slot| {
-            [
-                Some(slot.side.as_str()),
-                slot.overrides.get("side").and_then(Value::as_str),
-            ]
-            .into_iter()
-            .flatten()
-        }) {
-            if !side.trim().is_empty() && !draft.setup.sides.contains_key(side) {
-                draft
-                    .setup
-                    .sides
-                    .insert(side.into(), yaml("{hostile_to: []}"));
-            }
-        }
-        if let Some(i) = remove {
-            draft.setup.roster.remove(i);
-        } else if let Some(i) = duplicate {
-            let mut slot = draft.setup.roster[i].clone();
-            slot.key = format!("actor_{}", Uuid::new_v4().simple());
-            draft.setup.roster.insert(i + 1, slot);
-            *focus_search = true;
-        } else if let Some(i) = raise {
-            draft.setup.roster.swap(i, i - 1);
-        } else if let Some(i) = lower {
-            draft.setup.roster.swap(i, i + 1);
-        }
-    }
-
-    /// Run folder and initiative rule. These belong to the campaign, not to one encounter.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
-    )]
-    /// `modal`: the app's one test of an open modal (`crate::art::modal_open`); Ctrl+S waits for it.
-    pub fn run_settings(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, modal: bool) {
-        self.poll(ui.ctx(), campaigns);
-        let Some(active) = campaigns.active_campaign() else {
-            return;
-        };
-        let draft_open = self.draft_dirty();
-        let run_open = self.has_run();
-        let Some(snapshot) = &self.snapshot else {
-            crate::design::spinner(ui);
-            return;
-        };
-        design::gap(ui, design::Gap::S);
-        // The unread rule choices' lines, for the save row's state. Their warnings are the
-        // footer's (below).
-        let rule_lines: Vec<String> = rule_choices(snapshot, active.id)
-            .into_iter()
-            .map(|(line, _)| line)
-            .collect();
-        let closed_while = draft_open.then_some("Save or discard the open encounter first.");
-        // FC5, FN2's sibling: the unread choice's warnings, the folder move's warning, the
-        // discard's result and the reasons go in the tab's footer, so their coming and going
-        // moves no field or Save. The pane places it `S` below the form while the form fits,
-        // and at the tab's bottom only when the form scrolls.
-        let ctx = ui.ctx().clone();
-        let modules = campaigns.modules();
-        let active = &active;
-        let frame = design::outcome::PaneFrame::new(ui);
-        let this = &mut *self;
-        // L1c: the footer's typed lines (layout PR 2b) are read from their owners after the
-        // form's acts and the acts' own effects (a save's reload, a failed attempt's error),
-        // before the footer paints (`Messages::pane_then`): the frame of an act never shows a
-        // line the act ended, and shows the one it brought.
-        let paned = design::outcome::Messages::new(
-            &frame,
-            ("run_settings_footer", active.id),
-            design::FORM_WIDTH,
-        )
-        .pane_then(
-            ui,
-            design::Body::Content,
-            move |ui| {
-        let mut commit = None;
-        let mut form_left = None;
-        if let Some(snapshot) = this.snapshot.as_mut() {
-        ui.vertical(|ui| {
-        // The form is as wide as the tab, at most `FORM_WIDTH`.
-        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-        design::locked(ui, closed_while, |ui| {
-            design::labelled_field(
-                ui,
-                RUN_FOLDER.of(active.id),
-                "Run folder",
-                &mut snapshot.options.folder,
-                Some("Relative to the campaign folder, or an absolute path."),
-                None,
-            );
-            // M0206: the help is the field's (`small_field`), with the field's own `L` after it,
-            // so it reads as this choice's and not the next one's.
-            design::small_field(ui, "Roll NPC initiative", Some(INITIATIVE_HELP), None, |ui| {
-                // The menu ends at the form's edge, where Run folder and Save end.
-                let _ = design::Dropdown::new(RUN_INITIATIVE.of(active.id), "Roll NPC initiative")
-                    .width(ui.available_width())
-                    .choice(
-                        crate::encounter_settings::Grouping::ALL[0],
-                        crate::encounter_settings::Grouping::ALL[0].label(),
-                    )
-                    .choices(
-                        crate::encounter_settings::Grouping::ALL[1..]
-                            .iter()
-                            .map(|mode| (*mode, mode.label())),
-                    )
-                    .show(ui, &mut snapshot.options.initiative.grouping);
-            });
-            ui.checkbox(
-                &mut snapshot.options.initiative.roster_ties,
-                "Break initiative ties in roster order",
-            );
-            // The campaign's packages decide inspiration. Only several rules need a choice.
-            if snapshot.options.inspiration_rules.len() > 1 {
-                let rules = snapshot.options.inspiration_rules.clone();
-                let line = |rule: &crate::encounter_settings::InspirationRule| {
-                    format!("{}: {}", rule.name, rule.effect.effect())
-                };
-                design::small_field(ui, "Inspiration rule", None, None, |ui| {
-                    // No rule chosen yet: the control shows its name until one is.
-                    let mut chosen = snapshot.options.inspiration_choice;
-                    let mut dropdown = design::Dropdown::new(
-                        RUN_INSPIRATION.of(active.id),
-                        "Inspiration rule",
-                    )
-                    .width(ui.available_width())
-                    .choice(rules[0].id, line(&rules[0]));
-                    for rule in &rules[1..] {
-                        dropdown = dropdown.choices([(rule.id, line(rule))]);
-                    }
-                    let mut value = chosen.unwrap_or_default();
-                    if dropdown.show(ui, &mut value).changed {
-                        chosen = Some(value);
-                    }
-                    snapshot.options.inspiration_choice = chosen;
-                });
-                if snapshot.options.inspiration().is_none() {
-                    design::help(ui, "This campaign’s packages have more than one inspiration rule. Runs offer inspiration once you choose one.");
-                }
-            }
-            // Campaign → Rules and runs has a switch for each house rule note (F4). A campaign
-            // with none shows nothing new.
-            if !snapshot.options.house_rules.is_empty() {
-                let notes = snapshot.options.house_rules.clone();
-                design::small_field(ui, "House rules in play", Some(HOUSE_RULES_HELP), None, |ui| {
-                    ui.vertical(|ui| {
-                        for (id, name) in &notes {
-                            let mut on = snapshot.options.in_play.contains(id);
-                            if ui.checkbox(&mut on, name).changed() {
-                                if on {
-                                    snapshot.options.in_play.push(*id);
-                                } else {
-                                    snapshot.options.in_play.retain(|other| other != id);
-                                }
-                            }
-                        }
-                    });
-                });
-            }
-            let changed = snapshot.options != snapshot.saved_options;
-            // SD7: the last Save's `Saved` ends at the form's first edit (as the discard's result
-            // does), at another campaign, and when the file's settings changed outside Splat.
-            if changed
-                || this.options_saved.as_ref().is_some_and(|(campaign, saved)| {
-                    *campaign != active.id || *saved != snapshot.saved_options
-                })
+            let words = if run_files == 1
+                && let Some(run) = runs.first()
             {
-                this.options_saved = None;
-            }
-            // The run files the folder change leaves, read once a frame for the folder the
-            // fields left; the footer's warning says them (`then` below).
-            let left = snapshot.options.runs_left_in(&snapshot.saved_options, active);
-            let left_folder = snapshot.options.folder.clone();
-            let run_files = left.as_ref().map_or(0, Vec::len);
-            let folder_changed = snapshot.options.directory(active).ok() != snapshot.saved_options.directory(active).ok();
-            // M4: `Save run settings` is the commit in every state. While the folder change
-            // leaves saved runs, it waits in its place, and the folder warning's two choices (the
-            // footer's, `then` below) commit, so a second press where Save was never moves runs.
-            let choose_move = run_files > 0 && !run_open;
-            // One rule for the row (`DraftState`): the word (`Unsaved`, `Saved` while the last
-            // Save's settings hold, `No changes`), the repair of an unread choice, Save's weight
-            // and why it waits, Discard and the campaign lock.
-            let repair = (!rule_lines.is_empty()).then(|| {
-                // Save is the repair here: it writes the shown settings over the unread choice.
-                let lines = match rule_lines.split_last() {
-                    Some((last, [])) => format!("line {last}"),
-                    Some((last, before)) => format!("lines {} and {last}", before.join(", ")),
-                    None => String::new(),
-                };
-                format!("Save replaces the unread choice on {lines} with these settings")
-            });
-            let mut state = design::DraftState::new(
-                design::save_row::DraftOrigin::Saved,
-                if changed { design::save_row::Changed::Yes } else { design::save_row::Changed::No },
-                design::save_row::Primary::Draft,
-            )
-            .locks_campaign();
-            if this.options_saved.is_some() {
-                state = state.just_saved();
-            }
-            if let Some(write) = repair {
-                state = state.repairs(write);
-            }
-            if run_open {
-                state = state.waits("Close the open run to save run settings.");
-            } else if folder_changed && left.is_err() {
-                state = state.waits("Could not read saved runs. Check the old run folder before saving.");
-            } else if choose_move {
-                state = state.commits_elsewhere(CHOOSE_MOVE);
-            }
-            if changed {
-                this.discarded_options = None;
-            }
-            ui.vertical(|ui| {
-                // Ctrl+S saves exactly when the button it labels can: a rule repair with no
-                // other change too. Not under a modal (the app's one test) nor the form's lock
-                // (review of PR 525).
-                let save_key = design::save_row::save_key(ui, state.can_save() && !modal);
-                // The state and Discard start the row, the lock's reason after them, and Save
-                // ends it (`save_row`), in every state (M4).
-                let row = design::save_row(ui, &state, SAVE_RUN_SETTINGS);
-                if row.discard {
-                    this.discarded_options = Some(std::mem::replace(
-                        &mut snapshot.options,
-                        snapshot.saved_options.clone(),
+                format!(
+                    "{} ({}) stays in {}. From the new folder, Splat will not show it or resume it.",
+                    run.name,
+                    run.state_words(true),
+                    snapshot.saved_options.folder
+                )
+            } else {
+                format!(
+                    "{} {} in {}. {} are unfinished. From the new folder, Splat will not show these runs or resume them.",
+                    design::count(run_files, "saved run", "saved runs"),
+                    if run_files == 1 { "stays" } else { "stay" },
+                    snapshot.saved_options.folder,
+                    runs.len()
+                )
+            };
+            // M4: the warning's two choices are the folder's commit while it leaves
+            // runs; none while a run or the open encounter locks the form (the save row
+            // says why).
+            let mut warning = design::outcome::FaultMessage::new(&EncounterFault::RunsLeft(words));
+            if !run_open && !draft_open {
+                for (words, press) in [
+                    ("Move runs and save", FooterPress::MoveRuns),
+                    ("Save without moving", FooterPress::SaveWithoutMoving),
+                ] {
+                    warning = warning.choice(design::outcome::Choice::new(
+                        design::outcome::MessageChoice::Choice(words),
+                        press,
                     ));
-                    Self::record_kept(
-                        &mut this.kept,
-                        this.active.as_ref(),
-                        KeptResult::OptionsDiscarded,
-                    );
                 }
-                // Why Save waits, on its own line under the row, while the form has changes.
-                if snapshot.options != snapshot.saved_options {
-                    design::blocked_reason(ui, state.save_blocked());
-                }
-                if (row.save || save_key) && state.can_save() {
-                    commit = Some(commit_options(snapshot, active, OptionsCommit::Save));
-                }
-            });
-            form_left = Some((left_folder, left));
-        });
-        });
+            }
+            messages.outcome(warning);
         }
-        (this, commit, form_left)
-            },
-            |(this, commit, form_left), messages| {
-                // The acts' own effects first: a save reloads the settings (which ends the
-                // error), and a failed attempt says why.
-                if let Some(commit) = commit {
-                    this.options_committed(&ctx, active, modules.to_vec(), commit);
-                }
-                // Then the footer's lines, each from its owner as the acts left it. The
-                // discard's result is the page's store's (`KeptResult::OptionsDiscarded`, Undo by
-                // its ticket): it ends when its draft was dropped (an edit, a save, another
-                // campaign), and shows while the form is unchanged.
-                let discarded = KeptOwner {
-                    root: active.path.clone(),
-                    kind: KeptResult::OptionsDiscarded,
-                };
-                if this.discarded_options.is_none() {
-                    this.kept.owner_changed(&discarded);
-                }
-                let snapshot = this.snapshot.as_ref();
-                if snapshot.is_some_and(|snapshot| snapshot.options == snapshot.saved_options)
-                    && let Some(shown) = this.kept.get(&discarded)
-                {
-                    messages.kept(shown.outcome(&frame, |_| options_discarded()));
-                }
-                // Each unread choice's warning names its line; the file's path and links follow
-                // the last one.
-                let rule_words: Vec<String> = snapshot
-                    .map(|snapshot| rule_choices(snapshot, active.id))
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|(_, words)| words)
-                    .collect();
-                if let Some((last, before)) = rule_words.split_last() {
-                    for words in before {
-                        messages.outcome(design::outcome::FaultMessage::new(
-                            &EncounterFault::FileWarning(words.clone()),
-                        ));
-                    }
-                    messages.outcome(
-                        design::outcome::FaultMessage::new(&EncounterFault::FileWarning(
-                            last.clone(),
-                        ))
-                        .file(
-                            design::outcome::FileLine::new(&active.path, "Campaign.md")
-                                .edit()
-                                .show(),
-                        ),
-                    );
-                }
-                // The run files the form read, unless an act changed the folder after it
-                // (Discard puts the saved one back).
-                let left = snapshot.zip(form_left).map(|(snapshot, (folder, left))| {
-                    if snapshot.options.folder == folder {
-                        left
-                    } else {
-                        snapshot.options.runs_left_in(&snapshot.saved_options, active)
-                    }
-                });
-                if let Some(snapshot) = snapshot
-                    && let Some(Ok(left)) = &left
-                    && !left.is_empty()
-                {
-                    let run_files = left.len();
-                    let runs: Vec<_> = left
-                        .iter()
-                        .filter_map(|path| crate::encounter_run::Run::open(path, active.id).ok())
-                        .filter(|run| !run.state_words(true).starts_with("Ended"))
-                        .collect();
-                    let words = if run_files == 1
-                        && let Some(run) = runs.first()
-                    {
-                        format!(
-                            "{} ({}) stays in {}. From the new folder, Splat will not show it or resume it.",
-                            run.name,
-                            run.state_words(true),
-                            snapshot.saved_options.folder
-                        )
-                    } else {
-                        format!(
-                            "{} {} in {}. {} are unfinished. From the new folder, Splat will not show these runs or resume them.",
-                            design::count(run_files, "saved run", "saved runs"),
-                            if run_files == 1 { "stays" } else { "stay" },
-                            snapshot.saved_options.folder,
-                            runs.len()
-                        )
-                    };
-                    // M4: the warning's two choices are the folder's commit while it leaves
-                    // runs; none while a run or the open encounter locks the form (the save row
-                    // says why).
-                    let mut warning =
-                        design::outcome::FaultMessage::new(&EncounterFault::RunsLeft(words));
-                    if !run_open && !draft_open {
-                        for (words, press) in [
-                            ("Move runs and save", FooterPress::MoveRuns),
-                            ("Save without moving", FooterPress::SaveWithoutMoving),
-                        ] {
-                            warning = warning.choice(design::outcome::Choice::new(
-                                design::outcome::MessageChoice::Choice(words),
-                                press,
-                            ));
-                        }
-                    }
-                    messages.outcome(warning);
-                }
-                // An act's answer (a failed save or move) after the standing reasons, so it never
-                // moves the choice the DM pressed.
-                if let Some(e) = &this.error {
-                    messages.outcome(design::outcome::FaultMessage::new(
-                        &EncounterFault::Failed(e.clone()),
-                    ));
-                }
-                if this.draft_dirty() {
-                    messages.outcome(design::outcome::Notice::new(crate::sentence!(
-                        "Save or discard the open encounter to change run settings."
-                    )));
-                }
-            },
-        );
-        // `Undo discard of Rules and runs`: the page's store acts by the press's ticket, and only
-        // then is the draft put back.
-        let Some(press) = paned.pressed else {
-            return;
-        };
-        let commit = match press.id {
-            FooterPress::Undo => {
-                if let Some(ticket) = press.ticket {
-                    self.undo_by_ticket(ticket, None);
-                }
-                return;
-            }
-            FooterPress::MoveRuns => OptionsCommit::MoveRuns,
-            FooterPress::SaveWithoutMoving => OptionsCommit::WithoutMoving,
-            _ => return,
-        };
-        // The folder warning's choice (M4), offered only while no run or encounter draft locks
-        // the form.
-        if !run_open
-            && !draft_open
-            && let Some(snapshot) = &self.snapshot
-        {
-            let result = commit_options(snapshot, active, commit);
-            self.options_committed(
-                &ui.ctx().clone(),
-                active,
-                campaigns.modules().to_vec(),
-                result,
-            );
+        // An act's answer (a failed save or move) after the standing reasons, so it never
+        // moves the choice the DM pressed.
+        if let Some(e) = &self.error {
+            messages.outcome(design::outcome::FaultMessage::new(&EncounterFault::Failed(
+                e.clone(),
+            )));
+        }
+        if self.draft_dirty() {
+            messages.outcome(design::outcome::Notice::new(crate::sentence!(
+                "Save or discard the open encounter to change run settings."
+            )));
         }
     }
 
@@ -9687,7 +5973,7 @@ impl Encounters {
     /// is the footer's error.
     fn options_committed(
         &mut self,
-        ctx: &egui::Context,
+        ctx: &StateContext,
         active: &Campaign,
         modules: Vec<Module>,
         result: Result<Option<String>, String>,
@@ -9709,12 +5995,8 @@ impl Encounters {
     }
 }
 
-/// What Rules and runs' initiative choice does (its field's help).
-const INITIATIVE_HELP: &str = "Run setup starts with this choice. You can change it there for one roll. Groups that arrive later use it too.";
-
 /// `Save run settings` waits for the folder warning's choices (ruling M4), as `Save folder` does.
 const CHOOSE_MOVE: &str = "Choose below to move the runs or not.";
-const SAVE_RUN_SETTINGS: &str = "Save run settings";
 
 /// How Rules and runs commits its settings (ruling M4): `Save run settings`, or one of the folder
 /// warning's two choices while the folder change leaves saved runs.
@@ -9766,17 +6048,9 @@ fn options_discarded() -> design::outcome::KeptOutcome<FooterPress> {
     )
 }
 
-/// The widest a list row grows, so that its actions stay near the name they belong to.
-use crate::design::LIST_MEASURE;
 #[path = "encounters/list.rs"]
 mod list;
 pub use list::run_state_word;
-#[cfg(any(test, feature = "test-support"))]
-pub use list::{FIGHT_OPEN, GO_TO_RUN};
-use list::{
-    blocked_reason, choice_note, group_list, history_list, in_progress_list, menu_action,
-    ready_list, row_menu, side_control,
-};
 
 fn roster_detail(detail: &str) -> String {
     let parts: Vec<_> = detail.split(" · ").collect();
@@ -9814,6 +6088,32 @@ pub use splat_content_ui::content_actions::{blocked_draft_switch_reason, draft_s
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// A read made now (after a save, or `refresh_now`) ends the older read still in flight, so
+    /// that read's result cannot land later and put back the campaign as it was before.
+    #[test]
+    fn a_read_made_now_ends_the_older_read_in_flight() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let older = Snapshot::load(&active, &[]);
+        creature(dir.path(), "Mist Rider", false);
+        let mut encounters = Encounters::default();
+        let (tx, rx) = mpsc::channel();
+        encounters.pending = Some(rx);
+        encounters.refresh_now(&active, &[]);
+        assert!(!encounters.busy(), "the older read no longer counts");
+        assert!(
+            tx.send(older).is_err(),
+            "nothing takes the older read's result"
+        );
+        assert!(
+            encounters
+                .snapshot
+                .as_ref()
+                .is_some_and(|s| s.creatures.iter().any(|c| c.name == "Mist Rider")),
+            "the read made now is the one kept"
+        );
+    }
+
     #[test]
     fn run_copy_word_names_copies_and_not_the_original() {
         assert_eq!(
@@ -9829,7 +6129,6 @@ mod tests {
     /// it; with no words it keeps the list's first five.
     #[test]
     fn the_replacement_picker_ranks_before_it_takes_five() {
-        use crate::design::test_harness::Themed as _;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
         for name in [
@@ -9868,229 +6167,34 @@ mod tests {
             .collect();
         assert_eq!(listed.len(), 5, "fixture: five creatures listed");
         assert_eq!(names(""), listed);
-        // P2 of the review of PR 450: the picker keeps its five. A repaint with the same words
-        // visits no creature; new words rank again, as typed only (no typo compared); with no
-        // words it stops at the fifth it can offer.
-        use egui_kittest::kittest::Queryable;
-        let visited = || REPLACEMENT_NAMES.with(std::cell::Cell::get);
-        let typos = crate::matching::typo_checks;
-        let offered = snapshot.creatures.iter().filter(|c| !c.linked).count();
-        assert!(offered > 5, "fixture: more creatures than the five");
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(600.0, 600.0))
-            .themed_ui_state(
-                |ui, snapshot: &mut Snapshot| {
-                    let _ = replace_missing_creature(ui, snapshot, 1, "Missing");
-                },
-                snapshot,
-            );
-        harness.run_steps(2);
-        let empty = visited();
-        harness.get_by_label("Replacement creature").click();
-        harness.run_steps(1);
-        harness
-            .get_by_label("Replacement creature")
-            .type_text("fenstalker");
-        harness.run_steps(3);
-        let (seen, compared) = (visited(), typos());
-        harness.run_steps(5);
-        assert_eq!(visited(), seen, "an unchanged repaint visits no creature");
-        assert!(seen > empty, "the words ranked");
-        harness.get_by_label("Replacement creature").type_text(" ");
-        harness.run_steps(3);
-        assert!(visited() > seen, "new words rank again");
-        assert_eq!(typos(), compared, "as typed only: no typo is compared");
-        // Another read of the encounters (a new revision) ranks again.
-        let seen = visited();
-        *harness.state_mut() = Snapshot::load(&active, &[]).unwrap();
-        harness.run_steps(2);
-        assert!(
-            visited() > seen,
-            "another read of the encounters ranks again"
-        );
-        // No words: the first five it can offer, and no more visited.
-        let before = visited();
-        let fresh = Snapshot::load(&active, &[]).unwrap();
-        assert_eq!(
-            replacement_indices(&fresh.creatures, "").len(),
-            5,
-            "the list's first five"
-        );
-        assert_eq!(visited() - before, 5, "it stops at the fifth");
-        // Review of PR 466, P3: a closed picker's five go. Five rows' pickers in turn, each
-        // ranking its words, then none open: the store keeps no closed row's five.
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(600.0, 600.0))
-            .themed_ui_state(
-                |ui, (snapshot, open): &mut (Snapshot, Vec<u8>)| {
-                    for &row in open.iter() {
-                        ui.push_id(row, |ui| {
-                            let _ = replace_missing_creature(ui, snapshot, 1, "Missing");
-                        });
-                    }
-                },
-                (Snapshot::load(&active, &[]).unwrap(), Vec::new()),
-            );
-        for row in 1..=5 {
-            harness.state_mut().1 = vec![row];
-            harness.run_steps(2);
-            harness
-                .get_by_label("Replacement creature")
-                .type_text("fen");
-            harness.run_steps(2);
-            assert_eq!(
-                kept_replacement_pickers(&harness.ctx),
-                1,
-                "row {row}'s picker open: its five, and no closed row's"
-            );
-            harness.state_mut().1 = Vec::new();
-            harness.run_steps(2);
-        }
-        harness.state_mut().1 = vec![1];
-        harness.run_steps(2);
-        assert_eq!(
-            kept_replacement_pickers(&harness.ctx),
-            1,
-            "five rows closed in turn, one open again: one picker's five"
-        );
-        // Review of PR 473, P3: three pickers open at once; the sweep runs once per frame and
-        // visits each kept picker once, not once for every picker that draws.
-        harness.state_mut().1 = vec![1, 2, 3];
-        harness.run_steps(2);
-        let swept = || REPLACEMENT_SWEPT.with(std::cell::Cell::get);
-        let (before, frame) = (swept(), harness.ctx.cumulative_frame_nr());
-        harness.run_steps(4);
-        let (visits, frames) = (swept() - before, harness.ctx.cumulative_frame_nr() - frame);
-        let kept = kept_replacement_pickers(&harness.ctx);
-        assert_eq!(kept, 3, "three pickers open, three kept");
-        assert!(
-            visits > 0 && visits as u64 <= frames * kept as u64,
-            "the sweep runs once per frame: {visits} visits in {frames} frames"
-        );
-        // M-E0 (review of M-Q0.2): the encounter search keeps its ranking for its view too. A
-        // repaint with the same inputs visits no creature; new words, a filter, a change of the
-        // roster and another read of the campaign each rank again.
+        // M-E0 (review of M-Q0.2): the encounter search keeps its ranking for its view
+        // (`add_view`, as the GPUI page builds it). An unchanged frame ranks no creature; new
+        // words and a change of the roster each rank again.
         let ranked = || SEARCH_RANKED.with(std::cell::Cell::get);
-        type Search = (Snapshot, String, Vec<Uuid>);
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(600.0, 600.0))
-            .themed_ui_state(
-                |ui, (snapshot, query, roster): &mut Search| {
-                    let mut search = query.clone();
-                    let _ = Encounters::creature_search(
-                        ui,
-                        snapshot.search_list(false),
-                        &mut search,
-                        &mut false,
-                        &mut None,
-                        SearchRoster {
-                            already: &|c: &Creature| roster.contains(&c.id),
-                            on_roster: OnRoster::Ids(roster),
-                            separated: &std::cell::Cell::new(None),
-                        },
-                    );
-                },
-                (
-                    Snapshot::load(&active, &[]).unwrap(),
-                    "fenstalker".to_owned(),
-                    Vec::new(),
-                ),
-            );
-        harness.run_steps(2);
-        assert!(
-            harness.query_by_label("Fenstalker").is_some()
-                && harness.query_by_label("Dread Fenstalker").is_some(),
-            "the kept ranking draws its creatures"
-        );
+        let first = snapshot.creatures[0].id;
+        let mut page = Encounters {
+            draft: Some(Draft::new()),
+            snapshot: Some(snapshot),
+            ..Default::default()
+        };
+        page.set_search("fenstalker");
+        let before = ranked();
+        assert!(page.add_view(Filter::default()).is_some());
         let seen = ranked();
-        assert!(seen > 0, "the words ranked");
-        let copies = ROSTER_COPIES.with(std::cell::Cell::get);
-        harness.run_steps(5);
-        assert_eq!(ranked(), seen, "an unchanged repaint visits no creature");
-        // Review of PR 555 (#565, `m-p0-columns-key`): the results' columns are kept with the
-        // ranking's key and what they were measured in, so an unchanged repaint measures none,
-        // and another read of the campaign with the same words and count measures them again.
-        let columns = || RESULT_COLUMNS_MEASURED.with(std::cell::Cell::get);
-        let measured = columns();
-        assert!(measured > 0, "the results' columns were measured");
-        harness.run_steps(3);
-        assert_eq!(
-            columns(),
-            measured,
-            "m-p0-columns-key: an unchanged repaint measures no results columns"
-        );
-        assert_eq!(
-            ROSTER_COPIES.with(std::cell::Cell::get),
-            copies,
-            "#518: an unchanged repaint copies no roster ids"
-        );
-        harness.state_mut().1 = "dread".to_owned();
-        harness.run_steps(2);
+        assert!(seen > before, "the words ranked");
+        let _ = page.add_view(Filter::default());
+        assert_eq!(ranked(), seen, "an unchanged frame ranks no creature");
+        page.set_search("fen");
+        let _ = page.add_view(Filter::default());
         assert!(ranked() > seen, "new words rank again");
-        assert!(
-            harness.query_by_label("Dread Fenstalker").is_some()
-                && harness.query_by_label("Bog Fenstalker").is_none(),
-            "the new words' ranking draws"
-        );
         let seen = ranked();
-        harness.ctx.data_mut(|data| {
-            data.insert_temp(
-                egui::Id::new("creature_search_filter"),
-                Filter {
-                    challenge: (Some(30.0), None),
-                    ..Filter::default()
-                },
-            )
-        });
-        harness.run_steps(2);
-        assert!(ranked() > seen, "a filter ranks again");
-        harness.ctx.data_mut(|data| {
-            data.insert_temp(egui::Id::new("creature_search_filter"), Filter::default())
-        });
-        harness.run_steps(2);
-        let seen = ranked();
-        harness.state_mut().2 = vec![Uuid::new_v4()];
-        harness.run_steps(2);
+        page.draft.as_mut().unwrap().add(first, false);
+        let _ = page.add_view(Filter::default());
         assert!(ranked() > seen, "a change of the roster ranks again");
-        let (seen, measured) = (ranked(), columns());
-        harness.state_mut().0 = Snapshot::load(&active, &[]).unwrap();
-        harness.run_steps(2);
-        assert!(ranked() > seen, "another read of the campaign ranks again");
-        assert!(
-            columns() > measured,
-            "m-p0-columns-key: another read with the same words and count measures its columns again"
-        );
-        // Review of #875 (P2, `m-p0-columns-roster`): the columns are kept by the ranking itself.
-        // With no words, a party member on the roster is not offered; taken off the roster, it
-        // comes back with the same words, filter and list, and the columns are measured again.
-        const MEMBER: &str = "Marisol of the Long Western Road";
-        let member = creature(dir.path(), MEMBER, true);
-        harness.state_mut().0 = Snapshot::load(&active, &[]).unwrap();
-        harness.state_mut().1 = String::new();
-        harness.state_mut().2 = vec![member];
-        harness.run_steps(2);
-        // The party comes first in the list's order, so an offered member is the first row,
-        // before the first creature of the built-in list.
-        assert!(
-            harness.query_by_label("Aboleth").is_some() && harness.query_by_label(MEMBER).is_none(),
-            "m-p0-columns-roster setup: with no words the results show, and the party member on \
-             the roster is not offered"
-        );
-        let measured = columns();
-        harness.state_mut().2 = Vec::new();
-        harness.run_steps(2);
-        assert!(
-            harness.query_by_label(MEMBER).is_some() && columns() > measured,
-            "m-p0-columns-roster: the party member taken off the roster is offered again, and the \
-             columns are measured again ({} more times)",
-            columns() - measured
-        );
     }
 
     #[test]
     fn iter_2_b_npc_with_deleted_stat_block_stays_in_search_and_cannot_be_added() {
-        use crate::design::test_harness::ThemedPage as _;
-        use egui_kittest::kittest::{NodeT, Queryable};
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
         let text = splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: world\nsplat_name: Watchkeeper\nsplat_world:\n  type: npc\n  creature: {{id: {}, link: '[[Watchkeeper Guard]]'}}\n", Uuid::new_v4(), Uuid::new_v4()), "").unwrap();
@@ -10105,144 +6209,21 @@ mod tests {
                 .any(|creature| creature.entry.name == "Watchkeeper"),
             "the live run cannot add an NPC whose stat block is missing"
         );
-        let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                let chosen = Encounters::creature_search(
-                    ui,
-                    snapshot.search_list(false),
-                    &mut "Watchkeeper".to_owned(),
-                    &mut false,
-                    &mut None,
-                    SearchRoster {
-                        already: &|_| false,
-                        on_roster: OnRoster::Ids(&[]),
-                        separated: &std::cell::Cell::new(None),
-                    },
-                );
-                assert!(chosen.is_none());
-            });
-        });
-        harness.run_steps(2);
-        assert!(harness.query_by_label("No creatures match").is_none());
-        // FD3: the reason is a status, the warning icon and then the words.
-        assert!(
-            harness
-                .query_by_label(&format!(
-                    "{} Watchkeeper Guard stat block not found",
-                    icons::WARN
-                ))
-                .is_some(),
-            "iter18-B-FD3: the missing stat block reason has its warning icon"
-        );
-        assert!(harness.query_by_label("Open in World").is_some());
-        assert!(harness.get_by_label("Add").accesskit_node().is_disabled());
-
-        // Layout PR 4 (I6, §4.1): each row's action starts exactly `L` after the widest facts,
-        // in one column; a row's facts and action lie in its one block; each action is a 24 pt
-        // target at least; each row's gap is measured (a gap above 4L is a counted residual).
-        // An action that becomes `In roster` keeps the column.
-        let records = design::action_rows::row_records(&harness.ctx);
-        let column = |records: &[design::action_rows::RowRecord]| {
-            let widest = records
-                .iter()
-                .map(|record| record.facts.right())
-                .fold(f32::MIN, f32::max);
-            let lefts: Vec<f32> = records.iter().map(|record| record.action.left()).collect();
-            (widest, lefts)
-        };
-        // Review of PR 555 (#565, `m-p0-gap-allowance`): a gap above 4L is a counted residual,
-        // and this list's allowance is none, asserted before the column's own check.
-        let residuals = records.iter().filter(|record| record.residual()).count();
-        assert!(
-            residuals == 0,
-            "m-p0-gap-allowance: {residuals} residual gaps above 4L, allowed 0: {records:?}"
-        );
-        let (widest, lefts) = column(&records);
-        assert!(
-            !records.is_empty()
-                && records.iter().all(|record| !record.wrapped)
-                && lefts
-                    .iter()
-                    .all(|left| (left - (widest + design::L)).abs() <= 0.5),
-            "pr4-column: every action starts L after the widest facts {widest}: {lefts:?}"
-        );
-        assert!(
-            records.iter().all(|record| {
-                record.action.top() >= record.facts.top() - 0.5
-                    && record.action.bottom() <= record.facts.bottom() + 0.5
-                    && record.action.height() >= 24.0
-            }),
-            "pr4-block: each row's action lies in its block, a 24 pt target: {records:?}"
-        );
-        assert!(
-            records.iter().all(|record| record.gap() >= design::L - 0.5),
-            "pr4-gap: each row's gap is measured from its own facts ({residuals} residual): {records:?}"
-        );
-        let in_roster = {
-            let snapshot = Snapshot::load(&active, &[]).unwrap();
-            let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    let _ = Encounters::creature_search(
-                        ui,
-                        snapshot.search_list(false),
-                        &mut "Watchkeeper".to_owned(),
-                        &mut false,
-                        &mut None,
-                        SearchRoster {
-                            already: &|_| true,
-                            on_roster: OnRoster::Ids(&[]),
-                            separated: &std::cell::Cell::new(None),
-                        },
-                    );
-                });
-            });
-            harness.run_steps(2);
-            column(&design::action_rows::row_records(&harness.ctx)).1
-        };
-        assert!(
-            in_roster.len() == lefts.len()
-                && in_roster
-                    .iter()
-                    .zip(&lefts)
-                    .all(|(roster, add)| (roster - add).abs() <= 0.5),
-            "pr4-alternate: In roster keeps the column of Add: {in_roster:?} {lefts:?}"
+        // The search lists it with why it cannot be added (the GPUI result shows these words
+        // and no Add).
+        let watchkeeper = snapshot
+            .search_list(false)
+            .creatures()
+            .find(|c| c.name == "Watchkeeper")
+            .expect("the search lists the NPC");
+        assert_eq!(
+            watchkeeper.unavailable.as_deref(),
+            Some("Watchkeeper Guard stat block not found")
         );
     }
-    #[test]
-    fn editor_save_row_has_one_height_in_every_state() {
-        let ctx = egui::Context::default();
-        design::theme::install(&ctx);
-        let _ = ctx.run(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                let mut heights = Vec::new();
-                for (dirty, word) in [(true, "Unsaved"), (false, "Saved"), (false, "No changes")] {
-                    heights.push(
-                        ui.horizontal(|ui| {
-                            editor_save_state(
-                                ui,
-                                Status {
-                                    icon: icons::OK,
-                                    word,
-                                    color: colors().muted,
-                                },
-                                dirty,
-                                None,
-                            );
-                        })
-                        .response
-                        .rect
-                        .height(),
-                    );
-                }
-                assert_eq!(heights, vec![Density::Read.control(); 3]);
-            });
-        });
-    }
 
-    /// FD3 edge content: unread rows that are not roster rows get no file line; one roster row
-    /// and two roster rows with a long path in a narrow column each end with the right sentence,
-    /// and the file line starts at the last warning's words with its links whole. The path is
-    /// painted whole inside the column: a long one wraps above its links, never cut.
+    /// FD3 edge content: unread rows that are not roster rows and roster rows with a long path
+    /// each get the right words and tone (the GPUI footer draws them as typed lines).
     /// iter-22-B FD5: the warnings come from `unread_notes`. With a file line below them they name
     /// the row and the line, never the path; without one, the warning names the file.
     #[test]
@@ -10350,820 +6331,24 @@ mod tests {
                     "{reason}"
                 );
             }
-            let faults = rows.len();
-            let ctx = egui::Context::default();
-            design::theme::install(&ctx);
-            let mut bounds = egui::Rect::NOTHING;
-            // Migration-32 L2c: the editor's typed footer (`editor_messages`), as it draws the
-            // file's flags; a few frames, so the footer's plan is made and drawn.
-            let mut output = Default::default();
-            for _ in 0..3 {
-                output = ctx.run(Default::default(), |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        // The encounter editor's column at 960.
-                        let column =
-                            egui::Rect::from_min_size(ui.cursor().min, egui::vec2(440.0, 2000.0));
-                        ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
-                            bounds = ui.max_rect();
-                            let frame = design::outcome::PaneFrame::new(ui);
-                            let mut messages = design::outcome::Messages::<FooterPress>::new(
-                                &frame,
-                                "unread",
-                                ui.available_width(),
-                            );
-                            let unread = UnreadRows {
-                                notes: notes.clone(),
-                                faults,
-                                path: path.to_owned(),
-                            };
-                            for fault in unread.faults() {
-                                messages.outcome(fault.file_in(std::path::Path::new("/campaign")));
-                            }
-                            let _ = messages.pane(ui, design::Body::Content, |_| ());
-                        });
-                    });
-                });
-            }
-            let output: egui::FullOutput = output;
-            assert!(bounds.width() <= 440.0 + 0.5, "{bounds:?}");
-            let painted: Vec<(String, egui::Rect)> = output
-                .shapes
+            // Save's reason for all the rows ends with the one sentence that says what to do.
+            let faults: Vec<RosterFault> = rows
                 .iter()
-                .filter_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) => Some((
-                        text.galley.job.text.clone(),
-                        egui::Rect::from_min_size(text.pos, text.galley.size()),
-                    )),
-                    _ => None,
-                })
-                .collect();
-            let find = |words: &str| -> Vec<&(String, egui::Rect)> {
-                painted
-                    .iter()
-                    .filter(|(text, _)| text.starts_with(words))
-                    .collect()
-            };
-            let links = find("Edit in Obsidian").len() + find("Show file").len();
-            let Some(sentence) = sentence else {
-                assert_eq!(
-                    links, 0,
-                    "a fault that is not a roster row has no file line"
-                );
-                assert_eq!(find(&words[0]).len(), 1);
-                continue;
-            };
-            assert_eq!(
-                links, 2,
-                "one file line for every unread roster row together"
-            );
-            let ended: Vec<_> = painted
-                .iter()
-                .filter(|(text, _)| text.ends_with(sentence))
-                .collect();
-            assert_eq!(ended.len(), 1, "only the last warning says what to do");
-            let last = ended[0].1;
-            assert!(ended[0].0.starts_with(words.last().unwrap().as_str()));
-            for note in &words[..words.len() - 1] {
-                let found = find(note);
-                assert_eq!(
-                    found.len(),
-                    1,
-                    "each earlier warning is painted once: {note}"
-                );
-                let (text, rect) = found[0];
-                assert!(
-                    !text.contains(sentence) && rect.bottom() <= last.top(),
-                    "an earlier warning comes first and has no instruction: {text}"
-                );
-            }
-            // The typed file line (design system, "A file line that follows a warning"): the
-            // path whole when it fits its line, else cut in the middle, its start and end kept
-            // (the whole path is its hover and its name).
-            let head = &path[..path.len().min(10)];
-            let shown: Vec<_> = painted
-                .iter()
-                .filter(|(text, _)| {
-                    text == path
-                        || (text.contains('…')
-                            && text.starts_with(head)
-                            && path.ends_with(text.rsplit('…').next().unwrap_or_default()))
-                })
-                .collect();
-            assert_eq!(shown.len(), 1, "the path is painted once");
-            let (text, place) = (&shown[0].0, shown[0].1);
-            assert!(
-                text == path || path.len() > 60,
-                "a short path is whole, with no ellipsis: {text}"
-            );
-            assert!(
-                (place.left() - last.left()).abs() <= 0.5
-                    && place.top() >= last.bottom()
-                    && place.right() <= bounds.right() + 0.5,
-                "the path starts at the words and stays in the column: {place:?} in {bounds:?}"
-            );
-            for link in ["Edit in Obsidian", "Show file"] {
-                let (text, rect) = find(link)[0];
-                assert_eq!(text, link, "the link is whole");
-                assert!(rect.left() >= last.left() - 0.5 && rect.top() >= last.bottom());
-                assert!(
-                    rect.right() <= bounds.right() + 0.5
-                        && (rect.left() >= place.right() || rect.top() >= place.bottom()),
-                    "{link} follows the path inside the column: {rect:?}, path {place:?}"
-                );
-            }
-            let first_on_file_line = painted
-                .iter()
-                .filter(|(_, rect)| rect.top() >= last.bottom())
-                .map(|(_, rect)| rect.left())
-                .fold(f32::INFINITY, f32::min);
-            assert!(
-                (first_on_file_line - last.left()).abs() <= 0.5,
-                "the file line starts at the words"
-            );
-        }
-    }
-
-    #[test]
-    fn creature_detail_columns_reserve_room_for_their_widest_values() {
-        let ctx = egui::Context::default();
-        design::theme::install(&ctx);
-        let output = ctx.run(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                detail_columns(ui, "CR 1/8 · HP 999 · AC 25", Some("Ashen Marches"), false);
-            });
-        });
-        let bounds = |word| {
-            output
-                .shapes
-                .iter()
-                .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == word => {
-                        Some(egui::Rect::from_min_size(text.pos, text.galley.size()))
-                    }
-                    _ => None,
-                })
-                .expect("the stat and source text must be painted")
-        };
-        for (before, after, gap) in [
-            ("CR 1/8", "HP 999", design::S),
-            ("HP 999", "AC 25", design::S),
-            ("AC 25", "Ashen Marches", design::M),
-        ] {
-            assert!(bounds(after).left() - bounds(before).right() >= gap - 0.5);
-        }
-    }
-
-    #[test]
-    fn i20_w1_search_finds_a_hidden_duplicate_and_repairs_it_with_undo() {
-        use crate::design::test_harness::Themed as _;
-        use egui_kittest::kittest::Queryable;
-        // Review of PR 339 (4): the Undo names its copy (`Verb::Separate`).
-        const UNDO_COPY: &str = "Undo separate Rook copy.md";
-        let dir = tempfile::tempdir().unwrap();
-        let active = campaign(dir.path());
-        creature(dir.path(), "Rook", false);
-        let original = fs::read_to_string(dir.path().join("Rook.md")).unwrap();
-        fs::write(dir.path().join("Rook copy.md"), &original).unwrap();
-        let index = Arc::new(crate::lookup::ContentIndex::load(&[], Some(&active)).unwrap());
-        // The search can be hidden (a compact editor's roster tab); the footer stays.
-        let search_shown = Arc::new(std::sync::atomic::AtomicBool::new(true));
-        let shown = Arc::clone(&search_shown);
-        let page = Encounters {
-            active: Some(active.clone()),
-            ..Default::default()
-        };
-        let mut harness = egui_kittest::Harness::builder().themed_state(
-            move |ctx, page: &mut Encounters| {
-                ctx.data_mut(|data| {
-                    data.insert_temp(egui::Id::new("reader_link_index"), index.clone())
-                });
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    // FF8: the result and its Undo are in the footer, from the page's store,
-                    // as the group editor draws them; the Undo is used by its ticket.
-                    let frame = design::outcome::PaneFrame::new(ui);
-                    let mut messages = design::outcome::Messages::new(
-                        &frame,
-                        "identity_test_footer",
-                        ui.available_width(),
-                    );
-                    let root = page.active.as_ref().map(|active| active.path.clone());
-                    for line in root
+                .map(|row| RosterFault {
+                    problem: flags
                         .iter()
-                        .flat_map(|root| page.separation_lines(&frame, root))
-                    {
-                        messages.kept(line);
-                    }
-                    if let Some(error) = page.separation_failure() {
-                        messages.outcome(design::outcome::FaultMessage::new(
-                            &EncounterFault::SeparationFailed(error),
-                        ));
-                    }
-                    let separated = std::cell::Cell::new(None);
-                    let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
-                        if !shown.load(std::sync::atomic::Ordering::Relaxed) {
-                            return;
-                        }
-                        Encounters::creature_search(
-                            ui,
-                            SearchList {
-                                creatures: &[],
-                                unlinked: false,
-                                revision: Uuid::nil(),
-                            },
-                            &mut "Rook".to_owned(),
-                            &mut false,
-                            &mut None,
-                            SearchRoster {
-                                already: &|_| false,
-                                on_roster: OnRoster::Ids(&[]),
-                                separated: &separated,
-                            },
-                        );
-                    });
-                    page.record_separation(separated.into_inner());
-                    if let Some(ticket) = paned.pressed.and_then(|press| press.ticket)
-                        && let Some(active) = page.active.clone()
-                    {
-                        page.undo_separation(ui.ctx(), ticket, &active);
-                    }
-                });
-            },
-            page,
-        );
-        harness.run_steps(2);
-        assert!(harness.query_by_label("No creatures match").is_none());
-        harness.get_by_label("These two files claim to be the same entry.");
-        // M0178: the repair is the shared typed body fault (`world::DuplicateIdentity`), in the
-        // warning tone, as World draws it.
-        assert!(
-            design::outcome::message_rects(&harness.ctx)
-                .into_iter()
-                .any(
-                    |(_, place, tone)| place == design::outcome::MessagePlace::Page
-                        && tone == Tone::Warning
-                ),
-            "the duplicate repair is a typed body fault"
-        );
-        harness
-            .get_by_label("Make Rook copy.md a separate entry")
-            .click();
-        harness.run_steps(2);
-        let snapshot = Snapshot::load(&active, &[]).unwrap();
-        assert_eq!(
-            snapshot
-                .creatures
-                .iter()
-                .filter(|c| c.name.starts_with("Rook"))
-                .count(),
-            2
-        );
-        assert!(
-            harness
-                .query_all_by_label("Rook copy.md is now a separate entry.")
-                .next()
-                .is_some()
-        );
-        // Review of PR 299: unchanged redraws copy none of the change's note text, also with
-        // the search hidden.
-        let copies = identity_copies();
-        harness.run_steps(4);
-        search_shown.store(false, std::sync::atomic::Ordering::Relaxed);
-        harness.run_steps(4);
-        assert!(harness.query_by_label(UNDO_COPY).is_some());
-        search_shown.store(true, std::sync::atomic::Ordering::Relaxed);
-        harness.run_steps(2);
-        assert_eq!(identity_copies(), copies, "redraws copied the change");
-        // Review of PR 339 (5): drawing reads no note: ten unchanged frames, no read.
-        let reads = SEPARATION_READS.with(std::cell::Cell::get);
-        harness.run_steps(10);
-        assert_eq!(
-            SEPARATION_READS.with(std::cell::Cell::get),
-            reads,
-            "a redraw read a separated note"
-        );
-        // Review of PR 299: an Undo that fails (the file moved away) keeps the change and its
-        // Undo, says why, and works once the file is back.
-        let separated = fs::read_to_string(dir.path().join("Rook copy.md")).unwrap();
-        fs::rename(
-            dir.path().join("Rook copy.md"),
-            dir.path().join("Rook copy.away"),
-        )
-        .unwrap();
-        // Review of PR 339 (2): a copy that cannot be read now is not a changed identity: the
-        // disk event the page hears (`refresh_content` → `refresh_separations`) keeps it.
-        harness.state_mut().refresh_separations();
-        harness.run_steps(2);
-        assert!(
-            harness.query_by_label(UNDO_COPY).is_some(),
-            "a copy moved away for a moment keeps its separation"
-        );
-        harness.get_by_label(UNDO_COPY).click();
-        harness.run_steps(2);
-        assert!(!dir.path().join("Rook copy.md").exists());
-        assert!(
-            harness.query_by_label(UNDO_COPY).is_some(),
-            "a failed Undo keeps its Undo"
-        );
-        // Review of PR 339 (3): the failure is the campaign's: campaign B does not show it,
-        // and A shows it again.
-        let failure = harness
-            .state()
-            .separation_failure()
-            .expect("the failed Undo says why");
-        let other_dir = tempfile::tempdir().unwrap();
-        let other = campaign(other_dir.path());
-        harness.state_mut().active = Some(other);
-        harness.run_steps(2);
-        assert!(
-            harness.query_all_by_label(&failure).next().is_none(),
-            "campaign A's failure shows in campaign B"
-        );
-        harness.state_mut().active = Some(active.clone());
-        harness.run_steps(2);
-        assert!(harness.query_all_by_label(&failure).next().is_some());
-        assert!(
-            harness
-                .query_all_by_label("Rook copy.md is now a separate entry.")
-                .next()
-                .is_some()
-        );
-        fs::rename(
-            dir.path().join("Rook copy.away"),
-            dir.path().join("Rook copy.md"),
-        )
-        .unwrap();
-        assert_eq!(
-            fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
-            separated
-        );
-        harness.get_by_label(UNDO_COPY).click();
-        harness.run_steps(2);
-        assert_eq!(
-            fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
-            original
-        );
-        // Its Undo ends the result.
-        assert!(
-            harness
-                .query_all_by_label("Rook copy.md is now a separate entry.")
-                .next()
-                .is_none()
-        );
-        // Round 28 (a): the store's disk end event. Separate again; then another program
-        // gives the copy another identity: the next refresh ends the result, and its Undo goes.
-        harness
-            .get_by_label("Make Rook copy.md a separate entry")
-            .click();
-        harness.run_steps(2);
-        assert!(harness.query_by_label(UNDO_COPY).is_some());
-        let copy = dir.path().join("Rook copy.md");
-        let text = fs::read_to_string(&copy).unwrap();
-        let id = crate::content_workspace::note_id(&text).unwrap();
-        fs::write(
-            &copy,
-            text.replace(&id.to_string(), &Uuid::new_v4().to_string()),
-        )
-        .unwrap();
-        harness.run_steps(2);
-        assert!(
-            harness.query_by_label(UNDO_COPY).is_some(),
-            "nothing ends it before the disk check"
-        );
-        harness.state_mut().refresh_separations();
-        harness.run_steps(2);
-        assert!(
-            harness.query_by_label(UNDO_COPY).is_none(),
-            "a copy whose identity changed on disk ends its separation"
-        );
-        // Review of PR 339 (4): two separations keep two Undos, each named by its copy; the
-        // older one's Undo undoes only its copy.
-        let copy_before = fs::read_to_string(&copy).unwrap();
-        harness
-            .get_by_label("Make Rook copy.md a separate entry")
-            .click();
-        harness.run_steps(2);
-        let before_rook = fs::read_to_string(dir.path().join("Rook.md")).unwrap();
-        harness
-            .get_by_label("Make Rook.md a separate entry")
-            .click();
-        harness.run_steps(2);
-        let separated_rook = fs::read_to_string(dir.path().join("Rook.md")).unwrap();
-        assert_ne!(separated_rook, before_rook);
-        assert!(harness.query_by_label("Undo separate Rook.md").is_some());
-        harness.get_by_label(UNDO_COPY).click();
-        harness.run_steps(2);
-        assert_eq!(
-            fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
-            copy_before,
-            "the older Undo took back only its own copy"
-        );
-        assert!(harness.query_by_label(UNDO_COPY).is_none());
-        assert_eq!(
-            fs::read_to_string(dir.path().join("Rook.md")).unwrap(),
-            separated_rook,
-            "the newer separation stays"
-        );
-        assert!(harness.query_by_label("Undo separate Rook.md").is_some());
-    }
-
-    #[test]
-    fn iter7_b_duplicate_npc_has_aligned_single_repair_choices() {
-        use crate::design::test_harness::ThemedPage as _;
-        use egui_kittest::kittest::Queryable;
-        let dir = tempfile::tempdir().unwrap();
-        let active = campaign(dir.path());
-        let original = splat::content::formats::fixture(
-            "Fixture.md",
-            &format!(
-                "splat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_world: {{type: npc}}\n",
-                Uuid::new_v4()
-            ),
-            "",
-        )
-        .expect("schema-2 fixture");
-        fs::write(dir.path().join("Rook.md"), &original).unwrap();
-        fs::write(dir.path().join("Rook copy.md"), &original).unwrap();
-        let index = Arc::new(crate::lookup::ContentIndex::load(&[], Some(&active)).unwrap());
-        let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
-            ctx.data_mut(|data| {
-                data.insert_temp(egui::Id::new("reader_link_index"), index.clone())
-            });
-            egui::CentralPanel::default().show(ctx, |ui| {
-                Encounters::creature_search(
-                    ui,
-                    SearchList {
-                        creatures: &[],
-                        unlinked: false,
-                        revision: Uuid::nil(),
-                    },
-                    &mut "Rook".to_owned(),
-                    &mut false,
-                    &mut None,
-                    SearchRoster {
-                        already: &|_| false,
-                        on_roster: OnRoster::Ids(&[]),
-                        separated: &std::cell::Cell::new(None),
-                    },
-                );
-            });
-        });
-        harness.run_steps(2);
-        assert_eq!(
-            harness
-                .query_all_by_label("Make Rook copy.md a separate note")
-                .count(),
-            1
-        );
-        assert_eq!(
-            harness
-                .query_all_by_label("Make Rook.md a separate note")
-                .count(),
-            1
-        );
-        assert_eq!(
-            harness
-                .query_all_by_label("These two files claim to be the same note.")
-                .count(),
-            1
-        );
-        let warning = harness
-            .get_by_label("These two files claim to be the same note.")
-            .rect();
-        for label in [
-            "Make Rook copy.md a separate note",
-            "Make Rook.md a separate note",
-        ] {
-            let action = harness.get_by_label(label).rect();
-            assert!(
-                (action.left() - warning.left()).abs() < 1.0,
-                "iter7-B-FD3: repair {action:?} must align with warning text {warning:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn each_encounters_name_field_keeps_its_own_undo_history() {
-        use crate::design::test_harness::ThemedPage as _;
-        use egui_kittest::kittest::Queryable;
-        let mut a = Draft::new();
-        a.name = "Alpha".into();
-        let mut b = Draft::new();
-        b.name = "Beta".into();
-        assert_ne!(a.id, b.id);
-        let drafts = std::rc::Rc::new(std::cell::RefCell::new([a, b]));
-        let shown = drafts.clone();
-        let which = std::rc::Rc::new(std::cell::Cell::new(0));
-        let current = which.clone();
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(600.0, 200.0))
-            .themed(move |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    name_field(ui, &mut shown.borrow_mut()[current.get()], 300.0);
-                });
-            });
-        harness.run_steps(2);
-        let focus = |harness: &mut egui_kittest::Harness<'_>| {
-            harness
-                .get_by_role(egui::accesskit::Role::TextInput)
-                .click();
-            harness.run_steps(2);
-        };
-        // Edit A, so that its field has a history.
-        focus(&mut harness);
-        harness.event(egui::Event::Text("1".into()));
-        harness.run_steps(2);
-        assert_eq!(drafts.borrow()[0].name, "Alpha1");
-        harness.run_steps(40);
-        harness.event(egui::Event::Text("2".into()));
-        harness.run_steps(2);
-        assert_eq!(drafts.borrow()[0].name, "Alpha12");
-        // Switch to B, focus its field and press Ctrl+Z.
-        which.set(1);
-        harness.run_steps(2);
-        focus(&mut harness);
-        harness.event(egui::Event::Key {
-            key: egui::Key::Z,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: egui::Modifiers::COMMAND,
-        });
-        harness.run_steps(2);
-        assert_eq!(drafts.borrow()[1].name, "Beta", "B keeps its own text");
-        assert_eq!(drafts.borrow()[0].name, "Alpha12", "A is unchanged");
-    }
-
-    /// M0205: `Done` in a roster row's changes brings that row whole into view, through the
-    /// roster column's one reveal (`design::reveal`), when the DM scrolled its top out of view.
-    #[test]
-    fn roster_done_brings_its_row_whole_into_view() {
-        use crate::design::test_harness::Themed as _;
-        use egui_kittest::kittest::Queryable;
-        let dir = tempfile::tempdir().unwrap();
-        let active = campaign(dir.path());
-        let wolf = creature(dir.path(), "Wolf", false);
-        let snapshot = Snapshot::load(&active, &[]).unwrap();
-        let mut draft = Draft::new();
-        for _ in 0..12 {
-            draft.add(wolf, false);
-        }
-        // The first row: content stays below it, so closing its form clamps no offset.
-        let first_key = draft.setup.roster.first().unwrap().key.clone();
-        let id = draft.id;
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(960.0, 640.0))
-            .themed_state(
-                move |ctx, (draft, expanded): &mut (Draft, Option<String>)| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        Encounters::roster_pane(
-                            ui,
-                            draft,
-                            &snapshot,
-                            &mut false,
-                            expanded,
-                            None,
-                            &mut None,
-                            Some(None),
-                        );
-                    });
-                },
-                (draft, Some(first_key)),
-            );
-        harness.run_steps(2);
-        let scroll = harness
-            .ctx
-            .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(id)))
-            .expect("the roster column's scroll id");
-        let row = |harness: &egui_kittest::Harness<'_, (Draft, Option<String>)>| {
-            harness
-                .query_all(egui_kittest::kittest::By::new().predicate(|node| {
-                    node.value()
-                        .or(node.label())
-                        .is_some_and(|words| words.starts_with("1. Wolf"))
-                }))
-                .map(|node| node.rect())
-                .next()
-        };
-        // The column's top: where its first line (the roster heading) starts before any scroll.
-        let view_top = harness
-            .query_all(egui_kittest::kittest::By::new().predicate(|node| {
-                node.value()
-                    .or(node.label())
-                    .is_some_and(|words| words.to_uppercase().starts_with("ROSTER"))
-            }))
-            .map(|node| node.rect().top())
-            .fold(f32::INFINITY, f32::min);
-        // Scroll so the open row's top is cut by the column's top, its Done still in view.
-        let first = row(&harness).expect("the open row");
-        let mut state = egui::scroll_area::State::load(&harness.ctx, scroll).unwrap();
-        state.offset.y += first.top() - view_top + 4.0;
-        state.store(&harness.ctx, scroll);
-        harness.run_steps(2);
-        let cut = row(&harness).is_none_or(|rect| rect.top() < view_top)
-            && harness.query_by_label("Done with changes").is_some();
-        harness.get_by_label("Done with changes").click();
-        harness.run_steps(8);
-        let shown = row(&harness);
-        assert!(
-            cut && harness.state().1.is_none()
-                && shown.is_some_and(|rect| rect.top() >= view_top - 0.5),
-            "Done closed the form ({:?}) and brought row 1 whole into view: cut before {cut}, row {shown:?}, view top {view_top}",
-            harness.state().1
-        );
-    }
-
-    #[test]
-    fn iter7_b_roster_keeps_unsent_notes_focus_and_scroll_across_parent_changes() {
-        use crate::design::test_harness::ThemedPage as _;
-        use egui_kittest::kittest::Queryable;
-        let dir = tempfile::tempdir().unwrap();
-        let active = campaign(dir.path());
-        let snapshot = Snapshot::load(&active, &[]).unwrap();
-        let draft = std::rc::Rc::new(std::cell::RefCell::new(Draft::new()));
-        let shown = draft.clone();
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(960.0, 640.0))
-            .themed(move |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    let parent = if ui.available_width() > 760.0 {
-                        "wide"
-                    } else {
-                        "compact"
-                    };
-                    ui.push_id(parent, |ui| {
-                        Encounters::roster_pane(
-                            ui,
-                            &mut shown.borrow_mut(),
-                            &snapshot,
-                            &mut false,
-                            &mut None,
-                            None,
-                            &mut None,
-                            (parent != "compact").then_some(None),
-                        );
-                    });
-                });
-            });
-        harness.run_steps(2);
-        harness
-            .query_all_by_label("Read-aloud and notes")
-            .max_by(|a, b| a.rect().width().total_cmp(&b.rect().width()))
-            .unwrap()
-            .click();
-        harness.event(egui::Event::Text("Unsent tactics.\n".repeat(60)));
-        harness.run_steps(2);
-        // Layout PR 9b: the focused notes' quiet frames lay out and hash none of their text.
-        let work = design::pane::text_work(|| harness.run_steps(3));
-        assert!(
-            work.is_quiet(3),
-            "9b-quiet: the encounter notes' quiet frames: {work:?}"
-        );
-        let focus = harness.ctx.memory(|memory| memory.focused()).unwrap();
-        let text = draft.borrow().body.as_str().to_owned();
-        assert!(text.contains("Unsent tactics."));
-        // Outer scroll moves down to the caret; keep that same scroll state when the parent changes.
-        let scroll_id = harness
-            .ctx
-            .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(draft.borrow().id)))
-            .expect("the roster column's scroll id");
-        let offset = egui::scroll_area::State::load(&harness.ctx, scroll_id)
-            .unwrap()
-            .offset
-            .y;
-        assert!(offset > 0.0, "Exercise a scrolled editor");
-        for width in [600.0, 960.0] {
-            harness.set_size(egui::vec2(width, 640.0));
-            harness.run_steps(2);
-            assert_eq!(draft.borrow().body.as_str(), text, "Unsent text survives");
-            assert_eq!(
-                harness.ctx.memory(|memory| memory.focused()),
-                Some(focus),
-                "The same notes control keeps focus"
-            );
-            // Issue #542: the column recorded after the resize is the same column, with the same
-            // offset; a new column that started at its top would fail here.
-            let recorded = harness
-                .ctx
-                .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(draft.borrow().id)))
-                .expect("the roster column's scroll id after the resize");
-            assert_eq!(
-                recorded, scroll_id,
-                "At {width}, the roster keeps its column"
-            );
-            let current = egui::scroll_area::State::load(&harness.ctx, recorded)
-                .unwrap()
-                .offset
-                .y;
-            assert!(
-                (current - offset).abs() < 1.0,
-                "Scroll survives parent changes: {offset} -> {current}"
-            );
-        }
-        // Another encounter opens at its own top, with its own text: the column's scroll is
-        // keyed by the draft, not shared with the encounter before it.
-        let mut second = Draft::new();
-        let _ = second.body.replace(
-            (1..=600)
-                .map(|n| format!("Second line {n}.\n"))
-                .collect::<String>(),
-        );
-        let second_id = second.id;
-        *draft.borrow_mut() = second;
-        harness.run_steps(2);
-        let second_scroll = harness
-            .ctx
-            .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(second_id)))
-            .expect("the second roster's scroll id");
-        assert_ne!(second_scroll, scroll_id, "each draft has its own scroll");
-        let top =
-            egui::scroll_area::State::load(&harness.ctx, second_scroll).map(|state| state.offset.y);
-        assert!(
-            top.is_some_and(|top| top.abs() < 0.5)
-                && harness.query_all_by_label("Read-aloud and notes").count() > 0
-                && draft.borrow().body.starts_with("Second line 1."),
-            "the second encounter starts at its top: offset {top:?}"
-        );
-    }
-
-    #[test]
-    fn iter7_b_roster_scroll_content_keeps_list_measure_and_warning_words_muted() {
-        use crate::design::test_harness::ThemedPage as _;
-        use egui_kittest::kittest::Queryable;
-        let dir = tempfile::tempdir().unwrap();
-        let active = campaign(dir.path());
-        let id = creature(dir.path(), "Cinder Wolf", false);
-        fs::copy(
-            dir.path().join("Cinder Wolf.md"),
-            dir.path().join("Cinder Wolf copy.md"),
-        )
-        .unwrap();
-        let snapshot = Snapshot::load(&active, &[]).unwrap();
-        let mut draft = Draft::new();
-        draft.add(id, false);
-        draft.add(id, false);
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(1200.0, 1080.0))
-            .themed(move |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    Encounters::roster_pane(
-                        ui,
-                        &mut draft,
-                        &snapshot,
-                        &mut false,
-                        &mut None,
-                        None,
-                        &mut None,
-                        Some(None),
-                    );
-                });
-            });
-        harness.run_steps(2);
-        let notes = harness
-            .query_all_by_label("Read-aloud and notes")
-            .map(|node| node.rect())
-            .max_by(|a, b| a.width().total_cmp(&b.width()))
-            .unwrap();
-        // Width is checked after the colour, so each fault has its own red evidence.
-        let warnings: Vec<_> = harness
-            .output()
-            .shapes
-            .iter()
-            .filter_map(|shape| match &shape.shape {
-                // Round 24 FA3: each row says the short cause; the file names are on its hover.
-                egui::Shape::Text(text)
-                    if text.galley.text().contains(crate::library::SAME_ENTRY) =>
-                {
-                    Some(text)
-                }
-                _ => None,
-            })
-            .collect();
-        assert_eq!(
-            warnings.len(),
-            2,
-            "Two repeated roster warnings must be checked"
-        );
-        for text in warnings {
-            let mut marked = 0;
-            for section in &text.galley.job.sections {
-                let words = &text.galley.text()[section.byte_range.clone()];
-                if section.format.color == colors().muted {
-                    continue;
-                }
-                // Round 23 AD2: two files that claim one identity are a warning in the row, as in
-                // Library and in the message above the roster. Only an unreadable file is an error.
-                assert!(
-                    words.trim() == icons::WARN && section.format.color == colors().result.warning,
-                    "iter7-B-FD8: the fault colour is only for the icon: {words}"
-                );
-                marked += 1;
+                        .find(|flag| flag.line == row.line)
+                        .and_then(|flag| flag.words())
+                        .unwrap(),
+                    ..row.clone()
+                })
+                .collect();
+            let reason = roster_fault_reason(path, &faults);
+            assert_eq!(reason.is_some(), sentence.is_some(), "{reason:?}");
+            if let (Some(reason), Some(sentence)) = (reason, sentence) {
+                assert!(reason.ends_with(sentence), "{reason}");
             }
-            assert_eq!(marked, 1, "iter-19-B-FD5: each row marks its fault once");
         }
-        assert!(
-            notes.width() <= design::LIST_MEASURE,
-            "iter7-B-AT1: {notes:?}"
-        );
     }
 
     /// The replacement result names what changed, with a count when it replaced several rows.
@@ -11179,332 +6364,6 @@ mod tests {
         );
     }
 
-    /// FD4: the loot row and the notes field end at the roster's right edge, one column edge.
-    #[test]
-    fn iter18_b_loot_and_notes_end_at_the_roster_edge() {
-        use crate::design::test_harness::ThemedPage as _;
-        use egui_kittest::kittest::Queryable;
-        let dir = tempfile::tempdir().unwrap();
-        let active = campaign(dir.path());
-        let id = creature(dir.path(), "Cinder Wolf", false);
-        let snapshot = Snapshot::load(&active, &[]).unwrap();
-        let mut draft = Draft::new();
-        draft.add(id, false);
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(1200.0, 1080.0))
-            .themed(move |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    Encounters::roster_pane(
-                        ui,
-                        &mut draft,
-                        &snapshot,
-                        &mut false,
-                        &mut None,
-                        None,
-                        &mut None,
-                        Some(None),
-                    );
-                });
-            });
-        harness.run_steps(2);
-        // The roster's row rule marks the column's right edge.
-        let rule = harness
-            .output()
-            .shapes
-            .iter()
-            .filter_map(|shape| match &shape.shape {
-                egui::Shape::LineSegment { points, .. } if points[0].y == points[1].y => {
-                    Some(points[1].x.max(points[0].x))
-                }
-                _ => None,
-            })
-            .reduce(f32::max)
-            .expect("the roster draws a row rule");
-        // Layout PR 5b (I6): the row menu follows the roster's facts, within its rule.
-        let menu = harness
-            .query_all_by_label("More actions for Cinder Wolf")
-            .map(|node| node.rect().right())
-            .reduce(f32::max)
-            .unwrap();
-        assert!(
-            menu <= rule + 0.5,
-            "iter18-B-FD4: the row menu ends at {menu}, within the roster rule at {rule}"
-        );
-        for name in ["Roll on a table for the encounter", "Read-aloud and notes"] {
-            // The field's caption carries the same name; the widest node is the control.
-            let right = harness
-                .query_all_by_label(name)
-                .map(|node| node.rect().right())
-                .reduce(f32::max)
-                .unwrap();
-            assert!(
-                (right - rule).abs() <= 0.5,
-                "iter18-B-FD4: {name} ends at {right}, the roster rule at {rule}"
-            );
-        }
-        // Must stay true: the loot field keeps its gap before the menu.
-        let field = harness.get_by_label("Add loot to the encounter").rect();
-        let menu = harness
-            .get_by_label("Roll on a table for the encounter")
-            .rect();
-        assert!(
-            menu.left() - field.right() >= design::XS,
-            "iter18-B-FD4: the loot field and its menu stay apart: {field:?} {menu:?}"
-        );
-    }
-
-    #[test]
-    fn iter8_b_removed_source_has_no_ellipsis() {
-        let ctx = egui::Context::default();
-        design::theme::install(&ctx);
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
-                let fitted = changed_detail_parts(ui, detail, "Changed · 1 to add by hand", 400.0, false).0;
-                assert!(!fitted.contains("Ashen Marches"));
-                assert!(!fitted.contains('…'), "iter8-B-FT8: {fitted}");
-                assert!(fitted.contains("as Ember Cultist"));
-                // iter21-B-FD1: the HP fault is data. Shortened, it outlasts a package that has
-                // its words; with hit points, those words are only a package name.
-                let fault = format!("{} {HP_NOT_SET}", design::icons::WARN);
-                let missing = format!(
-                    "Enemies · CR 2 · {fault} · AC 15 · {fault} · as Ember Cultist"
-                );
-                let (fitted, kept) =
-                    changed_detail_parts(ui, &missing, "Changed · 1 to add by hand", 500.0, true);
-                assert!(kept, "iter21-B-FD1: {fitted}");
-                assert_eq!(fitted.matches(fault.as_str()).count(), 1, "iter21-B-FD1: {fitted}");
-                let parts = detail_parts(&fitted, kept);
-                assert_eq!(
-                    parts.iter().position(|part| part.hp_fault),
-                    Some(2),
-                    "iter21-B-FD1: the HP slot is the fault: {fitted}"
-                );
-                let healthy = format!("Enemies · CR 2 · HP 43 · AC 15 · {fault}");
-                let (fitted, kept) =
-                    changed_detail_parts(ui, &healthy, "Changed", 400.0, false);
-                assert!(!kept && fitted.contains(fault.as_str()), "iter21-B-FD1: {fitted}");
-                assert!(detail_parts(&healthy, false).iter().all(|part| !part.hp_fault));
-            });
-        });
-    }
-
-    #[test]
-    fn iter8_b_clean_creature_uses_shared_status() {
-        use crate::design::test_harness::Themed as _;
-        use egui_kittest::kittest::{NodeT, Queryable};
-        let dir = tempfile::tempdir().unwrap();
-        creature(dir.path(), "Wolf", false);
-        let editor = CreatureEditor::open(dir.path(), "Wolf.md").unwrap();
-        let root = dir.path().to_path_buf();
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(480.0, 600.0))
-            .themed_state(
-                move |ctx, (editor, key): &mut (CreatureEditor, bool)| {
-                    // The page's Ctrl+S, taken before the pane draws (`save_shortcut`).
-                    *key |= take_save_key(ctx);
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        Encounters::creature_pane(ui, editor, &root, key);
-                    });
-                    *key = false;
-                },
-                (editor, false),
-            );
-        harness.run_steps(2);
-        harness.get_by_label("Done with this creature");
-        let save = harness.get_by_label("Save creature");
-        assert!(save.accesskit_node().is_disabled());
-        let texts: Vec<_> = harness
-            .output()
-            .shapes
-            .iter()
-            .filter_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) => Some(text.galley.text()),
-                _ => None,
-            })
-            .collect();
-        assert!(
-            texts
-                .iter()
-                .any(|text| text.contains("No changes") && text.contains(icons::OK)),
-            "iter8-B-FT5: shared clean status: {texts:?}"
-        );
-        assert!(
-            !texts
-                .iter()
-                .any(|text| text.contains("No changes to save."))
-        );
-        // M0186: the save row's one rule. Changed, the word comes first and `Discard` after it;
-        // `Done` leaves the heading line, and the save row keeps its place.
-        let save_top = save.rect().top();
-        harness.state_mut().0.fields.name = "Wolf Pup".into();
-        harness.run_steps(2);
-        let word = harness
-            .query_all(
-                egui_kittest::kittest::By::new()
-                    .predicate(|node| node.value().is_some_and(|words| words.contains("Unsaved"))),
-            )
-            .next()
-            .expect("the save row says Unsaved")
-            .rect();
-        // Issue #553: its Discard has its own accessible name, apart from the encounter's.
-        let discard = harness.get_by_label("Discard creature changes").rect();
-        assert!(
-            harness.query_by_label("Done with this creature").is_none()
-                && word.right() <= discard.left()
-                && (word.center().y - discard.center().y).abs() < design::S
-                && harness.get_by_label("Save creature").rect().top() == save_top,
-            "the word {word:?} before Discard {discard:?}, Save kept at {save_top}"
-        );
-        harness.state_mut().0.fields.name = "Wolf".into();
-        harness.run_steps(2);
-        // Migration-32 L2c: a refused Save's reason is a typed fault in the pane's footer, at
-        // the pane's bottom: the fields keep their place, and an unchanged frame makes no plan,
-        // sorts, names, fits or lays out nothing.
-        let name_top = |harness: &egui_kittest::Harness<'_, (CreatureEditor, bool)>| {
-            harness
-                .query_all_by_label("Name")
-                .map(|node| node.rect().top())
-                .fold(f32::INFINITY, f32::min)
-        };
-        let before = name_top(&harness);
-        const REFUSED: &str = "Splat could not write Wolf.md.";
-        harness.state_mut().0.error = Some(REFUSED.to_owned());
-        harness.run_steps(4);
-        let reason = harness
-            .query_all_by_role_and_label(egui::accesskit::Role::Label, REFUSED)
-            .next()
-            .expect("the reason is painted")
-            .rect();
-        assert_eq!(name_top(&harness), before, "the fields keep their place");
-        assert!(
-            reason.top()
-                >= harness
-                    .get_by_label("Its text, as Markdown")
-                    .rect()
-                    .bottom()
-                && reason.bottom() <= 600.0,
-            "the reason sits in the footer, under the creature's text: {reason:?}"
-        );
-        let quiet = crate::design::outcome::footer_work();
-        harness.run_steps(4);
-        let after = crate::design::outcome::footer_work();
-        assert!(
-            after.compared > quiet.compared,
-            "the frames drew the footer"
-        );
-        assert_eq!(
-            (
-                after.plans - quiet.plans,
-                after.sorted - quiet.sorted,
-                after.named - quiet.named,
-                after.undo_fits - quiet.undo_fits,
-                after.laid - quiet.laid,
-            ),
-            (0, 0, 0, 0, 0),
-            "an unchanged frame of the creature's footer"
-        );
-        // Migration-32 L2c (L1c, `pane_then`): Save is done after the fields, and the footer
-        // reads its reason after it. A Save that cannot write (hit points that are not a
-        // number), pressed in a frame drawn in ONE pass, shows its reason in that frame.
-        harness.state_mut().0.error = None;
-        harness.state_mut().0.fields.hp = "lots".into();
-        harness.run_steps(2);
-        harness
-            .ctx
-            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
-        harness.get_by_label("Save creature").click_accesskit();
-        harness.step();
-        let error = harness
-            .state()
-            .0
-            .error
-            .clone()
-            .expect("the save was refused");
-        let painted = harness.output().shapes.iter().any(|shape| {
-            matches!(&shape.shape, egui::Shape::Text(text)
-                if text.galley.job.text.contains(error.trim_end_matches('.')))
-        });
-        assert!(painted, "the frame of the press shows its reason: {error}");
-        // Review of PR 499 (P1): Ctrl+S is done after the fields too. A digit typed into hit
-        // points and Ctrl+S in ONE input frame (one pass), while the save cannot write (no
-        // name): the save runs after the digit, says why in that frame, and the typed text
-        // stays.
-        harness.state_mut().0.error = None;
-        harness.state_mut().0.fields.name = String::new();
-        harness.state_mut().0.fields.hp = "12".into();
-        harness.run_steps(2);
-        harness
-            .query_all_by_role_and_label(egui::accesskit::Role::TextInput, "Hit points")
-            .next()
-            .expect("the hit points field")
-            .focus();
-        harness.run_steps(2);
-        // Both events in ONE frame's raw input (`harness.event` gives each its own frame).
-        let frame = harness.ctx.cumulative_frame_nr();
-        harness.input_mut().events.extend([
-            egui::Event::Text("3".into()),
-            egui::Event::Key {
-                key: egui::Key::S,
-                physical_key: None,
-                pressed: true,
-                repeat: false,
-                modifiers: egui::Modifiers::COMMAND,
-            },
-        ]);
-        harness.step();
-        assert_eq!(
-            harness.ctx.cumulative_frame_nr() - frame,
-            1,
-            "one input frame"
-        );
-        let typed = harness.state().0.fields.hp.clone();
-        let error = harness.state().0.error.clone();
-        let painted = harness.output().shapes.iter().any(|shape| {
-            matches!(&shape.shape, egui::Shape::Text(text)
-                if text.galley.job.text.contains("Enter a name"))
-        });
-        assert!(
-            typed.len() == 3
-                && typed.contains('3')
-                && error.as_deref() == Some("Enter a name.")
-                && painted,
-            "Ctrl+S with the digit: the field keeps {typed:?}, the save says {error:?} (painted {painted})"
-        );
-        // Layout PR 9b: the creature text (in its closed section until opened) keeps its layout:
-        // its quiet frames lay out and hash none of it.
-        harness.get_by_label("Its text, as Markdown").click();
-        harness.run_steps(3);
-        harness.get_by_label("Creature text");
-        let work = design::pane::text_work(|| harness.run_steps(3));
-        assert!(
-            work.is_quiet(3),
-            "9b-quiet: the creature text's quiet frames: {work:?}"
-        );
-    }
-
-    #[test]
-    fn iter_2_b_changed_row_keeps_base_and_full_hand_change_link() {
-        let ctx = egui::Context::default();
-        design::theme::install(&ctx);
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
-                let word = "Changed · 1 to add by hand";
-                for width in [280.0, 320.0, 356.0, 400.0] {
-                    let fitted = changed_detail_parts(ui, detail, word, width, false).0;
-                    assert!(fitted.contains("as Ember Cultist"), "{fitted}");
-                    assert!(!fitted.contains("Ashen Marches"), "{fitted}");
-                    assert!(!fitted.contains(word));
-                    let font = Type::Small.font(ui);
-                    let used = design::number_width(ui, &fitted, &font)
-                        + design::number_width(ui, word, &font)
-                        + design::number_width(ui, " · ", &font);
-                    assert!(used <= width, "{used} exceeds {width}");
-                }
-            });
-        });
-    }
     #[test]
     fn roster_stats_use_the_search_order_and_keep_other_details_last() {
         assert_eq!(
@@ -11615,127 +6474,39 @@ mod tests {
             "Choose a replacement for the Cinder Wolf row before you save or start a fight."
         ));
 
-        // Round 24 review: drawn frames check the refused draft again only when it or the
-        // campaign changes: not on unchanged frames or a resize; once after an edit, Discard and
-        // Undo. The work is counted inside `Draft::validate`.
-        use crate::test_support::{CachedWork, Counts};
-        let settings = dir.path().join("settings.json");
-        let mut store = crate::persistence::Store::at(settings.clone());
-        let mut data = store.load().unwrap();
-        data.active_campaign_id = Some(active.id);
-        data.campaigns.push(active.clone());
-        store.save(&data).unwrap();
-        let campaigns = Campaigns::at(settings);
+        // The editor's frame (`editor_frame`, as the GPUI page draws it) checks the refused
+        // draft again: after an edit, Discard and Undo, the reason follows the draft.
         encounters.active = Some(active.clone());
-        let ctx = egui::Context::default();
-        let frame = |encounters: &mut Encounters, size: egui::Vec2, events: Vec<egui::Event>| {
-            let _ = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
-                    events,
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        encounters.show(
-                            ui,
-                            &campaigns,
-                            &Party::default(),
-                            &Story {
-                                events: &[],
-                                sessions: &[],
-                                revision: None,
-                            },
-                        );
-                    });
-                },
-            );
-        };
-        let key = || {
-            vec![egui::Event::Key {
-                key: egui::Key::A,
-                physical_key: None,
-                pressed: true,
-                repeat: false,
-                modifiers: egui::Modifiers::NONE,
-            }]
-        };
         let shows = |encounters: &Encounters, words: &str| {
             encounters
                 .error
                 .as_deref()
                 .is_some_and(|error| error.starts_with(words))
         };
-        let (wide, narrow) = (egui::vec2(1200.0, 800.0), egui::vec2(960.0, 640.0));
-        let check = CachedWork::start("Encounter refusal check", &mut encounters, |e| Counts {
-            reached: e.validation_reached,
-            work: VALIDATIONS.with(std::cell::Cell::get),
-        });
-        frame(&mut encounters, wide, Vec::new());
-        let shown = shows(
-            &encounters,
-            "Choose a replacement for the Cinder Wolf row before you save or start a fight.",
-        );
-        check
-            .warm(&mut encounters, shown, 1)
-            .expect("refusal-check-warm");
-        check
-            .steady(&mut encounters, |encounters| {
-                for size in [wide, wide, wide, narrow, wide] {
-                    frame(encounters, size, Vec::new());
-                }
-                shows(encounters, "Choose a replacement for the Cinder Wolf row before you save or start a fight.")
-            })
-            .expect("refusal-check-steady");
+        let one = "Choose a replacement for the Cinder Wolf row before you save or start a fight.";
+        let two =
+            "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.";
+        let _ = encounters.editor_frame(&active);
+        assert!(shows(&encounters, one), "refusal-check-shown");
         // An edit: the second row comes back, and the reason counts both.
         let row = encounters.draft.as_ref().unwrap().setup.roster[0].clone();
-        check
-            .refresh(&mut encounters, 1, |encounters| {
-                encounters.draft.as_mut().unwrap().setup.roster.push(row);
-                frame(encounters, wide, key());
-                frame(encounters, wide, Vec::new());
-                shows(
-                    encounters,
-                    "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.",
-                )
-            })
-            .expect("refusal-check-edit");
-        // Discard: a new draft has no saved encounter to go back to, so its refusal goes with it.
-        check
-            .refresh(&mut encounters, 0, |encounters| {
-                encounters.discard_draft(&active);
-                frame(encounters, wide, key());
-                frame(encounters, wide, Vec::new());
-                encounters.draft.is_none() && encounters.error.is_none()
-            })
-            .expect("refusal-check-discard");
+        encounters.draft.as_mut().unwrap().setup.roster.push(row);
+        let _ = encounters.editor_frame(&active);
+        assert!(shows(&encounters, two), "refusal-check-edit");
+        // Discard: a new draft has no saved encounter to go back to, so its refusal goes with it
+        // (the page shows the list, so no editor frame runs).
+        encounters.discard_draft(&active);
+        assert!(
+            encounters.draft.is_none() && encounters.error.is_none(),
+            "refusal-check-discard"
+        );
         // Undo: the draft comes back and its reason with it.
-        check
-            .refresh(&mut encounters, 1, |encounters| {
-                encounters.undo_discard();
-                frame(encounters, wide, key());
-                frame(encounters, wide, Vec::new());
-                shows(
-                    encounters,
-                    "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.",
-                )
-            })
-            .expect("refusal-check-undo");
-        check
-            .steady(&mut encounters, |encounters| {
-                for size in [wide, narrow, wide] {
-                    frame(encounters, size, Vec::new());
-                }
-                shows(
-                    encounters,
-                    "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.",
-                )
-            })
-            .expect("refusal-check-steady-after-undo");
+        encounters.undo_discard();
+        let _ = encounters.editor_frame(&active);
+        assert!(shows(&encounters, two), "refusal-check-undo");
         // A check that passes clears the stored refusal.
         encounters.draft.as_mut().unwrap().setup.roster.clear();
-        frame(&mut encounters, wide, key());
-        frame(&mut encounters, wide, Vec::new());
+        let _ = encounters.editor_frame(&active);
         assert!(
             encounters.error.is_none() && encounters.validation_error.is_none(),
             "refusal-cleared-on-pass"
@@ -11798,7 +6569,7 @@ mod tests {
     fn undo_discard_stays_in_its_campaign() {
         let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         let (first, second) = (campaign(a.path()), campaign(b.path()));
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut encounters = Encounters {
             discarded: Some(Draft::new()),
             active: Some(first.clone()),
@@ -11809,367 +6580,7 @@ mod tests {
         encounters.reload(&ctx, second, Vec::new());
         assert!(encounters.discarded.is_none(), "another campaign drops it");
     }
-    /// Review of PR 339 (1): a result belongs to its draft's content. Discard keeps the
-    /// encounter draft's replacement result in the store (hidden: the clean draft has none),
-    /// and Undo discard shows it again with its Undo.
-    /// A roster change the test body makes before a held press is applied.
-    #[derive(Clone, Copy, Debug, Default)]
-    enum RosterChange {
-        #[default]
-        Add,
-        Move,
-        Remove,
-    }
 
-    #[test]
-    fn undo_discard_brings_back_the_encounter_draft_results() {
-        let dir = tempfile::tempdir().unwrap();
-        let active = campaign(dir.path());
-        let wolf = creature(dir.path(), "Wolf", false);
-        let mut saved = Draft::new();
-        saved.add(wolf, false);
-        saved.save(&active, &[]).unwrap();
-        let mut page = Encounters {
-            active: Some(active.clone()),
-            draft: Some(Draft::open(dir.path(), &saved.path).unwrap()),
-            ..Default::default()
-        };
-        // A replacement as `Use` makes it: its data on the draft, and the mark.
-        let draft = page.draft.as_mut().unwrap();
-        let roster = draft.setup.roster.clone();
-        let mut before = roster.clone();
-        before[0].initial.insert("hp".into(), 3.into());
-        draft.new_results.push(DraftUndo::Replacement {
-            before: before.clone(),
-            after: roster.clone(),
-            words: "1 Wolf row replaced with Wolf.".into(),
-            replaced: "Wolf".into(),
-        });
-        let owner = EditorOwner {
-            root: active.path.clone(),
-            draft: draft.results_key.id(),
-            kind: DraftResult::Replacement,
-        };
-        page.record_editor_results();
-        assert!(
-            page.editor_results.get(&owner).is_some(),
-            "recorded at the act"
-        );
-        page.discard_draft(&active);
-        page.record_editor_results();
-        assert!(
-            page.editor_results.get(&owner).is_some(),
-            "the discarded draft keeps its result while it waits for Undo discard"
-        );
-        let clean = EditorOwner {
-            draft: page.draft.as_ref().unwrap().results_key.id(),
-            ..owner.clone()
-        };
-        assert!(
-            page.editor_results.get(&clean).is_none(),
-            "the clean draft that replaced it shows none"
-        );
-        page.undo_discard();
-        page.record_editor_results();
-        assert!(
-            page.editor_results.get(&owner).is_some(),
-            "Undo discard shows the result again, with its Undo"
-        );
-        // Round 28 P2: the editor's own footer shows it, and its Undo goes by its ticket. An
-        // unrelated edit after it (the notes) stays through that Undo; the result's words leave
-        // with its data.
-        use egui_kittest::kittest::Queryable;
-        const WORDS: &str = "1 Wolf row replaced with Wolf.";
-        let campaign = active.clone();
-        // A footer press held one frame (`Some(None)` holds the next press), so that it is applied
-        // after a later body, with the ticket it was made with.
-        let hold = std::rc::Rc::new(std::cell::RefCell::new(
-            None::<Option<design::outcome::Press<FooterPress>>>,
-        ));
-        let held_by_page = hold.clone();
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(960.0, 640.0))
-            .build_state(
-                move |ctx, page: &mut Encounters| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        let frame = design::outcome::PaneFrame::new(ui);
-                        let messages = page.editor_messages(
-                            &frame,
-                            ui.available_width(),
-                            &campaign.path,
-                            None,
-                            None,
-                        );
-                        let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
-                            ui.label("The editor’s body");
-                            // Review 2 of PR 347: the body changes the roster before the
-                            // replacement's Undo press is applied: it adds a row (C), moves a
-                            // row, or removes one.
-                            let change = egui::Id::new("test_body_changes");
-                            if let Some(change) =
-                                ui.data_mut(|data| data.remove_temp::<RosterChange>(change))
-                                && let Some(draft) = page.draft.as_mut()
-                            {
-                                let roster = &mut draft.setup.roster;
-                                match change {
-                                    RosterChange::Add => {
-                                        let mut c = roster[0].clone();
-                                        c.key = "c".into();
-                                        roster.push(c);
-                                    }
-                                    RosterChange::Move => roster.swap(0, 1),
-                                    RosterChange::Remove => {
-                                        roster.pop();
-                                    }
-                                }
-                            }
-                        });
-                        let mut hold = held_by_page.borrow_mut();
-                        let held = match &mut *hold {
-                            Some(slot @ Some(_)) => slot.take(),
-                            _ => None,
-                        };
-                        if let Some(press) = paned.pressed {
-                            if matches!(*hold, Some(None)) {
-                                *hold = Some(Some(press));
-                            } else {
-                                page.editor_press(ui.ctx(), press, &campaign, &[]);
-                            }
-                        }
-                        if let Some(press) = held {
-                            *hold = None;
-                            page.editor_press(ui.ctx(), press, &campaign, &[]);
-                        }
-                    });
-                    // Each frame, as the app does (review 2 of PR 347).
-                    page.poll(ctx, &crate::campaigns::Campaigns::default());
-                },
-                page,
-            );
-        harness.run_steps(2);
-        assert!(
-            harness.query_all_by_label(WORDS).next().is_some(),
-            "the result shows"
-        );
-        harness
-            .state_mut()
-            .draft
-            .as_mut()
-            .unwrap()
-            .body
-            .push_str("Ash falls on the ford.");
-        harness.run_steps(2);
-        // Review 2 of PR 347 (P2-1): 20 groups join the draft, each with one member result.
-        // After that settles, frames that build the real footer (`editor_messages` ->
-        // `kept_results` -> `expire_discards`) and run `poll`, with the draft dirty and no
-        // discard held, check no result key at all; so does `poll` with no footer (another page
-        // shown). Then the groups leave: their keys drop, and the next `poll` ends their results.
-        let checks = || KEY_CHECKS.with(std::cell::Cell::get);
-        let added: Vec<MemberOwner> = {
-            let page = harness.state_mut();
-            let groups: Vec<GroupDraft> = (0..20).map(|_| GroupDraft::new()).collect();
-            let owners: Vec<MemberOwner> = groups
-                .iter()
-                .map(|group| MemberOwner {
-                    root: active.path.clone(),
-                    draft: group.results_key(),
-                })
-                .collect();
-            for (group, owner) in groups.iter().zip(&owners) {
-                page.member_results.record(MemberMark {
-                    owner: owner.clone(),
-                    draft: group.results_watch(),
-                    undo: groups::MemberUndo::Unread {
-                        line: 1,
-                        row: "| 1 | Wolf |\n".into(),
-                        name: "Wolf".into(),
-                    },
-                });
-            }
-            page.draft.as_mut().unwrap().groups.extend(groups);
-            owners
-        };
-        harness.run_steps(2);
-        let start = checks();
-        harness.run_steps(4);
-        assert_eq!(
-            checks() - start,
-            0,
-            "an unchanged frame with the footer checks no result key"
-        );
-        let ctx = harness.ctx.clone();
-        let campaigns = crate::campaigns::Campaigns::default();
-        let start = checks();
-        for _ in 0..4 {
-            harness.state_mut().poll(&ctx, &campaigns);
-        }
-        assert_eq!(
-            checks() - start,
-            0,
-            "an unchanged frame on another page checks no result key"
-        );
-        harness.state_mut().draft.as_mut().unwrap().groups.clear();
-        harness.state_mut().poll(&ctx, &campaigns);
-        assert!(
-            added
-                .iter()
-                .all(|owner| harness.state().member_results.get(owner).is_none()),
-            "the groups left the draft: their results end at the next poll"
-        );
-        harness.run_steps(1);
-        *hold.borrow_mut() = Some(None);
-        harness.get_by_label("Undo replace Wolf").click();
-        harness.run_steps(1);
-        assert!(
-            matches!(*hold.borrow(), Some(Some(_))),
-            "the press is held for the next frame"
-        );
-        harness.ctx.data_mut(|data| {
-            data.insert_temp(egui::Id::new("test_body_changes"), RosterChange::Add)
-        });
-        harness.run_steps(2);
-        let draft = harness.state().draft.as_ref().unwrap();
-        assert!(
-            draft.setup.roster.len() == 2 && draft.setup.roster[0] == roster[0],
-            "a row added in the pass of the press stays: the restore is refused ({} rows)",
-            draft.setup.roster.len()
-        );
-        assert!(
-            draft.body.contains("Ash falls on the ford."),
-            "the later, unrelated edit stays"
-        );
-        assert!(
-            harness.query_by_label(WORDS).is_none()
-                && harness.query_by_label("Undo replace Wolf").is_none(),
-            "the result no longer holds: its words and its Undo leave"
-        );
-        // The same for a move and a removal of a row in the pass of the press. Each starts
-        // from a new replacement of the roster as it is.
-        // Each case starts from the same two rows (A and C), whatever the case before it did.
-        let two = {
-            let mut two = roster.clone();
-            let mut c = two[0].clone();
-            c.key = "c".into();
-            two.push(c);
-            two
-        };
-        for (change, words) in [
-            (RosterChange::Move, "Rows replaced before a move."),
-            (RosterChange::Remove, "Rows replaced before a removal."),
-        ] {
-            let draft = harness.state_mut().draft.as_mut().unwrap();
-            draft.setup.roster = two.clone();
-            let after = draft.setup.roster.clone();
-            let mut before = after.clone();
-            before[0].initial.insert("hp".into(), 1.into());
-            draft.new_results.push(DraftUndo::Replacement {
-                before,
-                after: after.clone(),
-                words: words.into(),
-                replaced: "Wolf".into(),
-            });
-            harness.run_steps(2);
-            *hold.borrow_mut() = Some(None);
-            harness.get_by_label("Undo replace Wolf").click();
-            harness.run_steps(1);
-            assert!(matches!(*hold.borrow(), Some(Some(_))), "held");
-            harness
-                .ctx
-                .data_mut(|data| data.insert_temp(egui::Id::new("test_body_changes"), change));
-            harness.run_steps(2);
-            let mut expected = after;
-            match change {
-                RosterChange::Move => expected.swap(0, 1),
-                _ => {
-                    expected.pop();
-                }
-            }
-            assert_eq!(
-                harness.state().draft.as_ref().unwrap().setup.roster,
-                expected,
-                "{change:?} in the pass of the press stays: the restore is refused"
-            );
-            assert!(
-                harness.query_by_label(words).is_none(),
-                "{change:?}: the result leaves"
-            );
-        }
-
-        // Review 2 of PR 347: a draft's results live while some copy of the draft exists, in
-        // both stores, and end when none does. All through `poll`, as the app calls it each
-        // frame. A group held only by a removed group's Undo keeps its member result. Discard
-        // keeps them all. Edit the clean draft: Undo discard expires, and they end. Repeated,
-        // no entry builds up.
-        let ctx = harness.ctx.clone();
-        let campaigns = crate::campaigns::Campaigns::default();
-        let page = harness.state_mut();
-        let unread = || groups::MemberUndo::Unread {
-            line: 1,
-            row: "| 1 | Wolf |\n".into(),
-            name: "Wolf".into(),
-        };
-        for round in 0..2 {
-            let draft = page.draft.as_mut().unwrap();
-            let (group, removed) = (GroupDraft::new(), GroupDraft::new());
-            let [member_owner, removed_owner] = [&group, &removed].map(|group| MemberOwner {
-                root: active.path.clone(),
-                draft: group.results_key(),
-            });
-            let watches = [group.results_watch(), removed.results_watch()];
-            draft.groups.push(group);
-            let roster = draft.setup.roster.clone();
-            draft.new_results.push(DraftUndo::Replacement {
-                before: roster.clone(),
-                after: roster,
-                words: format!("Round {round}."),
-                replaced: "Wolf".into(),
-            });
-            // Its file went: the group left the draft, and only its Undo holds it (FF7).
-            draft.new_results.push(DraftUndo::RemovedGroup {
-                index: 0,
-                group: Box::new(removed),
-                delete: false,
-            });
-            let owner = EditorOwner {
-                root: active.path.clone(),
-                draft: draft.results_key.id(),
-                kind: DraftResult::Replacement,
-            };
-            for (owner, draft) in [member_owner.clone(), removed_owner.clone()]
-                .into_iter()
-                .zip(watches)
-            {
-                page.member_results.record(MemberMark {
-                    owner,
-                    draft,
-                    undo: unread(),
-                });
-            }
-            page.record_editor_results();
-            page.poll(&ctx, &campaigns);
-            assert!(
-                page.member_results.get(&removed_owner).is_some(),
-                "a group held only by a removed group's Undo keeps its member result"
-            );
-            page.discard_draft(&active);
-            page.poll(&ctx, &campaigns);
-            assert!(
-                page.editor_results.get(&owner).is_some()
-                    && page.member_results.get(&member_owner).is_some()
-                    && page.member_results.get(&removed_owner).is_some(),
-                "kept while Undo discard can bring the draft back"
-            );
-            page.draft.as_mut().unwrap().body.push_str("Edited.");
-            let _ = page.kept_results(false);
-            assert!(page.discarded.is_none(), "Undo discard expired");
-            page.poll(&ctx, &campaigns);
-            assert!(
-                page.editor_results.is_empty() && page.member_results.is_empty(),
-                "its draft cannot come back: both stores end its results"
-            );
-            page.draft = Some(Draft::open(dir.path(), &saved.path).unwrap());
-        }
-    }
     /// Older notes do not change, and a note says so only when the DM turned this on.
     #[test]
     fn repeatable_is_written_only_when_it_is_on() {
@@ -12229,7 +6640,7 @@ mod tests {
             OptionsCommit::Save,
         );
         assert!(result.is_ok(), "the folder saves: {result:?}");
-        encounters.options_committed(&egui::Context::default(), &active, Vec::new(), result);
+        encounters.options_committed(&StateContext::new(), &active, Vec::new(), result);
         let reread = Snapshot::load(&active, &[]).unwrap();
         assert_eq!(
             encounters.options_saved.map(|(_, saved)| saved),
@@ -12666,32 +7077,24 @@ mod tests {
     /// X2, review 290: a typed reason with no name known still says what is not known.
     #[test]
     fn review290_unnamed_missing_level_still_has_a_reason() {
-        let ctx = egui::Context::default();
-        design::theme::install(&ctx);
-        let _ = ctx.run(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                let missing = crate::difficulty::Missing {
-                    what: crate::difficulty::Unknown::Level,
-                    at: vec![0],
-                    names: Vec::new(),
-                };
-                let difficulty = crate::difficulty::Difficulty {
-                    missing: Some(missing),
-                    ..Default::default()
-                };
-                let shown = crate::difficulty::Line::roster(
-                    &difficulty,
-                    crate::difficulty::Summary::default(),
-                )
-                .fit(|text| design::number_width(ui, text, &Type::Label.font(ui)) <= 400.0)
+        let missing = crate::difficulty::Missing {
+            what: crate::difficulty::Unknown::Level,
+            at: vec![0],
+            names: Vec::new(),
+        };
+        let difficulty = crate::difficulty::Difficulty {
+            missing: Some(missing),
+            ..Default::default()
+        };
+        let shown =
+            crate::difficulty::Line::roster(&difficulty, crate::difficulty::Summary::default())
+                .fit(|_| true)
                 .map(|fitted| fitted.text());
-                assert_eq!(
-                    shown.as_deref(),
-                    Some("Level not known"),
-                    "A typed missing-level result must not disappear when its name is unavailable"
-                );
-            });
-        });
+        assert_eq!(
+            shown.as_deref(),
+            Some("Level not known"),
+            "A typed missing-level result must not disappear when its name is unavailable"
+        );
     }
     #[test]
     fn editing_preserves_notes_unknown_fields_and_detects_external_changes() {
@@ -12875,129 +7278,45 @@ mod tests {
         let saved = fs::read_to_string(&path).unwrap();
         assert!(saved.contains("tags: [DM]") && saved.contains("My words"));
 
-        use egui_kittest::kittest::Queryable;
         // FF7: the file goes while the draft is open. The red choice says what it removes, its
-        // result says what was lost, and Undo remove gives the draft back.
+        // result says what was lost, and Undo remove gives the draft back (through the model
+        // the GPUI page draws: `encounter_disk`, `encounter_disk_choice`, the list's footer).
         fs::remove_file(&path).unwrap();
         draft.body = "My later words".into();
         assert!(draft.save(&campaign, &[]).is_err());
         assert!(draft.recovery.file_gone());
         let name = draft.name.clone();
-        let editor = Encounters {
+        let mut editor = Encounters {
             // The kept results are the campaign's (`KeptOwner`).
             active: Some(campaign.clone()),
             draft: Some(draft),
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
             ..Default::default()
         };
-        let mut harness = egui_kittest::Harness::builder().build_state(
-            |ctx, editor: &mut Encounters| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    // The kept result in the editor's own footer; its Undo goes by its ticket.
-                    let frame = design::outcome::PaneFrame::new(ui);
-                    let messages = editor.editor_messages(
-                        &frame,
-                        ui.available_width(),
-                        &campaign.path,
-                        None,
-                        None,
-                    );
-                    let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
-                        if !editor.encounter_disk_view(ui, &campaign, &[]) {}
-                    });
-                    if let Some(press) = paned.pressed {
-                        editor.editor_press(ui.ctx(), press, &campaign, &[]);
-                    }
-                });
-            },
-            editor,
+        let ctx = StateContext::new();
+        let view = editor.encounter_disk().expect("the gone file's conflict");
+        assert!(view.disk.is_none());
+        assert_eq!(view.lose, "Remove encounter and lose draft");
+        editor.encounter_disk_choice(&ctx, &campaign, &[], false);
+        assert!(editor.draft.is_none());
+        let lines = editor.list_footer();
+        let removed = lines
+            .iter()
+            .find(|line| line.words == format!("{name} removed. Its draft was discarded."))
+            .expect("the result names the encounter and what was lost");
+        let undo = removed.press_undo().expect("its Undo");
+        assert_eq!(
+            removed.undo.as_ref().map(|undo| undo.label.as_str()),
+            Some(format!("Undo remove {name}").as_str())
         );
-        harness.run_steps(2);
-        assert!(harness.query_by_label("Let it go").is_none());
-        harness
-            .get_by_label("Remove encounter and lose draft")
-            .click();
-        harness.run_steps(2);
-        assert!(harness.state().draft.is_none());
-        // The footer's group is named with its words too.
-        assert!(
-            harness
-                .query_all_by_label(&format!("{name} removed. Its draft was discarded."))
-                .next()
-                .is_some()
-        );
-        harness.get_by_label(&format!("Undo remove {name}")).click();
-        harness.run_steps(2);
-        let back = harness
-            .state()
+        editor.footer_press(&ctx, undo, &campaign, &Campaigns::default());
+        let back = editor
             .draft
             .as_ref()
             .expect("Undo remove gives the draft back");
         assert_eq!(back.body.as_str(), "My later words");
-        assert!(harness.state().discarded.is_none());
+        assert!(editor.discarded.is_none());
         assert!(!path.exists(), "nothing was written");
-    }
-
-    #[test]
-    fn i19_e_encounter_comparison_matches_disk_layout_and_overwrite() {
-        use egui_kittest::kittest::Queryable;
-        let dir = tempfile::tempdir().unwrap();
-        let campaign = campaign(dir.path());
-        let mut draft = Draft::new();
-        draft.add(creature(dir.path(), "Monster", false), false);
-        draft.save(&campaign, &[]).unwrap();
-        let path = dir.path().join(&draft.path);
-        let external = format!(
-            "{}\nDM's outside account.\n",
-            fs::read_to_string(&path)
-                .unwrap()
-                .replace("splat_schema:", "tags: [dawn]\nsplat_schema:")
-        );
-        fs::write(&path, &external).unwrap();
-        draft.name = "Dawn".into();
-        assert!(draft.save(&campaign, &[]).is_err());
-        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
-        let editor = Encounters {
-            draft: Some(draft),
-            snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
-            ..Default::default()
-        };
-        let mut harness = egui_kittest::Harness::builder().build_state(
-            |ctx, editor: &mut Encounters| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    if !editor.encounter_disk_view(ui, &campaign, &[]) {}
-                });
-            },
-            editor,
-        );
-        harness.run_steps(2);
-        harness.get_by_label("1 line differs");
-        let comparison = harness
-            .state()
-            .draft
-            .as_ref()
-            .unwrap()
-            .comparison_text(&snapshot)
-            .unwrap();
-        assert_eq!(
-            comparison,
-            external.replace("splat_name: New encounter", "splat_name: Dawn")
-        );
-        let overwrite = splat::content::list_formats::write_references(
-            &comparison,
-            snapshot
-                .catalogue
-                .entries
-                .values()
-                .map(|entry| &entry.entry),
-        )
-        .unwrap();
-        assert!(comparison.contains("tags: [dawn]"));
-        assert!(comparison.contains("DM's outside account."));
-        harness.get_by_label("Overwrite with my draft").click();
-        harness.run_steps(2);
-        assert_eq!(harness.state().error, None);
-        assert_eq!(fs::read_to_string(&path).unwrap(), overwrite);
     }
 
     #[test]
@@ -13084,240 +7403,6 @@ mod tests {
         assert!(main.iter().all(|creature| creature.source.is_none()));
     }
     #[test]
-    fn editor_renders_at_supported_sizes_without_changing_the_draft() {
-        use crate::design::test_harness::Themed as _;
-        let dir = tempfile::tempdir().unwrap();
-        let campaign = campaign(dir.path());
-        let id = creature(dir.path(), "Hero", true);
-        let settings = dir.path().join("settings.json");
-        let mut store = crate::persistence::Store::at(settings.clone());
-        let mut data = store.load().unwrap();
-        data.active_campaign_id = Some(campaign.id);
-        data.campaigns.push(campaign.clone());
-        store.save(&data).unwrap();
-        let campaigns = Campaigns::at(settings);
-        let mut draft = Draft::new();
-        draft.add(id, true);
-        let expected = draft.text().unwrap();
-        let mut editor = Encounters {
-            active: Some(campaign.clone()),
-            snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
-            draft: Some(draft),
-            ..Default::default()
-        };
-        let ctx = egui::Context::default();
-        for size in [egui::vec2(960.0, 640.0), egui::vec2(1200.0, 800.0)] {
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        editor.show(
-                            ui,
-                            &campaigns,
-                            &Party::default(),
-                            &Story {
-                                events: &[],
-                                sessions: &[],
-                                revision: None,
-                            },
-                        );
-                    });
-                },
-            );
-            assert!(!output.shapes.is_empty());
-            assert!(editor.dirty());
-            assert_eq!(editor.draft.as_ref().unwrap().text().unwrap(), expected);
-        }
-        // Review of PR 499 (P2): the FIRST edit and Ctrl+S in ONE input frame. A saved, clean
-        // encounter; a letter typed into its name and Ctrl+S together: the page takes the key
-        // although nothing had changed before the frame (`save_shortcut`), and the editor saves
-        // after the name field took the letter.
-        editor.draft.as_mut().unwrap().name = "Hero fight".into();
-        editor.save_draft(&ctx, &campaign, &[]);
-        assert!(!editor.dirty(), "saved and clean");
-        let path = campaign.path.join(&editor.draft.as_ref().unwrap().path);
-        // An image that Lookup's reader can open full size (`art::thumbnail`), as a DM opens one.
-        let image = campaign.path.join("Map.png");
-        image::DynamicImage::new_rgb8(40, 20).save(&image).unwrap();
-        // The app's frame: the close confirmation (`close`) disables the page (`lib.rs`), the
-        // reader's image opens the full-window viewer, and the page's Ctrl+S asks the app's one
-        // modal test (`crate::art::modal_open`).
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(1200.0, 800.0))
-            .themed_state(
-                move |ctx, (editor, close): &mut (Encounters, bool)| {
-                    egui::SidePanel::right("lookup").show(ctx, |ui| {
-                        crate::art::thumbnail(ui, &image, "Map");
-                    });
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        if *close {
-                            ui.disable();
-                        }
-                        let modal = crate::art::modal_open(ui.ctx(), *close);
-                        editor.save_shortcut(ui.ctx(), modal, &campaigns);
-                        editor.show(
-                            ui,
-                            &campaigns,
-                            &Party::default(),
-                            &Story {
-                                events: &[],
-                                sessions: &[],
-                                revision: None,
-                            },
-                        );
-                    });
-                    crate::art::show_viewer(ctx);
-                },
-                (editor, false),
-            );
-        crate::art::install(&harness.ctx);
-        harness.run_steps(3);
-        {
-            use egui_kittest::kittest::Queryable;
-            harness
-                .query_all(egui_kittest::kittest::By::new().predicate(|node| {
-                    node.role() == egui::accesskit::Role::TextInput
-                        && node
-                            .label()
-                            .is_some_and(|label| label.starts_with("Encounter name"))
-                }))
-                .next()
-                .expect("the encounter's name field")
-                .focus();
-        }
-        harness.run_steps(2);
-        harness
-            .ctx
-            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
-        // Both events in ONE frame's raw input (`harness.event` gives each its own frame).
-        let frame = harness.ctx.cumulative_frame_nr();
-        harness.input_mut().events.extend([
-            egui::Event::Text("X".into()),
-            egui::Event::Key {
-                key: egui::Key::S,
-                physical_key: None,
-                pressed: true,
-                repeat: false,
-                modifiers: egui::Modifiers::COMMAND,
-            },
-        ]);
-        harness.step();
-        assert_eq!(
-            harness.ctx.cumulative_frame_nr() - frame,
-            1,
-            "one input frame"
-        );
-        let saved = fs::read_to_string(&path).unwrap();
-        let name = harness.state().0.draft.as_ref().unwrap().name.clone();
-        assert!(
-            name.contains('X') && saved.contains(&name) && !harness.state().0.dirty(),
-            "the first edit and Ctrl+S in one frame: the name {name:?} saved ({}) and clean",
-            saved.contains(&name)
-        );
-        // Review of PR 499: under the close confirmation the page is disabled, and Ctrl+S saves
-        // nothing beneath it; once the modal goes, the same key saves.
-        let ctrl_s = egui::Event::Key {
-            key: egui::Key::S,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: egui::Modifiers::COMMAND,
-        };
-        harness
-            .ctx
-            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::new(2).unwrap());
-        harness.state_mut().0.draft.as_mut().unwrap().name = "Hero fight again".into();
-        harness.state_mut().1 = true;
-        harness.run_steps(2);
-        harness.input_mut().events.push(ctrl_s.clone());
-        harness.run_steps(2);
-        assert!(
-            fs::read_to_string(&path).unwrap() == saved && harness.state().0.dirty(),
-            "Ctrl+S under the modal saves nothing"
-        );
-        harness.state_mut().1 = false;
-        harness.run_steps(2);
-        harness.input_mut().events.push(ctrl_s.clone());
-        harness.run_steps(2);
-        assert!(
-            fs::read_to_string(&path)
-                .unwrap()
-                .contains("Hero fight again")
-                && !harness.state().0.dirty(),
-            "with the modal gone, Ctrl+S saves"
-        );
-        // Review of PR 525 (P1): the full-window image is a modal too. A changed encounter, the
-        // image open from the reader, Ctrl+S: no write beneath it; closed, a fresh Ctrl+S saves.
-        let saved = fs::read_to_string(&path).unwrap();
-        harness.state_mut().0.draft.as_mut().unwrap().name = "Hero fight at dusk".into();
-        harness.run_steps(2);
-        {
-            use egui_kittest::kittest::Queryable;
-            harness.get_by_label("Map").click();
-        }
-        harness.run_steps(3);
-        assert!(
-            crate::art::viewer_open(&harness.ctx),
-            "the image fills the window"
-        );
-        harness.input_mut().events.push(ctrl_s.clone());
-        harness.run_steps(2);
-        assert!(
-            fs::read_to_string(&path).unwrap() == saved && harness.state().0.dirty(),
-            "Ctrl+S under the image saves nothing"
-        );
-        harness.key_press(egui::Key::Escape);
-        harness.run_steps(3);
-        assert!(
-            !crate::art::viewer_open(&harness.ctx),
-            "Escape closes the image"
-        );
-        harness.input_mut().events.push(ctrl_s);
-        harness.run_steps(2);
-        assert!(
-            fs::read_to_string(&path)
-                .unwrap()
-                .contains("Hero fight at dusk")
-                && !harness.state().0.dirty(),
-            "with the image closed, a fresh Ctrl+S saves"
-        );
-        // M0192 (ruling M20): while the page holds another campaign's encounter, its fault is the
-        // page's typed placeholder, in place of the editor.
-        let mut other = campaign.clone();
-        other.id = Uuid::new_v4();
-        harness.state_mut().0.active = Some(other);
-        harness.state_mut().0.draft.as_mut().unwrap().name = "Hero fight elsewhere".into();
-        harness.step();
-        {
-            use egui_kittest::kittest::Queryable;
-            let placeholder = harness
-                .query_all_by_role_and_label(
-                    egui::accesskit::Role::Label,
-                    "Save or discard the previous campaign’s encounter first.",
-                )
-                .count()
-                + harness
-                    .query_all(egui_kittest::kittest::By::new().predicate(|node| {
-                        node.value().is_some_and(|words| {
-                            words.contains(
-                                "Save or discard the previous campaign’s encounter first.",
-                            )
-                        })
-                    }))
-                    .count();
-            let placed = crate::design::outcome::message_rects(&harness.ctx)
-                .into_iter()
-                .any(|(_, place, _)| place == crate::design::outcome::MessagePlace::Page);
-            assert!(
-                placeholder > 0 && placed,
-                "the page's placeholder says why ({placeholder} nodes, typed place {placed})"
-            );
-        }
-    }
-    #[test]
     fn dm_run_requires_saved_current_template_and_protects_its_memory_state() {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
@@ -13354,7 +7439,7 @@ mod tests {
         assert!(combat.0.is_some() && combat.1.contains(&"Prone".to_owned()));
         assert_ne!(run.prep().0, "The bridge groans.");
         editor.draft.as_mut().unwrap().body = "The bridge groans.".into();
-        editor.save_draft(&egui::Context::default(), &campaign, &[]);
+        editor.save_draft(&StateContext::new(), &campaign, &[]);
         let saved = fs::read_to_string(&path).unwrap();
         assert!(saved.contains("The bridge groans.") && saved.contains("Hero"));
         let run = editor.run.as_ref().unwrap();
@@ -13673,7 +7758,6 @@ mod tests {
 
     #[test]
     fn iter4_b_unread_roster_blocks_direct_and_plan_starts_without_writing() {
-        use crate::design::test_harness::Themed as _;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
         let wolf = stat_creature(dir.path(), "Wolf", 20);
@@ -13729,167 +7813,6 @@ mod tests {
         let saved: serde_json::Value =
             serde_json::from_slice(&fs::read(run.path().unwrap()).unwrap()).unwrap();
         assert_eq!(saved["state"]["participants"].as_array().unwrap().len(), 2);
-
-        // Review of PR 347 (2): the unread rows' warnings sit in the editor's footer region,
-        // which the footer bounds and scrolls, never above the panes. With 30 unread rows at
-        // 960x640, the roster's first row and the search stay in view, the file line and its
-        // links are reached by the footer's scroll, and the region is at most a third of the
-        // page. A warning that comes and goes moves neither pane heading, nor the narrow
-        // layout's tabs.
-        use egui_kittest::kittest::{NodeT, Queryable};
-        let clean = fs::read_to_string(dir.path().join(&path)).unwrap();
-        let row = flagged
-            .lines()
-            .find(|line| line.contains("HP lots"))
-            .unwrap()
-            .to_owned();
-        let many = flagged.replacen(&format!("{row}\n"), &format!("{row}\n").repeat(30), 1);
-        let settings = dir.path().join("settings.json");
-        let mut store = crate::persistence::Store::at(settings.clone());
-        let mut data = store.load().unwrap();
-        data.active_campaign_id = Some(active.id);
-        data.campaigns.push(active.clone());
-        store.save(&data).unwrap();
-        let campaigns = Campaigns::at(settings);
-        let open = |text: &str| {
-            fs::write(dir.path().join(&path), text).unwrap();
-            Encounters {
-                active: Some(active.clone()),
-                snapshot: Some(Snapshot::load(&active, &[]).unwrap()),
-                draft: Some(Draft::open(dir.path(), &path).unwrap()),
-                ..Default::default()
-            }
-        };
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(960.0, 640.0))
-            .themed_state(
-                move |ctx, encounters: &mut Encounters| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        encounters.show(
-                            ui,
-                            &campaigns,
-                            &Party::default(),
-                            &Story {
-                                events: &[],
-                                sessions: &[],
-                                revision: None,
-                            },
-                        );
-                    });
-                },
-                open(&many),
-            );
-        harness.run_steps(4);
-        let page = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(960.0, 640.0));
-        let whole = |rect: egui::Rect| page.contains_rect(rect) && rect.is_positive();
-        use egui_kittest::kittest::By;
-        // The roster's first row, by its own action.
-        let first_row = harness
-            .query_all_by_label("More actions for Wolf")
-            .map(|node| node.rect())
-            .min_by(|a, b| a.top().total_cmp(&b.top()));
-        let search = harness
-            .query_all_by_label(SEARCH_FIELD)
-            .map(|node| node.rect())
-            .reduce(|a, b| a.union(b));
-        let warnings: Vec<egui::Rect> = harness
-            .query_all(By::new().label_contains("HP lots"))
-            .map(|node| node.rect())
-            .collect();
-        let region = warnings
-            .iter()
-            .filter(|rect| page.intersects(**rect))
-            .fold(egui::Rect::NOTHING, |a, b| a.union(*b));
-        assert!(
-            first_row.is_some_and(&whole)
-                && search.is_some_and(&whole)
-                && warnings.len() >= 30
-                && region.height() <= 640.0 / 3.0 + 1.0
-                && first_row.is_some_and(|row| row.bottom() <= region.top()),
-            "30 unread rows: the first roster row {first_row:?} and the search {search:?} in \
-             view above the warnings' region {region:?} ({} warnings)",
-            warnings.len()
-        );
-        // The typed file line names its link with the file (`Show file: <path>`).
-        let show_file_name = format!("Show file: {path}");
-        let show_file_link = || By::new().label(show_file_name.as_str());
-        let show_file = harness.get(show_file_link()).accesskit_node().id();
-        harness.event(egui::Event::AccessKitActionRequest(
-            egui::accesskit::ActionRequest {
-                target: show_file,
-                action: egui::accesskit::Action::ScrollIntoView,
-                data: None,
-            },
-        ));
-        harness.run_steps(4);
-        let link = harness.get(show_file_link()).rect();
-        assert!(
-            whole(link),
-            "the file line’s Show file is reached by the footer’s scroll: {link:?}"
-        );
-        // Migration-32 L2c: the unread rows are typed faults in the editor's one footer; an
-        // unchanged frame makes no plan, sorts, names, fits or lays out nothing.
-        let quiet = crate::design::outcome::footer_work();
-        harness.run_steps(4);
-        let after = crate::design::outcome::footer_work();
-        assert!(
-            after.compared > quiet.compared,
-            "the frames drew the footer"
-        );
-        assert_eq!(
-            (
-                after.plans - quiet.plans,
-                after.sorted - quiet.sorted,
-                after.named - quiet.named,
-                after.undo_fits - quiet.undo_fits,
-                after.laid - quiet.laid,
-            ),
-            (0, 0, 0, 0, 0),
-            "an unchanged frame of the editor's footer, 30 unread rows in it"
-        );
-        // A warning that comes and goes, at 960 and in the narrow layout (880).
-        // Each pane heading or tab by what it names (its count may change), and its top.
-        let headings = |harness: &egui_kittest::Harness<'_, Encounters>| -> Vec<(&str, f32)> {
-            harness
-                .query_all(By::new().predicate(|node| {
-                    node.role() != egui::accesskit::Role::TextRun
-                        && node.label().or(node.value()).is_some_and(|name| {
-                            let name = name.to_lowercase();
-                            name.starts_with("add participants") || name.starts_with("roster")
-                        })
-                }))
-                .map(|node| {
-                    let node = node.accesskit_node();
-                    let name = node.label().or(node.value()).unwrap_or_default();
-                    let kind = if name.to_lowercase().starts_with("roster") {
-                        "roster"
-                    } else {
-                        "add participants"
-                    };
-                    (
-                        kind,
-                        node.bounding_box().map_or(f32::NAN, |rect| rect.y0 as f32),
-                    )
-                })
-                .collect()
-        };
-        for width in [960.0, 880.0] {
-            harness.set_size(egui::vec2(width, 640.0));
-            *harness.state_mut() = open(&clean);
-            harness.run_steps(4);
-            let before = headings(&harness);
-            *harness.state_mut() = open(&flagged);
-            harness.run_steps(4);
-            let with = headings(&harness);
-            *harness.state_mut() = open(&clean);
-            harness.run_steps(4);
-            let after = headings(&harness);
-            assert!(
-                !before.is_empty() && before == with && before == after,
-                "at {width}: the pane headings and tabs before {before:?}, with a warning \
-                 {with:?}, after {after:?}"
-            );
-        }
     }
 
     #[test]

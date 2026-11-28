@@ -2,17 +2,16 @@
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::presentation;
 use crate::design::{
-    self, Type, colors,
-    reader::{self as reader_style, heavy_rule},
+    self,
+    reader::{self as reader_style},
 };
-use eframe::egui;
 use pulldown_cmark::{Event, Options, Parser, Tag};
 use splat::content::{
     Entry, Reference,
     dice_text::{self, D20, RollLink},
 };
 
-const ABILITIES: [&str; 6] = [
+pub const ABILITIES: [&str; 6] = [
     "strength",
     "dexterity",
     "constitution",
@@ -20,7 +19,7 @@ const ABILITIES: [&str; 6] = [
     "wisdom",
     "charisma",
 ];
-const DETAILS: [(&str, &str); 10] = [
+pub const DETAILS: [(&str, &str); 10] = [
     ("movement_text", "Speed"),
     ("skills_text", "Skills"),
     ("resistances_text", "Resistances"),
@@ -33,10 +32,10 @@ const DETAILS: [(&str, &str); 10] = [
     ("habitat_text", "Habitat"),
 ];
 
-fn field<'a>(entry: &'a Entry, key: &str) -> Option<&'a str> {
+pub fn field<'a>(entry: &'a Entry, key: &str) -> Option<&'a str> {
     entry.fields.get("splat_creature")?.get(key)?.as_str()
 }
-fn stat(entry: &Entry, key: &str) -> Option<i64> {
+pub fn stat(entry: &Entry, key: &str) -> Option<i64> {
     entry
         .fields
         .get("splat_stats")?
@@ -122,7 +121,7 @@ fn vital_lines(body: &str) -> Vec<std::ops::Range<usize>> {
     lines
 }
 
-pub(super) fn without_vitals(entry: &Entry, body: &str) -> String {
+pub fn without_vitals(entry: &Entry, body: &str) -> String {
     let mut output = String::new();
     let mut start = 0;
     for range in vital_lines(body) {
@@ -141,15 +140,15 @@ pub fn use_vital(text: &str, entry: &Entry, key: &str, value: i64) -> Result<Str
     splat::content::formats::patch_model(text, &[("splat_stats", Some(stats))])
 }
 
-fn value(entry: &Entry, key: &str) -> String {
+pub fn value(entry: &Entry, key: &str) -> String {
     stat(entry, key).map_or_else(|| "—".into(), |v| v.to_string())
 }
 
-fn size(entry: &Entry) -> Option<&str> {
+pub fn size(entry: &Entry) -> Option<&str> {
     field(entry, "size_options_text").or_else(|| field(entry, "size"))
 }
 
-pub(super) fn supports(entry: &Entry, sections: &[presentation::ReadingSection<'_>]) -> bool {
+pub fn supports(entry: &Entry, sections: &[presentation::ReadingSection<'_>]) -> bool {
     has_stats(entry)
         && sections
             .iter()
@@ -157,12 +156,12 @@ pub(super) fn supports(entry: &Entry, sections: &[presentation::ReadingSection<'
 }
 
 /// A creature with stats, from the book or written by hand, has a stat block at its head.
-pub(super) fn has_stats(entry: &Entry) -> bool {
+pub fn has_stats(entry: &Entry) -> bool {
     entry.kind == "creature" && entry.fields.contains_key("splat_stats")
 }
 
 /// Remove only source rows represented by the styled values. Unknown prose stays.
-fn rules_prose(entry: &Entry, source: &str) -> String {
+pub fn rules_prose(entry: &Entry, source: &str) -> String {
     let identity = size(entry)
         .zip(field(entry, "type"))
         .map(|(size, kind)| format!("{size} {kind}").to_lowercase());
@@ -228,7 +227,7 @@ fn rules_prose(entry: &Entry, source: &str) -> String {
 }
 
 /// Keep authored prose around data blocks, without their generated headings.
-fn authored_prose(body: &str) -> String {
+pub fn authored_prose(body: &str) -> String {
     let mut depth = 0usize;
     let mut data = false;
     let mut output = String::new();
@@ -291,231 +290,20 @@ pub fn spell_references(entry: &Entry) -> Vec<Reference> {
         .collect()
 }
 
-/// What a stat block's Spellcasting can open.
-pub(super) trait Spells {
-    /// Draw a list of spells (`At Will: Druidcraft, Light`) after its `spellcasting`
-    /// paragraph, which gives the caster's numbers.
-    fn list(&mut self, ui: &mut egui::Ui, spellcasting: &str, paragraph: &str);
-    /// After a Spellcasting paragraph and its lists, whose words are `text`: the spells they
-    /// name or the entry gives that no list showed.
-    fn rest(&mut self, ui: &mut egui::Ui, text: &str);
-    /// After a paragraph of its own that casts spells by name (`... casts Fear, using ...`):
-    /// their tiles.
-    fn casts(&mut self, ui: &mut egui::Ui, paragraph: &str);
-}
-
-/// Rules text with nothing to link: a list of spells is prose.
-struct NoSpells;
-
-impl Spells for NoSpells {
-    fn list(&mut self, ui: &mut egui::Ui, _: &str, paragraph: &str) {
-        reader_style::source_prose(ui, paragraph);
-    }
-    fn rest(&mut self, _: &mut egui::Ui, _: &str) {}
-    fn casts(&mut self, _: &mut egui::Ui, _: &str) {}
-}
-
-/// `text` is one part of the entry's `body`. A tile's number is its action's place in the
-/// whole body's list, which is the list Ctrl+number arms from.
-fn prose(
-    ui: &mut egui::Ui,
-    name: &str,
-    body: &str,
-    text: &str,
-    values: Option<&super::view::RunValues>,
-    spells: &mut dyn Spells,
-) {
-    let all = crate::rolls::actions(body);
-    let here = crate::rolls::actions(text);
-    let mut tiles: Vec<(Option<usize>, crate::rolls::Chip)> = Vec::new();
-    let mut spellcasting: Option<String> = None;
-    // Action tiles in a row. In a run, a tile shows the numbers Splat rolls, with a run's
-    // attack and damage changes in them, so no line under the tiles repeats those changes.
-    let flush = |ui: &mut egui::Ui, tiles: &mut Vec<(Option<usize>, crate::rolls::Chip)>| {
-        if !tiles.is_empty() {
-            crate::rolls::tiles(ui, name, tiles);
-            tiles.clear();
-        }
-    };
-    for (at, paragraph) in text
-        .split("\n\n")
-        .map(str::trim)
-        .enumerate()
-        .filter(|(_, s)| !s.is_empty())
-    {
-        // A Spellcasting paragraph's lists follow it, each spell a link.
-        if let Some(mut group) = spellcasting.take() {
-            if super::spells::aside(paragraph) {
-                spellcasting = Some(group);
-                continue;
-            }
-            if paragraph.lines().all(super::spells::list_line) {
-                let words = group.split("\n\n").next().unwrap_or_default();
-                spells.list(ui, words, paragraph);
-                group.push_str("\n\n");
-                group.push_str(paragraph);
-                spellcasting = Some(group);
-                continue;
-            }
-            spells.rest(ui, &group);
-        }
-        // A paragraph with an attack, a save or damage is an action tile; its text is in hover.
-        if let Some((_, chip)) = here.iter().find(|(place, _)| *place == at) {
-            tiles.push((crate::rolls::place_in(&all, chip), chip.clone()));
-            continue;
-        }
-        flush(ui, &mut tiles);
-        if let Some(speed) = values.and_then(|values| values.speed.as_ref())
-            && paragraph.lines().any(|line| line.starts_with("Speed "))
-        {
-            for line in paragraph.lines() {
-                if let Some(printed) = line.strip_prefix("Speed ") {
-                    changed_speed(ui, printed, speed);
-                } else {
-                    reader_style::source_prose(ui, line);
-                }
-            }
-        } else {
-            reader_style::source_prose(ui, paragraph);
-        }
-        if super::spells::spellcasting(paragraph) {
-            spellcasting = Some(paragraph.to_owned());
-        } else if super::spells::cast_names(paragraph).is_some() {
-            spells.casts(ui, paragraph);
-        }
-    }
-    if let Some(group) = spellcasting {
-        spells.rest(ui, &group);
-    }
-    flush(ui, &mut tiles);
-}
-
-/// Rules text written by hand: its actions as tiles, the rest as prose.
-pub(super) fn rules_text(ui: &mut egui::Ui, name: &str, body: &str, text: &str) {
-    prose(ui, name, body, text, None, &mut NoSpells);
-}
-
-fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
-    let preview = crate::roster::change_preview(&splat::content::overrides::Row {
-        label: "Speed",
-        base: printed.into(),
-        changed: speed.into(),
-        by_hand: true,
-        in_rolls: false,
-    });
-    reader_style::stat_detail(ui, "Speed", &preview, colors().participant.changed);
-}
-
-/// One ability row of the stat block's attribute table.
-fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str, saves: bool) {
-    let c = colors();
-    let modifier = stat(entry, ability).map(|score| (score - 10).div_euclid(2));
-    // An absent override does not establish proficiency or a save total.
-    let save = stat(entry, &format!("save_{ability}"));
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = design::XS;
-        let [label, score, modifier_cell] = ABILITY_CELLS;
-        cell(
-            ui,
-            label,
-            &ability[..3].to_uppercase(),
-            Type::StatLabel,
-            c.text,
-        );
-        cell(ui, score, &value(entry, ability), Type::Stat, c.text);
-        let name = dice_text::ability(ability).unwrap_or(ability);
-        match modifier {
-            Some(bonus) => link_cell(
-                ui,
-                modifier_cell,
-                &design::signed(bonus),
-                &RollLink::d20(D20::Check, bonus, name),
-            ),
-            None => cell(ui, modifier_cell, "—", Type::Stat, c.muted),
-        }
-        match save {
-            Some(bonus) => link_cell(
-                ui,
-                SAVE_CELL,
-                &format!("Save {}", design::signed(bonus)),
-                &RollLink::d20(D20::Save, bonus, name),
-            ),
-            None if saves => cell(ui, SAVE_CELL, "", Type::Stat, c.muted),
-            None => {}
-        }
-    });
-}
-
 /// The widths of an attribute row's cells: label, score, modifier, then the save.
-const ABILITY_CELLS: [f32; 3] = [30.0, 24.0, 26.0];
-const SAVE_CELL: f32 = 56.0;
-
-/// One half of the attribute table, physical or mental, with or without its Save column.
-fn ability_half_width(saves: bool) -> f32 {
-    let cells: f32 = ABILITY_CELLS.iter().sum::<f32>() + 2.0 * design::XS;
-    if saves {
-        cells + design::XS + SAVE_CELL
-    } else {
-        cells
-    }
-}
+pub const ABILITY_CELLS: [f32; 3] = [30.0, 24.0, 26.0];
+pub const SAVE_CELL: f32 = 56.0;
 
 /// An attribute row is as tall as a pointer target, as its numbers roll.
-const ABILITY_ROW: f32 = 24.0;
+pub const ABILITY_ROW: f32 = 24.0;
 
-fn cell(ui: &mut egui::Ui, width: f32, text: &str, role: Type, color: egui::Color32) {
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, ABILITY_ROW), egui::Sense::hover());
-    let galley = design::one_line(ui, text, role.font(ui), color, width + design::S);
-    let top = rect.center().y - galley.size().y / 2.0;
-    // Numbers line up on their right edge, so that a column of them can be read down.
-    let numeric = text.starts_with(|c: char| c.is_ascii_digit() || "+\u{2212}\u{2014}".contains(c));
-    let left = if numeric {
-        rect.right() - galley.size().x
-    } else {
-        rect.left()
-    };
-    ui.painter().galley(egui::pos2(left, top), galley, color);
-}
-
-/// A right-aligned number in the attribute table that rolls.
-fn link_cell(ui: &mut egui::Ui, width: f32, text: &str, link: &RollLink) {
-    let c = colors();
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, ABILITY_ROW), egui::Sense::hover());
-    // An id from the link, so its result follows it when lines appear above the table.
-    let response = ui.interact(
-        rect,
-        ui.id().with(("dice_cell", link.destination())),
-        egui::Sense::click(),
-    );
-    let color = if response.hovered() {
-        c.focus
-    } else {
-        c.accent
-    };
-    let galley = design::one_line(ui, text, Type::Stat.font(ui), color, width + design::S);
-    let left = rect.right() - galley.size().x;
-    let top = rect.center().y - galley.size().y / 2.0;
-    let bottom = top + galley.size().y - 1.0;
-    ui.painter().hline(
-        left..=rect.right(),
-        bottom,
-        egui::Stroke::new(1.0, color.gamma_multiply(0.6)),
-    );
-    ui.painter().galley(egui::pos2(left, top), galley, color);
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Link, true, crate::rolls::hint(link))
-    });
-    crate::rolls::interact(ui, &response, link);
-}
-
-/// The Skills row, with each bonus a dice link.
-fn skills_detail(ui: &mut egui::Ui, text: &str) {
+/// The Skills row's Markdown, each bonus a dice link; `None` when no skill is read from `text`.
+pub fn skills_markdown(text: &str) -> Option<String> {
     let mut markdown = String::new();
     let mut at = 0;
     let skills = dice_text::skills(text);
     if skills.is_empty() {
-        reader_style::stat_detail(ui, "Skills", text, colors().text);
-        return;
+        return None;
     }
     for (range, name, bonus) in skills {
         // A skill and its bonus wrap as one unit: the blanks inside `Sleight of Hand +5` do not
@@ -528,13 +316,11 @@ fn skills_detail(ui: &mut egui::Ui, text: &str) {
         at = range.end;
     }
     markdown.push_str(&text[at..]);
-    reader_style::linked_detail(ui, "Skills", |ui| {
-        crate::markdown_view::show_skills(ui, &markdown);
-    });
+    Some(markdown)
 }
 
 /// Armor class, hit points and initiative, under capital labels. Only what the entry has.
-fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
+pub fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
     let hp = field(entry, "hit_points_text")
         .filter(|text| {
             text.split_whitespace()
@@ -570,112 +356,7 @@ fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
     .collect()
 }
 
-pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::view::RunValues>) {
-    let c = colors();
-    ui.with_layout(
-        egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
-        |ui| {
-            ui.spacing_mut().item_spacing = egui::vec2(design::L, 2.0);
-            let printed = vital_rows(entry);
-            let rows = if values.is_some() {
-                ["ARMOR CLASS", "HIT POINTS", "INITIATIVE"]
-                    .into_iter()
-                    .map(|label| {
-                        (
-                            label,
-                            printed
-                                .iter()
-                                .find(|(key, _)| *key == label)
-                                .map_or_else(|| "Unknown".to_owned(), |(_, text)| text.clone()),
-                        )
-                    })
-                    .collect()
-            } else {
-                printed
-            };
-            for (label, text) in rows {
-                let run_hp = values.filter(|_| label == "HIT POINTS").map(|values| {
-                    crate::design::fraction(
-                        values
-                            .current_hp
-                            .map_or_else(|| "Unknown".to_owned(), |hp| hp.to_string()),
-                        values
-                            .hp
-                            .map_or_else(|| "Unknown".to_owned(), |hp| hp.to_string()),
-                    )
-                });
-                let printed = match label {
-                    "ARMOR CLASS" => stat(entry, "armor_class"),
-                    "HIT POINTS" => stat(entry, "max_hp"),
-                    _ => stat(entry, "initiative"),
-                };
-                let invalid = printed.is_none() && text != "Unknown";
-                let display = if invalid {
-                    format!("{} {text}", design::icons::WARN)
-                } else {
-                    text.clone()
-                };
-                let width = design::number_width(ui, label, &Type::Label.font(ui))
-                    .max(design::number_width(ui, &display, &Type::Prose.font(ui)))
-                    .max(design::number_width(
-                        ui,
-                        run_hp.as_deref().unwrap_or(&text),
-                        &Type::Prose.font(ui),
-                    ))
-                    + design::S;
-                ui.allocate_ui_with_layout(
-                    egui::vec2(width, 0.0),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        ui.spacing_mut().item_spacing.y = 0.0;
-                        ui.label(Type::Label.rich(ui, label).color(c.muted));
-                        let live = values.map(|values| match label {
-                            "ARMOR CLASS" => values.armor_class,
-                            "HIT POINTS" => values.hp,
-                            _ => values.initiative,
-                        });
-                        let shown = live.map_or_else(
-                            || text.clone(),
-                            |n| {
-                                n.map_or_else(
-                                    || "Unknown".to_owned(),
-                                    |n| {
-                                        if label == "INITIATIVE" {
-                                            design::signed(n)
-                                        } else {
-                                            n.to_string()
-                                        }
-                                    },
-                                )
-                            },
-                        );
-                        let shown = run_hp.unwrap_or(shown);
-                        if invalid {
-                            ui.label(
-                                Type::Prose
-                                    .rich(ui, format!("{} {shown}", design::icons::WARN))
-                                    .color(c.result.warning),
-                            );
-                        } else {
-                            ui.label(Type::Prose.rich(ui, shown).color(c.text));
-                        }
-                        if let Some(live) = live
-                            && live != printed
-                        {
-                            ui.label(
-                                Type::Small
-                                    .rich(ui, format!("printed {}", unbroken_dice(&text)))
-                                    .color(c.muted),
-                            );
-                        }
-                    },
-                );
-            }
-        },
-    );
-}
-
-fn unbroken_dice(text: &str) -> String {
+pub fn unbroken_dice(text: &str) -> String {
     let mut in_dice = false;
     text.chars()
         .map(|c| {
@@ -690,7 +371,7 @@ fn unbroken_dice(text: &str) -> String {
         .collect()
 }
 
-fn detail(entry: &Entry, key: &str) -> Option<String> {
+pub fn detail(entry: &Entry, key: &str) -> Option<String> {
     if key == "cr_text" {
         return presentation::challenge_text(entry).map(str::to_owned);
     }
@@ -722,7 +403,7 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
     (!movement.is_empty()).then(|| movement.join(", "))
 }
 
-fn stat_identity(entry: &Entry) -> String {
+pub fn stat_identity(entry: &Entry) -> String {
     let kind = field(entry, "type_options_text")
         .or_else(|| field(entry, "type"))
         .map(|kind| {
@@ -753,108 +434,6 @@ fn stat_identity(entry: &Entry) -> String {
         .collect::<Vec<_>>()
         .join(" · ");
     reader_style::human_label(&identity)
-}
-
-/// Identity, vitals, abilities and details: what the entry has, and no empty cells.
-pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::view::RunValues>) {
-    design::gap(ui, design::Gap::S);
-    reader_style::identity(ui, &stat_identity(entry));
-    heavy_rule(ui);
-    design::gap(ui, design::Gap::S);
-    vitals(ui, entry, values);
-    design::gap(ui, design::Gap::S);
-    // The rulebook's table: physical abilities beside mental ones, with a clear gutter between
-    // them. A creature with no saving throw has no Save column.
-    let saves = ABILITIES
-        .iter()
-        .any(|ability| stat(entry, &format!("save_{ability}")).is_some());
-    let two_columns = ui.available_width() >= 2.0 * ability_half_width(saves) + design::XL;
-    let any_ability = ABILITIES
-        .iter()
-        .any(|ability| stat(entry, ability).is_some());
-    if any_ability {
-        design::rule(ui);
-        design::gap(ui, design::Gap::XS);
-    }
-    if !any_ability {
-        // An authored creature can have no scores. There is nothing to tabulate.
-    } else if two_columns {
-        ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = design::XL;
-            for column in ABILITIES.chunks(3) {
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    for ability in column {
-                        ability_row(ui, entry, ability, saves);
-                    }
-                });
-            }
-        });
-    } else {
-        ui.spacing_mut().item_spacing.y = 0.0;
-        for ability in ABILITIES {
-            ability_row(ui, entry, ability, saves);
-        }
-    }
-    if any_ability {
-        design::gap(ui, design::Gap::XS);
-        design::rule(ui);
-        design::gap(ui, design::Gap::XS);
-    }
-    ui.spacing_mut().item_spacing.y = 2.0;
-    for (key, label) in DETAILS {
-        if let Some(text) = detail(entry, key).filter(|text| !text.is_empty()) {
-            if label == "Speed"
-                && let Some(speed) = values.and_then(|values| values.speed.as_ref())
-            {
-                changed_speed(ui, &text, speed);
-            } else if label == "Skills" {
-                skills_detail(ui, &text);
-            } else {
-                reader_style::stat_detail(ui, label, &text, colors().text);
-            }
-        }
-    }
-    design::gap(ui, design::Gap::XS);
-    heavy_rule(ui);
-    ui.spacing_mut().item_spacing.y = design::XS;
-}
-
-pub(super) fn show(
-    ui: &mut egui::Ui,
-    entry: &Entry,
-    sections: &[presentation::ReadingSection<'_>],
-    values: Option<&super::view::RunValues>,
-    spells: &mut dyn Spells,
-) {
-    stat_head(ui, entry, values);
-    // A styled stat block's first heading is Markdown's (`L` above it) after this gap.
-    design::gap(ui, design::Gap::S);
-    for section in sections {
-        if section.title == "Source text" {
-            prose(
-                ui,
-                &entry.name,
-                &entry.body,
-                &rules_prose(entry, section.body),
-                values,
-                spells,
-            );
-        } else {
-            let body = if section.body.contains("<!-- splat:") {
-                authored_prose(section.body)
-            } else {
-                section.body.to_owned()
-            };
-            if body.trim().is_empty() {
-                continue;
-            }
-            if section.title != "Overview" {
-                design::heading(ui, design::Heading::Section(&section.title));
-            }
-            prose(ui, &entry.name, &entry.body, &body, values, spells);
-        }
-    }
 }
 
 #[cfg(test)]
@@ -1047,407 +626,5 @@ mod tests {
             ),
             "Keep the existing complete view when no source rules prose exists"
         );
-    }
-
-    /// A harness that draws `add` in a panel `width` wide.
-    fn drawn(
-        width: f32,
-        add: impl FnMut(&mut egui::Ui) + 'static,
-    ) -> egui_kittest::Harness<'static> {
-        use crate::design::test_harness::ThemedPage as _;
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(width, 900.0))
-            .themed_ui(add);
-        harness.run_ok();
-        harness
-    }
-
-    /// One painted glyph: its row in its galley, its character (a no-break space reads as a
-    /// blank), its left and right edges and its baseline.
-    #[derive(Clone, Copy, Debug)]
-    struct Drawn {
-        row: usize,
-        chr: char,
-        left: f32,
-        right: f32,
-        baseline: f32,
-    }
-
-    /// The glyphs of the first painted text that holds `needle`.
-    fn glyphs_of(harness: &egui_kittest::Harness<'_>, needle: &str) -> Vec<Drawn> {
-        for shape in &harness.output().shapes {
-            let egui::Shape::Text(text) = &shape.shape else {
-                continue;
-            };
-            let glyphs: Vec<Drawn> = text
-                .galley
-                .rows
-                .iter()
-                .enumerate()
-                .flat_map(|(row_at, row)| {
-                    row.glyphs.iter().map(move |glyph| {
-                        let left = text.pos.x + row.pos.x + glyph.pos.x;
-                        Drawn {
-                            row: row_at,
-                            chr: if glyph.chr == '\u{a0}' {
-                                ' '
-                            } else {
-                                glyph.chr
-                            },
-                            left,
-                            right: left + glyph.advance_width,
-                            baseline: text.pos.y + row.pos.y + glyph.pos.y,
-                        }
-                    })
-                })
-                .collect();
-            let words: String = glyphs.iter().map(|glyph| glyph.chr).collect();
-            if words.contains(needle) {
-                return glyphs;
-            }
-        }
-        panic!("{needle} is painted");
-    }
-
-    /// The glyphs of each place `words` is drawn, in reading order.
-    fn runs(glyphs: &[Drawn], words: &str) -> Vec<Vec<Drawn>> {
-        let chars: Vec<char> = glyphs.iter().map(|glyph| glyph.chr).collect();
-        let wanted: Vec<char> = words.chars().collect();
-        (0..=chars.len().saturating_sub(wanted.len()))
-            .filter(|at| chars[*at..*at + wanted.len()] == wanted[..])
-            .map(|at| glyphs[at..at + wanted.len()].to_vec())
-            .collect()
-    }
-
-    /// Every link's press target, in reading order.
-    fn link_targets(harness: &egui_kittest::Harness<'_>) -> Vec<egui::Rect> {
-        use egui_kittest::kittest::NodeT;
-        let mut targets: Vec<egui::Rect> = harness
-            .root()
-            .children_recursive()
-            .filter(|node| node.accesskit_node().role() == egui::accesskit::Role::Link)
-            .map(|node| node.rect())
-            .collect();
-        targets.sort_by(|a, b| {
-            (a.top(), a.left())
-                .partial_cmp(&(b.top(), b.left()))
-                .unwrap()
-        });
-        targets
-    }
-
-    /// FD3 joint witness: `Deception +2, Religion +2` reads with no space before the comma,
-    /// both bonuses are `XL` square targets apart from each other and from the words around them,
-    /// and each bonus is as far from its skill as the other.
-    #[test]
-    fn iter20_s_fd3_a_skills_row_has_no_space_before_its_comma() {
-        // The panel widths of a stat block beside the editor, in Library and in a narrow side.
-        for width in [960.0, 480.0, 300.0] {
-            let harness = drawn(width, |ui| skills_detail(ui, "Deception +2, Religion +2"));
-            let at = format!("at {width}");
-            let glyphs = glyphs_of(&harness, "Deception");
-            let bonuses = runs(&glyphs, "+2");
-            assert_eq!(bonuses.len(), 2, "FD3-bonuses: {at}");
-            let comma = runs(&glyphs, ",");
-            assert_eq!(comma.len(), 1, "FD3-comma: {at}");
-            let gap = comma[0][0].left - bonuses[0][1].right;
-            // The font may kern the comma under the digit; a blank would be about 3 px or more.
-            assert!(
-                gap.abs() <= 1.0,
-                "FD3-no-space-before-comma: {at}: gap {gap}"
-            );
-            let targets = link_targets(&harness);
-            assert_eq!(targets.len(), 2, "FD3-targets: {at}: {targets:?}");
-            let religion = runs(&glyphs, "Religion")[0][0];
-            for (target, bonus) in targets.iter().zip(&bonuses) {
-                assert!(
-                    target.width() >= design::XL - 0.01 && target.height() >= design::XL - 0.01,
-                    "FD3-target-size: {at}: {target:?}"
-                );
-                assert!(
-                    target.left() <= bonus[0].left + 0.5 && target.right() >= bonus[1].right - 0.5,
-                    "FD3-target-covers-bonus: {at}: {target:?} {bonus:?}"
-                );
-            }
-            // On one row, the first target ends before the next skill starts.
-            assert!(
-                religion.row != bonuses[0][0].row || targets[0].right() <= religion.left + 0.5,
-                "FD3-target-clear-of-next-skill: {at}: {:?}, Religion at {}",
-                targets[0],
-                religion.left
-            );
-            let shared = targets[0].intersect(targets[1]);
-            assert!(
-                shared.width() <= 0.01 || shared.height() <= 0.01,
-                "FD3-targets-apart: {at}: {targets:?}"
-            );
-            // Must stay true: the bonus that ends the row is as far from its skill as the one
-            // before the comma, so the row reads evenly.
-            let names = [
-                runs(&glyphs, "Deception")[0][8],
-                runs(&glyphs, "Religion")[0][7],
-            ];
-            let gaps: Vec<f32> = names
-                .iter()
-                .zip(&bonuses)
-                .map(|(name, bonus)| bonus[0].left - name.right)
-                .collect();
-            // Glyphs snap to whole pixels, so the gaps can differ by one.
-            assert!(
-                (gaps[0] - gaps[1]).abs() <= 1.0,
-                "FD3-even-skill-gaps: {at}: {gaps:?}"
-            );
-        }
-    }
-
-    /// Iteration 21, FD4 joint witness (revised): a Skills row keeps one normal blank between each
-    /// name and its bonus and one after each comma. A bonus's target is at least `XL` square: it
-    /// extends left over its own skill's name, stays inside its entry, and is clear of the other
-    /// targets. The row wraps by whole entries. From the narrowest stat block to the widest
-    /// reader, so the Library and Lookup panels at 960 and 1920 are both inside it.
-    #[test]
-    fn iter21_s_fd4_a_skill_bonus_target_covers_its_own_entry() {
-        // The tightest text: the narrowest bonus, then two bonuses as wide as they get.
-        const SKILLS: &str = "Insight +8, Perception +14, Persuasion +14";
-        let skills = [
-            ("Insight", "+8"),
-            ("Perception", "+14"),
-            ("Persuasion", "+14"),
-        ];
-        let (mut wrapped, mut one_row) = (0, 0);
-        // From the narrowest panel where the longest entry, `Persuasion +14,`, fits a line (as SD3).
-        for width in (260..=1000).step_by(4) {
-            let harness = drawn(width as f32, |ui| skills_detail(ui, SKILLS));
-            let at = format!("at {width}");
-            let glyphs = glyphs_of(&harness, "Insight");
-            if glyphs.last().unwrap().row > 0 {
-                wrapped += 1;
-            } else {
-                one_row += 1;
-            }
-            let targets = link_targets(&harness);
-            assert_eq!(targets.len(), skills.len(), "FD4-links: {at}");
-            let mut name_gaps = Vec::new();
-            for (at_skill, ((name, bonus), target)) in skills.iter().zip(&targets).enumerate() {
-                let unit = format!("{name} {bonus}");
-                let found = runs(&glyphs, &unit);
-                assert_eq!(found.len(), 1, "FD4-unit-drawn: {at}: {unit}");
-                let unit_glyphs = &found[0];
-                let name_end = unit_glyphs[name.len() - 1];
-                let digits = &unit_glyphs[name.len() + 1..];
-                let row = unit_glyphs[0].row;
-                // Find this unit's place, then what follows it.
-                let start = glyphs
-                    .iter()
-                    .position(|glyph| {
-                        glyph.row == row
-                            && glyph.chr == unit_glyphs[0].chr
-                            && glyph.left == unit_glyphs[0].left
-                    })
-                    .unwrap();
-                let after = &glyphs[start + unit.chars().count()..];
-                assert!(
-                    target.width() >= design::XL - 0.01 && target.height() >= design::XL - 0.01,
-                    "FD4-target-size: {at}: {unit} {target:?}"
-                );
-                // The target may cover its own skill's name, but stays inside its entry.
-                assert!(
-                    target.left() >= unit_glyphs[0].left - 0.5,
-                    "FD4-target-inside-entry: {at}: {unit} target {target:?}, entry starts {}",
-                    unit_glyphs[0].left
-                );
-                let blank = unit_glyphs[name.len()];
-                name_gaps.push((digits[0].left - name_end.right, blank.right - blank.left));
-                assert!(
-                    target.contains(egui::pos2(
-                        (digits[0].left + digits.last().unwrap().right) / 2.0,
-                        digits[0].baseline - 2.0
-                    )),
-                    "FD4-target-on-bonus: {at}: {unit} target {target:?}"
-                );
-                // The spare width is all before the bonus, so its target ends with its words.
-                assert!(
-                    target.right() <= digits.last().unwrap().right + 0.5,
-                    "FD4-spare-to-the-left: {at}: {unit} target {target:?}, bonus ends {}",
-                    digits.last().unwrap().right
-                );
-                if at_skill + 1 == skills.len() {
-                    continue;
-                }
-                let [comma, blank, next, ..] = after else {
-                    panic!("FD4-next-entry: {at}: nothing follows {unit}");
-                };
-                assert_eq!(
-                    (comma.chr, blank.chr),
-                    (',', ' '),
-                    "FD4-comma: {at}: {unit}"
-                );
-                // Whole entries: the name, its bonus and its comma share a row.
-                assert!(
-                    unit_glyphs
-                        .iter()
-                        .chain([comma])
-                        .all(|glyph| glyph.row == row),
-                    "FD4-whole-entries: {at}: {unit} is split across rows"
-                );
-                // Must stay true (iteration 20): no space before the comma.
-                assert!(
-                    (comma.left - digits.last().unwrap().right).abs() <= 1.0,
-                    "FD4-no-space-before-comma: {at}: {unit}"
-                );
-                // One blank after the comma: the next entry starts where the blank's own width
-                // ends.
-                assert!(
-                    blank.left - comma.right <= 0.5 && next.left - blank.right <= 0.5,
-                    "FD4-one-blank: {at}: {unit}, comma ends {}, blank {}..{}, next starts {}",
-                    comma.right,
-                    blank.left,
-                    blank.right,
-                    next.left
-                );
-                assert!(
-                    next.row != row || target.right() <= next.left + 0.5,
-                    "FD4-target-clear-of-next: {at}: {unit} target {target:?}, next starts {}",
-                    next.left
-                );
-            }
-            // `+8` and `+14` sit as far from their names as each other. Glyphs snap to whole
-            // pixels, so the gaps can differ by one.
-            let (least, most) = name_gaps
-                .iter()
-                .fold((f32::MAX, f32::MIN), |(a, b), (gap, _)| {
-                    (a.min(*gap), b.max(*gap))
-                });
-            assert!(
-                most - least <= 1.0,
-                "FD4-equal-name-gaps: {at}: {name_gaps:?}"
-            );
-            // One normal blank between each name and its bonus, whatever the bonus's width.
-            for (gap, blank) in &name_gaps {
-                assert!(
-                    (gap - blank).abs() <= 0.5,
-                    "FD4-one-blank-before-bonus: {at}: gap {gap}, blank {blank}"
-                );
-            }
-            for (a, first) in targets.iter().enumerate() {
-                for second in &targets[a + 1..] {
-                    let shared = first.intersect(*second);
-                    assert!(
-                        shared.width() <= 0.01 || shared.height() <= 0.01,
-                        "FD4-targets-apart: {at}: {targets:?}"
-                    );
-                }
-            }
-        }
-        assert!(
-            wrapped > 0 && one_row > 0,
-            "FD4-widths-reached: wrapped {wrapped}, one row {one_row}"
-        );
-    }
-
-    /// SD3: a skill and its bonus wrap as one unit at every width, and each bonus keeps its own
-    /// link target.
-    #[test]
-    fn iter20_s_sd3_a_skill_and_its_bonus_wrap_together() {
-        const SKILLS: &str =
-            "Insight +8, Perception +14, Persuasion +9, Sleight of Hand +5, Stealth +8";
-        let skills = [
-            ("Insight", "+8"),
-            ("Perception", "+14"),
-            ("Persuasion", "+9"),
-            ("Sleight of Hand", "+5"),
-            ("Stealth", "+8"),
-        ];
-        let mut wrapped = 0;
-        // From the narrowest panel where the longest unit, `Sleight of Hand +5`, fits a line.
-        for width in (260..=600).step_by(4) {
-            let harness = drawn(width as f32, |ui| skills_detail(ui, SKILLS));
-            let at = format!("at {width}");
-            let glyphs = glyphs_of(&harness, "Insight");
-            let rows = glyphs.last().map_or(0, |glyph| glyph.row + 1);
-            if rows > 1 {
-                wrapped += 1;
-            }
-            let targets = link_targets(&harness);
-            assert_eq!(targets.len(), skills.len(), "SD3-links: {at}");
-            for ((name, bonus), target) in skills.iter().zip(&targets) {
-                let unit = format!("{name} {bonus}");
-                let found = runs(&glyphs, &unit);
-                assert_eq!(found.len(), 1, "SD3-unit-drawn: {at}: {unit}");
-                let unit_glyphs = &found[0];
-                assert!(
-                    unit_glyphs
-                        .iter()
-                        .all(|glyph| glyph.row == unit_glyphs[0].row),
-                    "SD3-one-row: {at}: {unit} is split across rows"
-                );
-                let digit = unit_glyphs.last().unwrap();
-                assert!(
-                    target.contains(egui::pos2(
-                        (digit.left + digit.right) / 2.0,
-                        digit.baseline - 2.0
-                    )),
-                    "SD3-bonus-keeps-target: {at}: {unit} target {target:?}"
-                );
-            }
-        }
-        assert!(wrapped > 0, "SD3-wrap-reached: no width wrapped the row");
-    }
-
-    /// FD4: every detail row of a stat block has one pitch, the link pitch, whether or not it
-    /// holds a link; a wrapped row keeps that pitch on every line.
-    #[test]
-    fn iter20_s_fd4_stat_detail_rows_have_one_pitch() {
-        let source =
-            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
-        for width in [960.0, 240.0] {
-            let entry = Entry::parse("Aboleth.md", source).unwrap();
-            let harness = drawn(width, move |ui| stat_head(ui, &entry, None));
-            let at = format!("at {width}");
-            let mut rows: Vec<(f32, Vec<Drawn>)> = Vec::new();
-            for (label, first) in [
-                ("Speed", "10 ft."),
-                ("Skills", "History"),
-                ("Senses", "Darkvision"),
-                ("Languages", "Deep"),
-                ("Challenge", "(XP"),
-            ] {
-                let label_glyphs = glyphs_of(&harness, label);
-                let value = glyphs_of(&harness, first);
-                let start = value[0];
-                // Must stay true: the label sits on its value's first baseline.
-                assert!(
-                    (label_glyphs[0].baseline - start.baseline).abs() <= 0.5,
-                    "FD4-label-baseline: {at}: {label} {} vs {first} {}",
-                    label_glyphs[0].baseline,
-                    start.baseline
-                );
-                rows.push((label_glyphs[0].baseline, value));
-            }
-            for pair in rows.windows(2) {
-                let (top, value) = &pair[0];
-                let lines = value.last().unwrap().row + 1;
-                let pitch = pair[1].0 - top;
-                let expected = lines as f32 * design::XL + 2.0;
-                assert!(
-                    (pitch - expected).abs() <= 0.5,
-                    "FD4-pitch: {at}: {lines} lines then {pitch} (expected {expected})"
-                );
-                let mut baselines: Vec<f32> = value.iter().map(|glyph| glyph.baseline).collect();
-                baselines.dedup_by(|a, b| (*a - *b).abs() < 0.5);
-                for line in baselines.windows(2) {
-                    assert!(
-                        (line[1] - line[0] - design::XL).abs() <= 0.5,
-                        "FD4-wrapped-pitch: {at}: {baselines:?}"
-                    );
-                }
-            }
-            if width < 300.0 {
-                assert!(
-                    rows.iter().any(|(_, value)| value.last().unwrap().row > 0),
-                    "FD4-wrap-reached: {at}"
-                );
-            }
-        }
     }
 }

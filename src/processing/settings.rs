@@ -3,16 +3,12 @@
 use super::{
     ANTHROPIC_MODEL, ANTHROPIC_URL, CODEX_MODEL, Config, OPENAI_SPEECH_MODEL, OPENAI_URL, Provider,
 };
+use crate::state_context::StateContext;
 use crate::{
     credentials::{self, KeySlot},
-    design::outcome::{
-        Fault, FaultMessage, Messages, NoPress, Notice, PaneFrame, Sentence, Severity,
-    },
-    design::pane::Body,
-    design::{self, Action, Density, Type, colors, icons},
+    design::outcome::{Fault, FaultMessage, Messages, NoPress, Notice, Sentence, Severity},
     recording::{self, Probe},
 };
-use eframe::egui;
 use std::{
     fs,
     io::Write,
@@ -131,20 +127,6 @@ const SPEECH_CHOICES: [(&str, &str, &str); 3] = [
 ];
 const OTHER_SERVICE: &str = "Another service";
 
-const SPEECH_KEY: design::FieldId = crate::field_id!("speech_api_key").once(design::Once::Settings);
-const LLM_KEY: design::FieldId = crate::field_id!("llm_api_key").once(design::Once::Settings);
-const CLEAN_PROMPT: design::FieldId = crate::field_id!("clean_prompt").once(design::Once::Settings);
-const REVIEW_PROMPT: design::FieldId =
-    crate::field_id!("review_prompt").once(design::Once::Settings);
-const INPUT: design::FieldId = crate::field_id!("recording_input").once(design::Once::Settings);
-const SPEECH_SERVICE: design::FieldId =
-    crate::field_id!("speech_service").once(design::Once::Settings);
-const SPEECH_URL: design::FieldId = crate::field_id!("speech_url").once(design::Once::Settings);
-const SPEECH_MODEL: design::FieldId = crate::field_id!("speech_model").once(design::Once::Settings);
-const LLM_SERVICE: design::FieldId = crate::field_id!("llm_service").once(design::Once::Settings);
-const LLM_URL: design::FieldId = crate::field_id!("llm_url").once(design::Once::Settings);
-const LLM_MODEL: design::FieldId = crate::field_id!("llm_model").once(design::Once::Settings);
-
 #[derive(Default)]
 struct Store {
     path: Option<PathBuf>,
@@ -225,9 +207,6 @@ pub struct ProcessingSettings {
     /// A recording is live, so a new input cannot apply to it.
     pub recording_now: bool,
     pub focus_input: bool,
-    /// The Input took the focus from `focus_input`: while it keeps it, the Recording heading
-    /// belongs to its field's reveal. Ends when the Input loses the focus.
-    input_heading: bool,
     pub focus_speech_key: bool,
     started: bool,
     load_error: Option<String>,
@@ -242,11 +221,6 @@ pub struct ProcessingSettings {
     /// A failed save to the keyring keeps the key for this run of the app only.
     held_speech_key: Option<Zeroizing<String>>,
     held_llm_key: Option<Zeroizing<String>>,
-    /// The DM chose a service last frame: bring the notice and an empty field that blocks
-    /// processing into view once. It ends on the next frame, whether or not it scrolls.
-    reveal_problem: bool,
-    /// Where this frame drew the first field reason that blocks processing.
-    reason_rect: Option<egui::Rect>,
 }
 
 impl Default for ProcessingSettings {
@@ -256,7 +230,6 @@ impl Default for ProcessingSettings {
             config: Config::default(),
             recording_now: false,
             focus_input: false,
-            input_heading: false,
             focus_speech_key: false,
             started: false,
             load_error: None,
@@ -270,14 +243,12 @@ impl Default for ProcessingSettings {
             replies: None,
             held_speech_key: None,
             held_llm_key: None,
-            reveal_problem: false,
-            reason_rect: None,
         }
     }
 }
 
 impl ProcessingSettings {
-    fn start(&mut self, ctx: &egui::Context) {
+    fn start(&mut self, ctx: &StateContext) {
         if self.started {
             return;
         }
@@ -291,7 +262,7 @@ impl ProcessingSettings {
         self.codex_found = cfg!(any(test, feature = "test-support")) || recording::on_path("codex");
         let (tx, rx) = mpsc::channel();
         for slot in [KeySlot::Speech, KeySlot::Llm] {
-            let (tx, ctx) = (tx.clone(), ctx.clone());
+            let (tx, ctx) = (tx.clone(), ctx.waker());
             credentials::in_background(move || {
                 let found = credentials::load_key(slot).is_ok_and(|key| key.is_some());
                 let _ = tx.send(Reply::Found(slot, found));
@@ -309,7 +280,7 @@ impl ProcessingSettings {
         }
     }
 
-    pub fn poll(&mut self, ctx: &egui::Context) {
+    pub fn poll(&mut self, ctx: &StateContext) {
         self.start(ctx);
         // The table is waiting while a chosen input is missing, so keep looking.
         if self.input_missing()
@@ -389,6 +360,15 @@ impl ProcessingSettings {
         self.config.input = Some(name.to_owned());
     }
 
+    /// Both keys saved for the services chosen now, as after the DM saved them in Settings.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn simulate_keys(&mut self) {
+        self.speech_key.saved = true;
+        self.llm_key.saved = true;
+        self.config.speech_key_for = self.config.speech_url.clone();
+        self.config.llm_key_for = self.config.llm_url.clone();
+    }
+
     /// A key for the service chosen now. A key saved for another service does not count,
     /// because it must never be sent to a different company.
     pub fn has_key(&self, slot: KeySlot) -> bool {
@@ -431,23 +411,6 @@ impl ProcessingSettings {
         )
     }
 
-    /// Faults to show, for a test of their places: the keyring's words for each key, and the
-    /// settings file's reader's words. `None` clears one.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn simulate_faults(&mut self, speech: Option<&str>, llm: Option<&str>, file: Option<&str>) {
-        self.speech_key.error = speech.map(str::to_owned);
-        self.llm_key.error = llm.map(str::to_owned);
-        self.load_error = file.map(str::to_owned);
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn simulate_keys(&mut self) {
-        self.speech_key.saved = true;
-        self.llm_key.saved = true;
-        self.config.speech_key_for = self.config.speech_url.clone();
-        self.config.llm_key_for = self.config.llm_url.clone();
-    }
-
     fn persist(&mut self) {
         self.save_error = self
             .store
@@ -456,493 +419,11 @@ impl ProcessingSettings {
             .map(|error| error.to_string());
     }
 
-    fn key_row(&mut self, ui: &mut egui::Ui, slot: KeySlot, label: &str) {
-        let (tx, ctx) = (
-            self.replies.as_ref().map(|(tx, _)| tx.clone()),
-            ui.ctx().clone(),
-        );
-        let saved = self.field(slot).saved;
-        let fits = match slot {
-            KeySlot::Speech => self.config.speech_key_fits(),
-            KeySlot::Llm => self.config.llm_key_fits(),
-        };
-        let saved_for = match slot {
-            KeySlot::Speech => &self.config.speech_key_for,
-            KeySlot::Llm => &self.config.llm_key_for,
-        };
-        let owner = key_service_name(saved_for).to_owned();
-        let target = key_service_name(match slot {
-            KeySlot::Speech => &self.config.speech_url,
-            KeySlot::Llm => &self.config.llm_url,
-        })
-        .to_owned();
-        let slot_word = if slot == KeySlot::Speech {
-            "speech"
-        } else {
-            "transcript and summary"
-        };
-        let remove = format!("Remove {slot_word} key ({owner})");
-        let remove_name = format!("{remove}: {label}");
-        let held = self.held(slot).is_some();
-        let focus = slot == KeySlot::Speech && std::mem::take(&mut self.focus_speech_key);
-        let key_field = match slot {
-            KeySlot::Speech => SPEECH_KEY,
-            KeySlot::Llm => LLM_KEY,
-        };
-        let mut save = false;
-        // The field and `Save key` share the form's width, so `Save key` ends at the edge the
-        // other fields end at. Its slot stays when it is hidden, so typing moves nothing. The
-        // line below holds the reason, else the saved status, so neither moves the form.
-        design::small_field(ui, "API key", None, None, |ui| {
-            let mut reason = None;
-            ui.horizontal(|ui| {
-                let row = ui.available_width().min(design::FORM_WIDTH);
-                let field = self.field(slot);
-                let empty = field.typing.trim().is_empty();
-                let show_save = !empty || (!saved && !held) || !fits;
-                reason = (empty && show_save).then_some("Paste a key first.");
-                let save_width = Action::secondary("Save key").natural_width(ui);
-                let width = (row - save_width - ui.spacing().item_spacing.x).max(design::L * 4.0);
-                let hint = design::placeholder(
-                    ui,
-                    if saved && fits {
-                        "Paste a new key to replace it"
-                    } else {
-                        "Paste the key"
-                    },
-                );
-                let response = key_field.single_line(ui, &mut field.typing, |edit| {
-                    edit.password(true)
-                        .desired_width(width - 2.0 * design::S)
-                        .min_size(egui::vec2(width, 0.0))
-                        .margin(egui::vec2(design::S, 5.0))
-                        .hint_text(hint)
-                });
-                design::named(ui, &response, label);
-                if focus {
-                    response.request_focus();
-                    response.scroll_to_me(None);
-                }
-                if show_save {
-                    save = Action::secondary("Save key")
-                        .name(&format!("Save key: {label}"))
-                        .blocked_if(empty, "Paste a key first.")
-                        .show(ui)
-                        .clicked();
-                }
-            });
-            // Where a field's help goes. A key error replaces the line with its message.
-            if self.field(slot).error.is_none() {
-                if let Some(reason) = reason {
-                    design::blocked_reason(ui, Some(reason));
-                } else if saved && fits {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("{} Saved on this computer.", icons::OK))
-                            .color(colors().document.saved),
-                    );
-                } else {
-                    // The line stays, so the reason coming and going moves nothing.
-                    let font = Type::Small.font(ui);
-                    let height = ui.fonts_mut(|fonts| fonts.row_height(&font));
-                    ui.allocate_exact_size(egui::vec2(0.0, height), egui::Sense::hover());
-                }
-            }
-        });
-        if (saved || held) && !fits {
-            key_fault(
-                ui,
-                &SettingsFault::KeyForAnother {
-                    owner: &owner,
-                    target: &target,
-                },
-            );
-        }
-        if save {
-            match slot {
-                KeySlot::Speech => self.config.speech_key_for = self.config.speech_url.clone(),
-                KeySlot::Llm => self.config.llm_key_for = self.config.llm_url.clone(),
-            }
-            self.persist();
-            let key = Zeroizing::new(self.field(slot).typing.trim().to_owned());
-            self.field(slot).typing.zeroize();
-            self.field(slot).typing.clear();
-            // Usable at once, even if the keyring is locked.
-            *self.held(slot) = Some(key.clone());
-            if let Some(tx) = tx.clone() {
-                credentials::in_background(move || {
-                    let result = credentials::save_key(slot, &key);
-                    let _ = tx.send(Reply::Saved(slot, result));
-                    ctx.request_repaint();
-                });
-            }
-        }
-        if let Some(error) = self.field(slot).error.clone() {
-            key_fault(ui, &SettingsFault::KeyNotKept(&error));
-        }
-        if (saved || held)
-            && Action::quiet(&remove)
-                .line_start()
-                .name(&remove_name)
-                .show(ui)
-                .clicked()
-        {
-            *self.held(slot) = None;
-            if let Some(tx) = self.replies.as_ref().map(|(tx, _)| tx.clone()) {
-                let ctx = ui.ctx().clone();
-                credentials::in_background(move || {
-                    let result = credentials::forget_key(slot);
-                    let _ = tx.send(Reply::Forgot(slot, result));
-                    ctx.request_repaint();
-                });
-            }
-        }
-    }
-
-    fn input_section(&mut self, ui: &mut egui::Ui) {
-        let heading = design::heading(
-            ui,
-            design::Heading::Group {
-                title: "Recording",
-                count: 0,
-            },
-        );
-        match &self.probe {
-            None => {
-                design::help(ui, "Looking for a recorder…");
-            }
-            // Round 28: why it cannot record is in the tab's footer.
-            Some(Probe { tool: None, .. }) => {}
-            Some(Probe {
-                tool: Some(tool),
-                inputs,
-            }) => {
-                design::help(
-                    ui,
-                    &format!(
-                        "Records with {}, as 16 kHz mono WAV in the campaign folder.",
-                        tool.name()
-                    ),
-                );
-                if tool.can_choose_input() {
-                    let inputs = inputs.clone();
-                    // A chosen input that is not plugged in now stays the choice, and says so.
-                    let missing = self
-                        .config
-                        .input
-                        .clone()
-                        .filter(|name| !inputs.iter().any(|input| input.name == *name));
-                    let mut changed = false;
-                    let mut focused = None;
-                    design::small_field(ui, "Input", None, None, |ui| {
-                        let shown =
-                            design::Dropdown::new(INPUT, "Recording input")
-                                .choice(None, "System default")
-                                .choices(inputs.iter().map(|input| {
-                                    (Some(input.name.clone()), input.description.clone())
-                                }))
-                                .choices(missing.map(|name| {
-                                    let words = format!("{name} (not found now)");
-                                    (Some(name), words)
-                                }))
-                                .show(ui, &mut self.config.input);
-                        changed = shown.changed;
-                        if std::mem::take(&mut self.focus_input) {
-                            shown.response.request_focus();
-                            self.input_heading = true;
-                        }
-                        focused = Some(shown.response.has_focus());
-                    });
-                    // Opened from elsewhere (a session's "Choose input"): the input takes the
-                    // focus, and the pane's one focus arbiter brings it into view with its
-                    // field and the Recording heading above it (layout PR 10c), no scroll of its
-                    // own. The heading stays part of the field's reveal in every pass while the
-                    // Input keeps that focus (a click that opened the tab makes the reveal wait
-                    // for its release).
-                    if focused == Some(false) {
-                        self.input_heading = false;
-                    }
-                    if self.input_heading {
-                        design::pane::reveal_with_focus(ui, heading.rect);
-                    }
-                    if changed {
-                        self.persist();
-                    }
-                    // Round 28 FM11: the notice that a new input waits for the next recording is
-                    // in the tab's footer, so it never pushes the form down.
-                }
-            }
-        }
-    }
-
-    /// A one-line setting with its label above it. A value that blocks processing says so
-    /// directly below its own field as the field's warning (round 31 SR4/AR4: a missing value is
-    /// never drawn as help), before the field's own help; the field part then keeps `L` before
-    /// the next label (N3), so the reason reads as its own field's (round 27 FI7). The first
-    /// reason's place is kept for the reveal.
-    fn setting_field(
-        &mut self,
-        ui: &mut egui::Ui,
-        field: (design::FieldId, &str, &str),
-        text: Text,
-        reason: &str,
-        help: Option<&str>,
-    ) -> bool {
-        let (id, label, name) = field;
-        let value = match text {
-            Text::SpeechUrl => &mut self.config.speech_url,
-            Text::SpeechModel => &mut self.config.speech_model,
-            Text::LlmUrl => &mut self.config.llm_url,
-            Text::LlmModel => &mut self.config.llm_model,
-        };
-        let blocks = value.trim().is_empty();
-        let response =
-            design::small_field_needing(ui, label, blocks.then_some(reason), help, |ui| {
-                let width = ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S;
-                id.single_line(ui, value, |edit| {
-                    edit.desired_width(width)
-                        .min_size(egui::vec2(0.0, Density::Read.control()))
-                        .margin(egui::vec2(design::S, 5.0))
-                })
-            });
-        design::named(ui, &response, name);
-        if blocks {
-            // The reason is the first line below the field.
-            let font = Type::Body.font(ui);
-            let line = ui.fonts_mut(|fonts| fonts.row_height(&font));
-            let below = egui::Rect::from_min_size(
-                response.rect.left_bottom(),
-                egui::vec2(response.rect.width(), design::XS + line),
-            );
-            self.reason_rect.get_or_insert(below);
-        }
-        response.changed()
-    }
-
-    fn speech_section(&mut self, ui: &mut egui::Ui) {
-        design::help(
-            ui,
-            "Turns your recording into text. Choose a speech service and enter its API key.",
-        );
-        let current = SPEECH_CHOICES
-            .iter()
-            .find(|(_, url, _)| self.config.speech_url == *url)
-            .map_or(OTHER_SERVICE, |(name, ..)| name);
-        let mut chosen = current;
-        // Round 28 FI7: the custom service's help is the Service field's own, so `L` follows it
-        // and it never reads as help for Address.
-        let custom = (current == OTHER_SERVICE)
-            .then_some("The custom service must support the OpenAI audio/transcriptions API.");
-        design::small_field(ui, "Service", custom, None, |ui| {
-            design::Dropdown::new(SPEECH_SERVICE, "Speech service")
-                .choice(SPEECH_CHOICES[0].0, SPEECH_CHOICES[0].0)
-                .choices(SPEECH_CHOICES[1..].iter().map(|(name, ..)| (*name, *name)))
-                .choice(OTHER_SERVICE, OTHER_SERVICE)
-                .show(ui, &mut chosen)
-        });
-        if chosen != current {
-            let (url, model) = SPEECH_CHOICES
-                .iter()
-                .find(|(name, ..)| *name == chosen)
-                .map_or(("", ""), |(_, url, model)| (*url, *model));
-            self.config.speech_url = url.to_owned();
-            self.config.speech_model = model.to_owned();
-            self.persist();
-            self.reveal_problem = true;
-            ui.ctx().request_repaint();
-        }
-        let mut changed = self.setting_field(
-            ui,
-            (SPEECH_URL, "Address", "Speech address"),
-            Text::SpeechUrl,
-            "Enter the address.",
-            None,
-        );
-        changed |= self.setting_field(
-            ui,
-            (SPEECH_MODEL, "Model", "Speech model"),
-            Text::SpeechModel,
-            "Enter the model’s name.",
-            Some("The name your service gives it. For OpenAI, gpt-transcribe."),
-        );
-        if changed {
-            self.persist();
-        }
-        self.key_row(ui, KeySlot::Speech, "Speech API key");
-    }
-
-    fn llm_section(&mut self, ui: &mut egui::Ui) {
-        design::help(
-            ui,
-            "Goes over the transcript twice: once to clean it and mark events, and once to check that work against the raw words.",
-        );
-        let current = LLM_CHOICES
-            .iter()
-            .find(|(_, provider, url, _)| {
-                self.config.provider == *provider && self.config.llm_url == *url
-            })
-            .map_or(OTHER_SERVICE, |(name, ..)| name);
-        let mut chosen = current;
-        design::small_field(ui, "Service", None, None, |ui| {
-            design::Dropdown::new(LLM_SERVICE, "Transcript and summary service")
-                .choice(LLM_CHOICES[0].0, LLM_CHOICES[0].0)
-                .choices(LLM_CHOICES[1..].iter().map(|(name, ..)| (*name, *name)))
-                .choice(OTHER_SERVICE, OTHER_SERVICE)
-                .show(ui, &mut chosen)
-        });
-        if chosen != current {
-            let (provider, url, model) = LLM_CHOICES
-                .iter()
-                .find(|(name, ..)| *name == chosen)
-                .map_or(
-                    (Provider::OpenAiCompatible, "", ""),
-                    |(_, provider, url, model)| (*provider, *url, *model),
-                );
-            self.config.provider = provider;
-            self.config.llm_url = url.to_owned();
-            self.config.llm_model = model.to_owned();
-            self.persist();
-            self.reveal_problem = true;
-            ui.ctx().request_repaint();
-        }
-        let codex = self.config.provider == Provider::CodexCli;
-        let mut changed = false;
-        if !codex {
-            changed |= self.setting_field(
-                ui,
-                (LLM_URL, "Address", "Transcript and summary address"),
-                Text::LlmUrl,
-                "Enter the address.",
-                None,
-            );
-        }
-        changed |= self.setting_field(
-            ui,
-            (LLM_MODEL, "Model", "Transcript and summary model"),
-            Text::LlmModel,
-            "Enter the model’s name.",
-            Some("The name your service gives it."),
-        );
-        if changed {
-            self.persist();
-        }
-        if codex {
-            let words = if self.codex_found {
-                "Uses your Codex sign-in. It cannot change your campaign files. No API key is needed here. Codex cannot take audio; the speech service turns it into text first."
-            } else {
-                "The codex command was not found on this computer."
-            };
-            design::help(ui, words);
-        } else {
-            self.key_row(ui, KeySlot::Llm, "Transcript and summary API key");
-        }
-        let mut changed = false;
-        // Technical, and a stray key here changes every later job.
-        design::quiet_section(ui, "Transcript and summary instructions", |ui| {
-            for (label, field_id, help, prompt, default) in [
-                (
-                    "First pass: clean and mark",
-                    CLEAN_PROMPT,
-                    "Cleans the raw transcript and marks events in it.",
-                    &mut self.config.clean_prompt,
-                    super::default_clean_prompt(),
-                ),
-                (
-                    "Second pass: check and summarize",
-                    REVIEW_PROMPT,
-                    "Checks the first pass against the raw transcript, corrects it, and writes the summary. Splat divides its reply at the headings # Review and # Marked transcript.",
-                    &mut self.config.review_prompt,
-                    super::default_review_prompt(),
-                ),
-            ] {
-                design::small_field(ui, label, None, None, |ui| {
-                    let width = ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S;
-                    let response = field_id.multi_line(ui, prompt, |edit| {
-                        edit.desired_width(width)
-                            .desired_rows(6)
-                            .margin(egui::vec2(design::S, design::S))
-                    });
-                    design::named(ui, &response, label);
-                    changed |= response.changed();
-                    // The field's own help, at the reader measure like the rest of this tab.
-                    design::help(ui, help);
-                });
-                if *prompt != default
-                    && Action::quiet("Reset")
-                        .name(&format!("Reset: {label}"))
-                        .show(ui)
-                        .clicked()
-                {
-                    *prompt = default;
-                    changed = true;
-                }
-            }
-        });
-        if changed {
-            self.persist();
-        }
-    }
-
-    pub fn show(&mut self, ui: &mut egui::Ui) {
-        design::help(
-            ui,
-            "Recording is your choice in each session. Splat sends nothing until you select Process on a recording. Changes here save as you type. A key needs Save key.",
-        );
-        // The notice that stood here is in the tab's footer (round 27 FI7): `L` before the
-        // first group heading, as after any help.
-        let reveal = std::mem::take(&mut self.reveal_problem);
-        self.reason_rect = None;
-        self.input_section(ui);
-        // The headings stand outside the `push_id` scopes: a heading in a new `Ui` is first in
-        // it and adds no space above itself.
-        design::heading(
-            ui,
-            design::Heading::Group {
-                title: "Speech service",
-                count: 0,
-            },
-        );
-        ui.push_id("speech_settings", |ui| self.speech_section(ui));
-        design::heading(
-            ui,
-            design::Heading::Group {
-                title: "Transcript and summary",
-                count: 0,
-            },
-        );
-        ui.push_id("llm_settings", |ui| self.llm_section(ui));
-        // After the DM chooses a service that leaves a field empty, that field's reason comes
-        // into view with the focused choice; the notice is in the tab's footer. The pane's one
-        // focus arbiter brings them in (layout PR 10), so no second scroll competes with it or
-        // with the DM's wheel. A key problem has its reason at the key row beside the choice, so
-        // the view stays where the DM is.
-        if reveal && let Some(reason) = self.reason_rect {
-            design::pane::reveal_with_focus(ui, reason);
-        }
-    }
-
-    /// The Recording tab as one pane: its fields, then its message footer, `S` below them, pinned
-    /// only when they fill the pane (round 28, `Body::Content`). The messages are made before the
-    /// fields draw, from owned words.
-    pub fn pane(&mut self, ui: &mut egui::Ui) {
-        let width = ui.available_width().min(design::LIST_MEASURE);
-        let frame = PaneFrame::new(ui);
-        let messages = self.messages(&frame, width);
-        let _ = messages.pane(ui, Body::Content, |ui| {
-            let mut fields = ui.available_rect_before_wrap();
-            fields.min.x += design::S;
-            ui.scope_builder(egui::UiBuilder::new().max_rect(fields), |ui| {
-                ui.set_max_width(design::FORM_WIDTH + design::XXL);
-                self.show(ui);
-            });
-        });
-    }
-
     /// Round 27 FI7: the Recording tab's notices sit in its message footer, so the form never
     /// moves when one comes or goes (the DM fills the last missing value, a save fails). Round
     /// 28 FM11: so does the notice that a new input waits for the next recording.
-    fn messages<'f>(&self, frame: &'f PaneFrame, width: f32) -> Messages<'f, NoPress> {
-        let mut messages = Messages::new(frame, "recording_settings_footer", width);
+    fn messages(&self) -> Messages<'static, NoPress> {
+        let mut messages = Messages::new();
         if let Some(error) = &self.load_error {
             messages.outcome(FaultMessage::new(&SettingsFault::Unreadable(error)));
         }
@@ -985,14 +466,8 @@ impl ProcessingSettings {
     }
 }
 
-/// A key's fault, where its key row is: the row's own place, so the DM reads it beside the key.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "a key’s fault belongs to its key row (`Ban::Body`)"
-)]
-fn key_fault(ui: &mut egui::Ui, fault: &SettingsFault<'_>) {
-    crate::design::outcome::row_fault(ui, fault);
-}
+#[path = "settings/view.rs"]
+pub mod view;
 
 /// The service a key was saved for, by its address.
 fn key_service_name(saved_for: &str) -> &str {

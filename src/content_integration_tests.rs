@@ -1,5 +1,6 @@
 use super::*;
-use crate::visual_tests::fixture::{Seed, World};
+use crate::fixtures::{Seed, World};
+use crate::state_context::StateContext;
 
 #[test]
 fn package_copy_keeps_original_entries_encounters_and_byte_exact_undo() {
@@ -48,8 +49,7 @@ fn iter14_e_changed_files_end_every_undo_result() {
     .unwrap();
     let mut app = world.app();
     let mut campaigns = std::mem::take(&mut app.campaigns);
-    let frame_context = eframe::egui::Context::default();
-    design::theme::install(&frame_context);
+    let frame_context = StateContext::new();
     library::iter14_e_changed_files_end_every_undo_result(
         &temp,
         &mut campaigns,
@@ -60,11 +60,7 @@ fn iter14_e_changed_files_end_every_undo_result() {
             *campaigns = std::mem::take(&mut app.campaigns);
             std::mem::take(&mut app.library)
         },
-        |library, campaigns| {
-            let _ = frame_context.run(eframe::egui::RawInput::default(), |ctx| {
-                eframe::egui::CentralPanel::default().show(ctx, |ui| library.show(ui, campaigns));
-            });
-        },
+        |library, campaigns| library.begin(&frame_context, campaigns),
     );
 }
 

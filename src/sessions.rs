@@ -5,6 +5,8 @@
 pub mod page;
 #[path = "sessions/slash.rs"]
 mod slash;
+/// The `/` menu's rules, for the GPUI note.
+pub use slash::plain as slash_plain;
 
 use crate::{
     content_workspace::{CampaignDocument, patch_fields},
@@ -218,12 +220,6 @@ pub fn note_path(folder: &Path, number: u32, title: &str) -> PathBuf {
 thread_local! {
     /// Scans of a session folder by `storage_files`, counted inside the scan.
     static STORAGE_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-/// How often `storage_files` scanned a folder on this thread.
-#[cfg(any(test, feature = "test-support"))]
-pub fn storage_scans() -> usize {
-    STORAGE_SCANS.with(std::cell::Cell::get)
 }
 
 /// A scan before a storage move that the system refused, in plain words from the error's kind
@@ -1514,6 +1510,13 @@ impl Draft {
         self.own_since = Some((now, now));
     }
 
+    /// Every change since the Notes panel last held the body was the note's own write (or there
+    /// was none): the panel's typing history stays under them.
+    pub fn own_since_followed(&self) -> bool {
+        self.own_since
+            .is_some_and(|(_, head)| head == self.body.key())
+    }
+
     /// The note's own write changed the body from revision `before` (an act, the page's insert,
     /// a renamed link, the DM's typing on the page). It goes on the row only when the row ends
     /// at `before`: a change made another way between them broke it.
@@ -1522,12 +1525,6 @@ impl Draft {
             .own_since
             .filter(|(_, head)| *head == before)
             .map(|(from, _)| (from, self.body.key()));
-    }
-
-    /// Whether every change of the body since revision `from` (the panel's mark) is the note's
-    /// own write, in a row.
-    pub fn own_since(&self, from: crate::design::text_draft::DraftKey) -> bool {
-        self.own_since == Some((from, self.body.key()))
     }
 
     /// This draft, a copy of `open` that an act wrote and saved (an event's link update, its

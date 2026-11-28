@@ -2,7 +2,6 @@
 //! character comes from the rule entry that the campaign uses; no table is written here. Every
 //! screen that shows the word calls [`Scale::weigh`], and keeps its answer until an input changes.
 use crate::design::memo::{Key, Measure, Memos, Revision};
-use eframe::egui;
 use serde::Deserialize;
 use serde_yaml_ng::Value;
 use splat::content::Entry;
@@ -986,60 +985,6 @@ impl<K, V: Sync, C: Key> Default for Kept<K, V, C> {
 }
 
 impl<K: std::hash::Hash + Eq + Clone, C: Key> Kept<K, Option<Fitted>, C> {
-    /// A line fitted to `room` in `font`. `content` is the owner's revision of the line's parts.
-    pub fn fit<'a>(
-        &mut self,
-        ui: &egui::Ui,
-        id: &K,
-        content: C,
-        room: f32,
-        font: &egui::FontId,
-        line: impl FnOnce() -> Line<'a>,
-    ) -> Option<Fitted> {
-        self.answer(ui, id, content, room, font, || {
-            line().fit_or_wrap(|text| crate::design::number_width(ui, text, font) <= room)
-        })
-    }
-
-    /// The width of [`Line::shortest`] in `font` (0 with no line).
-    pub fn shortest<'a>(
-        &mut self,
-        ui: &egui::Ui,
-        id: &K,
-        content: C,
-        font: &egui::FontId,
-        line: impl FnOnce() -> Line<'a>,
-    ) -> f32 {
-        *self
-            .shortest
-            .get_or(id, (content, Measure::whole(ui, font)), || {
-                count_work(0, 1);
-                line().shortest().map_or(0.0, |fitted| {
-                    crate::design::number_width(ui, &fitted.text(), font)
-                })
-            })
-    }
-
-    /// The width of the line with nothing given way (its whole first form) in `font`; `None`
-    /// when the line has nothing to say. Layout PR 5a: the ledger's facts column is its widest
-    /// row's whole line, so a frame with an unchanged key measures nothing here either.
-    pub fn widest<'a>(
-        &mut self,
-        ui: &egui::Ui,
-        id: &K,
-        content: C,
-        font: &egui::FontId,
-        line: impl FnOnce() -> Line<'a>,
-    ) -> Option<f32> {
-        *self
-            .widest
-            .get_or(id, (content, Measure::whole(ui, font)), || {
-                line()
-                    .fit(|_| true)
-                    .map(|fitted| crate::design::number_width(ui, &fitted.text(), font))
-            })
-    }
-
     #[cfg(any(test, feature = "test-support"))]
     pub fn seed(&mut self, id: K) {
         self.fits.seed(id.clone());
@@ -1048,22 +993,6 @@ impl<K: std::hash::Hash + Eq + Clone, C: Key> Kept<K, Option<Fitted>, C> {
 }
 
 impl<K: std::hash::Hash + Eq + Clone, V: Clone + Sync, C: Key> Kept<K, V, C> {
-    /// As `fit`, for an owner whose answer is more than the line (G118: the Ready row's
-    /// words where the fight has no form). `answer` runs only when the key changes.
-    pub fn answer(
-        &mut self,
-        ui: &egui::Ui,
-        id: &K,
-        content: C,
-        room: f32,
-        font: &egui::FontId,
-        answer: impl FnOnce() -> V,
-    ) -> V {
-        self.fits
-            .get_or(id, (content, Measure::of(ui, room, font)), answer)
-            .clone()
-    }
-
     /// Test builds: whether a line is kept for `id`.
     #[cfg(any(test, feature = "test-support"))]
     pub fn holds(&self, id: &K) -> bool {
@@ -1078,54 +1007,6 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone + Sync, C: Key> Kept<K, V, C> {
     }
 }
 
-/// One part of a line in the line's own type: the word in `text`, its separators and numbers
-/// in `muted`.
-pub fn append(
-    job: &mut egui::text::LayoutJob,
-    ui: &egui::Ui,
-    kind: crate::design::Type,
-    words: &str,
-    color: egui::Color32,
-) {
-    job.append(
-        words,
-        0.0,
-        egui::TextFormat {
-            font_id: kind.font(ui),
-            extra_letter_spacing: kind.tracking(),
-            color,
-            ..Default::default()
-        },
-    );
-}
-
-/// The difficulty form's parts at the end of `job`, in `kind`: the word in the text colour, the
-/// rest muted. Every line that shows a fight's difficulty draws it with this.
-pub fn append_form(
-    job: &mut egui::text::LayoutJob,
-    ui: &egui::Ui,
-    kind: crate::design::Type,
-    parts: &[Part],
-) {
-    let c = crate::design::colors();
-    for (words, word) in parts {
-        append(job, ui, kind, words, if *word { c.text } else { c.muted });
-    }
-}
-
-/// The width of a job on one line.
-pub fn width(ui: &egui::Ui, job: &egui::text::LayoutJob) -> f32 {
-    ui.fonts_mut(|fonts| fonts.layout_job(job.clone()).size().x)
-}
-
-/// The word's hover and accessible description: the party's budgets.
-pub fn describe(ui: &egui::Ui, response: egui::Response, rating: &Rating) -> egui::Response {
-    let line = rating.budget_line();
-    ui.ctx()
-        .accesskit_node_builder(response.id, |node| node.set_description(line.clone()));
-    response.on_hover_text(line)
-}
-
 /// The rule as the campaign's packages hold it, read through the same path the app uses.
 #[cfg(any(test, feature = "test-support"))]
 pub fn builtin_budgets() -> Budgets {
@@ -1136,19 +1017,6 @@ pub fn builtin_budgets() -> Budgets {
     .unwrap();
     let entry = Entry::parse("rule.md", &text).unwrap();
     Budgets::of_rule(&entry.fields["splat_rule"]).expect("the table in the package reads")
-}
-
-/// Mill Road's answer in the scenario's numbers: Above High for 5 at level 3, XP 6,300.
-#[cfg(any(test, feature = "test-support"))]
-pub fn above_high() -> Rating {
-    Rating {
-        word: Word::AboveHigh,
-        budgets: [750, 1125, 2000],
-        xp: 6300,
-        characters: 5,
-        levels: (3, 3),
-        campaign_party: false,
-    }
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -1466,90 +1334,6 @@ mod tests {
                 .text(),
             "Fight after: XP not known"
         );
-    }
-
-    /// Point 3 (round 29 review): a kept fit builds no line and measures nothing on a frame
-    /// whose key, room and font did not change; a new owner revision, room, display scale or
-    /// font generation works it out again (ruling M6).
-    #[test]
-    fn a_kept_line_does_no_work_on_an_unchanged_frame() {
-        let low = Difficulty {
-            xp: 400,
-            rating: Some(Rating {
-                word: Word::Low,
-                budgets: [2800, 4200, 6400],
-                xp: 400,
-                characters: 5,
-                levels: (3, 3),
-                campaign_party: false,
-            }),
-            ..Difficulty::default()
-        };
-        let summary = Summary {
-            party: 5,
-            members: (0..40)
-                .map(|at| Member::new(1, format!("Creature {at}"), false))
-                .collect(),
-            facts: Vec::new(),
-        };
-        let ctx = egui::Context::default();
-        crate::design::theme::install(&ctx);
-        let work = || WORK.with(std::cell::Cell::get);
-        let id = 7_u32;
-        let frame = |kept: &mut Kept<u32>, revision: Revision, room: f32| {
-            let mut out = None;
-            let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    let font = crate::design::Type::Small.font(ui);
-                    let width =
-                        kept.shortest(ui, &id, revision, &font, || Line::roster(&low, &summary));
-                    out = Some((
-                        width,
-                        kept.fit(ui, &id, revision, room, &font, || {
-                            Line::roster(&low, &summary)
-                        }),
-                    ));
-                });
-            });
-            out.unwrap()
-        };
-        let (one, two) = (
-            crate::design::memo::Revised::new(()).revision(),
-            crate::design::memo::Revised::new(()).revision(),
-        );
-        let mut run_a = Kept::default();
-        let first = frame(&mut run_a, one, 300.0);
-        let after_first = work();
-        assert!(after_first.0 >= 1 && after_first.1 >= 1, "{after_first:?}");
-        assert_eq!(frame(&mut run_a, one, 300.0), first);
-        assert_eq!(work(), after_first, "an unchanged frame does no work");
-        let _ = frame(&mut run_a, one, 200.0);
-        assert!(work().1 > after_first.1, "a new room measures again");
-        let before = work();
-        let _ = frame(&mut run_a, two, 200.0);
-        assert!(work().0 > before.0, "a new revision builds again");
-        // Point 1 of the second review: another owner (run B, loaded with the same group id and
-        // the same counters) never reads run A's answers: it works its own out.
-        let before = work();
-        let mut run_b = Kept::default();
-        let _ = frame(&mut run_b, two, 200.0);
-        assert!(work().0 > before.0, "run B builds its own line");
-        // A changed display scale fits again.
-        let before = work();
-        ctx.set_pixels_per_point(2.0);
-        let _ = frame(&mut run_b, two, 200.0);
-        assert!(work().1 > before.1, "a new display scale measures again");
-        // Fonts installed again under the same `FontId` (a new font generation) fit again.
-        let _ = frame(&mut run_b, two, 200.0);
-        let before = work();
-        crate::design::theme::install(&ctx);
-        let _ = frame(&mut run_b, two, 200.0);
-        assert!(work().1 > before.1, "a new font generation measures again");
-        // A group that is no longer offered drops its kept line.
-        run_b.retain(|kept| *kept != id);
-        let before = work();
-        let _ = frame(&mut run_b, two, 200.0);
-        assert!(work().0 > before.0, "a dropped line is built again");
     }
 
     #[test]

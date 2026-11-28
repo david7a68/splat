@@ -1,8 +1,7 @@
 //! A common reading layout for all non-creature entries.
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
-use super::presentation::{self, ReadingSection};
+use super::presentation::{self};
 use crate::design::reader as style;
-use eframe::egui;
 use splat::content::Entry;
 
 const LABELS: &[&str] = &[
@@ -24,7 +23,7 @@ const LABELS: &[&str] = &[
 ];
 
 /// Promote only explicit source labels. Everything else remains in the prose.
-fn source_facts(source: &str) -> (Vec<(String, String)>, String) {
+pub fn source_facts(source: &str) -> (Vec<(String, String)>, String) {
     let mut facts: Vec<(String, String)> = Vec::new();
     let mut prose = Vec::new();
     let mut preamble = true;
@@ -65,7 +64,7 @@ fn source_facts(source: &str) -> (Vec<(String, String)>, String) {
     (facts, prose.join("\n"))
 }
 
-fn display_value(value: &serde_yaml_ng::Value) -> String {
+pub fn display_value(value: &serde_yaml_ng::Value) -> String {
     use serde_yaml_ng::Value;
     match value {
         Value::String(s) => s.clone(),
@@ -95,10 +94,21 @@ fn display_value(value: &serde_yaml_ng::Value) -> String {
     }
 }
 
-fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
-    let Some(item) = entry.fields.get("splat_item").and_then(|v| v.as_mapping()) else {
-        return;
-    };
+/// An item's summary, as the reader shows it under its title: its identity line, its facts, and
+/// its other plain details (each a label and its value).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ItemSummary {
+    pub identity: String,
+    pub facts: Vec<(String, String)>,
+    pub details: Vec<(String, String)>,
+}
+
+/// The summary of an item entry; `printed` is the identity line its source prints.
+pub fn item_summary_parts(entry: &Entry, printed: Option<&str>) -> Option<ItemSummary> {
+    let item = entry
+        .fields
+        .get("splat_item")
+        .and_then(|v| v.as_mapping())?;
     let identity = ["weapon_category", "category", "rarity"]
         .into_iter()
         .filter_map(|key| item.get(key).map(display_value))
@@ -118,9 +128,6 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
         _ => identity,
     };
     let identity = printed.map_or(identity, str::to_owned);
-    if !identity.is_empty() {
-        style::identity(ui, &identity);
-    }
     let mut facts = Vec::new();
     for key in ["damage", "armor_class", "price", "mass"] {
         if let Some(value) = item.get(key) {
@@ -152,7 +159,7 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
     if let Some(ac) = item.get("armor").and_then(|armor| armor.get("base_ac")) {
         facts.insert(0, ("Base AC".into(), display_value(ac)));
     }
-    style::facts(ui, &facts);
+    let mut details = Vec::new();
     for (key, value) in item {
         let Some(key) = key.as_str() else { continue };
         if ![
@@ -169,16 +176,20 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
             if value.is_mapping() || value.is_sequence() {
                 continue;
             }
-            style::detail(
-                ui,
-                &key.trim_end_matches("_text").replace('_', " "),
-                &display_value(value),
-            );
+            details.push((
+                key.trim_end_matches("_text").replace('_', " "),
+                display_value(value),
+            ));
         }
     }
+    Some(ItemSummary {
+        identity,
+        facts,
+        details,
+    })
 }
 
-fn remaining_item_detail(
+pub fn remaining_item_detail(
     _entry: &Entry,
     key: &serde_yaml_ng::Value,
     value: &serde_yaml_ng::Value,
@@ -192,20 +203,7 @@ fn remaining_item_detail(
     value
 }
 
-pub(super) fn item_details(ui: &mut egui::Ui, entry: &Entry) {
-    if let Some(item) = entry.fields.get("splat_item").and_then(|v| v.as_mapping()) {
-        for (key, value) in item {
-            let value = remaining_item_detail(entry, key, value);
-            if !blank(&value) && (value.is_mapping() || value.is_sequence()) {
-                crate::design::quiet_section(ui, &style::human_label(&display_value(key)), |ui| {
-                    structured_value(ui, &value);
-                });
-            }
-        }
-    }
-}
-
-pub(super) fn has_item_details(entry: &Entry) -> bool {
+pub fn has_item_details(entry: &Entry) -> bool {
     entry
         .fields
         .get("splat_item")
@@ -220,7 +218,7 @@ pub(super) fn has_item_details(entry: &Entry) -> bool {
 
 /// A value with nothing to read. Sheet copies often have these, and they must not show
 /// as a label with no text after it.
-fn blank(value: &serde_yaml_ng::Value) -> bool {
+pub fn blank(value: &serde_yaml_ng::Value) -> bool {
     match value {
         serde_yaml_ng::Value::Null => true,
         serde_yaml_ng::Value::String(text) => text.trim().is_empty(),
@@ -230,30 +228,7 @@ fn blank(value: &serde_yaml_ng::Value) -> bool {
     }
 }
 
-fn structured_value(ui: &mut egui::Ui, value: &serde_yaml_ng::Value) {
-    if let Some(fields) = value.as_mapping() {
-        for (key, value) in fields {
-            let key = display_value(key);
-            if value.is_mapping() || value.is_sequence() {
-                crate::design::heading(
-                    ui,
-                    crate::design::Heading::Section(&style::human_label(&key)),
-                );
-                structured_value(ui, value);
-            } else {
-                style::detail(ui, &key, &display_value(value));
-            }
-        }
-    } else if let Some(values) = value.as_sequence() {
-        for value in values {
-            structured_value(ui, value);
-        }
-    } else {
-        ui.label(display_value(value));
-    }
-}
-
-pub(super) fn spell_facts(spell: &serde_yaml_ng::Value) -> Vec<(String, String)> {
+pub fn spell_facts(spell: &serde_yaml_ng::Value) -> Vec<(String, String)> {
     // Use the table's printed values, including text ranges and
     // component codes. A reader must not expose the model's internal shapes.
     let mut spell = spell.clone();
@@ -295,9 +270,16 @@ pub(super) fn spell_facts(spell: &serde_yaml_ng::Value) -> Vec<(String, String)>
         .collect()
 }
 
-fn preparation_summary(ui: &mut egui::Ui, entry: &Entry, has_source: bool) {
+/// What a spell or an encounter shows under its title: groups of facts, then an encounter's
+/// completion mode.
+pub fn preparation_parts(
+    entry: &Entry,
+    has_source: bool,
+) -> (Vec<Vec<(String, String)>>, Option<String>) {
+    let mut groups = Vec::new();
+    let mut completion = None;
     if !has_source && let Some(spell) = entry.fields.get("splat_spell") {
-        style::facts(ui, &spell_facts(spell));
+        groups.push(spell_facts(spell));
     }
     if let Some(encounter) = entry.fields.get("splat_encounter") {
         let mut facts = Vec::new();
@@ -310,16 +292,18 @@ fn preparation_summary(ui: &mut egui::Ui, entry: &Entry, has_source: bool) {
         if let Some(rounds) = encounter.get("limits").and_then(|v| v.get("rounds")) {
             facts.push(("Round limit".into(), display_value(rounds)));
         }
-        style::facts(ui, &facts);
-        if let Some(mode) = encounter.get("completion").and_then(|v| v.get("mode")) {
-            style::detail(ui, "Completion", &display_value(mode));
-        }
+        groups.push(facts);
+        completion = encounter
+            .get("completion")
+            .and_then(|v| v.get("mode"))
+            .map(display_value);
     }
+    (groups, completion)
 }
 
 /// Generated item source tables contain JSON. Hide it only if it exactly
 /// matches the item fields displayed above; unmatched source always stays.
-fn represented_item_source(entry: &Entry, source: &str) -> bool {
+pub fn represented_item_source(entry: &Entry, source: &str) -> bool {
     let Some((caption, json)) = source.trim().split_once("\n\n") else {
         return false;
     };
@@ -330,265 +314,9 @@ fn represented_item_source(entry: &Entry, source: &str) -> bool {
             .is_some_and(|value| Some(value) == entry.fields.get("splat_item"))
 }
 
-/// `after_stat_head`: a stat head is drawn just above. Its gap `S` comes before the first prose,
-/// and a section heading takes none (the heading part owns its space; d-rows L).
-pub(super) fn show(
-    ui: &mut egui::Ui,
-    entry: Option<&Entry>,
-    sections: &[ReadingSection<'_>],
-    builtin: bool,
-    has_summary: bool,
-    lead_gap: bool,
-    after_stat_head: bool,
-) {
-    let mut after_stat_head = after_stat_head;
-    let mut settle = |ui: &mut egui::Ui, heading: bool| {
-        if std::mem::take(&mut after_stat_head) && !heading {
-            crate::design::gap(ui, crate::design::Gap::S);
-        }
-    };
-    let table_stats = entry.is_some_and(|e| ["spell", "item"].contains(&e.kind.as_str()));
-    // This reader also receives already-split sections. Restore their headings
-    // before filtering, because table ownership is defined by the named section.
-    let clean_body = entry.filter(|_| table_stats).map(|entry| {
-        let body = sections
-            .iter()
-            .map(|section| {
-                if section.title == "Overview" {
-                    section.body.to_owned()
-                } else {
-                    format!("## {}\n\n{}", section.title, section.body)
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        splat::content::stat_blocks::reading_body(entry, &body)
-    });
-    let clean_sections;
-    let sections = if let Some(body) = &clean_body {
-        clean_sections = presentation::reading_sections(body, "");
-        clean_sections.as_slice()
-    } else {
-        sections
-    };
-    if !has_summary && lead_gap {
-        crate::design::gap(ui, crate::design::Gap::L);
-    }
-    if let Some(entry) = entry {
-        let printed = sections
-            .iter()
-            .find(|section| section.title == "Source text")
-            .filter(|_| builtin && !table_stats)
-            .and_then(|section| {
-                source_facts(section.body)
-                    .0
-                    .into_iter()
-                    .find(|(label, _)| label == "Identity")
-                    .map(|(_, identity)| identity)
-            });
-        item_summary(ui, entry, printed.as_deref());
-        preparation_summary(
-            ui,
-            entry,
-            !table_stats && sections.iter().any(|s| s.title == "Source text"),
-        );
-    }
-    for section in sections
-        .iter()
-        .filter(|section| presentation::visible_reading_section(section))
-    {
-        if section.title == "Source text" && has_summary {
-            continue;
-        }
-        if section.body.contains("<!-- splat:") {
-            continue;
-        } else {
-            settle(
-                ui,
-                section.title != "Source text" && section.title != "Overview",
-            );
-            if section.title == "Source text"
-                && let Some(entry) = entry.filter(|entry| super::class::supports(entry))
-                && super::class::show_source(ui, section.body, &entry.name)
-            {
-                continue;
-            }
-            if section.title == "Source text"
-                && entry.is_some_and(|e| represented_item_source(e, section.body))
-            {
-                continue;
-            }
-            if section.title == "Source text" && (builtin || table_stats) {
-                let (mut facts, prose) = source_facts(section.body);
-                if table_stats {
-                    facts.clear();
-                }
-                if let Some(index) = facts.iter().position(|(label, _)| label == "Identity") {
-                    let identity = facts.remove(index).1;
-                    // An item's is already its identity line, above.
-                    if !entry.is_some_and(|e| e.fields.contains_key("splat_item")) {
-                        style::identity(ui, &identity);
-                    }
-                }
-                let has_facts = !facts.is_empty();
-                if has_facts {
-                    ui.scope(|ui| {
-                        ui.spacing_mut().item_spacing.y = crate::design::XS / 2.0;
-                        for (label, value) in facts {
-                            style::detail(ui, &label, &value);
-                        }
-                    });
-                    crate::design::gap(ui, crate::design::Gap::M);
-                }
-                style::source_prose(ui, &presentation::overview_markdown(&prose));
-            } else {
-                // An intro has no printed heading, so the reader adds none.
-                if section.title != "Overview" {
-                    // The same typed jump as the reader's (ruling M18).
-                    if crate::markdown_view::wanted_heading(ui.ctx(), &section.title) {
-                        crate::design::reveal::jump(
-                            ui,
-                            ui.cursor().top(),
-                            crate::design::reveal::JumpTo::LinkedHeading,
-                        );
-                    }
-                    crate::design::heading(ui, crate::design::Heading::Section(&section.title));
-                }
-                // A hand-written stat block's actions read as the book's do.
-                if let Some(entry) = entry.filter(|entry| super::creature::has_stats(entry)) {
-                    super::creature::rules_text(ui, &entry.name, &entry.body, section.body);
-                } else {
-                    style::markdown(ui, section.body);
-                }
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn iter_two_reader_hides_reserved_and_empty_sections_but_keeps_readable_content() {
-        for size in [egui::vec2(960.0, 640.0), egui::vec2(1920.0, 1080.0)] {
-            let ctx = egui::Context::default();
-            crate::design::theme::install(&ctx);
-            let body = "## Splat data\n\nStorage only.\n\n## Empty\n\n<!-- hidden -->\n\n## Words\n\nKeep these words.\n\n## Code\n\n`Keep this code`\n";
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        show(
-                            ui,
-                            None,
-                            &presentation::reading_sections(body, ""),
-                            false,
-                            false,
-                            true,
-                            false,
-                        );
-                    });
-                },
-            );
-            let text: Vec<_> = output
-                .shapes
-                .iter()
-                .filter_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
-                    _ => None,
-                })
-                .collect();
-            for hidden in ["Splat data", "Storage only.", "Empty"] {
-                assert!(!text.contains(&hidden), "{text:?}");
-            }
-            for kept in ["Words", "Keep these words.", "Code", "Keep this code"] {
-                assert!(text.contains(&kept), "{text:?}");
-            }
-        }
-    }
-
-    #[test]
-    fn written_spell_and_item_readers_hide_tables_and_machine_lines() {
-        for (kind, fields) in [
-            (
-                "item",
-                "splat_item: {category: wondrous_item, rarity: uncommon, equipment: {attunement: required}}",
-            ),
-            ("spell", "splat_spell: {level: 1}"),
-            (
-                "spell",
-                "splat_spell: {level: 1, casting_time: {amount: null, unit: ''}, material: ''}",
-            ),
-            (
-                "spell",
-                "splat_spell: {level: 1, casting_time: Action, range_text: Self, components: [verbal], duration: '1 minute'}",
-            ),
-            (
-                "item",
-                "splat_item: {category: wondrous_item, rarity: uncommon}",
-            ),
-        ] {
-            let written = splat::content::formats::fixture("Fixture.md", &format!("splat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: {kind}\nsplat_name: Rook\n{fields}\n"), "\n# Rook\n\nKeep this effect.\n").expect("schema-2 fixture");
-            let entry = Entry::parse("Rook.md", &written).unwrap();
-            let ctx = egui::Context::default();
-            crate::design::theme::install(&ctx);
-            let output = ctx.run(Default::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    show(
-                        ui,
-                        Some(&entry),
-                        &presentation::reading_sections(&entry.body, &entry.name),
-                        false,
-                        false,
-                        true,
-                        false,
-                    );
-                });
-            });
-            let text: Vec<_> = output
-                .shapes
-                .iter()
-                .filter_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
-                    _ => None,
-                })
-                .collect();
-            assert!(
-                !text
-                    .iter()
-                    .any(|text| text.contains("%% splat") || *text == "Field"),
-                "{text:?}"
-            );
-            assert!(text.iter().any(|text| text.contains("Keep this effect.")));
-            if fields.contains("attunement: required") {
-                assert_eq!(
-                    text.iter()
-                        .filter(|text| **text == "Wondrous Item, Uncommon (Requires Attunement)")
-                        .count(),
-                    1,
-                    "{text:?}"
-                );
-            }
-            if fields.contains("casting_time: Action") {
-                for fact in ["Self", "V", "1 minute"] {
-                    assert_eq!(
-                        text.iter().filter(|text| **text == fact).count(),
-                        1,
-                        "{text:?}"
-                    );
-                }
-                assert_eq!(
-                    text.iter().filter(|text| **text == "Action").count(),
-                    1,
-                    "{text:?}"
-                );
-            }
-        }
-    }
 
     #[test]
     fn campaign_spell_uses_the_book_fact_order_and_true_flags_only() {

@@ -1,25 +1,25 @@
 //! The Library page and its authoring state.
+use crate::state_context::StateContext;
 #[path = "library/kept.rs"]
 mod kept;
+#[path = "library/model.rs"]
+pub mod model;
 use crate::{
     campaigns::Campaigns,
     content_workspace::CampaignDocument,
     design::{
-        self, Action, Density, Status, Tone, Type, colors, icons,
+        self, Tone, colors, icons,
         outcome::{
-            Banner, BodyFault, Choice, FaultMessage, FaultStatus, KeptOutcome, MessageChoice,
-            Messages, Notice, Offer, PagePlaceholder, PaneFrame, Press, Repair, Said, Sentence,
-            UndoStep, Verb,
+            Choice, FaultMessage, FaultStatus, KeptOutcome, MessageChoice, Messages, Notice, Offer,
+            PaneFrame, Press, Said, Sentence, UndoStep, Verb,
         },
-        reader as reader_style,
         results::{ByTicket, Ticket},
     },
-    history::{self, Step, Trail},
-    matching::{CLOSE_NAMES, Rank, Typed},
+    history::{Step, Trail},
+    matching::{Rank, Typed},
     persistence::{Campaign, Module},
     world::file_fault::FileFault,
 };
-use eframe::egui;
 use kept::{KeptKind, LibraryKept};
 use presentation::Section;
 use splat::content::{
@@ -33,8 +33,6 @@ use std::{
     sync::mpsc,
 };
 use uuid::Uuid;
-
-const SEARCH_NAME: &str = "Search the Library";
 
 /// The place of the open entry, for Back and Forward. A free function, so a list closure that
 /// holds the notes can record the place it leaves (round 26 SB1).
@@ -188,9 +186,6 @@ pub struct Library {
     /// The selected entry's row in the matches when last found (issue #539): checked in one
     /// step on a quiet frame (`matches[row]` is still the entry), searched again only when not.
     selected_row: Option<usize>,
-    /// The entry list's region (layout step 3b) and its rows: whole rows only, one offset writer.
-    entry_region: Option<design::RegionState>,
-    entry_rows: Option<design::memo::Revised<Vec<design::Block>>>,
     list_hidden: bool,
     /// The Library's kept results (Undos and notices that stay), with their footer order: data
     /// and mark change together behind one boundary (`kept`, M-L0.4a).
@@ -214,9 +209,6 @@ pub struct Library {
     renamed_links: design::Results<LinkOwner, LinkOffer>,
     /// Link updates and the names their links now say, each owned by the renamed entry.
     link_edits: design::Results<LinkOwner, LinkResult>,
-    /// The press in the pane's typed footer that `show` applies after the pane is drawn
-    /// (`apply_footer_press`): the page's results and the package's.
-    footer_press: Option<Press<LibraryPress>>,
     copied_package: Option<Module>,
     copy_name: String,
     copy_name_open: bool,
@@ -224,14 +216,15 @@ pub struct Library {
     disk_change: Option<DiskChange>,
     /// The note on screen was saved, and has not changed since.
     just_saved: bool,
-    overwrite_disk: bool,
     scope: Scope,
-    scope_menu: Option<ScopeMenu>,
     load_key: Option<LoadKey>,
     stale: bool,
     matches_scope: Option<Scope>,
     scope_counts: Option<(Scope, Vec<(Section, usize)>)>,
     confirm_unregister: Option<Module>,
+    /// The unregister confirmation's sentence of the campaign's entries that use the package,
+    /// read once as it opens (it reads every package from disk).
+    unregister_users: Option<String>,
     new_place: Option<usize>,
     /// A saved note's owner folder, so other pages can read it again.
     pub content_changed: Option<PathBuf>,
@@ -310,20 +303,6 @@ fn obsidian_for(root: &Path, owner: &Owner) -> bool {
             .any(|parent| parent.join(".obsidian").is_dir())
 }
 
-/// The reader's owner and file line is one Read row for every owner, whatever it holds
-/// (status, `Show file`, a quiet `Choose all`), so the title below it does not move
-/// between a built-in entry, a campaign entry and a package About.
-fn file_line_row(ui: &mut egui::Ui, wrap: bool, add: impl FnOnce(&mut egui::Ui)) {
-    let height = Density::Read.control();
-    ui.allocate_ui_with_layout(
-        egui::vec2(ui.available_width(), height),
-        egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(wrap),
-        |ui| {
-            ui.set_min_height(height);
-            add(ui);
-        },
-    );
-}
 /// What is on disk now, in place of what the draft started from.
 struct DiskChange {
     /// None when the file has gone, or cannot be read.
@@ -390,79 +369,6 @@ fn file_at(notes: &[Note], (owner, path): (OwnerKey, &str)) -> Option<usize> {
     notes
         .iter()
         .position(|note| note.owner.key() == owner && note.path == path)
-}
-/// The issues count's menu: the faults, then a link for each file with broken links that opens
-/// it (as in World). Round 26 FB1: as wide as its content, up to the reader measure, and never
-/// more than its room (a longer link is cut and a message wraps). M0330: its scroll column is as
-/// tall as its lines up to six controls, so one link leaves no empty band and a long list
-/// scrolls. M0331: while a draft holds the open entry (`open_lock`), no other entry opens; the
-/// menu says why and lists the files as text.
-fn issues_menu(
-    ui: &mut egui::Ui,
-    loaded: &Loaded,
-    broken: &[(usize, usize)],
-    stopped_reading: &Option<(FileId, String)>,
-    open_lock: Option<&str>,
-    open_broken: &mut Option<usize>,
-) {
-    let link_label = |at: usize, count: usize| {
-        format!(
-            "{}: {}",
-            loaded.file_label(&loaded.notes[at]),
-            design::count(count, "broken link", "broken links")
-        )
-    };
-    let font = Type::Small.font(ui);
-    let natural = |text: &str| {
-        ui.painter()
-            .layout_no_wrap(text.to_owned(), font.clone(), colors().text)
-            .size()
-            .x
-    };
-    let width = loaded
-        .diagnostics
-        .iter()
-        .map(|message| natural(&message.text))
-        .chain(stopped_reading.as_ref().map(|(_, text)| natural(text)))
-        .chain(
-            broken
-                .iter()
-                .map(|&(at, count)| natural(&link_label(at, count))),
-        )
-        .fold(design::XL, f32::max)
-        .min(design::READER_MEASURE)
-        .ceil();
-    // The scroll column keeps its lane beside the widest line.
-    ui.set_width((width + design::lane_width()).min(ui.available_width()));
-    design::ScrollColumn::new("library_file_issues")
-        .max_height(design::XXL * 6.0)
-        .fit_height()
-        .show(ui, |ui| {
-            for message in loaded
-                .diagnostics
-                .iter()
-                .map(|message| message.text.as_str())
-                .chain(stopped_reading.as_ref().map(|(_, text)| text.as_str()))
-            {
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, message).color(colors().muted)).wrap(),
-                );
-            }
-            if !broken.is_empty() {
-                design::blocked_reason(ui, open_lock);
-            }
-            for &(at, count) in broken {
-                let label = link_label(at, count);
-                if open_lock.is_some() {
-                    ui.add(
-                        egui::Label::new(Type::Small.rich(ui, &label).color(colors().muted)).wrap(),
-                    );
-                } else if design::small_link(ui, &label).clicked() {
-                    *open_broken = Some(at);
-                    ui.close();
-                }
-            }
-        });
 }
 
 impl Library {
@@ -750,16 +656,6 @@ impl Library {
                     .draft
                     .same_as(after.revision(), after, &self.same_heading)
         })
-    }
-
-    /// The footer order of the open entry's link result: the order its own update issued
-    /// (review of PR 298), for the check that proves it.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn open_link_result_order(&self) -> Option<design::ResultOrder> {
-        let owner = self.open_link_owner()?;
-        self.link_edits
-            .get(&owner)
-            .map(|shown| shown.order_for_caller_test())
     }
 
     /// The open entry as the owner of its link offer and link result.
@@ -1214,26 +1110,6 @@ impl Library {
         Ok(())
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn repairing_package_about(&self) -> bool {
-        self.selected
-            .and_then(|at| self.loaded.as_ref()?.notes.get(at))
-            .is_some_and(|note| {
-                note.is_manifest()
-                    && note.error.is_some()
-                    && self.source
-                    && self.scope == Scope::Package(note.owner.id().unwrap())
-                    && self.section == Section::All
-            })
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn selected_name(&self) -> Option<&str> {
-        self.selected
-            .and_then(|i| self.loaded.as_ref()?.notes.get(i))
-            .map(Note::name)
-    }
-
     pub fn report_error(&mut self, error: String) {
         self.error = Some(error.into());
     }
@@ -1475,16 +1351,6 @@ impl Library {
         }
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn repair_lookups(&self) -> usize {
-        REPAIR_LOOKUPS.with(std::cell::Cell::get)
-    }
-
-    /// The broken-link scans: an unchanged frame does none.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn broken_line_scans(&self) -> usize {
-        BROKEN_LINE_SCANS.with(std::cell::Cell::get)
-    }
     pub fn repair_file_link(
         &mut self,
         path: PathBuf,
@@ -1522,12 +1388,7 @@ impl Library {
         !self.dirty()
     }
 
-    pub fn refresh_destination(
-        &mut self,
-        root: &Path,
-        _ctx: &egui::Context,
-        campaigns: &Campaigns,
-    ) {
+    pub fn refresh_destination(&mut self, root: &Path, _ctx: &StateContext, campaigns: &Campaigns) {
         // Point 3 of the review: the registration results follow the write at its event,
         // even while a draft holds the reload back.
         self.reconcile_registrations(campaigns);
@@ -1621,12 +1482,12 @@ impl Library {
         self.matches = None;
         self.scope_counts = None;
     }
-    fn start_load(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    fn start_load(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         self.reselect = self.open_file_id();
         self.load_key = Some(load_key(campaigns));
         let modules = campaigns.modules().to_vec();
         let campaign = campaigns.active_campaign();
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.loaded = None;
@@ -1673,90 +1534,6 @@ impl Library {
         }
     }
 
-    /// The section rows' column, on a wide page with no disk change. M0333: the section rows
-    /// keep the scroll column's lane, so the column is that much wider and the rows keep their
-    /// room.
-    fn sections_column(&self, compact: bool) -> Option<design::Column> {
-        (!compact && self.disk_change.is_none()).then(|| {
-            let lane = design::lane_width();
-            let (width, room) = (166.0 + lane, 150.0 + lane..=280.0 + lane);
-            design::Column::left("library_sections", width, room)
-                // The drag handle is on this edge, so the rows stop short of it.
-                .frame(egui::Frame::new().inner_margin(egui::Margin {
-                    right: design::S as i8,
-                    ..Default::default()
-                }))
-        })
-    }
-
-    /// The entry list's column in a room `width` wide, or none: beside Lookup at the minimum
-    /// window, a draft needs the room more than the list. A wide window's list gets room too,
-    /// so that long names keep their second line.
-    fn entries_column(&self, ui: &egui::Ui, width: f32, dirty: bool) -> Option<design::Column> {
-        if self.disk_change.is_some() || (width < 480.0 && (dirty || self.source)) {
-            return None;
-        }
-        let min_list_width =
-            (design::number_width(ui, "Can use", &Type::Strong.font(ui)) + design::XXL + design::L)
-                * 2.0
-                + design::S * 2.0
-                + ui.spacing().item_spacing.x;
-        let list_width = (width * 0.38).clamp(min_list_width, 420.0);
-        Some(
-            design::Column::left("library_entries", list_width, min_list_width..=560.0).frame(
-                egui::Frame::new().inner_margin(egui::Margin {
-                    left: design::S as i8,
-                    right: design::S as i8,
-                    top: 0,
-                    bottom: 0,
-                }),
-            ),
-        )
-    }
-
-    /// The page's columns that `ui` lays out next, left to right: the section rows and the
-    /// entry list when they show, then the reader. The header asks the columns for their widths
-    /// before they draw (`Column::width_within`), so each menu of the header keeps inside the
-    /// column under its control, clear of its splitters and the list's scroll bar (issue
-    /// #504). Each column is its content: `S` inside its panel's edges, where its frame's
-    /// margin ends and its scroll bar starts. With no columns (a load, an empty scope) the page
-    /// is one column.
-    fn page_columns(
-        &self,
-        ui: &egui::Ui,
-        compact: bool,
-        dirty: bool,
-        total: usize,
-    ) -> Vec<egui::Rect> {
-        let mut room = ui.available_rect_before_wrap();
-        let mut columns = Vec::new();
-        if self.pending.is_none()
-            && self.loaded.is_some()
-            && !(self.scope == Scope::Campaign && total == 0)
-        {
-            let mut split = |room: &mut egui::Rect, width: f32| {
-                columns.push(egui::Rect::from_x_y_ranges(
-                    room.left()..=room.left() + width,
-                    room.y_range(),
-                ));
-                room.min.x += width;
-            };
-            if let Some(column) = self.sections_column(compact) {
-                let width = column.width_within(ui.ctx(), room);
-                split(&mut room, width);
-            }
-            if let Some(column) = self.entries_column(ui, room.width(), dirty) {
-                let width = column.width_within(ui.ctx(), room);
-                split(&mut room, width);
-            }
-        }
-        columns.push(room);
-        columns
-            .into_iter()
-            .map(|column| column.shrink2(egui::vec2(design::S, 0.0)))
-            .collect()
-    }
-
     fn draft_reason(&self) -> Option<&'static str> {
         if self.disk_change.is_some() {
             Some(CHANGED_FILE_FIRST.as_str())
@@ -1779,26 +1556,38 @@ impl Library {
             design::DraftBlocks::EntryInPackage
         }
     }
-    pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
+    /// The start of every Library frame, before anything draws (both UIs): the New entry form's
+    /// error ends with the form; the repair guidance and Remove's Undo end with their owners;
+    /// a load starts, or its result arrives; an edit or a repair another page asked for opens.
+    pub fn begin(&mut self, ctx: &StateContext, campaigns: &mut Campaigns) {
         // The New entry form's error ends with the form, however it closed.
         if !self.new_form {
             self.new_error = None;
         }
         self.end_repair_on_owner_change();
         self.end_remove_on_selection();
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("library"))
-        });
+        // The scope notice stands while the list keeps the scope it widened to, with no query:
+        // the DM's own scope change or search ends it. (`open_entry` changes the scope itself,
+        // so the list's last scope is not the notice's.) Settled here, before every footer of
+        // the page: the empty Campaign scope's, a form's and the reader's.
+        let searching = !self.search.trim().is_empty();
+        if self
+            .kept
+            .scope_notice()
+            .is_some_and(|(_, widened)| *widened != self.scope || searching)
+        {
+            let _ = self.kept.take_scope_notice();
+        }
         let key = load_key(campaigns);
         if self.load_key.is_none() && self.loaded.is_some() {
             self.load_key = Some(key.clone());
         }
         let changed = self.load_key.as_ref().is_some_and(|known| *known != key);
         if self.loaded.is_none() && self.pending.is_none() && self.error.is_none() {
-            self.start_load(ui.ctx(), campaigns);
+            self.start_load(ctx, campaigns);
         } else if (changed || self.stale) && !self.dirty() && self.pending.is_none() {
             self.stale = false;
-            self.start_load(ui.ctx(), campaigns);
+            self.start_load(ctx, campaigns);
         }
         if let Some(rx) = &self.pending {
             match rx.try_recv() {
@@ -1890,878 +1679,6 @@ impl Library {
             self.source = true;
             self.focus_repair = true;
         }
-        let dirty = self.dirty();
-        let locked = self.draft_reason().or(self
-            .pending
-            .is_some()
-            .then_some("Wait for the Library to load."));
-        // Beside Lookup at the minimum window, everything here gets smaller.
-        let compact = ui.available_width() < 900.0 || self.disk_change.is_some();
-        let mut open_form = false;
-        let mut reload = false;
-        let total = self.loaded.as_ref().map_or(0, |loaded| {
-            loaded
-                .notes
-                .iter()
-                .filter(|n| loaded.in_scope(n, self.scope))
-                .count()
-        });
-        let columns = self.page_columns(ui, compact, dirty, total);
-        let link_index = ui.ctx().data(|data| {
-            data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
-                "reader_link_index",
-            ))
-        });
-        // What keeps another entry from opening (`open_entry`) while a draft holds this one, in
-        // that act's words; a file changed on disk says its own.
-        let open_lock = match self.draft_reason() {
-            Some(_) if self.disk_change.is_none() => Some("Save or discard this entry first."),
-            reason => reason,
-        };
-        let mut open_broken = None;
-        // An open draft's file that stopped reading has no reload yet: the header counts it now,
-        // as a reload would, and names its short cause.
-        let stopped_reading = self
-            .disk_change
-            .as_ref()
-            .and_then(|change| change.fault.as_ref())
-            .zip(
-                self.selected
-                    .and_then(|at| self.loaded.as_ref()?.notes.get(at)),
-            )
-            .map(|(fault, note)| {
-                (
-                    Loaded::file_key(note),
-                    format!(
-                        "{}: {}",
-                        self.loaded.as_ref().unwrap().file_label(note),
-                        fault.cause()
-                    ),
-                )
-            });
-        // M0327-M0329 (ruling M21): the header is the shared title line: the title and its
-        // count, `New entry`, the `Packages` menu and the issues count, placed by measure.
-        const NEW_ENTRY: design::Word = crate::word!("New entry");
-        const PACKAGES: design::Word = crate::word!("Packages");
-        let context = (total > 0 && ui.available_width() >= design::READER_MEASURE)
-            .then(|| design::count(total, "entry", "entries"));
-        // The places policy that `Copy to…` shares; the page line under the header paints its
-        // reason.
-        let no_place = Places::of(campaigns).create();
-        let broken = self
-            .loaded
-            .as_ref()
-            .zip(link_index.as_ref())
-            .map(|(loaded, index)| loaded.broken_link_notes(index))
-            .unwrap_or_default();
-        let issues = self.loaded.as_ref().filter(|loaded| {
-            !loaded.diagnostics.is_empty() || !broken.is_empty() || stopped_reading.is_some()
-        });
-        let word = issues.map(|loaded| {
-            design::count(
-                loaded.files_to_fix(&broken, stopped_reading.as_ref().map(|(file, _)| file)),
-                "file needs fixing",
-                "files need fixing",
-            )
-        });
-        let mut line = design::TitleLine::new("Library").context(context.as_deref());
-        if !(self.scope == Scope::Campaign && total == 0) {
-            line = line.action(
-                design::TitleAction::secondary(NEW_ENTRY)
-                    .icon(icons::ADD)
-                    .blocked(locked.or(no_place.as_ref().map(|reason| reason.as_str()))),
-            );
-        }
-        line = line.menu(design::TitleAction::quiet(PACKAGES).blocked(locked), |ui| {
-            if Action::quiet("Reload from disk")
-                .icon(icons::REFRESH)
-                .show(ui)
-                .clicked()
-            {
-                reload = true;
-                ui.close();
-            }
-            if Action::quiet("Manage packages…")
-                .icon(icons::SETTINGS)
-                .show(ui)
-                .clicked()
-            {
-                open_form = true;
-                ui.close();
-            }
-        });
-        if let Some((loaded, word)) = issues.zip(word.as_deref()) {
-            // The count has the tone of the most severe fault it counts: a file that cannot be
-            // read is an error.
-            let unreadable = loaded.unreadable_counted || stopped_reading.is_some();
-            let status = Status {
-                icon: if unreadable {
-                    icons::ERROR
-                } else {
-                    icons::WARN
-                },
-                word,
-                color: if unreadable {
-                    colors().result.error
-                } else {
-                    colors().result.warning
-                },
-            };
-            let broken = &broken;
-            let stopped_reading = &stopped_reading;
-            let open_broken = &mut open_broken;
-            line = line.status(status, move |ui| {
-                issues_menu(ui, loaded, broken, stopped_reading, open_lock, open_broken);
-            });
-        }
-        // Issue #504: each menu of the line keeps inside the column under its control, clear of
-        // its splitters and the list's scroll bar.
-        let line = line.page().menu_room(move |control| {
-            columns
-                .iter()
-                .copied()
-                .find(|column| column.x_range().contains(control.center().x))
-                .unwrap_or_else(|| columns[columns.len() - 1])
-        });
-        let new_entry = line.show(ui).clicked(NEW_ENTRY);
-        if let Some(at) = open_broken {
-            self.open_entry(at);
-            self.reveal_row = true;
-        }
-        if new_entry {
-            self.new_form = true;
-            self.new_folder = kind_folder(&self.new_kind).into();
-            self.focus_new_name = true;
-            self.form = false;
-        }
-        if reload {
-            self.start_load(ui.ctx(), campaigns);
-        }
-        if open_form {
-            self.new_form = false;
-            self.form = !self.form;
-            self.focus_package_name = self.form;
-        }
-        if campaigns.active_campaign().is_none() {
-            // New entry's reason, from the places policy it shares with `Copy to…`.
-            let words = format!(
-                "{} {}",
-                if campaigns.all().is_empty() {
-                    "No campaign yet."
-                } else {
-                    "No campaign open."
-                },
-                Places::of(campaigns)
-                    .create()
-                    .as_ref()
-                    .map_or("The Library works without one.", |reason| reason.as_str())
-            );
-            ui.horizontal_wrapped(|ui| {
-                ui.label(Type::Small.rich(ui, words).color(colors().muted));
-                if Action::primary(if campaigns.all().is_empty() {
-                    "Add campaign"
-                } else {
-                    "Choose a campaign"
-                })
-                .density(Density::Read)
-                .show(ui)
-                .clicked()
-                {
-                    self.wants_settings = true;
-                }
-            });
-        }
-        design::gap(ui, design::Gap::XS);
-        self.unregister_dialog(ui.ctx(), campaigns);
-        // The page's error and results sit in the pane's typed footer (below the reader, the
-        // editor, the empty reader or a form), so they never move the columns, the tabs, the
-        // file line, the title or the body; each footer reads them from their stores
-        // (`page_messages`), and their presses are applied after the pane is drawn.
-        if self.pending.is_some() {
-            ui.horizontal(|ui| {
-                crate::design::spinner(ui);
-                ui.label("Loading the Library…");
-            });
-            return;
-        }
-
-        let Some(loaded) = &self.loaded else {
-            // Nothing loaded: there is no pane, so a failed load says so here (M20: a typed body
-            // fault).
-            if let Some(error) = &self.error {
-                #[allow(
-                    clippy::disallowed_methods,
-                    reason = "a failed load where the page has no pane (ruling M20)"
-                )]
-                let _ = design::outcome::banner(ui, Banner::Fault(&LibraryFault::from(error)));
-            }
-            return;
-        };
-        // Each scope has its own counts. Search and sections stay within the scope.
-        let scope = self.scope;
-        let about_open = self.selected.is_some_and(|at| {
-            loaded.notes[at].is_manifest()
-                && matches!(scope, Scope::Package(id) if loaded.notes[at].owner.is_package(id))
-        });
-        if self
-            .scope_counts
-            .as_ref()
-            .is_none_or(|(known, _)| *known != scope)
-        {
-            let notes = &loaded.notes;
-            let counts = Section::GROUPS
-                .iter()
-                .flat_map(|(_, sections)| sections.iter())
-                .map(|&section| {
-                    (
-                        section,
-                        notes
-                            .iter()
-                            .filter(|n| {
-                                loaded.in_scope(n, scope)
-                                    && (section == Section::All || n.section() == section)
-                            })
-                            .count(),
-                    )
-                })
-                .collect();
-            self.scope_counts = Some((scope, counts));
-        }
-        let count_of = |section: Section, counts: &Vec<(Section, usize)>| {
-            counts
-                .iter()
-                .find(|(s, _)| *s == section)
-                .map_or(0, |(_, n)| *n)
-        };
-        let counts = self
-            .scope_counts
-            .as_ref()
-            .map(|(_, counts)| counts.clone())
-            .unwrap_or_default();
-        let searching = !self.search.trim().is_empty();
-        // The scope notice stands while the list keeps the scope it widened to, with no query:
-        // the DM's own scope change or search ends it. (`open_entry` changes the scope itself,
-        // so the list's last scope is not the notice's: comparing with it ended the notice in
-        // the frame after it came, before any footer drew it.) Settled here, before every
-        // footer of the page: the empty scope's, a form's and the reader's.
-        if self
-            .kept
-            .scope_notice()
-            .is_some_and(|(_, widened)| *widened != scope || searching)
-        {
-            let _ = self.kept.take_scope_notice();
-        }
-        let empty_scope = scope == Scope::Campaign && count_of(Section::All, &counts) == 0;
-        if empty_scope {
-            ui.scope(|ui| {
-                ui.set_max_width(166.0);
-                Self::scope_menu(
-                    ui,
-                    compact,
-                    campaigns,
-                    &mut self.scope,
-                    &mut self.section,
-                    &mut self.scope_menu,
-                );
-            });
-            // Round 26 review: the page's results and error sit in this pane's footer too, below
-            // the form or the empty state.
-            let frame = PaneFrame::new(ui);
-            let messages = self.form_messages(&frame, ui.available_width(), campaigns);
-            let mut can_use = false;
-            // The footer holds its own lines: the body below changes the Library.
-            let paned = messages.pane(ui, design::Body::Content, |ui| {
-                if self.new_form {
-                    self.new_entry(ui, dirty, campaigns);
-                } else {
-                    design::empty_state_with_body(
-                        ui,
-                        icons::LIBRARY,
-                        "No entries of your own yet",
-                        |ui| {
-                            ui.horizontal_wrapped(|ui| {
-                                ui.spacing_mut().item_spacing.x = 0.0;
-                                ui.label(Type::Body.rich(ui, "Copy an ").color(colors().muted));
-                                can_use = design::link(ui, "entry you can use").clicked();
-                                ui.label(
-                                    Type::Body
-                                        .rich(ui, ", or make a new one here.")
-                                        .color(colors().muted),
-                                );
-                            });
-                        },
-                        |ui| {
-                            if Action::primary("New entry")
-                                .icon(icons::ADD)
-                                .show(ui)
-                                .clicked()
-                            {
-                                self.new_form = true;
-                                self.new_folder = kind_folder(&self.new_kind).into();
-                            }
-                        },
-                    );
-                }
-            });
-            if can_use {
-                self.scope = Scope::Uses;
-            }
-            if let Some(press) = paned.pressed {
-                self.apply_footer_press(press, campaigns);
-            }
-            return;
-        }
-        if let Some(column) = self.sections_column(compact) {
-            column.show_inside(ui, |ui| {
-                Self::scope_menu(
-                    ui,
-                    compact,
-                    campaigns,
-                    &mut self.scope,
-                    &mut self.section,
-                    &mut self.scope_menu,
-                );
-                if let Scope::Package(package) = scope
-                    && let Some((index, note)) = loaded
-                        .notes
-                        .iter()
-                        .enumerate()
-                        .find(|(_, n)| n.owner.is_package(package) && n.is_manifest())
-                    && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open)
-                        .clicked()
-                    && !dirty
-                {
-                    // Round 26 SB1: a list click records the trail, as a link does.
-                    if self.selected != Some(index) {
-                        self.trail.leave(place(
-                            loaded,
-                            self.selected,
-                            self.scope,
-                            self.section,
-                            &self.search,
-                        ));
-                    }
-                    self.selected = Some(index);
-                    let _ = self.draft.replace(note.text.as_str());
-                    self.section = Section::All;
-                    self.unreadable_kind = None;
-                    self.source = false;
-                }
-                // M0333: the shared scroll column keeps its lane, so a count never moves
-                // when the bar comes or goes.
-                design::ScrollColumn::new("section_list").show(ui, |ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    for &(group, sections) in Section::GROUPS {
-                        // Keep the empty encounter section discoverable, but hide an unused fallback.
-                        if sections
-                            .iter()
-                            .all(|section| count_of(*section, &counts) == 0)
-                        {
-                            continue;
-                        }
-                        if !group.is_empty() {
-                            design::heading(
-                                ui,
-                                design::Heading::Group {
-                                    title: group,
-                                    count: sections
-                                        .iter()
-                                        .map(|section| count_of(*section, &counts))
-                                        .sum(),
-                                },
-                            );
-                        }
-                        for &section in sections {
-                            let count = count_of(section, &counts);
-                            if count == 0 {
-                                continue;
-                            }
-                            if section == Section::Unreadable {
-                                for kind in Section::GROUPS
-                                    .iter()
-                                    .flat_map(|(_, sections)| sections.iter())
-                                    .copied()
-                                {
-                                    let count = loaded
-                                        .notes
-                                        .iter()
-                                        .filter(|note| {
-                                            note.error.is_some()
-                                                && loaded.in_scope(note, scope)
-                                                && note.unreadable_kind() == kind
-                                        })
-                                        .count();
-                                    if count == 0 {
-                                        continue;
-                                    }
-                                    let label = if kind == Section::Unreadable {
-                                        "Entries"
-                                    } else {
-                                        kind.label()
-                                    };
-                                    if section_row(
-                                        ui,
-                                        label,
-                                        count,
-                                        !about_open
-                                            && self.section == section
-                                            && self.unreadable_kind == Some(kind)
-                                            && !searching,
-                                    )
-                                    .clicked()
-                                    {
-                                        self.section = section;
-                                        self.unreadable_kind = Some(kind);
-                                        self.matches = None;
-                                        self.search.clear();
-                                    }
-                                }
-                                continue;
-                            }
-                            let selected = self.section == section && !searching && !about_open;
-                            let label = section.label();
-                            // Round 30 AI4: with no search, All entries paints no
-                            // count, which would repeat the header's; its name keeps
-                            // it. During a search it paints the number of matches,
-                            // zero included, from the list's kept result for this
-                            // query and scope (no new work); until that result exists,
-                            // no count.
-                            let (count, painted) = if section == Section::All {
-                                let query = self.search.trim().to_lowercase();
-                                let found = self
-                                    .matches
-                                    .as_ref()
-                                    .filter(|(_, kept, _)| {
-                                        searching
-                                            && *kept == query
-                                            && self.matches_scope == Some(scope)
-                                    })
-                                    .map(|(.., found)| found.len());
-                                (found.unwrap_or(count), found.is_some())
-                            } else {
-                                (count, true)
-                            };
-                            let response = section_row_counted(ui, label, count, selected, painted);
-                            if response.clicked() {
-                                if about_open && !dirty {
-                                    self.selected = None;
-                                    self.draft.clear();
-                                }
-                                self.section = section;
-                                self.unreadable_kind = None;
-                                self.search.clear();
-                            }
-                        }
-                    }
-                });
-            });
-        }
-        // A query always searches the whole scope. Clearing it returns to the selected section.
-        let query = self.search.trim().to_lowercase();
-        let searching = !query.is_empty();
-        let filtering =
-            (self.section == Section::Creatures || searching) && !self.filter.is_empty();
-        if self.matches_scope != Some(scope)
-            || self
-                .matches
-                .as_ref()
-                .is_none_or(|(section, cached_query, _)| {
-                    *section != self.section || *cached_query != query
-                })
-            || self.matched_filter != self.filter
-        {
-            self.matched_filter = self.filter.clone();
-            self.reveal_row |= self.matches_scope != Some(scope);
-            self.matches_scope = Some(scope);
-            let parsed = Query::parse(&query);
-            let typed = Typed::new(&parsed.words);
-            let facets = loaded.facets();
-            let mut found: Vec<(Rank, usize)> = loaded
-                .notes
-                .iter()
-                .enumerate()
-                .filter(|(i, n)| {
-                    loaded.in_scope(n, scope)
-                        && (!filtering
-                            || facets[*i].as_ref().is_some_and(|f| self.filter.matches(f)))
-                        && (!query.is_empty()
-                            || self.section != Section::Unreadable
-                            || self
-                                .unreadable_kind
-                                .is_none_or(|kind| n.unreadable_kind() == kind))
-                })
-                .filter_map(|(i, n)| {
-                    n.search_rank(self.section, &parsed, &typed, facets[i].as_ref())
-                        .map(|rank| (rank, i))
-                })
-                .collect();
-            if !parsed.words.is_empty() {
-                // Best first: the exact name, then a prefix, then a whole word, then each word in
-                // any order (a creature's whole word and a word that only holds the search are one
-                // tier, M3). A path, section or fact match comes next, and a typo comes last. The
-                // sort is stable, so the list's order (by name) stays inside each rank and origin.
-                found.sort_by_key(|&(rank, i)| {
-                    (
-                        rank,
-                        crate::lookup::entry_origin(
-                            loaded.notes[i].entry.as_ref(),
-                            matches!(loaded.notes[i].owner, Owner::Campaign(_)),
-                        ),
-                    )
-                });
-            }
-            self.typo_from = found
-                .iter()
-                .position(|(rank, _)| rank.typo)
-                .unwrap_or(found.len());
-            let found = found.into_iter().map(|(_, i)| i).collect();
-            self.matches = Some((self.section, query.clone(), found));
-        }
-        let matches = &self.matches.as_ref().unwrap().2;
-        // Keep the reader in sync with the visible list without dropping an unsaved draft.
-        let mut select = None;
-        // The whole catalogue has no first entry worth opening for the DM.
-        let whole_catalogue = self.section == Section::All && query.is_empty();
-        if !dirty
-            && self
-                .selected
-                .is_none_or(|i| !matches.contains(&i) && !loaded.notes[i].is_manifest())
-        {
-            // A name found only with a typo is a guess. It does not open by itself.
-            select = matches
-                .first()
-                .copied()
-                .filter(|_| !whole_catalogue && self.typo_from > 0);
-            if select.is_none() {
-                self.selected = None;
-                self.draft.clear();
-            }
-        }
-        let selected = select.or(self.selected);
-        let subtitles = loaded.subtitles();
-        let link_index = ui.ctx().data(|data| {
-            data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
-                "reader_link_index",
-            ))
-        });
-        let mut peek = None;
-        let mut search_everything = false;
-        let entries = self.entries_column(ui, ui.available_width(), dirty);
-        self.list_hidden = entries.is_none();
-        if let Some(column) = entries {
-            column.show_inside(ui, |ui| {
-                if compact {
-                    let half = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
-                    ui.horizontal_top(|ui| {
-                        ui.allocate_ui_with_layout(egui::vec2(half, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
-                            Self::scope_menu(ui, compact, campaigns, &mut self.scope, &mut self.section, &mut self.scope_menu);
-                        });
-                        // M0334: the shared drop-down. As the section rows of a wider window do,
-                        // it shows no chosen section while About is open or a search lists the
-                        // whole scope, so choosing any section ends the search.
-                        let short = |section: Section| match section {
-                            Section::All => "All",
-                            Section::Characters => "Characters",
-                            _ => section.label(),
-                        };
-                        let mut sections = Section::GROUPS
-                            .iter()
-                            .flat_map(|(_, sections)| sections.iter().copied())
-                            .filter(|section| count_of(*section, &counts) > 0);
-                        if let Some(first) = sections.next() {
-                            let mut chosen = (!about_open && !searching).then_some(self.section);
-                            let mut dropdown = design::Dropdown::new(LIBRARY_SECTION, "Section")
-                                .choice_with_short_label(Some(first), first.label(), short(first));
-                            for section in sections {
-                                dropdown = dropdown.choice_with_short_label(
-                                    Some(section),
-                                    section.label(),
-                                    short(section),
-                                );
-                            }
-                            if dropdown.width(half).show(ui, &mut chosen).changed
-                                && let Some(section) = chosen
-                            {
-                                if about_open && !dirty {
-                                    self.selected = None;
-                                    self.draft.clear();
-                                }
-                                self.section = section;
-                                self.search.clear();
-                            }
-                        }
-                    });
-                }
-                let width = ui.available_width();
-                // Clear empties the text; the search chooses nothing else to reset.
-                let _ = LIBRARY_SEARCH.search(
-                    ui,
-                    SEARCH_NAME,
-                    &mut self.search,
-                    "Search by name or detail…",
-                    width,
-                );
-                if compact
-                    && let Scope::Package(package) = scope
-                    && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.is_package(package) && n.is_manifest())
-                    && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open).clicked() && !dirty
-                {
-                    if self.selected != Some(index) {
-                        self.trail.leave(place(
-                            loaded,
-                            self.selected,
-                            self.scope,
-                            self.section,
-                            &self.search,
-                        ));
-                    }
-                    self.selected = Some(index);
-                    let _ = self.draft.replace(note.text.as_str());
-                    self.section = Section::All;
-                    self.unreadable_kind = None;
-                    self.source = false;
-                }
-                if self.section == Section::Creatures || searching {
-                    let notes = &loaded.notes;
-                    let facets = loaded.facets();
-                    let changed = crate::creature_filter::filter_bar(ui, &mut self.filter, || {
-                        notes
-                            .iter()
-                            .zip(facets)
-                            .filter(|(note, _)| loaded.in_scope(note, scope))
-                            .filter_map(|(_, facets)| facets.as_ref())
-                            .collect()
-                    });
-                    if changed {
-                        ui.ctx().request_repaint();
-                    }
-                }
-                let headed = searching || filtering || (compact && self.section != Section::All);
-                if headed {
-                    design::heading(ui, design::Heading::Group { title: if searching { "Search results" } else if filtering { "Matches" } else { self.section.label() }, count: matches.len() });
-                } else {
-                    design::gap(ui, design::Gap::XS);
-                }
-                if searching && !matches.is_empty() && self.typo_from == 0 {
-                    ui.add(
-                        egui::Label::new(
-                            Type::Body.rich(ui, CLOSE_NAMES)
-                                .color(colors().muted),
-                        )
-                        .wrap(),
-                    );
-                }
-                if matches.is_empty() {
-                    // A heading owns the space after it.
-                    if !headed {
-                        design::gap(ui, design::Gap::S);
-                    }
-                    if let Scope::Package(id) = scope && !searching
-                        && !loaded.notes.iter().any(|note| note.owner.is_package(id) && note.entry.as_ref().is_some_and(|entry| entry.kind != "package")) {
-                        let name = campaigns.modules().iter().find(|m| m.id == id).map_or("this package", |m| m.name.as_str());
-                        let mut create = false;
-                        if self.new_form {
-                            ui.label(Type::Title.rich(ui, icons::LIBRARY).color(colors().muted));
-                            ui.label(Type::Title.rich(ui, format!("No entries in {name} yet")).color(colors().text));
-                        } else {
-                            design::empty_state(ui, icons::LIBRARY, &format!("No entries in {name} yet"), "Create the first entry.", |ui| {
-                                create = Action::secondary("New entry").icon(icons::ADD).show(ui).clicked();
-                            });
-                        }
-                        if create { self.new_form = true; self.focus_new_name = true; self.new_kind = "creature".into(); self.new_folder = "Creatures".into(); }
-                    } else {
-                    let filtered = !self.filter.is_empty() && (searching || self.section == Section::Creatures);
-                    // Where a wider scope can find more, the sentence names this scope, and quiet
-                    // `Search Everything` below it keeps the words and the filters.
-                    let wider = (filtered || searching) && scope != Scope::All;
-                    let text = if filtered && wider {
-                        format!("No creatures match these filters in {}. Remove a filter, or search Everything.", scope_name(campaigns, scope))
-                    } else if filtered {
-                        "No creatures match these filters. Remove a filter.".to_owned()
-                    } else if scope == Scope::Campaign && !searching {
-                        "No campaign entries yet. Copy an entry here with Copy to…, or create one with New entry.".to_owned()
-                    } else if searching && wider {
-                        format!("No entries match in {}. Try fewer words, or search Everything.", scope_name(campaigns, scope))
-                    } else if searching {
-                        "No entries match. Try fewer words.".to_owned()
-                    } else {
-                        "No entries in this section.".to_owned()
-                    };
-                    // At the rows' text edge, so the action's hanging padding stays clear of the
-                    // splitter at the column's left edge.
-                    egui::Frame::new()
-                        .inner_margin(egui::Margin {
-                            left: design::S as i8,
-                            ..Default::default()
-                        })
-                        .show(ui, |ui| {
-                            ui.add(
-                                egui::Label::new(Type::Body.rich(ui, &text).color(colors().muted))
-                                    .wrap(),
-                            );
-                            if wider {
-                                search_everything = Action::quiet(SEARCH_EVERYTHING)
-                                    .density(Density::Read)
-                                    .line_start()
-                                    .show(ui)
-                                    .clicked();
-                            }
-                        });
-                    }
-                }
-                ui.spacing_mut().item_spacing.y = 0.0;
-                // The list's own region (layout step 3b): whole rows only, drawn in its scroll
-                // column with its lane; only the rows in view draw. It is the one writer of its
-                // offset: the selected entry that arrived by a link is a jump to its row.
-                let rows = self
-                    .entry_rows
-                    .get_or_insert_with(|| design::memo::Revised::new(Vec::new()));
-                if rows.len() != matches.len() {
-                    rows.revise(|rows| {
-                        *rows = vec![design::Block::Row(design::Row::Entry); matches.len()];
-                        design::memo::Changed::Yes
-                    });
-                }
-                let region = self
-                    .entry_region
-                    .get_or_insert_with(|| design::RegionState::new("library_entries"));
-                let selected_row = selected.and_then(|selected| {
-                    if let Some(row) = self
-                        .selected_row
-                        .filter(|&row| matches.get(row) == Some(&selected))
-                    {
-                        return Some(row);
-                    }
-                    #[cfg(test)]
-                    ROW_SEARCHES.with(|searches| searches.set(searches.get() + 1));
-                    let row = matches.iter().position(|i| *i == selected);
-                    self.selected_row = row;
-                    row
-                });
-                if std::mem::take(&mut self.reveal_row)
-                    && let Some(row) = selected_row
-                {
-                    region.navigate(design::Navigation::Jump { block: row });
-                }
-                // One Tab stop, a list box: Tab enters at the selected entry; Up and Down move.
-                design::BlockRegion::new(
-                    ("entry_list", self.section.label(), &query, scope),
-                    region,
-                    rows,
-                )
-                .name("Library entries")
-                .selected(selected_row)
-                .show(ui, |ui, row| {
-                        {
-                            let i = matches[row];
-                            let note = &loaded.notes[i];
-                            let line = &subtitles[i];
-                            let subtitle = match (&note.owner, scope) {
-                                (Owner::Campaign(_), Scope::Campaign) => line.strip_suffix(" · Campaign").unwrap_or(line),
-                                (Owner::Package(module), Scope::Package(id)) if module.id == id => line.strip_suffix(&format!(" · {}", module.name)).unwrap_or(line),
-                                _ => line,
-                            };
-                            let broken = note.entry.as_ref().zip(link_index.as_ref()).filter(|_| note.owner != Owner::Builtin).map_or(0, |(entry, index)| index.broken_link_count(&entry.body, entry.id));
-                            let faults = note.entry.as_ref().map_or(0, |entry| crate::roll_table::fault_count(&entry.body));
-                            let subtitle = if faults > 0 {
-                                format!("{} {} · {subtitle}", icons::WARN, design::count(faults, "table fault", "table faults"))
-                            } else if broken > 0 {
-                                // One fault gets one mark: when the file's every counted problem
-                                // is a missing link, the links' count is its only cause.
-                                let needs_fixing = format!("{} {NEEDS_FIXING} · ", icons::WARN);
-                                let rest = subtitle
-                                    .strip_prefix(&needs_fixing)
-                                    .filter(|_| loaded.link_faults_only.contains(&Loaded::file_key(note)))
-                                    .unwrap_or(subtitle);
-                                format!("{} {} · {rest}", icons::WARN, design::count(broken, "broken link", "broken links"))
-                            } else { subtitle.to_owned() };
-                            let response = ui
-                                .push_id(i, |ui| {
-                                    entry_row(
-                                        ui,
-                                        note.name(),
-                                        &subtitle,
-                                        selected == Some(i),
-                                    )
-                                })
-                                .inner;
-                            if response
-                                .on_hover_text(format!(
-                                    "{}\n{}\n{}",
-                                    note.name(),
-                                    subtitle,
-                                    note.path
-                                ))
-                                .clicked()
-                            {
-                                if dirty {
-                                    peek = note.entry.as_ref().map(|e| e.id);
-                                } else {
-                                    select = Some(i);
-                                }
-                            }
-                        }
-                    });
-            });
-        }
-        if peek.is_some() {
-            self.peek = peek;
-        }
-        if search_everything {
-            // The same words and filters, in the widest scope.
-            self.scope = Scope::All;
-            self.section = Section::All;
-        }
-        if let Some(i) = select {
-            // Round 26 SF1, SB1: a list click leaves the open entry as a link does, so Back
-            // returns to it and Forward ends.
-            if self.selected != Some(i) {
-                self.trail.leave(self.here());
-            }
-            self.selected = Some(i);
-            let _ = self
-                .draft
-                .replace(self.loaded.as_ref().unwrap().notes[i].text.as_str());
-            self.error = None;
-            self.source = false;
-        }
-        let subtitle = self
-            .selected
-            .map(|i| subtitles[i].clone())
-            .unwrap_or_default();
-        egui::CentralPanel::default()
-            .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: if self.disk_change.is_some() {
-                    0
-                } else {
-                    design::L as i8
-                },
-                right: 0,
-                top: 0,
-                bottom: 0,
-            }))
-            .show_inside(ui, |ui| {
-                if self.form || self.new_form {
-                    // A form has no reader: the page's results sit in the pane's message footer,
-                    // `S` below a short form, pinned under a long one (round 26; round 28 pane).
-                    let frame = PaneFrame::new(ui);
-                    let messages = self.form_messages(&frame, ui.available_width(), campaigns);
-                    // The footer holds its own lines: the form below changes the Library.
-                    let paned = messages.pane(ui, design::Body::Content, |ui| {
-                        if self.form {
-                            self.package_form(ui, campaigns);
-                        } else {
-                            self.new_entry(ui, dirty, campaigns);
-                        }
-                    });
-                    self.footer_press = paned.pressed;
-                } else {
-                    self.editor(ui, &subtitle, campaigns);
-                }
-            });
-        if let Some(press) = self.footer_press.take() {
-            self.apply_footer_press(press, campaigns);
-        }
     }
 
     /// The footer of a pane with no reader below a form or the empty scope (M-L0.4b): the
@@ -2769,14 +1686,9 @@ impl Library {
     fn form_messages<'f>(
         &self,
         frame: &'f PaneFrame,
-        width: f32,
         campaigns: &Campaigns,
     ) -> Messages<'f, LibraryPress> {
-        let mut messages = Messages::new(
-            frame,
-            "library_form_footer",
-            width.min(design::READER_MEASURE),
-        );
+        let mut messages = Messages::new();
         self.page_messages(frame, &mut messages, &ReaderResults::default(), campaigns);
         page_faults(
             &mut messages,
@@ -3009,172 +1921,11 @@ impl Library {
         self.reconcile_registrations(campaigns);
     }
 
-    /// What the catalogue shows. Choosing here never changes the active campaign. M0341: the
-    /// shared drop-down; `All` and `Can use` are one group, `D&D 2024`, the packages and the
-    /// campaign's entries another, under a rule.
-    fn scope_menu(
-        ui: &mut egui::Ui,
-        compact: bool,
-        campaigns: &Campaigns,
-        current: &mut Scope,
-        section: &mut Section,
-        cache: &mut Option<ScopeMenu>,
-    ) {
-        let campaign = campaigns.active_id().is_some();
-        let mut scope = if !campaign && matches!(*current, Scope::Uses | Scope::Campaign) {
-            Scope::All
-        } else {
-            *current
-        };
-        let before = scope;
-        let width = if compact {
-            ui.available_width()
-        } else {
-            ui.available_width().min(166.0 + design::lane_width())
-        };
-        let positions = campaigns.module_positions();
-        let layout = ScopeMenuLayout {
-            catalogue: positions.revision(),
-            campaign,
-            width,
-            font: Type::Strong.font(ui),
-            fonts: design::outcome::font_key(ui.ctx()),
-            scale: ui.ctx().pixels_per_point(),
-        };
-        cache.take_if(|menu| menu.layout != layout);
-        let menu = cache.get_or_insert_with(|| {
-            let fit = |words: &str| scope_label(ui, words, width - design::XXL - design::L);
-            let menu = design::Dropdown::new(LIBRARY_SCOPE, "What the Library shows").width(width);
-            let mut dropdown = if campaign {
-                menu.choice_with_short_label(Scope::Uses, "Can use", fit("Can use"))
-                    .choice_with_short_label(Scope::All, "Everything", fit("Everything"))
-            } else {
-                menu.choice_with_short_label(Scope::All, "Everything", fit("Everything"))
-            }
-            .group()
-            .choice_with_short_label(Scope::Builtin, BUILTIN_NAME, fit("D&D 2024"));
-            for module in campaigns.modules() {
-                dropdown = dropdown.choice_with_short_label(
-                    Scope::Package(module.id),
-                    module.name.clone(),
-                    fit(&module.name),
-                );
-            }
-            if campaign {
-                dropdown = dropdown.choice_with_short_label(
-                    Scope::Campaign,
-                    "Campaign entries",
-                    fit("Campaign entries"),
-                );
-            }
-            ScopeMenu { layout, dropdown }
-        });
-        let all = usize::from(campaign);
-        let first_package = all + 2;
-        let row = match scope {
-            Scope::Uses => Some(0),
-            Scope::All => Some(all),
-            Scope::Builtin => Some(all + 1),
-            Scope::Package(id) => positions.get(&id).map(|at| first_package + at),
-            Scope::Campaign => Some(first_package + positions.len()),
-        };
-        menu.dropdown.show_at(ui, &mut scope, row);
-        *current = scope;
-        if scope != before {
-            // The selected entry can stay if it is in this scope. A draft always stays.
-            *section = Section::All;
-        }
-    }
-
     /// Show the catalogue limited to this campaign's own entries.
     pub fn show_campaign_entries(&mut self) {
         self.scope = Scope::Campaign;
         self.search.clear();
         self.section = Section::All;
-    }
-
-    fn unregister_dialog(&mut self, ctx: &egui::Context, campaigns: &mut Campaigns) {
-        let Some(module) = self.confirm_unregister.clone() else {
-            return;
-        };
-        let count = self
-            .loaded
-            .as_ref()
-            .map_or(0, |l| unregister_count(&l.notes, module.id));
-        let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
-        let mut remove = false;
-        let title = format!("Unregister {}?", module.name);
-        design::dialog(ctx, "unregister_package", &title, |ui| {
-            ui.add(
-                egui::Label::new(format!(
-                    "{} leave Splat’s lists, and any campaign that selects them can no longer use them.", design::count(count, "entry", "entries")
-                ))
-                .wrap(),
-            );
-            if let Some(campaign) = campaigns.active_campaign()
-                && let Ok(catalogue) =
-                    crate::content_workspace::Catalogue::load(campaigns.modules(), Some(&campaign))
-            {
-                let entry_ids: Vec<_> = catalogue
-                    .entries
-                    .values()
-                    .filter(|entry| {
-                        entry.owner == module.id && catalogue.selectable(entry.entry.id)
-                    })
-                    .map(|entry| crate::content_workspace::EntryRef::id(entry.entry.id))
-                    .collect();
-                let selection = crate::content_workspace::PackageSelection {
-                    name: Some(module.name.clone()),
-                    package: crate::content_workspace::EntryRef::id(module.id),
-                    selection: crate::content_workspace::Selection::Selected { entries: entry_ids },
-                };
-                let users = selection.campaign_users(&catalogue);
-                if !users.is_empty() {
-                    let mut names = Vec::new();
-                    for (id, _) in &users {
-                        if let Some(user) = catalogue.entries.get(id) {
-                            for reference in
-                                content::required_references(&user.entry).unwrap_or_default()
-                            {
-                                if let Ok(id) = catalogue.resolve(&reference)
-                                    && let Some(entry) = catalogue.entries.get(&id)
-                                    && entry.owner == module.id
-                                {
-                                    names.push(entry.entry.name.clone());
-                                }
-                            }
-                        }
-                    }
-                    names.sort();
-                    names.dedup();
-                    let users: Vec<_> = users.into_iter().map(|(_, name)| name).collect();
-                    ui.label(format!(
-                        "{} uses {}, in {}.",
-                        campaign.name,
-                        name_list(&names),
-                        name_list(&users)
-                    ));
-                }
-            }
-            design::help(ui, &format!("The files stay in {}.", module.path.display()));
-            design::gap(ui, design::Gap::S);
-            design::dialog_actions(
-                ui,
-                |ui| {
-                    remove = Action::destructive("Unregister").show(ui).clicked();
-                },
-                |ui| {
-                    keep |= Action::secondary("Keep the package").show(ui).clicked();
-                },
-            );
-        });
-        if keep {
-            self.confirm_unregister = None;
-        }
-        if remove {
-            self.confirm_unregister = None;
-            self.unregister(module, campaigns);
-        }
     }
 
     /// Unregister `module` from Settings: its files stay. Its result, with Undo, is the newest
@@ -3188,668 +1939,6 @@ impl Library {
             }
             Err(e) => self.error = Some(e.into()),
         }
-    }
-
-    /// Registering a package is a form in the page, not a window over it.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "a copied package folder’s warning in the form, with its repair (ruling M20)"
-    )]
-    fn package_form(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
-        let c = colors();
-        let locked = self.draft_reason().or(self
-            .pending
-            .is_some()
-            .then_some("Wait for the Library to load."));
-        if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
-            self.form = false;
-        }
-        // The pane scrolls the form; it has no scroll area of its own.
-        ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-                design::gap(ui, design::Gap::L);
-                ui.horizontal(|ui| {
-                    ui.label(
-                        Type::Heading
-                            .rich(ui, "Manage packages")
-                            .color(colors().text),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if Action::quiet("Close")
-                            .name("Close the package form")
-                            .show(ui)
-                            .clicked()
-                        {
-                            self.form = false;
-                        }
-                    });
-                });
-                design::heading(
-                    ui,
-                    design::Heading::Group {
-                        title: "Add a package folder",
-                        count: 0,
-                    },
-                );
-                if self.copied_package.as_ref().is_some_and(|copy| {
-                    Path::new(self.path.trim()).canonicalize().ok().as_ref() != Some(&copy.path)
-                }) {
-                    self.copied_package = None;
-                    self.copy_name_open = false;
-                }
-                let lock = self.package_lock();
-                let add_reason = lock
-                    .or(self.copied_package.is_some().then_some(PackageReason::Copy))
-                    .or(self
-                        .path
-                        .trim()
-                        .is_empty()
-                        .then_some(PackageReason::NoFolder));
-                // Round 26 FB6 and round 28 FA7: the one inline creation form. Add folder follows
-                // the field (after Browse…) on its line; the control-high kept line holds the
-                // reason. For a copy, the reason is the next step: the warning below says the fact.
-                let form = design::InlineCreate::new()
-                    .field(
-                        design::CreateField::new(PACKAGE_FOLDER, "Package folder", &mut self.path)
-                            // Round 28 K4a: Browse locks with the form, says why, and its press
-                            // is the part's to refuse.
-                            .side_action(design::SideAction::new(BROWSE).locked_when(
-                                lock.is_some(),
-                                crate::sentence!("Browse waits for the reason below."),
-                            )),
-                    )
-                    .create(design::Create::secondary(ADD_FOLDER).blocked(add_reason))
-                    .kept_line(design::KeptLine::new())
-                    .show(ui);
-                if form.side
-                    && let Some(path) = crate::hermetic::pick_folder()
-                {
-                    self.path = path.display().to_string();
-                }
-                let add = form.create;
-                {
-                    if add {
-                        match local_module(Path::new(self.path.trim())).and_then(|module| {
-                            if let Some(original) = campaigns
-                                .modules()
-                                .iter()
-                                .find(|m| m.id == module.id && m.path != module.path)
-                            {
-                                self.copy_name = format!("{} copy", original.name);
-                                self.copy_name_open = false;
-                                self.copy_not_used = campaigns
-                                    .active_campaign()
-                                    .and_then(|campaign| CampaignDocument::load(&campaign).ok())
-                                    .is_some_and(|document| {
-                                        document.selections.iter().any(|selection| {
-                                            selection.package.id == Some(module.id)
-                                        })
-                                    });
-                                self.copied_package = Some(module);
-                                self.error = None;
-                                return Ok(None);
-                            }
-                            campaigns.register_module(module.clone())?;
-                            Ok(Some(module))
-                        }) {
-                            Ok(Some(module)) => {
-                                self.scope = Scope::Package(module.id);
-                                self.form = false;
-                                self.stale = true;
-                            }
-                            Ok(None) => {}
-                            Err(error) => self.error = Some(error.into()),
-                        }
-                    }
-                }
-                if let Some(copy) = self.copied_package.clone() {
-                    if Path::new(self.path.trim()).canonicalize().ok().as_ref() != Some(&copy.path)
-                    {
-                        self.copied_package = None;
-                    } else {
-                        let name = campaigns
-                            .modules()
-                            .iter()
-                            .find(|m| m.id == copy.id)
-                            .map_or(copy.name.as_str(), |m| m.name.as_str());
-                        let warning = crate::sentence!("This folder is a copy of {}.", name);
-                        let register = if self.copy_name_open {
-                            let _ = BodyFault::<()>::new(&LibraryFault::Warning(&warning)).show(ui);
-                            design::heading(
-                                ui,
-                                design::Heading::Group {
-                                    title: "Register a copy",
-                                    count: 0,
-                                },
-                            );
-                            // Round 27 FD2, round 28 FA7: the inline creation form. The choice
-                            // first, then the name with `Register` at the end of its line, then
-                            // the kept line: quiet Cancel at its start, the reason after it. The
-                            // commit keeps one word, so typing moves nothing.
-                            let register_reason = self.package_lock().or(self
-                                .copy_name
-                                .trim()
-                                .is_empty()
-                                .then_some(PackageReason::NoName));
-                            // The commit of an inline creation form has one weight: primary, as
-                            // `Create package` is, unless a run owns the primary.
-                            let commit = if self.run_open {
-                                design::Create::secondary(REGISTER)
-                            } else {
-                                design::Create::primary(REGISTER)
-                            }
-                            .blocked(register_reason);
-                            let field =
-                                design::CreateField::new(COPY_NAME, "New package name", &mut self.copy_name);
-                            let kept = design::KeptLine::new().cancel(CANCEL, true);
-                            let mut chosen = !self.copy_not_used;
-                            let help = if chosen {
-                                "Uses every entry in this package, including future entries."
-                            } else {
-                                "This campaign keeps the original. The copy is registered but not chosen."
-                            };
-                            let form = if campaigns.active_campaign().is_some() {
-                                design::InlineCreate::new()
-                                    .choice(
-                                        design::CreateChoice::new("Choose for this campaign", &mut chosen)
-                                            .help(help),
-                                    )
-                                    .field(field)
-                                    .create(commit)
-                                    .kept_line(kept)
-                                    .show(ui)
-                            } else {
-                                design::InlineCreate::new()
-                                    .field(field)
-                                    .create(commit)
-                                    .kept_line(kept)
-                                    .show(ui)
-                            };
-                            self.copy_not_used = !chosen;
-                            if form.cancel {
-                                self.copy_name_open = false;
-                            }
-                            form.create
-                        } else {
-                            let repair = Repair::new("Register as a new package", ());
-                            BodyFault::new(&LibraryFault::Warning(&warning))
-                                .repair(match self.page_lock() {
-                                    Some(reason) => repair.blocked(reason),
-                                    None => repair,
-                                })
-                                .show(ui)
-                                .is_some()
-                        };
-                        if register {
-                            if self.copy_name_open {
-                                if let Err(error) = self.register_copy(campaigns) {
-                                    self.error = Some(error.into());
-                                }
-                            } else {
-                                self.copy_name_open = true;
-                            }
-                        }
-                        design::quiet_section(ui, "Technical details", |ui| {
-                            ui.label(copy.id.to_string());
-                        });
-                    }
-                }
-
-                if !self.copy_name_open {
-                    design::heading(
-                        ui,
-                        design::Heading::Group {
-                            title: "New package",
-                            count: 0,
-                        },
-                    );
-                    let reason = self
-                        .package_lock()
-                        .or(self.name.trim().is_empty().then_some(PackageReason::NoName));
-                    let default_parent = || {
-                        campaigns
-                            .modules()
-                            .last()
-                            .and_then(|module| module.path.parent())
-                            .map(Path::to_path_buf)
-                            .or_else(|| {
-                                campaigns
-                                    .package_folder("new_package")
-                                    .ok()
-                                    .and_then(|p| p.parent().map(Path::to_path_buf))
-                            })
-                            .unwrap_or_default()
-                    };
-                    let parent = self.package_path.get_or_insert_with(default_parent).clone();
-                    let namespace: String = self
-                        .name
-                        .trim()
-                        .to_lowercase()
-                        .chars()
-                        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-                        .collect();
-                    let root: Result<PathBuf, String> = Ok(parent.join(&namespace));
-                    // Round 27: what Create package will make is the kept line's preview, so
-                    // typing moves nothing below the form.
-                    let preview = root
-                        .as_ref()
-                        .ok()
-                        .filter(|_| !self.name.trim().is_empty())
-                        .map(|root| format!("Will create {}", root.display()));
-                    let commit = if self.run_open {
-                        design::Create::secondary(CREATE_PACKAGE)
-                    } else {
-                        design::Create::primary(CREATE_PACKAGE)
-                    }
-                    .blocked(reason);
-                    let clear = !self.name.is_empty() || self.package_folder_changed;
-                    let mut folder = parent.display().to_string();
-                    let focus = std::mem::take(&mut self.focus_package_name);
-                    let name = design::CreateField::new(NEW_PACKAGE_NAME, "Name", &mut self.name)
-                        .focus(focus);
-                    let folder_field =
-                        design::CreateField::new(NEW_PACKAGE_FOLDER, "Folder", &mut folder)
-                            .side_action(BROWSE);
-                    let kept = design::KeptLine::new()
-                        .cancel(CLEAR, clear)
-                        .preview(preview.as_deref());
-                    let mut chosen = !self.package_not_used;
-                    // Round 26 FB6: the choice comes before the last field, so Create package
-                    // follows that field on its line.
-                    let form = if campaigns.active_campaign().is_some() {
-                        design::InlineCreate::new()
-                            .field(name)
-                            .choice(
-                                design::CreateChoice::new("Choose for this campaign", &mut chosen)
-                                    .help("Uses every entry in this package, including future entries."),
-                            )
-                            .field(folder_field)
-                            .create(commit)
-                            .kept_line(kept)
-                            .show(ui)
-                    } else {
-                        design::InlineCreate::new()
-                            .field(name)
-                            .field(folder_field)
-                            .create(commit)
-                            .kept_line(kept)
-                            .show(ui)
-                    };
-                    self.package_not_used = !chosen;
-                    if folder != parent.display().to_string() {
-                        self.package_path = Some(PathBuf::from(folder));
-                        self.package_folder_changed = true;
-                    }
-                    if form.side
-                        && let Some(chosen) = crate::hermetic::pick_folder()
-                    {
-                        self.package_path = Some(chosen);
-                        self.package_folder_changed = true;
-                    }
-                    if form.cancel {
-                        self.name.clear();
-                        self.package_path = None;
-                        self.package_folder_changed = false;
-                    }
-                    let create = form.create;
-                    {
-                        if create {
-                            let namespace: String = self
-                                .name
-                                .trim()
-                                .to_lowercase()
-                                .chars()
-                                .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-                                .collect();
-                            match root
-                                .and_then(|root| {
-                                    fs::create_dir_all(
-                                        root.parent().ok_or("No package folder is available.")?,
-                                    )
-                                    .map_err(|e| e.to_string())?;
-                                    create_module(&root, &self.name, &namespace)
-                                })
-                                .and_then(|module| {
-                                    campaigns.register_module(module.clone())?;
-                                    if !self.package_not_used
-                                        && let Some(campaign) = campaigns.active_campaign()
-                                    {
-                                        crate::content_workspace::use_in_campaign(
-                                            &campaign,
-                                            module.id,
-                                            &module.name,
-                                            None,
-                                        )?;
-                                    }
-                                    Ok(module)
-                                }) {
-                                Ok(module) => {
-                                    self.content_changed =
-                                        campaigns.active_campaign().map(|c| c.path);
-                                    self.scope = Scope::Package(module.id);
-                                    self.form = false;
-                                    self.new_form = true;
-                                    self.new_place = None;
-                                    self.new_name.clear();
-                                    self.new_folder = kind_folder(&self.new_kind).into();
-                                    self.new_not_used = false;
-                                    self.focus_new_name = true;
-                                    self.stale = true;
-                                }
-                                Err(error) => self.error = Some(error.into()),
-                            }
-                        }
-                    }
-                }
-                design::heading(
-                    ui,
-                    design::Heading::Group {
-                        title: "Registered packages",
-                        count: 0,
-                    },
-                );
-                design::rule(ui);
-                if campaigns.modules().is_empty() {
-                    ui.label(Type::Body.rich(ui, "None yet.").color(c.muted));
-                }
-                for module in campaigns.modules().to_vec() {
-                    ui.push_id(module.id, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.vertical(|ui| {
-                                ui.spacing_mut().item_spacing.y = 0.0;
-                                ui.set_max_width((ui.available_width() - design::XXL).max(120.0));
-                                ui.label(Type::Strong.rich(ui, &module.name).color(c.text));
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small
-                                            .rich(
-                                                ui,
-                                                module
-                                                    .path
-                                                    .display()
-                                                    .to_string()
-                                                    .replace('/', "/\u{200b}"),
-                                            )
-                                            .color(c.muted),
-                                    )
-                                    .wrap(),
-                                );
-                            });
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    design::row_menu(ui, &module.name, |ui| {
-                                        if Action::destructive("Unregister…")
-                                            .density(Density::Read)
-                                            .name(&format!("Unregister {}", module.name))
-                                            .blocked(locked)
-                                            .show(ui)
-                                            .clicked()
-                                        {
-                                            self.confirm_unregister = Some(module.clone());
-                                            ui.close();
-                                        }
-                                    });
-                                },
-                            );
-                        });
-                    });
-                    design::rule(ui);
-                }
-            });
-    }
-
-    fn new_entry(&mut self, ui: &mut egui::Ui, dirty: bool, campaigns: &Campaigns) {
-        if self.new_kind.is_empty() {
-            self.new_kind = "creature".into();
-            self.new_folder = kind_folder(&self.new_kind).into();
-        }
-        if self.loaded.is_none() {
-            return;
-        }
-        if ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
-            self.new_form = false;
-            self.new_error = None;
-            return;
-        }
-        // Where a new entry can go: the campaign, or a package. Never the built-in rules.
-        let mut places: Vec<Owner> = campaigns
-            .modules()
-            .iter()
-            .cloned()
-            .map(Owner::Package)
-            .collect();
-        if let Some(campaign) = campaigns.active_campaign() {
-            places.insert(0, Owner::Campaign(campaign));
-        }
-        if places.is_empty() {
-            return;
-        }
-        let in_scope = places.iter().position(|owner| match self.scope {
-            Scope::Package(id) => owner.is_package(id),
-            Scope::Campaign => matches!(owner, Owner::Campaign(_)),
-            _ => false,
-        });
-        let default_place = in_scope.unwrap_or(0);
-        let mut place = self
-            .new_place
-            .filter(|place| *place < places.len())
-            .unwrap_or(default_place);
-        ui.vertical(|ui| {
-            ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-            design::heading(
-                ui,
-                design::Heading::Group {
-                    title: "New entry",
-                    count: 0,
-                },
-            );
-            ui.label(
-                Type::Small
-                    .rich(ui, "Creates the entry, then opens it in the editor.")
-                    .color(colors().muted),
-            );
-            ui.vertical(|ui| {
-                let response = design::labelled_field(
-                    ui,
-                    NEW_ENTRY_NAME,
-                    "Entry name",
-                    &mut self.new_name,
-                    None,
-                    None,
-                );
-                // The create attempt's error ends when the DM changes the name.
-                if response.changed() {
-                    self.new_error = None;
-                }
-                if std::mem::take(&mut self.focus_new_name) {
-                    response.request_focus();
-                }
-                if self.new_kind.is_empty() {
-                    self.new_kind = "creature".into();
-                }
-                let old_kind = self.new_kind.clone();
-                design::field(ui, "Kind", None, None, |ui| {
-                    let word = |kind: &str| {
-                        let word = kind.replace('_', " ");
-                        format!("{}{}", word[..1].to_uppercase(), &word[1..])
-                    };
-                    let mut kinds = ["spell", "item", "effect", "rule", "rule_group"]
-                        .into_iter()
-                        .map(|kind| (kind.to_owned(), word(kind)));
-                    design::Dropdown::new(NEW_ENTRY_KIND, "Kind of entry")
-                        .choice("creature".to_owned(), word("creature"))
-                        .choices(kinds.by_ref())
-                        .width(ui.available_width())
-                        .show(ui, &mut self.new_kind);
-                });
-                if self.new_kind != old_kind {
-                    self.new_folder = kind_folder(&self.new_kind).into();
-                }
-                design::field(ui, "Destination", None, None, |ui| {
-                    let mut rows = places
-                        .iter()
-                        .enumerate()
-                        .map(|(i, owner)| (i, owner.label()));
-                    if let Some((first, label)) = rows.next() {
-                        design::Dropdown::new(NEW_ENTRY_PLACE, "Destination")
-                            .choice(first, label)
-                            .choices(rows)
-                            .width(ui.available_width())
-                            .show(ui, &mut place);
-                    }
-                });
-                // Round 26 FB6: the choice comes before the last field, so Create entry follows
-                // that field on its line; Cancel and the reason are on the line below.
-                if matches!(places[place], Owner::Package(_))
-                    && campaigns.active_campaign().is_some()
-                {
-                    use_checkbox(
-                        ui,
-                        &mut self.new_not_used,
-                        |_| "Adds this entry to the campaign’s package choices.",
-                    );
-                }
-                let blocked = if dirty {
-                    Some("Save or discard this entry first.")
-                } else if self.new_name.trim().is_empty() {
-                    Some("Type a name first.")
-                } else {
-                    None
-                };
-                let create_width = Action::primary("Create entry").natural_width(ui);
-                let mut create = false;
-                ui.horizontal_top(|ui| {
-                    let width = ui.available_width() - create_width - ui.spacing().item_spacing.x;
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(width, 0.0),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            folder_field(
-                                ui,
-                                NEW_ENTRY_FOLDER,
-                                "Folder",
-                                &mut self.new_folder,
-                                places[place].root().unwrap(),
-                                Some(&self.new_kind),
-                            );
-                        },
-                    );
-                    // The button stands on the field's line, below its label.
-                    let drop = design::L + design::XS;
-                    design::dropped(ui, egui::vec2(ui.available_width(), drop), drop, |ui| {
-                        create = Action::primary("Create entry")
-                            .blocked(blocked)
-                            .show(ui)
-                            .clicked();
-                    });
-                });
-                let relative = if self.new_folder.trim().is_empty() {
-                    format!("{}.md", self.new_name.trim())
-                } else {
-                    format!(
-                        "{}/{}.md",
-                        self.new_folder.trim().trim_end_matches('/'),
-                        self.new_name.trim()
-                    )
-                };
-                // One kept line: quiet Cancel at its start, then the reason, or the file Create
-                // entry will write. Round 27: the preview lives in this line, so typing moves
-                // nothing.
-                ui.horizontal(|ui| {
-                    ui.set_min_height(Density::Read.control());
-                    if Action::quiet("Cancel")
-                        .density(Density::Read)
-                        .line_start()
-                        .show(ui)
-                        .clicked()
-                    {
-                        self.new_form = false;
-                        self.new_error = None;
-                    }
-                    design::gap(ui, design::Gap::S); // With the line's item gap (`S`): `L`.
-                    if blocked.is_some() {
-                        design::blocked_reason(ui, blocked);
-                    } else if !self.new_name.trim().is_empty() {
-                        let destination = match &places[place] {
-                            Owner::Package(package) => &package.name,
-                            Owner::Campaign(campaign) => &campaign.name,
-                            Owner::Builtin => BUILTIN_NAME,
-                        };
-                        creation_path(ui, places[place].root().unwrap(), &relative, destination);
-                    }
-                });
-                // A closure, so an early `return` ends only the creation.
-                (|| {
-                    if create {
-                        let name = self.new_name.trim();
-                        if name.contains(['/', '\\', '\n', '\r']) || name == "." || name == ".." {
-                            self.new_error = Some(PageError::Own(NAME_WITHOUT_SEPARATORS.clone()));
-                            return;
-                        }
-                        let path = relative.clone();
-                        let text = note_text(name, &self.new_kind, None);
-                        let owner = places[place].clone();
-                        let root = owner.root().expect("a writable owner").to_path_buf();
-                        // The entry the new one replaces in the reader, for Back.
-                        let left = self.here();
-                        match write_note(&root, &path, None, &text) {
-                            Ok(entry) => {
-                                let used = self.choose_new_entry(&owner, entry.id, campaigns);
-                                let l = self.loaded.as_mut().unwrap();
-                                if !self.new_not_used
-                                    && used.is_ok()
-                                    && let (Some(uses), Some(chosen)) = (&mut l.uses, &mut l.chosen)
-                                {
-                                    uses.insert(entry.id);
-                                    chosen.insert(entry.id);
-                                }
-                                let created_path = path.clone();
-                                let created_owner = owner.key();
-                                l.notes.push(Note {
-                                    path,
-                                    text: crate::design::memo::Revised::new(text.clone()),
-                                    entry: Some(entry),
-                                    error: None,
-                                    fault: None,
-                                    manifest_gone: false,
-                                    owner,
-                                });
-                                l.notes.sort_by_cached_key(|n| natural_key(n.name()));
-                                l.invalidate();
-                                self.matches = None;
-                                self.scope_counts = None;
-                                self.selected = file_at(&l.notes, (created_owner, &created_path));
-                                if self.selected.is_some() {
-                                    self.trail.leave(left);
-                                }
-                                self.reveal_row = true;
-                                self.search.clear();
-                                self.section = Section::All;
-                                self.source = true;
-                                let _ = self.draft.replace(text);
-                                self.focus_hp = self.new_kind == "creature";
-                                self.new_name.clear();
-                                self.new_error = None;
-                                self.new_folder.clear();
-                                self.new_form = false;
-                                self.error = used.err();
-                                // Show the new entry, wherever the DM chose to put it.
-                                if self
-                                    .selected
-                                    .is_some_and(|i| !l.in_scope(&l.notes[i], self.scope))
-                                {
-                                    self.scope = Scope::All;
-                                }
-                                self.content_changed = Some(root);
-                            }
-                            Err(e) => self.new_error = Some(e.into()),
-                        }
-                    }
-                })();
-            });
-        });
-        self.new_place = (place != default_place).then_some(place);
     }
 
     /// The open entry, as Back or Forward returns to it.
@@ -3886,25 +1975,6 @@ impl Library {
         self.matches = None;
         self.source = false;
         self.error = None;
-    }
-
-    /// Keep the reader at the pane's left edge, with its scroll bar beside its measure.
-    fn editor(&mut self, ui: &mut egui::Ui, subtitle: &str, campaigns: &Campaigns) {
-        let spare = ui.available_width() - view::WIDE_READER;
-        if spare <= 0.0 || self.disk_change.is_some() {
-            self.editor_pane(ui, subtitle, campaigns, None);
-            return;
-        }
-        // The reader's lines keep their widest measure. Its body may still reach the pane's
-        // edge, for a wide table.
-        let pane_right = ui.max_rect().right();
-        ui.horizontal_top(|ui| {
-            let size = egui::vec2(view::WIDE_READER, ui.available_height());
-            ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
-                ui.set_max_width(view::WIDE_READER);
-                self.editor_pane(ui, subtitle, campaigns, Some(pane_right));
-            });
-        });
     }
 
     fn save_selected(&mut self, file_gone: bool) {
@@ -4197,1551 +2267,9 @@ impl Library {
             Err(error) => self.error = Some(error.into()),
         }
     }
-
-    /// `pane_right` is the pane's right edge, where the reader's body may end.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces, and the disk-change warnings above the comparison (design::results::STAGED_ALLOWS, ruling M20)"
-    )]
-    fn editor_pane(
-        &mut self,
-        ui: &mut egui::Ui,
-        subtitle: &str,
-        campaigns: &Campaigns,
-        pane_right: Option<f32>,
-    ) {
-        // The pane's kept results. They sit in the pane's message footer, so a result never moves
-        // the tabs, the file line, the title or the body.
-        let mut results = ReaderResults {
-            package_use: self.kept.package_use().is_some_and(|undo| {
-                campaigns
-                    .active_campaign()
-                    .is_some_and(|c| c.id == undo.campaign.id)
-            }),
-            manifest: self.kept.manifest().is_some(),
-            locked: if self.disk_change.is_some() {
-                Some(&CHANGED_FILE_FIRST)
-            } else if self.dirty() {
-                Some(&UNDO_WAITS_FOR_DRAFT)
-            } else {
-                None
-            },
-            lock_can_come: self.source || self.dirty() || self.disk_change.is_some(),
-            ..Default::default()
-        };
-        let mut undo_remove = false;
-        if self.selected.is_none() {
-            // With no entry open, the results and Remove's notice sit in the pane's message
-            // footer, below the empty reader (round 26). Its id is the reader's, so one pane has
-            // one footer. A typed footer (M-L0.4b): each kept line has its ticket.
-            let frame = PaneFrame::new(ui);
-            let mut messages = Messages::new(
-                &frame,
-                "library_footer",
-                ui.available_width().min(design::READER_MEASURE),
-            );
-            if !self.dirty()
-                && let Some(line) = self.kept.outcome(&frame, KeptKind::Removed, || {
-                    self.outcome_of(KeptKind::Removed, &results)
-                })
-            {
-                messages.kept(line);
-            }
-            self.page_messages(&frame, &mut messages, &results, campaigns);
-            page_faults(&mut messages, &[self.error.as_ref()]);
-            // The empty reader is the pane's body; the footer follows it (round 28 pane).
-            let paned = messages.pane(ui, design::Body::Content, |ui| {
-                design::empty_state(
-                    ui,
-                    icons::LIBRARY,
-                    "No entry open",
-                    if campaigns.active_campaign().is_some() || !campaigns.modules().is_empty() {
-                        "Choose one from the list, or make a new one."
-                    } else {
-                        "Choose one from the list."
-                    },
-                    |_| {},
-                );
-            });
-            // Undo remove acts here, as before; every other press after the pane is drawn, with
-            // the reader's (`show`). Each by its line's ticket.
-            match paned.pressed {
-                Some(Press {
-                    id: LibraryPress::Undo,
-                    ticket: Some(ticket),
-                }) if self.kept.kind_by(&ticket) == Some(KeptKind::Removed) => undo_remove = true,
-                pressed => self.footer_press = pressed,
-            }
-        }
-        let recovery = self
-            .selected
-            .and_then(|at| self.loaded.as_ref()?.notes.get(at))
-            .filter(|note| note.is_manifest() && note.error.is_some())
-            .and_then(|note| match &note.owner {
-                Owner::Package(module) => {
-                    let path = note.path.clone();
-                    let exists = note.error.as_deref()
-                        != Some(crate::content_workspace::DELETED_MANIFEST)
-                        && module.path.join(&path).exists();
-                    Some((module.clone(), path, exists))
-                }
-                _ => None,
-            });
-        if undo_remove
-            && let Some((_, _, draft)) = self.kept.take_discarded()
-            && let Some(LetGo {
-                note, used, chosen, ..
-            }) = self.kept.take_removed()
-            && let Some(loaded) = self.loaded.as_mut()
-        {
-            // The reload after Remove entry and lose draft left the entry out of what this campaign uses and
-            // counted the entries that need it. Undo gives back both with the draft.
-            if used && let (Some(uses), Some(entry)) = (loaded.uses.as_mut(), note.entry.as_ref()) {
-                uses.insert(entry.id);
-            }
-            if chosen
-                && let (Some(set), Some(entry)) = (loaded.chosen.as_mut(), note.entry.as_ref())
-            {
-                set.insert(entry.id);
-            }
-            self.selected = Some(loaded.notes.len());
-            loaded.notes.push(note);
-            loaded.invalidate();
-            loaded.refresh_diagnostics();
-            let _ = self.draft.replace(draft);
-            // The draft changed: a failed Save of the old words no longer owns it.
-            self.draft_revision += 1;
-            self.source = true;
-            self.disk_change = Some(DiskChange {
-                text: None,
-                moved_to: None,
-                fault: None,
-            });
-            self.invalidate();
-            // This frame drew the empty reader's pane; the next one draws the entry.
-            ui.ctx().request_repaint();
-            return;
-        }
-        let Some(i) = self.selected else {
-            return;
-        };
-        // Overwrite was chosen: what is on disk now becomes what this save replaces.
-        let overwrite = std::mem::take(&mut self.overwrite_disk);
-        let mut file_gone = false;
-        if overwrite && let Some(change) = self.disk_change.take() {
-            if let Some(path) = change.moved_to {
-                self.loaded.as_mut().unwrap().notes[i].path = path;
-                self.stale = true;
-            }
-            match change.text {
-                Some(text) => {
-                    self.loaded.as_mut().unwrap().notes[i].text =
-                        crate::design::memo::Revised::new(text)
-                }
-                None => file_gone = true,
-            }
-            self.loaded.as_mut().unwrap().invalidate();
-        }
-        let draft_lock = self.draft_lock();
-        let parsed_draft = self.parsed_draft(i);
-        let parsed: &Result<Entry, String> = &parsed_draft;
-        let note = &self.loaded.as_ref().unwrap().notes[i];
-        let reading = parsed
-            .as_ref()
-            .ok()
-            .and_then(|entry| entry.reading().ok().flatten());
-        // A file with no entry to read is titled by its file name; the file line names its path.
-        let file_name = Path::new(&note.path)
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned());
-        let title = match &reading {
-            Some(reading) => reading.title.as_str(),
-            None if note.entry.is_none()
-                && note.error.as_deref() != Some(crate::content_workspace::DELETED_MANIFEST) =>
-            {
-                file_name.as_deref().unwrap_or(note.name())
-            }
-            None => note.name(),
-        };
-        // A duplicate keeps its folder too: the two readers differ only there.
-        let reading_subtitle = reader_subtitle(
-            &note.owner,
-            &row_line_without_fault(subtitle),
-            reading
-                .as_ref()
-                .and_then(|_| presentation::class_level(parsed.as_ref().ok()?)),
-            parsed
-                .as_ref()
-                .ok()
-                .and_then(|entry| entry.fields.get("splat_spell"))
-                .and_then(spell_kind),
-        );
-        let dirty = !self.saved_is_draft(note);
-        let editable = note.owner.editable();
-        // A file the system will not read has no text to edit: the reader names its fault.
-        let fault = note.fault.clone();
-        if fault.is_some() {
-            self.source = false;
-        }
-        let conflict = self.disk_change.is_some();
-        let mut duplicate_indices = self.loaded.as_ref().unwrap().duplicates(i);
-        if !duplicate_indices.is_empty() {
-            duplicate_indices.push(i);
-            let notes = &self.loaded.as_ref().unwrap().notes;
-            let first = crate::content_workspace::duplicate_repair_path(
-                duplicate_indices.iter().filter_map(|&at| {
-                    notes[at]
-                        .owner
-                        .root()
-                        .map(|root| root.join(&notes[at].path))
-                }),
-            );
-            duplicate_indices.sort_by_key(|&at| {
-                notes[at]
-                    .owner
-                    .root()
-                    .map(|root| root.join(&notes[at].path))
-                    != first
-            });
-        }
-        let mut new_identity = None;
-        let mut new_identities = None;
-        // Only a side-by-side comparison of draft and disk text takes the full width. A deleted
-        // file's lone draft keeps the source editor's measure.
-        let editor_width = if self
-            .disk_change
-            .as_ref()
-            .is_some_and(|change| change.text.is_some())
-        {
-            ui.available_width()
-        } else {
-            ui.available_width().min(EDITOR_MAX_WIDTH)
-        };
-        self.just_saved &= !dirty && self.source;
-        // Ctrl+S is taken only where a draft could be saved; it saves exactly when Save can
-        // (`DraftState::can_save`, below).
-        let save_key = design::save_row::save_key(ui, dirty && editable && !conflict);
-        let d = colors().document;
-        // The file stopped reading under the draft: its owner line says so, as for a file that
-        // never read.
-        let stopped_reading = self
-            .disk_change
-            .as_ref()
-            .is_some_and(|change| change.fault.is_some());
-        let about = note.entry.as_ref().is_some_and(|e| e.kind == "package");
-        let mut use_every = None;
-        let mut every_chosen = false;
-        // Row 125: a fault on the owner line is typed, from the note's typed state (its file
-        // fault, its parse, a deleted manifest), never from its error words. The kind gives the
-        // status words and the tone (`outcome::fault_status`), as the row and the message have.
-        let owner_fault = match &note.owner {
-            Owner::Package(_) if stopped_reading => Some(FaultStatus::CannotRead),
-            Owner::Package(_) if about => None,
-            Owner::Package(_) if note.manifest_gone => Some(FaultStatus::ManifestDeleted),
-            Owner::Package(_) | Owner::Campaign(_)
-                if note.error.is_some() || note.fault.is_some() || stopped_reading =>
-            {
-                Some(FaultStatus::CannotRead)
-            }
-            _ => None,
-        };
-        let owner_name = match &note.owner {
-            Owner::Package(module) => module.name.as_str(),
-            _ => "Campaign",
-        };
-        let package_word = match &note.owner {
-            Owner::Package(module) if let Some(fault) = owner_fault => fault.words(&module.name),
-            Owner::Package(_) if about && campaigns.active_campaign().is_none() => {
-                "No campaign open".into()
-            }
-            Owner::Package(module) if about => {
-                let loaded = self.loaded.as_ref().unwrap();
-                let entries: Vec<_> = loaded
-                    .notes
-                    .iter()
-                    .filter(|n| {
-                        n.owner.is_package(module.id)
-                            && n.entry.as_ref().is_some_and(|e| {
-                                !["package", "reference"].contains(&e.kind.as_str())
-                            })
-                    })
-                    .collect();
-                // Round 27 FA6: the DM's choices and the entries they need, as Campaign's
-                // package row counts its ticked boxes.
-                let chosen = entries.iter().filter(|n| loaded.chose(n)).count();
-                let needed = entries
-                    .iter()
-                    .filter(|n| !loaded.chose(n) && loaded.in_scope(n, Scope::Uses))
-                    .count();
-                every_chosen = chosen == entries.len();
-                chosen_count(chosen, needed, entries.len())
-            }
-            Owner::Package(module) => format!(
-                "{} · {}",
-                module.name,
-                if self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses) {
-                    "Chosen for this campaign"
-                } else {
-                    "Not chosen"
-                }
-            ),
-            _ => String::new(),
-        };
-        // A ready state means Save would accept the draft. Every draft with changes, and every
-        // repair draft, asks Save's own check before the write (parse, identity, ownership):
-        // the parse is cached, and the identity index is cached until the notes change.
-        let refusal = (note.error.is_some() || dirty)
-            .then(|| self.loaded.as_ref().unwrap().draft_refusal(i, parsed))
-            .flatten();
-        // Why Save refuses this draft now. It blocks Save and Ctrl+S, and the state is Invalid.
-        let save_refusal = refusal.clone().filter(|_| dirty);
-        let (repair_problem, repair_line) =
-            draft_repair_problem(note, &self.draft, refusal, recovery.as_ref());
-        // A missing link Campaign sent here: the row that holds it in the parsed draft.
-        let here = note.owner.root().map(|root| root.join(&note.path));
-        let missing_link = self
-            .repair_link
-            .as_mut()
-            .filter(|link| here.as_ref() == Some(&link.path))
-            .and_then(|link| {
-                // Looked up again only for a new parse, that is, new draft text.
-                let line = (*link.found.get_or(parsed_draft.revision(), || {
-                    parsed
-                        .as_ref()
-                        .ok()
-                        .and_then(|entry| repair_row(entry, &link.target))
-                }))?;
-                // The content layer's words; the fault adds the entry, the line and the fix.
-                Some((line, link.words.clone()))
-            });
-        let repair_line = repair_line.or(missing_link.as_ref().map(|(line, _)| *line));
-        // A Save that failed on the disk, while this is still the draft it tried to write.
-        if let Some(failure) = &self.save_failure {
-            #[cfg(any(test, feature = "test-support"))]
-            {
-                let (checks, reads) = self.failure_checks.get();
-                self.failure_checks.set((checks + 1, reads));
-            }
-            let draft = DraftView::new(
-                &self.draft,
-                #[cfg(any(test, feature = "test-support"))]
-                &self.failure_checks,
-            );
-            if !failure.owns(note, self.draft_revision, draft) {
-                self.save_failure = None;
-            }
-        }
-        let failed = self
-            .save_failure
-            .as_ref()
-            .map(|failure| failure.reason.clone());
-        // The save row's state. Its word, Save's weight and why Save waits all come from it
-        // (`design::save_row`). A parse fault ends with the draft that parses: the saved file
-        // stays unreadable on the owner line until Save, but the draft is not Invalid.
-        let mut draft_state = design::DraftState::new(
-            design::save_row::DraftOrigin::Saved, // New entry writes the file before it opens
-            if dirty {
-                design::save_row::Changed::Yes
-            } else {
-                design::save_row::Changed::No
-            },
-            if self.run_open {
-                design::save_row::Primary::Elsewhere
-            } else {
-                design::save_row::Primary::Draft
-            },
-        );
-        if let Some(refusal) = &save_refusal {
-            draft_state = draft_state.check(design::save_row::Diagnosis::refused(refusal.as_str()));
-        }
-        // Lead ruling (s30 B11 F4, R41): a deleted manifest is a missing file, not unreadable
-        // text: its warning stays on the owner line and in the footer, and a draft whose text
-        // Save accepts says the ready word (`Unsaved`), never `Invalid`. Any other repair
-        // problem is unreadable data: `Invalid`, an error. Neither blocks Save (B3's contract).
-        let manifest_gone = fault.is_none()
-            && note.error.is_some()
-            && recovery.as_ref().is_some_and(|(_, _, exists)| !exists);
-        if (fault.is_some() || repair_problem.is_some()) && !manifest_gone {
-            draft_state = draft_state.check(design::save_row::Diagnosis::unreadable());
-        }
-        if conflict {
-            draft_state = draft_state.changed_on_disk();
-        }
-        if failed.is_some() {
-            // An action-time failure: the disk refused the last Save of this draft.
-            draft_state = draft_state.not_saved();
-        }
-        if self.just_saved {
-            draft_state = draft_state.just_saved();
-        }
-        // Overwrite was chosen in the comparison: it saves whatever the draft holds.
-        let mut save = overwrite || (save_key && draft_state.can_save());
-        let mut step = history::take_if(ui.ctx(), |_| true);
-        let can_copy = note
-            .entry
-            .as_ref()
-            .is_some_and(|e| !["package", "campaign", "reference"].contains(&e.kind.as_str()));
-        let can_make = matches!(note.owner, Owner::Campaign(_))
-            && note.entry.as_ref().is_some_and(|e| e.kind == "creature");
-        // Round 25 FF3: the campaign choice is a toolbar action, so it never sends the file line's
-        // path to a second row: the title keeps one place for chosen and not-chosen entries.
-        let choose = match &note.owner {
-            Owner::Package(_)
-                if about && campaigns.active_campaign().is_some() && !every_chosen =>
-            {
-                Some("Choose all")
-            }
-            Owner::Package(_)
-                if !about
-                    && note.entry.is_some()
-                    && !self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses) =>
-            {
-                Some("Choose for this campaign")
-            }
-            _ => None,
-        };
-        // Each control waits for one cause, from ONE value: the open draft (its save row, or the
-        // line under the toolbar when there is none, paints the reason), `Copy to…`'s places
-        // policy that it shares with `New entry` (painted under the toolbar), or, for the mode
-        // switch, the unreadable file that the body states.
-        let copy_availability = match Places::of(campaigns).copy() {
-            Some(reason) => design::Availability::Waits(reason),
-            None => design::Availability::Draft,
-        };
-        #[derive(Clone, Copy, PartialEq, Eq)]
-        enum Extra {
-            Copy,
-            Make,
-            Choose,
-        }
-        let edit_label = if editable {
-            "Edit Markdown"
-        } else {
-            "Markdown source"
-        };
-        let was_source = self.source;
-        let blocks = self.draft_blocks();
-        let mut toolbar = design::ReaderToolbar::new(
-            self.source,
-            edit_label,
-            "Markdown source",
-            match &fault {
-                Some(_) => design::ModeLock::BodyStatesFault(UNREAD_EDIT),
-                None => design::ModeLock::Open,
-            },
-        )
-        .back(
-            self.trail.peek(Step::Back).is_some(),
-            "Return to the entry before this link. During a draft, read it in Lookup.",
-        );
-        // M0355 (round 31 reader-toolbar-icon-form): every toolbar action has one form, its
-        // words; Back is navigation and keeps its arrow.
-        if can_copy {
-            toolbar = toolbar.action("Copy to…", Extra::Copy, copy_availability);
-        }
-        if can_make {
-            toolbar = toolbar.action("Make NPC note", Extra::Make, design::Availability::Draft);
-        }
-        if let Some(label) = choose {
-            toolbar = toolbar.action(label, Extra::Choose, design::Availability::Draft);
-        }
-        // The toolbar, the file line between, and the save row with the draft's reason are one
-        // part's draw: it paints the reason itself, on the save row's line or under the toolbar.
-        let row_for = |source: bool| {
-            if editable && (source || dirty) && !conflict {
-                design::DraftRow::Save {
-                    label: "Save",
-                    width: editor_width,
-                }
-            } else {
-                design::DraftRow::None
-            }
-        };
-        let file_line = |ui: &mut egui::Ui| {
-            if let Some(root) = note.owner.root() {
-                let moved_path = self
-                    .disk_change
-                    .as_ref()
-                    .and_then(|change| change.moved_to.as_deref());
-                let shown_path = moved_path.unwrap_or(&note.path);
-                let moved_from = moved_path.map(|_| {
-                    format!(
-                        "moved from {}/",
-                        Path::new(&note.path)
-                            .parent()
-                            .unwrap_or(Path::new(""))
-                            .display()
-                    )
-                });
-                // No editor link for a file that cannot be read, whether it never read or stopped
-                // reading under a draft: an editor cannot open it either.
-                let unread = fault.is_some()
-                    || self
-                        .disk_change
-                        .as_ref()
-                        .is_some_and(|change| change.fault.is_some());
-                let obsidian = obsidian_for(root, &note.owner) && !unread;
-                // The draft's file has gone from disk: no link can show it, so the line offers its
-                // folder, as a deleted manifest's does.
-                let file_gone_now = self.disk_change.as_ref().is_some_and(|change| {
-                    change.text.is_none() && change.moved_to.is_none() && change.fault.is_none()
-                });
-                let deleted_manifest = recovery.as_ref().is_some_and(|(_, _, exists)| !exists);
-                let file_line = |ui: &mut egui::Ui| {
-                    if deleted_manifest {
-                        show_folder(ui, root);
-                    } else if file_gone_now {
-                        gone_file_parts(ui, root, shown_path);
-                    } else if let Some(from) = &moved_from {
-                        // Round 27 FD7: one statement about the path, then its links: the new
-                        // path, the muted old folder, then `Show file`.
-                        moved_file_parts(ui, root, shown_path, from, obsidian);
-                    } else {
-                        crate::world::entry_file_parts(ui, root, shown_path, obsidian);
-                    }
-                };
-                // FL1: once Save has found the file or its folder read only, the owner line says so,
-                // as long as that failure lasts (the next edit, another entry or a Save ends it).
-                let read_only = self
-                    .save_failure
-                    .as_ref()
-                    .is_some_and(|failure| failure.read_only.is_some())
-                    && note.error.is_none()
-                    && !stopped_reading;
-                let read_only_word;
-                let campaign_fault_word;
-                let owner_word = match &note.owner {
-                    Owner::Package(module) if read_only => {
-                        read_only_word = format!("{} · Read only", module.name);
-                        read_only_word.as_str()
-                    }
-                    Owner::Package(_) => package_word.as_str(),
-                    Owner::Campaign(_) if let Some(fault) = owner_fault => {
-                        campaign_fault_word = fault.words(owner_name);
-                        campaign_fault_word.as_str()
-                    }
-                    _ if read_only => "Campaign · Read only",
-                    _ => "Campaign · Editable",
-                };
-                let file_below = ui.available_width()
-                    < design::number_width(ui, owner_word, &Type::Small.font(ui))
-                        + design::number_width(ui, "Show file", &Type::Body.font(ui))
-                        + design::XXL * 2.0
-                        + if obsidian {
-                            design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui))
-                        } else {
-                            0.0
-                        };
-                // The path shortens from the front and keeps its file name whole
-                // (`…/Cinder Wolf copy.md`). When even that does not fit after the owner words and
-                // their action, the path takes its own Read row: it is measured where it would start.
-                let filename = Path::new(shown_path)
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy();
-                let shortest_path = if filename == *shown_path {
-                    filename.to_string()
-                } else {
-                    format!("…/{filename}")
-                };
-                let path_room = if deleted_manifest {
-                    design::number_width(ui, "Show folder", &Type::Body.font(ui))
-                } else {
-                    design::number_width(ui, &shortest_path, &Type::Small.font(ui))
-                        + design::L
-                        + moved_from.as_ref().map_or(0.0, |from| {
-                            design::number_width(ui, from, &Type::Small.font(ui)) + design::S
-                        })
-                        + if file_gone_now {
-                            design::number_width(ui, "Show folder", &Type::Body.font(ui))
-                        } else {
-                            crate::world::entry_file_links_width(ui, obsidian)
-                        }
-                };
-                let mut path_below = false;
-                let owner_line = |ui: &mut egui::Ui| {
-                    // In a narrow reader (Lookup open beside it at 960), the campaign choice keeps
-                    // its first word rather than a cut: `Ashen Marches · Chosen`.
-                    let short_word;
-                    let owner_word = match owner_word.strip_suffix(" for this campaign") {
-                        Some(short)
-                            if design::number_width(ui, owner_word, &Type::Small.font(ui))
-                                + design::XL
-                                > ui.available_width() =>
-                        {
-                            short_word = short.to_owned();
-                            short_word.as_str()
-                        }
-                        _ => owner_word,
-                    };
-                    if let Some(fault) = owner_fault {
-                        design::outcome::fault_status(ui, owner_name, fault);
-                    } else {
-                        design::status(
-                            ui,
-                            if read_only {
-                                Status {
-                                    icon: icons::READ_ONLY,
-                                    word: owner_word,
-                                    color: d.read_only,
-                                }
-                            } else {
-                                Status {
-                                    icon: icons::EDIT,
-                                    word: owner_word,
-                                    color: d.clean,
-                                }
-                            },
-                        );
-                    }
-                    if !file_below {
-                        if ui.available_width() >= path_room {
-                            file_line(ui);
-                        } else {
-                            path_below = true;
-                        }
-                    }
-                };
-                file_line_row(ui, file_below, owner_line);
-                if file_below || path_below {
-                    file_line_row(ui, false, file_line);
-                }
-            } else {
-                file_line_row(ui, false, |ui| {
-                    design::status(
-                        ui,
-                        Status {
-                            icon: icons::READ_ONLY,
-                            word: "Built-in · Read only",
-                            color: d.read_only,
-                        },
-                    );
-                });
-            }
-        };
-        let shown = toolbar.show(ui, &draft_state, blocks, row_for, file_line);
-        let toolbar_press = shown.press;
-        self.source = shown.source;
-        if self.source != was_source {
-            let _ = self.kept.take_scope_notice();
-            self.focus_repair = self.source && note.error.is_some();
-        }
-        // The mode's flags, after the toggle above: the pass that opens Edit Markdown draws the
-        // editor's pane (its footer identity and scroll) from the start, not Read's.
-        // Read: the reader's messages sit in the pane's message footer, below the body.
-        let choices_in_reader = !self.source && !conflict;
-        let save_row = editable && (self.source || dirty);
-        // Edit Markdown's save row, with the pane's message footer below the editor.
-        let slot_row = save_row && !conflict;
-        results.identities = self.kept.identities().is_some();
-        results.identity = self.kept.identity().is_some();
-        let mut repair_pressed = false;
-        let mut read_again = false;
-        // The heading warning and its Undo. Read and Edit Markdown both draw them in the pane's
-        // message footer, with the duplicate warning, so one file's warnings share one place and
-        // the body never moves.
-        let heading = HeadingChoice::new(
-            (editable && !conflict)
-                .then(|| parsed.as_ref().ok())
-                .flatten(),
-            &self.draft,
-            self.kept.heading(),
-            &(note.owner.key(), note.path.clone()),
-            &self.same_heading,
-        );
-        // Read's messages for the pane's message footer: a package entry's links to entries in
-        // this campaign only, each with its copy action, and the copy's result.
-        let dependencies: Vec<(Uuid, Sentence, (String, String))> = match (&note.owner, &note.entry)
-        {
-            (Owner::Package(package), Some(entry)) if choices_in_reader => ui
-                .ctx()
-                .data(|data| {
-                    data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
-                        "reader_link_index",
-                    ))
-                })
-                .map(|index| {
-                    index
-                        .campaign_dependencies(entry)
-                        .into_iter()
-                        .map(|at| {
-                            let dependency = &index.items[at].entry;
-                            (
-                                dependency.id,
-                                // Row 145 (FC6): say what the link is and why it matters.
-                                crate::sentence!(
-                                    "{} links to {}, which is in this campaign only. Another campaign that uses {} will not find it.",
-                                    entry.name,
-                                    dependency.name,
-                                    package.name
-                                ),
-                                (dependency.name.clone(), package.name.clone()),
-                            )
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
-            _ => Vec::new(),
-        };
-        // What Edit Markdown's footer shows, gathered with the save row. The footer is built from
-        // it before the body and drawn by the pane after the body (`Messages::pane_editor`, round
-        // 28 P2); its press is applied after the pane returns.
-        struct EditData {
-            vital_result: Option<Sentence>,
-            vitals: Vec<(&'static str, &'static str, i64, Sentence)>,
-            broken_cache: Vec<Sentence>,
-            broken_taken: bool,
-            reason_tone: Tone,
-        }
-        let mut edit_data = None;
-        // Save and Discard are one row, as far apart as the pane allows.
-        if slot_row {
-            let row = shown.save.unwrap_or_default();
-            save |= row.save;
-            if row.discard {
-                Self::discard_draft(
-                    (
-                        &mut self.kept,
-                        &mut self.draft,
-                        &mut self.draft_revision,
-                        &mut self.error,
-                    ),
-                    note,
-                );
-            }
-            // The pane's message footer, below the editor: `S` under a short draft, pinned under
-            // a long one, whose editor region scrolls (round 28 P2).
-            // Results that carry a live Undo come first (Discard's, the heading and stat fixes',
-            // the reader's results with Undo): a broken file's reason never clears after Discard
-            // or Reload, so a reason first would hide the only way back. Then Save's reason (a
-            // repair draft's parse error with its recovery, a refusal before the write, the
-            // disk's failure). Then the notices: results with no Undo, the missing link Campaign
-            // sent here, the other broken links, the first-heading and stat warnings. Why other
-            // actions wait is painted by `design::ReaderToolbar`, never by the footer.
-            let vital_result = self.stat_result_for(&(note.owner.key(), note.path.clone()));
-            let vitals = match (editable, &parsed) {
-                (true, Ok(entry)) => creature::vital_checks(entry),
-                _ => Vec::new(),
-            };
-            // Round 25 FH6: each broken link the row counts has its own line here, so the DM
-            // knows where every one is. The link Campaign sent here has its own words.
-            let index = ui.ctx().data(|data| {
-                data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
-                    "reader_link_index",
-                ))
-            });
-            // Borrowed out of the cache for this frame and put back after the footer is drawn.
-            let mut broken_taken = false;
-            let broken_cache: Vec<Sentence> = match (&index, parsed) {
-                (Some(index), Ok(entry)) if note.owner.editable() && !note.is_manifest() => {
-                    let skip = missing_link.as_ref().map(|(at, _)| *at);
-                    let fresh = self
-                        .broken_lines
-                        .as_ref()
-                        .is_some_and(|(seen, known, at, _)| {
-                            *seen == parsed_draft.revision()
-                                && *known == index.generation()
-                                && *at == skip
-                        });
-                    if !fresh {
-                        let warnings = broken_link_warnings(&self.draft, entry, index, skip);
-                        self.broken_lines =
-                            Some((parsed_draft.revision(), index.generation(), skip, warnings));
-                    }
-                    broken_taken = true;
-                    self.broken_lines
-                        .as_mut()
-                        .map_or_else(Default::default, |(_, _, _, warnings)| {
-                            std::mem::take(warnings)
-                        })
-                }
-                _ => Default::default(),
-            };
-            let reason_tone = recovery
-                .as_ref()
-                .filter(|_| note.error.is_some())
-                .map_or(Tone::Error, |(_, _, exists)| {
-                    crate::content_workspace::manifest_fault_tone(*exists)
-                });
-            edit_data = Some(EditData {
-                vital_result,
-                vitals,
-                broken_cache,
-                broken_taken,
-                reason_tone,
-            });
-        }
-        // The toolbar's press, now that the draft's reason is painted.
-        if toolbar_press == Some(design::ToolbarPress::Back) {
-            step = Some(Step::Back);
-        }
-        let extra = match toolbar_press {
-            Some(design::ToolbarPress::Action(extra)) => Some(extra),
-            _ => None,
-        };
-        let copy_clicked = matches!(extra, Some(Extra::Copy));
-        let make_clicked = matches!(extra, Some(Extra::Make));
-        let choose_clicked = matches!(extra, Some(Extra::Choose));
-        if choose_clicked && let Owner::Package(module) = &note.owner {
-            if about {
-                use_every = Some(module.clone());
-            } else if let Some(entry) = &note.entry {
-                self.use_entry = Some((module.id, entry.id));
-            }
-        }
-        if copy_clicked {
-            self.copy = Some(crate::content_workspace::CopySource {
-                entry: note.entry.as_ref().unwrap().clone(),
-                text: note.text.to_string(),
-                root: note.owner.root().map(Path::to_path_buf),
-                campaign: match &note.owner {
-                    Owner::Campaign(campaign) => Some(campaign.clone()),
-                    _ => None,
-                },
-            });
-        }
-        if make_clicked && let (Owner::Campaign(campaign), Some(entry)) = (&note.owner, &note.entry)
-        {
-            match crate::world::make_npc_note(campaign, entry) {
-                Ok(id) => {
-                    self.stale = true;
-                    self.content_changed = Some(campaign.path.clone());
-                    self.open_world_npc = Some(id);
-                }
-                Err(error) => self.error = Some(error.into()),
-            }
-        }
-        // Live, because Discard in this same frame changed the draft.
-        if !self.saved_is_draft(note) {
-            let _ = self.kept.take_discarded();
-        }
-        // The pane's footer, typed (M-L0.4b): Edit Markdown's (with a save row), Read's, or a
-        // comparison's. Built before the body from the stores, each kept result with its ticket;
-        // the pane draws the body and then it (`Messages::pane`, `pane_editor`), so it follows a
-        // short body, and its one press is read after the pane (round 28, row G6 and P2). Keyed
-        // by the entry, as the old body scroll was: each entry keeps its own offset.
-        let frame = PaneFrame::new(ui);
-        let mut messages = Messages::new(
-            &frame,
-            (
-                if self.source {
-                    "library_source"
-                } else {
-                    "library_footer"
-                },
-                note.owner.key(),
-                note.path.clone(),
-            ),
-            if edit_data.is_some() || self.source {
-                editor_width
-            } else {
-                editor_width.min(design::READER_MEASURE)
-            },
-        );
-        let undo = |step: UndoStep| step.pressed_as(LibraryPress::Undo);
-        // Kept results with a live Undo: Discard's, the heading and stat fixes', each copy.
-        if discard_is_for(self.kept.discarded(), note)
-            && let Some(line) = self.kept.outcome(&frame, KeptKind::Discarded, || {
-                Some(KeptOutcome::Notice(
-                    Notice::new(crate::sentence!("{} draft discarded.", note.name())),
-                    undo(UndoStep::of(Verb::Discard, note.name())),
-                ))
-            })
-        {
-            messages.kept(line);
-        }
-        if let Some(words) = &heading.undo
-            && let Some(line) = self.kept.outcome(&frame, KeptKind::Heading, || {
-                Some(
-                    Said::new(words.clone())
-                        .undo(undo(HEADING_CHANGE_UNDO))
-                        .into(),
-                )
-            })
-        {
-            messages.kept(line);
-        }
-        if let Some(words) = edit_data
-            .as_ref()
-            .and_then(|data| data.vital_result.clone())
-            && let Some(line) = self.kept.outcome(&frame, KeptKind::Vital, || {
-                Some(Said::new(words).undo(undo(STAT_CHANGE_UNDO)).into())
-            })
-        {
-            messages.kept(line);
-        }
-        // Round 25 FF8: each copy's result names the entry and the package, in its Undo's words
-        // too (ruling M9).
-        for copy in self.kept.copies().iter().rev().filter(|copy| {
-            choices_in_reader
-                && copy.path == note.path
-                && note.owner.root() == Some(copy.root.as_path())
-        }) {
-            if let Some(line) = self.kept.copy_outcome(&frame, copy, || {
-                Said::new(crate::sentence!(
-                    "{} copied to {} and linked.",
-                    copy.name,
-                    copy.package
-                ))
-                .undo(undo(UndoStep::of(Verb::Copy, copy.name.as_str())))
-                .into()
-            }) {
-                messages.kept(line);
-            }
-        }
-        // The page's results and this pane's kept results.
-        self.page_messages(&frame, &mut messages, &results, campaigns);
-        if let Some(data) = &edit_data {
-            // A repair draft's fault in its tone (a deleted manifest is a warning), or Save's
-            // refusal before the write, a YAML fault in its own words. A broken manifest's
-            // recovery depends on the saved file only, so it stays while the DM edits.
-            let repair = recovery.as_ref().filter(|_| note.error.is_some());
-            let problem = repair_problem
-                .as_deref()
-                .or(repair.and(note.error.as_deref()));
-            if let Some(problem) = problem {
-                let fault = FaultMessage::new(&LibraryFault::Repair(problem, data.reason_tone));
-                messages.outcome(match repair {
-                    Some((_, path, exists)) => {
-                        fault.choice(recovery_choice(path, *exists, self.draft_lock()))
-                    }
-                    None => fault,
-                });
-            }
-            // The disk's failure of the last Save of this draft.
-            if let Some(failure) = &failed {
-                messages.outcome(FaultMessage::new(&LibraryFault::NotSaved(failure)));
-            }
-            // The repair this note was opened for.
-            if let Some((line, words)) = &missing_link {
-                messages.outcome(FaultMessage::new(&LibraryFault::Link {
-                    line: *line,
-                    words,
-                }));
-            }
-            for words in &data.broken_cache {
-                messages.outcome(Notice::warning(words.clone()));
-            }
-            for (key, label, value, words) in &data.vitals {
-                messages.outcome(Notice::warning(words.clone()).choice(Choice::named(
-                    crate::choice!("Use {}", value),
-                    LibraryPress::UseVital(key, label, *value),
-                )));
-            }
-        }
-        if let Some((words, name, _)) = &heading.fix {
-            messages.outcome(Notice::warning(words.clone()).choice(Choice::named(
-                crate::choice!("Use {}", name),
-                LibraryPress::FixHeading,
-            )));
-        }
-        if !duplicate_indices.is_empty() {
-            messages.outcome(duplicate_notice(
-                ui,
-                self.loaded.as_ref().unwrap(),
-                note,
-                &duplicate_indices,
-                self.draft_lock(),
-            ));
-        }
-        // A package entry's links to entries in this campaign only, each with its copy action.
-        for (id, words, (name, package)) in &dependencies {
-            let choice = Choice::named(
-                crate::choice!("Copy {} to {}", name, package),
-                LibraryPress::CopyDependency(*id),
-            );
-            messages.outcome(
-                Notice::warning(words.clone()).choice(match self.draft_lock() {
-                    Some(reason) => choice.blocked(reason),
-                    None => choice,
-                }),
-            );
-        }
-        page_faults(&mut messages, &[self.error.as_ref()]);
-        let mut messages = Some(messages);
-        let mut footer_pressed = None;
-        let mut reload_from_disk = false;
-        let mut read_disk_again = false;
-        if let Some(fault) = self
-            .disk_change
-            .as_ref()
-            .and_then(|change| change.fault.clone())
-        {
-            // The file is there but cannot be read. Saving the draft over it would replace bytes
-            // Splat never read, so the choices are to read it again or to let the draft go
-            // (M20: a typed placeholder; its red choice `L` after the safe one).
-            let choice = at_reader_measure(ui, |ui| {
-                PagePlaceholder::new(&LibraryFault::Unread(&fault, true))
-                    .choice(Choice::new(
-                        MessageChoice::Choice("Try again"),
-                        DiskChoice::Again,
-                    ))
-                    .choice(Choice::new(
-                        MessageChoice::Lose("Reload and lose my draft"),
-                        DiskChoice::Reload,
-                    ))
-                    .show(ui)
-            });
-            design::gap(ui, design::Gap::S);
-            design::quiet_section(ui, "Technical details", |ui| {
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, &fault.system).color(colors().muted))
-                        .wrap(),
-                );
-            });
-            read_disk_again = choice == Some(DiskChoice::Again);
-            reload_from_disk = choice == Some(DiskChoice::Reload);
-        } else if let Some(change) = &mut self.disk_change {
-            // R10 (G16, G164, G165): a changed entry is named, as Encounters and World name
-            // theirs; `This entry` only for an entry with no name.
-            let names = if change.text.is_none() {
-                self.loaded.as_ref().unwrap().dependents(note)
-            } else {
-                DependentNames::default()
-            };
-            // The entries that need a deleted one follow its words, so the choices keep one
-            // line: the safe one, then the red one `L` after it.
-            let text = if change.moved_to.is_some() {
-                MOVED_ON_DISK
-            } else if change.text.is_some() {
-                changed_on_disk(note.entry.as_ref().map_or("", |entry| &entry.name))
-            } else if names.is_empty() {
-                DELETED_ON_DISK
-            } else {
-                DELETED_ON_DISK.then(crate::sentence!("{} needs this entry.", name_list(&names)))
-            };
-            // The choices start at the message text, as in World and the run.
-            let save = match (&change.moved_to, &change.text) {
-                (Some(path), _) => Choice::named(
-                    crate::choice!("Save my draft to {}", path),
-                    DiskChoice::Overwrite,
-                ),
-                (None, None) => Choice::new(
-                    MessageChoice::Choice("Save my draft again"),
-                    DiskChoice::Overwrite,
-                ),
-                (None, Some(_)) => Choice::new(
-                    MessageChoice::Choice("Overwrite with my draft"),
-                    DiskChoice::Overwrite,
-                ),
-            };
-            let lose = Choice::new(
-                MessageChoice::Lose(if change.text.is_none() {
-                    "Remove entry and lose draft"
-                } else {
-                    "Reload and lose my draft"
-                }),
-                DiskChoice::Reload,
-            );
-            let choice = PagePlaceholder::new(&LibraryFault::Warning(&text))
-                .choice(save)
-                .choice(lose)
-                .show(ui);
-            let (overwrite, reload) = (
-                choice == Some(DiskChoice::Overwrite),
-                choice == Some(DiskChoice::Reload),
-            );
-            self.overwrite_disk |= overwrite;
-            reload_from_disk = reload;
-        }
-        let mut open_link = None;
-        let mut pressed_link = None;
-        if self.source && self.disk_change.is_none() {
-            // Edit Markdown (or a built-in's source): the editor is the pane's editor region, as
-            // tall as its text while the pane fits, and scrolling inside the region when it does
-            // not, so the footer under it stays in view (round 28 P2). With no save row the
-            // footer is empty, and the pane is still the editor's.
-            let footer = messages.take().expect("the footer is built above");
-            footer_pressed = footer
-                .pane_editor(ui, |ui, region| {
-                    // The region draws the editor's fixed frame, with the text and its lane
-                    // inside it (layout PR 9).
-                    ui.scope(|ui| {
-                        ui.set_max_width(editor_width);
-                        let output = region.editor(
-                            ui,
-                            note.markdown_field(),
-                            &mut self.draft,
-                            design::pane::Face::Font(
-                                egui::TextStyle::Monospace.resolve(ui.style()),
-                            ),
-                            |edit| edit.font(egui::TextStyle::Monospace).interactive(editable),
-                        );
-                        // Each edit is a new draft: a failed Save of the old words ends.
-                        if output.response.changed() {
-                            self.draft_revision += 1;
-                        }
-                        pressed_link = crate::markdown_source::pressed_note_link(
-                            ui,
-                            &output,
-                            note.entry.as_ref().map(|entry| entry.id),
-                        );
-                        let response = output.response;
-                        design::named(ui, &response, "Markdown editor");
-                        if std::mem::take(&mut self.focus_markdown) {
-                            response.request_focus();
-                        }
-                        // The caret goes to the broken line; the region reveals a caret that
-                        // moved outside its view, centred (P2).
-                        if std::mem::take(&mut self.focus_repair)
-                            && let Some(line) = repair_line
-                        {
-                            let at = self
-                                .draft
-                                .lines()
-                                .take(line.saturating_sub(1))
-                                .map(|line| line.chars().count() + 1)
-                                .sum();
-                            response.request_focus();
-                            let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
-                                .unwrap_or_default();
-                            state
-                                .cursor
-                                .set_char_range(Some(egui::text::CCursorRange::one(
-                                    egui::text::CCursor::new(at),
-                                )));
-                            state.store(ui.ctx(), response.id);
-                        }
-                        if std::mem::take(&mut self.focus_hp)
-                            && let Some(at) = self
-                                .draft
-                                .find("initiative: ")
-                                .map(|at| at + "initiative: ".len())
-                        {
-                            response.request_focus();
-                            let at = self.draft[..at].chars().count();
-                            let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
-                                .unwrap_or_default();
-                            state
-                                .cursor
-                                .set_char_range(Some(egui::text::CCursorRange::two(
-                                    egui::text::CCursor::new(at),
-                                    egui::text::CCursor::new(at + 1),
-                                )));
-                            state.store(ui.ctx(), response.id);
-                        }
-                    });
-                })
-                .pressed;
-        } else {
-            // The body's words, in Read (in the pane) and beside an open conflict (in its own
-            // scroll area, as Edit Markdown's form keeps until the pane part P2).
-            let right = pane_right
-                .filter(|_| self.disk_change.is_none())
-                .unwrap_or(ui.max_rect().right())
-                .max(ui.max_rect().right());
-            let mut content = |ui: &mut egui::Ui| {
-                if let Some(change) = &mut self.disk_change {
-                    if let Some(text) = &change.text {
-                        // The side-by-side comparison is the one state that takes the full width.
-                        ui.set_max_width(editor_width);
-                        design::grouped_draft_comparison(
-                            ui,
-                            &self.draft,
-                            text,
-                            (&note.path, text),
-                            true,
-                        );
-                    } else {
-                        design::heading(
-                            ui,
-                            design::Heading::Group {
-                                title: "Your draft",
-                                count: 0,
-                            },
-                        );
-                        let mut draft = self.draft.as_str();
-                        // The field belongs to this note: its owner and path key it.
-                        let field = DISK_DRAFT.of(note.owner.id()).with(note.field_key());
-                        let response = field.multi_line(ui, &mut draft, |edit| {
-                            edit.font(egui::TextStyle::Monospace)
-                                .margin(egui::vec2(design::S, design::S))
-                                .desired_width(editor_width - 2.0 * design::S)
-                                .interactive(false)
-                        });
-                        design::named(ui, &response, "Your draft");
-                    }
-                    return;
-                }
-                // A failed parse must never render YAML properties as book prose.
-                let body = parsed.as_ref().map_or("", |e| e.body.as_str());
-                ui.push_id(&note.path, |ui| {
-                    reader_style::measure(ui, |ui| {
-                        design::gap(ui, design::Gap::XS);
-                        let reading_subtitle = reader_kind_line(&note.owner, &reading_subtitle);
-                        let subtitle = reading_subtitle.as_str();
-                        let subtitle = subtitle.strip_suffix(" · Campaign").unwrap_or(subtitle);
-                        let subtitle = if note.error.is_some() {
-                            match note.unreadable_kind() {
-                                Section::Unreadable | Section::Other => "",
-                                Section::PackageDetails => "Package",
-                                kind => kind.label().trim_end_matches('s'),
-                            }
-                        } else if subtitle == "Campaign" {
-                            note.section().label().trim_end_matches('s')
-                        } else {
-                            subtitle
-                        };
-                        view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
-                        // Round 27 FH9: `L` between the kind line and its
-                        // first warning, as between a kind line and prose,
-                        // so the kind word does not read as the warning's.
-                        if fault.is_some() || repair_problem.is_some() {
-                            design::gap_to_next(ui, design::Gap::L);
-                        }
-                        if let Some(fault) = &fault {
-                            read_again = fault_notice(ui, fault);
-                        }
-                        // A read fault has no repair problem: there is no text to repair.
-                        if let Some(problem) = &repair_problem {
-                            repair_pressed = repair_notice(
-                                ui,
-                                problem,
-                                recovery.as_ref(),
-                                draft_lock.clone(),
-                                false,
-                            );
-                        }
-                    });
-                    open_link = view::show_with_related(
-                        ui,
-                        note.name(),
-                        parsed.as_ref().ok(),
-                        body,
-                        &view::Origin {
-                            path: &note.path,
-                            owner: &note.owner.label(),
-                            builtin: note.owner == Owner::Builtin,
-                        },
-                        self.loaded.as_ref().unwrap(),
-                        // The Library draws no value block above the entry.
-                        false,
-                        // A package entry's campaign links sit in the
-                        // pane's message footer (round 26).
-                        |_| None,
-                    );
-                });
-            };
-            // The body takes the whole pane, so a wide table can use it; prose keeps its
-            // measure. Read (with or without a changed draft) and an open conflict: the pane draws
-            // the body, then its message footer `S` below a short body, or pinned when the body
-            // scrolls (round 28 rows 17, 50, 53, 54; G6; P2 for the draft's footer).
-            let footer = messages.take().expect("the footer is built above");
-            let body = egui::Rect::from_min_max(
-                ui.cursor().min,
-                egui::pos2(right, ui.max_rect().bottom()),
-            );
-            ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
-                crate::markdown_view::with_wide_tables(ui, |ui| {
-                    footer_pressed = footer
-                        .pane(ui, design::Body::Content, |ui| content(ui))
-                        .pressed;
-                });
-            });
-        }
-        // The footer's one press, after the pane drew it. A kept result's acts by its line's
-        // ticket: on the kind its ticket names now, in this frame.
-        let (mut discard_undo, mut heading_undo, mut vital_undo) = (false, false, false);
-        let (mut heading_fix, mut vital_use) = (false, None);
-        let (mut undo_identities, mut undo_identity) = (false, false);
-        let (mut copy_dependency, mut undo_dependency) = (None, None);
-        if let Some(press) = footer_pressed {
-            let kind = press
-                .ticket
-                .as_ref()
-                .and_then(|ticket| self.kept.kind_by(ticket));
-            match (press.id, kind) {
-                (LibraryPress::Undo, Some(KeptKind::Discarded)) => discard_undo = true,
-                (LibraryPress::Undo, Some(KeptKind::Heading)) => heading_undo = true,
-                (LibraryPress::Undo, Some(KeptKind::Vital)) => vital_undo = true,
-                (LibraryPress::Undo, Some(KeptKind::Identities)) => undo_identities = true,
-                (LibraryPress::Undo, Some(KeptKind::Identity)) => undo_identity = true,
-                (LibraryPress::Undo, Some(KeptKind::Copy)) => {
-                    undo_dependency = press
-                        .ticket
-                        .as_ref()
-                        .and_then(|ticket| self.kept.copy_at(ticket));
-                }
-                (LibraryPress::FixHeading, _) => heading_fix = true,
-                (LibraryPress::UseVital(key, label, value), _) => {
-                    vital_use = Some((key, label, value));
-                }
-                (LibraryPress::Repair, _) => repair_pressed = true,
-                (LibraryPress::SeparateEntry(at), _) => new_identity = Some(at),
-                (LibraryPress::SeparateEntries(at), _) => {
-                    let loaded = self.loaded.as_ref().unwrap();
-                    let owner = &loaded.notes[at].owner;
-                    new_identities = loaded
-                        .duplicate_folder_paths(owner)
-                        .zip(owner.root().map(Path::to_path_buf))
-                        .map(|(paths, root)| (root, paths));
-                }
-                (LibraryPress::CopyDependency(id), _) => copy_dependency = Some(id),
-                // The page's results and the package's: after the pane, in `show`.
-                _ => self.footer_press = Some(press),
-            }
-        }
-        if let Some(data) = edit_data
-            && data.broken_taken
-            && let Some((_, _, _, warnings)) = &mut self.broken_lines
-        {
-            *warnings = data.broken_cache;
-        }
-        let draft_before = self.draft_revision;
-        // A press acts on the draft as it is now, not as the footer saw it: the body may have
-        // changed it in this same frame (a key and a screen reader's activation in one frame).
-        // A fix is computed again from the current text; an Undo acts only while the draft is
-        // still the text its action left, else it does nothing and its entry stays (its line
-        // comes back with its own draft). Typed text is never replaced.
-        if discard_undo
-            && self.saved_is_draft(note)
-            && let Some((_, _, text)) = self.kept.take_discarded()
-        {
-            let _ = self.draft.replace(text);
-            // The draft changed: a failed Save of the old words no longer owns it.
-            self.draft_revision += 1;
-        }
-        let current = (heading_fix || vital_use.is_some())
-            .then(|| Entry::parse(&note.path, &self.draft).ok())
-            .flatten()
-            .filter(|_| editable && !conflict);
-        // The open file, whole (owner kind, owner id, path): a fix's Undo acts only on it.
-        let file: FileId = (note.owner.key(), note.path.clone());
-        let heading_now = HeadingChoice::new(
-            current.as_ref(),
-            &self.draft,
-            self.kept.heading(),
-            &file,
-            &self.same_heading,
-        );
-        let pressed_heading = (
-            heading_fix && heading_now.fix.is_some(),
-            heading_undo && self.heading_undo_applies(&file),
-        );
-        if pressed_heading.0 || pressed_heading.1 {
-            self.draft_revision += 1;
-        }
-        save |= heading_now.apply(pressed_heading, &file, &mut self.draft, &mut self.kept);
-        // The stat fix again from the current text: its check must still say this value.
-        let current = vital_use.and_then(|(key, label, value)| {
-            let entry = Entry::parse(&note.path, &self.draft)
-                .ok()
-                .filter(|_| editable)?;
-            creature::vital_checks(&entry)
-                .iter()
-                .any(|(at, _, now, _)| *at == key && *now == value)
-                .then_some((key, label, value, entry))
-        });
-        if let Some((key, label, value, entry)) = current {
-            Self::fix_stat(
-                (
-                    &mut self.kept,
-                    &mut self.draft,
-                    &mut self.draft_revision,
-                    &mut self.error,
-                ),
-                file.clone(),
-                &entry,
-                (key, label, value),
-            );
-        }
-        if vital_undo
-            && self.stat_undo_applies(&file)
-            && let Some((_, before, _, _)) = self.kept.take_vital()
-        {
-            let _ = self.draft.replace(before);
-            // The draft changed: a failed Save of the old words no longer owns it.
-            self.draft_revision += 1;
-        }
-        // Live, as above: a press that changed the draft ends Discard's Undo.
-        if !self.saved_is_draft(note) {
-            let _ = self.kept.take_discarded();
-        }
-        if self.draft_revision != draft_before {
-            ui.ctx().request_repaint();
-        }
-        if repair_pressed {
-            if let Some((module, path, exists)) = recovery {
-                self.write_manifest(module, &path, exists);
-            } else {
-                self.source = true;
-                self.focus_repair = true;
-            }
-            return;
-        }
-        let reconnect = (|| -> Result<(), String> {
-            if let Some(at) = undo_dependency
-                && let Some(DependencyUndo {
-                    root,
-                    path,
-                    before,
-                    after,
-                    copied_path,
-                    copied_text,
-                    ..
-                }) = self.kept.copies().get(at)
-            {
-                let copied = note_path(root, copied_path)?;
-                if fs::read_to_string(&copied)
-                    .map_err(|e| FileFault::read(copied_path, &e).message())?
-                    != *copied_text
-                {
-                    return Err(
-                        "The copy changed on disk. Keep it, and change the link in Markdown."
-                            .into(),
-                    );
-                }
-                write_note(root, path, Some(after), before)?;
-                if let Err(error) = fs::remove_file(copied) {
-                    let _ = write_note(root, path, Some(before), after);
-                    return Err(error.to_string());
-                }
-                self.content_changed = Some(root.clone());
-                self.kept.remove_copy(at);
-                self.stale = true;
-            }
-            if let Some(id) = copy_dependency
-                && let Some(source) = self
-                    .loaded
-                    .as_ref()
-                    .unwrap()
-                    .notes
-                    .iter()
-                    .find(|n| n.entry.as_ref().is_some_and(|e| e.id == id))
-                && let Some(root) = Self::copy_dependency(&mut self.kept, note, source, campaigns)?
-            {
-                self.content_changed = Some(root);
-                self.stale = true;
-            }
-            Ok(())
-        })();
-        if let Err(error) = reconnect {
-            self.error = Some(error.into());
-        }
-        if reload_from_disk {
-            self.reload_note_from_disk(i);
-            return;
-        }
-        // Try again reads the file now. With no draft, every file is read again and the note opens
-        // with its text or its new fault. With a draft (after Undo discard), the file is compared
-        // with it as any outside change is: a load waits while a draft is open.
-        if (read_again || read_disk_again)
-            && let Some(root) = note.owner.root().map(Path::to_path_buf)
-        {
-            self.refresh_destination(&root, ui.ctx(), campaigns);
-            return;
-        }
-        if let Some(target) =
-            pressed_link.or_else(|| crate::markdown_view::take_note_link(ui.ctx()))
-            && let Some(index) = ui.ctx().data(|data| {
-                data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
-                    "reader_link_index",
-                ))
-            })
-        {
-            let from = note.entry.as_ref().map(|entry| entry.id);
-            let choices = match index.resolve_link(&target, from) {
-                crate::world::Go::Item(at, heading) => {
-                    crate::markdown_view::want_heading(ui.ctx(), heading);
-                    vec![index.items[at].entry.id]
-                }
-                crate::world::Go::Many(positions) => positions
-                    .iter()
-                    .map(|&at| index.items[at].entry.id)
-                    .collect(),
-                _ => Vec::new(),
-            };
-            self.link_choices = choices;
-        }
-        if self.link_choices.len() == 1 {
-            let id = self.link_choices.remove(0);
-            open_link = self
-                .loaded
-                .as_ref()
-                .unwrap()
-                .notes
-                .iter()
-                .position(|n| n.entry.as_ref().is_some_and(|e| e.id == id));
-            if open_link.is_none() {
-                self.peek = Some(id);
-            }
-        } else if !self.link_choices.is_empty() {
-            ui.horizontal_wrapped(|ui| {
-                for id in &self.link_choices {
-                    if let Some((at, note)) = self
-                        .loaded
-                        .as_ref()
-                        .unwrap()
-                        .notes
-                        .iter()
-                        .enumerate()
-                        .find(|(_, n)| n.entry.as_ref().is_some_and(|e| e.id == *id))
-                        && design::link(ui, &format!("{} · {}", note.name(), note.owner.label()))
-                            .clicked()
-                    {
-                        open_link = Some(at);
-                    }
-                }
-            });
-            if open_link.is_some() {
-                self.link_choices.clear();
-            }
-        }
-        if let Some(module) = use_every {
-            self.choose_all(&module, campaigns);
-        }
-
-        if save {
-            self.save_selected(file_gone);
-        }
-        let identity_result = if let Some((root, paths)) = new_identities {
-            self.separate_entries(root, &paths)
-        } else if undo_identities {
-            self.kept.identities().unwrap().0.undo().map(|()| {
-                let _ = self.kept.take_identities();
-                self.stale = true;
-                self.content_changed = campaigns.active_campaign().map(|campaign| campaign.path);
-            })
-        } else if let Some(at) = new_identity {
-            self.open_entry(at);
-            self.give_new_identity()
-        } else if undo_identity {
-            self.undo_new_identity()
-        } else {
-            Ok(())
-        };
-        if let Err(error) = identity_result {
-            self.error = Some(error.into());
-        }
-        if let Some(index) = open_link {
-            if dirty {
-                // Keep the draft. The linked entry opens beside it, in Lookup.
-                self.peek = self
-                    .loaded
-                    .as_ref()
-                    .and_then(|l| l.notes.get(index))
-                    .and_then(|n| n.entry.as_ref())
-                    .map(|e| e.id);
-            } else {
-                self.open_entry(index);
-                // Followed from the text, so the list may not show it yet.
-                self.reveal_row = true;
-            }
-        }
-        if let Some(step) = step {
-            if dirty {
-                self.peek = self.trail.peek(step).and_then(|target| {
-                    let notes = &self.loaded.as_ref()?.notes;
-                    notes[target.find(notes)?].entry.as_ref().map(|e| e.id)
-                });
-            } else {
-                self.go(step);
-            }
-        }
-    }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(feature = "test-support")]
 #[path = "library/workflow_tests.rs"]
 mod workflow_tests;
 #[cfg(feature = "test-support")]
@@ -5881,25 +2409,14 @@ mod tests {
             "{}",
             loaded.subtitles()[bear]
         );
-        let mut library = Library {
+        let library = Library {
             loaded: Some(loaded),
             ..Default::default()
         };
-        let ctx = egui::Context::default();
-        let output = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(1200.0, 800.0),
-                )),
-                ..Default::default()
-            },
-            |ctx| {
-                egui::CentralPanel::default()
-                    .show(ctx, |ui| library.show(ui, &mut Campaigns::default()));
-            },
+        assert_eq!(
+            issues_word(&library, None),
+            Some("3 files need fixing".to_owned())
         );
-        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("3 files need fixing"))));
         let diagnostics = &library.loaded.as_ref().unwrap().diagnostic_texts();
         assert!(diagnostics.iter().any(|s| s.starts_with("Wolf.md: Line ")
             && s.contains(": Hit Points “about twenty” was not read")));
@@ -5985,32 +2502,26 @@ mod tests {
         );
         assert_eq!(loaded.broken_link_notes(&other).len(), 2);
 
-        let mut library = Library {
+        let library = Library {
             loaded: Some(loaded),
             ..Default::default()
         };
-        let ctx = egui::Context::default();
-        ctx.data_mut(|data| data.insert_temp(egui::Id::new("reader_link_index"), other));
-        let output = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(1200.0, 800.0),
-                )),
-                ..Default::default()
-            },
-            |ctx| {
-                egui::CentralPanel::default()
-                    .show(ctx, |ui| library.show(ui, &mut Campaigns::default()));
-            },
-        );
-        let painted = |words: &str| {
-            output.shapes.iter().any(|shape| {
-                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains(words))
-            })
-        };
         // Linker, Both (flag and link) and the unreadable file: three, not four.
-        assert!(painted("3 files need fixing"));
+        assert_eq!(
+            issues_word(&library, Some(&other)),
+            Some("3 files need fixing".to_owned())
+        );
+    }
+
+    /// The header's issues count (`Library::header`), as the page's title line shows it.
+    fn issues_word(
+        library: &Library,
+        index: Option<&std::sync::Arc<crate::lookup::ContentIndex>>,
+    ) -> Option<String> {
+        library
+            .header(&Campaigns::default(), index, true)
+            .issues
+            .map(|issues| issues.word)
     }
 
     /// iter-13-E-SD1: the header counts files by owner and path. Two packages each with
@@ -6119,26 +2630,14 @@ mod tests {
             "warnings only: the count stays amber"
         );
 
-        let mut library = Library {
+        let library = Library {
             loaded: Some(loaded),
             ..Default::default()
         };
-        let ctx = egui::Context::default();
-        ctx.data_mut(|data| data.insert_temp(egui::Id::new("reader_link_index"), index));
-        let output = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(1200.0, 800.0),
-                )),
-                ..Default::default()
-            },
-            |ctx| {
-                egui::CentralPanel::default()
-                    .show(ctx, |ui| library.show(ui, &mut Campaigns::default()));
-            },
+        assert_eq!(
+            issues_word(&library, Some(&index)),
+            Some("3 files need fixing".to_owned())
         );
-        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("3 files need fixing"))));
 
         // iter-13-E2 review 1: a second package with the same name and path. Its rows name the
         // folder, so the two Ashen Marches rows differ; Ember Coast keeps its plain owner row.
@@ -6256,84 +2755,46 @@ mod tests {
 
     #[test]
     fn iter2_d_copied_folder_blocks_add_until_the_path_changes() {
-        use crate::design::test_harness::Themed as _;
-        use egui_kittest::kittest::{NodeT, Queryable};
         let folder = tempfile::tempdir().unwrap();
         let other = tempfile::tempdir().unwrap();
-        let library = Library {
+        let mut library = Library {
             path: folder.path().display().to_string(),
             copied_package: Some(Module {
                 id: Uuid::new_v4(),
                 name: "Copied package".into(),
                 path: folder.path().canonicalize().unwrap(),
             }),
+            loaded: Some(Loaded::default()),
             ..Default::default()
         };
-        let mut campaigns = Campaigns::default();
-        let mut harness = egui_kittest::Harness::builder().themed_ui_state(
-            move |ui, library| library.package_form(ui, &mut campaigns),
-            library,
-        );
-        harness.run_steps(2);
-        assert!(
-            harness
-                .get_by_label("Add folder")
-                .accesskit_node()
-                .is_disabled()
-        );
-        harness
-            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Package folder")
-            .focus();
-        harness.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::A);
-        harness
-            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Package folder")
-            .type_text(&other.path().display().to_string());
-        harness.run_steps(2);
-        assert!(
-            !harness
-                .get_by_label("Add folder")
-                .accesskit_node()
-                .is_disabled()
-        );
-        assert!(harness.state().copied_package.is_none());
-        // Round 28 K4a (the review of PR 341): while the Library loads, Browse is disabled and
-        // its description says why; once it has loaded, Browse is open again.
-        let browse = |harness: &egui_kittest::Harness<'_, Library>| {
-            // The folder form's Browse (the new package form below has its own).
-            let node = harness
-                .query_all_by_label("Browse…")
-                .next()
-                .expect("Browse")
-                .accesskit_node();
-            (
-                node.is_disabled(),
-                node.description().map(|words| words.to_owned()),
-            )
-        };
-        assert_eq!(browse(&harness), (false, None));
+        let campaigns = Campaigns::default();
+        let form = library.package_form_view(&campaigns);
+        assert!(form.add_blocked.is_some() && form.copy.is_some());
+        library.set_package_path(&other.path().display().to_string());
+        let form = library.package_form_view(&campaigns);
+        assert_eq!(form.add_blocked, None);
+        assert!(form.copy.is_none() && library.copied_package.is_none());
+        // Round 28 K4a (the review of PR 341): while the Library loads, Browse waits and says
+        // why; once it has loaded, Browse is open again.
+        assert_eq!(form.browse_blocked, None);
         let (_loading, rx) = mpsc::channel();
-        harness.state_mut().pending = Some(rx);
-        harness.run_steps(2);
+        library.pending = Some(rx);
+        let form = library.package_form_view(&campaigns);
         assert_eq!(
-            browse(&harness),
-            (true, Some("Browse waits for the reason below.".to_owned()))
+            form.browse_blocked.as_deref(),
+            Some("Browse waits for the reason below.")
         );
-        assert!(
-            harness
-                .query_all_by_label_contains("Wait for the Library to load.")
-                .next()
-                .is_some(),
+        assert_eq!(
+            form.add_blocked.as_deref(),
+            Some("Wait for the Library to load."),
             "the reason it points to"
         );
-        harness.state_mut().pending = None;
-        harness.run_steps(2);
-        assert_eq!(browse(&harness), (false, None));
+        library.pending = None;
+        assert_eq!(library.package_form_view(&campaigns).browse_blocked, None);
     }
 
     #[test]
     fn iter2_d_about_selects_its_own_navigation_row() {
-        use crate::design::test_harness::Themed as _;
-        use egui_kittest::kittest::{NodeT, Queryable};
         let mut library = navigation_library();
         let owner = library.loaded.as_ref().unwrap().notes[0].owner.clone();
         let package = owner.id().unwrap();
@@ -6349,44 +2810,29 @@ mod tests {
         };
         library.loaded.as_mut().unwrap().notes[1].owner =
             library.loaded.as_ref().unwrap().notes[0].owner.clone();
+        library.loaded.as_mut().unwrap().invalidate();
         library.scope = Scope::Package(package);
-        let mut campaigns = Campaigns::default();
-        let mut harness = egui_kittest::Harness::builder()
-            .themed_ui_state(move |ui, library| library.show(ui, &mut campaigns), library);
-        harness.set_size(egui::vec2(1920.0, 1080.0));
-        harness.run_steps(2);
-        harness.get_by_label("About First").click();
-        harness.run_steps(2);
-        assert_eq!(
-            harness
-                .get_by_label("About First")
-                .accesskit_node()
-                .toggled(),
-            Some(egui::accesskit::Toggled::True)
-        );
-        assert_eq!(
-            harness
-                .get_by_label("All entries   1")
-                .accesskit_node()
-                .toggled(),
-            Some(egui::accesskit::Toggled::False)
-        );
-        harness.get_by_label("All entries   1").click();
-        harness.run_steps(2);
-        assert_eq!(
-            harness
-                .get_by_label("About First")
-                .accesskit_node()
-                .toggled(),
-            Some(egui::accesskit::Toggled::False)
-        );
-        assert_eq!(
-            harness
-                .get_by_label("All entries   1")
-                .accesskit_node()
-                .toggled(),
-            Some(egui::accesskit::Toggled::True)
-        );
+        let campaigns = Campaigns::default();
+        // The About row's and the All entries row's selected marks, as the list shows them.
+        let marks = |library: &mut Library| {
+            let list = library
+                .list_view(&campaigns, None, false, 1920.0)
+                .expect("loaded");
+            let (index, label, about) = list.about.expect("the About row");
+            assert_eq!(label, "About First");
+            let all = list
+                .groups
+                .iter()
+                .flat_map(|group| &group.rows)
+                .find(|row| row.section == Section::All)
+                .expect("the All entries row");
+            (index, about, all.selected)
+        };
+        let (about, ..) = marks(&mut library);
+        library.open_about(about);
+        assert_eq!(marks(&mut library), (about, true, false));
+        library.choose_section(Section::All, None);
+        assert_eq!(marks(&mut library), (about, false, true));
     }
 
     #[test]
@@ -6515,11 +2961,9 @@ mod tests {
                 "src/library.rs",
                 &[
                     ("kept_result", 0),
-                    // The typed locks of the footers (M-L0.4b: `page_messages`, the duplicate
-                    // notice, the dependencies, the recovery choice) and the old waiting
-                    // controls left in the page's body. A typed lock is not debt, but this count
-                    // reads text.
-                    (".blocked(", 12),
+                    // The typed locks of the page's footer (M-L0.4b: `page_messages`). A typed
+                    // lock is not debt, but this count reads text.
+                    (".blocked(", 3),
                     ("blocked_if(", 0),
                     ("design::locked(", 0),
                     ("undo_message(", 0),
@@ -6529,7 +2973,7 @@ mod tests {
                 "src/library/catalogue.rs",
                 &[
                     ("kept_result", 0),
-                    (".blocked(", 3),
+                    (".blocked(", 2),
                     ("blocked_if(", 0),
                     ("design::locked(", 0),
                     ("undo_message(", 0),
@@ -6539,9 +2983,9 @@ mod tests {
                 "src/campaigns.rs",
                 &[
                     ("kept_result", 0),
-                    (".blocked(", 4),
+                    (".blocked(", 0),
                     ("blocked_if(", 0),
-                    ("design::locked(", 1),
+                    ("design::locked(", 0),
                     ("undo_message(", 0),
                 ],
             ),
@@ -6561,62 +3005,65 @@ mod tests {
         }
     }
 
-    /// Round 30 SH1: a folder field reads its folders once per open of its suggestions menu;
-    /// a redraw reads nothing; a close (with no closed draw between), a form that was not drawn,
-    /// another root or kind, and another menu each start a fresh read.
+    /// Round 30 SH1: the New entry folder field reads its folders once per open of its
+    /// suggestions menu (`Library::new_folder_choices_if`): while the menu stays open on the same
+    /// root and kind it reads nothing; a menu that opens again (nothing kept), another kind and
+    /// another root each read again.
     #[test]
     fn folder_suggestions_read_once_per_open_menu() {
         let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("book"), "Book", "book").unwrap();
         for folder in ["Creatures/Undead", "Spells", ".hidden"] {
-            fs::create_dir_all(temp.path().join(folder)).unwrap();
+            fs::create_dir_all(module.path.join(folder)).unwrap();
         }
-        let other = tempfile::tempdir().unwrap();
-        let ctx = egui::Context::default();
-        let reads = || FOLDER_READS.with(std::cell::Cell::get);
-        // One pass of the app: the menu `id`'s state this pass, at `root` with `kind`.
-        let pass = |id: &str, state: (bool, bool), root: &Path, kind: Option<&str>| {
-            let mut folders = std::sync::Arc::default();
-            let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                folders = folder_suggestions(ctx, egui::Id::new(id), state, root, kind);
-            });
-            folders
+        let other = create_module(&temp.path().join("other"), "Other", "other").unwrap();
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        campaigns.register_module(module.clone()).unwrap();
+        campaigns.register_module(other.clone()).unwrap();
+        let mut library = Library {
+            loaded: Some(Loaded::default()),
+            scope: Scope::Package(module.id),
+            ..Default::default()
         };
-        let (closed, opening, open) = ((false, false), (false, true), (true, false));
-        let spell = Some("spell");
+        library.open_new_entry();
+        library.set_new_kind("spell");
+        let reads = || FOLDER_READS.with(std::cell::Cell::get);
         let before = reads();
-        for _ in 0..3 {
-            assert!(pass("a", closed, temp.path(), spell).is_empty());
-        }
-        assert_eq!(reads(), before, "a closed menu reads no folder");
-        let folders = pass("a", opening, temp.path(), spell);
-        assert_eq!(*folders, ["Creatures", "Creatures/Undead", "Spells"]);
+        let (root, folders) = library.new_folder_choices_if(&campaigns, None).unwrap();
+        assert_eq!(root, module.path);
+        assert_eq!(folders, ["Creatures", "Creatures/Undead", "Spells"]);
         let one_read = reads() - before;
         assert!(one_read > 0);
         for _ in 0..3 {
-            assert_eq!(*pass("a", open, temp.path(), spell), *folders);
+            assert!(
+                library
+                    .new_folder_choices_if(&campaigns, Some((&root, "spell")))
+                    .is_none()
+            );
         }
         assert_eq!(
             reads() - before,
             one_read,
             "an open menu's redraw reads nothing"
         );
-        // Choosing a folder closes the menu; the next pass opens it again at once, with no
-        // closed draw between: a fresh read shows a folder made meanwhile.
-        fs::create_dir(temp.path().join("Items")).unwrap();
-        assert!(pass("a", opening, temp.path(), spell).contains(&"Items".to_owned()));
-        assert_eq!(reads() - before, 2 * one_read + 1);
-        // Its form was not drawn for a while (no pass of this menu): the session ended.
-        pass("b", opening, other.path(), None);
-        pass("b", open, other.path(), None);
-        fs::create_dir(temp.path().join("Rules")).unwrap();
-        assert!(pass("a", open, temp.path(), spell).contains(&"Rules".to_owned()));
+        // The menu opens again: a fresh read shows a folder made meanwhile.
+        fs::create_dir(module.path.join("Items")).unwrap();
+        let (_, folders) = library.new_folder_choices_if(&campaigns, None).unwrap();
+        assert!(folders.contains(&"Items".to_owned()));
         // Another kind, and another root, are other lists.
+        library.set_new_kind("rule");
         let at = reads();
-        assert!(!pass("a", open, temp.path(), None).contains(&"Spells/".to_owned()));
-        assert!(reads() > at, "another kind reads again");
+        let (_, folders) = library
+            .new_folder_choices_if(&campaigns, Some((&root, "spell")))
+            .expect("another kind reads again");
+        assert!(!folders.contains(&"Spells/".to_owned()) && reads() > at);
+        library.scope = Scope::Package(other.id);
         let at = reads();
-        assert!(pass("a", open, other.path(), None).is_empty());
-        assert!(reads() > at, "another root reads again");
+        let (other_root, folders) = library
+            .new_folder_choices_if(&campaigns, Some((&root, "rule")))
+            .expect("another root reads again");
+        assert_eq!(other_root, other.path);
+        assert!(!folders.contains(&"Items".to_owned()) && reads() > at);
     }
 
     /// Round 30 B11 F4, Astra F8, and the B2b review's F1 and F2: Save on the draft of a
@@ -6919,11 +3366,7 @@ mod tests {
             ..Default::default()
         };
         fs::remove_file(module.path.join("Wolf.md")).unwrap();
-        library.refresh_destination(
-            &module.path,
-            &egui::Context::default(),
-            &Campaigns::default(),
-        );
+        library.refresh_destination(&module.path, &StateContext::new(), &Campaigns::default());
         assert!(library.disk_change.as_ref().unwrap().moved_to.is_none());
         library.save_selected(false);
         assert!(!module.path.join("Wolf.md").exists());
@@ -6966,11 +3409,7 @@ mod tests {
             module.path.join("Moved/Rule.md"),
         )
         .unwrap();
-        library.refresh_destination(
-            &module.path,
-            &egui::Context::default(),
-            &Campaigns::default(),
-        );
+        library.refresh_destination(&module.path, &StateContext::new(), &Campaigns::default());
         library.save_selected(true);
         assert!(
             !module.path.join("Rule.md").exists(),
@@ -7036,22 +3475,11 @@ mod tests {
         );
     }
 
+    /// The scope drop-down's choices (`Library::scope_choices`) follow the catalogue: a renamed
+    /// package shows its new name, an open campaign adds its two scopes, and an unregistered
+    /// selection falls back to the first choice.
     #[test]
     fn scope_picker_fits_whole_words_and_reuses_unchanged_choices() {
-        let ctx = egui::Context::default();
-        let _ = ctx.run(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                let budget = design::number_width(ui, "Ashen…", &Type::Strong.font(ui));
-                assert_eq!(scope_label(ui, "Ashen Marches", budget), "Ashen…");
-                assert_eq!(
-                    scope_label(ui, "Ashen Marches", budget / 2.0)
-                        .matches('…')
-                        .count(),
-                    1
-                );
-            });
-        });
-
         let temp = tempfile::tempdir().unwrap();
         let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
         let package = |folder: &str, name: &str| Module {
@@ -7063,114 +3491,41 @@ mod tests {
         let second = package("second", "Ashen Marches");
         campaigns.register_module(first.clone()).unwrap();
         campaigns.register_module(second.clone()).unwrap();
-
-        ctx.enable_accesskit();
-        let scale = std::cell::Cell::new(1.0);
-        let mut cache = None;
-        let mut draw = |campaigns: &Campaigns, current: Scope, width: f32, expected: &str| {
-            use crate::campaigns::MODULE_READS;
-            MODULE_READS.set(0);
-            SCOPE_LABEL_FITS.set(0);
-            let mut scope = current;
-            let mut section = Section::All;
-            let mut input = egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(width, 480.0),
-                )),
-                ..Default::default()
-            };
-            input
-                .viewports
-                .get_mut(&egui::ViewportId::ROOT)
-                .unwrap()
-                .native_pixels_per_point = Some(scale.get());
-            let output = ctx.run(input, |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    Library::scope_menu(ui, true, campaigns, &mut scope, &mut section, &mut cache);
-                });
-            });
-            let name = output
-                .platform_output
-                .accesskit_update
-                .unwrap()
-                .nodes
-                .into_iter()
-                .find(|(_, node)| node.role() == egui::accesskit::Role::ComboBox)
-                .and_then(|(_, node)| node.label().map(str::to_owned));
-            assert_eq!(name.as_deref(), Some(expected), "closed scope name");
-            assert!(
-                MODULE_READS.get() <= 1,
-                "the picker reads the catalogue at most once per rebuild, got {}",
-                MODULE_READS.get()
-            );
-            (MODULE_READS.get(), SCOPE_LABEL_FITS.get())
+        let mut library = Library {
+            scope: Scope::Package(second.id),
+            ..Default::default()
         };
-        let selected = Scope::Package(second.id);
-        let ashen = "What the Library shows: Ashen Marches";
-        let renamed = "What the Library shows: Renamed package";
-        assert_eq!(draw(&campaigns, selected, 100.0, ashen).1, 4);
-        for _ in 0..3 {
-            assert_eq!(
-                draw(&campaigns, selected, 100.0, ashen),
-                (0, 0),
-                "steady closed frame"
-            );
-        }
+        let chosen = |library: &Library, campaigns: &Campaigns| {
+            let (choices, chosen, _) = library.scope_choices(campaigns);
+            choices[chosen].1.clone()
+        };
+        assert_eq!(chosen(&library, &campaigns), "Ashen Marches");
         campaigns
             .rename_module(second.id, "Renamed package".into())
             .unwrap();
-        assert_eq!(draw(&campaigns, selected, 100.0, renamed).1, 4);
-        // Restoring the first package moves it behind the selected package.
-        campaigns.restore_module(first).unwrap();
-        assert_eq!(draw(&campaigns, selected, 100.0, renamed).1, 4);
-        assert_eq!(draw(&campaigns, selected, 200.0, renamed).1, 4, "new width");
-        ctx.style_mut(|style| {
-            style
-                .text_styles
-                .insert(Type::Strong.style(), egui::FontId::proportional(21.0));
-        });
-        assert_eq!(draw(&campaigns, selected, 200.0, renamed).1, 4, "new font");
-        scale.set(2.0);
-        assert_eq!(
-            draw(&campaigns, selected, 200.0, renamed).1,
-            4,
-            "new display scale"
-        );
-        let mut fonts = egui::FontDefinitions::default();
-        fonts
-            .families
-            .get_mut(&egui::FontFamily::Proportional)
-            .unwrap()
-            .reverse();
-        ctx.set_fonts(fonts);
-        assert_eq!(
-            draw(&campaigns, selected, 200.0, renamed).1,
-            4,
-            "replaced font family"
-        );
+        assert_eq!(chosen(&library, &campaigns), "Renamed package");
         campaigns.open_for_test(&sd1_campaign(temp.path()));
+        let (choices, _, group) = library.scope_choices(&campaigns);
         assert_eq!(
-            draw(
-                &campaigns,
-                Scope::Campaign,
-                200.0,
-                "What the Library shows: Campaign entries"
-            )
-            .1,
-            6
+            choices
+                .iter()
+                .map(|(_, words)| words.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Can use",
+                "Everything",
+                BUILTIN_NAME,
+                "First package",
+                "Renamed package",
+                "Campaign entries"
+            ]
         );
-        assert_eq!(draw(&campaigns, selected, 200.0, renamed), (0, 0));
+        assert_eq!(group, 2);
+        library.scope = Scope::Campaign;
+        assert_eq!(chosen(&library, &campaigns), "Campaign entries");
+        library.scope = Scope::Package(second.id);
         campaigns.unregister_module(second.id).unwrap();
-        assert_eq!(
-            draw(&campaigns, selected, 200.0, "What the Library shows").1,
-            5
-        );
-        assert_eq!(
-            draw(&campaigns, selected, 200.0, "What the Library shows"),
-            (0, 0),
-            "missing selection"
-        );
+        assert_eq!(chosen(&library, &campaigns), "Can use", "missing selection");
     }
 
     #[test]
@@ -7349,88 +3704,6 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_package_rows_keep_the_folder_last_and_whole() {
-        let ctx = egui::Context::default();
-        let input = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(256.0, 100.0),
-            )),
-            ..Default::default()
-        };
-        let output = ctx.run(input, |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                ui.set_width(240.0);
-                let response = entry_row(
-                    ui,
-                    "Cinder Wolf",
-                    "Same entry in two files · Creature · CR 1 · Ashen Marches · ashen-marches-copy/",
-                    false,
-                );
-                assert_eq!(response.rect.height(), ENTRY_ROW_HEIGHT);
-            });
-        });
-        // Round 25 FF5: the folder ends the row, as it ends the reader's kind line. The row is
-        // too narrow for the whole line, so the words before the folder shorten, never the folder.
-        let lines: Vec<String> = output
-            .shapes
-            .iter()
-            .filter_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.job.text.starts_with("Same entry") => {
-                    Some(text.galley.job.text.clone())
-                }
-                _ => None,
-            })
-            .collect();
-        assert!(
-            lines.len() == 1
-                && lines[0].starts_with("Same entry")
-                && lines[0].contains('…')
-                && lines[0].ends_with(" · ashen-marches-copy/"),
-            "{lines:?}"
-        );
-    }
-
-    #[test]
-    fn entry_rows_keep_both_lines_at_a_fixed_height() {
-        let ctx = egui::Context::default();
-        let output = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(186.0, 100.0),
-                )),
-                ..Default::default()
-            },
-            |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.set_width(170.0);
-                    let response = entry_row(
-                        ui,
-                        &"Long entry name ".repeat(30),
-                        &"Long subtitle ".repeat(30),
-                        false,
-                    );
-                    assert_eq!(response.rect.height(), 44.0);
-                });
-            },
-        );
-        let rows: Vec<_> = output
-            .shapes
-            .iter()
-            .filter_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if !text.galley.job.text.is_empty() => Some(&text.galley),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(rows.len(), 2);
-        assert!(
-            rows.iter()
-                .all(|galley| galley.rows.len() == 1 && galley.rect.width() <= 162.0)
-        );
-    }
-
-    #[test]
     fn list_metadata_is_refreshed_after_content_changes() {
         let mut loaded = Loaded::fixture(vec![Note {
             path: "first.md".into(),
@@ -7547,53 +3820,6 @@ mod tests {
         );
     }
 
-    /// Run explicitly to measure the complete library UI while scrolling the built-in package.
-    #[test]
-    #[ignore]
-    fn library_scroll_frame_times() {
-        let mut library = Library {
-            loaded: Some(load(None).unwrap()),
-            ..Default::default()
-        };
-        let mut campaigns = Campaigns::default();
-        let ctx = egui::Context::default();
-        let mut times = Vec::new();
-        for frame in 0..150 {
-            let input = egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(1200.0, 800.0),
-                )),
-                time: Some(frame as f64 / 60.0),
-                events: vec![
-                    egui::Event::PointerMoved(egui::pos2(300.0, 450.0)),
-                    egui::Event::MouseWheel {
-                        unit: egui::MouseWheelUnit::Point,
-                        delta: egui::vec2(0.0, -30.0),
-                        modifiers: Default::default(),
-                    },
-                ],
-                ..Default::default()
-            };
-            let start = std::time::Instant::now();
-            let output = ctx.run(input, |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
-            });
-            let _ = ctx.tessellate(output.shapes, output.pixels_per_point);
-            if frame >= 30 {
-                times.push(start.elapsed().as_secs_f64() * 1000.0);
-            }
-        }
-        times.sort_by(f64::total_cmp);
-        println!(
-            "Library entries: {}; frame CPU ms: median={:.3}, p95={:.3}, max={:.3}",
-            library.loaded.as_ref().unwrap().notes.len(),
-            times[times.len() / 2],
-            times[times.len() * 95 / 100],
-            times.last().unwrap()
-        );
-    }
-
     #[test]
     fn repeated_rule_headings_name_their_subsection() {
         let loaded = load(None).unwrap();
@@ -7684,49 +3910,12 @@ mod tests {
                     "{readable}"
                 );
             }
-            let mut library = Library {
-                loaded: Some(Loaded::fixture(vec![Note {
-                    path: entry.path.clone(),
-                    text: crate::design::memo::Revised::new(text.clone()),
-                    entry: Some(entry),
-                    error: None,
-                    fault: None,
-                    manifest_gone: false,
-                    owner: Owner::Builtin,
-                }])),
-                selected: Some(0),
-                draft: (text).into(),
-                ..Default::default()
-            };
-            let ctx = egui::Context::default();
-            let subtitles = library.loaded.as_ref().unwrap().subtitles().clone();
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(1000.0, 700.0),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        library.editor(ui, &subtitles[0], &Campaigns::default())
-                    });
-                },
-            );
-            let text = output
-                .shapes
-                .iter()
-                .filter_map(|s| match &s.shape {
-                    egui::Shape::Text(t) => Some(t.galley.job.text.as_str()),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            assert!(text.contains(expected), "{text}");
-            assert!(!text.contains('\\'), "{text}");
-            assert!(!text.contains("[["), "{text}");
-            assert!(!text.contains("Original layout:"), "{text}");
+            // The reader shows the overview as this prose: the expected words, with no source
+            // markup.
+            assert!(readable.contains(expected), "{readable}");
+            assert!(!readable.contains('\\'), "{readable}");
+            assert!(!readable.contains("[["), "{readable}");
+            assert!(!readable.contains("Original layout:"), "{readable}");
         }
     }
     #[test]
@@ -7805,190 +3994,58 @@ mod tests {
             search: "bronze".into(),
             ..Default::default()
         };
-        for width in [390.0, 900.0] {
-            for dirty in [true, false] {
-                library.open_entry(0);
-                library.search = "bronze".into();
-                library.matches = Some((Section::Creatures, "bronze".into(), vec![0]));
-                if dirty {
-                    library.draft.push_str("\nUnsaved note.\n");
-                }
-                let ctx = egui::Context::default();
-                let mut frame = |events| {
-                    ctx.run(
-                        egui::RawInput {
-                            screen_rect: Some(egui::Rect::from_min_size(
-                                egui::Pos2::ZERO,
-                                egui::vec2(width, 6000.0),
-                            )),
-                            events,
-                            ..Default::default()
-                        },
-                        |ctx| {
-                            egui::CentralPanel::default().show(ctx, |ui| {
-                                library.editor(ui, "Definition · creature", &Campaigns::default())
-                            });
-                        },
-                    )
-                };
-                frame(vec![]);
-                let output = frame(vec![]);
-                // The stat block's spells were resolved once, with the notes' other caches:
-                // another unchanged frame looks none up.
-                let looked = SPELL_LOOKUPS.with(std::cell::Cell::get);
-                frame(vec![]);
+        // Detect Magic and Guiding Bolt open from the stat block's spell tiles
+        // (`Library::open_link`, the reader's link): a clean reader opens the spell in the
+        // Library, in its section and outside the search; a draft stays, and the spell opens
+        // beside it in Lookup.
+        for (dirty, place, title) in [
+            (false, 1, "# Detect Magic"),
+            (false, 2, "# Guiding Bolt"),
+            (true, 2, ""),
+        ] {
+            library.open_entry(0);
+            library.search = "bronze".into();
+            library.matches = Some((Section::Creatures, "bronze".into(), vec![0]));
+            library.peek = None;
+            if dirty {
+                library.draft.push_str("\nUnsaved note.\n");
+            }
+            library.open_link(place);
+            if dirty {
+                assert_eq!(library.selected, Some(0));
+                assert!(library.draft.ends_with("Unsaved note.\n"));
                 assert_eq!(
-                    SPELL_LOOKUPS.with(std::cell::Cell::get),
-                    looked,
-                    "an unchanged frame looks no spell up"
+                    library.peek,
+                    library.loaded.as_ref().unwrap().notes[place]
+                        .entry
+                        .as_ref()
+                        .map(|entry| entry.id),
+                    "the spell opens beside the draft"
                 );
-                let texts: Vec<_> = output
-                    .shapes
-                    .iter()
-                    .filter_map(|shape| match &shape.shape {
-                        egui::Shape::Text(text) => Some(text),
-                        _ => None,
-                    })
-                    .collect();
-                // Each spell is a tile under its list's label; no line repeats them.
-                let find = |words: &str| {
-                    texts
-                        .iter()
-                        .find(|t| t.galley.job.text == words)
-                        .unwrap_or_else(|| panic!("{words} is drawn"))
-                };
-                let (detect, bolt) = (find("Detect Magic"), find("Guiding Bolt"));
-                assert!(find("At Will").pos.y < detect.pos.y);
-                assert!(
-                    !texts
-                        .iter()
-                        .any(|t| t.galley.job.text.contains("Spell descriptions"))
-                );
-                // Guiding Bolt is cast at level 2: one more die, and the dragon's bonus to hit.
-                assert!(
-                    texts.iter().any(|t| t.galley.job.text.starts_with("+10 ·")
-                        && t.galley.job.text.contains("5d6"))
-                );
-                assert!(
-                    texts
-                        .iter()
-                        .any(|t| t.galley.job.text.starts_with("Level 2 ·"))
-                );
-                // A spell's facts come from its entry; a range of Self from its printed text.
-                assert!(
-                    texts
-                        .iter()
-                        .any(|t| t.galley.job.text == "Level 1 · Action or Ritual · Self"),
-                    "Speak with Animals keeps its range"
-                );
-                let spellcasting = texts
-                    .iter()
-                    .find(|t| t.galley.job.text.starts_with("Spellcasting."))
-                    .unwrap();
-                let legendary = find("Legendary Actions");
-                assert!(bolt.pos.y > spellcasting.pos.y && bolt.pos.y < legendary.pos.y);
-                assert!(!texts.iter().any(|t| t.galley.job.text.contains("^splat-")));
-                let centre = |t: &egui::epaint::TextShape| t.pos + t.galley.rect.center().to_vec2();
-                // Detect Magic rolls nothing, so a click opens it. Guiding Bolt rolls, so its
-                // menu reads it.
-                let read_by_menu = width > 400.0 && !dirty;
-                let position = centre(if read_by_menu { bolt } else { detect });
-                let button = if read_by_menu {
-                    egui::PointerButton::Secondary
-                } else {
-                    egui::PointerButton::Primary
-                };
-                frame(vec![egui::Event::PointerMoved(position)]);
-                for pressed in [true, false] {
-                    frame(vec![egui::Event::PointerButton {
-                        pos: position,
-                        button,
-                        pressed,
-                        modifiers: egui::Modifiers::NONE,
-                    }]);
-                }
-                if read_by_menu {
-                    let output = frame(vec![]);
-                    let read = output
-                        .shapes
-                        .iter()
-                        .find_map(|shape| match &shape.shape {
-                            egui::Shape::Text(text)
-                                if text.galley.job.text == "Read Guiding Bolt" =>
-                            {
-                                Some(text.pos + text.galley.rect.center().to_vec2())
-                            }
-                            _ => None,
-                        })
-                        .expect("the menu reads Guiding Bolt");
-                    frame(vec![egui::Event::PointerMoved(read)]);
-                    for pressed in [true, false] {
-                        frame(vec![egui::Event::PointerButton {
-                            pos: read,
-                            button: egui::PointerButton::Primary,
-                            pressed,
-                            modifiers: egui::Modifiers::NONE,
-                        }]);
-                    }
-                }
-                if dirty {
-                    assert_eq!(library.selected, Some(0));
-                    assert!(library.draft.ends_with("Unsaved note.\n"));
-                    let _ = library
-                        .draft
-                        .replace(library.loaded.as_ref().unwrap().notes[0].text.as_str());
-                } else {
-                    let (place, title) = if read_by_menu {
-                        (2, "# Guiding Bolt")
-                    } else {
-                        (1, "# Detect Magic")
-                    };
-                    assert_eq!(library.selected, Some(place));
-                    assert_eq!(library.section, Section::Spells);
-                    assert!(library.search.is_empty());
-                    assert!(library.matches.is_none());
-                    assert!(!library.source);
-                    assert!(library.draft.contains(title));
-                }
+                let _ = library
+                    .draft
+                    .replace(library.loaded.as_ref().unwrap().notes[0].text.as_str());
+            } else {
+                assert_eq!(library.selected, Some(place));
+                assert_eq!(library.section, Section::Spells);
+                assert!(library.search.is_empty());
+                assert!(library.matches.is_none());
+                assert!(!library.source);
+                assert!(library.draft.contains(title));
             }
         }
-        // A stat block whose lists end their lines with `\` and that casts a spell no note has:
-        // an unchanged frame looks none up either.
+        // The Druid's stat block lists end their lines with `\` and cast a spell no note has:
+        // its spells resolve, and the same notes resolve them once.
         library.open_entry(8);
-        let ctx = egui::Context::default();
-        let mut frame = || {
-            ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(900.0, 6000.0),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        library.editor(ui, "Definition · creature", &Campaigns::default())
-                    });
-                },
-            )
-        };
-        frame();
-        let output = frame();
-        let drawn = |words: &str| {
-            output.shapes.iter().any(|shape| {
-                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.starts_with(words))
-            })
-        };
-        assert!(
-            drawn("Dread Word.") && drawn("At Will"),
-            "the Druid is drawn"
-        );
+        let loaded = library.loaded.as_mut().unwrap();
+        let druid = loaded.notes[8].entry.clone().unwrap();
+        spells::resolve(&druid, &*loaded);
         let looked = SPELL_LOOKUPS.with(std::cell::Cell::get);
-        frame();
+        spells::resolve(&druid, &*loaded);
         assert_eq!(
             SPELL_LOOKUPS.with(std::cell::Cell::get),
             looked,
-            "an unchanged frame of the Druid looks no spell up"
+            "the Druid's spells are looked up once"
         );
         // A change to the notes clears what was resolved through them, with their other caches.
         let loaded = library.loaded.as_mut().unwrap();
@@ -8018,59 +4075,7 @@ mod tests {
     }
 
     #[test]
-    fn creature_read_view_hides_rule_anchors() {
-        let path = "definitions/creatures/adult_bronze_dragon.md";
-        let source = content::definitions::source_file(path).unwrap();
-        let mut library = Library {
-            loaded: Some(Loaded::fixture(vec![Note {
-                path: path.into(),
-                text: crate::design::memo::Revised::new(source.into()),
-                entry: Some(Entry::parse(path, source).unwrap()),
-                error: None,
-                fault: None,
-                manifest_gone: false,
-                owner: Owner::Builtin,
-            }])),
-            selected: Some(0),
-            draft: source.into(),
-            ..Default::default()
-        };
-        let ctx = egui::Context::default();
-        let output = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(900.0, 6000.0),
-                )),
-                ..Default::default()
-            },
-            |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    library.editor(ui, "Definition · creature", &Campaigns::default())
-                });
-            },
-        );
-        let text = output
-            .shapes
-            .iter()
-            .filter_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        assert!(text.iter().any(|text| text.contains("Spellcasting.")));
-        assert!(
-            !text.iter().any(|text| text.contains("^splat-")),
-            "{text:?}"
-        );
-        assert!(
-            !text.contains(&"Rule"),
-            "Empty mechanics section should be hidden"
-        );
-    }
-
-    #[test]
-    fn reviewed_summary_keeps_rules_and_source_and_opens_related_entry() {
+    fn reviewed_summary_keeps_rules_and_source() {
         let loaded = load(None).unwrap();
         let index = loaded
             .notes
@@ -8093,99 +4098,10 @@ mod tests {
                 .body
                 .contains("of Lore subclass is detailed after this class’s description")
         );
-        for width in [390.0, 900.0] {
-            let mut library = Library {
-                loaded: Some(load(None).unwrap()),
-                ..Default::default()
-            };
-            library.open_entry(index);
-            let ctx = egui::Context::default();
-            let mut frame = |events| {
-                ctx.run(
-                    egui::RawInput {
-                        screen_rect: Some(egui::Rect::from_min_size(
-                            egui::Pos2::ZERO,
-                            egui::vec2(width, 1400.0),
-                        )),
-                        events,
-                        ..Default::default()
-                    },
-                    |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| {
-                            library.editor(
-                                ui,
-                                "Definition · class feature · Bard",
-                                &Campaigns::default(),
-                            )
-                        });
-                    },
-                )
-            };
-            frame(vec![]);
-            let output = frame(vec![]);
-            let texts: Vec<_> = output
-                .shapes
-                .iter()
-                .filter_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) => Some(text),
-                    _ => None,
-                })
-                .collect();
-            assert!(
-                texts
-                    .iter()
-                    .all(|text| text.pos.x + text.galley.size().x <= width)
-            );
-            let rendered = texts
-                .iter()
-                .map(|text| text.galley.job.text.as_str())
-                .collect::<Vec<_>>()
-                .join("\n");
-            for expected in [
-                "Bard Subclass",
-                "Bard · Level 3 · D&D 2024 · SRD 5.2.1",
-                "Choose a Bard subclass.",
-                "Subclasses",
-                "Source text",
-            ] {
-                assert!(rendered.contains(expected), "{rendered}");
-            }
-            assert!(!rendered.contains("You gain a Bard subclass of your choice."));
-            // The published wording is still readable, and the related link navigates.
-            for label in ["Source text", "College of Lore"] {
-                let current = frame(vec![]);
-                let text = current
-                    .shapes
-                    .iter()
-                    .filter_map(|shape| match &shape.shape {
-                        egui::Shape::Text(text) => Some(text),
-                        _ => None,
-                    })
-                    .find(|text| text.galley.job.text == label)
-                    .unwrap();
-                let pos = text.pos + text.galley.size() * 0.5;
-                for pressed in [true, false] {
-                    frame(vec![
-                        egui::Event::PointerMoved(pos),
-                        egui::Event::PointerButton {
-                            pos,
-                            button: egui::PointerButton::Primary,
-                            pressed,
-                            modifiers: Default::default(),
-                        },
-                    ]);
-                }
-                if label == "Source text" {
-                    let output = frame(vec![]);
-                    assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("You gain a Bard subclass of your choice."))));
-                }
-            }
-            assert!(library.draft.contains("# College of Lore"));
-        }
     }
 
     #[test]
-    fn library_toolbar_keeps_back_visible_with_more_menu() {
+    fn library_toolbar_keeps_back_and_says_the_draft_reason_once() {
         let loaded = load(None).unwrap();
         let mut library = Library {
             loaded: Some(loaded),
@@ -8193,266 +4109,59 @@ mod tests {
         };
         library.open_entry(0);
         library.open_entry(1);
-        let ctx = egui::Context::default();
-        crate::design::theme::install(&ctx);
-        let mut rendered = Vec::new();
-        for _ in 0..3 {
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(360.0, 640.0),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        library.editor(ui, "Entry", &Campaigns::default());
-                    });
-                },
-            );
-            rendered = output
-                .shapes
-                .into_iter()
-                .filter_map(|shape| match shape.shape {
-                    egui::Shape::Text(text)
-                        if shape.clip_rect.contains_rect(text.visual_bounding_rect()) =>
-                    {
-                        Some(text.galley.job.text.clone())
-                    }
-                    _ => None,
-                })
-                .collect();
-        }
-        for word in ["Read", "Back", "More"] {
+        let painted = sd1_painted(&mut library);
+        for word in ["Read", "Back"] {
             assert!(
-                rendered.iter().any(|text| text == word),
-                "Missing {word}: {rendered:?}"
+                painted.lines().any(|text| text == word),
+                "Missing {word}: {painted}"
             );
         }
 
         // M2 (packet E1): a campaign creature's draft with changes and a heading that no longer
-        // matches its name: `Make NPC note` waits for the draft, and the draft's reason is
-        // painted once, by the save row's slot, whatever the footer holds (here the heading
-        // warning), at a wide pane and behind `More` in a narrow one.
-        for width in [900.0, 360.0] {
-            let text = note_text("Cinder Wolf", "creature", None);
-            let note = Note {
-                path: "Cinder Wolf.md".into(),
-                entry: Some(Entry::parse("Cinder Wolf.md", &text).unwrap()),
-                text: crate::design::memo::Revised::new(text.clone()),
-                error: None,
-                fault: None,
-                manifest_gone: false,
-                owner: Owner::Campaign(Campaign {
-                    id: Uuid::new_v4(),
-                    name: "Ashen Marches".into(),
-                    path: "ashen".into(),
-                    dndbeyond_campaign_id: None,
-                    dndbeyond_campaign_name: None,
-                }),
-            };
-            let mut library = Library {
-                loaded: Some(Loaded::fixture(vec![note])),
-                ..Default::default()
-            };
-            library.open_entry(0);
-            library.source = true;
-            let _ = library
-                .draft
-                .replace(text.replacen("# Cinder Wolf", "# Ash Wolf", 1));
-            let ctx = egui::Context::default();
-            crate::design::theme::install(&ctx);
-            let mut painted = Vec::new();
-            for _ in 0..4 {
-                let output = ctx.run(
-                    egui::RawInput {
-                        screen_rect: Some(egui::Rect::from_min_size(
-                            egui::Pos2::ZERO,
-                            egui::vec2(width, 800.0),
-                        )),
-                        ..Default::default()
-                    },
-                    |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| {
-                            library.editor(ui, "Entry", &Campaigns::default());
-                        });
-                    },
-                );
-                painted = output
-                    .shapes
-                    .into_iter()
-                    .filter_map(|shape| match shape.shape {
-                        egui::Shape::Text(text) if text.fallback_color.a() > 0 => {
-                            Some(text.galley.job.text.clone())
-                        }
-                        _ => None,
-                    })
-                    .collect();
-            }
-            assert!(
-                painted
-                    .iter()
-                    .any(|text| text.starts_with("The first heading says")),
-                "at {width}: the footer holds the heading warning: {painted:?}"
-            );
-            let reason = design::DraftBlocks::EntryInCampaign.long();
-            assert_eq!(
-                painted
-                    .iter()
-                    .filter(|text| text.as_str() == reason)
-                    .count(),
-                1,
-                "at {width}: the draft's reason is painted once: {painted:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn source_editor_keeps_its_frame_inside_the_remaining_height() {
-        for size in [egui::vec2(480.0, 480.0), egui::vec2(960.0, 920.0)] {
-            let source = format!(
-                "{}\n{}",
-                note_text("Long rule", "rule", None),
-                "Long source line.\n".repeat(200)
-            );
-            let mut library = Library {
-                loaded: Some(Loaded::fixture(vec![Note {
-                    path: "Long rule.md".into(),
-                    text: crate::design::memo::Revised::new(source.clone()),
-                    entry: Some(Entry::parse("Long rule.md", &source).unwrap()),
-                    error: None,
-                    fault: None,
-                    manifest_gone: false,
-                    owner: Owner::Builtin,
-                }])),
-                selected: Some(0),
-                source: true,
-                draft: (source).into(),
-                ..Default::default()
-            };
-            let ctx = egui::Context::default();
-            crate::design::theme::install(&ctx);
-            for _ in 0..3 {
-                let output = ctx.run(
-                    egui::RawInput {
-                        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
-                        ..Default::default()
-                    },
-                    |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| {
-                            library.editor(ui, "Rule", &Campaigns::default());
-                        });
-                    },
-                );
-                let frames: Vec<_> = output
-                    .shapes
-                    .iter()
-                    .filter_map(|shape| {
-                        if let egui::Shape::Rect(rect) = &shape.shape
-                            && rect.stroke.color == colors().field_border
-                            && rect.rect.height() > design::XXL
-                        {
-                            Some((rect.rect, shape.clip_rect))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                assert!(!frames.is_empty(), "The source needs a visible frame");
-                for (frame, clip) in frames {
-                    assert!(
-                        clip.expand(design::HAIRLINE_WIDTH).contains_rect(frame),
-                        "Frame {frame:?} leaves viewport {clip:?}"
-                    );
-                    assert!(
-                        frame.bottom() <= size.y,
-                        "Frame leaves the window: {frame:?}"
-                    );
-                }
-            }
-        }
-    }
-
-    /// The words a built-in entry paints in the reader, in order.
-    fn reader_text(name: &str) -> String {
-        let loaded = load(None).unwrap();
-        let index = loaded
-            .notes
-            .iter()
-            .position(|note| note.name() == name)
-            .unwrap();
+        // matches its name: `Make NPC note` waits for the draft, and the draft's reason is said
+        // once, by the save row's slot, whatever the footer holds (here the heading warning).
+        let text = note_text("Cinder Wolf", "creature", None);
+        let note = Note {
+            path: "Cinder Wolf.md".into(),
+            entry: Some(Entry::parse("Cinder Wolf.md", &text).unwrap()),
+            text: crate::design::memo::Revised::new(text.clone()),
+            error: None,
+            fault: None,
+            manifest_gone: false,
+            owner: Owner::Campaign(Campaign {
+                id: Uuid::new_v4(),
+                name: "Ashen Marches".into(),
+                path: "ashen".into(),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            }),
+        };
         let mut library = Library {
-            loaded: Some(loaded),
+            loaded: Some(Loaded::fixture(vec![note])),
             ..Default::default()
         };
-        library.open_entry(index);
-        let ctx = egui::Context::default();
-        let mut frame = || {
-            ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(390.0, 2400.0),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        library.editor(ui, "Definition", &Campaigns::default())
-                    });
-                },
-            )
-        };
-        frame();
-        frame()
-            .shapes
-            .iter()
-            .filter_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    #[test]
-    fn an_item_has_one_identity_line_with_its_attunement_before_the_rules() {
-        let text = reader_text("Dragon Orb");
-        assert!(!text.contains("Source classification"), "{text}");
-        assert!(!text.contains("wondrous item · artifact"), "{text}");
-        let identity = text.find("(Requires Attunement)").expect("the book's line");
+        library.open_entry(0);
+        library.source = true;
+        let _ = library
+            .draft
+            .replace(text.replacen("# Cinder Wolf", "# Ash Wolf", 1));
+        let painted = sd1_painted(&mut library);
         assert!(
-            identity < text.find("An orb is an etched crystal").unwrap(),
-            "{text}"
+            painted
+                .lines()
+                .any(|text| text.starts_with("The first heading says")),
+            "the footer holds the heading warning: {painted}"
+        );
+        let reason = design::DraftBlocks::EntryInCampaign.long();
+        assert_eq!(
+            painted.lines().filter(|text| *text == reason).count(),
+            1,
+            "the draft's reason is said once: {painted}"
         );
     }
 
     #[test]
-    fn a_class_that_grants_its_features_links_to_them_and_its_spell_list() {
-        let text = reader_text("Wizard");
-        assert!(text.contains("Class features"), "{text}");
-        assert!(text.find("Arcane Recovery").unwrap() < text.find("Signature Spells").unwrap());
-        assert!(text.contains("Wizard Spell List"), "{text}");
-        assert!(text.contains("Wizard Progression"), "{text}");
-        // Row 107 (AG3): the table's own title is its one heading.
-        assert_eq!(text.matches("Wizard Features").count(), 1, "{text}");
-        assert!(!text.contains("Class table"), "{text}");
-        // Tight rows in one case, as a spell's are, and each option on its own row.
-        assert!(text.contains("Primary ability\nIntelligence"), "{text}");
-        assert!(text.contains("Option A\n"), "{text}");
-        assert!(text.contains("Option B\n55 GP"), "{text}");
-    }
-
-    #[test]
-    fn a_subclass_lists_its_features() {
-        let text = reader_text("College of Lore");
-        assert!(text.contains("Subclass features"), "{text}");
-        assert!(text.contains("Cutting Words"), "{text}");
-    }
-
-    #[test]
-    fn class_reader_is_readable_and_opens_features() {
+    fn class_names_have_no_colon_and_old_names_stay_aliases() {
         let loaded = load(None).unwrap();
         // Row 144 (FG6): no built-in name ends in a colon, which reads as a cut title.
         let colons: Vec<_> = loaded
@@ -8486,170 +4195,6 @@ mod tests {
                     .map(|&at| &index.items[at].entry.name)
                     .collect::<Vec<_>>()
             );
-        }
-        let index = loaded
-            .notes
-            .iter()
-            .position(|note| note.name() == "Barbarian")
-            .unwrap();
-        let mut library = Library {
-            loaded: Some(loaded),
-            ..Default::default()
-        };
-        library.open_entry(index);
-        let ctx = egui::Context::default();
-        let mut frame = |events| {
-            ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(390.0, 2400.0),
-                    )),
-                    events,
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        library.editor(ui, "Definition · class", &Campaigns::default())
-                    });
-                },
-            )
-        };
-        frame(vec![]);
-        let output = frame(vec![]);
-        let texts: Vec<_> = output
-            .shapes
-            .iter()
-            .filter_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) => Some(text),
-                _ => None,
-            })
-            .collect();
-        // Stat-sized table cells can extend sideways inside their scroll area.
-        // Prose and feature links must still fit without horizontal scrolling.
-        assert!(output.shapes.iter().all(|shape| {
-            let egui::Shape::Text(text) = &shape.shape else {
-                return true;
-            };
-            text.pos.x + text.galley.size().x <= 390.0
-                || (shape.clip_rect.right() <= 390.0
-                    && text
-                        .galley
-                        .job
-                        .sections
-                        .iter()
-                        .all(|section| section.format.font_id.size == Type::Stat.size()))
-        }));
-        let rendered = texts
-            .iter()
-            .map(|text| text.galley.job.text.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
-        // A label and its value, as a spell's facts are: on one row, in one case.
-        assert!(rendered.contains("Primary ability\nStrength"), "{rendered}");
-        assert!(rendered.contains("Starting equipment"));
-        assert!(!rendered.contains("dnd2024:class_features/"));
-        assert!(rendered.find("Rage").unwrap() < rendered.find("Relentless Rage").unwrap());
-        // The class table names the feature too. The link is in the list below it. Its own
-        // title is its heading, once (row 107).
-        assert_eq!(
-            rendered.matches("Barbarian Features").count(),
-            1,
-            "{rendered}"
-        );
-        assert!(!rendered.contains("Class table"), "{rendered}");
-        let link = texts
-            .iter()
-            .rfind(|text| text.galley.job.text == "Relentless Rage")
-            .unwrap();
-        let pos = link.pos + link.galley.size() * 0.5;
-        for pressed in [true, false] {
-            frame(vec![
-                egui::Event::PointerMoved(pos),
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed,
-                    modifiers: Default::default(),
-                },
-            ]);
-        }
-        assert!(library.draft.contains("# Level 11: Relentless Rage"));
-    }
-
-    #[test]
-    fn creature_read_view_shows_one_styled_stat_block() {
-        let path = "definitions/creatures/vampire_familiar.md";
-        let source = content::definitions::source_file(path).unwrap();
-        let entry = Entry::parse(path, source).unwrap();
-        for width in [390.0, 800.0] {
-            let mut library = Library {
-                loaded: Some(Loaded::fixture(vec![Note {
-                    path: path.into(),
-                    text: crate::design::memo::Revised::new(source.into()),
-                    entry: Some(entry.clone()),
-                    error: None,
-                    fault: None,
-                    manifest_gone: false,
-                    owner: Owner::Builtin,
-                }])),
-                selected: Some(0),
-                draft: source.into(),
-                ..Default::default()
-            };
-            let ctx = egui::Context::default();
-            let mut rendered = String::new();
-            for _ in 0..2 {
-                let output = ctx.run(
-                    egui::RawInput {
-                        screen_rect: Some(egui::Rect::from_min_size(
-                            egui::Pos2::ZERO,
-                            egui::vec2(width, 2400.0),
-                        )),
-                        ..Default::default()
-                    },
-                    |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| {
-                            library.editor(ui, "Definition · creature", &Campaigns::default())
-                        });
-                    },
-                );
-                rendered = output
-                    .shapes
-                    .iter()
-                    .filter_map(|shape| match &shape.shape {
-                        egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-            }
-            assert_eq!(rendered.matches("65 (10d8 + 20)").count(), 1, "{rendered}");
-            for expected in [
-                "ARMOR CLASS",
-                "STR",
-                "Save +5",
-                "Vampiric Connection.",
-                // An action is a tile with its name; its rules text is in hover.
-                "Umbral Dagger",
-                "Deathless Agility.",
-                "except from its vampire master",
-            ] {
-                assert!(
-                    rendered.contains(expected),
-                    "Missing {expected}: {rendered}"
-                );
-            }
-            for duplicate in [
-                "Creature data",
-                "Abilities data",
-                "Stats data",
-                "MOD SAVE",
-                "AC 15",
-            ] {
-                assert!(!rendered.contains(duplicate), "{rendered}");
-            }
-            assert_eq!(library.draft.as_str(), source);
         }
     }
 
@@ -8720,33 +4265,7 @@ mod tests {
                 selected: Some(0),
                 ..Default::default()
             };
-            let ctx = egui::Context::default();
-            let mut rendered = String::new();
-            for _ in 0..2 {
-                let output = ctx.run(
-                    egui::RawInput {
-                        screen_rect: Some(egui::Rect::from_min_size(
-                            egui::Pos2::ZERO,
-                            egui::vec2(1200.0, 2400.0),
-                        )),
-                        ..Default::default()
-                    },
-                    |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| {
-                            library.editor_pane(ui, "Cannot be read", &Campaigns::default(), None);
-                        });
-                    },
-                );
-                rendered = output
-                    .shapes
-                    .iter()
-                    .filter_map(|shape| match &shape.shape {
-                        egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-            }
+            let rendered = sd1_painted(&mut library);
             assert!(
                 rendered.contains("The package manifest was deleted."),
                 "{rendered}"
@@ -8759,7 +4278,7 @@ mod tests {
             let warning = colors().result.warning;
             assert_eq!(
                 owner_line_look(&mut library, "Test · Manifest deleted"),
-                Some((icons::WARN.to_owned(), warning, warning)),
+                Some((icons::WARN.to_owned(), warning)),
                 "row-125-manifest-deleted ({filename})"
             );
             assert!(rendered.contains("Show folder"), "{rendered}");
@@ -9367,34 +4886,7 @@ mod tests {
         // M-L0.4b: the notice stands through the list's next frames, where the footer draws it
         // (main's list ended it in the first frame, as the scope it had listed was not the
         // notice's: no footer ever drew it). The DM's own search, or scope, ends it.
-        let ctx = egui::Context::default();
-        design::theme::install(&ctx);
-        let painted = |library: &mut Library, campaigns: &mut Campaigns| {
-            let mut texts = Vec::new();
-            for _ in 0..2 {
-                let output = ctx.run(
-                    egui::RawInput {
-                        screen_rect: Some(egui::Rect::from_min_size(
-                            egui::Pos2::ZERO,
-                            egui::vec2(1200.0, 800.0),
-                        )),
-                        ..Default::default()
-                    },
-                    |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| library.show(ui, campaigns));
-                    },
-                );
-                texts = output
-                    .shapes
-                    .into_iter()
-                    .filter_map(|shape| match shape.shape {
-                        egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>();
-            }
-            texts.join("\n")
-        };
+        let painted = page_words;
         let notice = "Scope is now Everything, to show Brand.";
         let shown = painted(&mut library, &mut campaigns);
         assert!(
@@ -9706,34 +5198,16 @@ mod tests {
                 && loaded.duplicates(1) == [3],
             "fixture: the creature and the encounter are each in both owners"
         );
-        let ctx = egui::Context::default();
-        design::theme::install(&ctx);
-        let mut painted = Vec::new();
-        for _ in 0..2 {
-            let output = ctx.run(egui::RawInput::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    // The warning in a typed footer, as the reader draws it (M-L0.4b).
-                    let frame = PaneFrame::new(ui);
-                    let mut messages = Messages::<LibraryPress>::new(&frame, "duplicates", 600.0);
-                    messages.outcome(duplicate_notice(
-                        ui,
-                        &loaded,
-                        &loaded.notes[0],
-                        &[0, 2],
-                        None,
-                    ));
-                    let _ = messages.pane(ui, design::Body::Content, |_| ());
-                });
-            });
-            painted = output
-                .shapes
-                .into_iter()
-                .filter_map(|shape| match shape.shape {
-                    egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
-                    _ => None,
-                })
-                .collect::<Vec<_>>();
-        }
+        // The warning in the reader's typed footer, as plain lines (M-L0.4b).
+        let mut messages = Messages::<LibraryPress>::new();
+        messages.outcome(duplicate_notice(
+            &StateContext::new(),
+            &loaded,
+            &loaded.notes[0],
+            &[0, 2],
+            None,
+        ));
+        let painted = footer_words(&messages.into_plain());
         // Issue #505 (M-L0.5): the campaign with the package's UUID is never the package: not in
         // its scope, not in what unregistering it takes away.
         assert!(
@@ -9770,19 +5244,14 @@ mod tests {
     }
 
     #[test]
-    fn the_empty_readers_undos_name_their_object_whole_or_short() {
-        use crate::design::test_harness::Themed as _;
-        // M-L0.4b, the three proofs of the M9 labels (`Undo unregister <package>`, `Undo remove
-        // <name>`) in the empty reader's typed footer:
-        // 8. At every width each Undo shows its whole label where it fits the Undo's own room
-        //    (the line, capped at `LIST_MEASURE`, less the message's inset and the action's icon
-        //    and padding), else its short form: never cut, never past the pane.
-        // 9. Its accessible name is the whole label at every width, also where it shows short.
-        // 10. An unchanged frame builds and measures no label, and makes no plan.
-        use egui_kittest::kittest::{NodeT, Queryable};
+    fn the_empty_readers_undos_name_their_object_whole() {
+        // M-L0.4b, the M9 labels (`Undo unregister <package>`, `Undo remove <name>`) in the
+        // empty reader's typed footer: each Undo carries its whole label (the GPUI footer shows
+        // its short form where the whole one does not fit), and an unchanged frame does no
+        // content-sized work for the Remove line's words.
         let temp = tempfile::tempdir().unwrap();
         let m = create_module(&temp.path().join("module"), "Module", "test").unwrap();
-        // Long names, as the DM's data may hold, so the widths cross each label's boundary.
+        // Long names, as the DM's data may hold.
         let entry = "Ash Exposure in the Burning Wastes";
         let package = "The Ashen Marches of the Cinder Reach";
         let creature = note_text(entry, "creature", None);
@@ -9826,127 +5295,43 @@ mod tests {
             path: temp.path().join("modules/ashen-marches"),
         });
         assert!(library.selected.is_none(), "fixture: no entry open");
-        let mut harness = egui_kittest::Harness::builder().themed_ui_state(
-            |ui, library: &mut Library| library.editor(ui, "Entry", &Campaigns::default()),
-            library,
-        );
-        let (unregister, remove) = (
+        let campaigns = Campaigns::default();
+        let words = reader_words(&mut library, &campaigns);
+        for whole in [
             format!("Undo unregister {package}"),
             format!("Undo remove {entry}"),
-        );
-        let labels = [
-            ("Undo unregister", unregister.as_str()),
-            ("Undo remove", remove.as_str()),
-        ];
-        let mut forms = std::collections::BTreeSet::new();
-        for width in (260..=900).step_by(4) {
-            let width = width as f32;
-            harness.set_size(egui::vec2(width, 700.0));
-            harness.run_steps(2);
-            // Each text with its rect, the rect it is clipped to, and whether its layout cut it
-            // (`elided`: egui's `…` is in the galley, not in its words): a text past its clip or
-            // elided is cut.
-            let painted: Vec<(String, egui::Rect, egui::Rect, bool)> = harness
-                .output()
-                .shapes
-                .iter()
-                .filter_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) => Some((
-                        text.galley.job.text.clone(),
-                        text.galley.rect.translate(text.pos.to_vec2()),
-                        shape.clip_rect,
-                        text.galley.elided,
-                    )),
-                    _ => None,
-                })
-                .collect();
-            for (short, whole) in labels {
-                let named = harness
-                    .query_all(egui_kittest::kittest::By::new().predicate(|node| {
-                        node.role() == egui::accesskit::Role::Button
-                            && node.label().is_some_and(|label| label.starts_with(short))
-                    }))
-                    .map(|node| node.accesskit_node().label().unwrap_or_default())
-                    .collect::<Vec<_>>();
-                assert_eq!(named, [whole], "9: the whole accessible name at {width}");
-                let shown: Vec<_> = painted
-                    .iter()
-                    .filter(|(text, ..)| text.starts_with(short))
-                    .collect();
-                assert!(
-                    shown.len() == 1
-                        && (shown[0].0 == whole || shown[0].0 == short)
-                        && shown[0].1.right() <= shown[0].2.right().min(width) + 0.5
-                        && !shown[0].3,
-                    "8: whole where it fits, else short, never cut, at {width}: {shown:?}"
-                );
-                forms.insert((short, shown[0].0 == whole));
-            }
-            assert!(
-                !painted
-                    .iter()
-                    .any(|(text, _, _, elided)| *elided || text.contains('…')),
-                "8: nothing cut at {width}"
+        ] {
+            assert_eq!(
+                words.iter().filter(|text| **text == whole).count(),
+                1,
+                "the whole label: {whole}\n{words:#?}"
             );
         }
-        for (short, _) in labels {
-            assert!(
-                forms.contains(&(short, true)) && forms.contains(&(short, false)),
-                "fixture: the widths reach the whole and the short form of {short}: {forms:?}"
-            );
-        }
-        // 10. Quiet frames at one width: no footer plan, and no content-sized work for the
-        // Remove line's words (the entries that need the removed one, found once per content).
-        harness.set_size(egui::vec2(700.0, 700.0));
-        harness.run_steps(2);
         let scans = || DEPENDENT_SCANS.with(std::cell::Cell::get);
         let copied = || DEPENDENT_NAMES.with(std::cell::Cell::get);
         assert!(
             scans() > 0 && copied() >= 4,
             "fixture: the Remove line found the four encounters that need its entry"
         );
-        let painted: Vec<String> = harness
-            .output()
-            .shapes
-            .iter()
-            .filter_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
-                _ => None,
-            })
-            .collect();
         assert!(
-            painted
+            words
                 .iter()
                 .any(|text| text.contains("Bridge 1, Bridge 2, Bridge 3 and 1 more now needs")),
-            "fixture: the Remove line names them\n{painted:#?}"
+            "fixture: the Remove line names them\n{words:#?}"
         );
-        let (quiet, scanned, names) = (crate::design::outcome::footer_work(), scans(), copied());
-        harness.run_steps(4);
-        let after = crate::design::outcome::footer_work();
+        let (scanned, names) = (scans(), copied());
+        for _ in 0..4 {
+            let _ = reader_words(&mut library, &campaigns);
+        }
         assert_eq!(
             scans(),
             scanned,
-            "10: an unchanged frame reads no note for the Remove line"
+            "an unchanged frame reads no note for the Remove line"
         );
         assert_eq!(
             copied(),
             names,
-            "10: an unchanged frame copies none of the names that need the removed entry"
-        );
-        assert!(
-            after.compared > quiet.compared,
-            "the frames drew the footer"
-        );
-        assert_eq!(
-            (
-                after.plans - quiet.plans,
-                after.sorted - quiet.sorted,
-                after.named - quiet.named,
-                after.undo_fits - quiet.undo_fits,
-                after.laid - quiet.laid,
-            ),
-            (0, 0, 0, 0, 0),
-            "10: an unchanged frame of the empty reader's footer"
+            "an unchanged frame copies none of the names that need the removed entry"
         );
     }
 
@@ -9997,10 +5382,7 @@ mod tests {
         send.send(Ok(Loaded::fixture(notes()))).unwrap();
         library.pending = Some(receive);
         let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
-        let ctx = egui::Context::default();
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
-        });
+        let _ = page_words(&mut library, &mut campaigns);
         assert_eq!(
             library.selected,
             Some(1),
@@ -10009,9 +5391,7 @@ mod tests {
         // Issue #539: the list finds the selected entry's row once; quiet frames search the
         // matches no more.
         let mut frame = || {
-            let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
-            });
+            let _ = page_words(&mut library, &mut campaigns);
         };
         frame();
         frame();
@@ -10042,10 +5422,7 @@ mod tests {
         library.draft.push_str("Unsaved description");
         let expected = library.draft.as_str().to_owned();
         library.search = "no matching entry".into();
-        let ctx = egui::Context::default();
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
-        });
+        let _ = page_words(&mut library, &mut campaigns);
         assert!(campaigns.active_campaign().is_none());
         assert_eq!(library.draft.as_str(), expected);
         campaigns.unregister_module(m.id).unwrap();
@@ -10264,137 +5641,151 @@ mod tests {
         campaign
     }
 
-    /// The text the reader paints for the selected note, after two frames.
-    fn sd1_painted(library: &mut Library) -> String {
-        sd1_painted_at(library, (900.0, 1400.0))
-    }
-
-    /// The text the reader paints for the selected note, after two frames at `size`.
-    fn sd1_painted_at(library: &mut Library, size: (f32, f32)) -> String {
-        let ctx = egui::Context::default();
-        crate::design::theme::install(&ctx);
-        let mut texts = Vec::new();
-        for _ in 0..2 {
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(size.0, size.1),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        library.editor(ui, "Entry", &Campaigns::default());
-                    });
-                },
-            );
-            texts = output
-                .shapes
-                .into_iter()
-                .filter_map(|shape| match shape.shape {
-                    egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
-                    _ => None,
-                })
-                .collect();
-        }
-        texts.join("\n")
-    }
-
-    /// Types `words` into the open Markdown editor, as the DM does: focus, then text input.
-    fn sd1_type(library: &mut Library, words: &str) {
-        sd1_input(library, vec![vec![egui::Event::Text(words.to_owned())]]);
-    }
-
-    /// Sends each batch of input to the open Markdown editor, one frame each, in one context
-    /// (so the editor's own Undo remembers the earlier frames). The editor has focus.
-    fn sd1_input(library: &mut Library, batches: Vec<Vec<egui::Event>>) {
-        let ctx = egui::Context::default();
-        crate::design::theme::install(&ctx);
-        let note = &library.loaded.as_ref().unwrap().notes[library.selected.unwrap()];
-        let id = note.markdown_field().id();
-        let input = |events, time| egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(900.0, 1400.0),
-            )),
-            events,
-            time: Some(time),
-            ..Default::default()
-        };
-        let frames = [vec![], vec![]]
-            .into_iter()
-            .chain(batches.into_iter().flat_map(|batch| {
-                // A quiet frame after each batch, a second later, so the editor settles its Undo.
-                [batch, vec![]]
-            }));
-        let mut last = 0.0;
-        for (at, events) in frames.enumerate() {
-            last = at as f64 * 2.0;
-            let _ = ctx.run(input(events, last), |ctx| {
-                ctx.memory_mut(|memory| memory.request_focus(id));
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    library.editor(ui, "Entry", &Campaigns::default());
-                });
-            });
-        }
-        // Layout PR 9b: the focused editor's quiet frames lay out and hash none of its text.
-        let work = crate::design::pane::text_work(|| {
-            for at in 1..=3 {
-                let _ = ctx.run(input(Vec::new(), last + f64::from(at)), |ctx| {
-                    ctx.memory_mut(|memory| memory.request_focus(id));
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        library.editor(ui, "Entry", &Campaigns::default());
-                    });
-                });
+    /// The words of a footer's lines (`Library::reader_view`, `empty_reader_footer`), as the
+    /// pane's footer shows them: each line's words, help, Undo and choices, and its file.
+    fn footer_words(lines: &[model::FooterLine<LibraryPress>]) -> Vec<String> {
+        let mut words = Vec::new();
+        for line in lines {
+            words.push(line.words.clone());
+            words.extend(line.help.iter().cloned());
+            if let Some(undo) = &line.undo {
+                words.push(undo.label.clone());
             }
-        });
-        assert!(
-            work.is_quiet(3),
-            "9b-quiet: the Library editor's quiet frames: {work:?}"
-        );
+            for choice in &line.choices {
+                words.push(choice.words.clone());
+                words.extend(choice.help.clone());
+            }
+            if let Some(file) = &line.file {
+                words.push(file.shown.clone());
+            }
+        }
+        words
     }
 
-    /// Row 125: the owner line's status that ends with `words`, after two frames: its icon, the
-    /// icon's colour and the words' colour.
+    /// The words the Library's reader pane shows for the selected note, one part a line, as
+    /// the GPUI pane draws its `ReaderView` (`gui::pages::library::reader`): the toolbar, the
+    /// owner and file line, the save row (with its long reason), the body's notices, the disk
+    /// change and the footer. With no entry open, the empty reader and its footer. Each call is
+    /// two frames of the pane.
+    fn sd1_painted(library: &mut Library) -> String {
+        let campaigns = Campaigns::default();
+        let _ = reader_words(library, &campaigns);
+        reader_words(library, &campaigns).join("\n")
+    }
+
+    /// One frame of `sd1_painted`'s reader pane, with `campaigns`.
+    fn reader_words(library: &mut Library, campaigns: &Campaigns) -> Vec<String> {
+        let mut words: Vec<String> = Vec::new();
+        {
+            let subtitle = library.open_subtitle();
+            let Some((view, lines)) = library.reader_view(campaigns, None, &subtitle) else {
+                words.push("No entry open".into());
+                words.extend(footer_words(&library.empty_reader_footer(campaigns)));
+                return words;
+            };
+            words.push(view.title.clone());
+            words.push(view.subtitle.clone());
+            let bar = &view.toolbar;
+            words.push("Read".into());
+            words.push(bar.source_label.into());
+            if bar.back {
+                words.push("Back".into());
+            }
+            for (label, ..) in &bar.actions {
+                words.push((*label).into());
+            }
+            words.extend(bar.draft_reason.clone());
+            words.extend(bar.reasons.iter().cloned());
+            let line = &view.file_line;
+            words.push(format!("{} {}", line.status.0, line.status.1));
+            if let Some((_, relative)) = &line.file {
+                if line.folder_only {
+                    if !relative.is_empty() && !line.status.1.contains("deleted") {
+                        words.push(relative.clone());
+                    }
+                    words.push("Show folder".into());
+                } else {
+                    words.push(relative.clone());
+                    words.extend(line.moved_from.clone());
+                    if line.obsidian {
+                        words.push("Edit in Obsidian".into());
+                    }
+                    words.push("Show file".into());
+                }
+            }
+            if let Some(row) = &view.save_row {
+                words.push(format!("{} {}", row.word.0, row.word.1));
+                if row.discard {
+                    words.push("Discard".into());
+                }
+                words.extend(
+                    row.reason
+                        .as_ref()
+                        .map(|(long, _)| long.clone())
+                        .or(row.lock.clone()),
+                );
+                words.push("Save".into());
+            }
+            for notice in &view.notices {
+                words.push(notice.words.clone());
+                if let Some((repair, _, help)) = &notice.repair {
+                    words.push(repair.clone());
+                    words.extend(help.clone());
+                }
+                if let Some(details) = &notice.details {
+                    words.push("Technical details".into());
+                    words.push(details.clone());
+                }
+            }
+            if let Some(disk) = &view.disk {
+                words.push(disk.words.clone());
+                words.push(disk.keep.clone());
+                words.push(disk.lose.clone());
+                if let Some(details) = &disk.details {
+                    words.push("Technical details".into());
+                    words.push(details.clone());
+                }
+            }
+            words.extend(footer_words(&lines));
+        }
+        words
+    }
+
+    /// The words of two frames of the whole page, as the GPUI page runs them: `begin`, the
+    /// list's work (`list_view`), then the empty Campaign scope's pane or the reader pane.
+    fn page_words(library: &mut Library, campaigns: &mut Campaigns) -> String {
+        let ctx = StateContext::new();
+        let mut words = Vec::new();
+        for _ in 0..2 {
+            library.begin(&ctx, campaigns);
+            if library.empty_scope() {
+                words = vec!["No entries of your own yet".to_owned()];
+                words.extend(footer_words(&library.form_footer(campaigns)));
+                continue;
+            }
+            let _ = library.list_view(campaigns, None, false, 1200.0);
+            words = reader_words(library, campaigns);
+        }
+        words.join("\n")
+    }
+
+    /// Types `words` at the end of the open Markdown editor's text, as the GPUI editor reports
+    /// an edit (`Library::edit_draft`).
+    fn sd1_type(library: &mut Library, words: &str) {
+        let draft = format!("{}{words}", library.draft.as_str());
+        library.edit_draft(&draft);
+    }
+
+    /// Row 125: the owner line's status when its words end with `words`: its icon and its
+    /// colour, which the icon and the words share.
     fn owner_line_look(
         library: &mut Library,
         words: &str,
-    ) -> Option<(String, egui::Color32, egui::Color32)> {
-        let ctx = egui::Context::default();
-        crate::design::theme::install(&ctx);
-        let mut look = None;
-        for _ in 0..2 {
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(1200.0, 1400.0),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        library.editor(ui, "Entry", &Campaigns::default());
-                    });
-                },
-            );
-            look = output.shapes.iter().find_map(|shape| {
-                let egui::Shape::Text(text) = &shape.shape else {
-                    return None;
-                };
-                let job = &text.galley.job;
-                (job.text.ends_with(words) && job.sections.len() >= 3).then(|| {
-                    let icon = &job.sections[0];
-                    (
-                        job.text[icon.byte_range.clone()].to_owned(),
-                        icon.format.color,
-                        job.sections[job.sections.len() - 1].format.color,
-                    )
-                })
-            });
-        }
-        look
+    ) -> Option<(String, crate::design::Color)> {
+        let subtitle = library.open_subtitle();
+        let (view, _) = library.reader_view(&Campaigns::default(), None, &subtitle)?;
+        let (icon, said, color) = view.file_line.status;
+        said.ends_with(words).then(|| (icon.to_owned(), color))
     }
 
     fn sd1_select(loaded: Loaded, owner: Option<Uuid>, path: &str) -> Library {
@@ -10573,7 +5964,7 @@ mod tests {
         let error = colors().result.error;
         assert_eq!(
             owner_line_look(&mut library, "Campaign · Cannot be read"),
-            Some((icons::ERROR.to_owned(), error, error)),
+            Some((icons::ERROR.to_owned(), error)),
             "row-125-cannot-be-read"
         );
         let yaml_painted = sd1_painted(&mut library);
@@ -10788,18 +6179,11 @@ mod tests {
             painted.contains("Campaign · Editable") && !painted.contains("Read only"),
             "FL1-folder-inside-owner-line\n{painted}"
         );
-        // Unchanged frames and a resize keep the failure and never read the draft's words to do
-        // so. Each paint is two frames, and each frame checks.
+        // Unchanged frames keep the failure and never read the draft's words to do so. Each
+        // paint is two frames, and each frame checks.
         let steady = failure_work
             .steady(&mut library, |library| {
-                [
-                    (900.0, 1400.0),
-                    (900.0, 1400.0),
-                    (960.0, 640.0),
-                    (1920.0, 1080.0),
-                ]
-                .into_iter()
-                .all(|size| sd1_painted_at(library, size).contains("Not saved"))
+                (0..4).all(|_| sd1_painted(library).contains("Not saved"))
             })
             .expect("disk-failure-no-draft-scan");
         assert!(
@@ -10832,19 +6216,9 @@ mod tests {
         let _ = library.draft.replace(accepted.clone());
         library.draft_revision += 1;
         failed_again(&mut library);
-        sd1_input(
-            &mut library,
-            vec![
-                vec![egui::Event::Text("More.".into())],
-                vec![egui::Event::Key {
-                    key: egui::Key::Z,
-                    physical_key: None,
-                    pressed: true,
-                    repeat: false,
-                    modifiers: egui::Modifiers::COMMAND,
-                }],
-            ],
-        );
+        sd1_type(&mut library, "More.");
+        // The editor's Undo reports the words before the edit.
+        library.edit_draft(&accepted);
         assert_eq!(
             library.draft.as_str(),
             accepted,
@@ -10947,19 +6321,8 @@ mod tests {
             "fixture: a repair draft"
         );
         let fixed = broken.replace("splat_kind: [", "splat_kind: rule");
-        sd1_input(
-            &mut repair,
-            vec![
-                vec![egui::Event::Key {
-                    key: egui::Key::A,
-                    physical_key: None,
-                    pressed: true,
-                    repeat: false,
-                    modifiers: egui::Modifiers::COMMAND,
-                }],
-                vec![egui::Event::Text(fixed.clone())],
-            ],
-        );
+        // Select all, then type the fixed text.
+        repair.edit_draft(&fixed);
         assert_eq!(
             repair.draft.as_str(),
             fixed,
@@ -11085,7 +6448,7 @@ mod tests {
         let file = module.path.join("Wolf.md");
         let text = note_text("Wolf", "creature", None);
         fs::write(&file, &text).unwrap();
-        let ctx = egui::Context::default();
+        let ctx = StateContext::new();
         let mut library = sd1_select(load(Some(&module)).unwrap(), Some(module.id), "Wolf.md");
         let draft = format!("{text}\nMy draft.\n");
         let _ = library.draft.replace(draft.clone());

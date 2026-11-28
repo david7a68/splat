@@ -1,15 +1,10 @@
 //! The same disk comparison for encounter, group and creature drafts.
 #![warn(deprecated)] // Its parent allows old message functions; this file uses none.
+use crate::state_context::StateContext;
 use crate::{
-    design::{
-        self, Type, colors,
-        outcome::{
-            BodyMessage, Choice, ChoiceKind, Fault, FaultMessage, MessageChoice, Sentence, Severity,
-        },
-    },
+    design::{self, outcome::Sentence},
     library::note_path,
 };
-use eframe::egui;
 use std::{fs, path::Path};
 
 #[derive(Clone, Default)]
@@ -48,17 +43,23 @@ pub(super) fn changed_on_disk(what: &str, name: &str) -> Sentence {
     }
 }
 
-/// What the disk did under a draft: its file changed or went, or another file uses its
-/// identity. The draft is safe and Save waits until the DM chooses: the warning tone.
-struct DiskFault(Sentence);
-
-impl Fault for DiskFault {
-    fn severity(&self) -> Severity {
-        Severity::NeedsFixing
-    }
-    fn cause(&self) -> Sentence {
-        self.0.clone()
-    }
+/// A draft's disk conflict, as data for the GPUI page.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DiskView {
+    /// The facts before the last one (another file claims this identity).
+    pub facts: Vec<String>,
+    /// The last fact: the choices follow its words.
+    pub last: String,
+    /// The safe choice: `Overwrite with my draft`.
+    pub keep: String,
+    /// The red choice: `Reload and lose my draft`, or `Remove <what> and lose draft`.
+    pub lose: String,
+    /// What differs, part by part, in the DM's words.
+    pub differences: Vec<(String, String)>,
+    /// The draft's text, as Overwrite would save it.
+    pub draft: String,
+    /// The file's text now, and its path; none when the file is gone.
+    pub disk: Option<(String, String)>,
 }
 
 impl Recovery {
@@ -121,83 +122,36 @@ impl Recovery {
         self.change.take()
     }
 
-    /// The conflict in place of the editor, its choices after the last fact, then what differs.
-    /// `Some(true)` keeps the draft; `Some(false)` lets it go.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "ruling M20: a draft’s disk conflict in its editor’s place, typed (`Ban::Body`)"
-    )]
-    pub fn show(&self, ui: &mut egui::Ui, draft: &str, (what, name): (&str, &str)) -> Option<bool> {
+    /// The conflict as data (`show`'s facts, choices and comparison), while there is one.
+    pub fn view(&self, draft: &str, (what, name): (&str, &str)) -> Option<DiskView> {
         let change = self.change.as_ref()?;
-        let mut faults = vec![DiskFault(changed_on_disk(what, name))];
-        faults.extend(change.copies.iter().map(|path| {
-            DiskFault(crate::sentence!(
+        let mut facts = vec![changed_on_disk(what, name).to_string()];
+        facts.extend(change.copies.iter().map(|path| {
+            crate::sentence!(
                 "Another file claims to be this {}: {}. Both files stay.",
                 what,
                 path
-            ))
-        }));
-        let last = faults.pop()?;
-        for fault in &faults {
-            let _ = BodyMessage::<()>::from(FaultMessage::new(fault)).show(ui);
-        }
-        // The choices follow the last fact the DM reads, at its words: safe first, then the red
-        // one `L` after it (the part's). FF7: a file that is gone says what the red one removes
-        // and loses.
-        let lose = if change.text.is_some() {
-            Choice::new(MessageChoice::Lose("Reload and lose my draft"), false)
-        } else {
-            Choice::named_as(
-                ChoiceKind::Lose,
-                crate::choice!("Remove {} and lose draft", what),
-                false,
             )
-        };
-        let choice = BodyMessage::from(
-            FaultMessage::new(&last)
-                .choice(Choice::new(
-                    MessageChoice::Choice("Overwrite with my draft"),
-                    true,
-                ))
-                .choice(lose),
-        )
-        .show(ui);
-        if let Some(text) = &change.text {
-            // One line for each part that differs, in the DM's words, above the raw lines.
-            let key = egui::Id::new(("disk_differences", draft, text.as_str()));
-            let lines = ui
-                .data(|data| data.get_temp::<Vec<(String, String)>>(key))
-                .unwrap_or_else(|| {
-                    let lines = differences(draft, text);
-                    ui.data_mut(|data| data.insert_temp(key, lines.clone()));
-                    lines
-                });
-            if !lines.is_empty() {
-                design::gap(ui, design::Gap::S);
-            }
-            for (label, words) in &lines {
-                ui.horizontal_top(|ui| {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(design::XXL * 3.0 + design::S, 0.0),
-                        egui::Layout::left_to_right(egui::Align::Min),
-                        |ui| {
-                            ui.set_min_width(design::XXL * 3.0 + design::S);
-                            ui.label(Type::Small.rich(ui, label).color(colors().muted));
-                        },
-                    );
-                    ui.add(egui::Label::new(Type::Small.rich(ui, words)).wrap());
-                });
-            }
-            design::draft_comparison_styled(
-                ui,
-                draft,
-                text,
-                (&change.path, text),
-                design::Type::Mono.font(ui),
-                design::Type::Mono.line(),
-            );
-        }
-        choice
+            .to_string()
+        }));
+        let last = facts.pop()?;
+        Some(DiskView {
+            facts,
+            last,
+            keep: "Overwrite with my draft".to_owned(),
+            lose: if change.text.is_some() {
+                "Reload and lose my draft".to_owned()
+            } else {
+                format!("Remove {what} and lose draft")
+            },
+            differences: change
+                .text
+                .as_deref()
+                .map(|text| differences(draft, text))
+                .unwrap_or_default(),
+            draft: draft.to_owned(),
+            disk: change.text.clone().map(|text| (change.path.clone(), text)),
+        })
     }
 }
 
@@ -419,75 +373,81 @@ pub(super) fn comparison_text(
 }
 
 impl super::Encounters {
-    pub(super) fn encounter_disk_view(
+    /// The encounter editor's disk conflict: its own, else the first of its groups' (the
+    /// editor shows it in its place, `encounter_disk_view`).
+    pub fn encounter_disk(&self) -> Option<DiskView> {
+        let snapshot = self.snapshot.as_ref()?;
+        let draft = self.draft.as_ref()?;
+        if draft.recovery.change.is_none() {
+            let group = draft.groups.iter().find(|group| group.has_disk_change())?;
+            return group.disk_view(snapshot);
+        }
+        draft.recovery.view(
+            &draft.comparison_text(snapshot).unwrap_or_default(),
+            ("encounter", &draft.name),
+        )
+    }
+
+    /// The DM's choice in the encounter editor's disk conflict: `keep` overwrites with the
+    /// draft, else the draft goes (with Undo) and the file's text comes back.
+    pub fn encounter_disk_choice(
         &mut self,
-        ui: &mut egui::Ui,
+        ctx: &StateContext,
         campaign: &crate::persistence::Campaign,
         modules: &[crate::persistence::Module],
-    ) -> bool {
-        let Some(snapshot) = self.snapshot.as_ref() else {
-            return false;
-        };
+        keep: bool,
+    ) {
         let Some(draft) = self.draft.as_mut() else {
-            return false;
+            return;
         };
         if draft.recovery.change.is_none() {
-            if let Some(index) = draft
+            let Some(index) = draft
                 .groups
                 .iter()
                 .position(|group| group.has_disk_change())
-            {
-                let gone = draft.groups[index].file_gone();
-                match draft.groups[index].disk_choice(ui, &campaign.path, snapshot) {
-                    Ok(Some(true)) => self.save_draft(ui.ctx(), campaign, modules),
-                    Ok(Some(false)) => {
-                        // FF7: the group's file is gone. It leaves this encounter's draft, and
-                        // Undo remove puts it back at its place with its draft.
-                        if gone {
-                            let group = draft.groups.remove(index);
-                            if draft.add_to.as_deref() == Some(group.path()) {
-                                draft.add_to = None;
-                            }
-                            draft.new_results.push(super::DraftUndo::RemovedGroup {
-                                index,
-                                group: Box::new(group),
-                                delete: false,
-                            });
+            else {
+                return;
+            };
+            let gone = draft.groups[index].file_gone();
+            match draft.groups[index].disk_choice(&campaign.path, keep) {
+                Ok(()) if keep => self.save_draft(ctx, campaign, modules),
+                Ok(()) => {
+                    // FF7: the group's file is gone. It leaves this encounter's draft, and
+                    // Undo remove puts it back at its place with its draft.
+                    if gone {
+                        let group = draft.groups.remove(index);
+                        if draft.add_to.as_deref() == Some(group.path()) {
+                            draft.add_to = None;
                         }
-                        self.error = None;
+                        draft.new_results.push(super::DraftUndo::RemovedGroup {
+                            index,
+                            group: Box::new(group),
+                            delete: false,
+                        });
                     }
-                    Err(error) => self.error = Some(error),
-                    _ => {}
+                    self.error = None;
                 }
-                return true;
+                Err(error) => self.error = Some(error),
             }
-            return false;
+            return;
         }
-        let choice = draft.recovery.show(
-            ui,
-            &draft.comparison_text(snapshot).unwrap_or_default(),
-            ("encounter", &draft.name),
-        );
-        if let Some(keep) = choice {
-            if keep {
-                if let Some(change) = draft.recovery.accept() {
-                    draft.path = change.path;
-                    draft.baseline = change.text.clone();
-                    if let Some(text) = change.text {
-                        draft.source = text;
-                    }
-                    self.save_draft(ui.ctx(), campaign, modules);
+        if keep {
+            if let Some(change) = draft.recovery.accept() {
+                draft.path = change.path;
+                draft.baseline = change.text.clone();
+                if let Some(text) = change.text {
+                    draft.source = text;
                 }
-            } else {
-                let path = draft.path.clone();
-                let old = self.draft.take();
-                self.draft = super::Draft::open(&campaign.path, &path).ok();
-                self.discarded = old;
-                self.stamp_kept(super::KeptResult::Discarded);
-                self.error = None;
+                self.save_draft(ctx, campaign, modules);
             }
+        } else {
+            let path = draft.path.clone();
+            let old = self.draft.take();
+            self.draft = super::Draft::open(&campaign.path, &path).ok();
+            self.discarded = old;
+            self.stamp_kept(super::KeptResult::Discarded);
+            self.error = None;
         }
-        true
     }
 }
 

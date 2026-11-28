@@ -24,11 +24,11 @@
 //! struct Saved;
 //! impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
 //! struct App { store: Results<Link, Saved>, view: Retained<Link, NoPress, splat_design::ownership::Revision> }
-//! fn frame(ui: &mut egui::Ui, app: &mut App, book: splat_design::ownership::Revision) {
+//! fn frame(app: &mut App, book: splat_design::ownership::Revision) {
 //!     let projection = app.view.refresh(&app.store, &Link, book, |_| {
 //!         Said::new(splat_design::sentence!("Campaign link saved.")).into()
 //!     });
-//!     let frame = PaneFrame::new(ui);
+//!     let frame = PaneFrame::new();
 //!     let line: Option<KeptLine<NoPress>> = app.store.present(&frame, projection, &Link, book).ok().flatten();
 //!     let _ = line;
 //! }
@@ -71,9 +71,9 @@
 //!     view: Retained<Link, NoPress, Revision>,
 //!     kept: Option<KeptLine<'static, NoPress>>,
 //! }
-//! fn frame(ui: &mut egui::Ui, app: &mut App, book: Revision) {
+//! fn frame(app: &mut App, book: Revision) {
 //!     let projection = app.view.refresh(&app.store, &Link, book, |_| Said::new(splat_design::sentence!("Saved.")).into());
-//!     let frame = PaneFrame::new(ui);
+//!     let frame = PaneFrame::new();
 //!     app.kept = app.store.present(&frame, projection, &Link, book).ok().flatten(); // <- kept past its frame
 //! }
 //! ```

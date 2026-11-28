@@ -2,21 +2,16 @@
 //! It covers built-in, package and campaign-owned entries in one index (T2.3), and the
 //! campaign's plain notes, with each heading as its own result.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
+use crate::state_context::StateContext;
 use crate::{
     campaigns::Campaigns,
     content_workspace::Catalogue,
-    design::{
-        self, Action, Density, Tone, Type, colors, icons,
-        outcome::{Messages, PaneFrame},
-        pane::Body,
-        reader as style,
-    },
-    history::{self, Step, Trail},
+    design::{self, icons},
+    history::{Step, Trail},
     library::{presentation, view},
     persistence::{Campaign, Module},
     world::{self, Go, Nav, Reader, Role, lines::Line},
 };
-use eframe::egui;
 use splat::content::{Entry, Reference};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -26,7 +21,6 @@ use uuid::Uuid;
 
 use crate::matching::{self, Rank, Typed, names_lower_word};
 
-const RESULT_ROW: f32 = design::XXL;
 /// Result rows before `Show all`, and the most rows its list shows before it scrolls.
 const RESULTS_SHOWN: usize = 5;
 
@@ -40,11 +34,8 @@ fn rows_shown(matches: usize, show_all: bool) -> usize {
     }
 }
 pub const RESULTS_LISTED: usize = 8;
-const PANEL_MARGIN: f32 = design::M;
 
 pub const SEARCH_NAME: &str = "Search everything";
-const LOOKUP_SEARCH: design::FieldId =
-    crate::field_id!("lookup_search").once(design::Once::PageSearch);
 
 /// The search field's placeholder for this width of the panel.
 fn search_hint(width: f32) -> &'static str {
@@ -56,9 +47,6 @@ fn search_hint(width: f32) -> &'static str {
 }
 /// What an empty search finds, below the search field.
 pub const SEARCH_HELP: &str = "Search built-in rules, every package, this campaign’s own entries, session notes and the timeline. Press Escape to close.";
-/// How many lines of a long note show where the words were found.
-const FOUND_LINES: usize = 3;
-const FOUND_FROM_LINES: usize = 12;
 
 /// Where something the DM wrote lives, so that it can open there.
 #[derive(Clone, Debug, PartialEq)]
@@ -286,21 +274,6 @@ thread_local! {
 #[cfg(any(test, feature = "test-support"))]
 static SHARED_NAME_SEARCHES: std::sync::Mutex<BTreeMap<std::path::PathBuf, usize>> =
     std::sync::Mutex::new(BTreeMap::new());
-
-/// How often `shown_name` ran on this thread, and how often the shared-name search ran for
-/// the campaign in this folder.
-#[cfg(any(test, feature = "test-support"))]
-pub fn shown_name_counts(campaign: &std::path::Path) -> crate::test_support::Counts {
-    crate::test_support::Counts {
-        reached: SHOWN_NAMES.with(std::cell::Cell::get),
-        work: SHARED_NAME_SEARCHES
-            .lock()
-            .unwrap()
-            .get(campaign)
-            .copied()
-            .unwrap_or(0),
-    }
-}
 
 /// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -804,7 +777,8 @@ impl ContentIndex {
         Ok(index)
     }
 
-    /// The rule for an official condition, by the name on a run's row.
+    /// The rule of an official condition (`Poisoned`, `Exhaustion (2)`), to open beside a run.
+    /// Words the DM typed for another effect have none.
     pub fn condition_rule(&self, condition: &str) -> Option<usize> {
         let name = condition.split(" (").next()?.trim().to_lowercase();
         if !splat_campaign::encounter_run::effect::CONDITIONS
@@ -1409,34 +1383,32 @@ impl ContentIndex {
         output
     }
 
-    /// `unused_creatures` for one view, `id`, kept in egui's memory for that view and worked out
-    /// again only when the query or the index (its load, `generation`) changes: a repaint of an
-    /// encounter search with no match as typed ranks nothing (review of PR 450, P2). The view's
-    /// own state, never a process-wide one: the visual suite draws scenarios on parallel threads.
+    /// `unused_creatures` for one view, `view`, kept in the state context for that view and
+    /// worked out again only when the query or the index (its load, `generation`) changes: a
+    /// repaint of an encounter search with no match as typed ranks nothing (review of PR 450,
+    /// P2). The view's own state, never a process-wide one: GUI tests run on parallel threads.
     pub fn unused_creatures_kept(
         &self,
-        ctx: &eframe::egui::Context,
-        id: eframe::egui::Id,
+        ctx: &StateContext,
+        view: &str,
         query: &str,
     ) -> Arc<Vec<(Uuid, Uuid, String, String)>> {
-        let key = id.with("unused_creatures");
-        let kept = ctx.data(|data| data.get_temp::<UnusedKept>(key));
+        let key = crate::state_context::Slot::<UnusedKept>::new("unused_creatures").with(view);
+        let kept = ctx.get(key);
         if let Some(kept) =
             kept.filter(|kept| kept.generation == self.generation && kept.query == query)
         {
             return kept.found;
         }
         let found = Arc::new(self.unused_creatures(query));
-        ctx.data_mut(|data| {
-            data.insert_temp(
-                key,
-                UnusedKept {
-                    generation: self.generation,
-                    query: query.to_owned(),
-                    found: found.clone(),
-                },
-            );
-        });
+        ctx.set(
+            key,
+            UnusedKept {
+                generation: self.generation,
+                query: query.to_owned(),
+                found: found.clone(),
+            },
+        );
         found
     }
 
@@ -1834,15 +1806,11 @@ pub struct Lookup {
     trail: Trail<Shown>,
     /// What is on screen is the best match of the words being typed (`show_typed`).
     typed_shown: bool,
-    /// Where the panel was drawn last, for Back and Forward beside the Library.
-    panel_rect: Option<egui::Rect>,
     waiting_for: Option<Uuid>,
     focus_search: bool,
     results_open: bool,
     /// `Show all` lists every match in place. New words return to five.
     show_all: bool,
-    /// An arrow key moved the highlight, so the list brings that row into view.
-    follow_highlight: bool,
     highlight: usize,
     /// An entry the DM asked to see in the Library.
     pub open_in_library: Option<Entry>,
@@ -1867,7 +1835,9 @@ pub struct Lookup {
     /// A check of campaign and package files, away from the frame.
     pub files_changed: bool,
     checking: Option<mpsc::Receiver<u64>>,
-    was_focused: bool,
+    /// The check of the files is started (at the first poll, and again each time the window gets
+    /// the focus back: `check_files`).
+    files_checked: bool,
     /// The panel shows the Trackers view in place of what it held, which it keeps.
     trackers_shown: bool,
     /// Ctrl+T opened the panel, so Ctrl+T closes it again.
@@ -1899,27 +1869,43 @@ impl Lookup {
         self.pending.is_some() || self.checking.is_some()
     }
 
+    /// Block until the index read in flight has its result (its completion signal, never a
+    /// clock), and hand that result to the next `poll`, which takes it as it takes any. A test's
+    /// wait. `false` when no read was in flight.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn wait_for_load(&mut self) -> bool {
+        let Some(rx) = self.pending.take() else {
+            return false;
+        };
+        let (tx, ready) = mpsc::channel();
+        if let Ok(result) = rx.recv() {
+            let _ = tx.send(result);
+        }
+        self.pending = Some(ready);
+        true
+    }
+
     pub fn index(&self) -> Option<Arc<ContentIndex>> {
         self.index.clone()
     }
 
     /// Load or reload in the background when the active campaign or packages change.
-    pub fn poll(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    pub fn poll(&mut self, ctx: &StateContext, campaigns: &Campaigns) {
         let active = campaigns.active_campaign();
-        // Coming back from Obsidian, show what was just written there.
-        let focused = ctx.input(|i| i.focused);
-        if focused && !self.was_focused {
+        // At the first poll, show what was written while the app was closed; when the window
+        // gets the focus back (`check_files`), what was just written in Obsidian or a file manager.
+        if !self.files_checked {
             let (tx, rx) = mpsc::channel();
             let campaign = active.clone();
             let modules = campaigns.modules().to_vec();
-            let waker = ctx.clone();
+            let waker = ctx.waker();
             std::thread::spawn(move || {
                 let _ = tx.send(content_fingerprint(&modules, campaign.as_ref()));
                 waker.request_repaint();
             });
             self.checking = Some(rx);
         }
-        self.was_focused = focused;
+        self.files_checked = true;
         if let Some(seen) = self.checking.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.checking = None;
             if self
@@ -1968,20 +1954,22 @@ impl Lookup {
         }
     }
 
+    /// The window got the focus back: the next poll checks the campaign and package files, and
+    /// every page reads them again when they changed (`files_changed`). egui did this on its
+    /// `WindowFocused(true)`.
+    pub fn check_files(&mut self) {
+        self.files_checked = false;
+    }
+
     /// Content on disk changed, for example after a copy.
     pub fn refresh(&mut self) {
         self.scope = None;
     }
 
-    fn start_load(
-        &mut self,
-        ctx: &egui::Context,
-        modules: Vec<Module>,
-        campaign: Option<Campaign>,
-    ) {
+    fn start_load(&mut self, ctx: &StateContext, modules: Vec<Module>, campaign: Option<Campaign>) {
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
-        let ctx = ctx.clone();
+        let ctx = ctx.waker();
         std::thread::spawn(move || {
             let _ = tx.send(ContentIndex::load(&modules, campaign.as_ref()));
             ctx.request_repaint();
@@ -2089,6 +2077,33 @@ impl Lookup {
         self.open = false;
     }
 
+    /// Trackers' title line offers Back: an entry or a found note waits under Trackers (for a
+    /// view drawn by another UI, the GPUI port).
+    pub fn trackers_hold_something(&self) -> bool {
+        self.holds_something()
+    }
+
+    /// Back from Trackers to what Lookup held.
+    pub fn back_from_trackers(&mut self) {
+        self.leave_trackers();
+    }
+
+    /// Words typed in the search field over Trackers: a new search, which leaves Trackers for
+    /// its results (`search_over_trackers`).
+    pub fn search_from_trackers(&mut self, typed: &str) {
+        if typed.is_empty() {
+            return;
+        }
+        typed.clone_into(&mut self.query);
+        self.leave_trackers();
+        self.results_open = true;
+    }
+
+    /// Trackers just came into view: it shows from its top, once.
+    pub fn take_trackers_from_top(&mut self) -> bool {
+        std::mem::take(&mut self.trackers_from_top)
+    }
+
     /// The name of the NPC this panel rolled and has not saved.
     pub fn generated_name(&self) -> Option<&str> {
         self.generated.as_ref().map(|npc| npc.name.as_str())
@@ -2119,7 +2134,7 @@ impl Lookup {
     }
 
     /// Open one entry from a link somewhere else in the app.
-    pub fn open_note_link(&mut self, target: &str, from: Option<Uuid>, ctx: &egui::Context) {
+    pub fn open_note_link(&mut self, target: &str, from: Option<Uuid>, ctx: &StateContext) {
         let Some(index) = &self.index else {
             return;
         };
@@ -2309,28 +2324,6 @@ impl Lookup {
         changed
     }
 
-    /// Back and Forward. Beside the Library page, a key acts here only with focus here,
-    /// and a mouse button only with the pointer here; the Library takes the rest.
-    pub fn history_input(&mut self, ctx: &egui::Context, library_page: bool) {
-        if !self.open {
-            return;
-        }
-        let over_panel = |pos: egui::Pos2| self.panel_rect.is_some_and(|rect| rect.contains(pos));
-        let step = history::take_if(ctx, |source| {
-            !library_page
-                || match source {
-                    history::Request::Key => ctx
-                        .memory(|memory| memory.focused())
-                        .and_then(|id| ctx.read_response(id))
-                        .is_some_and(|response| over_panel(response.rect.center())),
-                    history::Request::Button(pos) => over_panel(pos),
-                }
-        });
-        if let Some(step) = step {
-            self.step(step);
-        }
-    }
-
     /// What the reader shows: the one answer for the body and for the title line's open
     /// button, so the button never acts on an entry that is not on screen (FL4).
     fn on_screen(&self) -> OnScreen {
@@ -2371,14 +2364,6 @@ impl Lookup {
         )
     }
 
-    /// The open action with its icon and words: a press changes the page beside Lookup, so its
-    /// words always say where (FP4, FM4).
-    fn open_action_of(words: &str) -> Action<'_> {
-        Action::quiet(words)
-            .icon(icons::OPEN_OUT)
-            .density(Density::Read)
-    }
-
     /// Why the open action is locked, from the one fact that locks it: an unsaved Library draft.
     /// The lock, its hover and accessible text, and the painted line take these words.
     fn open_lock(&self) -> Option<String> {
@@ -2391,690 +2376,9 @@ impl Lookup {
         })
     }
 
-    /// The open action's locked reason, painted once in Lookup above the entry, from the text
-    /// edge, wherever the action stands (ruling R35). Nothing while the action is open.
-    fn open_lock_line(&self, ui: &mut egui::Ui) {
-        design::blocked_reason(ui, self.open_lock().as_deref());
-    }
-
-    /// The open action, locked while a Library draft is unsaved. Returns whether it was pressed.
-    fn open_action(&self, ui: &mut egui::Ui, own_line: bool) -> bool {
-        let Some(words) = self.open_action_words() else {
-            return false;
-        };
-        design::locked(ui, self.open_lock().as_deref(), |ui| {
-            // On a line of its own the action has no icon, as `Show N results` has: the
-            // panel's margin is narrower than an icon's hang, so its words start at the
-            // text edge (N4).
-            if own_line {
-                Action::quiet(words)
-                    .density(Density::Read)
-                    .line_start()
-                    .show(ui)
-                    .clicked()
-            } else {
-                Self::open_action_of(words).show(ui).clicked()
-            }
-        })
-    }
-
     /// An entry or a found note, which Trackers keeps while it is in view.
     fn holds_something(&self) -> bool {
         self.current.is_some() || self.reading_written.is_some()
-    }
-
-    pub fn show(&mut self, ctx: &egui::Context, trackers: &mut dyn world::TrackerUi) {
-        let width = design::side_panel_width(ctx.content_rect().width());
-        design::Column::panel("lookup", width)
-            .page_keeps(design::PANEL_LEAVES_PAGE)
-            .frame(
-                egui::Frame::new()
-                    .fill(colors().page)
-                    .stroke(egui::Stroke::new(design::HAIRLINE_WIDTH, colors().rule))
-                    .inner_margin(egui::Margin::same(PANEL_MARGIN as i8)),
-            )
-            .show(ctx, |ui| self.panel(ui, trackers));
-    }
-
-    /// The search field while Trackers is the view: empty, with its placeholder, so it does not
-    /// read as a filter of the trackers. Lookup keeps its words for its own view. Words typed
-    /// here are a new search, which leaves Trackers for its results.
-    fn search_over_trackers(&mut self, ui: &mut egui::Ui, width: f32) -> egui::Response {
-        let mut typed = String::new();
-        let response = LOOKUP_SEARCH
-            .search(ui, SEARCH_NAME, &mut typed, search_hint(width), width)
-            .field;
-        if !typed.is_empty() {
-            self.query = typed;
-            self.leave_trackers();
-            self.results_open = true;
-        }
-        response
-    }
-
-    fn panel(&mut self, ui: &mut egui::Ui, trackers: &mut dyn world::TrackerUi) {
-        // With the margin, so a press anywhere on the panel counts as here.
-        let panel = ui.max_rect().expand(PANEL_MARGIN);
-        self.panel_rect = Some(panel);
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
-        });
-        let mut close = false;
-        // Where the open action stands: on the title line when its words fit there, else on a
-        // line of its own above the entry (FM4, SK8). Never an icon alone.
-        let mut open_on_title = true;
-        let mut open_pressed = false;
-        if self.trackers_shown {
-            let mut back = false;
-            ui.horizontal(|ui| {
-                // The count belongs to the `DUE N` heading below; the title says nothing more (FH8).
-                ui.label(Type::Heading.rich(ui, "Trackers"));
-                back = self.holds_something() && Action::history_back(true).show(ui).clicked();
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
-                });
-            });
-            if back {
-                self.leave_trackers();
-            }
-        } else {
-            ui.horizontal(|ui| {
-                ui.label(Type::Heading.rich(ui, "Lookup"));
-                if self.trail.peek(Step::Back).is_some()
-                // The icon buttons' density, so the title line keeps one height with or without
-                // Back, and the search field below never moves.
-                && Action::history_back(true).show(ui).clicked()
-                {
-                    self.step(Step::Back);
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
-                    // The room left after the title, Back while it shows, and Close: the action
-                    // stands here with its icon and words when they fit whole, else on its own
-                    // line above the entry.
-                    open_on_title = self.open_action_words().is_none_or(|words| {
-                        Self::open_action_of(words).natural_width(ui) + design::L
-                            <= ui.available_width()
-                    });
-                    if open_on_title {
-                        open_pressed = self.open_action(ui, false);
-                    }
-                });
-            });
-        }
-        if close {
-            self.close();
-        }
-        let width = ui.available_width();
-        let before = self.query.clone();
-        let response = if self.trackers_shown {
-            self.search_over_trackers(ui, width)
-        } else {
-            let search =
-                LOOKUP_SEARCH.search(ui, SEARCH_NAME, &mut self.query, search_hint(width), width);
-            if search.cleared {
-                self.current = None;
-                self.reader.clear();
-                self.reading_written = None;
-                self.generated = None;
-            }
-            // The one place that decides the query became empty, by Clear or by the keyboard:
-            // the typing group ends, so the next search records what is on screen (FL4).
-            if self.query.trim().is_empty() {
-                self.typed_shown = false;
-            }
-            search.field
-        };
-        if std::mem::take(&mut self.focus_search) {
-            design::focus_and_select(ui, response.id, &self.query);
-        }
-        if open_pressed
-            && let Some(entry) = self
-                .index
-                .as_ref()
-                .and_then(|index| self.open_target(index))
-                .map(|current| current.entry.clone())
-        {
-            self.open_in_library = Some(entry);
-        }
-        if let Some(error) = &self.error {
-            design::message(ui, Tone::Error, error);
-        }
-        if self.trackers_shown {
-            design::rule(ui);
-            trackers.show(ui, std::mem::take(&mut self.trackers_from_top));
-            return;
-        }
-        let Some(index) = self.index.clone() else {
-            ui.horizontal(|ui| {
-                crate::design::spinner(ui);
-                ui.label(
-                    Type::Body
-                        .rich(ui, "Reading content…")
-                        .color(colors().muted),
-                );
-            });
-            return;
-        };
-        let broken = &index.broken_world;
-        if !broken.is_empty() {
-            ui.horizontal_wrapped(|ui| {
-                // A note that cannot be read is an error here too, as on World's header.
-                design::status(
-                    ui,
-                    design::Status {
-                        icon: icons::ERROR,
-                        word: &format!(
-                            "{} cannot be read",
-                            design::count(broken.len(), "note", "notes")
-                        ),
-                        color: colors().result.error,
-                    },
-                );
-                if design::link(ui, "Show").clicked() {
-                    self.open_world_repair = Some(broken[0].0.clone());
-                }
-            });
-        }
-        let query = self.query.trim().to_lowercase();
-        if self.matches.as_ref().is_none_or(|(q, _)| *q != query) {
-            let found = if query.is_empty() {
-                Vec::new()
-            } else {
-                merge_hits(
-                    &index.search_typos(&query),
-                    &search_written(&self.written_search, &query),
-                )
-            };
-            self.matches = Some((query.clone(), found));
-            self.highlight = 0;
-            self.show_all = false;
-        }
-        let matches = self.matches.as_ref().unwrap().1.clone();
-        if before != self.query && !query.is_empty() {
-            // Open the best match and keep the other answers in view.
-            self.results_open = matches.len() != 1;
-            // Through the trail, as every other change of what is on screen (FL4).
-            match matches.first() {
-                Some(Hit::Entry(top)) => {
-                    let (position, heading) = index.target_of(*top);
-                    self.show_typed(Landing::Entry(position));
-                    self.reader.show_heading(heading);
-                }
-                Some(Hit::Written(top)) => self.show_typed(Landing::Written(*top)),
-                None => {}
-            }
-        }
-        if let Some(error) = &self.create_error {
-            design::message(ui, Tone::Error, error);
-        }
-        let matches = &self.matches.as_ref().unwrap().1;
-        let mut chosen = None;
-        // One result that is already open offers nothing to show (FI6).
-        let only_open = match matches.as_slice() {
-            [Hit::Entry(only)] => {
-                self.reading_written.is_none() && self.current == Some(index.target_of(*only).0)
-            }
-            [Hit::Written(only)] => self.reading_written == Some(*only),
-            _ => false,
-        };
-        if !query.is_empty()
-            && !matches.is_empty()
-            && !only_open
-            && !self.results_open
-            && (self.current.is_some() || self.reading_written.is_some())
-            // Outside a message, a line-start action has no icon: its words start at the edge.
-            // Its verb says that a press shows the hidden list; a bare count reads as a label.
-            && Action::quiet(&format!(
-                "Show {}",
-                design::count(matches.len(), "result", "results")
-            ))
-                .density(Density::Read)
-                .name("Show the results")
-                .line_start()
-                .show(ui)
-                .clicked()
-        {
-            self.results_open = true;
-        }
-        if response.has_focus() {
-            let (down, up) = ui.input_mut(|i| {
-                (
-                    i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
-                    i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
-                )
-            });
-            if down && self.highlight + 1 < matches.len() {
-                self.highlight += 1;
-                chosen = matches.get(self.highlight).copied();
-            }
-            if up && self.highlight > 0 {
-                self.highlight -= 1;
-                chosen = matches.get(self.highlight).copied();
-            }
-            self.follow_highlight |= down || up;
-        }
-        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            self.results_open = false;
-        }
-        let show_results = self.results_open && !query.is_empty();
-        if show_results {
-            if matches.is_empty() {
-                ui.label(
-                    Type::Body
-                        .rich(ui, "Nothing found. Check the spelling, or try fewer words.")
-                        .color(colors().muted),
-                );
-            }
-            // The reader stays the larger part of the panel, even at the minimum window.
-            // `Show all` names every match, in a list that scrolls past eight rows.
-            let rows = rows_shown(matches.len(), self.show_all);
-            let results: Vec<_> = matches
-                .iter()
-                .take(rows)
-                .enumerate()
-                .map(|(row, hit)| match *hit {
-                    Hit::Entry(position) => {
-                        let item = &index.items[position];
-                        (
-                            index.name_of(item).to_owned(),
-                            index.result_detail(position),
-                            self.reading_written.is_none() && row == self.highlight,
-                        )
-                    }
-                    Hit::Written(at) => {
-                        let written = &self.written[at];
-                        (
-                            written.title.clone(),
-                            written.detail.clone(),
-                            self.reading_written == Some(at) && row == self.highlight,
-                        )
-                    }
-                })
-                .collect();
-            ui.spacing_mut().item_spacing.y = 0.0;
-            let follow = std::mem::take(&mut self.follow_highlight);
-            // Every row keeps its control, so Tab reaches a match below the list's edge. A row
-            // paints only while it is in view.
-            design::ScrollColumn::new("lookup_results")
-                .max_height(RESULT_ROW * rows.min(RESULTS_LISTED) as f32)
-                .fit_height()
-                .full_width()
-                .show(ui, |ui| {
-                    for row in 0..rows {
-                        let (title, detail, selected) = &results[row];
-                        let full = format!("{title} · {detail}");
-                        let response = design::row(ui, RESULT_ROW, *selected, &full, |ui, rect| {
-                            let name = ui.painter().layout_no_wrap(
-                                title.clone(),
-                                Type::Body.font(ui),
-                                colors().text,
-                            );
-                            let room = (rect.width() - name.size().x).max(0.0);
-                            let fitted = fitted_detail(ui, detail, room);
-                            // A fault mark has its own tone, as on a Library row.
-                            let tail = crate::library::marked_line(
-                                ui,
-                                &if fitted.is_empty() {
-                                    String::new()
-                                } else {
-                                    format!("{DETAIL_SEPARATOR}{fitted}")
-                                },
-                                Type::Small.font(ui),
-                                colors().muted,
-                                room,
-                            );
-                            let top = rect.center().y - name.size().y / 2.0;
-                            ui.painter().galley(
-                                egui::pos2(rect.left(), top),
-                                name.clone(),
-                                colors().text,
-                            );
-                            ui.painter().galley(
-                                egui::pos2(
-                                    rect.left() + name.size().x,
-                                    rect.center().y - tail.size().y / 2.0,
-                                ),
-                                tail,
-                                colors().muted,
-                            );
-                        })
-                        .on_hover_text(&full);
-                        ui.ctx().accesskit_node_builder(response.id, |node| {
-                            node.set_role_description("Lookup result");
-                        });
-                        // egui does not scroll to a row that Tab focuses, and arrow keys move
-                        // the highlight from the search field. The list follows both.
-                        // egui's scroll target counts the clip margin as visible, so the row
-                        // asks for that margin too and shows whole.
-                        if response.gained_focus() || (follow && *selected) {
-                            let margin = ui.visuals().clip_rect_margin;
-                            design::reveal::bring_into_view(
-                                ui,
-                                response.rect.expand2(egui::vec2(0.0, margin)),
-                                design::reveal::JumpTo::ListedRow,
-                            );
-                        }
-                        if response.clicked() {
-                            chosen = Some(matches[row]);
-                        }
-                    }
-                });
-            ui.spacing_mut().item_spacing.y = design::XS;
-            // The same quiet action as Arrivals: it lists every match in place. It starts a
-            // line, so its words start at the result rows' text.
-            if rows < matches.len()
-                && Action::quiet(&format!("Show all {}", matches.len()))
-                    .density(Density::Read)
-                    .hint("List every match, without more typing")
-                    .line_start()
-                    .show(ui)
-                    .clicked()
-            {
-                self.show_all = true;
-            }
-        }
-        if let Some(hit) = chosen {
-            if let Some(row) = matches.iter().position(|candidate| *candidate == hit) {
-                self.highlight = row;
-            }
-            match hit {
-                Hit::Entry(position) => self.open_result(&index, position),
-                Hit::Written(at) => {
-                    self.show_now(Landing::Written(at));
-                }
-            }
-            // Arrow keys walk the list. A click on a row means read it.
-            if !response.has_focus() {
-                self.results_open = false;
-            }
-        }
-        // Outside the results, because a new name can also match unrelated prose.
-        if let Some(campaign) = self.campaign.clone() {
-            let mut made = None;
-            let mut generate = false;
-            let new_name = !query.is_empty()
-                && !index
-                    .items
-                    .iter()
-                    .any(|item| names_the_query(&item.entry.name, &query))
-                && !self
-                    .written
-                    .iter()
-                    .any(|item| item.title.eq_ignore_ascii_case(&query));
-            let offer_generate =
-                query.is_empty() && self.current.is_none() && self.generated.is_none();
-            // With no creation action to show, the row takes no room.
-            if new_name || offer_generate {
-                ui.horizontal_wrapped(|ui| {
-                    if new_name {
-                        let name = typed_name(&self.query);
-                        for (at, (word, kind)) in [("New NPC", "npc"), ("New location", "location")]
-                            .into_iter()
-                            .enumerate()
-                        {
-                            let label = format!("{word} “{name}”");
-                            // No plus: a line-start action outside a message has no icon, so its
-                            // words start at the result names. The second keeps the same form.
-                            let action = Action::quiet(&label).density(Density::Read);
-                            // The second action starts a line only when it wraps.
-                            if world::starts_line(ui, action, at == 0).show(ui).clicked() {
-                                made = Some(world::create_entry(&campaign, &name, kind));
-                            }
-                        }
-                    }
-                    generate = offer_generate
-                        && Action::quiet("Generate NPC")
-                            .density(Density::Read)
-                            .line_start()
-                            .show(ui)
-                            .clicked();
-                });
-            }
-            let mut reroll = generate;
-            if let Some(npc) = self.generated.as_ref().filter(|_| self.generated_shown) {
-                let choice = generator_card(
-                    ui,
-                    npc,
-                    &self.generator_problems,
-                    &self.generator_sources,
-                    self.run_open,
-                    NamesHelp::Link,
-                    &world::new_entry_path(Some(&*index), &npc.name, "npc"),
-                );
-                reroll = choice.again;
-                if choice.save {
-                    made = Some(world::create_generated(&campaign, npc));
-                }
-                if choice.discard {
-                    self.generated = None;
-                    self.create_error = None;
-                }
-                if choice.own_names {
-                    // The NPC moves to the World page, so only one card can save it.
-                    self.open_world_names = self.generated.take().map(|npc| GeneratedCard {
-                        campaign: campaign.id,
-                        npc,
-                        problems: std::mem::take(&mut self.generator_problems),
-                        sources: std::mem::take(&mut self.generator_sources),
-                    });
-                    self.create_error = None;
-                }
-            }
-            if reroll {
-                let tables = index.npc_tables();
-                match crate::npc_generator::roll(&tables) {
-                    Ok(npc) => {
-                        self.generated = Some(npc);
-                        self.show_now(Landing::Card);
-                        self.create_error = None;
-                    }
-                    Err(error) => self.create_error = Some(error),
-                }
-                self.generator_sources = tables.sources;
-                self.generator_problems = tables.problems;
-            }
-            match made {
-                Some(Ok(id)) => {
-                    self.generated = None;
-                    self.create_error = None;
-                    self.query.clear();
-                    self.results_open = false;
-                    self.refresh();
-                    self.waiting_for = Some(id);
-                }
-                Some(Err(error)) => self.create_error = Some(error),
-                None => {}
-            }
-        }
-        design::rule(ui);
-        let shown = self.on_screen();
-        if shown == OnScreen::Generated {
-            return;
-        }
-        if let Some(npc) = &self.generated
-            && world::unsaved_npc_row(ui, &npc.name)
-        {
-            self.show_now(Landing::Card);
-        }
-        if let OnScreen::Written(at) = shown {
-            self.written_reader(ui, at, &query);
-            return;
-        }
-        if self.current.is_none() {
-            let _ = self.reader.choices(ui, &index).map(|nav| self.follow(nav));
-        }
-        let Some(current) = self.current.and_then(|c| index.items.get(c)) else {
-            // With no entry on show, the words of a Log line whose entry is gone still sit in
-            // Lookup's footer, with `Copy text`, until the DM copies or dismisses them.
-            let frame = PaneFrame::new(ui);
-            let mut messages = Messages::new(&frame, "lookup_footer", ui.available_width());
-            let campaign = self.campaign.as_ref();
-            self.reader
-                .gone_log_messages(&frame, &mut messages, campaign.map(|c| c.id));
-            let paned = messages.pane(ui, Body::Content, |ui| {
-                if query.is_empty() {
-                    design::gap(ui, design::Gap::S);
-                    // Help keeps the reader measure, as every help line does (round 26 AB2).
-                    design::help(ui, SEARCH_HELP);
-                }
-            });
-            if let (Some(press), Some(campaign)) = (paned.pressed, campaign) {
-                let _ = self.reader.footer_act(ui.ctx(), press, None, campaign);
-            }
-            return;
-        };
-        // The open action's own line, when the title line cannot hold its words: directly above
-        // the entry it opens, below the rule, so it never reads as an act on the results.
-        if !open_on_title && self.open_action(ui, true) {
-            self.open_in_library = Some(current.entry.clone());
-        }
-        self.open_lock_line(ui);
-        let mut nav = self.reader.choices(ui, &index);
-        if ui.rect_contains_pointer(ui.available_rect_before_wrap())
-            && ui.input(|input| input.smooth_scroll_delta.y != 0.0)
-        {
-            self.results_open = false;
-        }
-        self.reader.compact = true;
-        let (reader, campaign) = (&mut self.reader, self.campaign.as_ref());
-        // The reader's results and their Undo sit in Lookup's footer, below the reader, so a
-        // result never moves the kind line, `Add to fight` or the text (round 26 FJ3). The
-        // reader is the pane's scroll column, one for each entry.
-        let frame = PaneFrame::new(ui);
-        let messages = Messages::new(
-            &frame,
-            ("lookup_reader", current.entry.id),
-            ui.available_width(),
-        );
-        // The results list above sets its own row spacing. The reader keeps the app's, so an
-        // entry reads the same whether a search or a link opened it. The pane is always the
-        // editor form (P2), so an edit form's text gives way and Save stays in view from the
-        // first frame the form shows. Issue #761: the footer's lines come after the body, from
-        // the stores as the body's acts left them, so an act's result and its Undo show in the
-        // act's own frame.
-        let paned = messages.pane_editor_then(
-            ui,
-            |ui, region| {
-                ui.spacing_mut().item_spacing.y = ui.ctx().style().spacing.item_spacing.y;
-                let nav = reader.read_in_pane(
-                    ui,
-                    current,
-                    &index,
-                    campaign,
-                    Some(&mut *trackers),
-                    Some(region),
-                );
-                (nav, &mut *reader, &mut *trackers)
-            },
-            |(nav, reader, trackers), messages| {
-                reader.footer(&frame, messages, current, &index, campaign);
-                trackers.history_footer(current.entry.id, &frame, messages);
-                nav
-            },
-        );
-        nav = nav.take().or(paned.body);
-        match paned.pressed {
-            Some(press) if press.id == world::FooterAct::Trackers => {
-                trackers.undo_remove(press.ticket)
-            }
-            Some(press) => {
-                if let Some(campaign) = campaign {
-                    nav = nav.take().or(reader.footer_act(
-                        ui.ctx(),
-                        press,
-                        Some(current.entry.id),
-                        campaign,
-                    ));
-                }
-            }
-            None => {}
-        }
-        if let Some(nav) = nav {
-            self.follow(nav);
-        }
-    }
-
-    /// A note or an event, with the lines that have the words first: a long note must not
-    /// make the DM hunt for the sentence that answers the table's question.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
-    fn written_reader(&mut self, ui: &mut egui::Ui, at: usize, query: &str) {
-        let Some(written) = self.written.get(at) else {
-            self.reading_written = None;
-            return;
-        };
-        let place = match written.place {
-            WrittenIn::Session(_) => "Open this session",
-            WrittenIn::Event(_) => "Open on the timeline",
-        };
-        let mut open = false;
-        // The card is its pane's scroll column; it has no footer messages.
-        let frame = PaneFrame::new(ui);
-        let messages: Messages<'_, world::FooterAct> =
-            Messages::new(&frame, ("lookup_written", at), ui.available_width());
-        let _ = messages.pane(ui, Body::Content, |ui| {
-            // The card's one action is a title-line action, as every reader's is (FN2, FM5):
-            // after the title when it fits, else in one row under it, from the text edge.
-            let width = ui.available_width();
-            let cell = ui
-                .allocate_ui_with_layout(
-                    egui::vec2(width, 0.0),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        style::title(ui, &written.title);
-                        style::subtitle(ui, &written.detail);
-                    },
-                )
-                .response
-                .rect;
-            let title = ui
-                .painter()
-                .layout(
-                    written.title.clone(),
-                    Type::Display.font(ui),
-                    colors().text,
-                    width.max(design::XXL),
-                )
-                .size()
-                .x;
-            let action = Action::quiet(place)
-                .icon(icons::OPEN_OUT)
-                .density(Density::Read);
-            open = world::title_line_actions(ui, cell, title, width, vec![action])
-                .first()
-                .copied()
-                .unwrap_or(false);
-            // The `L` gap after the kind line, as every other Lookup entry has. Their reader
-            // also keeps one row gap for its line warnings above the prose, so the card's
-            // words start where a spell's do.
-            ui.add_space(design::L + ui.spacing().item_spacing.y);
-            let found: Vec<&str> = written
-                .text
-                .lines()
-                .filter(|line| !query.is_empty() && line.to_lowercase().contains(query))
-                .take(FOUND_LINES)
-                .collect();
-            // A short note is all in view, and needs no second copy of its own line.
-            if !found.is_empty() && written.text.lines().count() > FOUND_FROM_LINES {
-                design::heading(ui, design::Heading::Label("Found here"));
-                for line in found {
-                    let words = line.trim_start_matches(['#', '-', '*', ' ']);
-                    ui.add(
-                        egui::Label::new(Type::Body.rich(ui, words).color(colors().text)).wrap(),
-                    );
-                }
-                design::rule(ui);
-            }
-            // A found note is prose: the Reader's prose role, as a rule in this panel has
-            // (`ProseCompact` at this width), not the stat block's field rows (FM13).
-            style::markdown(ui, &written.text);
-        });
-        if open {
-            self.open_written = Some(written.place.clone());
-        }
     }
 }
 
@@ -3104,291 +2408,14 @@ fn typed_name(typed: &str) -> String {
     })
 }
 
-/// The separator between a result row's name and the parts of its detail.
-const DETAIL_SEPARATOR: &str = " · ";
-
-/// A result row's detail, shortened by whole parts to fit `width` after the separator. A fault
-/// part starts with the warning or error mark. The kind and other parts before the fault go
-/// first, from the nearest, then the parts after it. The file, which tells duplicate rows
-/// apart, stays whole while the fault shortens to whole words and then to its mark; only then
-/// is the file cut. No cut is inside a word, and a cut ends with `…`, never on a separator.
-/// With no room for a word, the row shows no detail.
-pub(crate) fn fitted_detail(ui: &egui::Ui, detail: &str, width: f32) -> String {
-    let font = Type::Small.font(ui);
-    // Each candidate is measured whole, with its separator, as the row paints it.
-    let fits =
-        |text: &str| design::number_width(ui, &format!("{DETAIL_SEPARATOR}{text}"), &font) <= width;
-    // The longest whole-word cut of `text` that fits once `around` places it in the row.
-    let whole_words = |text: &str, around: &dyn Fn(&str) -> String| {
-        let mut words: Vec<&str> = text.split_whitespace().collect();
-        while words.pop().is_some() {
-            while words.last().is_some_and(|word| *word == "·") {
-                words.pop();
-            }
-            if words.is_empty() {
-                break;
-            }
-            let cut = format!("{}…", words.join(" "));
-            if fits(&around(&cut)) {
-                return cut;
-            }
-        }
-        String::new()
-    };
-    if detail.is_empty() || fits(detail) {
-        return detail.to_owned();
-    }
-    let parts: Vec<&str> = detail.split(DETAIL_SEPARATOR).collect();
-    let fault = |part: &str| part.starts_with(icons::WARN) || part.starts_with(icons::ERROR);
-    let Some(first_fault) = parts.iter().position(|part| fault(part)) else {
-        return whole_words(detail, &|cut| cut.to_owned());
-    };
-    let last_fault = parts
-        .iter()
-        .rposition(|part| fault(part))
-        .unwrap_or(first_fault);
-    // The order parts leave in: the nearest before the fault (not the file), then the last.
-    let mut order: Vec<usize> = (1..first_fault)
-        .rev()
-        .filter(|&at| !fault(parts[at]))
-        .collect();
-    order.extend(
-        (last_fault + 1..parts.len())
-            .rev()
-            .filter(|&at| !fault(parts[at])),
-    );
-    let mut kept = vec![true; parts.len()];
-    for at in order {
-        kept[at] = false;
-        let shown = parts
-            .iter()
-            .zip(&kept)
-            .filter_map(|(part, keep)| keep.then_some(*part))
-            .collect::<Vec<_>>()
-            .join(DETAIL_SEPARATOR);
-        if fits(&shown) {
-            return shown;
-        }
-    }
-    let faults = parts
-        .iter()
-        .copied()
-        .filter(|part| fault(part))
-        .collect::<Vec<_>>()
-        .join(DETAIL_SEPARATOR);
-    // The fault's warning mark is a whole word, and it stays while any detail shows.
-    let mark = faults
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .to_owned();
-    let shorten = |faults: &str, around: &dyn Fn(&str) -> String| {
-        let cut = whole_words(faults, around);
-        if cut == format!("{mark}…") {
-            mark.clone()
-        } else {
-            cut
-        }
-    };
-    if fault(parts[0]) {
-        return shorten(&faults, &|cut| cut.to_owned());
-    }
-    // The file tells two duplicate rows apart, so it stays whole while the fault shortens to
-    // whole words. Only when the file and the mark do not fit is the file cut, last.
-    let file = parts[0];
-    let cut = shorten(&faults, &|cut| format!("{file}{DETAIL_SEPARATOR}{cut}"));
-    if !cut.is_empty() {
-        return format!("{file}{DETAIL_SEPARATOR}{cut}");
-    }
-    if fits(&format!("{file}{DETAIL_SEPARATOR}{mark}")) {
-        return format!("{file}{DETAIL_SEPARATOR}{mark}");
-    }
-    let file = whole_words(file, &|cut| format!("{cut}{DETAIL_SEPARATOR}{mark}"));
-    if file.is_empty() {
-        shorten(&faults, &|cut| cut.to_owned())
-    } else {
-        format!("{file}{DETAIL_SEPARATOR}{mark}")
-    }
-}
-
-/// How a generator card says that it uses the built-in names.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NamesHelp {
-    /// The World page, where the DM prepares: the table marker in full.
-    Marker,
-    /// Lookup: short words and a quiet link to the World page's card.
-    Link,
-    /// A session note's card keeps the note's keyboard, so it only says so.
-    Plain,
-}
-
 /// The World page's words for using the campaign's own names. The marker itself is copied, not
 /// shown, because the DM types it in another program.
 pub const OWN_NAMES_HELP: &str = "Built-in names. To use your own, add a table of names to a note. Paste the marker on the line above the table.";
 /// The exact line that marks a table of names, for `Copy the marker`.
 pub(crate) const NAMES_MARKER: &str = "<!-- splat:rolls key=npc-name dice=1d6 -->";
 pub const COPY_MARKER: &str = "Copy the marker";
-/// After the copy: what the DM changes in the pasted line. The dice are the marker's own.
-/// The words of the card's copy result, for the checks: World's footer says them with a checked
-/// `sentence!` of the same words.
-#[cfg(any(test, feature = "test-support"))]
-pub const MARKER_COPIED: &str = "Copied. Change 1d6 to the number of names.";
 pub const BUILT_IN_NAMES: &str = "Built-in names.";
 pub const USE_OWN_NAMES: &str = "Use your own names";
-
-/// What the DM chose on a generator card.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct CardChoice {
-    pub save: bool,
-    pub again: bool,
-    pub discard: bool,
-    /// Lookup's `Use your own names`: show this NPC on the World page with the full help.
-    pub own_names: bool,
-    /// `Copy the marker` copied the names marker: the page's footer says what to change.
-    pub copied_marker: bool,
-}
-
-/// What the generator rolled, with its choices. Returns save, reroll and discard. A session
-/// note's card says only that the names are built in.
-pub fn generated_card(
-    ui: &mut egui::Ui,
-    npc: &crate::npc_generator::Generated,
-    problems: &[crate::npc_generator::TableProblem],
-    sources: &[String],
-    run_open: bool,
-    save_path: &str,
-) -> (bool, bool, bool) {
-    let choice = generator_card(
-        ui,
-        npc,
-        problems,
-        sources,
-        run_open,
-        NamesHelp::Plain,
-        save_path,
-    );
-    (choice.save, choice.again, choice.discard)
-}
-
-/// What the generator rolled, with its choices and the names help for this place.
-pub fn generator_card(
-    ui: &mut egui::Ui,
-    npc: &crate::npc_generator::Generated,
-    problems: &[crate::npc_generator::TableProblem],
-    sources: &[String],
-    run_open: bool,
-    help: NamesHelp,
-    save_path: &str,
-) -> CardChoice {
-    let mut choice = CardChoice::default();
-    design::heading(ui, design::Heading::Label("Generated NPC"));
-    ui.add(egui::Label::new(Type::Strong.rich(ui, &npc.name).color(colors().text)).wrap());
-    for (label, text) in crate::npc_generator::ATTRIBUTES.iter().zip(&npc.attributes) {
-        ui.add(
-            egui::Label::new(
-                Type::Body
-                    .rich(ui, format!("{label}: {text}"))
-                    .color(colors().text),
-            )
-            .wrap(),
-        );
-    }
-    if sources.is_empty() && problems.is_empty() {
-        match help {
-            NamesHelp::Marker => {
-                // Help keeps the reader measure, so it wraps above Copy the marker (round 25
-                // AE1, FE2, AD2).
-                design::help(ui, OWN_NAMES_HELP);
-                // The action stays, so the DM can copy again. Its result, which says what to
-                // change in the pasted line, is in the page's footer (round 27 FG2).
-                // A quiet action that starts a line, outside a message, has no icon: its words
-                // start at the card's text edge.
-                let response = Action::quiet(COPY_MARKER)
-                    .density(Density::Read)
-                    .line_start()
-                    .show(ui)
-                    .on_hover_text(NAMES_MARKER);
-                if response.clicked() {
-                    ui.ctx().copy_text(NAMES_MARKER.to_owned());
-                    choice.copied_marker = true;
-                }
-            }
-            NamesHelp::Plain => {
-                ui.label(Type::Small.rich(ui, BUILT_IN_NAMES).color(colors().muted));
-            }
-            NamesHelp::Link => {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(Type::Small.rich(ui, BUILT_IN_NAMES).color(colors().muted));
-                    choice.own_names = design::link(ui, USE_OWN_NAMES).clicked();
-                });
-            }
-        }
-    }
-    for source in sources {
-        let (kind, path) = source.split_once(": ").unwrap_or(("npc-name", source));
-        let label = if kind == "npc-name" {
-            "Names".to_owned()
-        } else {
-            style::human_label(kind)
-        };
-        ui.horizontal_wrapped(|ui| {
-            ui.label(
-                Type::Small
-                    .rich(ui, format!("{label} from"))
-                    .color(colors().muted),
-            );
-            if design::link(ui, path).clicked() {
-                ui.ctx().data_mut(|data| {
-                    data.insert_temp(egui::Id::new("markdown_clicked_note"), path.to_owned())
-                });
-            }
-        });
-    }
-    ui.scope(|ui| {
-        ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-        for problem in problems {
-            let opened = ui.scope(|ui| {
-                design::message_with_action(
-                    ui,
-                    Tone::Warning,
-                    &problem.message,
-                    &format!("Open {}", problem.path),
-                )
-            });
-            opened.response.on_hover_text(&problem.marker);
-            if opened.inner {
-                ui.ctx().data_mut(|data| {
-                    data.insert_temp(egui::Id::new("markdown_clicked_note"), problem.path.clone())
-                });
-            }
-        }
-    });
-    ui.label(
-        Type::Small
-            .rich(ui, format!("Will save {save_path}"))
-            .color(colors().muted),
-    );
-    ui.horizontal_wrapped(|ui| {
-        choice.save = (if run_open {
-            Action::secondary("Save NPC")
-        } else {
-            Action::primary("Save NPC")
-        })
-        .density(Density::Read)
-        .show(ui)
-        .clicked();
-        choice.again = Action::secondary("Reroll")
-            .icon(icons::DICE)
-            .density(Density::Read)
-            .show(ui)
-            .clicked();
-        choice.discard = Action::quiet("Discard")
-            .density(Density::Read)
-            .show(ui)
-            .clicked();
-    });
-    choice
-}
 
 impl splat_campaign::trackers::RuleSource for ContentIndex {
     fn manifest(&self, campaign: &Campaign) -> Result<String, String> {
@@ -3409,199 +2436,12 @@ impl splat_campaign::trackers::RuleSource for ContentIndex {
     }
 }
 
+#[path = "lookup/panel_view.rs"]
+pub mod panel_view;
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// FD6: a result row shortens by whole parts. The kind goes first, then the parts after the
-    /// fault. The file stays whole while the fault shortens to whole words and then to its mark;
-    /// the file is cut last. No cut is inside a word or ends on a separator before `…`.
-    #[test]
-    fn result_detail_shortens_by_whole_parts() {
-        use crate::design::test_harness::ThemedPage as _;
-        let mut harness = egui_kittest::Harness::builder().themed_ui(|ui| {
-            let mark = icons::WARN;
-            let fault = format!("{mark} Same note in two files");
-            let path = "NPCs/Rook Ambry copy.md";
-            let detail = format!("{path} · NPC · {fault} · Campaign");
-            let font = Type::Small.font(ui);
-            let room = |text: &str| design::number_width(ui, &format!(" · {text}"), &font) + 0.5;
-            let fit = |width: f32| fitted_detail(ui, &detail, width);
-            // A cut keeps whole words of `whole` and ends with `…`.
-            let whole_cut = |cut: &str, whole: &str| {
-                cut.strip_suffix('…').is_some_and(|kept| {
-                    whole.starts_with(kept)
-                        && whole[kept.len()..].starts_with(' ')
-                        && !kept.trim_end().ends_with('·')
-                })
-            };
-            // Room for all: nothing changes.
-            assert_eq!(fit(room(&detail)), detail, "whole");
-            // The kind goes first, even when the part after the fault could go instead.
-            let no_kind = format!("{path} · {fault} · Campaign");
-            assert_eq!(fit(room(&no_kind)), no_kind, "kind first");
-            let file_and_fault = format!("{path} · {fault}");
-            assert_eq!(
-                fit(room(&file_and_fault)),
-                file_and_fault,
-                "then after the fault"
-            );
-            // Then the fault shortens to whole words, after the whole file.
-            let cut = fit(room(&file_and_fault) - 1.0);
-            let rest = cut
-                .strip_prefix(&format!("{path} · "))
-                .unwrap_or_else(|| panic!("the file stays whole: {cut:?}"));
-            assert!(
-                whole_cut(rest, &fault),
-                "the fault ends on a whole word: {cut:?}"
-            );
-            // Then to its mark alone, never a lone `…`.
-            let file_and_mark = format!("{path} · {mark}");
-            assert_eq!(fit(room(&file_and_mark)), file_and_mark, "the mark stays");
-            // Only then is the file cut, to whole words, before the mark.
-            let short = fit(room(&file_and_mark) - 1.0);
-            let file = short
-                .strip_suffix(&format!(" · {mark}"))
-                .unwrap_or_else(|| panic!("the mark stays: {short:?}"));
-            assert!(
-                whole_cut(file, path),
-                "the file ends on a whole word: {short:?}"
-            );
-            // No room for a word: no detail, so no lone `…` after a separator.
-            assert_eq!(fit(4.0), "", "no room");
-            assert_eq!(fitted_detail(ui, "", 200.0), "", "empty");
-            // A row that starts with its fault drops what follows, then cuts whole words.
-            let first = format!("{fault} · World note · Campaign");
-            assert_eq!(
-                fitted_detail(ui, &first, room(&fault)),
-                fault,
-                "fault first"
-            );
-            let first_cut = fitted_detail(ui, &first, room(&fault) - 1.0);
-            assert!(whole_cut(&first_cut, &fault), "{first_cut:?}");
-            // A row with no fault ends on a whole word, not on its separator.
-            let plain = "Monster · CR 1/4 · Small humanoid (goblinoid) · SRD 5.1";
-            let plain_cut = fitted_detail(ui, plain, room("Monster · CR 1/4 · Small humanoid"));
-            assert!(whole_cut(&plain_cut, plain), "{plain_cut:?}");
-            // The longest realistic file name still ends on a whole word before the mark.
-            let long = format!(
-                "NPCs/The Venerable Watchkeeper of the Northern Gate copy.md · NPC · {fault}"
-            );
-            let long_cut = fitted_detail(ui, &long, room(&format!("NPCs/The Venerable… · {mark}")));
-            assert_eq!(
-                long_cut,
-                format!("NPCs/The Venerable… · {mark}"),
-                "long file"
-            );
-        });
-        harness.run_steps(1);
-    }
-
-    /// The table marker stays on the World page. Lookup links there, and a session note
-    /// only says so. A campaign table replaces the words in every place.
-    #[test]
-    fn generator_card_names_help_fits_its_place() {
-        use crate::design::test_harness::Themed as _;
-        use egui_kittest::kittest::Queryable;
-        let npc = crate::npc_generator::Generated {
-            name: "Wren Hallam".into(),
-            attributes: ["A scar".into(), "Calm".into(), "Gold".into()],
-        };
-        let table = vec!["npc-name: Names.md".to_owned()];
-        for (help, sources, marker, short, link) in [
-            (NamesHelp::Marker, vec![], true, false, false),
-            (NamesHelp::Link, vec![], false, true, true),
-            (NamesHelp::Plain, vec![], false, true, false),
-            (NamesHelp::Link, table.clone(), false, false, false),
-        ] {
-            let npc = npc.clone();
-            let mut harness = egui_kittest::Harness::builder().themed_ui_state(
-                move |ui, pressed: &mut (bool, bool)| {
-                    let choice = generator_card(
-                        ui,
-                        &npc,
-                        &[],
-                        &sources,
-                        false,
-                        help,
-                        "People/Wren Hallam.md",
-                    );
-                    pressed.0 |= choice.own_names;
-                    pressed.1 |= choice.copied_marker;
-                },
-                (false, false),
-            );
-            harness.run_steps(2);
-            let case = format!("{help:?}");
-            assert!(harness.query_by_label("Save NPC").is_some(), "{case}");
-            assert_eq!(
-                harness.query_by_label(OWN_NAMES_HELP).is_some(),
-                marker,
-                "{case}"
-            );
-            assert_eq!(
-                harness.query_by_label(BUILT_IN_NAMES).is_some(),
-                short,
-                "{case}"
-            );
-            assert_eq!(
-                harness.query_by_label(USE_OWN_NAMES).is_some(),
-                link,
-                "{case}"
-            );
-            if link {
-                assert!(!harness.state().0);
-                harness.get_by_label(USE_OWN_NAMES).click();
-                harness.run_steps(2);
-                assert!(harness.state().0, "{case}: the link reports its press");
-            }
-            // AD2: every card names the path it was given, which is the path the save writes.
-            assert!(
-                harness
-                    .query_by_label("Will save People/Wren Hallam.md")
-                    .is_some(),
-                "{case}"
-            );
-            // FD3: no card shows the raw marker. Only the World card can copy it.
-            assert!(
-                harness.query_by_label_contains("splat:rolls").is_none(),
-                "iter-15-D-FD3-hidden {case}"
-            );
-            assert_eq!(
-                harness.query_by_label(COPY_MARKER).is_some(),
-                marker,
-                "{case}"
-            );
-            if marker {
-                let will_save = "Will save People/Wren Hallam.md";
-                let save_before = harness.get_by_label(will_save).rect();
-                harness.get_by_label(COPY_MARKER).click();
-                harness.step();
-                let copied = harness.output().platform_output.commands.iter().any(
-                    |command| matches!(command, egui::OutputCommand::CopyText(text) if text == NAMES_MARKER),
-                );
-                assert!(
-                    copied,
-                    "iter-15-D-FD3-copy: the action copies the exact marker"
-                );
-                harness.run_steps(2);
-                // Round 27 FG2: the card reports the copy to its page, whose footer says which
-                // dice to change; the card keeps `Copy the marker`, so the DM can copy again.
-                assert!(
-                    harness.state().1
-                        && harness.query_by_label(MARKER_COPIED).is_none()
-                        && harness.query_by_label(COPY_MARKER).is_some(),
-                    "iter-27-D-FG2-card: the card reports the copy and keeps its action"
-                );
-                // Round 23 FC4: the save row stays.
-                let save_after = harness.get_by_label(will_save).rect();
-                assert!(
-                    (save_after.top() - save_before.top()).abs() < 0.5,
-                    "iter-23-D-FC4: {save_before:?} → {save_after:?}"
-                );
-            }
-        }
-    }
 
     #[test]
     fn repaired_note_has_a_distinct_name_link_and_no_false_mention() {
@@ -3682,7 +2522,6 @@ mod tests {
 
     #[test]
     fn forward_returns_to_what_back_left_until_another_entry() {
-        use crate::design::test_harness::Themed as _;
         let mut lookup = browsed_lookup();
         lookup.step(Step::Back);
         assert_eq!(lookup.current, Some(0));
@@ -3828,7 +2667,7 @@ mod tests {
 
         // Review of 1f560778: the typed best match goes through the trail too. Open A, then B,
         // then TYPE words whose best match is a found note: Back returns to B, Forward to the
-        // note. The panel draws as the app draws it, and the words go into its search field.
+        // note. The words go into the search field as the panel gives them (`set_query`).
         lookup.generated = None;
         lookup.set_written(vec![Written {
             title: "Qorvax Landing".into(),
@@ -3838,24 +2677,9 @@ mod tests {
         }]);
         lookup.navigate(6);
         lookup.navigate(7);
-        use egui_kittest::kittest::Queryable;
-        let mut harness = egui_kittest::Harness::builder().themed_ui_state(
-            |ui, lookup: &mut Lookup| {
-                lookup.panel(
-                    ui,
-                    &mut crate::tracker_reader::Reader(&mut Default::default()),
-                )
-            },
-            std::mem::take(&mut lookup),
-        );
-        harness.run_steps(2);
-        harness.get_by_label(SEARCH_NAME).focus();
-        harness.run_steps(1);
-        for typed in ["qorvax", " landing"] {
-            harness.get_by_label(SEARCH_NAME).type_text(typed);
-            harness.run_steps(2);
+        for typed in ["qorvax", "qorvax landing"] {
+            lookup.set_query(typed);
         }
-        let lookup = harness.state_mut();
         assert_eq!(
             lookup.on_screen(),
             OnScreen::Written(0),
@@ -3879,25 +2703,18 @@ mod tests {
         let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).unwrap());
         let b = index.position(b_id).unwrap();
         let a = (0..index.items.len()).find(|&at| at != b).unwrap();
-        let lookup = harness.state_mut();
         lookup.index = Some(index);
         lookup.query.clear();
         lookup.matches = None;
         lookup.navigate(a);
         lookup.navigate(b);
-        harness.run_steps(2);
-        harness.get_by_label(SEARCH_NAME).focus();
-        harness.run_steps(1);
-        harness.get_by_label(SEARCH_NAME).type_text("qorvax");
-        harness.run_steps(2);
+        lookup.set_query("qorvax");
         assert_eq!(
-            harness.state().on_screen(),
+            lookup.on_screen(),
             OnScreen::Entry(b),
             "B is the best match of `qorvax` and stays on screen"
         );
-        harness.get_by_label(SEARCH_NAME).type_text(" landing");
-        harness.run_steps(2);
-        let lookup = harness.state_mut();
+        lookup.set_query("qorvax landing");
         assert_eq!(
             lookup.on_screen(),
             OnScreen::Written(0),
@@ -3932,26 +2749,15 @@ mod tests {
         lookup.matches = None;
         lookup.navigate(a);
         lookup.navigate(b);
-        harness.run_steps(2);
-        harness.get_by_label(SEARCH_NAME).focus();
-        harness.run_steps(1);
-        for typed in ["qorvax", " landing"] {
-            harness.get_by_label(SEARCH_NAME).type_text(typed);
-            harness.run_steps(2);
+        for typed in ["qorvax", "qorvax landing"] {
+            lookup.set_query(typed);
         }
-        assert_eq!(
-            harness.state().on_screen(),
-            OnScreen::Written(0),
-            "C opened"
-        );
-        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
-        harness.key_press(egui::Key::Backspace);
-        harness.run_steps(2);
-        assert!(harness.state().query.is_empty());
-        assert_eq!(harness.state().on_screen(), OnScreen::Written(0), "C stays");
-        harness.get_by_label(SEARCH_NAME).type_text("veldrin tower");
-        harness.run_steps(2);
-        let lookup = harness.state_mut();
+        assert_eq!(lookup.on_screen(), OnScreen::Written(0), "C opened");
+        // Select all and Backspace: the field's words become empty.
+        lookup.set_query("");
+        assert!(lookup.query.is_empty());
+        assert_eq!(lookup.on_screen(), OnScreen::Written(0), "C stays");
+        lookup.set_query("veldrin tower");
         assert_eq!(lookup.on_screen(), OnScreen::Written(1), "D opened");
         lookup.step(Step::Back);
         assert_eq!(
@@ -3959,35 +2765,6 @@ mod tests {
             OnScreen::Written(0),
             "Back returns to C, where the new search started"
         );
-    }
-
-    /// Beside the Library, Lookup takes a side button only under the pointer, and leaves
-    /// the rest in the input for the Library.
-    #[test]
-    fn beside_the_library_a_side_button_acts_where_the_pointer_is() {
-        let press = |lookup: &mut Lookup, x: f32, library_page: bool| {
-            let back = history::tests::press(egui::PointerButton::Extra1, egui::pos2(x, 50.0));
-            lookup.panel_rect = Some(egui::Rect::from_min_max(
-                egui::pos2(300.0, 0.0),
-                egui::pos2(600.0, 400.0),
-            ));
-            history::tests::frame(vec![back], |ctx| {
-                lookup.history_input(ctx, library_page);
-                history::take_if(ctx, |_| true)
-            })
-        };
-        let mut lookup = browsed_lookup();
-        assert_eq!(press(&mut lookup, 100.0, true), Some(Step::Back));
-        assert_eq!(
-            lookup.current,
-            Some(1),
-            "over the Library page, Lookup stays"
-        );
-        assert_eq!(press(&mut lookup, 400.0, true), None);
-        assert_eq!(lookup.current, Some(0), "over Lookup, Lookup goes back");
-        let mut lookup = browsed_lookup();
-        assert_eq!(press(&mut lookup, 100.0, false), None);
-        assert_eq!(lookup.current, Some(0), "on other pages, Lookup goes back");
     }
 
     #[test]
@@ -4836,33 +3613,30 @@ mod tests {
         // P2 of the review of PR 450: the encounter search keeps its five for its view. A
         // repaint with the same words and the same index visits no name; new words rank again,
         // as typed only (no typo compared); another load of the index ranks again.
-        use egui_kittest::kittest::Queryable;
         let names = || UNUSED_NAMES.with(std::cell::Cell::get);
         let typos = crate::matching::typo_checks;
-        let index = Arc::new(index);
-        type State = (Arc<ContentIndex>, String);
-        let mut harness = egui_kittest::Harness::builder().build_ui_state(
-            |ui, (index, query): &mut State| {
-                let found = index.unused_creatures_kept(ui.ctx(), ui.id().with("search"), query);
-                for (_, _, name, _) in found.iter() {
-                    ui.label(name.as_str());
-                }
-            },
-            (index.clone(), "fenstalker".to_owned()),
-        );
-        harness.run_steps(2);
-        assert!(harness.query_by_label("Fenstalker").is_some());
+        let ctx = StateContext::new();
+        let view = "search";
+        let kept = |index: &ContentIndex, query: &str| {
+            index
+                .unused_creatures_kept(&ctx, view, query)
+                .iter()
+                .map(|(_, _, name, _)| name.clone())
+                .collect::<Vec<_>>()
+        };
+        assert!(kept(&index, "fenstalker").contains(&"Fenstalker".to_owned()));
         let (visited, compared) = (names(), typos());
-        harness.run_steps(5);
+        for _ in 0..5 {
+            kept(&index, "fenstalker");
+        }
         assert_eq!(names(), visited, "an unchanged repaint visits no name");
-        harness.state_mut().1 = "wolf".to_owned();
-        harness.run_steps(2);
+        let wolves = kept(&index, "wolf");
         assert!(names() > visited, "new words rank again");
         assert_eq!(typos(), compared, "as typed only: no typo is compared");
-        assert!(harness.query_by_label("Winter Wolf").is_some());
+        assert!(wolves.contains(&"Winter Wolf".to_owned()));
         let visited = names();
-        harness.state_mut().0 = Arc::new(ContentIndex::load(&modules, Some(&campaign)).unwrap());
-        harness.run_steps(2);
+        let index = ContentIndex::load(&modules, Some(&campaign)).unwrap();
+        kept(&index, "wolf");
         assert!(names() > visited, "another load of the index ranks again");
     }
     #[test]

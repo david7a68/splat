@@ -54,7 +54,6 @@ splat-content = { path = "crates/content" }
 splat-design = { path = "src/design" }
 splat-execution = { path = "crates/execution" }
 splat-trackers = { path = "src/trackers" }
-eframe = { version = "0.33", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
 serde = { version = "1", features = ["derive", "rc"] }
 zeroize = "1"
@@ -69,16 +68,24 @@ pulldown-cmark = "0.13"
 tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
 base64 = "0.22"
 rfd = "0.15"
-egui-phosphor = "0.11"
 libc = "0.2"
-egui_extras = { version = "0.33", default-features = false, features = ["file", "image"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 # `file:` URLs by the platform's rules (`design::outcome::file_url`).
 url = "2.5"
 # Graphemes: a fact line breaks a long word only between whole characters (design::fact).
 unicode-segmentation = "1.13"
+# The GPUI UI (`src/gui/`, docs/development.md). gpui-component wraps the hard widgets; pages use
+# only `gui::kit`.
+gpui = { package = "gpui-pre", version = "0.3.14" }
+gpui_platform = { package = "gpui-pre-platform", version = "0.3.14", features = ["wayland", "x11"] }
+gpui-component = "0.11"
 
 [dev-dependencies]
+gpui = { package = "gpui-pre", version = "0.3.14", features = ["test-support"] }
+gpui_platform = { package = "gpui-pre-platform", version = "0.3.14", features = ["wayland", "x11", "test-support"] }
+# The screenshot harness's text system: only Splat's own fonts, so captures do not depend on the
+# machine's fonts (`gui::harness`).
+gpui_wgpu = { package = "gpui-pre-wgpu", version = "0.3.14", features = ["test-support"] }
 splat-library-page = { path = "src/library_page", features = ["test-support"] }
 splat-campaign-packages = { path = "src/campaign_packages", features = ["test-support"] }
 splat-sessions-ui = { path = "src/sessions_ui", features = ["test-support"] }
@@ -92,9 +99,6 @@ splat-trackers = { path = "src/trackers", features = ["test-support"] }
 # The source checks read Rust with a real parser (`design::attributes`), never by hand.
 syn = { version = "2.0.119", features = ["full", "visit", "extra-traits"] }
 proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
-egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }
-ab_glyph = "0.2"
-epaint_default_fonts = "0.33"
 # Model tests of a page against a shared part's state machine model (ruling M29; see
 # `src/design/Cargo.toml`).
 proptest = { version = "1", default-features = false, features = ["std", "bit-set"] }

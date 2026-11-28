@@ -10,11 +10,9 @@ splat-character = { path = "../../crates/character" }
 splat-content = { path = "../../crates/content" }
 splat-content-ui = { path = "../content_ui" }
 splat-design = { path = "../design" }
-eframe = { version = "0.33", default-features = false }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [dev-dependencies]
 splat-trackers = { path = "../trackers", features = ["test-support"] }
 splat-content-ui = { path = "../content_ui", features = ["test-support"] }
-egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }
 tempfile = "3"

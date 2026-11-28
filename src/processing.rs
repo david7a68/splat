@@ -7,6 +7,7 @@
 //!
 //! Test builds have no route to a service from the app (`start`). The HTTP code is tested
 //! against a server on the loopback address.
+use crate::state_context::StateContext;
 #[path = "processing/settings.rs"]
 pub mod settings;
 
@@ -353,9 +354,6 @@ macro_rules! no_check {
 /// The warning used when the first pass stands without a second-pass transcript.
 pub const NO_CHECK_WARNING: &str =
     concat!(no_check!(), ", so the clean transcript was not checked.");
-
-/// The warning's own words, beside Raw transcript while the warning line is hidden.
-pub const NO_CHECK_LABEL: &str = no_check!();
 
 /// What a person must know about the result, beside it, for as long as it stands.
 pub fn warning_path(recording: &Path) -> PathBuf {
@@ -1227,7 +1225,7 @@ impl Job {
 }
 
 pub fn start(
-    ctx: &eframe::egui::Context,
+    ctx: &StateContext,
     mut request: Request,
     load_keys: impl FnOnce(&mut Request) -> Result<(), String> + Send + 'static,
 ) -> Job {
@@ -1240,7 +1238,7 @@ pub fn start(
     let cancel = Arc::new(AtomicBool::new(false));
     let recording = request.recording.clone();
     let flag = cancel.clone();
-    let ctx = ctx.clone();
+    let ctx = ctx.waker();
     std::thread::spawn(move || {
         let report = {
             let (tx, ctx) = (tx.clone(), ctx.clone());
@@ -1266,13 +1264,6 @@ pub fn start(
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static LAST_CONTEXT: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
-}
-
-/// The context words of the last job started on this thread in a test build: what the real
-/// build sends to the model with the transcript.
-#[cfg(any(test, feature = "test-support"))]
-pub fn last_context() -> Option<String> {
-    LAST_CONTEXT.with(|last| last.borrow().clone())
 }
 
 /// No service in a test build: fixed words, written where the real ones go.
