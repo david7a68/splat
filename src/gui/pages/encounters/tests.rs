@@ -337,7 +337,42 @@ fn a_group_is_edited_and_saved() {
         shell.read(|root| root.app.encounters.group_open()),
         Some(true)
     );
-    shell.click("id:member-menu-0-button");
+    // A, an unrelated B, Undo of A (AGENTS.md): the member gets a change of its own, is
+    // removed, the notes change after it; Undo brings the member back whole (its count and its
+    // change) and the notes keep their new words.
+    let change = first_target(&mut shell, "id:member-change-");
+    let index: usize = change
+        .rsplit('-')
+        .next()
+        .and_then(|at| at.parse().ok())
+        .expect("the member's index");
+    shell.click(&change);
+    let ac_how = first_target(&mut shell, "id:changes-how:AC:");
+    shell.click(&ac_how);
+    shell.click("Add");
+    shell.click("Done with changes");
+    let member_ac = move |shell: &mut Shell| {
+        shell.read(move |root| {
+            use splat_encounters_ui::encounters::model::{ChangesOf, GroupAt};
+            root.app
+                .encounters
+                .changes_form(&ChangesOf::Member(GroupAt::Open, index))
+                .and_then(|form| {
+                    form.rows
+                        .iter()
+                        .find(|row| row.label == "AC")
+                        .map(|row| (row.how, row.number))
+                })
+        })
+    };
+    let changed = member_ac(&mut shell);
+    assert_eq!(
+        changed.map(|(how, _)| how),
+        Some(splat_encounters_ui::encounters::model::ChangeHow::Add),
+        "the member's own change"
+    );
+    let whole = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
+    shell.click(&format!("id:member-menu-{index}-button"));
     shell.click("Remove");
     let fewer = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
     assert_eq!(
@@ -346,10 +381,29 @@ fn a_group_is_edited_and_saved() {
         "Remove takes the member away"
     );
     shell.capture("encounter-groups__10-group-member-removed-with-undo__1200x800");
+    shell.click("Group notes");
+    shell.press("ctrl-end");
+    shell.type_text(" Watch the bridge.");
+    let notes = |shell: &mut Shell| {
+        shell.update(|root, _, _| {
+            root.app
+                .encounters
+                .group_frame(None)
+                .map(|view| view.fields.notes)
+                .unwrap_or_default()
+        })
+    };
+    let typed = notes(&mut shell);
+    assert!(typed.ends_with("Watch the bridge."), "{typed:?}");
     let undo = first_target(&mut shell, "Undo ");
     shell.click(&undo);
     let back = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
-    assert_eq!(back.len(), members.len(), "Undo brings the member back");
+    assert_eq!(
+        back, whole,
+        "Undo brings the member back in its place, with its count"
+    );
+    assert_eq!(member_ac(&mut shell), changed, "and with its own change");
+    assert_eq!(notes(&mut shell), typed, "the notes typed after it stay");
     shell.click("Save group");
     assert_eq!(
         shell.read(|root| root.app.encounters.group_open()),

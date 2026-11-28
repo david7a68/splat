@@ -2044,6 +2044,66 @@ mod tests {
         id
     }
 
+    /// Review of PR 339 (1), the encounter twin: a result belongs to its draft's content.
+    /// Discard keeps the encounter draft's replacement result in the store (hidden: the clean
+    /// draft has none), and Undo discard shows it again with its Undo.
+    #[test]
+    fn undo_discard_brings_back_the_encounter_draft_results() {
+        use super::super::{DraftResult, DraftUndo, EditorOwner};
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let wolf = creature(dir.path(), "Wolf");
+        let mut saved = Draft::new();
+        saved.add(wolf, false);
+        saved.save(&active, &[]).unwrap();
+        let mut page = Encounters {
+            active: Some(active.clone()),
+            draft: Some(Draft::open(dir.path(), &saved.path).unwrap()),
+            ..Default::default()
+        };
+        // A replacement as `Use` makes it: its data on the draft, and the mark.
+        let draft = page.draft.as_mut().unwrap();
+        let roster = draft.setup.roster.clone();
+        let mut before = roster.clone();
+        before[0].initial.insert("hp".into(), 3.into());
+        draft.new_results.push(DraftUndo::Replacement {
+            before,
+            after: roster,
+            words: "1 Wolf row replaced with Wolf.".into(),
+            replaced: "Wolf".into(),
+        });
+        let owner = EditorOwner {
+            root: active.path.clone(),
+            draft: draft.results_key.id(),
+            kind: DraftResult::Replacement,
+        };
+        page.record_editor_results();
+        assert!(
+            page.editor_results.get(&owner).is_some(),
+            "recorded at the act"
+        );
+        page.discard_draft(&active);
+        page.record_editor_results();
+        assert!(
+            page.editor_results.get(&owner).is_some(),
+            "the discarded draft keeps its result while it waits for Undo discard"
+        );
+        let clean = EditorOwner {
+            draft: page.draft.as_ref().unwrap().results_key.id(),
+            ..owner.clone()
+        };
+        assert!(
+            page.editor_results.get(&clean).is_none(),
+            "the clean draft that replaced it shows none"
+        );
+        page.undo_discard();
+        page.record_editor_results();
+        assert!(
+            page.editor_results.get(&owner).is_some(),
+            "Undo discard shows the result again, with its Undo"
+        );
+    }
+
     /// Review of PR 339 (1): a member result belongs to its draft's content. Remove a member,
     /// Discard (the saved group opens clean, with the same identity), then Undo discard: the
     /// member is still removed and its result comes back with its Undo.
