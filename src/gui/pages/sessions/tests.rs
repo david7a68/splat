@@ -863,28 +863,103 @@ fn plan_scene_add_and_tick() {
     shell.type_text("Meet the ferryman");
     shell.press("enter");
     assert!(note_words(&mut shell).contains("- [ ] Meet the ferryman"));
-    shell.update(|root, _, cx| {
-        let ctx = root.ctx.clone();
-        let index = root.app.lookup.index();
-        super::with_plan(&mut root.app, |sessions, _, book, plan| {
-            let view = sessions.gv_plan(book, plan, index.as_deref());
-            let line = view.rows.iter().find_map(|row| match row {
-                crate::sessions::page::gpui_facade::PlanRow::Scene(scene) => Some(scene.line),
-                _ => None,
+    let path = shell
+        .read(|root| {
+            root.app
+                .sessions
+                .gv_selected_note()
+                .map(|note| note.path.clone())
+        })
+        .expect("the open note");
+    let read = || std::fs::read_to_string(&path).expect("the note's file");
+    // An edit outside Splat a moment before is in the words that the tick changes: the tick
+    // changes one character, and the outside words stay.
+    let outside = read().replace(
+        "- [ ] Meet the ferryman\n",
+        "- [ ] Meet the ferryman\n- [ ] Pay the toll\n",
+    );
+    assert_ne!(outside, read(), "the outside edit changes the file");
+    std::fs::write(&path, &outside).expect("the outside edit");
+    let tick = |shell: &mut Shell| {
+        shell.update(|root, _, cx| {
+            let ctx = root.ctx.clone();
+            let index = root.app.lookup.index();
+            super::with_plan(&mut root.app, |sessions, _, book, plan| {
+                let view = sessions.gv_plan(book, plan, index.as_deref());
+                let line = view.rows.iter().find_map(|row| match row {
+                    crate::sessions::page::gpui_facade::PlanRow::Scene(scene)
+                        if scene.words.contains("ferryman") =>
+                    {
+                        Some(scene.line)
+                    }
+                    _ => None,
+                });
+                if let Some(line) = line {
+                    sessions.gv_plan_act(
+                        crate::sessions::page::gpui_facade::PlanAct::SceneTick(line),
+                        book,
+                        plan,
+                        index.as_deref(),
+                        &ctx,
+                    );
+                }
             });
-            if let Some(line) = line {
-                sessions.gv_plan_act(
-                    crate::sessions::page::gpui_facade::PlanAct::SceneTick(line),
-                    book,
-                    plan,
-                    index.as_deref(),
-                    &ctx,
-                );
-            }
+            cx.notify();
         });
-        cx.notify();
-    });
+    };
+    tick(&mut shell);
     assert!(note_words(&mut shell).contains("- [x] Meet the ferryman"));
+    let ticked = read();
+    assert_eq!(ticked, outside.replace("- [ ] Meet the", "- [x] Meet the"));
+    // A tick is its own Undo.
+    tick(&mut shell);
+    assert_eq!(read(), outside, "a second tick takes the first back");
+    // A: `Remove from tonight` takes the scene's line out of the note file at once.
+    shell.click("More actions for Meet the ferryman");
+    shell.click("Remove from tonight");
+    assert_eq!(
+        read(),
+        outside.replace("- [ ] Meet the ferryman\n", ""),
+        "the removed scene's line, and only it, left the note"
+    );
+    // B: unrelated acts. A long rest is added, and a fight of tonight begins; the DM leaves
+    // the page and comes back. A's `Undo remove` stays in reach (W6-D1).
+    let events = shell.read(|root| root.app.timeline.events.len());
+    shell.click("Long rest");
+    assert_eq!(
+        shell.read(|root| root.app.timeline.events.len()),
+        events + 1
+    );
+    let fight = shell.update(|root, _, cx| {
+        let session = root.app.sessions.gv_selected();
+        let book = &mut root.app.timeline;
+        let fight = book.add(crate::timeline::Kind::Encounter, session);
+        let event = book
+            .events
+            .iter_mut()
+            .find(|e| e.id == fight)
+            .expect("the fight");
+        event.title = "Ford".into();
+        event.run = Some(uuid::Uuid::from_u128(7));
+        book.touch();
+        cx.notify();
+        fight
+    });
+    shell.click("id:nav-Timeline");
+    shell.click("id:nav-Session");
+    // Undo of A puts back the scene alone: the file is as it was before the removal, with the
+    // outside words, and B's events stay on the Timeline.
+    shell.click("Undo remove Meet the ferryman");
+    assert_eq!(read(), outside, "Undo remove puts back only the scene");
+    assert!(
+        shell.read(|root| root.app.timeline.events.iter().any(|e| e.id == fight)),
+        "the fight stays"
+    );
+    assert_eq!(
+        shell.read(|root| root.app.timeline.events.len()),
+        events + 2,
+        "B's events stayed"
+    );
 }
 
 /// A template deleted from its menu comes back with the footer's Undo.

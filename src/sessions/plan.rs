@@ -5288,6 +5288,175 @@ mod tests {
         );
     }
 
+    /// `Add rewards` and its Undo are note acts (ported from egui's
+    /// `rewards_are_a_note_act_with_their_own_undo`): an edit on disk a moment before stays,
+    /// each add writes its block under `Loot and rewards` and asks the note to show it, and the
+    /// footer's Undo of A takes back A's block alone while B's stays.
+    #[test]
+    fn rewards_are_a_note_act_with_their_own_undo() {
+        // The run writer is the app's (`src/encounter_run.rs`), reached here through Encounters.
+        use crate::sessions::{NewNote, create_note};
+        use splat_encounters_ui::encounter_run::{Participant, write_ended_run_with};
+        let root = tempfile::tempdir().unwrap();
+        let (sessions, runs) = (root.path().join("Sessions"), root.path().join("Runs"));
+        fs::create_dir_all(&sessions).unwrap();
+        let campaign = Uuid::new_v4();
+        let creature = |name: &str, cr: &str| {
+            let fields = format!(
+                "splat_id: {}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{type: beast, cr_text: \"{cr}\"}}\nsplat_stats:\n  max_hp: {{value: 11}}\n  armor_class: {{value: 13}}\n",
+                Uuid::new_v4()
+            );
+            let text =
+                splat::content::formats::fixture("Fixture.md", &fields, "\n## Actions\nBite.\n");
+            splat::content::Entry::parse("creature.md", &text.unwrap()).unwrap()
+        };
+        let joined = |key: &str, entry| {
+            Participant::new(
+                key.into(),
+                "enemies".into(),
+                entry,
+                &serde_yaml_ng::Mapping::new(),
+                true,
+            )
+            .unwrap()
+        };
+        // Each fight ends with its first creature at 0 HP, as the run file holds it.
+        let ended = |name: &str, details: &str, participants| {
+            let fact =
+                write_ended_run_with(campaign, &runs, name, None, "Won", participants, details)
+                    .unwrap();
+            let path = crate::encounter_run::find_run(&runs, campaign, fact.id).unwrap();
+            let mut saved: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+            saved["state"]["participants"][0]["hp"] = 0.into();
+            fs::write(&path, saved.to_string()).unwrap();
+            fact
+        };
+        let bridge = ended(
+            "Bridge",
+            "# Bridge\n\n## Loot\n\n- 30 gp\n",
+            vec![
+                joined("wolf", creature("Wolf", "1 (XP 200; PB +2)")),
+                joined("wolf2", creature("Wolf", "1 (XP 200; PB +2)")),
+            ],
+        );
+        let shrine = ended(
+            "Shrine",
+            "# Shrine",
+            vec![joined("varra", creature("Captain Varra", ""))],
+        );
+        let note = create_note(
+            &sessions,
+            &NewNote {
+                number: 2,
+                title: "The Crossing",
+                date: "2026-11-01",
+                campaign: "Marches",
+                template: "## What happened\n\n## Loot and rewards\n\n## Open threads\n\n",
+            },
+        )
+        .unwrap();
+        let mut book = Book::default();
+        book.open(Some(&sessions));
+        book.record_run(&bridge, Some(note.id), false);
+        book.record_run(&shrine, Some(note.id), false);
+        let id = |name: &str| {
+            book.events
+                .iter()
+                .find(|event| event.title == name)
+                .unwrap()
+                .id
+                .clone()
+        };
+        let (a, b) = (id("Bridge"), id("Shrine"));
+        let read = || fs::read_to_string(&note.path).unwrap();
+        let mut page = Sessions {
+            selected: Some(note.id),
+            notes: vec![note.clone()],
+            folder: Some(sessions.clone()),
+            draft: Some(Draft::open(&note.path).unwrap()),
+            campaign: Some(crate::persistence::Campaign {
+                id: campaign,
+                name: "Marches".into(),
+                path: root.path().to_owned(),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            }),
+            ..Sessions::default()
+        };
+        let still = crate::design::memo::Revised::new(()).revision();
+        let plan = Plan {
+            fights: &[],
+            saved_runs: &[],
+            saved_runs_revision: still,
+            fights_revision: still,
+            groups: &[],
+            group_blocked: None,
+            group_open: false,
+            group_discard: &|_| None,
+            arrivals_open: false,
+            blocked: None,
+            run_directory: Some(runs.clone()),
+            open_run: None,
+            open_state: String::new(),
+            open_encounter: None,
+            party: &[],
+            tables: &[],
+        };
+        let block_a = format!(
+            "- [[Timeline#^{a}|Bridge]]\n  - XP 200 for 1 at 0 HP · 1 still stood (XP 200)\n  - 30 gp\n"
+        );
+        let block_b = format!(
+            "- [[Timeline#^{b}|Shrine]]\n  - XP 0. XP not known for Captain Varra: enter an award here.\n"
+        );
+        // An edit on disk a moment before is in the words that the act changes.
+        let outside = read().replace("## What happened\n", "## What happened\n\nThe ford held.\n");
+        fs::write(&note.path, &outside).unwrap();
+        page.do_rewards_act(
+            (RewardsAct::Add(a.clone(), bridge.id), None),
+            &mut book,
+            &plan,
+        );
+        let with_a = outside.replace(
+            "## Loot and rewards\n\n",
+            &format!("## Loot and rewards\n\n{block_a}\n"),
+        );
+        assert_eq!(read(), with_a);
+        assert!(
+            page.caret_to_show.is_some(),
+            "the note beside the plan is asked to show the block"
+        );
+        // B: another fight's rewards. A's Undo stays.
+        page.caret_to_show = None;
+        page.do_rewards_act(
+            (RewardsAct::Add(b.clone(), shrine.id), None),
+            &mut book,
+            &plan,
+        );
+        let with_both = with_a.replace(&block_a, &format!("{block_a}{block_b}"));
+        assert_eq!(read(), with_both);
+        let settings = crate::processing::settings::ProcessingSettings::default();
+        let lines = page.gv_plan_footer(&settings, &mut book, &plan, None, false);
+        let undo_of = |words: &str| {
+            lines
+                .iter()
+                .find(|line| line.words.contains(words))
+                .and_then(crate::design::outcome::plain::PlainLine::press_undo)
+                .unwrap_or_else(|| panic!("no Undo for {words:?}"))
+        };
+        let undo_a = undo_of("Rewards for “Bridge”");
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.words.contains("Rewards for “Shrine”")
+                    && line.press_undo().is_some()),
+            "B's result keeps its Undo"
+        );
+        // Undo of A takes back A's block alone; B's stays.
+        page.gv_plan_press(undo_a, &mut book, &plan);
+        assert_eq!(read(), with_both.replace(&block_a, ""));
+    }
+
     /// A plan with these saved runs and nothing else, all its revisions `revision`: the
     /// Session page's view of the rest of the app in a plan test.
     fn with_bare_plan<R>(
