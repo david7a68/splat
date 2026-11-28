@@ -724,6 +724,129 @@ fn design_or_capture(path: &str) -> bool {
     path.starts_with("src/design/")
 }
 
+/// Suppressions of the Clippy bans in `clippy.toml`, read by `syn`, on lines up to `last_line`.
+/// The bans are owner rules (an Undo or a late revision by owner, UI words outside their part),
+/// so a suppression is a reviewed call and its count only shrinks.
+///
+/// - `ban-allow`: an `allow` or `expect` of `clippy::disallowed_methods` on one function or on
+///   something inside one. The allowlist counts each file's.
+/// - `ban-allow-wide`: one on a file, a module, an `impl` or a trait, or one of `clippy::all`
+///   or `warnings` anywhere. It frees calls that no one reviewed, so none is allowed.
+///
+/// The scan does not read an attribute that a macro makes.
+fn allow_rules(text: &str, last_line: usize) -> Vec<&'static str> {
+    use syn::spanned::Spanned;
+    use syn::visit::Visit;
+
+    #[derive(PartialEq)]
+    enum Frees {
+        Bans,
+        All,
+    }
+
+    fn idents(tokens: proc_macro2::TokenStream, names: &mut Vec<String>) {
+        for token in tokens {
+            match token {
+                proc_macro2::TokenTree::Ident(name) => names.push(name.to_string()),
+                proc_macro2::TokenTree::Group(group) => idents(group.stream(), names),
+                proc_macro2::TokenTree::Punct(_) | proc_macro2::TokenTree::Literal(_) => {}
+            }
+        }
+    }
+
+    fn frees(attribute: &syn::Attribute) -> Option<Frees> {
+        let path = attribute.path();
+        let conditional = path.is_ident("cfg_attr");
+        if !(conditional || path.is_ident("allow") || path.is_ident("expect")) {
+            return None;
+        }
+        let syn::Meta::List(list) = &attribute.meta else {
+            return None;
+        };
+        let mut names = Vec::new();
+        idents(list.tokens.clone(), &mut names);
+        if conditional && !names.iter().any(|name| name == "allow" || name == "expect") {
+            return None;
+        }
+        if names.iter().any(|name| name == "warnings")
+            || names
+                .windows(2)
+                .any(|pair| pair[0] == "clippy" && pair[1] == "all")
+        {
+            Some(Frees::All)
+        } else if names.iter().any(|name| name == "disallowed_methods") {
+            Some(Frees::Bans)
+        } else {
+            None
+        }
+    }
+
+    struct Allows {
+        last_line: usize,
+        bans: usize,
+        wide: usize,
+    }
+    impl Allows {
+        fn counts(&self, attribute: &syn::Attribute) -> bool {
+            attribute.span().start().line <= self.last_line
+        }
+
+        /// A file, a module, an `impl` or a trait: its suppression of the bans is wide.
+        fn scope(&mut self, attributes: &[syn::Attribute]) {
+            for attribute in attributes {
+                if self.counts(attribute) && frees(attribute) == Some(Frees::Bans) {
+                    self.bans -= 1;
+                    self.wide += 1;
+                }
+            }
+        }
+    }
+    impl<'ast> Visit<'ast> for Allows {
+        fn visit_attribute(&mut self, attribute: &'ast syn::Attribute) {
+            if !self.counts(attribute) {
+                return;
+            }
+            match frees(attribute) {
+                Some(Frees::Bans) => self.bans += 1,
+                Some(Frees::All) => self.wide += 1,
+                None => {}
+            }
+        }
+
+        // Each scope's attributes are visited first (`visit_attribute` counts them as `bans`),
+        // then moved to `wide`.
+        fn visit_file(&mut self, file: &'ast syn::File) {
+            syn::visit::visit_file(self, file);
+            self.scope(&file.attrs);
+        }
+
+        fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+            syn::visit::visit_item_mod(self, item);
+            self.scope(&item.attrs);
+        }
+
+        fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+            syn::visit::visit_item_impl(self, item);
+            self.scope(&item.attrs);
+        }
+
+        fn visit_item_trait(&mut self, item: &'ast syn::ItemTrait) {
+            syn::visit::visit_item_trait(self, item);
+            self.scope(&item.attrs);
+        }
+    }
+
+    let mut allows = Allows {
+        last_line,
+        bans: 0,
+        wide: 0,
+    };
+    allows.visit_file(&syn::parse_file(text).expect("allow lint source parses"));
+    let mut found = vec!["ban-allow"; allows.bans];
+    found.extend(vec!["ban-allow-wide"; allows.wide]);
+    found
+}
+
 fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
     for item in fs::read_dir(folder).expect("read source folder") {
         let path = item.expect("read source entry").path();
@@ -762,6 +885,9 @@ fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
                 *counts.entry(format!("{key} {rule}")).or_default() += 1;
             }
             for rule in format_rules(key, &text, code.lines().count()) {
+                *counts.entry(format!("{key} {rule}")).or_default() += 1;
+            }
+            for rule in allow_rules(&text, code.lines().count()) {
                 *counts.entry(format!("{key} {rule}")).or_default() += 1;
             }
             // A renaming of a banned owner or function, a `CreateReasons` impl by hand (the
@@ -817,6 +943,12 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                     "Make a sheet's fact with `design::fact::line` and a tile label that holds its number with `fact::tile_label` (M5)"
                 }
                 "arrow-label" => "Give the control its word: a back control says where it goes",
+                "ban-allow" => {
+                    "Call the part that clippy.toml names in the ban's reason. A new suppression of a ban is a decision: raise the file's count with the reason in the PR"
+                }
+                "ban-allow-wide" => {
+                    "Put the suppression on the one function that calls the banned path: on a file, a module, an `impl` or a trait, or as `clippy::all` or `warnings`, it frees calls that no one reviewed"
+                }
                 _ => "Use design tokens",
             };
             problems.push(format!("{key}: {count} found, {limit} allowed. {fix}."));
@@ -970,6 +1102,46 @@ fn the_lint_finds_what_it_should() {
     assert!(violations("let s = \"a\"; // the campaign's rule").is_empty());
     // YAML's quoted scalars are file content: no letter on both sides of the mark.
     assert!(violations("\"splat_in: '[[Undercroft]]'\"").is_empty());
+
+    // A suppression of the Clippy bans: counted on one function, never wider.
+    let allows = |code: &str| allow_rules(code, code.lines().count());
+    for narrow in [
+        "#[allow(clippy::disallowed_methods, reason = \"x\")]\nfn f() {}",
+        "#[expect(\n    clippy::disallowed_methods,\n    reason = \"x\"\n)]\nfn f() {}",
+        "impl A {\n    #[allow(clippy::disallowed_methods)]\n    fn f(&self) {}\n}",
+        "fn f() {\n    #[allow(clippy::disallowed_methods)]\n    let a = b();\n}",
+        "#[cfg_attr(test, allow(clippy::disallowed_methods))]\nfn f() {}",
+    ] {
+        assert_eq!(allows(narrow), ["ban-allow"], "{narrow}");
+    }
+    for wide in [
+        "#![allow(clippy::disallowed_methods)]\nfn f() {}",
+        "#[allow(clippy::disallowed_methods)]\nmod page {\n    fn f() {}\n}",
+        "mod page {\n    #![allow(clippy::disallowed_methods)]\n    fn f() {}\n}",
+        "#[allow(clippy::disallowed_methods)]\nimpl A {\n    fn f(&self) {}\n}",
+        "#[allow(clippy::disallowed_methods)]\ntrait A {\n    fn f(&self) {}\n}",
+        "#[allow(clippy::all)]\nfn f() {}",
+        "#[allow(warnings)]\nfn f() {}",
+        "#![expect(warnings)]\nfn f() {}",
+    ] {
+        assert_eq!(allows(wide), ["ban-allow-wide"], "{wide}");
+    }
+    for other in [
+        "#![allow(deprecated)]\n#[allow(dead_code)]\nfn f() {}",
+        "#[cfg_attr(all(test, unix), ignore)]\nfn f() {}",
+        "#[deny(warnings)]\nfn f() {}",
+        "// #[allow(clippy::disallowed_methods)]\nfn f() {}",
+    ] {
+        assert!(allows(other).is_empty(), "{other}");
+    }
+    // Test code after the last line of shipped code is not counted.
+    assert!(
+        allow_rules(
+            "fn f() {}\n#[allow(clippy::disallowed_methods)]\nfn t() {}",
+            1
+        )
+        .is_empty()
+    );
 }
 
 /// Package K: no Clippy level is set outside the source, where no row could count it.

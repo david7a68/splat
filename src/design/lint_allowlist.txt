@@ -14,3 +14,23 @@ src/sessions/plan.rs phrase-owner 1
 # `line` builds `<label>: <cells>` as a line's search words, not drawn (lane W0 decides).
 src/encounter_run/notice.rs fact-owner 1
 src/world/lines.rs fact-owner 1
+# Suppressions of the Clippy bans in clippy.toml (`ban-allow`): each is one reviewed call of a
+# banned owner path on its function. A file, module, `impl` or trait may hold none
+# (`ban-allow-wide`).
+src/campaign_content.rs ban-allow 3
+src/campaigns.rs ban-allow 2
+src/combat_sync.rs ban-allow 1
+src/content_ui/src/roster.rs ban-allow 1
+src/content_ui/src/session_notes.rs ban-allow 1
+src/encounter_run/view.rs ban-allow 1
+src/encounters.rs ban-allow 3
+src/library.rs ban-allow 1
+src/library/catalogue.rs ban-allow 1
+src/party.rs ban-allow 1
+src/processing/settings.rs ban-allow 1
+src/sessions/page.rs ban-allow 1
+src/sessions/plan.rs ban-allow 1
+src/timeline/page.rs ban-allow 2
+src/trackers.rs ban-allow 2
+src/world.rs ban-allow 1
+src/world/repair.rs ban-allow 1

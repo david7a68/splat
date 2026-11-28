@@ -60,8 +60,8 @@ takes the mutation as a patch (`git diff > mutant.diff` on a scratch edit, then 
 the expected assertion's words, and the focused command after `--`:
 
 ```sh
-scripts/red_run.py --patch mutant.diff --expect "the two long names are fitted once" \
-  -- devenv shell -- cargo test --locked --lib -p splat-trackers -- a_name_in_its_column
+scripts/red_run.py --patch mutant.diff --expect "a day notice is worked out" \
+  -- devenv shell -- cargo test --locked --lib -p splat-trackers -- day_marks_follow_the_campaigns_day_count
 scripts/red_run.py --patch t19.diff --expect "the tracker's row moves down" \
   -- devenv shell -- gui-test gui::pages::trackers
 ```

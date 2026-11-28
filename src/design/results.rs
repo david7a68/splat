@@ -986,6 +986,13 @@ pub(crate) const STAGED: &[Staged] = &[
         "A refusal ends at its cause only at a limit the DM cannot change: a tracker's `min`, every name rolled (M13), or the run rule after the fight's encounter was deleted (M15). A fault in the tracker rules, and every other cause, gets its next step: `Refusal::new`.",
         &[("src/design/results/refusal.rs", 3), ("src/trackers.rs", 2)],
     ),
+    // One owner of Ctrl+S: the root's `Save` binding, which asks the area shown
+    // (`gui::pages::save_key`). A page's own binding would save under a modal or save two drafts.
+    (
+        "KeyBinding::new(\"ctrl-s\"",
+        "Ctrl+S has one owner, the root's `Save` binding. Give the area a `save_key` that `gui::pages::save_key` calls.",
+        &[("src/gui/mod.rs", 1)],
+    ),
 ];
 
 #[cfg(test)]
