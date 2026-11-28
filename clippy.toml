@@ -1,7 +1,9 @@
 # Calls that a shared part in `src/design/` replaces (docs/design-system.md). `check` runs Clippy
 # with `-D warnings`, so a new call outside its owner fails it. A function that still calls one
-# has its own `#[allow(clippy::disallowed_methods, reason = "...")]` on the innermost function,
-# for review. The design lint refuses an alias of any path below (`banned-alias`).
+# has its own `#[allow(clippy::disallowed_methods, reason = "...")]` on the innermost function.
+# The design lint counts each file's (`ban-allow` in `src/design/lint_allowlist.txt`, shrink only),
+# refuses one on a file, a module, an `impl` or a trait (`ban-allow-wide`), and refuses an alias of
+# any path below (`banned-alias`).
 disallowed-methods = [
     { path = "splat_design::design::components::ResultOrder::issue", reason = "record the result in a `design::Results` store: it issues the order at the action" },
     { path = "splat_design::design::results::Results::undo", reason = "a footer press names its entry by its ticket: use `Results::undo_by(press.ticket, …)`; by owner, a press could undo a newer result of that owner" },

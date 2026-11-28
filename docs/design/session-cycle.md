@@ -1,5 +1,9 @@
 # The session cycle
 
+> Paths under `src/visual_tests/` and `artifacts/dm-audit/` in this document name the egui visual suite and
+> its audit. Both were removed when the UI moved to GPUI. The paths stay as history; the GUI tests are in
+> `src/gui/` (see [Development](../development.md#gui-tests)).
+
 Status: proposed, after design round 4 and its last corrections. Nothing here is built. F8 is being built in
 pull request 232. A line that says "today" is about the app as it is.
 This document fits nine features (F1 to F9) into the app as one workflow: prep at the desk, play at the table,

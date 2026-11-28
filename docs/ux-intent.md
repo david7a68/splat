@@ -1,5 +1,9 @@
 # Splat UX intent
 
+> Paths under `src/visual_tests/` and `artifacts/dm-audit/` in this document name the egui visual suite and
+> its audit. Both were removed when the UI moved to GPUI. The paths stay as history; the GUI tests are in
+> `src/gui/` (see [Development](development.md#gui-tests)).
+
 This document states who uses Splat, what they try to do, and why each screen
 exists. The design system and the redesign review use it as their brief. It
 separates what the user needs from how the app works today. No current screen
