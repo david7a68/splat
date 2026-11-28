@@ -479,6 +479,33 @@ impl Shell {
         }
     }
 
+    /// Put the key `keystroke` down (as GPUI writes it), without letting it up, then settle.
+    pub(crate) fn key_down(&mut self, keystroke: &str) {
+        let os = self.cx.update(|cx| cx.platform_info().os);
+        let keystroke = Keystroke::parse_with_os(keystroke, os)
+            .unwrap_or_else(|_| panic!("{keystroke:?} is not a keystroke"));
+        self.cx
+            .update_window(self.window, |_, window, cx| {
+                window.dispatch_keystroke(keystroke, cx);
+            })
+            .expect("the window");
+        self.settle();
+    }
+
+    /// Let the key `keystroke` up (the end of `key_down`), then settle.
+    pub(crate) fn key_up(&mut self, keystroke: &str) {
+        let os = self.cx.update(|cx| cx.platform_info().os);
+        let keystroke = Keystroke::parse_with_os(keystroke, os)
+            .unwrap_or_else(|_| panic!("{keystroke:?} is not a keystroke"));
+        let up = PlatformInput::KeyUp(gpui::KeyUpEvent { keystroke });
+        self.cx
+            .update_window(self.window, |_, window, cx| {
+                window.dispatch_event(up, cx);
+            })
+            .expect("the window");
+        self.settle();
+    }
+
     /// Type words into the focused field, one character at a time.
     pub(crate) fn type_text(&mut self, words: &str) {
         for character in words.chars() {

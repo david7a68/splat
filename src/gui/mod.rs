@@ -203,7 +203,13 @@ impl SplatRoot {
         });
         let root = cx.entity().downgrade();
         let this_window = window.window_handle();
+        let clock = self.ctx.clone();
         let escape = cx.intercept_keystrokes(move |event, window, cx| {
+            // Interceptors run before any binding or key listener: the frame clock moves to the
+            // key's time before anything the key starts reads it (a timed result's birth).
+            if window.window_handle() == this_window {
+                clock.tick_clock();
+            }
             let keystroke = &event.keystroke;
             if keystroke.key != "escape"
                 || keystroke.modifiers.modified()
@@ -812,8 +818,11 @@ impl Render for SplatRoot {
             // listener of the path once before it looks at the stop (`dispatch_key_down_up_event`).
             // Without this one, that call went to a part's own key listener: a dialog's frame
             // closed the dialog on the Escape that had closed its drop-down.
-            // It moves the frame clock to the key's time too (`clock_on_press` for presses).
-            .capture_key_down({
+            .capture_key_down(|_, _, _| {})
+            // A focused button is pressed as Space or Enter comes up: the frame clock moves to
+            // that time before the press's handler reads it (`watch_keys` for key downs,
+            // `clock_on_press` for the pointer).
+            .capture_key_up({
                 let ctx = self.ctx.clone();
                 move |_, _, _| ctx.tick_clock()
             })

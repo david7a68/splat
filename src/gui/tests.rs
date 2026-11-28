@@ -648,14 +648,25 @@ fn a_press_long_after_the_last_frame_keeps_its_undo() {
     // The last frame was long ago: the clock stands far behind the release.
     splat_design::frame_clock::set(-1000.0);
     shell.release(add);
-    assert!(
-        shell.bounds("Undo add Long rest").is_some(),
-        "the Add's result keeps its Undo: {:?}",
+    let undo = || {
         super::kit::probe::names()
             .into_iter()
-            .filter(|name| name.starts_with("Undo"))
-            .collect::<Vec<_>>()
-    );
+            .any(|name| name.starts_with("Undo add Long rest"))
+    };
+    assert!(undo(), "the Add's result keeps its Undo");
+    // The keyboard's press: Space on the focused Add, which presses as the key comes up. The
+    // pointer gives it the keyboard (down on Add, up away from it: no press).
+    let events = |shell: &mut Shell| shell.read(|root| root.app.timeline.events.len());
+    let before = events(&mut shell);
+    let add = shell.scroll_into_view("Add Long rest");
+    shell.hold_and_move(add, point(add.x, px(5.0)));
+    shell.release(point(add.x, px(5.0)));
+    assert_eq!(events(&mut shell), before, "the pointer only gave Add the keyboard");
+    shell.key_down("space");
+    splat_design::frame_clock::set(-1000.0);
+    shell.key_up("space");
+    assert_eq!(events(&mut shell), before + 1, "Space pressed Add once");
+    assert!(undo(), "the keyboard's Add keeps its Undo");
 }
 
 /// A focused field shows its caret in a capture, steady (egui's caret; R43: no blink).
