@@ -779,9 +779,33 @@ fn note_typing_saves_at_ctrl_s() {
         words.contains("Ogre arrives.!"),
         "a correction keeps the line: {words:?}"
     );
+    // A write that fails stays failed through a capture: the capture tries no save the app
+    // would not make, and the DM's Ctrl+S is the retry.
+    let path = shell
+        .read(|root| root.app.sessions.gv_selected_note().map(|n| n.path.clone()))
+        .expect("a note");
+    let before = std::fs::read_to_string(&path).expect("the note's file");
+    shell.update(|root, _, _| root.app.sessions.gv_fail_note_writes(Some(28)));
     shell.press("ctrl-s");
-    let path = shell.read(|root| root.app.sessions.gv_selected_note().map(|n| n.path.clone()));
-    let file = std::fs::read_to_string(path.expect("a note")).expect("the note's file");
+    let failed = |shell: &mut Shell| {
+        shell.read(|root| {
+            matches!(
+                root.app.sessions.gv_draft_state(),
+                Some(crate::sessions::DraftState::Failed(_))
+            )
+        })
+    };
+    assert!(failed(&mut shell), "the write failed");
+    shell.update(|root, _, _| root.app.sessions.gv_fail_note_writes(None));
+    capture(&mut shell, "session-note-typing__01-write-failed__1200x800");
+    assert!(failed(&mut shell), "the capture left the failure for the DM");
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("the note's file"),
+        before,
+        "the capture wrote nothing"
+    );
+    shell.press("ctrl-s");
+    let file = std::fs::read_to_string(&path).expect("the note's file");
     assert!(
         file.contains("Wolves at the ford."),
         "Ctrl+S saved the typed words"

@@ -514,14 +514,15 @@ impl Shell {
         self.settle();
     }
 
-    /// Render the window and write it to `artifacts/screenshots/gpui/<name>.png`. The session
-    /// note, the template and the Timeline are saved first, as egui's driver did before every
-    /// capture (`finish_capture_saves`): test builds save only when told to, so the capture shows
-    /// what the DM sees once the save timer has run, never a held "Saving…".
+    /// Render the window and write it to `artifacts/screenshots/gpui/<name>.png`. Test builds
+    /// save only when told to, so first the saves the autosave timer would make are made now
+    /// (the session note, the template, the Timeline; egui's driver saved before every capture
+    /// too): the capture shows what the DM sees once the timer has run, never a held "Saving…".
+    /// A failed write is not tried again: it waits for the DM's retry, as in the app.
     pub(crate) fn capture(&mut self, name: &str) -> PathBuf {
         self.update(|root, _, cx| {
-            root.app.sessions.flush();
-            root.app.timeline.save();
+            root.app.sessions.save_pending();
+            root.app.timeline.save_pending();
             cx.notify();
         });
         let image = self

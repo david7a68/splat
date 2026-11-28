@@ -1599,6 +1599,12 @@ impl Draft {
                 .is_none_or(|at| now.duration_since(at) >= SAVE_AFTER)
     }
 
+    /// Whether the autosave timer saves this draft: only words not yet tried. A failed write
+    /// waits for the DM's retry (Ctrl+S, Retry, leaving the note).
+    pub fn autosaves(&self) -> bool {
+        self.state == DraftState::Unsaved
+    }
+
     pub fn save(&mut self) {
         if !matches!(self.state, DraftState::Unsaved | DraftState::Failed(_)) {
             return;

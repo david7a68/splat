@@ -1561,7 +1561,7 @@ impl Sessions {
             .into_iter()
             .flatten()
         {
-            if draft.state == DraftState::Unsaved {
+            if draft.autosaves() {
                 #[cfg(not(any(test, feature = "test-support")))]
                 if draft.due_at(Instant::now()) {
                     draft.save();
@@ -2062,6 +2062,20 @@ impl Sessions {
     }
 
     /// Save what can be saved. Called on the way to anything that can lose a draft.
+    /// Make now the saves the autosave timer would make (`Draft::autosaves`), without its
+    /// wait: a test's capture shows what the DM sees once the timer has run. A failed write is
+    /// left for the DM's retry.
+    pub fn save_pending(&mut self) {
+        for draft in [&mut self.draft, &mut self.template_draft]
+            .into_iter()
+            .flatten()
+        {
+            if draft.autosaves() {
+                draft.save();
+            }
+        }
+    }
+
     pub fn flush(&mut self) {
         for draft in [&mut self.draft, &mut self.template_draft]
             .into_iter()
