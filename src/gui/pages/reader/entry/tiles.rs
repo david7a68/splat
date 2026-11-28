@@ -54,7 +54,7 @@ pub fn tile_row(
                     super::parts::child(id, format!("tile-{at}")),
                     view,
                     press,
-                    ctx.cloned(),
+                    (ctx.cloned(), entry.to_owned()),
                     on_open.clone(),
                 )
             }));
@@ -127,7 +127,7 @@ fn tile(
     id: ElementId,
     view: TileView,
     press: Press,
-    ctx: Option<StateContext>,
+    (ctx, entry): (Option<StateContext>, String),
     on_open: Option<OnOpen>,
 ) -> AnyElement {
     let c = colors();
@@ -195,6 +195,8 @@ fn tile(
         .on_click(move |_, window, cx| match &press {
             Press::Roll { link, occurrence } => {
                 if let Some(ctx) = &ctx {
+                    // Named at the press: the reader drawn last is not the one pressed.
+                    crate::rolls::set_entry(ctx, &entry);
                     let keys = window.modifiers();
                     plain::ask_pressed_at(
                         ctx,
