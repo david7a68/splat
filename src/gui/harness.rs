@@ -198,15 +198,76 @@ impl Shell {
         kit::probe::find(name)
     }
 
-    /// Press (down and up) the middle of the target `name`, then settle.
+    /// Press (down and up) the middle of the target `name`, then settle. A target whose middle
+    /// its scroll view hides is first scrolled into view with the wheel, as the DM would; one
+    /// that no scroll brings into view fails the test, so no test presses what the DM cannot see.
     pub(crate) fn click(&mut self, name: &str) {
-        let bounds = self.bounds(name).unwrap_or_else(|| {
-            panic!(
-                "No target named {name:?}. Targets: {:?}",
-                kit::probe::names()
-            )
-        });
-        self.click_at(bounds.center());
+        let at = self.into_view(name);
+        self.click_at(at);
+    }
+
+    /// The middle of the target `name`, scrolled into its view first (see `click`).
+    pub(crate) fn into_view(&mut self, name: &str) -> Point<Pixels> {
+        let find = |name: &str| {
+            kit::probe::find_in_view(name).unwrap_or_else(|| {
+                panic!(
+                    "No target named {name:?}. Targets: {:?}",
+                    kit::probe::names()
+                )
+            })
+        };
+        let window = self.size();
+        let (mut bounds, mut view) = find(name);
+        'scrolls: for _ in 0..40 {
+            let middle = bounds.center();
+            if view.contains(&middle) {
+                return middle;
+            }
+            // A touchpad's scroll by the distance to the target, with the pointer where the DM
+            // would put it: in the seen part nearest to the target, one pixel inside. A target
+            // clipped away whole has no seen part to point at: then the places up its column,
+            // inside the window, are tried until one scrolls it.
+            let near = |at: Pixels, from: Pixels, to: Pixels| {
+                if at >= to {
+                    to - px(1.0)
+                } else if at <= from {
+                    from + px(1.0)
+                } else {
+                    at
+                }
+            };
+            let seen = view.size.width > px(1.0)
+                && view.size.height > px(1.0)
+                && view.intersects(&Bounds::new(point(px(0.0), px(0.0)), window));
+            let places: Vec<Point<Pixels>> = if seen {
+                vec![point(
+                    near(middle.x, view.left(), view.right()),
+                    near(middle.y, view.top(), view.bottom()),
+                )]
+            } else {
+                let x = near(middle.x, px(0.0), window.width);
+                let from = near(middle.y, px(0.0), window.height);
+                (0..)
+                    .map(|step| from - px(24.0 * step as f32))
+                    .take_while(|y| *y > px(0.0))
+                    .map(|y| point(x, y))
+                    .collect()
+            };
+            for at in places {
+                let by = point(at.x - middle.x, at.y - middle.y);
+                self.scroll(at, ScrollDelta::Pixels(by), Modifiers::default());
+                let (moved, now) = find(name);
+                if moved != bounds {
+                    (bounds, view) = (moved, now);
+                    continue 'scrolls;
+                }
+            }
+            break;
+        }
+        panic!(
+            "The target {name:?} at {bounds:?} is outside the part of the window it can be seen \
+             in ({view:?}), and scrolling does not bring it in: the DM could not press it"
+        )
     }
 
     /// Press at a place in the window, then settle.

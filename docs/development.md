@@ -256,6 +256,8 @@ fn library_browse() {
   runs frames until the app is idle. It also waits for a read of the party's sheets in flight, on the
   read's own result, as egui's driver did: the party bar, the run's Sheet tab and synced roster rows
   show those sheets. `wait(Duration)` moves the clock on (timers, the poll).
+- `click(name)` presses only what the DM can see: a target outside its scroll view's seen part is
+  scrolled into view first (a touchpad scroll), and one that no scroll brings into view fails the test.
 - `bounds(name)` and `click_at(point)` find and press a place. `drag(from, to)` drags (a splitter), and
   `drag_target(from, to)` drags between two targets by name. `scroll(at, ScrollDelta, Modifiers)`
   scrolls: `Pixels` is a touchpad, `Lines` a wheel.

@@ -111,14 +111,30 @@ pub(crate) mod probe {
     thread_local! {
         /// The targets of the last frame, in paint order. One thread per test (each test's app
         /// runs on its own thread), so no test sees another's targets.
-        static TARGETS: RefCell<Vec<(SharedString, Bounds<Pixels>)>> = const { RefCell::new(Vec::new()) };
+        static TARGETS: RefCell<Vec<Target>> = const { RefCell::new(Vec::new()) };
     }
 
-    /// An invisible child as large as its parent, which records the parent's bounds.
+    /// A target of the last frame: its name, where it was laid out, and the part of the window
+    /// its scroll views and clips let the DM see (its content mask).
+    struct Target {
+        name: SharedString,
+        bounds: Bounds<Pixels>,
+        view: Bounds<Pixels>,
+    }
+
+    /// An invisible child as large as its parent, which records the parent's bounds and the
+    /// room it can be seen in.
     pub(super) fn probe(name: SharedString) -> impl IntoElement {
         canvas(
-            move |bounds, _, _| {
-                TARGETS.with(|targets| targets.borrow_mut().push((name.clone(), bounds)));
+            move |bounds, window, _| {
+                let view = window.content_mask().bounds;
+                TARGETS.with(|targets| {
+                    targets.borrow_mut().push(Target {
+                        name: name.clone(),
+                        bounds,
+                        view,
+                    })
+                });
             },
             |_, _, _, _| {},
         )
@@ -135,13 +151,19 @@ pub(crate) mod probe {
 
     /// The last target laid out under `name`.
     pub(crate) fn find(name: &str) -> Option<Bounds<Pixels>> {
+        find_in_view(name).map(|(bounds, _)| bounds)
+    }
+
+    /// The last target laid out under `name`, and the part of the window it can be seen in (the
+    /// clip of its scroll views, inside the window).
+    pub(crate) fn find_in_view(name: &str) -> Option<(Bounds<Pixels>, Bounds<Pixels>)> {
         TARGETS.with(|targets| {
             targets
                 .borrow()
                 .iter()
                 .rev()
-                .find(|(n, _)| n.as_ref() == name)
-                .map(|(_, bounds)| *bounds)
+                .find(|target| target.name.as_ref() == name)
+                .map(|target| (target.bounds, target.view))
         })
     }
 
@@ -152,8 +174,8 @@ pub(crate) mod probe {
             targets
                 .borrow()
                 .iter()
-                .filter(|(n, _)| n.as_ref() == name)
-                .map(|(_, bounds)| *bounds)
+                .filter(|target| target.name.as_ref() == name)
+                .map(|target| target.bounds)
                 .collect()
         })
     }
@@ -164,7 +186,7 @@ pub(crate) mod probe {
             targets
                 .borrow()
                 .iter()
-                .map(|(name, _)| name.to_string())
+                .map(|target| target.name.to_string())
                 .collect()
         })
     }

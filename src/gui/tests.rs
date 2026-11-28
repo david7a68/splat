@@ -537,6 +537,63 @@ fn a_scroll_bar_paints_inside_its_lane() {
     );
 }
 
+/// `Shell::click` presses only what the DM can see: a button below its pane's scroll is
+/// scrolled into view first and pressed there; one that no scroll brings into view fails.
+#[test]
+fn a_click_scrolls_its_target_into_view() {
+    use super::kit::{Button, Pane};
+    use gpui::{IntoElement, ParentElement, Styled};
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let mut shell = Shell::new("gpui-click-in-view", Seed::Campaign);
+    let pressed = Rc::new(Cell::new(0));
+    let seen = pressed.clone();
+    shell.update(move |root, _, cx| {
+        let seen = seen.clone();
+        root.pages.reader.preview = Some(Rc::new(move |_, _, _| {
+            let (low, hidden) = (seen.clone(), seen.clone());
+            gpui::div()
+                .flex()
+                .flex_row()
+                .size_full()
+                .child(
+                    gpui::div().w(px(300.0)).h_full().child(
+                        Pane::new("click-pane")
+                            .child(gpui::div().h(px(2000.0)))
+                            .child(
+                                Button::secondary("low-button", "Low button")
+                                    .on_click(move |_, _, _| low.set(low.get() + 1)),
+                            ),
+                    ),
+                )
+                .child(
+                    gpui::div().w(px(300.0)).h(px(100.0)).overflow_hidden().child(
+                        gpui::div().mt(px(400.0)).child(
+                            Button::secondary("hidden-button", "Hidden button")
+                                .on_click(move |_, _, _| hidden.set(hidden.get() + 100)),
+                        ),
+                    ),
+                )
+                .into_any_element()
+        }));
+        cx.notify();
+    });
+    let before = shell.bounds("Low button").expect("the low button is laid out");
+    assert!(before.top() > shell.size().height, "it starts below the window");
+    shell.click("Low button");
+    assert_eq!(pressed.get(), 1, "the low button took the press");
+    let after = shell.bounds("Low button").expect("the low button");
+    assert!(
+        after.bottom() <= shell.size().height,
+        "it was scrolled into view: {after:?}"
+    );
+    let unreachable = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        shell.click("Hidden button");
+    }));
+    assert!(unreachable.is_err(), "a target no scroll reaches fails the press");
+    assert_eq!(pressed.get(), 1, "and nothing pressed it");
+}
+
 /// Ctrl+S has one owner (`SplatRoot::save`): with drafts open on two pages, it saves only the
 /// draft of the page shown, wherever the keyboard is (a rail item the DM just pressed, the
 /// Lookup field), and nothing while a menu is open over the page.
