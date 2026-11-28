@@ -255,6 +255,7 @@ impl RenderOnce for Columns {
                 };
                 Some(Splitter {
                     column,
+                    key: fixed.key,
                     sign,
                     default: fixed.width?,
                     range: fixed.range.clone()?,
@@ -372,6 +373,8 @@ type SaveWidths = std::rc::Rc<dyn Fn(&Entity<ResizableState>, &mut App)>;
 struct Splitter {
     /// The column it resizes.
     column: usize,
+    /// The id its width is saved under, if it is saved.
+    key: Option<&'static str>,
     /// +1 when Right widens that column (it is left of the splitter), −1 when Right narrows it.
     sign: f32,
     default: Pixels,
@@ -440,7 +443,22 @@ impl Splitter {
                 let width = match event.keystroke.key.as_str() {
                     "right" => now + L * self.sign,
                     "left" => now - L * self.sign,
-                    "home" => self.default,
+                    "home" => {
+                        // The column's own width, in the columns as a fresh page lays them out:
+                        // the saved width goes, and the panels start again from their widths
+                        // (the others' saved ones stay). A resize to the default instead would
+                        // be scaled again when the page's room follows the saved width.
+                        if let Some(key) = self.key {
+                            super::edge::set_column_width(key, None, cx);
+                        }
+                        state.update(cx, |state, cx| {
+                            state.clear();
+                            cx.notify();
+                        });
+                        cx.stop_propagation();
+                        window.refresh();
+                        return;
+                    }
                     _ => return,
                 };
                 let width = width.clamp(self.range.start, self.range.end);
