@@ -139,6 +139,54 @@ fn edit_details_discard_and_undo() {
     shell.click("Discard");
     shell.click("Cancel");
     assert_eq!(shell.read(|root| root.app.campaigns.editing()), None);
+    // Review 2 P2: a form opened before a campaign change is blocked does not commit under the
+    // block. B's details form is open; an unsaved NPC in Lookup blocks the change; Save details
+    // (and Enter) refuse, and B neither becomes active nor takes the new name.
+    let active = shell.read(|root| root.app.campaigns.active_id());
+    let other = shell.read(|root| {
+        root.app
+            .campaigns
+            .all()
+            .iter()
+            .find(|campaign| Some(campaign.id) != active)
+            .cloned()
+            .expect("a campaign that is not active")
+    });
+    shell.click(&format!("id:campaign-edit-{}", other.id));
+    shell.click(&format!("id:campaign_name-{}", other.id));
+    shell.type_text(" Renamed");
+    shell.update(|root, _, _| root.app.lookup.generate());
+    assert_eq!(
+        shell.read(|root| root.app.blocked_switch()),
+        Some("Save or discard your changes to change campaigns.")
+    );
+    shell.click("Save details");
+    shell.press("enter");
+    let stored = |shell: &mut Shell| {
+        shell.read(|root| {
+            root.app
+                .campaigns
+                .all()
+                .iter()
+                .find(|campaign| campaign.id == other.id)
+                .map(|campaign| campaign.name.clone())
+        })
+    };
+    assert_eq!(
+        shell.read(|root| root.app.campaigns.active_id()),
+        active,
+        "the blocked Save did not change the active campaign"
+    );
+    assert_eq!(stored(&mut shell), Some(other.name.clone()));
+    assert_eq!(
+        shell.read(|root| root.app.campaigns.editing()),
+        Some(other.id),
+        "the form and its draft stay"
+    );
+    // Without the block, Save details saves.
+    shell.update(|root, _, _| root.app.lookup.discard_generated());
+    shell.click("Save details");
+    assert_eq!(stored(&mut shell), Some(format!("{} Renamed", other.name)));
 }
 
 /// Remove… opens the confirm dialog; Escape keeps the campaign; Remove from Splat forgets it.

@@ -204,7 +204,8 @@ pub(crate) fn render_add_campaign_form(
     cx: &mut Context<SplatRoot>,
 ) -> AnyElement {
     root.app.campaigns.set_form_open(true);
-    let form = campaign_list::add_form(root, true, cx);
+    let locked = root.app.campaigns.list_lock(root.app.blocked_switch());
+    let form = campaign_list::add_form(root, true, locked, cx);
     let error = campaign_list::form_error_inline(root, cx);
     div()
         .flex()
