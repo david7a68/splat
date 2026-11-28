@@ -6,13 +6,17 @@
 //! - `Columns`: panes side by side with a drag handle (splitter) between them. Each fixed column
 //!   has a default width and a range; the last column takes the rest. The widths live in
 //!   gpui-component's `ResizableState`, kept under the columns' id. A column `saved` under its
-//!   id keeps the DM's width after a restart (`kit::edge::ColumnWidths`, `ui_state`).
+//!   id keeps the DM's width after a restart (`kit::edge::ColumnWidths`, `ui_state`). Each
+//!   splitter is a tab stop too (egui's `Column` handle): with the keyboard on it, it shows the
+//!   focus colour, Left and Right move it by `L`, and Home gives the column back its default
+//!   width.
 //!
 //! Keep targets clear of a splitter: a pane's content has `M` padding at its sides.
-use crate::gui::theme::{HAIRLINE_WIDTH, M, S, colors};
+use crate::gui::theme::{FOCUS_WIDTH, HAIRLINE_WIDTH, L, M, S, SPLITTER_WIDTH, colors};
 use gpui::{
-    AnyElement, App, ElementId, IntoElement, ParentElement, Pixels, RenderOnce, ScrollHandle,
-    SharedString, Styled, Window, div, prelude::*,
+    AnyElement, App, DispatchPhase, Entity, ElementId, FocusHandle, IntoElement, MouseDownEvent,
+    ParentElement, Pixels,
+    RenderOnce, Role, ScrollHandle, SharedString, Styled, Window, canvas, div, prelude::*,
 };
 use gpui_component::{ResizableState, h_resizable, resizable_panel};
 use std::ops::Range;
@@ -212,18 +216,57 @@ impl RenderOnce for Columns {
             cx,
             |_, _| ResizableState::default(),
         );
-        let keys: Vec<Option<&'static str>> = self.columns.iter().map(|c| c.key).collect();
-        let mut group = h_resizable(self.id)
-            .with_state(&state)
-            .on_resize(move |state, _, cx| {
-                let sizes = state.read(cx).sizes().clone();
-                for (key, size) in keys.iter().zip(sizes) {
-                    if let Some(key) = key {
-                        super::edge::set_column_width(key, Some(f32::from(size).round()), cx);
-                    }
+        // A width the DM gave back with Home (or dragged to the default) is forgotten, so the
+        // column follows its default again.
+        let keys: Vec<Option<(&'static str, Option<Pixels>)>> = self
+            .columns
+            .iter()
+            .map(|c| c.key.map(|key| (key, c.width)))
+            .collect();
+        let save: SaveWidths = std::rc::Rc::new(move |state, cx| {
+            let sizes = state.read(cx).sizes().clone();
+            for (key, size) in keys.iter().zip(sizes) {
+                if let Some((key, default)) = key {
+                    let width = f32::from(size).round();
+                    let kept =
+                        (default.map(|d| f32::from(d).round()) != Some(width)).then_some(width);
+                    super::edge::set_column_width(key, kept, cx);
                 }
-            });
-        for column in self.columns {
+            }
+        });
+        let mut group = h_resizable(self.id.clone()).with_state(&state).on_resize({
+            let save = save.clone();
+            move |state, _, cx| save(state, cx)
+        });
+        // The splitter between columns `at - 1` and `at` moves the fixed one of the two: the
+        // left one when it has a width, else the right one (a column right of the rest).
+        let splitters: Vec<Option<Splitter>> = (0..self.columns.len())
+            .map(|at| {
+                if at == 0 {
+                    return None;
+                }
+                let (left, right) = (&self.columns[at - 1], &self.columns[at]);
+                let (column, sign, fixed) = if left.width.is_some() {
+                    (at - 1, 1.0, left)
+                } else if right.width.is_some() {
+                    (at, -1.0, right)
+                } else {
+                    return None;
+                };
+                Some(Splitter {
+                    column,
+                    sign,
+                    default: fixed.width?,
+                    range: fixed.range.clone()?,
+                    name: format!(
+                        "Resize column {}",
+                        fixed.key.unwrap_or("between the panes")
+                    )
+                    .into(),
+                })
+            })
+            .collect();
+        for (at, (column, splitter)) in self.columns.into_iter().zip(splitters).enumerate() {
             // A saved column is a harness target by its key (`column world_list_panel`).
             let content = match column.key {
                 Some(key) => super::target(
@@ -232,6 +275,15 @@ impl RenderOnce for Columns {
                 )
                 .into_any_element(),
                 None => column.content,
+            };
+            let content = match splitter {
+                Some(splitter) => div()
+                    .relative()
+                    .size_full()
+                    .child(content)
+                    .child(splitter.render(&self.id, at, (&state, &save), window, cx))
+                    .into_any_element(),
+                None => content,
             };
             let mut panel = resizable_panel().child(content);
             let saved = column
@@ -251,5 +303,132 @@ impl RenderOnce for Columns {
             group = group.child(panel);
         }
         group
+    }
+}
+
+/// Keep the saved columns' widths from the columns' state (after a drag or a key).
+type SaveWidths = std::rc::Rc<dyn Fn(&Entity<ResizableState>, &mut App)>;
+
+/// The keyboard's side of the splitter at a column's left edge (gpui-component's handle takes
+/// the pointer): a tab stop that moves the fixed column beside it.
+struct Splitter {
+    /// The column it resizes.
+    column: usize,
+    /// +1 when Right widens that column (it is left of the splitter), −1 when Right narrows it.
+    sign: f32,
+    default: Pixels,
+    range: Range<Pixels>,
+    /// Its accessible name and harness target (`Resize column library_entries`).
+    name: SharedString,
+}
+
+impl Splitter {
+    /// A band at the left edge of column `at`, under gpui-component's handle, which keeps the
+    /// keyboard: it shows the focus colour beside the hairline while it has it.
+    fn render(
+        self,
+        id: &ElementId,
+        at: usize,
+        (state, save): (&Entity<ResizableState>, &SaveWidths),
+        window: &mut Window,
+        cx: &mut App,
+    ) -> AnyElement {
+        let band_id = ElementId::NamedChild(
+            std::sync::Arc::new(id.clone()),
+            SharedString::from(format!("splitter-{at}")),
+        );
+        let focus: FocusHandle = window
+            .use_keyed_state(
+                ElementId::NamedChild(std::sync::Arc::new(band_id.clone()), "focus".into()),
+                cx,
+                |_, cx| cx.focus_handle().tab_stop(true),
+            )
+            .read(cx)
+            .clone();
+        let focused = focus.is_focused(window);
+        // A press on gpui-component's handle (which takes the pointer) gives this band the
+        // keyboard too, as a press on an edge column's splitter does; the drag goes on.
+        let press = {
+            let focus = focus.clone();
+            canvas(
+                |_, _, _| {},
+                move |bounds, _, window, _| {
+                    window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
+                        // In the bubble, after the handle and the parts in front of it, so no
+                        // focusable part behind the handle takes the keyboard back.
+                        if phase == DispatchPhase::Bubble
+                            && bounds.contains(&event.position)
+                            && !window.default_prevented()
+                        {
+                            window.focus(&focus, cx);
+                            window.prevent_default();
+                        }
+                    });
+                },
+            )
+            .absolute()
+            .top_0()
+            .left(-(SPLITTER_WIDTH / 2.0))
+            .h_full()
+            .w(SPLITTER_WIDTH)
+        };
+        let (state, save) = (state.clone(), save.clone());
+        let name = self.name.clone();
+        let band = div()
+            .id(band_id)
+            .absolute()
+            .top_0()
+            .left_0()
+            .h_full()
+            .w(HAIRLINE_WIDTH + FOCUS_WIDTH)
+            .track_focus(&focus)
+            .role(Role::Splitter)
+            .aria_label(name.clone())
+            .on_key_down(move |event, window, cx| {
+                if event.keystroke.modifiers.modified() {
+                    return;
+                }
+                let now = state
+                    .read(cx)
+                    .sizes()
+                    .get(self.column)
+                    .copied()
+                    .unwrap_or(self.default);
+                let width = match event.keystroke.key.as_str() {
+                    "right" => now + L * self.sign,
+                    "left" => now - L * self.sign,
+                    "home" => self.default,
+                    _ => return,
+                };
+                let width = width.clamp(self.range.start, self.range.end);
+                state.update(cx, |state, cx| {
+                    state.resize_panel(self.column, width, window, cx)
+                });
+                save(&state, cx);
+                cx.stop_propagation();
+                window.refresh();
+            })
+            // The focus line stands right of the 1 px hairline the handle draws on the edge.
+            .when(focused, |band| {
+                band.child(super::target(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left(HAIRLINE_WIDTH)
+                        .h_full()
+                        .w(FOCUS_WIDTH)
+                        .bg(colors().focus),
+                    format!("{name} (focused)"),
+                ))
+            });
+        // Taffy places an absolute child in its parent: the holder spans the edge's height.
+        div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .h_full()
+            .child(press)
+            .child(super::target(band, name))
+            .into_any_element()
     }
 }

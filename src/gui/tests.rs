@@ -394,6 +394,38 @@ fn columns_keep_the_widths_the_dm_drags() {
         (width - wanted).abs() <= 2.0,
         "the list is {width} px wide, not {wanted}"
     );
+    // The page splitter has the keyboard after the press (egui's Column handle): it shows the
+    // focus colour, Right moves it by L, and Home gives the list back its default width.
+    assert!(
+        shell
+            .bounds("Resize column library_entries (focused)")
+            .is_some(),
+        "the pressed splitter shows the focus ring"
+    );
+    shell.capture("gpui-columns__03-page-splitter-focused__1200x800");
+    shell.press("right");
+    let right = saved(&mut shell, "library_entries").expect("the list's width is kept");
+    assert!(
+        (right - width - 16.0).abs() <= 1.0,
+        "Right widens the list by L: {width} to {right}"
+    );
+    let list = shell.bounds("column library_entries").expect("the list");
+    assert!((f32::from(list.size.width) - right).abs() <= 1.0);
+    shell.press("left left");
+    let left = saved(&mut shell, "library_entries").expect("the list's width is kept");
+    assert!((left - (right - 32.0)).abs() <= 1.0, "Left narrows it: {left}");
+    shell.press("home");
+    assert_eq!(
+        saved(&mut shell, "library_entries"),
+        None,
+        "Home forgets the dragged width"
+    );
+    let list = shell.bounds("column library_entries").expect("the list");
+    assert!(
+        (f32::from(list.size.width) - (width - 50.0)).abs() <= 2.0,
+        "Home gives back the default width: {:?}",
+        list.size.width
+    );
 }
 
 /// A menu keeps inside the pane that holds its trigger: near the pane's foot it
