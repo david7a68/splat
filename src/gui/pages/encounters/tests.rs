@@ -315,6 +315,14 @@ fn a_group_is_edited_and_saved() {
     shell.click(&more);
     let more = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
     assert_eq!(more[0].1, members[0].1 + 1, "+ adds one to the count");
+    // The count's well keeps the DM's words while they type: cleared, then `12`, is 12.
+    let well = first_target(&mut shell, "How many of ");
+    shell.click(&well);
+    shell.press("ctrl-a backspace");
+    shell.type_text("12");
+    let typed = shell.read(|root| root.app.encounters.group_members().unwrap_or_default());
+    assert_eq!(typed[0].1, 12, "a cleared count takes the typed 12");
+    shell.press("enter");
     assert_eq!(
         shell.read(|root| root.app.encounters.group_open()),
         Some(true)
