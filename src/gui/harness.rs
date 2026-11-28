@@ -257,8 +257,11 @@ impl Shell {
                     .map(|y| point(x, y))
                     .collect()
             };
+            // The app multiplies a touchpad's scroll by the DM's speed (`gui::touchpad`): ask
+            // for the distance over that factor, so the scroll lands on the target.
+            let factor = self.read(|root| root.app.touchpad_speed.factor());
             for at in places {
-                let by = point(at.x - middle.x, at.y - middle.y);
+                let by = point((at.x - middle.x) / factor, (at.y - middle.y) / factor);
                 self.scroll(at, ScrollDelta::Pixels(by), Modifiers::default());
                 let (moved, now) = find(name);
                 if moved != bounds {

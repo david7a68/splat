@@ -561,7 +561,8 @@ fn a_scroll_bar_paints_inside_its_lane() {
 }
 
 /// `Shell::click` presses only what the DM can see: a button below its pane's scroll is
-/// scrolled into view first and pressed there; one that no scroll brings into view fails.
+/// scrolled into view first and pressed there, at the default touchpad speed (4×); one that no
+/// scroll brings into view fails.
 #[test]
 fn a_click_scrolls_its_target_into_view() {
     use super::kit::{Button, Pane};
@@ -586,7 +587,10 @@ fn a_click_scrolls_its_target_into_view() {
                             .child(
                                 Button::secondary("low-button", "Low button")
                                     .on_click(move |_, _, _| low.set(low.get() + 1)),
-                            ),
+                            )
+                            // Room below it too: a scroll that went past it could come
+                            // back past it again (the touchpad's speed multiplies a scroll).
+                            .child(gpui::div().h(px(2000.0))),
                     ),
                 )
                 .child(
