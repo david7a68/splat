@@ -1108,6 +1108,74 @@ fn dialogs() {
         "Enter keeps editing"
     );
     assert!(shell.read(|root| root.app.library.dirty()));
+    // Save and close writes the draft to its file and closes the window.
+    let file = file_holding(shell.home(), "Ash Exposure");
+    assert!(!std::fs::read_to_string(&file).unwrap().contains("Draft ruling."));
+    assert!(!close(&mut shell));
+    assert!(
+        shell.click_to_close("Save and close"),
+        "Save and close closes the window"
+    );
+    assert!(
+        std::fs::read_to_string(&file)
+            .unwrap()
+            .contains("Draft ruling."),
+        "Save and close wrote the draft to {file:?}"
+    );
+}
+
+/// The close prompt's `Discard and close`: the window closes and the draft's file on disk keeps
+/// its words (the `dialogs` scenario's draft, discarded instead of saved).
+#[test]
+fn discard_and_close_leaves_the_file() {
+    let mut shell = Shell::new("dialogs-discard", Seed::Campaign);
+    shell.click("Library");
+    wait_for(&mut shell, "the Library loads", |root| {
+        root.app.library.loaded() && !root.app.library.loading()
+    });
+    shell.click("id:library-scope");
+    shell.click("Ashen Marches");
+    shell.click("Ash Exposure · Rule");
+    shell.click("Edit Markdown");
+    shell.click("Markdown editor");
+    shell.press("ctrl-end");
+    shell.type_text(" Draft ruling.");
+    assert!(shell.read(|root| root.app.library.dirty()));
+    let file = file_holding(shell.home(), "Ash Exposure");
+    let before = std::fs::read_to_string(&file).unwrap();
+    let closes = shell.update(|root, window, cx| root.should_close(window, cx));
+    assert!(!closes, "the draft keeps the window open");
+    assert!(
+        shell.click_to_close("Discard and close"),
+        "Discard and close closes the window"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        before,
+        "the discarded draft left {file:?} as it was"
+    );
+}
+
+/// The one Markdown file under `folder` whose name starts with `name`.
+fn file_holding(folder: &std::path::Path, name: &str) -> std::path::PathBuf {
+    fn walk(folder: &std::path::Path, name: &str, found: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(folder).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, name, found);
+            } else if path.extension().is_some_and(|e| e == "md")
+                && path
+                    .file_name()
+                    .is_some_and(|f| f.to_string_lossy().starts_with(name))
+            {
+                found.push(path);
+            }
+        }
+    }
+    let mut found = Vec::new();
+    walk(folder, name, &mut found);
+    assert_eq!(found.len(), 1, "one file named {name}: {found:?}");
+    found.remove(0)
 }
 
 /// Each page keeps its state while the DM visits the others (the egui `nav-state` scenario):

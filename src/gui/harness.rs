@@ -270,6 +270,42 @@ impl Shell {
         )
     }
 
+    /// Press the target `name` that closes the window (the close prompt's `Save and close` or
+    /// `Discard and close`): true when the window is gone after it. No settle follows, as there
+    /// is no window left to draw.
+    pub(crate) fn click_to_close(&mut self, name: &str) -> bool {
+        let at = self.into_view(name);
+        for input in [
+            PlatformInput::MouseDown(MouseDownEvent {
+                button: MouseButton::Left,
+                position: at,
+                modifiers: Modifiers::default(),
+                click_count: 1,
+                first_mouse: false,
+            }),
+            PlatformInput::MouseUp(MouseUpEvent {
+                button: MouseButton::Left,
+                position: at,
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        ] {
+            let _ = self.cx.update_window(self.window, |_, window, cx| {
+                window.dispatch_event(input, cx);
+            });
+            self.cx.run_until_parked();
+        }
+        let id = self.window.window_id();
+        !self
+            .cx
+            .update(|cx| cx.windows().iter().any(|window| window.window_id() == id))
+    }
+
+    /// The test's own folder: the campaigns, the Library's packages and the settings live in it.
+    pub(crate) fn home(&self) -> &std::path::Path {
+        self._home.path()
+    }
+
     /// Press at a place in the window, then settle.
     pub(crate) fn click_at(&mut self, position: gpui::Point<Pixels>) {
         for input in [
