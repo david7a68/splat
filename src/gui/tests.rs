@@ -623,6 +623,43 @@ fn a_press_long_after_the_last_frame_keeps_its_undo() {
     );
 }
 
+/// A focused field shows its caret in a capture, steady (egui's caret; R43: no blink).
+#[test]
+fn a_focused_field_shows_its_caret() {
+    use gpui::{IntoElement, ParentElement, Styled};
+    let mut shell = Shell::new("gpui-caret", Seed::Campaign);
+    shell.update(|root, _, cx| {
+        root.pages.reader.preview = Some(std::rc::Rc::new(|_, _, _| {
+            gpui::div()
+                .w(px(300.0))
+                .child(
+                    super::kit::TextField::new("caret-field", "")
+                        .name("Caret field")
+                        .focus(true),
+                )
+                .into_any_element()
+        }));
+        cx.notify();
+    });
+    let field = shell.bounds("Caret field").expect("the field");
+    let path = shell.capture("gpui-caret__01-focused-field__1200x800");
+    let picture = image::open(&path).expect("the capture").to_rgba8();
+    let caret = gpui::Rgba::from(super::theme::colors().focus);
+    let caret = [caret.r, caret.g, caret.b].map(|channel| (channel * 255.0).round() as i32);
+    // Inside the field's border, away from its focus ring: the caret's pixels.
+    let inside = (f32::from(field.left()) as u32 + 4..f32::from(field.left()) as u32 + 40)
+        .flat_map(|x| {
+            (f32::from(field.top()) as u32 + 5..f32::from(field.bottom()) as u32 - 5)
+                .map(move |y| (x, y))
+        })
+        .filter(|(x, y)| {
+            let pixel = picture.get_pixel(*x, *y);
+            (0..3).all(|at| (i32::from(pixel[at]) - caret[at]).abs() <= 24)
+        })
+        .count();
+    assert!(inside >= 6, "the caret is drawn: {inside} caret pixels");
+}
+
 /// Ctrl+S has one owner (`SplatRoot::save`): with drafts open on two pages, it saves only the
 /// draft of the page shown, wherever the keyboard is (a rail item the DM just pressed, the
 /// Lookup field), and nothing while a menu is open over the page.

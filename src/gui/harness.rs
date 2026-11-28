@@ -97,6 +97,10 @@ impl Shell {
             .expect("a headless window");
         // One device pixel per pixel, as the reference captures (`*__1200x800.png`).
         cx.simulate_window_scale_factor_change(handle.into(), 1.0);
+        // The window has the system's focus, as the DM's window does: a focused field shows
+        // its caret (gpui-component draws it only in the active window).
+        cx.update_window(handle.into(), |_, window, _| window.activate_window())
+            .expect("the window");
         let mut shell = Self {
             cx,
             window: handle.into(),
