@@ -428,14 +428,14 @@ fn arrivals_made_up(shell: &mut Shell) {
     assert!(with_run(shell, |run| run.panel == Panel::Groups));
 }
 
-/// The target `name` in the run panel ends clear of the scroll bar's track at the window's
+/// The target `name` in the run panel ends clear of the scroll bar's lane at the window's
 /// right (the page's `M` gutter, then the track), where egui's content stopped.
 fn clear_of_bar(shell: &mut Shell, name: &str) {
     let right = shell
         .bounds(name)
         .unwrap_or_else(|| panic!("{name}"))
         .right();
-    let edge = shell.size().width - crate::gui::theme::M - crate::gui::kit::scroll::TRACK_WIDTH;
+    let edge = shell.size().width - crate::gui::theme::M - crate::gui::theme::SCROLL_BAR_WIDTH;
     assert!(
         right <= edge,
         "{name} ends at {right:?}, under the bar from {edge:?}"

@@ -3,7 +3,7 @@
 use crate::Page;
 use crate::fixtures::Seed;
 use crate::gui::harness::Shell;
-use gpui::{px, size};
+use gpui::{point, px, size};
 
 /// The page after its campaign is read (the read runs on a thread of its own): each read in
 /// flight is waited for on its own result, never a clock, and the frames after it take it.
@@ -990,6 +990,72 @@ fn the_narrow_editor_takes_turns_and_a_dragged_width_is_kept() {
         Some(360.0)
     );
     shell.capture("column-resize__09-roster-follows-add-panel__1200x800");
+    // Home on the splitter forgets the kept width and gives the column its own width again,
+    // as in an editor that never had a dragged width.
+    let kept = shell
+        .bounds("column encounter_add")
+        .expect("Add participants");
+    shell.click_at(point(kept.left(), kept.center().y));
+    shell.press("home");
+    assert_eq!(
+        shell.update(|_, _, cx| crate::gui::kit::edge::column_width(super::editor::ADD_PANE, cx)),
+        None,
+        "Home forgets the kept width"
+    );
+    let home = shell
+        .bounds("column encounter_add")
+        .expect("Add participants");
+    let mut fresh = Shell::new("column-resize-natural", Seed::Campaign);
+    ready(&mut fresh);
+    open_encounter(&mut fresh, "");
+    let natural = fresh
+        .bounds("column encounter_add")
+        .expect("Add participants");
+    assert!(
+        (home.size.width - natural.size.width).abs() <= px(1.0),
+        "Home gives the column its own width: {home:?}, not {natural:?}"
+    );
+    // At 1600 px the page's room follows the kept width (the roster's measure, then Add): one
+    // Home still lands on a fresh editor's width, with the splitter keeping the keyboard.
+    let wide = size(px(1600.0), px(900.0));
+    let mut shell = Shell::with_size("column-resize-wide", Seed::Campaign, wide);
+    ready(&mut shell);
+    shell.update(|_, _, cx| {
+        crate::gui::kit::edge::set_column_width(super::editor::ADD_PANE, Some(360.0), cx);
+        cx.notify();
+    });
+    open_encounter(&mut shell, "");
+    let kept = shell
+        .bounds("column encounter_add")
+        .expect("Add participants");
+    assert!((kept.size.width - px(360.0)).abs() <= px(1.0), "{kept:?}");
+    shell.click_at(point(kept.left(), kept.center().y));
+    shell.press("home");
+    shell.settle();
+    assert_eq!(
+        shell.update(|_, _, cx| crate::gui::kit::edge::column_width(super::editor::ADD_PANE, cx)),
+        None,
+        "Home forgets the kept width"
+    );
+    assert!(
+        shell
+            .bounds("Resize creature search column (focused)")
+            .is_some(),
+        "the splitter keeps the keyboard"
+    );
+    let home = shell
+        .bounds("column encounter_add")
+        .expect("Add participants");
+    let mut fresh = Shell::with_size("column-resize-wide-natural", Seed::Campaign, wide);
+    ready(&mut fresh);
+    open_encounter(&mut fresh, "");
+    let natural = fresh
+        .bounds("column encounter_add")
+        .expect("Add participants");
+    assert!(
+        (home.size.width - natural.size.width).abs() <= px(1.0),
+        "at 1600 px one Home gives the column its own width: {home:?}, not {natural:?}"
+    );
 }
 
 /// Read the campaign again (the list's Reload from disk) and wait for the read.

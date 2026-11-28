@@ -647,7 +647,35 @@ pub fn install(cx: &mut App) {
         // A pane whose content runs past its foot shows its bar all the time, as egui's did, so
         // the DM sees that more is below; a pane that fits shows none.
         theme.scrollbar_mode = gpui_component::scroll::ScrollbarMode::Always;
+        // R43, and egui's caret: a focused field's caret stays shown; it does not blink.
+        theme.cursor_blink = gpui_base::input::CursorBlink::steady();
     });
+    size_scroll_bars(cx);
+}
+
+/// Every scroll bar's track and thumb are `SCROLL_BAR_WIDTH` wide, the lane a scroll column keeps
+/// (`kit::scroll`), as egui's solid bar was: gpui-base's own bar is 16 px wide and would paint
+/// over the content's right edge. The thumb fills the track and keeps its width on hover and
+/// in a drag (R43: no motion that draws the eye). gpui-component rebuilds the base theme on each
+/// `Theme::update` or `Theme::change`, so this runs after `install`'s.
+fn size_scroll_bars(cx: &mut App) {
+    use gpui_component::scroll::{ScrollbarStyles, ScrollbarThumbStyle};
+    let base = gpui_base::Theme::global_mut(cx);
+    let thumb = |style: ScrollbarThumbStyle| style.width(SCROLL_BAR_WIDTH).inset(px(0.0));
+    let styles: ScrollbarStyles = base
+        .scrollbar
+        .styles()
+        .clone()
+        .track(|style| style.width(SCROLL_BAR_WIDTH))
+        .track_hover(|style| style.width(SCROLL_BAR_WIDTH))
+        .track_active(|style| style.width(SCROLL_BAR_WIDTH))
+        .thumb(thumb)
+        .thumb_hover(thumb)
+        .thumb_active(thumb);
+    base.scrollbar = gpui_base::ScrollbarTheme::new()
+        .with_mode(base.scrollbar.mode())
+        .with_motion(base.scrollbar.motion())
+        .with_styles(styles);
 }
 
 #[cfg(test)]

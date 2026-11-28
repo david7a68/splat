@@ -246,8 +246,9 @@ impl Element for Placed {
             return;
         };
         if limits(&anchor, self.match_width) != sized {
-            // Laid out for another room: lay it out again in the next frame.
-            window.refresh();
+            // Laid out for another room: lay it out again in the next frame. GPUI drops a
+            // `refresh` asked for while it draws; a next-frame callback it keeps.
+            window.on_next_frame(|window, _| window.refresh());
         }
         if out_of_view(&anchor) {
             return;

@@ -4,7 +4,7 @@ use super::gallery::Gallery;
 use super::harness::Shell;
 use crate::fixtures::Seed;
 use crate::{Page, SettingsTab};
-use gpui::{point, px, size};
+use gpui::{Pixels, point, px, size};
 
 /// The shell over a campaign at the default size and at the smallest window.
 #[test]
@@ -394,6 +394,60 @@ fn columns_keep_the_widths_the_dm_drags() {
         (width - wanted).abs() <= 2.0,
         "the list is {width} px wide, not {wanted}"
     );
+    // The page splitter has the keyboard after the press (egui's Column handle): it shows the
+    // focus colour, Right moves it by L, and Home gives the list back its default width.
+    assert!(
+        shell
+            .bounds("Resize Library entries column (focused)")
+            .is_some(),
+        "the pressed splitter shows the focus ring"
+    );
+    shell.capture("gpui-columns__03-page-splitter-focused__1200x800");
+    // Tab order follows the page: the splitter left of the entries comes before their search,
+    // the one left of the reader after the list.
+    shell.click("id:library-search");
+    shell.press("shift-tab");
+    assert!(
+        shell
+            .bounds("Resize Library categories column (focused)")
+            .is_some(),
+        "Shift+Tab from the search reaches the splitter on its left"
+    );
+    shell.press("tab");
+    assert!(
+        shell
+            .bounds("Resize Library categories column (focused)")
+            .is_none(),
+        "and Tab goes back to the search"
+    );
+    let list = shell.bounds("column library_entries").expect("the list");
+    shell.click_at(point(list.right(), list.center().y));
+    shell.press("right");
+    let right = saved(&mut shell, "library_entries").expect("the list's width is kept");
+    assert!(
+        (right - width - 16.0).abs() <= 1.0,
+        "Right widens the list by L: {width} to {right}"
+    );
+    let list = shell.bounds("column library_entries").expect("the list");
+    assert!((f32::from(list.size.width) - right).abs() <= 1.0);
+    shell.press("left left");
+    let left = saved(&mut shell, "library_entries").expect("the list's width is kept");
+    assert!(
+        (left - (right - 32.0)).abs() <= 1.0,
+        "Left narrows it: {left}"
+    );
+    shell.press("home");
+    assert_eq!(
+        saved(&mut shell, "library_entries"),
+        None,
+        "Home forgets the dragged width"
+    );
+    let list = shell.bounds("column library_entries").expect("the list");
+    assert!(
+        (f32::from(list.size.width) - (width - 50.0)).abs() <= 2.0,
+        "Home gives back the default width: {:?}",
+        list.size.width
+    );
 }
 
 /// A menu keeps inside the pane that holds its trigger: near the pane's foot it
@@ -445,6 +499,219 @@ fn a_menu_keeps_inside_its_pane() {
         );
         assert!(bounds.right() <= right, "{item} keeps inside the pane");
     }
+}
+
+/// A scroll bar paints only inside the lane its column keeps (`SCROLL_BAR_WIDTH`, egui's solid
+/// 8 px bar): the content's right edge beside it stays whole, and the thumb fills the lane.
+#[test]
+fn a_scroll_bar_paints_inside_its_lane() {
+    use super::kit::Pane;
+    use gpui::{IntoElement, ParentElement, Styled};
+    let mut shell = Shell::new("gpui-scroll-lane", Seed::Campaign);
+    let fill = super::theme::colors().focus;
+    shell.update(move |root, _, cx| {
+        root.pages.reader.preview = Some(std::rc::Rc::new(move |_, _, _| {
+            gpui::div()
+                .flex()
+                .flex_row()
+                .size_full()
+                .child(gpui::div().flex_1())
+                .child(
+                    gpui::div()
+                        .w(px(300.0))
+                        .h_full()
+                        .child(Pane::new("lane-pane").child(super::kit::target(
+                            gpui::div().w_full().h(px(3000.0)).bg(fill),
+                            "lane-content",
+                        ))),
+                )
+                .into_any_element()
+        }));
+        cx.notify();
+    });
+    let content = shell.bounds("lane-content").expect("the pane's content");
+    let path = shell.capture("gpui-scroll-lane__01-bar-in-lane__1200x800");
+    let picture = image::open(&path).expect("the capture").to_rgba8();
+    let pixel = |x: Pixels| {
+        let rgba = picture.get_pixel(
+            f32::from(x) as u32,
+            f32::from(content.top() + px(100.0)) as u32,
+        );
+        [rgba[0], rgba[1], rgba[2]].map(i32::from)
+    };
+    let rgb = |color: gpui::Hsla| {
+        let rgba = gpui::Rgba::from(color);
+        [rgba.r, rgba.g, rgba.b].map(|channel| (channel * 255.0).round() as i32)
+    };
+    let near = |a: [i32; 3], b: [i32; 3]| (0..3).all(|at| (a[at] - b[at]).abs() <= 8);
+    for inside in 1..=4 {
+        let x = content.right() - px(inside as f32);
+        assert!(
+            near(pixel(x), rgb(fill)),
+            "the content's edge at {x:?} is whole, not under the bar: {:?}",
+            pixel(x)
+        );
+    }
+    let thumb = content.right() + super::theme::SCROLL_BAR_WIDTH / 2.0;
+    assert!(
+        near(pixel(thumb), rgb(super::theme::colors().rule)),
+        "the thumb fills the lane at {thumb:?}: {:?}",
+        pixel(thumb)
+    );
+}
+
+/// `Shell::click` presses only what the DM can see: a button below its pane's scroll is
+/// scrolled into view first and pressed there, at the default touchpad speed (4×); one that no
+/// scroll brings into view fails.
+#[test]
+fn a_click_scrolls_its_target_into_view() {
+    use super::kit::{Button, Pane};
+    use gpui::{IntoElement, ParentElement, Styled};
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let mut shell = Shell::new("gpui-click-in-view", Seed::Campaign);
+    let pressed = Rc::new(Cell::new(0));
+    let seen = pressed.clone();
+    shell.update(move |root, _, cx| {
+        let seen = seen.clone();
+        root.pages.reader.preview = Some(Rc::new(move |_, _, _| {
+            let (low, hidden) = (seen.clone(), seen.clone());
+            gpui::div()
+                .flex()
+                .flex_row()
+                .size_full()
+                .child(
+                    gpui::div().w(px(300.0)).h_full().child(
+                        Pane::new("click-pane")
+                            .child(gpui::div().h(px(2000.0)))
+                            .child(
+                                Button::secondary("low-button", "Low button")
+                                    .on_click(move |_, _, _| low.set(low.get() + 1)),
+                            )
+                            // Room below it too: a scroll that went past it could come
+                            // back past it again (the touchpad's speed multiplies a scroll).
+                            .child(gpui::div().h(px(2000.0))),
+                    ),
+                )
+                .child(
+                    gpui::div()
+                        .w(px(300.0))
+                        .h(px(100.0))
+                        .overflow_hidden()
+                        .child(
+                            gpui::div().mt(px(400.0)).child(
+                                Button::secondary("hidden-button", "Hidden button")
+                                    .on_click(move |_, _, _| hidden.set(hidden.get() + 100)),
+                            ),
+                        ),
+                )
+                .into_any_element()
+        }));
+        cx.notify();
+    });
+    let before = shell
+        .bounds("Low button")
+        .expect("the low button is laid out");
+    assert!(
+        before.top() > shell.size().height,
+        "it starts below the window"
+    );
+    shell.click("Low button");
+    assert_eq!(pressed.get(), 1, "the low button took the press");
+    let after = shell.bounds("Low button").expect("the low button");
+    assert!(
+        after.bottom() <= shell.size().height,
+        "it was scrolled into view: {after:?}"
+    );
+    let unreachable = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        shell.click("Hidden button");
+    }));
+    assert!(
+        unreachable.is_err(),
+        "a target no scroll reaches fails the press"
+    );
+    assert_eq!(pressed.get(), 1, "and nothing pressed it");
+}
+
+/// A press long after the last frame starts a timed result at the press's time: the Timeline's
+/// Add keeps its result and Undo, though no frame moved the clock since long before (the
+/// pointer still on Add, then a press and release within one frame). GPUI's test mode draws
+/// after each input, which the app does not, so the clock is set back between the press and
+/// the release, where the Add's handler runs.
+#[test]
+fn a_press_long_after_the_last_frame_keeps_its_undo() {
+    let mut shell = Shell::new("gpui-still-press", Seed::Campaign);
+    shell.click("Timeline");
+    if shell.bounds("Start with day 1").is_some() {
+        shell.click("Start with day 1");
+    } else {
+        shell.click("Add Day");
+    }
+    let add = shell.scroll_into_view("Add Long rest");
+    shell.hold_and_move(add, add);
+    // The last frame was long ago: the clock stands far behind the release.
+    splat_design::frame_clock::set(-1000.0);
+    shell.release(add);
+    let undo = || {
+        super::kit::probe::names()
+            .into_iter()
+            .any(|name| name.starts_with("Undo add Long rest"))
+    };
+    assert!(undo(), "the Add's result keeps its Undo");
+    // The keyboard's press: Space on the focused Add, which presses as the key comes up. The
+    // pointer gives it the keyboard (down on Add, up away from it: no press).
+    let events = |shell: &mut Shell| shell.read(|root| root.app.timeline.events.len());
+    let before = events(&mut shell);
+    let add = shell.scroll_into_view("Add Long rest");
+    shell.hold_and_move(add, point(add.x, px(5.0)));
+    shell.release(point(add.x, px(5.0)));
+    assert_eq!(
+        events(&mut shell),
+        before,
+        "the pointer only gave Add the keyboard"
+    );
+    shell.key_down("space");
+    splat_design::frame_clock::set(-1000.0);
+    shell.key_up("space");
+    assert_eq!(events(&mut shell), before + 1, "Space pressed Add once");
+    assert!(undo(), "the keyboard's Add keeps its Undo");
+}
+
+/// A focused field shows its caret in a capture, steady (egui's caret; R43: no blink).
+#[test]
+fn a_focused_field_shows_its_caret() {
+    use gpui::{IntoElement, ParentElement, Styled};
+    let mut shell = Shell::new("gpui-caret", Seed::Campaign);
+    shell.update(|root, _, cx| {
+        root.pages.reader.preview = Some(std::rc::Rc::new(|_, _, _| {
+            gpui::div()
+                .w(px(300.0))
+                .child(
+                    super::kit::TextField::new("caret-field", "")
+                        .name("Caret field")
+                        .focus(true),
+                )
+                .into_any_element()
+        }));
+        cx.notify();
+    });
+    let field = shell.bounds("Caret field").expect("the field");
+    let path = shell.capture("gpui-caret__01-focused-field__1200x800");
+    let picture = image::open(&path).expect("the capture").to_rgba8();
+    let caret = gpui::Rgba::from(super::theme::colors().focus);
+    let caret = [caret.r, caret.g, caret.b].map(|channel| (channel * 255.0).round() as i32);
+    // Inside the field's border, away from its focus ring: the caret's pixels.
+    let inside = (f32::from(field.left()) as u32 + 4..f32::from(field.left()) as u32 + 40)
+        .flat_map(|x| {
+            (f32::from(field.top()) as u32 + 5..f32::from(field.bottom()) as u32 - 5)
+                .map(move |y| (x, y))
+        })
+        .filter(|(x, y)| {
+            let pixel = picture.get_pixel(*x, *y);
+            (0..3).all(|at| (i32::from(pixel[at]) - caret[at]).abs() <= 24)
+        })
+        .count();
+    assert!(inside >= 6, "the caret is drawn: {inside} caret pixels");
 }
 
 /// Ctrl+S has one owner (`SplatRoot::save`): with drafts open on two pages, it saves only the
@@ -813,6 +1080,26 @@ fn dialogs() {
             .is_some_and(|dialog| dialog.plan().is_some())
     });
     shell.capture("dialogs__01-copy-dialog__1200x800");
+    // A press on the backdrop over the list's splitter is the dialog's: the splitter under it
+    // does not take the keyboard, and Right moves nothing.
+    let list = shell
+        .bounds("column library_entries")
+        .expect("the list under the dialog");
+    let width = |shell: &mut Shell| {
+        shell.update(|_, _, cx| super::kit::edge::column_width("library_entries", cx))
+    };
+    let before = width(&mut shell);
+    let foot = list.bottom() - px(4.0);
+    shell.click_at(point(list.right(), foot));
+    assert!(
+        shell
+            .bounds("Resize Library entries column (focused)")
+            .is_none(),
+        "the splitter under the backdrop did not take the keyboard"
+    );
+    shell.press("right");
+    assert_eq!(width(&mut shell), before, "Right moved no splitter");
+    assert!(shell.read(|root| root.app.copy_dialog.is_some()));
     // The copy's Folder is an editable combo (egui's `folder_field`): its chevron is inside the
     // field, and its menu starts with `Main folder`, chosen while the field is empty.
     let field = shell.bounds("id:copy-folder").expect("the copy's Folder");
@@ -854,6 +1141,33 @@ fn dialogs() {
     );
     shell.click("Destination");
     shell.click("id:copy-destination-choice-1");
+    assert_eq!(destination(&mut shell), first);
+    // Escape with the drop-down open closes only the drop-down; a second Escape is the
+    // dialog's safe action (egui's popup took the first Escape).
+    let menu_open = |shell: &mut Shell| shell.update(|_, _, cx| super::kit::menu::any_open(cx));
+    let dialog_open = |shell: &mut Shell| shell.read(|root| root.app.copy_dialog.is_some());
+    shell.click("Destination");
+    assert!(menu_open(&mut shell), "the destination list is open");
+    shell.press("escape");
+    assert!(!menu_open(&mut shell), "Escape closed the list");
+    assert!(dialog_open(&mut shell), "and not the dialog");
+    shell.click("Suggestions for Folder");
+    assert!(menu_open(&mut shell), "the Folder's menu is open");
+    shell.press("escape");
+    assert!(!menu_open(&mut shell), "Escape closed it");
+    assert!(dialog_open(&mut shell), "and not the dialog");
+    shell.press("escape");
+    assert!(
+        !dialog_open(&mut shell),
+        "the second Escape closes the dialog"
+    );
+    shell.click("Copy to…");
+    wait_for(&mut shell, "the copy plan", |root| {
+        root.app
+            .copy_dialog
+            .as_ref()
+            .is_some_and(|dialog| dialog.plan().is_some())
+    });
     assert_eq!(destination(&mut shell), first);
     shell.click("Copy name");
     shell.press("ctrl-a");
@@ -937,6 +1251,78 @@ fn dialogs() {
         "Enter keeps editing"
     );
     assert!(shell.read(|root| root.app.library.dirty()));
+    // Save and close writes the draft to its file and closes the window.
+    let file = file_holding(shell.home(), "Ash Exposure");
+    assert!(
+        !std::fs::read_to_string(&file)
+            .unwrap()
+            .contains("Draft ruling.")
+    );
+    assert!(!close(&mut shell));
+    assert!(
+        shell.click_to_close("Save and close"),
+        "Save and close closes the window"
+    );
+    assert!(
+        std::fs::read_to_string(&file)
+            .unwrap()
+            .contains("Draft ruling."),
+        "Save and close wrote the draft to {file:?}"
+    );
+}
+
+/// The close prompt's `Discard and close`: the window closes and the draft's file on disk keeps
+/// its words (the `dialogs` scenario's draft, discarded instead of saved).
+#[test]
+fn discard_and_close_leaves_the_file() {
+    let mut shell = Shell::new("dialogs-discard", Seed::Campaign);
+    shell.click("Library");
+    wait_for(&mut shell, "the Library loads", |root| {
+        root.app.library.loaded() && !root.app.library.loading()
+    });
+    shell.click("id:library-scope");
+    shell.click("Ashen Marches");
+    shell.click("Ash Exposure · Rule");
+    shell.click("Edit Markdown");
+    shell.click("Markdown editor");
+    shell.press("ctrl-end");
+    shell.type_text(" Draft ruling.");
+    assert!(shell.read(|root| root.app.library.dirty()));
+    let file = file_holding(shell.home(), "Ash Exposure");
+    let before = std::fs::read_to_string(&file).unwrap();
+    let closes = shell.update(|root, window, cx| root.should_close(window, cx));
+    assert!(!closes, "the draft keeps the window open");
+    assert!(
+        shell.click_to_close("Discard and close"),
+        "Discard and close closes the window"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        before,
+        "the discarded draft left {file:?} as it was"
+    );
+}
+
+/// The one Markdown file under `folder` whose name starts with `name`.
+fn file_holding(folder: &std::path::Path, name: &str) -> std::path::PathBuf {
+    fn walk(folder: &std::path::Path, name: &str, found: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(folder).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, name, found);
+            } else if path.extension().is_some_and(|e| e == "md")
+                && path
+                    .file_name()
+                    .is_some_and(|f| f.to_string_lossy().starts_with(name))
+            {
+                found.push(path);
+            }
+        }
+    }
+    let mut found = Vec::new();
+    walk(folder, name, &mut found);
+    assert_eq!(found.len(), 1, "one file named {name}: {found:?}");
+    found.remove(0)
 }
 
 /// Each page keeps its state while the DM visits the others (the egui `nav-state` scenario):
@@ -1068,4 +1454,63 @@ fn nav_state() {
         shell.read(|root| root.app.encounters.editor_open()),
         "Encounters keeps its open editor"
     );
+}
+
+/// A long measured column (`kit::measured_column`, World's notes) costs a quiet frame no more
+/// than a short one: the frame makes only the rows in view, each once, whether the column holds
+/// 2,000 rows or 20,000.
+#[test]
+fn a_quiet_frame_makes_only_the_rows_in_view() {
+    use gpui::{IntoElement, ParentElement, Styled};
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let mut made = Vec::new();
+    for count in [2_000usize, 20_000] {
+        let mut shell = Shell::new("gpui-measured-quiet", Seed::Campaign);
+        let calls = Rc::new(Cell::new(0usize));
+        let seen = calls.clone();
+        let state = gpui::ListState::new(count, gpui::ListAlignment::Top, px(400.0));
+        shell.update(move |root, _, cx| {
+            let state = state.clone();
+            let seen = seen.clone();
+            root.pages.reader.preview = Some(Rc::new(move |_, _, _| {
+                let seen = seen.clone();
+                gpui::div()
+                    .size_full()
+                    .child(super::kit::measured_column(
+                        "quiet-rows",
+                        &state,
+                        move |at, _, _| {
+                            seen.set(seen.get() + 1);
+                            super::kit::target(
+                                super::kit::text(
+                                    super::theme::Type::Body,
+                                    super::theme::colors().text,
+                                    format!("Row {at} with some words"),
+                                ),
+                                "quiet row",
+                            )
+                            .into_any_element()
+                        },
+                    ))
+                    .into_any_element()
+            }));
+            cx.notify();
+        });
+        // `frame_cost` settles first (a few frames): the difference of two runs is 20 frames.
+        let before = calls.get();
+        shell.frame_cost(10);
+        let ten = calls.get() - before;
+        shell.frame_cost(30);
+        let thirty = calls.get() - before - ten;
+        let per_frame = (thirty - ten) / 20;
+        let in_view = super::kit::probe::find_all("quiet row").len();
+        assert!(in_view > 5, "the column shows rows: {in_view}");
+        assert_eq!(
+            per_frame, in_view,
+            "{count} rows: a quiet frame makes each row in view once"
+        );
+        made.push(per_frame);
+    }
+    assert_eq!(made[0], made[1], "the work does not grow with the rows");
 }

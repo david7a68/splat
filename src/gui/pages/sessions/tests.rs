@@ -19,15 +19,9 @@ fn wait_for_fights(shell: &mut Shell) {
     );
 }
 
-/// A capture as the egui driver took it (`finish_capture_saves`): the note, the template and the
-/// Timeline are saved first, since test builds save only when told to, so the header says what
-/// the DM sees once the save timer has run, never a held "Saving…".
+/// A capture (`Shell::capture` saves the note, the template and the Timeline first, as egui's
+/// driver did).
 pub(crate) fn capture(shell: &mut Shell, name: &str) -> std::path::PathBuf {
-    shell.update(|root, _, cx| {
-        root.app.sessions.flush();
-        root.app.timeline.save();
-        cx.notify();
-    });
     shell.capture(name)
 }
 
@@ -785,9 +779,36 @@ fn note_typing_saves_at_ctrl_s() {
         words.contains("Ogre arrives.!"),
         "a correction keeps the line: {words:?}"
     );
+    // A write that fails stays failed through a capture: the capture tries no save the app
+    // would not make, and the DM's Ctrl+S is the retry.
+    let path = shell
+        .read(|root| root.app.sessions.gv_selected_note().map(|n| n.path.clone()))
+        .expect("a note");
+    let before = std::fs::read_to_string(&path).expect("the note's file");
+    shell.update(|root, _, _| root.app.sessions.gv_fail_note_writes(Some(28)));
     shell.press("ctrl-s");
-    let path = shell.read(|root| root.app.sessions.gv_selected_note().map(|n| n.path.clone()));
-    let file = std::fs::read_to_string(path.expect("a note")).expect("the note's file");
+    let failed = |shell: &mut Shell| {
+        shell.read(|root| {
+            matches!(
+                root.app.sessions.gv_draft_state(),
+                Some(crate::sessions::DraftState::Failed(_))
+            )
+        })
+    };
+    assert!(failed(&mut shell), "the write failed");
+    shell.update(|root, _, _| root.app.sessions.gv_fail_note_writes(None));
+    capture(&mut shell, "session-note-typing__01-write-failed__1200x800");
+    assert!(
+        failed(&mut shell),
+        "the capture left the failure for the DM"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("the note's file"),
+        before,
+        "the capture wrote nothing"
+    );
+    shell.press("ctrl-s");
+    let file = std::fs::read_to_string(&path).expect("the note's file");
     assert!(
         file.contains("Wolves at the ford."),
         "Ctrl+S saved the typed words"

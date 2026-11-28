@@ -203,7 +203,13 @@ impl SplatRoot {
         });
         let root = cx.entity().downgrade();
         let this_window = window.window_handle();
+        let clock = self.ctx.clone();
         let escape = cx.intercept_keystrokes(move |event, window, cx| {
+            // Interceptors run before any binding or key listener: the frame clock moves to the
+            // key's time before anything the key starts reads it (a timed result's birth).
+            if window.window_handle() == this_window {
+                clock.tick_clock();
+            }
             let keystroke = &event.keystroke;
             if keystroke.key != "escape"
                 || keystroke.modifiers.modified()
@@ -807,6 +813,19 @@ impl Render for SplatRoot {
             .id("splat-root")
             .key_context("SplatRoot")
             .track_focus(&self.focus)
+            // The first key listener on every focus path, and an empty one: when an interceptor
+            // stops a key (the root's Escape, `watch_keys`), GPUI still calls the first key
+            // listener of the path once before it looks at the stop (`dispatch_key_down_up_event`).
+            // Without this one, that call went to a part's own key listener: a dialog's frame
+            // closed the dialog on the Escape that had closed its drop-down.
+            .capture_key_down(|_, _, _| {})
+            // A focused button is pressed as Space or Enter comes up: the frame clock moves to
+            // that time before the press's handler reads it (`watch_keys` for key downs,
+            // `clock_on_press` for the pointer).
+            .capture_key_up({
+                let ctx = self.ctx.clone();
+                move |_, _, _| ctx.tick_clock()
+            })
             .on_action(cx.listener(Self::toggle_lookup))
             .on_action(cx.listener(Self::toggle_notes))
             .on_action(cx.listener(Self::toggle_trackers))
@@ -825,6 +844,7 @@ impl Render for SplatRoot {
             .text_size(theme::Type::Body.size())
             // First, so a touchpad's scroll is at the chosen speed before anything sees it.
             .child(touchpad::listener(self.app.touchpad_speed))
+            .child(clock_on_press(self.ctx.clone()))
             .child(rail::column(self, window).render(
                 window.viewport_size().width,
                 rail.when(panels_inert, |rail| rail.opacity(0.6)),
@@ -834,4 +854,30 @@ impl Render for SplatRoot {
             .child(main)
             .children(dialogs.into_iter().flatten())
     }
+}
+
+/// The frame clock moves to the time of each press, before any handler reads it: the clock moves
+/// only as a frame starts, and a press and its release can come in one frame long after the last
+/// one (the pointer still on Add for half a minute), so a timed result the press starts (an Add
+/// with its Undo) would be born old and end at once.
+fn clock_on_press(ctx: StateContext) -> impl IntoElement {
+    gpui::canvas(
+        |_, _, _| {},
+        move |_, _, window, _| {
+            let down = ctx.clone();
+            window.on_mouse_event(move |_: &gpui::MouseDownEvent, phase, _, _| {
+                if phase == gpui::DispatchPhase::Capture {
+                    down.tick_clock();
+                }
+            });
+            let up = ctx.clone();
+            window.on_mouse_event(move |_: &gpui::MouseUpEvent, phase, _, _| {
+                if phase == gpui::DispatchPhase::Capture {
+                    up.tick_clock();
+                }
+            });
+        },
+    )
+    .absolute()
+    .size_0()
 }

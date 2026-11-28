@@ -183,6 +183,12 @@ impl StateContext {
         self.0.pass.set(self.0.pass.get() + 1);
     }
 
+    /// Move the frame clock to now without starting a pass: an input (a press, a key) can come
+    /// long after the last frame, and an act it starts reads the clock as its time.
+    pub fn tick_clock(&self) {
+        crate::frame_clock::tick(self.0.started.elapsed().as_secs_f64());
+    }
+
     /// The number of passes started so far: two values are equal within one pass.
     pub fn pass(&self) -> u64 {
         self.0.pass.get()

@@ -802,10 +802,8 @@ with many rows keeps one entry for each row in `Memos` and drops the rows it no 
 
 The GPUI app does not yet meet these rules:
 
-- A splitter of `kit::Columns` (gpui-component's) cannot take the keyboard. Only the edge columns (the
-  rail, Lookup, the session notes and the run's panels) move with Left, Right and Home. Some columns do
-  not save their width yet (`timeline_detail_panel`, `session_note_frame`, the encounter editors' Add
-  column).
+- Two columns cannot be dragged and do not save their width yet: `timeline_detail_panel` and
+  `session_note_frame` (`kit::EdgeColumn` fits both).
 - Reader text cannot be selected or copied, and links cannot be reached with Tab (GPUI's
   `InteractiveText` has neither). A dice link or tile has no right-click mode menu (Shift and Ctrl still
   choose advantage and disadvantage). A wide table's header does not stay at the top while its rows

@@ -371,6 +371,14 @@ impl Sessions {
         self.reading_note = !self.reading_note;
     }
 
+    /// Make the open note's writes fail with OS error `code` (`None`: write again).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn gv_fail_note_writes(&mut self, code: Option<i32>) {
+        if let Some(draft) = &mut self.draft {
+            draft.failing_write = code;
+        }
+    }
+
     /// The note's draft state, while a draft is open.
     pub fn gv_draft_state(&self) -> Option<&DraftState> {
         self.draft.as_ref().map(|draft| &draft.state)

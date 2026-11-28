@@ -42,7 +42,9 @@ pub fn uniform_column<R: IntoElement + 'static>(
 }
 
 /// The rows of `state` (its item count), each made by `row` when it comes into view, at its own
-/// height.
+/// height. A frame makes and lays out only the rows in view, once each: the column takes its
+/// parent's height (`ListSizingBehavior::Auto`), so GPUI does not lay the rows out a second time
+/// to learn a height of its own.
 pub fn measured_column(
     id: impl Into<ElementId>,
     state: &ListState,
@@ -54,6 +56,7 @@ pub fn measured_column(
         .min_h_0()
         .child(
             gpui::list(state.clone(), row)
+                .with_sizing_behavior(gpui::ListSizingBehavior::Auto)
                 .size_full()
                 .pr(SCROLL_BAR_WIDTH),
         )

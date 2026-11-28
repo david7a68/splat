@@ -97,6 +97,10 @@ impl Shell {
             .expect("a headless window");
         // One device pixel per pixel, as the reference captures (`*__1200x800.png`).
         cx.simulate_window_scale_factor_change(handle.into(), 1.0);
+        // The window has the system's focus, as the DM's window does: a focused field shows
+        // its caret (gpui-component draws it only in the active window).
+        cx.update_window(handle.into(), |_, window, _| window.activate_window())
+            .expect("the window");
         let mut shell = Self {
             cx,
             window: handle.into(),
@@ -198,15 +202,115 @@ impl Shell {
         kit::probe::find(name)
     }
 
-    /// Press (down and up) the middle of the target `name`, then settle.
+    /// Press (down and up) the middle of the target `name`, then settle. A target whose middle
+    /// its scroll view hides is first scrolled into view with the wheel, as the DM would; one
+    /// that no scroll brings into view fails the test, so no test presses what the DM cannot see.
     pub(crate) fn click(&mut self, name: &str) {
-        let bounds = self.bounds(name).unwrap_or_else(|| {
-            panic!(
-                "No target named {name:?}. Targets: {:?}",
-                kit::probe::names()
-            )
-        });
-        self.click_at(bounds.center());
+        let at = self.scroll_into_view(name);
+        self.click_at(at);
+    }
+
+    /// The middle of the target `name`, scrolled into its view first (see `click`).
+    pub(crate) fn scroll_into_view(&mut self, name: &str) -> Point<Pixels> {
+        let find = |name: &str| {
+            kit::probe::find_in_view(name).unwrap_or_else(|| {
+                panic!(
+                    "No target named {name:?}. Targets: {:?}",
+                    kit::probe::names()
+                )
+            })
+        };
+        let window = self.size();
+        let (mut bounds, mut view) = find(name);
+        'scrolls: for _ in 0..40 {
+            let middle = bounds.center();
+            if view.contains(&middle) {
+                return middle;
+            }
+            // A touchpad's scroll by the distance to the target, with the pointer where the DM
+            // would put it: in the seen part nearest to the target, one pixel inside. A target
+            // clipped away whole has no seen part to point at: then the places up its column,
+            // inside the window, are tried until one scrolls it.
+            let near = |at: Pixels, from: Pixels, to: Pixels| {
+                if at >= to {
+                    to - px(1.0)
+                } else if at <= from {
+                    from + px(1.0)
+                } else {
+                    at
+                }
+            };
+            let seen = view.size.width > px(1.0)
+                && view.size.height > px(1.0)
+                && view.intersects(&Bounds::new(point(px(0.0), px(0.0)), window));
+            let places: Vec<Point<Pixels>> = if seen {
+                vec![point(
+                    near(middle.x, view.left(), view.right()),
+                    near(middle.y, view.top(), view.bottom()),
+                )]
+            } else {
+                let x = near(middle.x, px(0.0), window.width);
+                let from = near(middle.y, px(0.0), window.height);
+                (0..)
+                    .map(|step| from - px(24.0 * step as f32))
+                    .take_while(|y| *y > px(0.0))
+                    .map(|y| point(x, y))
+                    .collect()
+            };
+            // The app multiplies a touchpad's scroll by the DM's speed (`gui::touchpad`): ask
+            // for the distance over that factor, so the scroll lands on the target.
+            let factor = self.read(|root| root.app.touchpad_speed.factor());
+            for at in places {
+                let by = point((at.x - middle.x) / factor, (at.y - middle.y) / factor);
+                self.scroll(at, ScrollDelta::Pixels(by), Modifiers::default());
+                let (moved, now) = find(name);
+                if moved != bounds {
+                    (bounds, view) = (moved, now);
+                    continue 'scrolls;
+                }
+            }
+            break;
+        }
+        panic!(
+            "The target {name:?} at {bounds:?} is outside the part of the window it can be seen \
+             in ({view:?}), and scrolling does not bring it in: the DM could not press it"
+        )
+    }
+
+    /// Press the target `name` that closes the window (the close prompt's `Save and close` or
+    /// `Discard and close`): true when the window is gone after it. No settle follows, as there
+    /// is no window left to draw.
+    pub(crate) fn click_to_close(&mut self, name: &str) -> bool {
+        let at = self.scroll_into_view(name);
+        for input in [
+            PlatformInput::MouseDown(MouseDownEvent {
+                button: MouseButton::Left,
+                position: at,
+                modifiers: Modifiers::default(),
+                click_count: 1,
+                first_mouse: false,
+            }),
+            PlatformInput::MouseUp(MouseUpEvent {
+                button: MouseButton::Left,
+                position: at,
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        ] {
+            let _ = self.cx.update_window(self.window, |_, window, cx| {
+                window.dispatch_event(input, cx);
+            });
+            self.cx.run_until_parked();
+        }
+        let id = self.window.window_id();
+        !self
+            .cx
+            .update(|cx| cx.windows().iter().any(|window| window.window_id() == id))
+    }
+
+    /// The test's own folder: the campaigns, the Library's packages and the settings live in it.
+    pub(crate) fn home(&self) -> &std::path::Path {
+        self._home.path()
     }
 
     /// Press at a place in the window, then settle.
@@ -378,6 +482,33 @@ impl Shell {
         }
     }
 
+    /// Put the key `keystroke` down (as GPUI writes it), without letting it up, then settle.
+    pub(crate) fn key_down(&mut self, keystroke: &str) {
+        let os = self.cx.update(|cx| cx.platform_info().os);
+        let keystroke = Keystroke::parse_with_os(keystroke, os)
+            .unwrap_or_else(|_| panic!("{keystroke:?} is not a keystroke"));
+        self.cx
+            .update_window(self.window, |_, window, cx| {
+                window.dispatch_keystroke(keystroke, cx);
+            })
+            .expect("the window");
+        self.settle();
+    }
+
+    /// Let the key `keystroke` up (the end of `key_down`), then settle.
+    pub(crate) fn key_up(&mut self, keystroke: &str) {
+        let os = self.cx.update(|cx| cx.platform_info().os);
+        let keystroke = Keystroke::parse_with_os(keystroke, os)
+            .unwrap_or_else(|_| panic!("{keystroke:?} is not a keystroke"));
+        let up = PlatformInput::KeyUp(gpui::KeyUpEvent { keystroke });
+        self.cx
+            .update_window(self.window, |_, window, cx| {
+                window.dispatch_event(up, cx);
+            })
+            .expect("the window");
+        self.settle();
+    }
+
     /// Type words into the focused field, one character at a time.
     pub(crate) fn type_text(&mut self, words: &str) {
         for character in words.chars() {
@@ -413,9 +544,17 @@ impl Shell {
         self.settle();
     }
 
-    /// Render the window and write it to `artifacts/screenshots/gpui/<name>.png`.
+    /// Render the window and write it to `artifacts/screenshots/gpui/<name>.png`. Test builds
+    /// save only when told to, so first the saves the autosave timer would make are made now
+    /// (the session note, the template, the Timeline; egui's driver saved before every capture
+    /// too): the capture shows what the DM sees once the timer has run, never a held "Saving…".
+    /// A failed write is not tried again: it waits for the DM's retry, as in the app.
     pub(crate) fn capture(&mut self, name: &str) -> PathBuf {
-        self.settle();
+        self.update(|root, _, cx| {
+            root.app.sessions.save_pending();
+            root.app.timeline.save_pending();
+            cx.notify();
+        });
         let image = self
             .cx
             .capture_screenshot(self.window)

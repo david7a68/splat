@@ -79,6 +79,8 @@ unicode-segmentation = "1.13"
 gpui = { package = "gpui-pre", version = "0.3.14" }
 gpui_platform = { package = "gpui-pre-platform", version = "0.3.14", features = ["wayland", "x11"] }
 gpui-component = "0.11"
+# Its base layer owns the scroll bars' paint; `gui::theme::install` sets their width there.
+gpui-base = "0.11"
 
 [dev-dependencies]
 gpui = { package = "gpui-pre", version = "0.3.14", features = ["test-support"] }

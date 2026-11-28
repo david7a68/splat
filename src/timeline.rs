@@ -762,6 +762,20 @@ impl Book {
         Ok(())
     }
 
+    /// Whether the autosave timer saves the book: changes, no conflict, and no failed write,
+    /// which waits for the DM's retry.
+    fn autosaves(&self) -> bool {
+        self.dirty && !self.conflict && self.error.is_none()
+    }
+
+    /// Make now the save the autosave timer would make (`autosaves`), without its wait: a
+    /// test's capture shows what the DM sees once the timer has run.
+    pub fn save_pending(&mut self) {
+        if self.autosaves() {
+            self.save();
+        }
+    }
+
     pub fn save(&mut self) {
         if !self.dirty || self.conflict || self.unreadable.is_some() || self.path.is_none() {
             return;
@@ -924,8 +938,7 @@ impl Book {
         if self.dirty {
             // Test builds save only when told to, so a capture never depends on the clock.
             #[cfg(not(any(test, feature = "test-support")))]
-            if !self.conflict
-                && self.error.is_none()
+            if self.autosaves()
                 && self
                     .last_edit
                     .is_none_or(|at| now.duration_since(at) >= SAVE_AFTER)

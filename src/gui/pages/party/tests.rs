@@ -148,9 +148,7 @@ fn party_sync_editor() {
         assert!(shell.bounds("Combat sync · On").is_some());
         shell.capture(&format!("signed-in__07-party-sync-editable__{size}"));
         shell.click("Short rest…");
-        if w > 1000.0 {
-            assert!(shell.bounds("Take short rest").is_some());
-        }
+        assert!(shell.bounds("Take short rest").is_some());
         shell.capture(&format!("signed-in__06-party-short-rest__{size}"));
     }
 }

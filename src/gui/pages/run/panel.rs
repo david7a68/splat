@@ -70,13 +70,7 @@ pub(super) fn render(
     if run.state.phase == Phase::Setup {
         top = top.children(sync_block(run, cx));
     }
-    // The bar's track paints over the lane's edge: the words keep clear of all of it.
-    let mut body = div()
-        .flex()
-        .flex_col()
-        .w_full()
-        .gap(theme::XS)
-        .pr(kit::scroll::TRACK_WIDTH - theme::SCROLL_BAR_WIDTH);
+    let mut body = div().flex().flex_col().w_full().gap(theme::XS);
     if !fight && p.shows_death_saves() {
         body = body.child(death_saves(run, index, cx));
     }
@@ -1545,7 +1539,7 @@ fn keys(run: &Run) -> AnyElement {
 fn arrivals(run: &Run, room: Pixels, window: &Window, cx: &mut Context<SplatRoot>) -> AnyElement {
     let c = colors();
     // One block for every group, no wider than a list, so the controls keep one column.
-    let block = theme::LIST_MEASURE.min(room - kit::scroll::TRACK_WIDTH);
+    let block = theme::LIST_MEASURE.min(room - theme::SCROLL_BAR_WIDTH);
     let mut column = div()
         .flex()
         .flex_col()
