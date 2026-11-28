@@ -1183,3 +1183,62 @@ fn nav_state() {
         "Encounters keeps its open editor"
     );
 }
+
+/// A long measured column (`kit::measured_column`, World's notes) costs a quiet frame no more
+/// than a short one: the frame makes only the rows in view, each once, whether the column holds
+/// 2,000 rows or 20,000.
+#[test]
+fn a_quiet_frame_makes_only_the_rows_in_view() {
+    use gpui::{IntoElement, ParentElement, Styled};
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let mut made = Vec::new();
+    for count in [2_000usize, 20_000] {
+        let mut shell = Shell::new("gpui-measured-quiet", Seed::Campaign);
+        let calls = Rc::new(Cell::new(0usize));
+        let seen = calls.clone();
+        let state = gpui::ListState::new(count, gpui::ListAlignment::Top, px(400.0));
+        shell.update(move |root, _, cx| {
+            let state = state.clone();
+            let seen = seen.clone();
+            root.pages.reader.preview = Some(Rc::new(move |_, _, _| {
+                let seen = seen.clone();
+                gpui::div()
+                    .size_full()
+                    .child(super::kit::measured_column(
+                        "quiet-rows",
+                        &state,
+                        move |at, _, _| {
+                            seen.set(seen.get() + 1);
+                            super::kit::target(
+                                super::kit::text(
+                                    super::theme::Type::Body,
+                                    super::theme::colors().text,
+                                    format!("Row {at} with some words"),
+                                ),
+                                "quiet row",
+                            )
+                            .into_any_element()
+                        },
+                    ))
+                    .into_any_element()
+            }));
+            cx.notify();
+        });
+        // `frame_cost` settles first (a few frames): the difference of two runs is 20 frames.
+        let before = calls.get();
+        shell.frame_cost(10);
+        let ten = calls.get() - before;
+        shell.frame_cost(30);
+        let thirty = calls.get() - before - ten;
+        let per_frame = (thirty - ten) / 20;
+        let in_view = super::kit::probe::find_all("quiet row").len();
+        assert!(in_view > 5, "the column shows rows: {in_view}");
+        assert_eq!(
+            per_frame, in_view,
+            "{count} rows: a quiet frame makes each row in view once"
+        );
+        made.push(per_frame);
+    }
+    assert_eq!(made[0], made[1], "the work does not grow with the rows");
+}
