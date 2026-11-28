@@ -263,6 +263,9 @@ impl RenderOnce for Columns {
                 })
             })
             .collect();
+        // Where each splitter's band was laid out in this frame, for the press that gives it the
+        // keyboard (`press_layer`).
+        let mut presses: Vec<(Band, FocusHandle)> = Vec::new();
         for (at, (column, splitter)) in self.columns.into_iter().zip(splitters).enumerate() {
             // A saved column is a harness target by its key (`column world_list_panel`).
             let content = match column.key {
@@ -274,12 +277,17 @@ impl RenderOnce for Columns {
                 None => column.content,
             };
             let content = match splitter {
-                Some(splitter) => div()
-                    .relative()
-                    .size_full()
-                    .child(content)
-                    .child(splitter.render(&self.id, at, (&state, &save), window, cx))
-                    .into_any_element(),
+                Some(splitter) => {
+                    let (band, laid, focus) =
+                        splitter.render(&self.id, at, (&state, &save), window, cx);
+                    presses.push((laid, focus));
+                    div()
+                        .relative()
+                        .size_full()
+                        .child(content)
+                        .child(band)
+                        .into_any_element()
+                }
                 None => content,
             };
             let mut panel = resizable_panel().child(content);
@@ -299,8 +307,56 @@ impl RenderOnce for Columns {
             }
             group = group.child(panel);
         }
-        group
+        div()
+            .relative()
+            .size_full()
+            .child(group)
+            .child(press_layer(presses))
     }
+}
+
+/// Where a splitter's band was laid out in this frame.
+type Band = std::rc::Rc<std::cell::Cell<Option<gpui::Bounds<Pixels>>>>;
+
+/// A press on gpui-component's handle (which takes the pointer) gives the splitter's band the
+/// keyboard too, as a press on an edge column's splitter does; the drag goes on. Each band gets a
+/// hitbox over the handle's grab band, laid out after the panels so the handle is under it: a
+/// layer drawn over the columns (a dialog's backdrop, a menu) covers it too, and then the press
+/// is the layer's.
+fn press_layer(presses: Vec<(Band, FocusHandle)>) -> impl IntoElement {
+    canvas(
+        move |_, window, _| {
+            presses
+                .iter()
+                .filter_map(|(band, focus)| {
+                    let band = band.get()?;
+                    let grab = gpui::Bounds::new(
+                        gpui::point(band.left() - SPLITTER_WIDTH / 2.0, band.top()),
+                        gpui::size(SPLITTER_WIDTH, band.size.height),
+                    );
+                    Some((
+                        window.insert_hitbox(grab, gpui::HitboxBehavior::Normal),
+                        focus.clone(),
+                    ))
+                })
+                .collect::<Vec<_>>()
+        },
+        |_, hitboxes, window, _| {
+            for (hitbox, focus) in hitboxes {
+                window.on_mouse_event(move |_: &MouseDownEvent, phase, window, cx| {
+                    if phase == DispatchPhase::Bubble && hitbox.is_hovered(window) {
+                        // After the whole press: no part behind takes the keyboard back.
+                        let focus = focus.clone();
+                        window.defer(cx, move |window, cx| window.focus(&focus, cx));
+                    }
+                });
+            }
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
 }
 
 /// Keep the saved columns' widths from the columns' state (after a drag or a key).
@@ -321,7 +377,8 @@ struct Splitter {
 
 impl Splitter {
     /// A band at the left edge of column `at`, under gpui-component's handle, which keeps the
-    /// keyboard: it shows the focus colour beside the hairline while it has it.
+    /// keyboard: it shows the focus colour beside the hairline while it has it. With it, where
+    /// it was laid out and its focus.
     fn render(
         self,
         id: &ElementId,
@@ -329,7 +386,7 @@ impl Splitter {
         (state, save): (&Entity<ResizableState>, &SaveWidths),
         window: &mut Window,
         cx: &mut App,
-    ) -> AnyElement {
+    ) -> (AnyElement, Band, FocusHandle) {
         let band_id = ElementId::NamedChild(
             std::sync::Arc::new(id.clone()),
             SharedString::from(format!("splitter-{at}")),
@@ -343,31 +400,14 @@ impl Splitter {
             .read(cx)
             .clone();
         let focused = focus.is_focused(window);
-        // A press on gpui-component's handle (which takes the pointer) gives this band the
-        // keyboard too, as a press on an edge column's splitter does; the drag goes on.
-        let press = {
-            let focus = focus.clone();
-            canvas(
-                |_, _, _| {},
-                move |bounds, _, window, _| {
-                    window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
-                        // In the bubble, after the handle and the parts in front of it, so no
-                        // focusable part behind the handle takes the keyboard back.
-                        if phase == DispatchPhase::Bubble
-                            && bounds.contains(&event.position)
-                            && !window.default_prevented()
-                        {
-                            window.focus(&focus, cx);
-                            window.prevent_default();
-                        }
-                    });
-                },
-            )
-            .absolute()
-            .top_0()
-            .left(-(SPLITTER_WIDTH / 2.0))
-            .h_full()
-            .w(SPLITTER_WIDTH)
+        let laid: Band = Band::default();
+        let record = {
+            let laid = laid.clone();
+            canvas(move |bounds, _, _| laid.set(Some(bounds)), |_, _, _, _| {})
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
         };
         let (state, save) = (state.clone(), save.clone());
         let name = self.name.clone();
@@ -405,6 +445,7 @@ impl Splitter {
                 cx.stop_propagation();
                 window.refresh();
             })
+            .child(record)
             // The focus line stands right of the 1 px hairline the handle draws on the edge.
             .when(focused, |band| {
                 band.child(super::target(
@@ -418,14 +459,10 @@ impl Splitter {
                     format!("{name} (focused)"),
                 ))
             });
-        // Taffy places an absolute child in its parent: the holder spans the edge's height.
-        div()
-            .absolute()
-            .top_0()
-            .left_0()
-            .h_full()
-            .child(press)
-            .child(super::target(band, name))
-            .into_any_element()
+        (
+            super::target(band, name).into_any_element(),
+            laid,
+            focus,
+        )
     }
 }

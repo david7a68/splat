@@ -1042,6 +1042,26 @@ fn dialogs() {
             .is_some_and(|dialog| dialog.plan().is_some())
     });
     shell.capture("dialogs__01-copy-dialog__1200x800");
+    // A press on the backdrop over the list's splitter is the dialog's: the splitter under it
+    // does not take the keyboard, and Right moves nothing.
+    let list = shell
+        .bounds("column library_entries")
+        .expect("the list under the dialog");
+    let width = |shell: &mut Shell| {
+        shell.update(|_, _, cx| super::kit::edge::column_width("library_entries", cx))
+    };
+    let before = width(&mut shell);
+    let foot = list.bottom() - px(4.0);
+    shell.click_at(point(list.right(), foot));
+    assert!(
+        shell
+            .bounds("Resize column library_entries (focused)")
+            .is_none(),
+        "the splitter under the backdrop did not take the keyboard"
+    );
+    shell.press("right");
+    assert_eq!(width(&mut shell), before, "Right moved no splitter");
+    assert!(shell.read(|root| root.app.copy_dialog.is_some()));
     // The copy's Folder is an editable combo (egui's `folder_field`): its chevron is inside the
     // field, and its menu starts with `Main folder`, chosen while the field is empty.
     let field = shell.bounds("id:copy-folder").expect("the copy's Folder");
