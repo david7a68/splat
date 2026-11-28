@@ -17,7 +17,9 @@ pub fn prompt(
     // Sync finished, or a draft was saved, while the prompt was open.
     if items.is_empty() {
         app.confirm_close = false;
-        cx.notify();
+        // The rest of the window was drawn for an open prompt: draw it again. GPUI drops a
+        // `notify` asked for while it draws; a next-frame callback it keeps.
+        window.on_next_frame(|window, _| window.refresh());
         return div().into_any_element();
     }
     let only_sync = items.len() == 1 && !app.encounters.pending_sync_names().is_empty();
