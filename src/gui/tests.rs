@@ -665,7 +665,11 @@ fn a_press_long_after_the_last_frame_keeps_its_undo() {
     let add = shell.scroll_into_view("Add Long rest");
     shell.hold_and_move(add, point(add.x, px(5.0)));
     shell.release(point(add.x, px(5.0)));
-    assert_eq!(events(&mut shell), before, "the pointer only gave Add the keyboard");
+    assert_eq!(
+        events(&mut shell),
+        before,
+        "the pointer only gave Add the keyboard"
+    );
     shell.key_down("space");
     splat_design::frame_clock::set(-1000.0);
     shell.key_up("space");

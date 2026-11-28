@@ -465,11 +465,7 @@ impl Splitter {
                     format!("{name} (focused)"),
                 ))
             });
-        (
-            super::target(band, name).into_any_element(),
-            laid,
-            focus,
-        )
+        (super::target(band, name).into_any_element(), laid, focus)
     }
 }
 

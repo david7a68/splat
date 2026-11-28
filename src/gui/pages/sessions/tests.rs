@@ -798,7 +798,10 @@ fn note_typing_saves_at_ctrl_s() {
     assert!(failed(&mut shell), "the write failed");
     shell.update(|root, _, _| root.app.sessions.gv_fail_note_writes(None));
     capture(&mut shell, "session-note-typing__01-write-failed__1200x800");
-    assert!(failed(&mut shell), "the capture left the failure for the DM");
+    assert!(
+        failed(&mut shell),
+        "the capture left the failure for the DM"
+    );
     assert_eq!(
         std::fs::read_to_string(&path).expect("the note's file"),
         before,

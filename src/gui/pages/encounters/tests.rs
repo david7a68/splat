@@ -992,7 +992,9 @@ fn the_narrow_editor_takes_turns_and_a_dragged_width_is_kept() {
     shell.capture("column-resize__09-roster-follows-add-panel__1200x800");
     // Home on the splitter forgets the kept width and gives the column its own width again,
     // as in an editor that never had a dragged width.
-    let kept = shell.bounds("column encounter_add").expect("Add participants");
+    let kept = shell
+        .bounds("column encounter_add")
+        .expect("Add participants");
     shell.click_at(point(kept.left(), kept.center().y));
     shell.press("home");
     assert_eq!(
@@ -1000,11 +1002,15 @@ fn the_narrow_editor_takes_turns_and_a_dragged_width_is_kept() {
         None,
         "Home forgets the kept width"
     );
-    let home = shell.bounds("column encounter_add").expect("Add participants");
+    let home = shell
+        .bounds("column encounter_add")
+        .expect("Add participants");
     let mut fresh = Shell::new("column-resize-natural", Seed::Campaign);
     ready(&mut fresh);
     open_encounter(&mut fresh, "");
-    let natural = fresh.bounds("column encounter_add").expect("Add participants");
+    let natural = fresh
+        .bounds("column encounter_add")
+        .expect("Add participants");
     assert!(
         (home.size.width - natural.size.width).abs() <= px(1.0),
         "Home gives the column its own width: {home:?}, not {natural:?}"

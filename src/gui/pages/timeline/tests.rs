@@ -161,8 +161,15 @@ fn a_disk_conflict_compares_the_draft_and_the_file() {
     let failed = |shell: &mut Shell| shell.read(|root| root.app.timeline.not_saved());
     assert!(failed(&mut shell), "the write failed");
     shell.capture("timeline-conflict__00-write-failed__1200x800");
-    assert!(failed(&mut shell), "the capture left the failure for the DM");
-    assert_eq!(fs::read_to_string(&path).unwrap(), saved, "the capture wrote nothing");
+    assert!(
+        failed(&mut shell),
+        "the capture left the failure for the DM"
+    );
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        saved,
+        "the capture wrote nothing"
+    );
     shell.press("ctrl-s");
     assert!(!failed(&mut shell), "Ctrl+S tried again");
     let saved = fs::read_to_string(&path).unwrap();
